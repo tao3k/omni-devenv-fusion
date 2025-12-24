@@ -1,11 +1,36 @@
-{ pkgs, lib, config, inputs, ... }:
+{
+  pkgs,
+  lib,
+  config,
+  inputs,
+  ...
+}:
 
 {
+  imports = [
+    ({
+      config = lib.mkMerge [
+        {
+          claude.code.enable = true;
+          claude.code.hooks = {
+            PostToolUse = {
+              command = ''
+                cd "$DEVENV_ROOT" && lefthook run
+              '';
+            };
+          };
+        }
+      ];
+    })
+  ];
   # https://devenv.sh/basics/
   env.GREET = "devenv";
 
   # https://devenv.sh/packages/
-  packages = [ pkgs.git ];
+  packages = [
+    pkgs.git
+    pkgs.claude-code
+  ];
 
   # https://devenv.sh/languages/
   # languages.rust.enable = true;
@@ -39,6 +64,6 @@
 
   # https://devenv.sh/pre-commit-hooks/
   git-hooks.hooks.shellcheck.enable = true;
-
+  git-hooks.hooks.nixfmt.enable = true;
   # See full reference at https://devenv.sh/reference/options/
 }
