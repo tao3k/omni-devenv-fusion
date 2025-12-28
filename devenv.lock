@@ -46,17 +46,10 @@
     "devenv": {
       "locked": {
         "dir": "src/modules",
-<<<<<<< HEAD
-        "lastModified": 1766415291,
-        "owner": "cachix",
-        "repo": "devenv",
-        "rev": "445843843575c324f56f46e0a54c2fef1332f3cc",
-=======
         "lastModified": 1766921574,
         "owner": "cachix",
         "repo": "devenv",
         "rev": "02c9dcf3e050400d8101057f9f00ec458af7c959",
->>>>>>> 8518bc2 (feat: test lefthook)
         "type": "github"
       },
       "original": {
@@ -227,10 +220,10 @@
     },
     "nixpkgs-latest": {
       "locked": {
-        "lastModified": 1766840161,
+        "lastModified": 1766870016,
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "3edc4a30ed3903fdf6f90c837f961fa6b49582d1",
+        "rev": "5c2bc52fb9f8c264ed6c93bd20afa2ff5e763dce",
         "type": "github"
       },
       "original": {
