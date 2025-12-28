@@ -46,10 +46,17 @@
     "devenv": {
       "locked": {
         "dir": "src/modules",
+<<<<<<< HEAD
         "lastModified": 1766415291,
         "owner": "cachix",
         "repo": "devenv",
         "rev": "445843843575c324f56f46e0a54c2fef1332f3cc",
+=======
+        "lastModified": 1766921574,
+        "owner": "cachix",
+        "repo": "devenv",
+        "rev": "02c9dcf3e050400d8101057f9f00ec458af7c959",
+>>>>>>> 8518bc2 (feat: test lefthook)
         "type": "github"
       },
       "original": {
@@ -93,10 +100,10 @@
     "flake-compat": {
       "flake": false,
       "locked": {
-        "lastModified": 1765121682,
+        "lastModified": 1766929376,
         "owner": "edolstra",
         "repo": "flake-compat",
-        "rev": "65f23138d8d09a92e30f1e5c87611b23ef451bf3",
+        "rev": "236f248441a986331cda53b039e7f9fd96e03635",
         "type": "github"
       },
       "original": {
@@ -191,10 +198,10 @@
     },
     "nixlib": {
       "locked": {
-        "lastModified": 1765674936,
+        "lastModified": 1766884708,
         "owner": "nix-community",
         "repo": "nixpkgs.lib",
-        "rev": "2075416fcb47225d9b68ac469a5c4801a9c4dd85",
+        "rev": "15177f81ad356040b4460a676838154cbf7f6213",
         "type": "github"
       },
       "original": {
@@ -218,15 +225,30 @@
         "type": "github"
       }
     },
+    "nixpkgs-latest": {
+      "locked": {
+        "lastModified": 1766840161,
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "3edc4a30ed3903fdf6f90c837f961fa6b49582d1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "omnibus": {
       "inputs": {
         "flops": "flops"
       },
       "locked": {
-        "lastModified": 1766553492,
+        "lastModified": 1766959665,
         "owner": "tao3k",
         "repo": "omnibus",
-        "rev": "d206805988e0f3a1c52c7e3a38feb41d9d44596e",
+        "rev": "9005384d6702e921371b420414ae80c0dcbdffee",
         "type": "github"
       },
       "original": {
@@ -241,6 +263,7 @@
         "devenv": "devenv",
         "git-hooks": "git-hooks",
         "nixpkgs": "nixpkgs",
+        "nixpkgs-latest": "nixpkgs-latest",
         "omnibus": "omnibus",
         "pre-commit-hooks": [
           "git-hooks"

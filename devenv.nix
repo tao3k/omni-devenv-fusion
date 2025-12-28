@@ -8,6 +8,7 @@
 
 {
   imports = [
+<<<<<<< HEAD
     ({
       config = lib.mkMerge [
         {
@@ -17,6 +18,22 @@
               command = ''
                 cd "$DEVENV_ROOT" && lefthook run
               '';
+=======
+    ./claude.nix
+    ./files.nix
+    ./modules/flake-parts/omnibus.nix
+    ./lefthook.nix
+    #./modules/flake-parts/omnibus-hive.nix
+    ({
+      config = lib.mkMerge [
+        {
+          omnibus = {
+            inputs = {
+              inputs = {
+                nixpkgs = pkgs;
+                inherit (inputs.omnibus.flake.inputs) nixago;
+              };
+>>>>>>> 8518bc2 (feat: test lefthook)
             };
           };
         }
@@ -46,10 +63,6 @@
     echo hello from $GREET
   '';
 
-  enterShell = ''
-    echo "Hello from $GREET"
-  '';
-
   # https://devenv.sh/tasks/
   # tasks = {
   #   "myproj:setup".exec = "mytool build";
@@ -63,7 +76,7 @@
   '';
 
   # https://devenv.sh/pre-commit-hooks/
-  git-hooks.hooks.shellcheck.enable = true;
-  git-hooks.hooks.nixfmt.enable = true;
+  # git-hooks.hooks.shellcheck.enable = true;
+  # git-hooks.hooks.nixfmt.enable = true;
   # See full reference at https://devenv.sh/reference/options/
 }
