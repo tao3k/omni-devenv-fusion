@@ -32,24 +32,28 @@ let
     }
   ];
 
-  genLefthook =
-    (config.omnibus.ops.mkNixago initConfigs.nixago-lefthook)
-      (removeTreefmt initConfigs.lefthook.default)
-      initConfigs.lefthook.nix
-      initConfigs.lefthook.shell;
-  genConform = (config.omnibus.ops.mkNixago initConfigs.nixago-conform);
+  # Define generator configurations
+  generators = [
+    {
+      name = "lefthook";
+      gen = (config.omnibus.ops.mkNixago initConfigs.nixago-lefthook)
+        (removeTreefmt initConfigs.lefthook.default)
+        initConfigs.lefthook.nix
+        initConfigs.lefthook.shell;
+    }
+    {
+      name = "conform";
+      gen = (config.omnibus.ops.mkNixago initConfigs.nixago-conform);
+    }
+  ];
+
+  # Generate all hooks using map
+  generatedHooks = map (g: g.gen) generators;
 in
 {
   config = {
-    packages =
-      genLefthook.__passthru.packages
-      ++ [
-      ]
-      ++ genConform.__passthru.packages;
-    enterShell = ''
-      ${genLefthook.shellHook}
-      ${genConform.shellHook}
-    '';
+    packages = lib.flatten (map (g: g.__passthru.packages) generatedHooks);
+    enterShell = lib.concatMapStringsSep "\n" (g: g.shellHook) generatedHooks;
     # perSystem = {...}:{
     #   devenv.shells.default = {
     #     enterShell = ''
