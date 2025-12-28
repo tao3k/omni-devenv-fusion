@@ -8,17 +8,6 @@
 
 {
   imports = [
-<<<<<<< HEAD
-    ({
-      config = lib.mkMerge [
-        {
-          claude.code.enable = true;
-          claude.code.hooks = {
-            PostToolUse = {
-              command = ''
-                cd "$DEVENV_ROOT" && lefthook run
-              '';
-=======
     ./claude.nix
     ./files.nix
     ./modules/flake-parts/omnibus.nix
@@ -33,7 +22,6 @@
                 nixpkgs = pkgs;
                 inherit (inputs.omnibus.flake.inputs) nixago;
               };
->>>>>>> 8518bc2 (feat: test lefthook)
             };
           };
         }

@@ -245,10 +245,10 @@
         "flops": "flops"
       },
       "locked": {
-        "lastModified": 1766959665,
+        "lastModified": 1766963138,
         "owner": "tao3k",
         "repo": "omnibus",
-        "rev": "9005384d6702e921371b420414ae80c0dcbdffee",
+        "rev": "8b2aacfa5384c1c487b449d7688a5f0b953e42c6",
         "type": "github"
       },
       "original": {

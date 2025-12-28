@@ -6,8 +6,7 @@
   ...
 }:
 let
-  nixpkgs-latest =
-    inputs.nixpkgs-latest.legacyPackages.${pkgs.stdenv.hostPlatform.system};
+  nixpkgs-latest = inputs.nixpkgs-latest.legacyPackages.${pkgs.stdenv.hostPlatform.system};
 
   initConfigs =
     (inputs.omnibus.units.configs {
@@ -36,14 +35,35 @@ let
   generators = [
     {
       name = "lefthook";
-      gen = (config.omnibus.ops.mkNixago initConfigs.nixago-lefthook)
-        (removeTreefmt initConfigs.lefthook.default)
-        initConfigs.lefthook.nix
-        initConfigs.lefthook.shell;
+      gen =
+        (config.omnibus.ops.mkNixago initConfigs.nixago-lefthook)
+          (removeTreefmt initConfigs.lefthook.default)
+          initConfigs.lefthook.nix
+          initConfigs.lefthook.shell;
     }
     {
       name = "conform";
-      gen = (config.omnibus.ops.mkNixago initConfigs.nixago-conform);
+      gen = (config.omnibus.ops.mkNixago initConfigs.nixago-conform) initConfigs.conform.default;
+    }
+    {
+      name = "cog";
+      gen = (config.omnibus.ops.mkNixago initConfigs.nixago-cog) initConfigs.cog.default {
+        data = {
+          changelog = {
+            path = "CHANGELOG.md";
+            template = "remote";
+            remote = "github.com";
+            repository = "devenv-native";
+            owner = "tao3k";
+            authors = [
+              {
+                username = "gtrunsec";
+                signature = "Guangtao";
+              }
+            ];
+          };
+        };
+      };
     }
   ];
 

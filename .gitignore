@@ -17,6 +17,7 @@ devenv.local.nix
 .claude/settings.json
 
 # nixago: ignore-linked-files
+/cog.toml
 /.conform.yaml
 /lefthook.yml
 >>>>>>> 8518bc2 (feat: test lefthook)
