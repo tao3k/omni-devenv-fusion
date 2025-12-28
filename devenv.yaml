@@ -2,5 +2,7 @@ allowUnfree: true
 inputs:
   nixpkgs:
     url: github:cachix/devenv-nixpkgs/rolling
+  nixpkgs-latest:
+    url: github:NixOS/nixpkgs/nixpkgs-unstable
   omnibus:
     url: github:tao3k/omnibus/main

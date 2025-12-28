@@ -9,3 +9,14 @@ devenv.local.nix
 .pre-commit-config.yaml
 
 .data
+<<<<<<< HEAD
+=======
+
+.mcp.json
+
+.claude/settings.json
+
+# nixago: ignore-linked-files
+/.conform.yaml
+/lefthook.yml
+>>>>>>> 8518bc2 (feat: test lefthook)
