@@ -9,8 +9,6 @@ devenv.local.nix
 .pre-commit-config.yaml
 
 .data
-<<<<<<< HEAD
-=======
 
 .mcp.json
 
@@ -20,4 +18,4 @@ devenv.local.nix
 /cog.toml
 /.conform.yaml
 /lefthook.yml
->>>>>>> 8518bc2 (feat: test lefthook)
+
