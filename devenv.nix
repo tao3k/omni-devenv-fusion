@@ -36,6 +36,7 @@
     pkgs.git
     pkgs.claude-code
     pkgs.just
+    pkgs.secretspec
   ];
 
   # https://devenv.sh/languages/

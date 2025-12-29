@@ -6,3 +6,8 @@ inputs:
     url: github:NixOS/nixpkgs/nixpkgs-unstable
   omnibus:
     url: github:tao3k/omnibus/main
+
+secretspec:
+  enable: true
+  provider: keyring  # keyring, dotenv, env, 1password, lastpass
+  profile: development   # profile from secretspec.toml

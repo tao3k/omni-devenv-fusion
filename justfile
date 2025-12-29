@@ -31,7 +31,7 @@ check-format:
 # Lint all files
 lint:
     @echo "Linting files..."
-    @lefthook run
+    @lefthook run pre-commit
 
 # Run tests
 test:

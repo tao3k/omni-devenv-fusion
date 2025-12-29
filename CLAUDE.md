@@ -144,6 +144,24 @@ Claude Code is fully integrated via `claude.nix`:
   - `devenv`: Local devenv MCP server for devenv-specific queries
   - `nixos`: NixOS package/option search via github:utensils/mcp-nixos
 
+**MiniMax API Integration:**
+This repository uses MiniMax as the API provider for Claude Code:
+
+```nix
+claude.code.env = {
+  ANTHROPIC_BASE_URL = "https://api.minimax.io/anthropic";
+  ANTHROPIC_MODEL = "MiniMax-M2.1";
+  ANTHROPIC_DEFAULT_SONNET_MODEL = "MiniMax-M2.1";
+  ANTHROPIC_DEFAULT_OPUS_MODEL = "MiniMax-M2.1";
+  ANTHROPIC_DEFAULT_HAIKU_MODEL = "MiniMax-M2.1";
+  ANTHROPIC_SMALL_FAST_MODEL = "MiniMax-M2.1";
+  API_TIMEOUT_MS = "2000000";
+  CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1";
+};
+```
+
+The API key is managed via **secretspec** (see [Secret Management](#secret-management)).
+
 **Hook Behavior:**
 The PostToolUse hook runs `cd "$DEVENV_ROOT" && lefthook run` whenever Claude Code edits, multi-edits, or writes files. This ensures:
 - Nix files are formatted with nixfmt
@@ -204,6 +222,7 @@ omnibus = {
 Core packages installed in `devenv.nix`:
 - `git`: Version control
 - `claude-code`: Claude Code CLI tool
+- `secretspec`: Secret management tool for secure credential handling
 
 Additional packages are dynamically provided by generated hooks (lefthook, conform, hunspell, typos, etc.)
 
@@ -530,3 +549,60 @@ Two MCP servers are available for enhanced Claude Code capabilities:
    - Search NixOS packages and options
    - Query Home Manager and nix-darwin configurations
    - Access nixpkgs package versions and flakes
+
+## Secret Management
+
+Secrets are managed via **secretspec** (https://github.com/tao3k/secretspec), a secret management tool integrated into devenv.
+
+### Configuration
+
+**devenv.yaml:**
+```yaml
+secretspec:
+  enable: true
+  provider: keyring  # keyring, dotenv, env, 1password, lastpass
+  profile: development
+```
+
+**secretspec.toml:**
+```toml
+[project]
+name = "devenv-native"
+revision = "1.0"
+
+[profiles.default]
+MINIMAX_API_KEY = { description = "API key for MINIMAX", required = true }
+
+[profiles.development]
+# Inherits from default, override secrets as needed
+```
+
+### Available Secrets
+
+| Secret | Profile | Description |
+|--------|---------|-------------|
+| `MINIMAX_API_KEY` | default | API key for MiniMax API access |
+
+### Setting Secrets
+
+```bash
+# Using keyring provider
+secretspec set MINIMAX_API_KEY --value "your-api-key"
+
+# Or set profile-specific value
+secretspec set MINIMAX_API_KEY --profile development --value "your-dev-key"
+```
+
+### Usage in Nix
+
+Secrets are injected via `claude.nix` using the secretspec module:
+```nix
+claude.code.env = {
+  ANTHROPIC_AUTH_TOKEN = config.secretspec.secrets.MINIMAX_API_KEY;
+};
+```
+
+### Profiles
+
+- **default**: Base profile with production secrets
+- **development**: Development profile (inherits from default)
