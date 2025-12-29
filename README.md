@@ -1,4 +1,4 @@
-# devenv-native
+# omni-devenv-fusion
 
 > Exploring AI-assisted coding workflows with devenv, Nix ecosystem, and modern SDLC standards
 
@@ -13,8 +13,8 @@ A showcase repository demonstrating best practices for AI-powered development en
 
 ```bash
 # Clone the repository
-git clone https://github.com/tao3k/devenv-native.git
-cd devenv-native
+git clone https://github.com/tao3k/omni-devenv-fusion.git
+cd omni-devenv-fusion
 
 # Setup (direnv will auto-load the environment)
 just setup
@@ -64,7 +64,7 @@ just cl        # Preview changelog
 ### Configuration Files
 
 ```
-devenv-native/
+omni-devenv-fusion/
 ├── devenv.nix              # Main devenv configuration
 ├── claude.nix              # Claude Code integration
 ├── lefthook.nix            # Git hooks via omnibus
@@ -257,8 +257,8 @@ The repository uses the [omnibus framework](https://github.com/tao3k/omnibus) fo
 
 ```bash
 # Clone the repository
-git clone https://github.com/tao3k/devenv-native.git
-cd devenv-native
+git clone https://github.com/tao3k/omni-devenv-fusion.git
+cd omni-devenv-fusion
 
 # Allow direnv (if installed)
 direnv allow
@@ -273,7 +273,7 @@ just info
 ## Project Structure
 
 ```
-devenv-native/
+omni-devenv-fusion/
 ├── .claude/                # Claude Code configuration
 ├── .direnv/                # Cached devenv profiles
 ├── modules/
