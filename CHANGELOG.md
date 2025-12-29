@@ -2,6 +2,26 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.0.0](https://github.com/tao3k/devenv-native/compare/5215ac951e138bb1d52350beedb0ff1381da9ed1..v1.0.0) - 2025-12-29
+#### Features
+- change claude to MINIMAX_2.0 - ([7bce13c](https://github.com/tao3k/devenv-native/commit/7bce13c9219b8707f6d36cae8615f2aec047edde)) - guangtao
+- add justfile  workflow - ([acb2090](https://github.com/tao3k/devenv-native/commit/acb2090c7be92f4d01a1b4f9cc990e17108b0819)) - guangtao
+- add cog - ([571d78d](https://github.com/tao3k/devenv-native/commit/571d78d6eeea60483c4619c71b1cda58449849ac)) - guangtao
+- add cog - ([00b9ca7](https://github.com/tao3k/devenv-native/commit/00b9ca7a0a540dc6dd1002d074a50276da5ee217)) - guangtao
+- test lefthook - ([9c2d502](https://github.com/tao3k/devenv-native/commit/9c2d502f2301d93e6c55a634bf4bc8b9e8e0d9c9)) - guangtao
+#### Bug Fixes
+- make the cog.toml to copy mode - ([bb1d057](https://github.com/tao3k/devenv-native/commit/bb1d0570808107f2408ea6525a8a8862cf3d3c01)) - guangtao
+#### Documentation
+- init README - ([3291c44](https://github.com/tao3k/devenv-native/commit/3291c4402a2fa92300066709624f243d56686c6a)) - guangtao
+#### Tests
+- add claude test - ([f5a7cbd](https://github.com/tao3k/devenv-native/commit/f5a7cbdde71724d3d51b14e2c647ba7c05c871c3)) - guangtao
+#### Miscellaneous Chores
+- (**claude**) add claude.md - ([58031b3](https://github.com/tao3k/devenv-native/commit/58031b38a249a003d45c27282882a698402ef0c5)) - guangtao
+- (**version**) v0.1.0 - ([4f6723e](https://github.com/tao3k/devenv-native/commit/4f6723e48a3efc8cb8ae731be3d8770125ae4ef8)) - guangtao
+- init - ([5215ac9](https://github.com/tao3k/devenv-native/commit/5215ac951e138bb1d52350beedb0ff1381da9ed1)) - guangtao
+
+- - -
+
 ## [v0.1.0](https://github.com/tao3k/devenv-native/compare/092dd9f6e36f86f8abf0a3466988540dfe847621..v0.1.0) - 2025-12-28
 #### Features
 - add cog - ([1a1f3c9](https://github.com/tao3k/devenv-native/commit/1a1f3c9aeca05f7eb49171a12bacf301e01a070f)) - guangtao
