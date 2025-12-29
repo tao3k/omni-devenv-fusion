@@ -4,7 +4,7 @@
   claude.code.hooks = {
     PostToolUse = {
       command = ''
-        cd "$DEVENV_ROOT" && lefthook run pre-commit
+        bash -c 'cd "$DEVENV_ROOT" && source "$(ls -t .direnv/devenv-profile*.rc 2>/dev/null | head -1)" && lefthook run pre-commit'
       '';
       matcher = "^(Edit|MultiEdit|Write)$";
     };

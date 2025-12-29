@@ -35,6 +35,7 @@
   packages = [
     pkgs.git
     pkgs.claude-code
+    pkgs.just
   ];
 
   # https://devenv.sh/languages/
