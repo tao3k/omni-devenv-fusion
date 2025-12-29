@@ -157,7 +157,7 @@ release-notes version="latest":
         sed '$d'
     echo ""
     echo "---"
-    echo "**Full Changelog**: https://github.com/tao3k/devenv-native/compare/$(git describe --tags --abbrev=0 $VERSION^ 2>/dev/null)...$VERSION"
+    echo "**Full Changelog**: https://github.com/tao3k/omni-devenv-fusion/compare/$(git describe --tags --abbrev=0 $VERSION^ 2>/dev/null)...$VERSION"
 
 # Publish GitHub release
 publish-release version="latest":

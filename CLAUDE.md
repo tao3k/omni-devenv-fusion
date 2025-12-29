@@ -320,7 +320,7 @@ just commit  # or: just c
 The changelog is automatically generated using cocogitto and stored in `CHANGELOG.md`.
 
 **Configuration** (in `lefthook.nix` and `cog.toml`):
-- Repository: `github.com/tao3k/devenv-native`
+- Repository: `github.com/tao3k/omni-devenv-fusion`
 - Changelog path: `CHANGELOG.md`
 - Template: `remote` (GitHub links)
 - Tag prefix: `v`
@@ -521,7 +521,7 @@ The cocogitto configuration is managed via the omnibus framework in `lefthook.ni
         path = "CHANGELOG.md";
         template = "remote";
         remote = "github.com";
-        repository = "devenv-native";
+        repository = "omni-devenv-fusion";
         owner = "tao3k";
         authors = [
           {
@@ -567,7 +567,7 @@ secretspec:
 **secretspec.toml:**
 ```toml
 [project]
-name = "devenv-native"
+name = "omni-devenv-fusion"
 revision = "1.0"
 
 [profiles.default]
