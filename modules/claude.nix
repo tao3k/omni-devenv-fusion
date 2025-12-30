@@ -5,15 +5,12 @@
   ...
 }:
 {
-  packages = [
-    pkgs.uv # required by minimax-coding-plan-mcp
-  ];
   claude.code.enable = true;
   claude.code.env = {
     ANTHROPIC_BASE_URL = "https://api.minimax.io/anthropic";
     ANTHROPIC_AUTH_TOKEN = config.secretspec.secrets.MINIMAX_API_KEY;
     API_TIMEOUT_MS = "2000000";
-    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"; # 注意：转换为字符串
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"; # Note: Convert to string
     ANTHROPIC_MODEL = "MiniMax-M2.1";
     ANTHROPIC_SMALL_FAST_MODEL = "MiniMax-M2.1";
     ANTHROPIC_DEFAULT_SONNET_MODEL = "MiniMax-M2.1";
@@ -21,12 +18,12 @@
     ANTHROPIC_DEFAULT_HAIKU_MODEL = "MiniMax-M2.1";
   };
   claude.code.hooks = {
-    PostToolUse = {
-      command = ''
-        bash -c 'cd "$DEVENV_ROOT" && source "$(ls -t .direnv/devenv-profile*.rc 2>/dev/null | head -1)" && lefthook run pre-commit'
-      '';
-      matcher = "^(Edit|MultiEdit|Write)$";
-    };
+    # PostToolUse = {
+    #   command = ''
+    #     bash -c 'cd "$DEVENV_ROOT" && source "$(ls -t .direnv/devenv-profile*.rc 2>/dev/null | head -1)" && lefthook run pre-commit'
+    #   '';
+    #   matcher = "^(Edit|MultiEdit|Write)$";
+    # };
   };
   claude.code.mcpServers = {
     # Local devenv MCP server
@@ -56,6 +53,18 @@
         MINIMAX_MCP_BASE_PATH = "${config.devenv.root}/.minimax-output";
         MINIMAX_API_HOST = "https://api.minimax.io";
         MINIMAX_API_RESOURCE_MODE = "url";
+      };
+    };
+
+    orchestrator = {
+      type = "stdio";
+      command = "python"; # Use python from devenv environment
+      args = [ "./mcp-server/orchestrator.py" ];
+      env = {
+        # Pass your Minimax Key to the python script
+        ANTHROPIC_API_KEY = config.secretspec.secrets.MINIMAX_API_KEY;
+        ANTHROPIC_BASE_URL = "https://api.minimax.io/anthropic";
+        PYTHONPATH = "${config.devenv.root}/mcp-server";
       };
     };
   };
