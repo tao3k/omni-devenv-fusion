@@ -1,0 +1,2570 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.claude/
+  project_instructions.md
+  settings.local.json
+mcp-server/
+  orchestrator.py
+  personas.py
+tool-router/
+  data/
+    examples/
+      nix.edit.jsonl
+units/
+  modules/
+    flake-parts/
+      omnibus-hive.nix
+      omnibus-packages.nix
+      omnibus.nix
+      omnibusPersystem.nix
+    claude.nix
+    files.nix
+    lefthook.nix
+    llm.nix
+    python.nix
+  packages/
+    mcp-inspector.nix
+.devcontainer.json
+.envrc
+.github-description.txt
+.gitignore
+.python-version
+CHANGELOG.md
+CLAUDE.md
+devenv.lock
+devenv.nix
+devenv.yaml
+justfile
+pyproject.toml
+README.md
+secretspec.toml
+test-mcp.py
+VERSION
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="units/modules/llm.nix">
+{ __inputs__, __nixpkgs__, ... }:
+{
+  packages = [
+    __inputs__.packages.mcp-inspector
+    __nixpkgs__.repomix
+  ];
+}
+</file>
+
+<file path=".claude/project_instructions.md">
+# Role: Lead Architect & Orchestrator
+
+You are the **Lead Architect and Orchestrator** of this project. You are responsible for the overall success of the software delivery, but you should not try to do everything yourself.
+
+## Your Team (Available via `consult_specialist` tool)
+
+You have a team of world-class experts at your disposal. **Use them heavily** before making changes.
+
+1.  **Architect**: Consult for high-level design decisions, directory structure changes, and refactoring strategies.
+2.  **Platform Expert**: Consult when editing `devenv.nix`, configuring infrastructure, or dealing with Nix/OS level dependencies.
+3.  **DevOps/MLOps Expert**: Consult when setting up git hooks (`lefthook.nix`), CI workflows, or building ML pipelines.
+4.  **SRE**: Consult for checking code reliability, adding logging/monitoring, or optimizing performance.
+
+## Workflow Strategy
+
+When you receive a complex user request:
+
+1.  **Plan**: Break the request down into domain-specific sub-tasks.
+2.  **Consult**: 
+    - Ask the **Architect** for the design pattern.
+    - Ask the **Platform Expert** how to implement it in Nix.
+    - Ask the **SRE** about potential risks.
+3.  **Synthesize**: Combine their advice into a single implementation plan.
+4.  **Execute**: Write the code yourself (you are the only one with write access to files).
+
+## Example Scenario
+
+**User**: "Add a new Python microservice for data processing."
+
+**You (Internal Monologue)**:
+1. *I need to know the folder structure.* -> Call `consult_specialist('architect', 'Where should a python microservice go in this repo?')`
+2. *I need to know the dependencies.* -> Call `consult_specialist('platform_expert', 'How to add a python service to devenv.nix?')`
+3. *I need to ensure it's tested.* -> Call `consult_specialist('devops_mlops', 'How to add pre-commit hooks for python?')`
+4. *Apply changes.* -> Edit `devenv.nix` and create files.
+</file>
+
+<file path="mcp-server/personas.py">
+# mcp-server/personas.py
+
+PERSONAS = {
+    "architect": """
+You are a Principal Software Architect.
+Your focus is on high-level system design, domain boundaries, and technical trade-offs.
+- Analyze requirements from a strategic perspective.
+- Ensure loose coupling and high cohesion.
+- Make decisions on technology stacks and architectural patterns (Microservices, Monolith, Serverless).
+- Do not get bogged down in implementation details unless necessary for the design.
+""",
+
+    "platform_expert": """
+You are a Platform Engineering Expert.
+Your goal is to build the Internal Developer Platform (IDP) and underlying infrastructure.
+- Focus on Infrastructure as Code (Nix, Terraform, Crossplane).
+- Expertise in Kubernetes, Containerization, and Cloud-Native ecosystems.
+- Prioritize developer experience (DX) and self-service capabilities.
+- Ensure the underlying compute/storage/networking is abstracted correctly.
+""",
+
+    "devops_mlops": """
+You are a DevOps & MLOps Expert.
+Your focus is on the automation of the software and data lifecycles.
+- Design CI/CD pipelines (GitHub Actions, Lefthook).
+- Ensure reproducible builds (Nix is your primary tool here).
+- For MLOps: Focus on model training pipelines, experiment tracking, and model serving.
+- Automate everything: testing, linting, packaging, and deployment.
+""",
+
+    "sre": """
+You are a Site Reliability Engineer (SRE).
+Your priority is reliability, scalability, and observability.
+- Think in terms of SLIs, SLOs, and Error Budgets.
+- Design for failure: circuit breakers, retries, rate limiting.
+- Focus on Observability: Logging, Metrics, Tracing (Prometheus, Grafana, OpenTelemetry).
+- Review code for potential performance bottlenecks and security risks.
+"""
+}
+</file>
+
+<file path="units/modules/flake-parts/omnibus-hive.nix">
+{
+  inputs,
+  lib,
+  config,
+  ...
+}:
+let
+  inherit (lib)
+    types
+    mkOption
+    mkMerge
+    mkIf
+    isFunction
+    ;
+in
+{
+  options = {
+    omnibus.pops.hive = mkOption {
+      type = types.either (lib.types.attrsOf lib.types.unspecified) (
+        types.functionTo (lib.types.attrsOf lib.types.unspecified)
+      );
+      default = { };
+      apply =
+        x:
+        let
+          hive =
+            l:
+            (inputs.omnibus.pops.hive.setHosts (
+              ((
+                (inputs.omnibus.pops.load {
+                  inputs = {
+                    inherit inputs;
+                  };
+                }).addLoadExtender
+                { load = l; }
+              ).exports.default
+              )
+            ));
+        in
+        if isFunction x then x hive else hive x;
+    };
+  };
+  config = mkMerge [
+    (mkIf (config.omnibus.pops.hive != { }) {
+      flake = {
+        inherit (config.omnibus.pops.hive.exports)
+          nixosConfigurations
+          homeConfigurations
+          darwinConfigurations
+          colmenaHive
+          ;
+      };
+    })
+  ];
+}
+</file>
+
+<file path="units/modules/flake-parts/omnibus-packages.nix">
+{
+  withSystem,
+  config,
+  lib,
+  inputs,
+  system,
+  ...
+}:
+let
+  inherit (lib)
+    types
+    mkOption
+    mkMerge
+    mkIf
+    ;
+
+  omnibusPackages = system: (config.perSystem system).omnibus.pops.packages;
+in
+{
+  imports = [ ./omnibusPersystem.nix ];
+  config = mkMerge [
+    ({
+      flake.overlays.default =
+        final: prev:
+        withSystem prev.stdenv.hostPlatform.system (
+          { config, ... }: config.omnibus.pops.packages.overlays.default
+        );
+      flake.overlays.composedPackages =
+        final: prev:
+        withSystem prev.stdenv.hostPlatform.system (
+          { config, ... }: config.omnibus.pops.packages.overlays.composedPackages
+        );
+      perSystem =
+        { config, options, ... }:
+        {
+          config = mkMerge [
+            (mkIf options.omnibus.pops.isDefined {
+              packages = config.omnibus.pops.packages.exports.derivations;
+            })
+          ];
+        };
+    })
+  ];
+
+}
+</file>
+
+<file path="units/modules/flake-parts/omnibus.nix">
+{
+  inputs,
+  lib,
+  config,
+  pkgs,
+  ...
+}:
+let
+  inherit (lib)
+    types
+    mkOption
+    mkMerge
+    mkIf
+    isFunction
+    ;
+in
+{
+  options = {
+    omnibus = mkOption {
+      type = types.either (lib.types.attrsOf lib.types.unspecified) (
+        types.functionTo (lib.types.attrsOf lib.types.unspecified)
+      );
+      default = { };
+      apply =
+        x:
+        let
+          omnibus =
+            l:
+            (
+              (inputs.omnibus.pops.self.addLoadExtender ({
+                load.inputs = {
+                  inherit inputs;
+                };
+              })).addLoadExtender
+              { load = l; }
+            ).exports.default;
+        in
+        if isFunction x then x omnibus else omnibus x;
+    };
+  };
+}
+</file>
+
+<file path="units/modules/flake-parts/omnibusPersystem.nix">
+{
+  lib,
+  flake-parts-lib,
+  inputs,
+  ...
+}:
+let
+  inherit (lib)
+    types
+    mkSubmodule
+    mkOption
+    ;
+  inherit (flake-parts-lib)
+    mkPerSystemOption
+    ;
+in
+{
+  options.perSystem = mkPerSystemOption (
+    { config, pkgs, ... }:
+    {
+      _file = ./omnibusPersystem.nix.nix;
+      options = {
+        omnibus.pops = mkOption {
+          type = types.submodule {
+            options = {
+              packages = mkOption {
+                type = types.lazyAttrsOf types.unspecified;
+                default = { };
+                apply =
+                  x:
+                  (inputs.omnibus.pops.packages {
+                    inputs.inputs = {
+                      nixpkgs = pkgs;
+                    };
+                  }).addLoadExtender
+                    { load = x; };
+                description = ''
+                  Packages to be exported with the extensible attribute
+                '';
+              };
+            };
+          };
+        };
+      };
+    }
+  );
+}
+</file>
+
+<file path="units/modules/claude.nix">
+{
+  lib,
+  config,
+  pkgs,
+  inputs,
+  ...
+}:
+{
+  claude.code.enable = true;
+  claude.code.env = {
+    ANTHROPIC_BASE_URL = "https://api.minimax.io/anthropic";
+    ANTHROPIC_AUTH_TOKEN = config.secretspec.secrets.MINIMAX_API_KEY;
+    API_TIMEOUT_MS = "2000000";
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"; # Note: Convert to string
+    ANTHROPIC_MODEL = "MiniMax-M2.1";
+    ANTHROPIC_SMALL_FAST_MODEL = "MiniMax-M2.1";
+    ANTHROPIC_DEFAULT_SONNET_MODEL = "MiniMax-M2.1";
+    ANTHROPIC_DEFAULT_OPUS_MODEL = "MiniMax-M2.1";
+    ANTHROPIC_DEFAULT_HAIKU_MODEL = "MiniMax-M2.1";
+  };
+  claude.code.hooks = {
+    # PostToolUse = {
+    #   command = ''
+    #     bash -c 'cd "$DEVENV_ROOT" && source "$(ls -t .direnv/devenv-profile*.rc 2>/dev/null | head -1)" && lefthook run pre-commit'
+    #   '';
+    #   matcher = "^(Edit|MultiEdit|Write)$";
+    # };
+  };
+  claude.code.mcpServers = {
+    # Local devenv MCP server
+    devenv = {
+      type = "stdio";
+      command = "devenv";
+      args = [ "mcp" ];
+      env = {
+        DEVENV_ROOT = config.devenv.root;
+      };
+    };
+    nixos = {
+      type = "stdio";
+      command = "nix";
+      args = [
+        "run"
+        "github:utensils/mcp-nixos"
+        "--"
+      ];
+    };
+    MiniMax = {
+      type = "stdio";
+      command = "uvx";
+      args = [ "minimax-coding-plan-mcp" ];
+      env = {
+        MINIMAX_API_KEY = config.secretspec.secrets.MINIMAX_API_KEY;
+        MINIMAX_MCP_BASE_PATH = "${config.devenv.root}/.minimax-output";
+        MINIMAX_API_HOST = "https://api.minimax.io";
+        MINIMAX_API_RESOURCE_MODE = "url";
+      };
+    };
+
+    orchestrator = {
+      type = "stdio";
+      command = "python"; # Use python from devenv environment
+      args = [ "./mcp-server/orchestrator.py" ];
+      env = {
+        # Pass your Minimax Key to the python script
+        ANTHROPIC_API_KEY = config.secretspec.secrets.MINIMAX_API_KEY;
+        ANTHROPIC_BASE_URL = "https://api.minimax.io/anthropic";
+        PYTHONPATH = "${config.devenv.root}/mcp-server";
+      };
+    };
+  };
+}
+</file>
+
+<file path="units/modules/files.nix">
+{ lib, ... }:
+{
+  config = {
+    files = lib.mkMerge [
+      { }
+    ];
+  };
+}
+</file>
+
+<file path=".devcontainer.json">
+{
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "mkhl.direnv"
+      ]
+    }
+  },
+  "image": "ghcr.io/cachix/devenv/devcontainer:latest",
+  "overrideCommand": false,
+  "updateContentCommand": "devenv test"
+}
+</file>
+
+<file path=".github-description.txt">
+Exploring AI-assisted coding workflows with devenv, Nix ecosystem, and modern SDLC standards. Features Claude Code integration, automated changelog generation, conventional commits, and reproducible development environments.
+
+Topics: devenv, nix, claude-code, conventional-commits, cocogitto, lefthook, omnibus, justfile, sdlc, ai-coding, mcp-servers, reproducible-builds
+</file>
+
+<file path=".python-version">
+3.13
+</file>
+
+<file path="pyproject.toml">
+[project]
+name = "omni-devenv-fusion"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.75.0",
+    "mcp>=1.25.0",
+]
+</file>
+
+<file path="test-mcp.py">
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+# === Debug: Print current environment info ===
+print(f"📂 Current Working Directory (CWD): {os.getcwd()}")
+print(f"👤 Current User: {os.environ.get('USER')}")
+
+CONFIG_CANDIDATES = [
+    # Try absolute and relative paths
+    Path(".mcp.json").absolute(),
+    Path(".claude/settings.json").absolute(),
+]
+
+def find_config():
+    print("\n🔎 Searching for config files...")
+    found = None
+    for path in CONFIG_CANDIDATES:
+        exists = path.exists()
+        status = "✅ Exists" if exists else "❌ Not found"
+        print(f"   Check: {path} -> {status}")
+        if exists and found is None:
+            found = path
+    return found
+
+def test_orchestrator():
+    config_path = find_config()
+
+    if not config_path:
+        print("\n🚫 Fatal Error: No config file found after checking all candidates!")
+        print("💡 Suggestion: Run from project root and verify filename with 'ls -la .mcp.json'.")
+        return
+
+    print(f"\n🚀 Using config file: {config_path}")
+
+    try:
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+    except Exception as e:
+        print(f"❌ Failed to parse JSON: {e}")
+        return
+
+    servers = config.get("mcpServers", {})
+    if "orchestrator" not in servers:
+        print("❌ No 'orchestrator' field in config file.")
+        return
+
+    server_conf = servers["orchestrator"]
+    env_vars = server_conf.get("env", {})
+
+    # Print API Key info (masked)
+    api_key = env_vars.get("ANTHROPIC_API_KEY", "")
+    if api_key:
+        print(f"🔑 Successfully read API Key from JSON (prefix: {api_key[:5]}...)")
+    else:
+        print("⚠️  ANTHROPIC_API_KEY not found in JSON")
+
+    # Start test
+    cmd = server_conf.get("command")
+    args = server_conf.get("args", [])
+    executable = sys.executable if cmd in ["python", "python3"] else cmd
+
+    run_env = os.environ.copy()
+    run_env.update(env_vars)
+
+    print(f"▶️  Starting Server: {executable} {' '.join(args)}")
+
+    process = subprocess.Popen(
+        [executable] + args,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=run_env,
+        text=True,
+        bufsize=1
+    )
+
+    # Send initialize
+    init_msg = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "test", "version": "1.0"}}}
+    process.stdin.write(json.dumps(init_msg) + "\n")
+    process.stdin.flush()
+
+    response = process.stdout.readline()
+    if response:
+        print(f"✅ Server Response:\n{response.strip()}")
+    else:
+        print(f"❌ No response. Stderr:\n{process.stderr.read()}")
+
+    process.terminate()
+
+if __name__ == "__main__":
+    test_orchestrator()
+</file>
+
+<file path="mcp-server/orchestrator.py">
+# mcp-server/orchestrator.py
+import os
+import sys
+import asyncio
+from mcp.server.fastmcp import FastMCP
+from anthropic import AsyncAnthropic  # Key point: Import async client
+from personas import PERSONAS         # Import separated prompts
+
+# Initialize MCP Server
+mcp = FastMCP("orchestrator-tools")
+
+# Startup logs
+sys.stderr.write(f"🚀 Orchestrator Server (Async) starting... PID: {os.getpid()}\n")
+
+# Global Client initialization (connection pool reuse)
+# AsyncAnthropic automatically handles connection pooling, avoiding new connections per call
+api_key = os.environ.get("ANTHROPIC_API_KEY")
+base_url = os.environ.get("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
+
+if not api_key:
+    sys.stderr.write("⚠️ Warning: ANTHROPIC_API_KEY not found in environment.\n")
+
+client = AsyncAnthropic(api_key=api_key, base_url=base_url)
+
+@mcp.tool()
+async def consult_specialist(role: str, query: str) -> str:
+    """
+    Consult a specialized AI expert for a specific domain task (Async Optimized).
+
+    Args:
+        role: The role to consult. Options: 'architect', 'platform_expert', 'devops_mlops', 'sre'.
+        query: The specific question, code snippet, or design problem to analyze.
+    """
+    # 1. Validate inputs
+    if role not in PERSONAS:
+        return f"Error: Role '{role}' not found. Available roles: {list(PERSONAS.keys())}"
+    
+    if not api_key:
+        return "Error: ANTHROPIC_API_KEY is missing."
+
+    system_prompt = PERSONAS[role]
+
+    try:
+        # 2. Async API call (Non-blocking I/O)
+        # The await here releases control, allowing the server to handle other requests concurrently (e.g., heartbeats, cancellations)
+        response = await client.messages.create(
+            model="MiniMax-M2.1",
+            max_tokens=4096,
+            system=system_prompt,
+            messages=[{"role": "user", "content": query}]
+        )
+
+        # 3. Process response
+        final_text = []
+        for block in response.content:
+            if hasattr(block, 'type') and block.type == 'text':
+                final_text.append(block.text)
+            elif hasattr(block, 'text'):
+                final_text.append(block.text)
+
+        if not final_text:
+            return "Error: Model returned content but no text block found."
+
+        return f"--- 🤖 Expert Opinion: {role.upper()} ---\n" + "\n".join(final_text)
+
+    except Exception as e:
+        sys.stderr.write(f"❌ API Call Error: {str(e)}\n")
+        return f"Error consulting specialist: {str(e)}"
+
+if __name__ == "__main__":
+    mcp.run()
+</file>
+
+<file path="tool-router/data/examples/nix.edit.jsonl">
+{"id":"nix-mkNixago-dmerge-extend","intent":"Extend lefthook.nix config using dmerge to append exclude list and remove commands","syntax_focus":["mkNixago","dmerge","prepend"],"do_not":["Do NOT write (lefthook: lefthook//...) - dmerge is implicit","Do NOT wrap in data={...} unless explicitly required by mkNixago signature"],"allowed_edits":["inherit dmerge prepend","define data field with extend operations","use builtins.removeAttrs for command removal"],"checks":["nix fmt"],"notes":"mkNixago applies dmerge automatically - pass only the fields you want to extend, not full override. Use prepend for lists, builtins.removeAttrs for key removal."}
+{"id":"nix-module-args-keep-ellipsis","intent":"Add optional module argument while preserving backwards compatibility","syntax_focus":["module-args-attrset","ellipsis"],"do_not":["Do NOT remove `...` from module args","Do NOT replace `{ config, lib, pkgs, ... }:` with `args:`"],"allowed_edits":["add_optional_arg_with_default","update_let_bindings","update_inherit"],"checks":["nix fmt","statix check","deadnix","nix flake check"],"before":"{ config, lib, pkgs, ... }:","after":"{ config, lib, pkgs, myOpt ? null, ... }:"}
+{"id":"nix-dmerge-import-flake-inputs","intent":"Fix dmerge import path when accessed through nested flake inputs","syntax_focus":["dmerge","inherit","inputs"],"do_not":["Do NOT use dmerge directly without proper import path","Do NOT access nested flake inputs incorrectly"],"allowed_edits":["update import path in inherit statement","access dmerge through correct flake input chain"],"checks":["nix fmt","nix flake check"],"example":"inherit (inputs.omnibus.inputs.flops.inputs.dmerge) prepend;"}
+{"id":"nix-lefthook-commands-access","intent":"Fix lefthook commands access path for pre-commit configuration","syntax_focus":["lefthook","commands","data"],"do_not":["Do NOT use lefthook.data.pre-commit.commands","Do NOT access commands without .default prefix when using mkNixago"],"allowed_edits":["add .default before .data","update command access path"],"checks":["nix fmt","nix flake check"],"example":"commands = builtins.removeAttrs lefthook.default.data.pre-commit.commands [ \"treefmt\" ];"}
+{"id":"nix-omnibus-devenv-inputs-filtering","intent":"Pass inputs through devenv filter using __inputs__ and __nixpkgs__ in omnibus loader","syntax_focus":["omnibus","__inputs__","__nixpkgs__","devenv"],"do_not":["Do NOT pass inputs/nixpkgs directly in load - they are filtered by devenv","Do NOT omit __inputs__ when you need to access inputs in nested modules"],"allowed_edits":["add __inputs__ section filtered inputs","add to pass __nixpkgs__ section for nixpkgs passthrough","use inputs = { inherit nixpkgs; } for available inputs in module args"],"checks":["nix fmt","nix flake check"],"example":"load = {\n  src = ./units/modules;\n  inputs = {\n    inherit nixpkgs-latest;\n    __inputs__ = { inherit nixpkgs-latest packages; };\n    inputs = { nixpkgs = nixpkgs-latest; };\n  };\n};"}
+</file>
+
+<file path="units/modules/python.nix">
+{ __inputs__, ... }:
+{
+  languages.python = {
+    enable = true;
+    venv.enable = true;
+    # directory = "../.";
+    uv = {
+      enable = true;
+      # package = inputs.nixpkgs.uv;
+      sync.enable = true;
+    };
+  };
+}
+</file>
+
+<file path="units/packages/mcp-inspector.nix">
+{
+  lib,
+  buildNpmPackage,
+  fetchFromGitHub,
+  nodejs,
+  jq,
+  ...
+}:
+buildNpmPackage rec {
+  pname = "mcp-inspector";
+  version = "0.17.1";
+
+  src = fetchFromGitHub {
+    owner = "modelcontextprotocol";
+    repo = "inspector";
+    rev = version;
+    hash = "sha256-xiNBMCtDAoNxgB4Vh+m/2hrBBwzzAB9/37J0qsDlSaE=";
+  };
+
+  postPatch = ''
+    ${jq}/bin/jq '.packages["node_modules/router/node_modules/path-to-regexp"] += {
+      resolved: "https://registry.npmjs.org/path-to-regexp/-/path-to-regexp-8.2.0.tgz",
+      integrity: "sha512-TdrF7fW9Rphjq4RjrW0Kp2AW0Ahwu9sRGTkS6bvDi0SCwZlEZYmcfDbEsTz8RVk0EHIS/Vd1bv3JhG+1xZuAyQ=="
+    }' package-lock.json > package-lock.json.new
+    mv package-lock.json.new package-lock.json
+    sed -i 's/\.allowExcessArguments()/\.allowExcessArguments?.()/g' cli/src/cli.ts
+  '';
+
+  makeWrapperArgs = [
+    "--prefix PATH : ${
+      lib.makeBinPath [
+        nodejs
+      ]
+    }"
+  ];
+
+  dontNpmPrune = true;
+
+  npmDepsHash = "sha256-QuG+RLsduOplFEY92sQC4R7w04Pk/nIIvaQaEHYLzXU=";
+
+  doCheck = false;
+
+  meta = with lib; {
+    description = "Visual testing tool for MCP servers";
+    homepage = "https://github.com/modelcontextprotocol/inspector";
+    license = licenses.mit;
+    maintainers = [ ];
+    platforms = platforms.all;
+  };
+}
+</file>
+
+<file path="secretspec.toml">
+[project]
+name = "omni-devenv-fusion"
+revision = "1.0"
+# Extend configurations from subdirectories
+# extends = [ "subdir1", "subdir2" ]
+
+[profiles.default]
+MINIMAX_API_KEY = { description = "API key for MINIMAX", required = true }
+
+[profiles.development]
+# Development profile inherits all secrets from default profile
+# Only define secrets here that need different values or settings than default
+# DATABASE_URL = { default = "sqlite:///dev.db" }
+#
+# New secrets
+# REDIS_URL = { description = "Redis connection URL for caching", required = false, default = "redis://localhost:6379" }
+</file>
+
+<file path="units/modules/lefthook.nix">
+{
+  inputs,
+  __inputs__,
+  pkgs,
+  config,
+  lib,
+}:
+let
+  inherit (inputs.omnibus.inputs.flops.inputs.dmerge) prepend;
+  initConfigs =
+    (inputs.omnibus.units.configs {
+      inputs = {
+        inputs = {
+          nixpkgs = __inputs__.nixpkgs-latest;
+          inherit (inputs.omnibus.flake.inputs) git-hooks;
+        };
+      };
+    }).exports.default;
+
+  lefthook = initConfigs.lefthook;
+
+  # Define generator configurations
+  generators = [
+    {
+      name = "lefthook";
+      gen = (config.omnibus.ops.mkNixago initConfigs.nixago-lefthook) {
+        data = {
+          # Remove treefmt from commands
+          commands = builtins.removeAttrs lefthook.default.data.pre-commit.commands [
+            "treefmt"
+          ];
+          # Exclude CHANGELOG.md from typos (false positives from commit hashes)
+          exclude = prepend [ "CHANGELOG.md" ];
+        };
+      } initConfigs.lefthook.nix initConfigs.lefthook.shell;
+    }
+    {
+      name = "conform";
+      gen = (config.omnibus.ops.mkNixago initConfigs.nixago-conform) initConfigs.conform.default;
+    }
+    {
+      name = "cog";
+      gen =
+        (config.omnibus.ops.mkNixago initConfigs.nixago-cog) initConfigs.cog.default
+          {
+            hook.mode = "copy";
+            data = {
+              changelog = {
+                path = "CHANGELOG.md";
+                template = "remote";
+                remote = "github.com";
+                repository = "omni-devenv-fusion";
+                owner = "tao3k";
+                authors = [
+                  {
+                    username = "gtrunsec";
+                    signature = "Guangtao";
+                  }
+                ];
+              };
+            };
+          };
+    }
+  ];
+
+  # Generate all hooks using map
+  generatedHooks = map (g: g.gen) generators;
+in
+{
+  config = {
+    packages = lib.flatten (map (g: g.__passthru.packages) generatedHooks);
+    enterShell = lib.concatMapStringsSep "\n" (g: g.shellHook) generatedHooks;
+    # perSystem = {...}:{
+    #   devenv.shells.default = {
+    #     enterShell = ''
+    #       ${config.omnibus.ops.mkNixago initConfigs.nixago-lefthook}
+    #     '';
+    #   };
+    # };
+  };
+}
+</file>
+
+<file path=".envrc">
+for profile in $NIX_PROFILES; do
+    if [ -d "$profile/bin" ]; then
+        PATH_add "$profile/bin"
+    fi
+done
+
+if ! has devenv; then
+    echo "Devenv not found in PATH. Checking/Installing via Nix profile..."
+    
+    if [ ! -e "$HOME/.nix-profile/bin/devenv" ]; then
+        echo "Installing devenv..."
+        nix profile add github:cachix/devenv#devenv
+    else
+        echo "Devenv found in .nix-profile but was not in PATH. (Path added above)"
+    fi
+fi
+
+{ # PRJ Base Directory Specification: https://github.com/numtide/prj-spec
+        # shellcheck source=/dev/null
+        source "$(
+                fetchurl \
+                        "https://raw.githubusercontent.com/numtide/prj-spec/9b0ffcd0fddcb261bcd73ad9dad18a096760b4a0/contrib/direnv" \
+                        "sha256-54YaaGly6Q0E8GhFT9fB/h9tN1PDERo2/4R4X0Pdi/c="
+        )"
+}
+
+source_url "https://raw.githubusercontent.com/cachix/devenv/77768ac70ae8201738b0c3fa41621a6fa0fb2df2/devenv/direnvrc" "sha256-ato6rQhHH/nvLMD8uCnJ8zTD8kxsm15WlfXkMNsICEQ="
+
+
+use devenv
+</file>
+
+<file path="CHANGELOG.md">
+# Changelog
+All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
+
+- - -
+## [v1.1.0](https://github.com/tao3k/omni-devenv-fusion/compare/d538b85ae40a885f5ce5dadc11e2498bfa6b8a05..v1.1.0) - 2025-12-30
+#### Features
+- rename repo to omni-devenv-fusion with MiniMax integration - ([a0f3c18](https://github.com/tao3k/omni-devenv-fusion/commit/a0f3c186aef0854a4fbb7ce057599fce595a1140)) - guangtao
+#### Bug Fixes
+- remove unsupported --no-pager flag from cog commands - ([afebf9b](https://github.com/tao3k/omni-devenv-fusion/commit/afebf9bea484b97725911650b37d10e8e4f37e9c)) - guangtao
+- stage all files before commit to capture hook changes - ([c27abcf](https://github.com/tao3k/omni-devenv-fusion/commit/c27abcfbdaf4fb03e86bebb1fcbdef57c2fa7b4f)) - guangtao
+#### Documentation
+- improve README with full secretspec providers and acknowledgments - ([60c6699](https://github.com/tao3k/omni-devenv-fusion/commit/60c6699ed47ab887879263cac90dc7fe81ca4b52)) - guangtao
+- rewrite README with Orchestrator workflow and SRE health checks - ([fa0ddd8](https://github.com/tao3k/omni-devenv-fusion/commit/fa0ddd821d9cde0d21bc56944a1c3145f35385b0)) - guangtao
+- update module structure documentation - ([80e2486](https://github.com/tao3k/omni-devenv-fusion/commit/80e2486fd868a71f21658ee0db710e8628f36482)) - guangtao
+- add secretspec setup documentation with 1Password integration - ([7ff15c6](https://github.com/tao3k/omni-devenv-fusion/commit/7ff15c6426efe5094369b38f327a847d248b3eb2)) - guangtao
+#### Refactoring
+- reorganize nix modules into modules/ directory - ([24422c9](https://github.com/tao3k/omni-devenv-fusion/commit/24422c972a382abe2bf51947e9d4232d26e88069)) - guangtao
+#### Miscellaneous Chores
+- stage local settings - ([1ba2b44](https://github.com/tao3k/omni-devenv-fusion/commit/1ba2b44dbc9a711a09dd3910baaf34bbf559746e)) - guangtao
+- update project name references to omni-devenv-fusion - ([ccde25e](https://github.com/tao3k/omni-devenv-fusion/commit/ccde25e0b74f1be32285c5443e91b4bce51a42ef)) - guangtao
+- formalize agent workflow with SRE health checks - ([7841d2d](https://github.com/tao3k/omni-devenv-fusion/commit/7841d2dc3dfdf28344174da84c5955b049070642)) - guangtao
+- sync with release - ([d538b85](https://github.com/tao3k/omni-devenv-fusion/commit/d538b85ae40a885f5ce5dadc11e2498bfa6b8a05)) - guangtao
+
+- - -
+
+## [v1.0.0](https://github.com/tao3k/devenv-native/compare/5215ac951e138bb1d52350beedb0ff1381da9ed1..v1.0.0) - 2025-12-29
+#### Features
+- change claude to MINIMAX_2.0 - ([7bce13c](https://github.com/tao3k/devenv-native/commit/7bce13c9219b8707f6d36cae8615f2aec047edde)) - guangtao
+- add justfile  workflow - ([acb2090](https://github.com/tao3k/devenv-native/commit/acb2090c7be92f4d01a1b4f9cc990e17108b0819)) - guangtao
+- add cog - ([571d78d](https://github.com/tao3k/devenv-native/commit/571d78d6eeea60483c4619c71b1cda58449849ac)) - guangtao
+- add cog - ([00b9ca7](https://github.com/tao3k/devenv-native/commit/00b9ca7a0a540dc6dd1002d074a50276da5ee217)) - guangtao
+- test lefthook - ([9c2d502](https://github.com/tao3k/devenv-native/commit/9c2d502f2301d93e6c55a634bf4bc8b9e8e0d9c9)) - guangtao
+#### Bug Fixes
+- make the cog.toml to copy mode - ([bb1d057](https://github.com/tao3k/devenv-native/commit/bb1d0570808107f2408ea6525a8a8862cf3d3c01)) - guangtao
+#### Documentation
+- init README - ([3291c44](https://github.com/tao3k/devenv-native/commit/3291c4402a2fa92300066709624f243d56686c6a)) - guangtao
+#### Tests
+- add claude test - ([f5a7cbd](https://github.com/tao3k/devenv-native/commit/f5a7cbdde71724d3d51b14e2c647ba7c05c871c3)) - guangtao
+#### Miscellaneous Chores
+- (**claude**) add claude.md - ([58031b3](https://github.com/tao3k/devenv-native/commit/58031b38a249a003d45c27282882a698402ef0c5)) - guangtao
+- (**version**) v0.1.0 - ([4f6723e](https://github.com/tao3k/devenv-native/commit/4f6723e48a3efc8cb8ae731be3d8770125ae4ef8)) - guangtao
+- init - ([5215ac9](https://github.com/tao3k/devenv-native/commit/5215ac951e138bb1d52350beedb0ff1381da9ed1)) - guangtao
+
+- - -
+
+## [v0.1.0](https://github.com/tao3k/devenv-native/compare/092dd9f6e36f86f8abf0a3466988540dfe847621..v0.1.0) - 2025-12-28
+#### Features
+- add cog - ([1a1f3c9](https://github.com/tao3k/devenv-native/commit/1a1f3c9aeca05f7eb49171a12bacf301e01a070f)) - guangtao
+- add cog - ([38fc0f3](https://github.com/tao3k/devenv-native/commit/38fc0f39858f766db037a19f0fbe52e6dbe53032)) - guangtao
+- test lefthook - ([c15f6f6](https://github.com/tao3k/devenv-native/commit/c15f6f6646b3195ac2ffcd8a8a710fd7725f838c)) - guangtao
+#### Tests
+- add claude test - ([a572568](https://github.com/tao3k/devenv-native/commit/a5725684684aebbf9fdc4a4dab3d31a8ae3c9ae3)) - guangtao
+#### Miscellaneous Chores
+- (**claude**) add claude.md - ([1ceb7ee](https://github.com/tao3k/devenv-native/commit/1ceb7ee87de17765d01e3820451907f7e3d9d9a0)) - guangtao
+- initial commit - ([092dd9f](https://github.com/tao3k/devenv-native/commit/092dd9f6e36f86f8abf0a3466988540dfe847621)) - guangtao
+
+- - -
+
+Changelog generated by [cocogitto](https://github.com/cocogitto/cocogitto).
+</file>
+
+<file path="VERSION">
+1.2.0-dev
+</file>
+
+<file path=".gitignore">
+# Devenv
+.devenv*
+devenv.local.nix
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml
+
+.data
+
+.mcp.json
+
+.claude/settings.json
+
+# nixago: ignore-linked-files
+/cog.toml
+/.conform.yaml
+/lefthook.yml
+</file>
+
+<file path="devenv.lock">
+{
+  "nodes": {
+    "POP": {
+      "inputs": {
+        "flake-compat": [
+          "omnibus",
+          "flops"
+        ],
+        "nixlib": [
+          "omnibus",
+          "flops",
+          "nixlib"
+        ],
+        "nixpkgs": [
+          "omnibus",
+          "flops"
+        ]
+      },
+      "locked": {
+        "lastModified": 1765336162,
+        "owner": "divnix",
+        "repo": "POP",
+        "rev": "b6b81b1c42ba78fda5b3021f8927cf2a52b5460e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "divnix",
+        "repo": "POP",
+        "type": "github"
+      }
+    },
+    "blueprint": {
+      "inputs": {
+        "nixpkgs": [
+          "llm-agents",
+          "nixpkgs"
+        ],
+        "systems": "systems"
+      },
+      "locked": {
+        "lastModified": 1763308703,
+        "owner": "numtide",
+        "repo": "blueprint",
+        "rev": "5a9bba070f801d63e2af3c9ef00b86b212429f4f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "blueprint",
+        "type": "github"
+      }
+    },
+    "call-flake": {
+      "locked": {
+        "lastModified": 1754792893,
+        "owner": "divnix",
+        "repo": "call-flake",
+        "rev": "1abb37095a152e0e8ba4315c57c84905bc8bf93c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "divnix",
+        "repo": "call-flake",
+        "type": "github"
+      }
+    },
+    "devenv": {
+      "locked": {
+        "dir": "src/modules",
+        "lastModified": 1766921574,
+        "owner": "cachix",
+        "repo": "devenv",
+        "rev": "02c9dcf3e050400d8101057f9f00ec458af7c959",
+        "type": "github"
+      },
+      "original": {
+        "dir": "src/modules",
+        "owner": "cachix",
+        "repo": "devenv",
+        "type": "github"
+      }
+    },
+    "dmerge": {
+      "inputs": {
+        "haumea": [
+          "omnibus",
+          "flops",
+          "haumea"
+        ],
+        "nixlib": [
+          "omnibus",
+          "flops",
+          "nixlib"
+        ],
+        "yants": [
+          "omnibus",
+          "flops",
+          "yants"
+        ]
+      },
+      "locked": {
+        "lastModified": 1698340621,
+        "owner": "divnix",
+        "repo": "dmerge",
+        "rev": "7e528814b0da207ea12ab3f62f2a928b7b8fe9c6",
+        "type": "github"
+      },
+      "original": {
+        "owner": "divnix",
+        "repo": "dmerge",
+        "type": "github"
+      }
+    },
+    "flake-compat": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1766929376,
+        "owner": "edolstra",
+        "repo": "flake-compat",
+        "rev": "236f248441a986331cda53b039e7f9fd96e03635",
+        "type": "github"
+      },
+      "original": {
+        "owner": "edolstra",
+        "repo": "flake-compat",
+        "type": "github"
+      }
+    },
+    "flops": {
+      "inputs": {
+        "POP": "POP",
+        "call-flake": "call-flake",
+        "dmerge": "dmerge",
+        "haumea": "haumea",
+        "nixlib": "nixlib",
+        "yants": "yants"
+      },
+      "locked": {
+        "lastModified": 1766285703,
+        "owner": "tao3k",
+        "repo": "flops",
+        "rev": "43ab978be4f7071d9e85393ec4a30f637f423471",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tao3k",
+        "repo": "flops",
+        "type": "github"
+      }
+    },
+    "git-hooks": {
+      "inputs": {
+        "flake-compat": "flake-compat",
+        "gitignore": "gitignore",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1765911976,
+        "owner": "cachix",
+        "repo": "git-hooks.nix",
+        "rev": "b68b780b69702a090c8bb1b973bab13756cc7a27",
+        "type": "github"
+      },
+      "original": {
+        "owner": "cachix",
+        "repo": "git-hooks.nix",
+        "type": "github"
+      }
+    },
+    "gitignore": {
+      "inputs": {
+        "nixpkgs": [
+          "git-hooks",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1762808025,
+        "owner": "hercules-ci",
+        "repo": "gitignore.nix",
+        "rev": "cb5e3fdca1de58ccbc3ef53de65bd372b48f567c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "gitignore.nix",
+        "type": "github"
+      }
+    },
+    "haumea": {
+      "inputs": {
+        "nixpkgs": [
+          "omnibus",
+          "flops",
+          "nixlib"
+        ]
+      },
+      "locked": {
+        "lastModified": 1708375098,
+        "owner": "nix-community",
+        "repo": "haumea",
+        "rev": "ec6350fd9353e7f27ce0e85d31f82e3ed73e4d70",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "haumea",
+        "type": "github"
+      }
+    },
+    "llm-agents": {
+      "inputs": {
+        "blueprint": "blueprint",
+        "nixpkgs": "nixpkgs",
+        "treefmt-nix": "treefmt-nix"
+      },
+      "locked": {
+        "lastModified": 1767018837,
+        "owner": "numtide",
+        "repo": "llm-agents.nix",
+        "rev": "edcea569dfdadb140d6e6960bdf91ecda19b3696",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "llm-agents.nix",
+        "type": "github"
+      }
+    },
+    "nixlib": {
+      "locked": {
+        "lastModified": 1766884708,
+        "owner": "nix-community",
+        "repo": "nixpkgs.lib",
+        "rev": "15177f81ad356040b4460a676838154cbf7f6213",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "nixpkgs.lib",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1766996594,
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "0744ef1b047f07d31d9962d757ffe38ec14a4d41",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs-latest": {
+      "locked": {
+        "lastModified": 1766870016,
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "5c2bc52fb9f8c264ed6c93bd20afa2ff5e763dce",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1764580874,
+        "owner": "cachix",
+        "repo": "devenv-nixpkgs",
+        "rev": "dcf61356c3ab25f1362b4a4428a6d871e84f1d1d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "cachix",
+        "ref": "rolling",
+        "repo": "devenv-nixpkgs",
+        "type": "github"
+      }
+    },
+    "omnibus": {
+      "inputs": {
+        "flops": "flops"
+      },
+      "locked": {
+        "lastModified": 1766963138,
+        "owner": "tao3k",
+        "repo": "omnibus",
+        "rev": "8b2aacfa5384c1c487b449d7688a5f0b953e42c6",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tao3k",
+        "ref": "main",
+        "repo": "omnibus",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "devenv": "devenv",
+        "git-hooks": "git-hooks",
+        "llm-agents": "llm-agents",
+        "nixpkgs": "nixpkgs_2",
+        "nixpkgs-latest": "nixpkgs-latest",
+        "omnibus": "omnibus",
+        "pre-commit-hooks": [
+          "git-hooks"
+        ]
+      }
+    },
+    "systems": {
+      "locked": {
+        "lastModified": 1681028828,
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
+        "type": "github"
+      }
+    },
+    "treefmt-nix": {
+      "inputs": {
+        "nixpkgs": [
+          "llm-agents",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1766000401,
+        "owner": "numtide",
+        "repo": "treefmt-nix",
+        "rev": "42d96e75aa56a3f70cab7e7dc4a32868db28e8fd",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "treefmt-nix",
+        "type": "github"
+      }
+    },
+    "yants": {
+      "inputs": {
+        "nixpkgs": [
+          "omnibus",
+          "flops",
+          "nixlib"
+        ]
+      },
+      "locked": {
+        "lastModified": 1699522279,
+        "owner": "divnix",
+        "repo": "yants",
+        "rev": "cde27c2821d925245303650c2914d4b7d3a435cd",
+        "type": "github"
+      },
+      "original": {
+        "owner": "divnix",
+        "ref": "refs/pull/5/head",
+        "repo": "yants",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
+</file>
+
+<file path="devenv.yaml">
+inputs:
+  llm-agents:
+    url: github:numtide/llm-agents.nix
+  nixpkgs:
+    url: github:cachix/devenv-nixpkgs/rolling
+  nixpkgs-latest:
+    url: github:NixOS/nixpkgs/nixpkgs-unstable
+  omnibus:
+    url: github:tao3k/omnibus/main
+allowUnfree: true
+secretspec:
+  enable: true
+  profile: development
+  provider: onepassword
+</file>
+
+<file path="README.md">
+# omni-devenv-fusion
+
+> Orchestrator-Worker workflow with devenv, Nix, and Claude Code
+
+A development environment showcasing AI-assisted software development lifecycle (SDLC) with the Orchestrator pattern.
+
+## Quick Start
+
+```bash
+# Clone and enter
+git clone https://github.com/tao3k/omni-devenv-fusion.git
+cd omni-devenv-fusion
+
+# Setup (direnv auto-loads the environment)
+just setup
+
+# View all commands
+just
+
+# Validate everything
+just validate
+```
+
+## Key Features
+
+### 🤖 Orchestrator-Worker Pattern
+
+Claude Code acts as the **Lead Architect & Orchestrator**, delegating complex tasks to specialized experts via MCP:
+
+- **`architect`**: High-level design, refactoring strategies
+- **`platform_expert`**: Nix/OS configuration, infrastructure
+- **`devops_mlops`**: CI/CD pipelines, build workflows
+- **`sre`**: Reliability, observability, security
+
+```bash
+# Example: Consult multiple experts for a complex task
+just agent-commit "feat" "" "add redis service"
+# Delegates to platform_expert for devenv config,
+# devops_mlops for CI/CD, sre for health checks
+```
+
+### ⚡ Agent-Friendly Commands
+
+All commands support non-interactive execution for AI agents:
+
+| Command | Description |
+|---------|-------------|
+| `just agent-commit <type> "" <msg>` | Non-interactive commit |
+| `just agent-validate` | Run all checks |
+| `just agent-fmt` | Apply formatting fixes |
+| `just agent-bump [auto\|patch\|minor\|major]` | Version bump |
+| `just agent-release` | Complete release workflow |
+
+### 🏥 SRE Health Checks
+
+Built-in health monitoring with machine-parseable JSON output:
+
+```bash
+# Human-readable
+just health
+
+# Machine-parseable (for CI/AI)
+JUST_JSON=true just health-report
+# {"component":"git","branch":"main",...}
+```
+
+Available checks:
+- `health-git` - Repository status
+- `health-nix` - Nix environment
+- `health-devenv` - Devenv configuration
+- `health-secrets` - Secret availability
+- `health-api-keys` - API key validation
+
+### 📦 Reproducible Environments
+
+- **devenv**: Declarative development shells with Nix
+- **direnv**: Automatic environment loading
+- **omnibus**: Modular configuration framework
+- **flake-parts**: Composable Nix modules
+
+### 🔄 Modern SDLC
+
+- **Conventional Commits**: Enforced via conform
+- **Automated Changelog**: Generated with cocogitto
+- **Semantic Versioning**: Auto-bump based on commits
+- **Git Hooks**: lefthook + omnibus framework
+
+## Architecture
+
+```
+omni-devenv-fusion/
+├── devenv.nix              # Main devenv configuration
+├── devenv.yaml             # Flake inputs
+├── justfile                # Task runner (40+ commands)
+├── CLAUDE.md               # Orchestrator instructions
+├── modules/
+│   ├── claude.nix          # Claude Code + MCP servers
+│   ├── lefthook.nix        # Git hooks (omnibus)
+│   ├── python.nix          # Python environment
+│   └── flake-parts/
+│       └── omnibus.nix     # Omnibus framework
+└── mcp-server/
+    └── orchestrator.py     # Expert consultation server
+```
+
+## Available Commands
+
+### Validation & Quality
+
+```bash
+just validate      # Run all checks (fmt, lint, test)
+just check-format  # Check formatting only
+just check-commits # Validate commit messages
+just lint          # Run linters
+just fmt           # Format code
+just test          # Run tests
+```
+
+### Changelog & Version
+
+```bash
+just changelog-preview  # Preview next release
+just changelog-stats    # Commit statistics
+just version            # Show current version
+just bump-auto          # Auto-bump version
+just bump-patch         # Bump patch (0.0.X)
+```
+
+### Git Operations
+
+```bash
+just status            # Repository status
+just log               # Recent commits
+just agent-commit      # Non-interactive commit
+just commit            # Interactive commit (human)
+```
+
+### Health & Diagnostics
+
+```bash
+just health            # Full health check
+just health-report     # JSON report (for AI/CI)
+just secrets-check     # Secret availability
+just info              # Environment info
+```
+
+### Release
+
+```bash
+just pre-release       # Pre-release checklist
+just release           # Complete release
+just publish-release   # Publish to GitHub
+```
+
+## Claude Code Integration
+
+### PostToolUse Hook
+
+Claude Code automatically runs quality checks after edits:
+
+```nix
+claude.code.hooks = {
+  PostToolUse = {
+    command = "lefthook run pre-commit";
+    matcher = "^(Edit|MultiEdit|Write)$";
+  };
+};
+```
+
+### MCP Servers
+
+- **devenv**: Local devenv context
+- **nixos**: NixOS package/option search
+- **orchestrator**: Expert consultation (architect, platform_expert, devops_mlops, sre)
+
+### Orchestrator Workflow
+
+```python
+# MCP orchestrator.py provides expert consultation
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("orchestrator-tools")
+
+@mcp.tool()
+def consult_specialist(role: str, query: str) -> str:
+    """Consult AI expert for domain-specific guidance"""
+    # Returns expert opinion based on role
+```
+
+## Conventional Commits
+
+All commits follow the specification:
+
+```
+<type>: <description>
+
+Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
+```
+
+### Examples
+
+```bash
+# Agent (automated)
+just agent-commit "feat" "" "add sre health checks"
+
+# Human (interactive)
+just commit
+# Guides through type/scope/body/breaking change selection
+```
+
+## Secret Management
+
+Secrets are managed via **secretspec**, a tool for secure credential handling. Multiple providers are supported.
+
+### Supported Providers
+
+| Provider | Description | Use Case |
+|----------|-------------|----------|
+| `keyring` | System keyring (macOS Keychain, KWallet) | Local development |
+| `1password` | 1Password | Team sharing |
+| `lastpass` | LastPass | Team sharing |
+| `dotenv` | .env file | Local development |
+| `env` | Environment variables | CI/CD |
+
+### Configuration
+
+**Provider Selection** (in `devenv.yaml`):
+
+```yaml
+secretspec:
+  enable: true
+  provider: keyring  # or: onepassword, lastpass, dotenv, env
+  profile: development
+```
+
+**Secret Definitions** (in `secretspec.toml`):
+
+```toml
+[project]
+name = "omni-devenv-fusion"
+revision = "1.0"
+
+[profiles.default]
+MINIMAX_API_KEY = { description = "API key for MiniMax", required = true }
+
+[profiles.development]
+# Inherits from default, override as needed
+```
+
+### Setup Commands
+
+```bash
+# Check secret status
+just secrets-check
+
+# View secrets info
+just secrets-info
+
+# Set a secret (interactive)
+just secrets-set-minimax
+
+# Or use secretspec directly
+secretspec set MINIMAX_API_KEY --value "your-api-key"
+secretspec set MINIMAX_API_KEY --profile development --value "dev-key"
+
+# Get secret value (masked)
+secretspec get MINIMAX_API_KEY
+```
+
+### 1Password Setup (Optional)
+
+If using 1Password as provider:
+
+```bash
+# 1. Install 1Password CLI (handled by devenv)
+# 2. Sign in
+op signin
+
+# 3. Add secret to 1Password
+#    Run: just secrets-set-minimax
+```
+
+## Development
+
+```bash
+# Setup
+just setup
+
+# Iterate
+just validate  # Before committing
+just agent-commit "fix" "" "fix bug"
+
+# Release
+just pre-release
+just release
+```
+
+## Resources
+
+- [devenv.sh](https://devenv.sh) - Development environments with Nix
+- [Nix Manual](https://nixos.org/manual/nix/stable/) - Nix package manager
+- [just](https://github.com/casey/just) - Command runner
+- [Conventional Commits](https://www.conventionalcommits.org/) - Commit message specification
+- [cocogitto](https://github.com/cocogitto/cocogitto) - Changelog and version management
+- [lefthook](https://github.com/evilmartians/lefthook) - Git hooks manager
+- [omnibus](https://github.com/tao3k/omnibus) - Configuration framework
+- [secretspec](https://github.com/tao3k/secretspec) - Secret management
+- [Claude Code](https://claude.com/claude-code) - AI coding assistant
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make changes following conventional commits
+4. Run `just validate` to ensure checks pass
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License.
+
+## Acknowledgments
+
+Built with modern tools that empower AI-assisted software development:
+
+- **Anthropic Claude Code** - AI-powered coding assistant with MCP support
+- **devenv** - Reproducible development environments
+- **Nix ecosystem** - Declarative package management
+- **omnibus framework** - Advanced configuration management
+- **cocogitto** - Automated changelog and versioning
+- **lefthook** - Fast and powerful Git hooks
+
+Special thanks to the maintainers of these projects for enabling the AI-SDLC workflow.
+
+---
+
+Built with ❤️ using devenv, Nix, and Claude Code
+</file>
+
+<file path=".claude/settings.local.json">
+{
+  "permissions": {
+    "allow": [
+      "Bash(just commit)",
+      "mcp__orchestrator__consult_specialist",
+      "Bash(op account:*)",
+      "Bash(git checkout:*)",
+      "Bash(lefthook run:*)",
+      "Bash(git add:*)",
+      "Bash(just agent-commit:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "MiniMax",
+    "devenv",
+    "nixos",
+    "orchestrator"
+  ]
+}
+</file>
+
+<file path="justfile">
+# Justfile for devenv-native
+# https://github.com/casey/just
+#
+# Design principles:
+# - Interactive commands for humans (e.g., `just commit`)
+# - Agent-friendly commands with `agent-*` prefix (e.g., `just agent-commit "feat" "cli" "message"`)
+# - SRE health checks with JSON output for machine parsing
+# - Group annotations for clean `just --list` output
+
+# ==============================================================================
+# Global Settings
+# ==============================================================================
+
+set dotenv-load := true
+set shell := ["bash", "-uc"]
+set positional-arguments := true
+
+# Enable JSON output mode via environment variable
+json_output := if env_var_or_default("JUST_JSON", "false") == "true" { "true" } else { "false" }
+
+# ==============================================================================
+# Core Commands
+# ==============================================================================
+
+default:
+    @just --list
+
+# ==============================================================================
+# AGENT INTERFACE (Non-interactive, argument-based)
+# Designed for AI agents - accepts parameters, no interactive prompts
+# ==============================================================================
+
+# Non-interactive commit for agents
+# Usage: just agent-commit <type> <scope> <message> [body] [breaking_desc]
+# Example: just agent-commit "feat" "cli" "add new feature" "Detailed description" "BREAKING: API changed"
+agent-commit type scope message body="" breaking_desc="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TYPE="{{type}}"
+    SCOPE="{{scope}}"
+    DESC="{{message}}"
+    BODY="{{body}}"
+    BREAKING_DESC="{{breaking_desc}}"
+
+    # Validate type
+    if [[ ! "$TYPE" =~ ^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)$ ]]; then
+        echo "Error: Invalid type '$TYPE'. Must be: feat, fix, docs, style, refactor, perf, test, build, ci, chore" >&2
+        exit 1
+    fi
+
+    # Build scope string
+    SCOPE_STR=""
+    if [ -n "$SCOPE" ]; then
+        SCOPE_STR="($SCOPE)"
+    fi
+
+    # Build commit message
+    MSG="$TYPE$SCOPE_STR: $DESC"
+    if [ -n "$BODY" ]; then
+        MSG="$MSG"$'\n\n'"$BODY"
+    fi
+    if [ -n "$BREAKING_DESC" ]; then
+        MSG="$MSG"$'\n\n'"BREAKING CHANGE: $BREAKING_DESC"
+    fi
+
+    # Run lefthook first to apply all formatting fixes (prevents unstaged files after commit)
+    echo "Running pre-commit hooks..."
+    lefthook run pre-commit --all-files --no-tty
+
+    # Stage all modified files after formatting
+    echo "Staging all modified files..."
+    git add -A
+
+    # Commit with staged changes
+    git commit -m "$MSG"
+    echo "Committed: $TYPE$SCOPE_STR: $DESC"
+
+# Agent-friendly validate (non-interactive)
+agent-validate:
+    @echo "Running validation..." && lefthook run pre-commit && devenv test
+
+# Agent-friendly format (apply fixes)
+agent-fmt:
+    @echo "Applying formatting fixes..." && lefthook run pre-commit --all-files --no-tty
+
+# Agent-friendly version bump
+agent-bump type="auto":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    BUMP_TYPE="{{type}}"
+    if [ "$BUMP_TYPE" = "auto" ]; then
+        cog bump --auto
+    else
+        cog bump --$BUMP_TYPE
+    fi
+
+# Agent-friendly release publish
+agent-publish-release version="latest":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    VERSION="{{version}}"
+    if [ "$VERSION" = "latest" ]; then
+        VERSION=$(git describe --tags --abbrev=0)
+    fi
+    NOTES=$(mktemp)
+    just release-notes "$VERSION" > "$NOTES"
+    gh release create "$VERSION" --title "Release $VERSION" --notes-file "$NOTES" --verify-tag
+    rm -f "$NOTES"
+
+# Agent-friendly complete release workflow
+agent-release type="auto" version="latest":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just agent-validate
+    just agent-bump {{type}}
+    just agent-publish-release {{version}}
+
+# ==============================================================================
+# HUMAN INTERFACE (Interactive commands preserved)
+# Commands with user prompts for manual operations
+# ==============================================================================
+
+# Interactive commit helper (for humans - uses select/read)
+[group('git')]
+commit:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Interactive Conventional Commit"
+    echo "================================"
+    select TYPE in feat fix docs style refactor perf test build ci chore; do
+        [ -n "$TYPE" ] && break
+    done
+    read -p "Enter scope (optional): " SCOPE
+    SCOPE_STR=""
+    if [ -n "$SCOPE" ]; then
+        SCOPE_STR="($SCOPE)"
+    fi
+    read -p "Enter short description: " DESC
+    read -p "Add detailed body? [y/N]: " -n 1 ADD_BODY
+    echo
+    BODY=""
+    if [[ $ADD_BODY =~ ^[Yy]$ ]]; then
+        echo "Enter body (Ctrl+D when done):"
+        BODY=$(cat)
+    fi
+    read -p "Breaking change? [y/N]: " -n 1 BREAKING
+    echo
+    FOOTER=""
+    if [[ $BREAKING =~ ^[Yy]$ ]]; then
+        read -p "Describe breaking change: " BREAKING_DESC
+        FOOTER="BREAKING CHANGE: $BREAKING_DESC"
+    fi
+    MSG="$TYPE$SCOPE_STR: $DESC"
+    if [ -n "$BODY" ]; then
+        MSG="$MSG\n\n$BODY"
+    fi
+    if [ -n "$FOOTER" ]; then
+        MSG="$MSG\n\n$FOOTER"
+    fi
+    echo ""
+    echo "Preview:"
+    echo -e "$MSG"
+    echo ""
+    read -p "Commit? [Y/n]: " -n 1 CONFIRM
+    echo
+    if [[ ! $CONFIRM =~ ^[Nn]$ ]]; then
+        git commit -m "$(echo -e "$MSG")"
+        echo "Committed!"
+    else
+        echo "Cancelled"
+        exit 1
+    fi
+
+# ==============================================================================
+# SETUP & VALIDATION
+# ==============================================================================
+
+[group('setup')]
+setup:
+    @echo "Setting up development environment..."
+    @direnv allow
+    @echo "Ready! Run 'just' to see commands."
+
+[group('validate')]
+validate: check-format check-commits lint test
+    @echo "All validation checks passed!"
+
+[group('validate')]
+check-format:
+    @echo "Checking code formatting..."
+    @lefthook run pre-commit --all-files
+
+[group('validate')]
+lint:
+    @echo "Linting files..."
+    @lefthook run pre-commit
+
+[group('validate')]
+test:
+    @echo "Running tests..."
+    @devenv test
+
+# ==============================================================================
+# CHANGELOG MANAGEMENT
+# ==============================================================================
+
+[group('changelog')]
+changelog-preview:
+    @echo "Changelog Preview (since last tag)"
+    @echo "===================================="
+    @cog log
+    @echo ""
+    @echo "Commit breakdown:"
+    @cog log | grep -oE "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)" | sort | uniq -c
+
+[group('changelog')]
+changelog-stats:
+    @echo "Changelog Statistics"
+    @echo "===================="
+    @echo "Commits by type:"
+    @cog log | grep -oE "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)" | sort | uniq -c | sort -rn
+    @echo ""
+    @echo "Commits by author:"
+    @git log --format='%an' $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD")..HEAD | sort | uniq -c | sort -rn
+    @echo ""
+    @echo "Changes since last release:"
+    @git diff --stat $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD")..HEAD
+
+[group('validate')]
+check-commits:
+    @echo "Validating commit messages..."
+    @cog check
+
+[group('validate')]
+check-commits-range from to:
+    @cog check --from {{from}} --to {{to}}
+
+[group('changelog')]
+changelog:
+    @echo "Generating changelog..."
+    @cog changelog
+
+[group('changelog')]
+changelog-at version:
+    @cog changelog --at {{version}}
+
+[group('changelog')]
+changelog-export version="latest":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    VERSION={{version}}
+    if [ "$VERSION" = "latest" ]; then
+        VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+    fi
+    echo "Exporting changelog for $VERSION..."
+    cog changelog --at "$VERSION" > "CHANGELOG_${VERSION}.md"
+    echo "  Markdown: CHANGELOG_${VERSION}.md"
+    cog log --format json > "CHANGELOG_${VERSION}.json"
+    echo "  JSON: CHANGELOG_${VERSION}.json"
+    cog changelog --at "$VERSION" | sed 's/\[//' | sed 's/\](.*)$//' > "CHANGELOG_${VERSION}.txt"
+    echo "  Plain text: CHANGELOG_${VERSION}.txt"
+
+# ==============================================================================
+# VERSION MANAGEMENT & RELEASES
+# ==============================================================================
+
+[group('version')]
+version:
+    @echo "Current version: $(cat VERSION 2>/dev/null || git describe --tags --abbrev=0 2>/dev/null || echo 'No version found')"
+
+[group('version')]
+bump-auto: validate
+    @echo "Auto-bumping version..."
+    @cog bump --auto
+
+[group('version')]
+bump-patch: validate
+    @echo "Bumping patch version..."
+    @cog bump --patch
+
+[group('version')]
+bump-minor: validate
+    @echo "Bumping minor version..."
+    @cog bump --minor
+
+[group('version')]
+bump-major: validate
+    @echo "Bumping major version..."
+    @cog bump --major
+
+[group('version')]
+bump-dry:
+    @echo "Previewing version bump (dry run)..."
+    @cog bump --auto --dry-run
+
+[group('version')]
+bump-pre type="alpha":
+    @echo "Creating pre-release ({{type}})..."
+    @cog bump --pre {{type}}
+
+[group('version')]
+release-notes version="latest":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    VERSION={{version}}
+    if [ "$VERSION" = "latest" ]; then
+        VERSION=$(git describe --tags --abbrev=0)
+    fi
+    echo "# Release $VERSION"
+    echo ""
+    cog changelog --at "$VERSION" | sed -n "/^## \[v${VERSION#v}\]/,/^## \[v/p" | sed '$d'
+    echo ""
+    echo "---"
+    echo "**Full Changelog**: https://github.com/tao3k/omni-devenv-fusion/compare/$(git describe --tags --abbrev=0 $VERSION^ 2>/dev/null)...$VERSION"
+
+[group('version')]
+publish-release version="latest":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    VERSION={{version}}
+    if [ "$VERSION" = "latest" ]; then
+        VERSION=$(git describe --tags --abbrev=0)
+    fi
+    NOTES=$(mktemp)
+    just release-notes "$VERSION" > "$NOTES"
+    echo "Publishing release $VERSION to GitHub..."
+    gh release create "$VERSION" --title "Release $VERSION" --notes-file "$NOTES" --verify-tag
+    rm -f "$NOTES"
+    echo "Published release $VERSION"
+
+[group('version')]
+release type="auto":
+    @echo "Starting release workflow..."
+    @just bump-{{type}}
+    @just publish-release
+
+# ==============================================================================
+# GIT OPERATIONS
+# ==============================================================================
+
+[group('git')]
+status:
+    @echo "Repository Status"
+    @echo "=================="
+    @git status
+    @echo ""
+    @echo "Branch: $(git branch --show-current)"
+    @echo "Last commit: $(git log -1 --oneline)"
+    @echo "Last tag: $(git describe --tags --abbrev=0 2>/dev/null || echo 'No tags')"
+
+[group('git')]
+log n="10":
+    @cog log --no-pager | head -n {{n}}
+
+# ==============================================================================
+# DEVELOPMENT HELPERS
+# ==============================================================================
+
+[group('dev')]
+fmt:
+    @echo "Formatting code..."
+    @lefthook run pre-commit --all-files
+
+[group('dev')]
+clean:
+    @echo "Cleaning generated files..."
+    @rm -f CHANGELOG_*.md CHANGELOG_*.json CHANGELOG_*.txt RELEASE_NOTES_*.md
+    @echo "Cleaned"
+
+[group('dev')]
+update:
+    @echo "Updating dependencies..."
+    @devenv update
+    @echo "Updated"
+
+[group('dev')]
+info:
+    @echo "Environment Information"
+    @echo "======================"
+    @echo "devenv version: $(devenv version)"
+    @echo "nix version: $(nix --version)"
+    @echo "just version: $(just --version)"
+    @echo "cog version: $(cog --version 2>/dev/null || echo 'not found')"
+    @echo "git version: $(git --version)"
+    @echo ""
+    @echo "Repository: $(git remote get-url origin 2>/dev/null || echo 'no remote')"
+    @echo "Branch: $(git branch --show-current)"
+    @echo "Version: $(cat VERSION 2>/dev/null || git describe --tags --abbrev=0 2>/dev/null || echo 'unknown')"
+
+[group('dev')]
+watch:
+    @echo "Watching for changes..."
+    @watchexec -e nix,md,sh -c "just check-format"
+
+# ==============================================================================
+# MCP SERVER COMMANDS
+# ==============================================================================
+
+[group('mcp')]
+debug server="mcp-server/orchestrator.py":
+    @echo "Starting MCP Inspector..."
+    @uv run mcp-inspector python {{server}}
+
+[group('mcp')]
+run server="mcp-server/orchestrator.py":
+    @echo "Running MCP server: {{server}}"
+    @python {{server}}
+
+# ==============================================================================
+# SRE HEALTH CHECKS
+# Outputs machine-parseable JSON for AI agents and CI/CD
+# ==============================================================================
+
+[group('sre')]
+health: health-git health-nix health-secrets health-devenv
+    @echo ""
+    @echo "Health check complete!"
+
+# Git repository health (JSON optional)
+[group('sre')]
+health-git:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "${JUST_JSON:-}" = "true" ]; then
+        BRANCH=$(git branch --show-current)
+        UNCOMMITTED=$(git status --porcelain | wc -l)
+        LAST_COMMIT=$(git log -1 --oneline)
+        BEHIND=0
+        git fetch --quiet 2>/dev/null && BEHIND=$(git log HEAD..origin/$BRANCH 2>/dev/null | wc -l)
+        jq -n --arg branch "$BRANCH" --argjson uncommitted "$UNCOMMITTED" --arg last_commit "$LAST_COMMIT" --argjson behind "$BEHIND" \
+            '{component: "git", branch: $branch, uncommitted_files: $uncommitted, last_commit: $last_commit, commits_behind: $behind}'
+    else
+        echo "Git Health"
+        echo "=========="
+        echo "Branch: $(git branch --show-current)"
+        echo "Status: $(git status --porcelain | wc -l) uncommitted files"
+        echo "Last commit: $(git log -1 --oneline)"
+    fi
+
+# Nix/Devenv health
+[group('sre')]
+health-nix:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "${JUST_JSON:-}" = "true" ]; then
+        NIX_VERSION=$(nix --version 2>/dev/null || echo "")
+        jq -n --arg version "$NIX_VERSION" '{component: "nix", version: $version}'
+    else
+        echo "Nix Health"
+        echo "=========="
+        echo "Nix version: $(nix --version)"
+    fi
+
+# Devenv health
+[group('sre')]
+health-devenv:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "${JUST_JSON:-}" = "true" ]; then
+        VERSION=$(devenv version 2>/dev/null || echo "")
+        NIXPKGS=$(devenv nixpkgs-version 2>/dev/null || echo "")
+        jq -n --arg version "$VERSION" --arg nixpkgs "$NIXPKGS" '{component: "devenv", version: $version, nixpkgs: $nixpkgs}'
+    else
+        echo "Devenv Health"
+        echo "============="
+        echo "Version: $(devenv version 2>/dev/null || echo 'not found')"
+        echo "Nixpkgs: $(devenv nixpkgs-version 2>/dev/null || echo 'unknown')"
+    fi
+
+# Secrets health check (validates presence, never echoes values)
+[group('sre')]
+health-secrets:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    MISSING=""
+    if [ -z "${MINIMAX_API_KEY:-}" ]; then
+        MISSING="MINIMAX_API_KEY"
+    fi
+    if [ "${JUST_JSON:-}" = "true" ]; then
+        if [ -z "$MISSING" ]; then
+            jq -n '{component: "secrets", status: "pass", message: "All required secrets present"}'
+        else
+            jq -n --arg missing "$MISSING" \
+                '{component: "secrets", status: "fail", message: "Missing secrets", missing_keys: [$missing]}'
+            exit 1
+        fi
+    else
+        echo "Secrets Health"
+        echo "=============="
+        echo "Provider: onepassword"
+        if [ -z "$MISSING" ]; then
+            echo "Status: OK"
+        else
+            echo "Status: MISSING - $MISSING"
+        fi
+    fi
+
+# API keys health (presence check only)
+[group('sre')]
+health-api-keys:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "${JUST_JSON:-}" = "true" ]; then
+        if [ -n "${MINIMAX_API_KEY:-}" ]; then
+            jq -n '{component: "api_keys", minimax: "present"}'
+        else
+            jq -n '{component: "api_keys", minimax: "missing"}'
+            exit 1
+        fi
+    else
+        echo "API Keys Health"
+        echo "==============="
+        if [ -n "${MINIMAX_API_KEY:-}" ]; then
+            echo "MINIMAX_API_KEY: Set"
+        else
+            echo "MINIMAX_API_KEY: Not set"
+        fi
+    fi
+
+# Composite health report for agents
+[group('sre')]
+health-report:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    JUST_JSON=true just health-git
+    JUST_JSON=true just health-devenv
+    JUST_JSON=true just health-secrets
+
+# ==============================================================================
+# CI/CD COMMANDS
+# ==============================================================================
+
+[group('ci')]
+ci: validate changelog-preview
+    @echo "CI checks passed!"
+
+[group('ci')]
+pre-release: validate changelog-preview changelog-stats
+    @echo ""
+    @echo "Pre-release checks complete!"
+    @echo ""
+    @echo "Next steps:"
+    @echo "  1. Review changelog preview"
+    @echo "  2. Run: just bump-auto (or bump-patch/minor/major)"
+    @echo "  3. Run: just publish-release"
+
+# ==============================================================================
+# SECRET MANAGEMENT (secretspec)
+# ==============================================================================
+
+[group('secrets')]
+secrets-check:
+    @echo "Checking secrets status..."
+    @secretspec check --profile development
+
+[group('secrets')]
+secrets-info:
+    @echo "Secret Management Info"
+    @echo "======================"
+    @echo "Provider: onepassword"
+    @echo "Profile: development"
+    @echo ""
+    @echo "Configured secrets:"
+    @secretspec check --profile development | grep -E "^\s+[A-Z]" || echo "  (none)"
+
+[group('secrets')]
+secrets-set-minimax:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    read -p "Enter MINIMAX_API_KEY: " -s API_KEY
+    echo
+    secretspec set MINIMAX_API_KEY --value "$API_KEY" --profile development
+    echo "MINIMAX_API_KEY set"
+
+[group('secrets')]
+secrets-get-minimax:
+    @secretspec get MINIMAX_API_KEY
+
+# ==============================================================================
+# DOCUMENTATION
+# ==============================================================================
+
+[group('docs')]
+docs:
+    @echo "Documentation Index"
+    @echo "==================="
+    @echo ""
+    @echo "Available documentation:"
+    @ls -1 *.md | sed 's/^/  - /'
+
+[group('docs')]
+examples:
+    @echo "Commit Message Examples"
+    @echo "======================="
+    @echo ""
+    @echo "feat: add new feature"
+    @echo "feat(cli): add command"
+    @echo "fix: correct bug"
+    @echo "docs: update documentation"
+    @echo "refactor: reorganize code"
+    @echo "chore: maintenance tasks"
+    @echo ""
+    @echo "feat(api)!: breaking change"
+    @echo "BREAKING CHANGE: description"
+
+# ==============================================================================
+# ALIASES (using recipe definitions instead of variable assignments)
+# ==============================================================================
+
+check: validate
+cl: changelog-preview
+c: commit
+s: status
+ship: release
+
+# Compatibility aliases for agent-* pattern
+agent-ci: agent-validate
+agent-test: test
+agent-lint: lint
+agent-format: fmt
+</file>
+
+<file path="devenv.nix">
+{
+  pkgs,
+  lib,
+  config,
+  inputs,
+  ...
+}:
+
+let
+  nixpkgs-latest = import inputs.nixpkgs-latest {
+    system = pkgs.stdenv.hostPlatform.system;
+    config = {
+      allowUnfree = true;
+    };
+  };
+  nixosModules =
+    (inputs.omnibus.pops.nixosProfiles.addLoadExtender {
+      load = {
+        src = ./units/modules;
+        inputs = {
+          __nixpkgs__ = nixpkgs-latest;
+          __inputs__ = {
+            inherit nixpkgs-latest packages;
+          };
+          inputs = {
+            nixpkgs = nixpkgs-latest;
+          };
+        };
+      };
+    }).exports.default;
+
+  packages =
+    (inputs.omnibus.pops.packages.addLoadExtender {
+      load = {
+        src = ./units/packages;
+        inputs = {
+          inputs = {
+            nixpkgs = nixpkgs-latest;
+          };
+        };
+      };
+    }).exports.packages;
+in
+{
+  imports = [
+    nixosModules.claude
+    nixosModules.flake-parts.omnibus
+    nixosModules.files
+    nixosModules.lefthook
+    nixosModules.python
+    nixosModules.llm
+    #./modules/flake-parts/omnibus-hive.nix
+    ({
+      config = lib.mkMerge [
+        {
+          omnibus = {
+            inputs = {
+              inputs = {
+                nixpkgs = pkgs;
+                inherit nixpkgs-latest;
+                inherit (inputs.omnibus.flake.inputs) nixago;
+              };
+            };
+          };
+        }
+      ];
+    })
+  ];
+
+  devcontainer.enable = true;
+  # https://devenv.sh/basics/
+  env.GREET = "devenv";
+
+  # https://devenv.sh/packages/
+  packages = [
+    pkgs.git
+    pkgs.just
+    nixpkgs-latest.claude-code
+    pkgs.secretspec
+    pkgs._1password-cli
+  ];
+  # https://devenv.sh/languages/
+  # languages.rust.enable = true;
+
+  # https://devenv.sh/processes/
+  # processes.cargo-watch.exec = "cargo-watch";
+
+  # https://devenv.sh/services/
+  # services.postgres.enable = true;
+
+  # https://devenv.sh/scripts/
+  scripts.hello.exec = ''
+    echo hello from $GREET
+  '';
+
+  # https://devenv.sh/tasks/
+  # tasks = {
+  #   "myproj:setup".exec = "mytool build";
+  #   "devenv:enterShell".after = [ "myproj:setup" ];
+  # };
+
+  # https://devenv.sh/tests/
+  enterTest = ''
+    echo "Running tests"
+    git --version | grep --color=auto "${pkgs.git.version}"
+  '';
+
+  # https://devenv.sh/pre-commit-hooks/
+  # git-hooks.hooks.shellcheck.enable = true;
+  # git-hooks.hooks.nixfmt.enable = true;
+  # See full reference at https://devenv.sh/reference/options/
+}
+</file>
+
+<file path="CLAUDE.md">
+# CLAUDE.md - Orchestrator Edition
+
+## 🤖 Role & Identity
+You are the **Lead Architect & Orchestrator** for this project (`omni-devenv-fusion`).
+- **Mission**: Manage the software development lifecycle (SDLC) by coordinating specialized resources.
+- **Core Behavior**: Do NOT guess complex implementations. **DELEGATE** to your expert tools first.
+- **Tone**: Professional, decisive, and structured.
+
+## 🛠 Tool Use & Expert Team
+You have access to the `consult_specialist` (MCP) tool. Use it strictly for these domains:
+
+1.  **`architect`**:
+    - *When to use*: High-level design, directory structure, module boundaries, refactoring strategies.
+    - *Example*: "Should I split this file?", "Where does this new service belong?"
+2.  **`platform_expert`**:
+    - *When to use*: Nix/OS config (`devenv.nix`, `flake.nix`), infrastructure, containers, environment variables.
+    - *Example*: "How to add Redis to devenv?", "Fix this Nix build error."
+3.  **`devops_mlops`**:
+    - *When to use*: CI/CD (Lefthook, GitHub Actions), build pipelines, ML workflows, reproducibility.
+    - *Example*: "Add a pre-commit hook for linting.", "Design a model training pipeline."
+4.  **`sre`**:
+    - *When to use*: Reliability, observability, error handling, performance optimization, security checks.
+    - *Example*: "Check this code for security leaks.", "How to monitor this service?"
+
+## ⚡️ Workflow SOP (Standard Operating Procedure)
+When receiving a complex user request (e.g., "Add a new feature", "Refactor build"):
+
+1.  **Analyze**: Break the request into sub-tasks (e.g., Infrastructure, Code, Pipeline).
+2.  **Consult**: Call `consult_specialist` for **EACH** relevant domain.
+    - *Critically*: Do not write complex Nix code without asking `platform_expert`.
+3.  **Synthesize**: Combine expert advice into a single implementation plan.
+4.  **Execute**: Write the code yourself using file edit tools.
+
+## 🏗 Build & Test Commands (Justfile)
+Always prefer **Agent-Friendly** commands (non-interactive) over interactive ones.
+
+- **Validate All**: `just validate` (Runs fmt, lint, test)
+- **Build**: `just build`
+- **Test**: `just test`
+- **Lint**: `just lint`
+- **Format**: `just fmt`
+- **Commit**: When user says "run `just agent-commit`", **automatically determine** type, scope, and message from the changes made. Use `just agent-commit <type> "" <message>` (no scope).
+
+## 📝 Coding Standards
+- **Nix**: Prefer `flake-parts` modules. Keep `devenv.nix` clean and modular.
+- **Python**: Use `uv` for dependency management.
+- **Commits**: Follow Conventional Commits (feat, fix, chore, refactor, docs).
+- **Style**: When editing files, keep changes minimal and focused.
+
+## 📦 Tool-Router Example Protocol
+When making code changes that establish new patterns, **always add examples** to `tool-router/data/examples/`:
+1. Read current code before editing
+2. Make the fix
+3. Verify the actual change works
+4. Add/update examples based on **real changes**, not hypotheticals
+
+## 🛡 Pre-Commit Protocol
+Before executing `just agent-commit` or any git commit, you **MUST** perform a **Documentation Consistency Check**:
+
+1.  **Analyze the Change**: Does this code change affect:
+    - User commands (Justfile)?
+    - Architecture patterns?
+    - New tools or environment variables?
+
+2.  **Verify Docs**:
+    - If **YES**: You MUST update `README.md` (public facing) or `CLAUDE.md` (internal agent instructions) **in the same commit**.
+
+3.  **Stage All Files**: Always use `git add -A` before committing to capture hook-generated changes (e.g., nixfmt formatting).
+
+4.  **Commit**: When user says "run `just agent-commit`", **automatically determine** type and message. Use `just agent-commit <type> "" <message>` (no scope - conform requires empty scope).
+
+    **IMPORTANT**: The message should be the description **WITHOUT** the type prefix. The justfile automatically adds it.
+    - ✅ Correct: `just agent-commit fix "" "correct dmerge import"`
+    - ❌ Wrong: `just agent-commit fix "" "fix: correct dmerge import"` (causes double "fix: fix:")
+
+## 🔧 Nix Edit Protocol
+When editing `.nix` files, you **MUST** follow this protocol to avoid syntax pitfalls:
+
+1.  **Check Examples**: Before editing any `.nix` file, call `tool_router.describe_tool("nix.edit")` and select exactly ONE example id.
+2.  **Confirm Rules**: State "Selected example: `<id>`" and list each `do_not` rule, confirming it will be followed.
+3.  **Apply Edits**: Make only `allowed_edits` from the selected example.
+4.  **Run Checks**: Execute the `checks` listed in the example (e.g., `nix fmt`, `statix check`).
+5.  **If No Match**: If no example matches the current change, STOP and ask the user to add/adjust an example.
+
+**Example Location**: `tool-router/data/examples/nix.edit.jsonl`
+
+### Key Nix Rules (Memorized)
+- **mkNixago**: dmerge is implicit - pass only fields to extend, not full override
+- **Module args**: Always preserve `...` in `{ config, lib, pkgs, ... }:`
+- **Lists**: Use `prepend` from `inputs.omnibus.inputs.dmerge` to append items
+- **Commands**: Use `builtins.removeAttrs` to remove keys
+</file>
+
+</files>

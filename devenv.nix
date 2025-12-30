@@ -18,7 +18,7 @@ let
       load = {
         src = ./units/modules;
         inputs = {
-          inherit nixpkgs-latest;
+          __nixpkgs__ = nixpkgs-latest;
           __inputs__ = {
             inherit nixpkgs-latest packages;
           };
@@ -48,6 +48,7 @@ in
     nixosModules.files
     nixosModules.lefthook
     nixosModules.python
+    nixosModules.llm
     #./modules/flake-parts/omnibus-hive.nix
     ({
       config = lib.mkMerge [
