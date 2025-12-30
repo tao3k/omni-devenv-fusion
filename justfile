@@ -204,10 +204,10 @@ test:
 changelog-preview:
     @echo "Changelog Preview (since last tag)"
     @echo "===================================="
-    @cog log --no-pager
+    @cog log
     @echo ""
     @echo "Commit breakdown:"
-    @cog log --no-pager | grep -oE "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)" | sort | uniq -c
+    @cog log | grep -oE "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)" | sort | uniq -c
 
 [group('changelog')]
 changelog-stats:
