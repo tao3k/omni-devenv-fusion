@@ -6,7 +6,7 @@
   lib,
 }:
 let
-  inherit (inputs.omnibus.inputs.dmerge) prepend;
+  inherit (inputs.omnibus.inputs.flops.inputs.dmerge) prepend;
   initConfigs =
     (inputs.omnibus.units.configs {
       inputs = {
@@ -26,7 +26,9 @@ let
       gen = (config.omnibus.ops.mkNixago initConfigs.nixago-lefthook) {
         data = {
           # Remove treefmt from commands
-          commands = builtins.removeAttrs lefthook.data.pre-commit.commands [ "treefmt" ];
+          commands = builtins.removeAttrs lefthook.default.data.pre-commit.commands [
+            "treefmt"
+          ];
           # Exclude CHANGELOG.md from typos (false positives from commit hashes)
           exclude = prepend [ "CHANGELOG.md" ];
         };
