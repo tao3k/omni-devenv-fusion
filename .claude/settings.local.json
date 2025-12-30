@@ -4,7 +4,10 @@
       "Bash(just commit)",
       "mcp__orchestrator__consult_specialist",
       "Bash(op account:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(lefthook run:*)",
+      "Bash(git add:*)",
+      "Bash(just agent-commit:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
