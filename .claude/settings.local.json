@@ -6,9 +6,10 @@
     ]
   },
   "enabledMcpjsonServers": [
+    "MiniMax",
     "devenv",
     "nixos",
-    "MiniMax",
     "orchestrator"
-  ]
+  ],
+  "enableAllProjectMcpServers": true
 }

@@ -1,6 +1,6 @@
-# devenv-native
+# omni-devenv-fusion
 
-> AI-SDLC Lab: Orchestrator-Worker workflow with devenv, Nix, and Claude Code
+> Orchestrator-Worker workflow with devenv, Nix, and Claude Code
 
 A development environment showcasing AI-assisted software development lifecycle (SDLC) with the Orchestrator pattern.
 
@@ -8,8 +8,8 @@ A development environment showcasing AI-assisted software development lifecycle 
 
 ```bash
 # Clone and enter
-git clone https://github.com/GTrunSec/devenv-native.git
-cd devenv-native
+git clone https://github.com/tao3k/omni-devenv-fusion.git
+cd omni-devenv-fusion
 
 # Setup (direnv auto-loads the environment)
 just setup
@@ -88,7 +88,7 @@ Available checks:
 ## Architecture
 
 ```
-devenv-native/
+omni-devenv-fusion/
 ├── devenv.nix              # Main devenv configuration
 ├── devenv.yaml             # Flake inputs
 ├── justfile                # Task runner (40+ commands)
@@ -237,7 +237,7 @@ secretspec:
 
 ```toml
 [project]
-name = "devenv-native"
+name = "omni-devenv-fusion"
 revision = "1.0"
 
 [profiles.default]
