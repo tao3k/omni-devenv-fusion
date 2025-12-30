@@ -18,6 +18,7 @@ let
       load = {
         src = ./modules;
         inputs = {
+          nixpkgs = nixpkgs-latest;
           inputs = inputs // {
             nixpkgs = nixpkgs-latest;
           };
@@ -31,6 +32,7 @@ in
     nixosModules.flake-parts.omnibus
     nixosModules.files
     nixosModules.lefthook
+    nixosModules.python
     #./modules/flake-parts/omnibus-hive.nix
     ({
       config = lib.mkMerge [
@@ -47,6 +49,8 @@ in
       ];
     })
   ];
+  
+  devcontainer.enable = true;
   # https://devenv.sh/basics/
   env.GREET = "devenv";
 

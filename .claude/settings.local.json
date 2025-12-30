@@ -1,12 +1,14 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(just commit)",
+      "mcp__orchestrator__consult_specialist"
+    ]
+  },
   "enabledMcpjsonServers": [
     "devenv",
     "nixos",
-    "MiniMax"
-  ],
-  "permissions": {
-    "allow": [
-      "Bash(just commit)"
-    ]
-  }
+    "MiniMax",
+    "orchestrator"
+  ]
 }
