@@ -1,5 +1,4 @@
 {
-  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "devenv",
     "nixos",

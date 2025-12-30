@@ -61,17 +61,26 @@ just check-format  # or: just fmt
 
 ### Nix Configuration Structure
 
-The configuration follows a modular design with separate concerns:
+The configuration follows a modular design with `omnibus.pops.nixosProfiles` loading modules from the `./modules/` directory as a tree structure:
 
 - **devenv.nix**: Main entry point, imports all modules and defines core settings
-- **claude.nix**: Claude Code integration (PostToolUse hooks, MCP servers)
-- **lefthook.nix**: Git hooks configuration via omnibus framework
-- **files.nix**: File management configuration (currently minimal)
-- **justfile**: Task runner for development workflows (changelog, releases, validation)
+- **modules/claude.nix**: Claude Code integration (PostToolUse hooks, MCP servers)
+- **modules/lefthook.nix**: Git hooks configuration via omnibus framework
+- **modules/files.nix**: File management configuration (currently minimal)
 - **modules/flake-parts/omnibus.nix**: Omnibus framework integration module
 - **devenv.yaml**: Flake inputs configuration
 - **devenv.lock**: Lock file for reproducible builds
 - **.envrc**: direnv configuration for automatic shell loading
+
+**Module Loading (in devenv.nix):**
+```nix
+nixosModules = (inputs.omnibus.pops.nixosProfiles.addLoadExtender {
+  load = {
+    src = ./modules;
+    inputs = { inputs = inputs // { nixpkgs = nixpkgs-latest; }; };
+  };
+}).exports.default;
+```
 
 ### Justfile Task Runner
 
@@ -135,7 +144,7 @@ Commands can depend on each other. For example:
 
 ### Claude Code Integration
 
-Claude Code is fully integrated via `claude.nix`:
+Claude Code is fully integrated via `modules/claude.nix`:
 
 **Features:**
 - `claude.code.enable = true`: Activates Claude Code support
@@ -170,7 +179,7 @@ The PostToolUse hook runs `cd "$DEVENV_ROOT" && lefthook run` whenever Claude Co
 
 ### Git Hooks (Lefthook)
 
-Git hooks are managed via **lefthook** through the omnibus framework integration in `lefthook.nix`.
+Git hooks are managed via **lefthook** through the omnibus framework integration in `modules/lefthook.nix`.
 
 **Architecture:**
 The lefthook configuration uses a functional map-based approach:
@@ -249,7 +258,7 @@ Additional packages are dynamically provided by generated hooks (lefthook, confo
 - Packages from omnibus framework are added via `lefthook.nix` generators
 
 **Extending git hooks:**
-- Add new generators to the `generators` list in `lefthook.nix`
+- Add new generators to the `generators` list in `modules/lefthook.nix`
 - Each generator should follow the pattern:
   ```nix
   {
@@ -319,7 +328,7 @@ just commit  # or: just c
 
 The changelog is automatically generated using cocogitto and stored in `CHANGELOG.md`.
 
-**Configuration** (in `lefthook.nix` and `cog.toml`):
+**Configuration** (in `modules/lefthook.nix` and `cog.toml`):
 - Repository: `github.com/tao3k/omni-devenv-fusion`
 - Changelog path: `CHANGELOG.md`
 - Template: `remote` (GitHub links)
@@ -510,7 +519,7 @@ git commit --no-verify -m "message"
 
 ### Cocogitto Configuration
 
-The cocogitto configuration is managed via the omnibus framework in `lefthook.nix`:
+The cocogitto configuration is managed via the omnibus framework in `modules/lefthook.nix`:
 
 ```nix
 {
@@ -595,7 +604,7 @@ secretspec set MINIMAX_API_KEY --profile development --value "your-dev-key"
 
 ### Usage in Nix
 
-Secrets are injected via `claude.nix` using the secretspec module:
+Secrets are injected via `modules/claude.nix` using the secretspec module:
 ```nix
 claude.code.env = {
   ANTHROPIC_AUTH_TOKEN = config.secretspec.secrets.MINIMAX_API_KEY;
