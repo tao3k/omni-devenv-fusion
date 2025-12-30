@@ -1,231 +1,167 @@
-# omni-devenv-fusion
+# devenv-native
 
-> Exploring AI-assisted coding workflows with devenv, Nix ecosystem, and modern SDLC standards
+> AI-SDLC Lab: Orchestrator-Worker workflow with devenv, Nix, and Claude Code
 
-A showcase repository demonstrating best practices for AI-powered development environments using:
-- **devenv** for reproducible development shells
-- **Nix** for declarative package management
-- **Claude Code** integration with MCP servers
-- **Conventional Commits** and automated changelog generation
-- **Modern SDLC** workflows with git hooks and validation
+A development environment showcasing AI-assisted software development lifecycle (SDLC) with the Orchestrator pattern.
 
 ## Quick Start
 
 ```bash
-# Clone the repository
-git clone https://github.com/tao3k/omni-devenv-fusion.git
-cd omni-devenv-fusion
+# Clone and enter
+git clone https://github.com/GTrunSec/devenv-native.git
+cd devenv-native
 
-# Setup (direnv will auto-load the environment)
+# Setup (direnv auto-loads the environment)
 just setup
 
-# See all available commands
+# View all commands
 just
 
-# Start developing with confidence
-just validate  # Run all checks
-just cl        # Preview changelog
+# Validate everything
+just validate
 ```
 
-## Features
+## Key Features
 
-### 🤖 AI-Powered Development
+### 🤖 Orchestrator-Worker Pattern
 
-- **Claude Code Integration**: Native support for Claude Code with PostToolUse hooks
-- **MCP Servers**:
-  - `devenv` - Local devenv context and commands
-  - `nixos` - NixOS packages, options, and flake search
-- **Automated Quality**: Code formatting and linting on every edit
+Claude Code acts as the **Lead Architect & Orchestrator**, delegating complex tasks to specialized experts via MCP:
+
+- **`architect`**: High-level design, refactoring strategies
+- **`platform_expert`**: Nix/OS configuration, infrastructure
+- **`devops_mlops`**: CI/CD pipelines, build workflows
+- **`sre`**: Reliability, observability, security
+
+```bash
+# Example: Consult multiple experts for a complex task
+just agent-commit "feat" "" "add redis service"
+# Delegates to platform_expert for devenv config,
+# devops_mlops for CI/CD, sre for health checks
+```
+
+### ⚡ Agent-Friendly Commands
+
+All commands support non-interactive execution for AI agents:
+
+| Command | Description |
+|---------|-------------|
+| `just agent-commit <type> "" <msg>` | Non-interactive commit |
+| `just agent-validate` | Run all checks |
+| `just agent-fmt` | Apply formatting fixes |
+| `just agent-bump [auto\|patch\|minor\|major]` | Version bump |
+| `just agent-release` | Complete release workflow |
+
+### 🏥 SRE Health Checks
+
+Built-in health monitoring with machine-parseable JSON output:
+
+```bash
+# Human-readable
+just health
+
+# Machine-parseable (for CI/AI)
+JUST_JSON=true just health-report
+# {"component":"git","branch":"main",...}
+```
+
+Available checks:
+- `health-git` - Repository status
+- `health-nix` - Nix environment
+- `health-devenv` - Devenv configuration
+- `health-secrets` - Secret availability
+- `health-api-keys` - API key validation
 
 ### 📦 Reproducible Environments
 
-- **devenv**: Declarative development environments with Nix
+- **devenv**: Declarative development shells with Nix
 - **direnv**: Automatic environment loading
-- **Cached Profiles**: Fast environment activation using `.direnv` cache
-- **Cross-platform**: Works on macOS and Linux
+- **omnibus**: Modular configuration framework
+- **flake-parts**: Composable Nix modules
 
-### 🔄 Modern SDLC Workflow
+### 🔄 Modern SDLC
 
-- **Conventional Commits**: Enforced via conform hook
+- **Conventional Commits**: Enforced via conform
 - **Automated Changelog**: Generated with cocogitto
-- **Semantic Versioning**: Automatic version bumping based on commits
-- **Git Hooks**: Managed by lefthook via omnibus framework
-- **GitHub Releases**: Automated release notes and publishing
-
-### ⚡ Fast Task Runner
-
-- **Justfile**: Lightning-fast command execution (no Nix eval overhead)
-- **40+ Commands**: Organized into logical categories
-- **Interactive Helpers**: Guided commit creation and validation
-- **CI/CD Ready**: Pre-configured validation and release workflows
+- **Semantic Versioning**: Auto-bump based on commits
+- **Git Hooks**: lefthook + omnibus framework
 
 ## Architecture
 
-### Module-Based Configuration
-
-The repository uses a modular architecture with `omnibus.pops.nixosProfiles` to load Nix modules from the `./modules/` directory as a tree structure:
-
-```nix
-# In devenv.nix
-nixosModules = (inputs.omnibus.pops.nixosProfiles.addLoadExtender {
-  load = {
-    src = ./modules;
-    inputs = {
-      inputs = inputs // { nixpkgs = nixpkgs-latest; };
-    };
-  };
-}).exports.default;
 ```
-
-This enables clean, composable configurations organized by concern.
-
-### Configuration Files
-
-```
-omni-devenv-fusion/
+devenv-native/
 ├── devenv.nix              # Main devenv configuration
 ├── devenv.yaml             # Flake inputs
-├── justfile                # Task runner commands
-├── cog.toml                # Cocogitto configuration (generated)
-├── .conform.yaml           # Commit message validation (generated)
-├── lefthook.yml            # Git hook definitions (generated)
+├── justfile                # Task runner (40+ commands)
+├── CLAUDE.md               # Orchestrator instructions
 ├── modules/
-│   ├── claude.nix          # Claude Code integration
-│   ├── files.nix           # File management
-│   ├── lefthook.nix        # Git hooks via omnibus
+│   ├── claude.nix          # Claude Code + MCP servers
+│   ├── lefthook.nix        # Git hooks (omnibus)
+│   ├── python.nix          # Python environment
 │   └── flake-parts/
-│       └── omnibus.nix     # Omnibus framework integration
-└── .claude/
-    └── settings.local.json # Claude Code local settings
+│       └── omnibus.nix     # Omnibus framework
+└── mcp-server/
+    └── orchestrator.py     # Expert consultation server
 ```
 
-### Key Technologies
+## Available Commands
 
-| Technology | Purpose | Configuration |
-|------------|---------|---------------|
-| **devenv** | Development environment | `devenv.nix`, `devenv.yaml` |
-| **direnv** | Auto-load environment | `.envrc` |
-| **Claude Code** | AI coding assistant | `modules/claude.nix` |
-| **lefthook** | Git hook manager | `modules/lefthook.nix`, `lefthook.yml` |
-| **cocogitto** | Changelog generator | `cog.toml` |
-| **conform** | Commit validation | `.conform.yaml` |
-| **just** | Task runner | `justfile` |
-| **omnibus** | Config framework | `modules/flake-parts/omnibus.nix` |
-| **secretspec** | Secret management | `secretspec.toml`, `devenv.yaml` |
-
-## Development Workflow
-
-### Daily Development
+### Validation & Quality
 
 ```bash
-# Make changes to code
-# Git hooks automatically validate on commit
-
-# Preview what will be in the next release
-just changelog-preview
-
-# Interactive commit with guidance
-just commit
-
-# Or commit directly
-git commit -m "feat(api): add new endpoint"
+just validate      # Run all checks (fmt, lint, test)
+just check-format  # Check formatting only
+just check-commits # Validate commit messages
+just lint          # Run linters
+just fmt           # Format code
+just test          # Run tests
 ```
 
-### Release Process
+### Changelog & Version
 
 ```bash
-# 1. Validate everything
-just pre-release
-
-# 2. Bump version and release (one command!)
-just release
-
-# Or step-by-step:
-just bump-auto          # Analyze commits and bump version
-just publish-release    # Create GitHub release with notes
-```
-
-### Common Tasks
-
-```bash
-# Validation
-just validate           # Run all checks (format, commits, lint, test)
-just check-format       # Check code formatting only
-just check-commits      # Validate commit messages
-
-# Changelog
-just cl                 # Preview next changelog
-just changelog-stats    # Show commit statistics
-just changelog-export   # Export in multiple formats
-
-# Version Management
+just changelog-preview  # Preview next release
+just changelog-stats    # Commit statistics
 just version            # Show current version
-just bump-dry           # Preview version bump
-just bump-patch         # Bump patch version (0.0.X)
-
-# Development
-just fmt                # Format all code
-just test               # Run test suite
-just info               # Show environment info
+just bump-auto          # Auto-bump version
+just bump-patch         # Bump patch (0.0.X)
 ```
 
-## Conventional Commits
-
-All commits must follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
-
-```
-<type>[optional scope]: <description>
-
-[optional body]
-
-[optional footer(s)]
-```
-
-### Commit Types
-
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation changes
-- `style`: Code style (formatting, missing semicolons, etc.)
-- `refactor`: Code refactoring
-- `perf`: Performance improvements
-- `test`: Tests
-- `build`: Build system changes
-- `ci`: CI/CD changes
-- `chore`: Other changes
-
-### Examples
+### Git Operations
 
 ```bash
-# Simple feature
-git commit -m "feat: add justfile workflow"
+just status            # Repository status
+just log               # Recent commits
+just agent-commit      # Non-interactive commit
+just commit            # Interactive commit (human)
+```
 
-# With scope
-git commit -m "feat(claude): integrate MCP servers"
+### Health & Diagnostics
 
-# Breaking change
-git commit -m "feat(api)!: redesign configuration API
+```bash
+just health            # Full health check
+just health-report     # JSON report (for AI/CI)
+just secrets-check     # Secret availability
+just info              # Environment info
+```
 
-BREAKING CHANGE: Configuration moved from config.omnibus to omnibus.config"
+### Release
 
-# Or use interactive helper
-just commit
+```bash
+just pre-release       # Pre-release checklist
+just release           # Complete release
+just publish-release   # Publish to GitHub
 ```
 
 ## Claude Code Integration
 
-### PostToolUse Hooks
+### PostToolUse Hook
 
-Automatically runs code quality checks after Claude Code edits files:
+Claude Code automatically runs quality checks after edits:
 
 ```nix
 claude.code.hooks = {
   PostToolUse = {
-    command = ''
-      bash -c 'cd "$DEVENV_ROOT" &&
-      source "$(ls -t .direnv/devenv-profile*.rc 2>/dev/null | head -1)" &&
-      lefthook run pre-commit'
-    '';
+    command = "lefthook run pre-commit";
     matcher = "^(Edit|MultiEdit|Write)$";
   };
 };
@@ -233,213 +169,80 @@ claude.code.hooks = {
 
 ### MCP Servers
 
-Two Model Context Protocol servers provide enhanced context:
+- **devenv**: Local devenv context
+- **nixos**: NixOS package/option search
+- **orchestrator**: Expert consultation (architect, platform_expert, devops_mlops, sre)
 
-**devenv MCP**: Access devenv-specific information
-```bash
-devenv mcp
+### Orchestrator Workflow
+
+```python
+# MCP orchestrator.py provides expert consultation
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("orchestrator-tools")
+
+@mcp.tool()
+def consult_specialist(role: str, query: str) -> str:
+    """Consult AI expert for domain-specific guidance"""
+    # Returns expert opinion based on role
 ```
 
-**nixos MCP**: Search NixOS packages, options, and flakes
-```bash
-nix run github:utensils/mcp-nixos
+## Conventional Commits
+
+All commits follow the specification:
+
+```
+<type>: <description>
+
+Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
 ```
 
-## Git Hooks
-
-Managed by lefthook via the omnibus framework:
-
-**Pre-commit hooks:**
-- `nixfmt` - Format Nix files
-- `shfmt` - Format shell scripts
-- `hunspell` - Spell checking
-- `typos` - Typo detection
-
-**Commit-msg hook:**
-- `conform` - Validate conventional commits
-
-All hooks are configured using a functional map-based approach in `lefthook.nix`.
-
-## Omnibus Framework
-
-The repository uses the [omnibus framework](https://github.com/tao3k/omnibus) for advanced configuration management:
-
-- Flexible configuration system with load extenders
-- Nixago-based configuration file generation
-- Integrated git-hooks from omnibus inputs
-- Modular and composable configurations
-
-## Installation
-
-### Prerequisites
-
-- [Nix](https://nixos.org/download.html) with flakes enabled
-- [direnv](https://direnv.net/) (optional but recommended)
-
-### Setup
+### Examples
 
 ```bash
-# Clone the repository
-git clone https://github.com/tao3k/omni-devenv-fusion.git
-cd omni-devenv-fusion
+# Agent (automated)
+just agent-commit "feat" "" "add sre health checks"
 
-# Allow direnv (if installed)
-direnv allow
-
-# Or enter devenv shell manually
-devenv shell
-
-# Verify setup
-just info
+# Human (interactive)
+just commit
+# Guides through type/scope/body/breaking change selection
 ```
 
-**Note:** 1Password CLI is automatically installed via devenv (`pkgs._1password-cli`).
+## Secret Management
 
-### Secret Management
-
-Secrets are managed via **secretspec** with **1Password** as the provider. This provides secure, encrypted storage for sensitive credentials like API keys.
-
-#### Prerequisites
-
-1. **1Password CLI** is automatically installed via devenv when entering the shell.
-
-2. **Sign in to 1Password**:
-   ```bash
-   op signin
-   ```
-
-#### Available Secrets
-
-| Secret | Profile | Description |
-|--------|---------|-------------|
-| `MINIMAX_API_KEY` | default | API key for MiniMax API access |
-
-#### Managing Secrets
+Secrets managed via **secretspec** with 1Password:
 
 ```bash
-# Check secret status
-secretspec check --profile development
+# Set API key
+secretspec set MINIMAX_API_KEY --value "your-key"
 
-# Set a secret value
-secretspec set MINIMAX_API_KEY --value "your-api-key"
-
-# Set profile-specific value
-secretspec set MINIMAX_API_KEY --profile development --value "your-dev-key"
-
-# View secret value (masked)
-secretspec get MINIMAX_API_KEY
-```
-
-#### Justfile Commands for Secrets
-
-```bash
-# Check all secrets status
+# Check status
 just secrets-check
-
-# Set MINIMAX_API_KEY
-just secrets-set-minimax
-
-# View secrets info
-just secrets-info
 ```
 
-#### Configuration
-
-The secretspec configuration is defined in `secretspec.toml`:
-
-```toml
-[project]
-name = "omni-devenv-fusion"
-revision = "1.0"
-
-[profiles.default]
-MINIMAX_API_KEY = { description = "API key for MINIMAX", required = true }
-
-[profiles.development]
-# Inherits from default, override secrets as needed
-```
-
-The provider is configured in `devenv.yaml`:
-
-```yaml
-secretspec:
-  enable: true
-  provider: onepassword  # keyring, dotenv, env, 1password, lastpass
-  profile: development
-```
-
-## Project Structure
-
-```
-omni-devenv-fusion/
-├── .claude/                # Claude Code configuration
-│   └── settings.local.json # Local settings (user-specific)
-├── .direnv/                # Cached devenv profiles
-├── modules/
-│   ├── claude.nix          # Claude Code integration
-│   ├── files.nix           # File management
-│   ├── lefthook.nix        # Git hooks configuration
-│   └── flake-parts/
-│       └── omnibus.nix     # Omnibus framework integration
-├── devenv.nix              # Main devenv configuration
-├── devenv.yaml             # Flake inputs
-├── justfile                # Task runner
-├── CLAUDE.md               # Detailed documentation for Claude Code
-├── README.md               # This file
-└── CHANGELOG.md            # Generated changelog
-```
-
-## CI/CD
-
-The repository includes configurations for automated workflows:
+## Development
 
 ```bash
-# Run what CI would run locally
-just ci
+# Setup
+just setup
 
-# Pre-release validation
+# Iterate
+just validate  # Before committing
+just agent-commit "fix" "" "fix bug"
+
+# Release
 just pre-release
-
-# Complete release
 just release
 ```
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes following conventional commits
-4. Run `just validate` to ensure all checks pass
-5. Submit a pull request
-
-## Documentation
-
-- **[CLAUDE.md](CLAUDE.md)** - Comprehensive guide for Claude Code
-- **[CHANGELOG.md](CHANGELOG.md)** - Generated changelog
-- `just examples` - Commit message examples
-- `just docs` - Documentation index
-
-## License
-
-[Add your license here]
-
 ## Resources
 
-- [devenv Documentation](https://devenv.sh)
-- [Nix Manual](https://nixos.org/manual/nix/stable/)
+- [devenv.sh](https://devenv.sh)
+- [just](https://github.com/casey/just)
 - [Conventional Commits](https://www.conventionalcommits.org/)
-- [Cocogitto](https://github.com/cocogitto/cocogitto)
-- [just Manual](https://github.com/casey/just)
-- [Omnibus Framework](https://github.com/tao3k/omnibus)
-
-## Acknowledgments
-
-This project demonstrates modern development workflows by integrating:
-- **Anthropic Claude Code** - AI-powered coding assistant
-- **devenv** - Reproducible development environments
-- **Nix ecosystem** - Declarative package management
-- **Omnibus framework** - Advanced configuration management
+- [cocogitto](https://github.com/cocogitto/cocogitto)
+- [omnibus](https://github.com/tao3k/omnibus)
 
 ---
 
-**Built with ❤️ using devenv, Nix, and Claude Code**
+Built with devenv, Nix, and Claude Code
