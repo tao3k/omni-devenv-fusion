@@ -37,6 +37,7 @@
     pkgs.claude-code
     pkgs.just
     pkgs.secretspec
+    pkgs._1password-cli
   ];
 
   # https://devenv.sh/languages/

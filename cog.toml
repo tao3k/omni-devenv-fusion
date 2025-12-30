@@ -8,7 +8,7 @@ tag_prefix = "v"
 owner = "tao3k"
 path = "CHANGELOG.md"
 remote = "github.com"
-repository = "devenv-native"
+repository = "omni-devenv-fusion"
 template = "remote"
 [[changelog.authors]]
 signature = "Guangtao"

@@ -295,6 +295,38 @@ watch:
     @watchexec -e nix,md,sh -c "just check-format"
 
 # ==============================================================================
+# Secret Management (secretspec)
+# ==============================================================================
+
+# Check secret status
+secrets-check:
+    @echo "Checking secrets status..."
+    @secretspec check --profile development
+
+# Show secrets info
+secrets-info:
+    @echo "Secret Management Info"
+    @echo "======================"
+    @echo "Provider: onepassword"
+    @echo "Profile: development"
+    @echo ""
+    @echo "Configured secrets:"
+    @secretspec check --profile development | grep -E "^\s+[A-Z]" || echo "  (no secrets defined)"
+
+# Set MINIMAX_API_KEY
+secrets-set-minimax:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    read -p "Enter MINIMAX_API_KEY: " -s API_KEY
+    echo
+    secretspec set MINIMAX_API_KEY --value "$API_KEY" --profile development
+    echo "MINIMAX_API_KEY set successfully"
+
+# Get MINIMAX_API_KEY (masked)
+secrets-get-minimax:
+    @secretspec get MINIMAX_API_KEY
+
+# ==============================================================================
 # CI/CD Helpers
 # ==============================================================================
 

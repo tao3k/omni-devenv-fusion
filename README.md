@@ -270,6 +270,81 @@ devenv shell
 just info
 ```
 
+**Note:** 1Password CLI is automatically installed via devenv (`pkgs._1password-cli`).
+
+### Secret Management
+
+Secrets are managed via **secretspec** with **1Password** as the provider. This provides secure, encrypted storage for sensitive credentials like API keys.
+
+#### Prerequisites
+
+1. **1Password CLI** is automatically installed via devenv when entering the shell.
+
+2. **Sign in to 1Password**:
+   ```bash
+   op signin
+   ```
+
+#### Available Secrets
+
+| Secret | Profile | Description |
+|--------|---------|-------------|
+| `MINIMAX_API_KEY` | default | API key for MiniMax API access |
+
+#### Managing Secrets
+
+```bash
+# Check secret status
+secretspec check --profile development
+
+# Set a secret value
+secretspec set MINIMAX_API_KEY --value "your-api-key"
+
+# Set profile-specific value
+secretspec set MINIMAX_API_KEY --profile development --value "your-dev-key"
+
+# View secret value (masked)
+secretspec get MINIMAX_API_KEY
+```
+
+#### Justfile Commands for Secrets
+
+```bash
+# Check all secrets status
+just secrets-check
+
+# Set MINIMAX_API_KEY
+just secrets-set-minimax
+
+# View secrets info
+just secrets-info
+```
+
+#### Configuration
+
+The secretspec configuration is defined in `secretspec.toml`:
+
+```toml
+[project]
+name = "omni-devenv-fusion"
+revision = "1.0"
+
+[profiles.default]
+MINIMAX_API_KEY = { description = "API key for MINIMAX", required = true }
+
+[profiles.development]
+# Inherits from default, override secrets as needed
+```
+
+The provider is configured in `devenv.yaml`:
+
+```yaml
+secretspec:
+  enable: true
+  provider: onepassword  # keyring, dotenv, env, 1password, lastpass
+  profile: development
+```
+
 ## Project Structure
 
 ```

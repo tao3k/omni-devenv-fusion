@@ -9,5 +9,5 @@ inputs:
 
 secretspec:
   enable: true
-  provider: keyring  # keyring, dotenv, env, 1password, lastpass
+  provider: onepassword  # keyring, dotenv, env, 1password, lastpass
   profile: development   # profile from secretspec.toml
