@@ -63,6 +63,11 @@ agent-commit type scope message body="" breaking_desc="":
         MSG="$MSG"$'\n\n'"BREAKING CHANGE: $BREAKING_DESC"
     fi
 
+    # Stage all modified files first (handles hook-generated changes like nixfmt)
+    echo "Staging all modified files..."
+    git add -A
+
+    # Commit with staged changes
     git commit -m "$MSG"
     echo "Committed: $TYPE$SCOPE_STR: $DESC"
 

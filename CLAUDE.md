@@ -49,10 +49,15 @@ Always prefer **Agent-Friendly** commands (non-interactive) over interactive one
 
 ## 🛡 Pre-Commit Protocol
 Before executing `just agent-commit` or any git commit, you **MUST** perform a **Documentation Consistency Check**:
+
 1.  **Analyze the Change**: Does this code change affect:
     - User commands (Justfile)?
     - Architecture patterns?
     - New tools or environment variables?
+
 2.  **Verify Docs**:
     - If **YES**: You MUST update `README.md` (public facing) or `CLAUDE.md` (internal agent instructions) **in the same commit**.
-    - If **NO**: Proceed with commit.
+
+3.  **Stage All Files**: Always use `git add -A` before committing to capture hook-generated changes (e.g., nixfmt formatting).
+
+4.  **Commit**: Use `just agent-commit <type> "" <message>` (no scope - conform requires empty scope).
