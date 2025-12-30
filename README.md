@@ -152,6 +152,16 @@ just release           # Complete release
 just publish-release   # Publish to GitHub
 ```
 
+### MCP Server
+
+```bash
+just run               # Run MCP server
+just debug             # Debug with MCP Inspector
+just test-mcp          # Syntax check + startup test
+just test_basic        # Basic MCP tests
+just test_workflow     # Workflow integration tests
+```
+
 ## Claude Code Integration
 
 ### PostToolUse Hook
@@ -172,6 +182,31 @@ claude.code.hooks = {
 - **devenv**: Local devenv context
 - **nixos**: NixOS package/option search
 - **orchestrator**: Expert consultation (architect, platform_expert, devops_mlops, sre)
+
+### MCP Server Commands
+
+```bash
+# Run the MCP orchestrator server
+just run
+
+# Debug with MCP Inspector
+just debug
+
+# Test MCP server functionality
+just test-mcp       # Syntax check + server startup
+just test_basic     # Run basic MCP tests
+just test_workflow  # Run workflow integration tests
+```
+
+### Testing
+
+```bash
+# Run basic tests (MCP initialization, tools, context)
+uv run python tests/test_basic.py
+
+# Run full workflow tests (consult_specialist, personas)
+uv run python tests/workflows.py
+```
 
 ### Orchestrator Workflow
 

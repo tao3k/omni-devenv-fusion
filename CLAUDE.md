@@ -90,3 +90,10 @@ When editing `.nix` files, you **MUST** follow this protocol to avoid syntax pit
 - **Lists**: Use `prepend` from `inputs.omnibus.inputs.dmerge` to append items
 - **Commands**: Use `builtins.removeAttrs` to remove keys
 
+## 📁 Design Documentation Protocol
+When making **design changes or updates**:
+- Write documentation in `design/*.md`
+- Follow the pattern: `design/{feature-name}.md`
+- Include: rationale, architecture decisions, alternatives considered
+- Link from `CLAUDE.md` or relevant code comments
+

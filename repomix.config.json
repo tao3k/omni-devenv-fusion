@@ -1,0 +1,20 @@
+{
+  "output": {
+    "style": "xml",
+    "headerText": "Project: omni-devenv-fusion context"
+  },
+  "ignore": {
+    "useGitignore": true,
+    "customPatterns": [
+      "**/uv.lock",
+      "**/devenv.lock",
+      "**/flake.lock",
+      "**/.devenv/**",
+      "**/.direnv/**",
+      "**/__pycache__/**",
+      "**/*.ipynb", 
+      "**/target/**",
+      "**/mcp-server/__pycache__/**"
+    ]
+  }
+}

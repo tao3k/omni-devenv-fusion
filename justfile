@@ -414,6 +414,16 @@ test-mcp:
     @timeout 3 python -u mcp-server/orchestrator.py 2>&1 || echo "Server startup test completed"
     @echo "MCP tests passed"
 
+[group('mcp')]
+test_basic:
+    @echo "Running basic tests..."
+    @uv run python tests/test_basic.py
+
+[group('mcp')]
+test_workflow:
+    @echo "Running workflow tests..."
+    @uv run python tests/workflows.py
+
 # ==============================================================================
 # SRE HEALTH CHECKS
 # Outputs machine-parseable JSON for AI agents and CI/CD
