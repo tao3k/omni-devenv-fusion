@@ -5,7 +5,7 @@ import json
 import asyncio
 import logging
 import subprocess
-import tempfile  # [新增] 用于创建临时文件
+from pathlib import Path
 from typing import Any, Dict, List
 
 from anthropic import AsyncAnthropic
@@ -156,14 +156,14 @@ async def get_codebase_context(target_dir: str = ".", ignore_files: str = "") ->
         _log_decision("get_codebase_context.security_block", {"target_dir": target_dir})
         return error_msg
 
-    # 创建一个临时文件路径
-    # delete=False 因为我们需要关闭它后让 repomix 写入，然后再读取
-    with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as tmp:
-        temp_path = tmp.name
+    # Use .cache/ directory for repomix output (following numtide/prj-spec)
+    cache_dir = Path(target_dir) / ".cache"
+    cache_dir.mkdir(exist_ok=True)
+    temp_path = str(cache_dir / "repomix-output.xml")
 
     _log_decision("get_codebase_context.request", {"target_dir": target_dir, "temp_path": temp_path})
 
-    # 使用临时文件作为 output
+    # Use temp file as output
     command = [
         "repomix",
         target_dir,
@@ -171,38 +171,37 @@ async def get_codebase_context(target_dir: str = ".", ignore_files: str = "") ->
         "--output", temp_path,
         "--no-security-check"
     ]
-    
+
     if ignore_files:
         command.extend(["--ignore", ignore_files])
 
     try:
-        # 执行 Repomix (stdout/stderr 此时只包含日志，不包含内容)
+        # Execute Repomix (stdout/stderr only contains logs, not content)
         process = await asyncio.create_subprocess_exec(
             *command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
         stdout, stderr = await process.communicate()
-        
-        # 检查是否生成了文件
+
+        # Check if file was generated
         if not os.path.exists(temp_path):
             err_msg = stderr.decode() + "\n" + stdout.decode()
             return f"Error: Repomix failed to generate output file.\nLogs:\n{err_msg}"
-            
-        # 即使 Repomix 报错(非0)，只要文件生成了且有内容，我们也可以尝试读取
-        # 但通常 returncode != 0 意味着失败
+
+        # Even if Repomix returns non-zero, if file was generated with content, we try to read it
         if process.returncode != 0:
-            os.unlink(temp_path) # 清理
+            os.unlink(temp_path) # Cleanup
             return f"Error running Repomix (Exit {process.returncode}):\n{stderr.decode()}"
 
-        # 读取纯净内容
+        # Read clean content
         try:
             with open(temp_path, "r", encoding="utf-8") as f:
                 content = f.read()
         except Exception as read_err:
             return f"Error reading temp file: {read_err}"
         finally:
-            # 务必清理临时文件
+            # Must cleanup temp file
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
 
@@ -215,7 +214,7 @@ async def get_codebase_context(target_dir: str = ".", ignore_files: str = "") ->
     except FileNotFoundError:
         return "Error: 'repomix' command not found. Please ensure it is installed."
     except Exception as e:
-        # 确保清理
+        # Ensure cleanup
         if os.path.exists(temp_path):
             os.unlink(temp_path)
         _log_decision("get_codebase_context.exception", {"error": str(e)})

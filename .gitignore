@@ -8,7 +8,13 @@ devenv.local.nix
 # pre-commit
 .pre-commit-config.yaml
 
-.data
+# prj-spec directories (numtide/prj-spec)
+# See: https://github.com/numtide/prj-spec
+.config/
+.run/
+.cache/
+.data/
+.bin/
 
 .mcp.json
 

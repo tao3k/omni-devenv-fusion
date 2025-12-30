@@ -97,3 +97,16 @@ When making **design changes or updates**:
 - Include: rationale, architecture decisions, alternatives considered
 - Link from `CLAUDE.md` or relevant code comments
 
+## 📦 Project Directory Structure (numtide/prj-spec)
+Follow [numtide/prj-spec](https://github.com/numtide/prj-spec) for project directories:
+
+| Directory | Purpose |
+|-----------|---------|
+| `.config/` | Project configuration |
+| `.run/` | Runtime files |
+| `.cache/` | Cache files (e.g., repomix output) |
+| `.data/` | Data files (direnv layout) |
+| `.bin/` | Project binaries |
+
+All are ignored in `.gitignore`.
+
