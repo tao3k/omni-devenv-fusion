@@ -47,6 +47,13 @@ Always prefer **Agent-Friendly** commands (non-interactive) over interactive one
 - **Commits**: Follow Conventional Commits (feat, fix, chore, refactor, docs).
 - **Style**: When editing files, keep changes minimal and focused.
 
+## 📦 Tool-Router Example Protocol
+When making code changes that establish new patterns, **always add examples** to `tool-router/data/examples/`:
+1. Read current code before editing
+2. Make the fix
+3. Verify the actual change works
+4. Add/update examples based on **real changes**, not hypotheticals
+
 ## 🛡 Pre-Commit Protocol
 Before executing `just agent-commit` or any git commit, you **MUST** perform a **Documentation Consistency Check**:
 
@@ -61,6 +68,10 @@ Before executing `just agent-commit` or any git commit, you **MUST** perform a *
 3.  **Stage All Files**: Always use `git add -A` before committing to capture hook-generated changes (e.g., nixfmt formatting).
 
 4.  **Commit**: When user says "run `just agent-commit`", **automatically determine** type and message. Use `just agent-commit <type> "" <message>` (no scope - conform requires empty scope).
+
+    **IMPORTANT**: The message should be the description **WITHOUT** the type prefix. The justfile automatically adds it.
+    - ✅ Correct: `just agent-commit fix "" "correct dmerge import"`
+    - ❌ Wrong: `just agent-commit fix "" "fix: correct dmerge import"` (causes double "fix: fix:")
 
 ## 🔧 Nix Edit Protocol
 When editing `.nix` files, you **MUST** follow this protocol to avoid syntax pitfalls:
