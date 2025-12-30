@@ -210,14 +210,74 @@ just commit
 
 ## Secret Management
 
-Secrets managed via **secretspec** with 1Password:
+Secrets are managed via **secretspec**, a tool for secure credential handling. Multiple providers are supported.
+
+### Supported Providers
+
+| Provider | Description | Use Case |
+|----------|-------------|----------|
+| `keyring` | System keyring (macOS Keychain, KWallet) | Local development |
+| `1password` | 1Password | Team sharing |
+| `lastpass` | LastPass | Team sharing |
+| `dotenv` | .env file | Local development |
+| `env` | Environment variables | CI/CD |
+
+### Configuration
+
+**Provider Selection** (in `devenv.yaml`):
+
+```yaml
+secretspec:
+  enable: true
+  provider: keyring  # or: onepassword, lastpass, dotenv, env
+  profile: development
+```
+
+**Secret Definitions** (in `secretspec.toml`):
+
+```toml
+[project]
+name = "devenv-native"
+revision = "1.0"
+
+[profiles.default]
+MINIMAX_API_KEY = { description = "API key for MiniMax", required = true }
+
+[profiles.development]
+# Inherits from default, override as needed
+```
+
+### Setup Commands
 
 ```bash
-# Set API key
-secretspec set MINIMAX_API_KEY --value "your-key"
-
-# Check status
+# Check secret status
 just secrets-check
+
+# View secrets info
+just secrets-info
+
+# Set a secret (interactive)
+just secrets-set-minimax
+
+# Or use secretspec directly
+secretspec set MINIMAX_API_KEY --value "your-api-key"
+secretspec set MINIMAX_API_KEY --profile development --value "dev-key"
+
+# Get secret value (masked)
+secretspec get MINIMAX_API_KEY
+```
+
+### 1Password Setup (Optional)
+
+If using 1Password as provider:
+
+```bash
+# 1. Install 1Password CLI (handled by devenv)
+# 2. Sign in
+op signin
+
+# 3. Add secret to 1Password
+#    Run: just secrets-set-minimax
 ```
 
 ## Development
@@ -237,12 +297,41 @@ just release
 
 ## Resources
 
-- [devenv.sh](https://devenv.sh)
-- [just](https://github.com/casey/just)
-- [Conventional Commits](https://www.conventionalcommits.org/)
-- [cocogitto](https://github.com/cocogitto/cocogitto)
-- [omnibus](https://github.com/tao3k/omnibus)
+- [devenv.sh](https://devenv.sh) - Development environments with Nix
+- [Nix Manual](https://nixos.org/manual/nix/stable/) - Nix package manager
+- [just](https://github.com/casey/just) - Command runner
+- [Conventional Commits](https://www.conventionalcommits.org/) - Commit message specification
+- [cocogitto](https://github.com/cocogitto/cocogitto) - Changelog and version management
+- [lefthook](https://github.com/evilmartians/lefthook) - Git hooks manager
+- [omnibus](https://github.com/tao3k/omnibus) - Configuration framework
+- [secretspec](https://github.com/tao3k/secretspec) - Secret management
+- [Claude Code](https://claude.com/claude-code) - AI coding assistant
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make changes following conventional commits
+4. Run `just validate` to ensure checks pass
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License.
+
+## Acknowledgments
+
+Built with modern tools that empower AI-assisted software development:
+
+- **Anthropic Claude Code** - AI-powered coding assistant with MCP support
+- **devenv** - Reproducible development environments
+- **Nix ecosystem** - Declarative package management
+- **omnibus framework** - Advanced configuration management
+- **cocogitto** - Automated changelog and versioning
+- **lefthook** - Fast and powerful Git hooks
+
+Special thanks to the maintainers of these projects for enabling the AI-SDLC workflow.
 
 ---
 
-Built with devenv, Nix, and Claude Code
+Built with ❤️ using devenv, Nix, and Claude Code
