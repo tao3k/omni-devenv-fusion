@@ -16,15 +16,29 @@ let
   nixosModules =
     (inputs.omnibus.pops.nixosProfiles.addLoadExtender {
       load = {
-        src = ./modules;
+        src = ./units/modules;
         inputs = {
-          nixpkgs = nixpkgs-latest;
-          inputs = inputs // {
+          inherit nixpkgs-latest;
+          __inputs__  = {
+            inherit nixpkgs-latest packages;
+          };
+          inputs = {
             nixpkgs = nixpkgs-latest;
           };
         };
       };
     }).exports.default;
+  
+  packages = (inputs.omnibus.pops.packages.addLoadExtender {
+    load = {
+      src = ./units/packages;
+      inputs = {
+        inputs = {
+          nixpkgs = nixpkgs-latest;
+        };
+      };
+    };
+  }).exports.packages;
 in
 {
   imports = [
@@ -41,6 +55,7 @@ in
             inputs = {
               inputs = {
                 nixpkgs = pkgs;
+                inherit nixpkgs-latest;
                 inherit (inputs.omnibus.flake.inputs) nixago;
               };
             };
@@ -62,7 +77,6 @@ in
     pkgs.secretspec
     pkgs._1password-cli
   ];
-
   # https://devenv.sh/languages/
   # languages.rust.enable = true;
 

@@ -1,19 +1,16 @@
 {
   inputs,
+  __inputs__,
   pkgs,
   config,
   lib,
-  ...
 }:
 let
-  nixpkgs-latest =
-    inputs.nixpkgs-latest.legacyPackages.${pkgs.stdenv.hostPlatform.system};
-
   initConfigs =
     (inputs.omnibus.units.configs {
       inputs = {
         inputs = {
-          nixpkgs = nixpkgs-latest;
+          nixpkgs = __inputs__.nixpkgs-latest;
           inherit (inputs.omnibus.flake.inputs) git-hooks;
         };
       };

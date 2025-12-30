@@ -39,7 +39,7 @@ Always prefer **Agent-Friendly** commands (non-interactive) over interactive one
 - **Test**: `just test`
 - **Lint**: `just lint`
 - **Format**: `just fmt`
-- **Commit**: `just agent-commit <type> <scope> <message>` (Avoid `just commit`)
+- **Commit**: When user says "run `just agent-commit`", **automatically determine** type, scope, and message from the changes made. Use `just agent-commit <type> "" <message>` (no scope).
 
 ## 📝 Coding Standards
 - **Nix**: Prefer `flake-parts` modules. Keep `devenv.nix` clean and modular.
@@ -60,4 +60,4 @@ Before executing `just agent-commit` or any git commit, you **MUST** perform a *
 
 3.  **Stage All Files**: Always use `git add -A` before committing to capture hook-generated changes (e.g., nixfmt formatting).
 
-4.  **Commit**: Use `just agent-commit <type> "" <message>` (no scope - conform requires empty scope).
+4.  **Commit**: When user says "run `just agent-commit`", **automatically determine** type and message. Use `just agent-commit <type> "" <message>` (no scope - conform requires empty scope).

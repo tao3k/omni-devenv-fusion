@@ -389,6 +389,20 @@ watch:
     @watchexec -e nix,md,sh -c "just check-format"
 
 # ==============================================================================
+# MCP SERVER COMMANDS
+# ==============================================================================
+
+[group('mcp')]
+debug server="mcp-server/orchestrator.py":
+    @echo "Starting MCP Inspector..."
+    @uv run mcp-inspector python {{server}}
+
+[group('mcp')]
+run server="mcp-server/orchestrator.py":
+    @echo "Running MCP server: {{server}}"
+    @python {{server}}
+
+# ==============================================================================
 # SRE HEALTH CHECKS
 # Outputs machine-parseable JSON for AI agents and CI/CD
 # ==============================================================================
