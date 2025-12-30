@@ -61,3 +61,21 @@ Before executing `just agent-commit` or any git commit, you **MUST** perform a *
 3.  **Stage All Files**: Always use `git add -A` before committing to capture hook-generated changes (e.g., nixfmt formatting).
 
 4.  **Commit**: When user says "run `just agent-commit`", **automatically determine** type and message. Use `just agent-commit <type> "" <message>` (no scope - conform requires empty scope).
+
+## 🔧 Nix Edit Protocol
+When editing `.nix` files, you **MUST** follow this protocol to avoid syntax pitfalls:
+
+1.  **Check Examples**: Before editing any `.nix` file, call `tool_router.describe_tool("nix.edit")` and select exactly ONE example id.
+2.  **Confirm Rules**: State "Selected example: `<id>`" and list each `do_not` rule, confirming it will be followed.
+3.  **Apply Edits**: Make only `allowed_edits` from the selected example.
+4.  **Run Checks**: Execute the `checks` listed in the example (e.g., `nix fmt`, `statix check`).
+5.  **If No Match**: If no example matches the current change, STOP and ask the user to add/adjust an example.
+
+**Example Location**: `tool-router/data/examples/nix.edit.jsonl`
+
+### Key Nix Rules (Memorized)
+- **mkNixago**: dmerge is implicit - pass only fields to extend, not full override
+- **Module args**: Always preserve `...` in `{ config, lib, pkgs, ... }:`
+- **Lists**: Use `prepend` from `inputs.omnibus.inputs.dmerge` to append items
+- **Commands**: Use `builtins.removeAttrs` to remove keys
+

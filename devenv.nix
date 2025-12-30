@@ -19,7 +19,7 @@ let
         src = ./units/modules;
         inputs = {
           inherit nixpkgs-latest;
-          __inputs__  = {
+          __inputs__ = {
             inherit nixpkgs-latest packages;
           };
           inputs = {
@@ -28,17 +28,18 @@ let
         };
       };
     }).exports.default;
-  
-  packages = (inputs.omnibus.pops.packages.addLoadExtender {
-    load = {
-      src = ./units/packages;
-      inputs = {
+
+  packages =
+    (inputs.omnibus.pops.packages.addLoadExtender {
+      load = {
+        src = ./units/packages;
         inputs = {
-          nixpkgs = nixpkgs-latest;
+          inputs = {
+            nixpkgs = nixpkgs-latest;
+          };
         };
       };
-    };
-  }).exports.packages;
+    }).exports.packages;
 in
 {
   imports = [

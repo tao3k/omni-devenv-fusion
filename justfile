@@ -63,7 +63,11 @@ agent-commit type scope message body="" breaking_desc="":
         MSG="$MSG"$'\n\n'"BREAKING CHANGE: $BREAKING_DESC"
     fi
 
-    # Stage all modified files first (handles hook-generated changes like nixfmt)
+    # Run lefthook first to apply all formatting fixes (prevents unstaged files after commit)
+    echo "Running pre-commit hooks..."
+    lefthook run pre-commit --all-files --no-tty
+
+    # Stage all modified files after formatting
     echo "Staging all modified files..."
     git add -A
 

@@ -35,7 +35,7 @@ buildNpmPackage rec {
   ];
 
   dontNpmPrune = true;
-  
+
   npmDepsHash = "sha256-QuG+RLsduOplFEY92sQC4R7w04Pk/nIIvaQaEHYLzXU=";
 
   doCheck = false;

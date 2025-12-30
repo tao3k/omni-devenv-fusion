@@ -3,7 +3,8 @@
     "allow": [
       "Bash(just commit)",
       "mcp__orchestrator__consult_specialist",
-      "Bash(op account:*)"
+      "Bash(op account:*)",
+      "Bash(git checkout:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -6,6 +6,7 @@
   lib,
 }:
 let
+  inherit (inputs.omnibus.inputs.dmerge) prepend;
   initConfigs =
     (inputs.omnibus.units.configs {
       inputs = {
@@ -18,26 +19,18 @@ let
 
   lefthook = initConfigs.lefthook;
 
-  removeTreefmt = lib.updateManyAttrsByPath [
-    {
-      path = [
-        "data"
-        "pre-commit"
-        "commands"
-      ];
-      update = old: builtins.removeAttrs old [ "treefmt" ];
-    }
-  ];
-
   # Define generator configurations
   generators = [
     {
       name = "lefthook";
-      gen =
-        (config.omnibus.ops.mkNixago initConfigs.nixago-lefthook)
-          (removeTreefmt initConfigs.lefthook.default)
-          initConfigs.lefthook.nix
-          initConfigs.lefthook.shell;
+      gen = (config.omnibus.ops.mkNixago initConfigs.nixago-lefthook) {
+        data = {
+          # Remove treefmt from commands
+          commands = builtins.removeAttrs lefthook.data.pre-commit.commands [ "treefmt" ];
+          # Exclude CHANGELOG.md from typos (false positives from commit hashes)
+          exclude = prepend [ "CHANGELOG.md" ];
+        };
+      } initConfigs.lefthook.nix initConfigs.lefthook.shell;
     }
     {
       name = "conform";

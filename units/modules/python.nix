@@ -1,6 +1,6 @@
 { __inputs__, ... }:
 {
-  packages =  [
+  packages = [
     __inputs__.packages.mcp-inspector
   ];
   languages.python = {
