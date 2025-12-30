@@ -1,13 +1,14 @@
-allowUnfree: true
 inputs:
+  llm-agents:
+    url: github:numtide/llm-agents.nix
   nixpkgs:
     url: github:cachix/devenv-nixpkgs/rolling
   nixpkgs-latest:
     url: github:NixOS/nixpkgs/nixpkgs-unstable
   omnibus:
     url: github:tao3k/omnibus/main
-
+allowUnfree: true
 secretspec:
   enable: true
-  provider: onepassword  # keyring, dotenv, env, 1password, lastpass
-  profile: development   # profile from secretspec.toml
+  profile: development
+  provider: onepassword

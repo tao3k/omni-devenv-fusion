@@ -6,12 +6,31 @@
   ...
 }:
 
+let
+  nixpkgs-latest = import inputs.nixpkgs-latest {
+    system = pkgs.stdenv.hostPlatform.system;
+    config = {
+      allowUnfree = true;
+    };
+  };
+  nixosModules =
+    (inputs.omnibus.pops.nixosProfiles.addLoadExtender {
+      load = {
+        src = ./modules;
+        inputs = {
+          inputs = inputs // {
+            nixpkgs = nixpkgs-latest;
+          };
+        };
+      };
+    }).exports.default;
+in
 {
   imports = [
-    ./claude.nix
-    ./files.nix
-    ./modules/flake-parts/omnibus.nix
-    ./lefthook.nix
+    nixosModules.claude
+    nixosModules.flake-parts.omnibus
+    nixosModules.files
+    nixosModules.lefthook
     #./modules/flake-parts/omnibus-hive.nix
     ({
       config = lib.mkMerge [
@@ -34,8 +53,8 @@
   # https://devenv.sh/packages/
   packages = [
     pkgs.git
-    pkgs.claude-code
     pkgs.just
+    nixpkgs-latest.claude-code
     pkgs.secretspec
     pkgs._1password-cli
   ];

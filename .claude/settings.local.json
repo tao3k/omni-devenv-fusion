@@ -1,6 +1,13 @@
 {
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "devenv",
-    "nixos"
-  ]
+    "nixos",
+    "MiniMax"
+  ],
+  "permissions": {
+    "allow": [
+      "Bash(just commit)"
+    ]
+  }
 }
