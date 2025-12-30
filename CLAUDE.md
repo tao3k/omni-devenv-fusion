@@ -606,3 +606,4 @@ claude.code.env = {
 
 - **default**: Base profile with production secrets
 - **development**: Development profile (inherits from default)
+- to memorizw

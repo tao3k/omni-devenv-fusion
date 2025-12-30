@@ -1,5 +1,13 @@
-{ lib, config, ... }:
 {
+  lib,
+  config,
+  pkgs,
+  ...
+}:
+{
+  packages = [
+    pkgs.uv # required by minimax-coding-plan-mcp
+  ];
   claude.code.enable = true;
   claude.code.env = {
     ANTHROPIC_BASE_URL = "https://api.minimax.io/anthropic";
@@ -38,6 +46,17 @@
         "github:utensils/mcp-nixos"
         "--"
       ];
+    };
+    MiniMax = {
+      type = "stdio";
+      command = "uvx";
+      args = [ "minimax-coding-plan-mcp" ];
+      env = {
+        MINIMAX_API_KEY = config.secretspec.secrets.MINIMAX_API_KEY;
+        MINIMAX_MCP_BASE_PATH = "${config.devenv.root}/.minimax-output";
+        MINIMAX_API_HOST = "https://api.minimax.io";
+        MINIMAX_API_RESOURCE_MODE = "url";
+      };
     };
   };
 }

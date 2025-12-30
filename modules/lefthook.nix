@@ -6,7 +6,8 @@
   ...
 }:
 let
-  nixpkgs-latest = inputs.nixpkgs-latest.legacyPackages.${pkgs.stdenv.hostPlatform.system};
+  nixpkgs-latest =
+    inputs.nixpkgs-latest.legacyPackages.${pkgs.stdenv.hostPlatform.system};
 
   initConfigs =
     (inputs.omnibus.units.configs {
@@ -47,24 +48,26 @@ let
     }
     {
       name = "cog";
-      gen = (config.omnibus.ops.mkNixago initConfigs.nixago-cog) initConfigs.cog.default {
-        hook.mode = "copy";
-        data = {
-          changelog = {
-            path = "CHANGELOG.md";
-            template = "remote";
-            remote = "github.com";
-            repository = "omni-devenv-fusion";
-            owner = "tao3k";
-            authors = [
-              {
-                username = "gtrunsec";
-                signature = "Guangtao";
-              }
-            ];
+      gen =
+        (config.omnibus.ops.mkNixago initConfigs.nixago-cog) initConfigs.cog.default
+          {
+            hook.mode = "copy";
+            data = {
+              changelog = {
+                path = "CHANGELOG.md";
+                template = "remote";
+                remote = "github.com";
+                repository = "omni-devenv-fusion";
+                owner = "tao3k";
+                authors = [
+                  {
+                    username = "gtrunsec";
+                    signature = "Guangtao";
+                  }
+                ];
+              };
+            };
           };
-        };
-      };
     }
   ];
 
