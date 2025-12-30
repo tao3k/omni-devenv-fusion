@@ -2,14 +2,15 @@
   "permissions": {
     "allow": [
       "Bash(just commit)",
-      "mcp__orchestrator__consult_specialist"
+      "mcp__orchestrator__consult_specialist",
+      "Bash(op account:*)"
     ]
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "MiniMax",
     "devenv",
     "nixos",
     "orchestrator"
-  ],
-  "enableAllProjectMcpServers": true
+  ]
 }
