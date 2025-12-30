@@ -2,6 +2,27 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.1.0](https://github.com/tao3k/omni-devenv-fusion/compare/d538b85ae40a885f5ce5dadc11e2498bfa6b8a05..v1.1.0) - 2025-12-30
+#### Features
+- rename repo to omni-devenv-fusion with MiniMax integration - ([a0f3c18](https://github.com/tao3k/omni-devenv-fusion/commit/a0f3c186aef0854a4fbb7ce057599fce595a1140)) - guangtao
+#### Bug Fixes
+- remove unsupported --no-pager flag from cog commands - ([afebf9b](https://github.com/tao3k/omni-devenv-fusion/commit/afebf9bea484b97725911650b37d10e8e4f37e9c)) - guangtao
+- stage all files before commit to capture hook changes - ([c27abcf](https://github.com/tao3k/omni-devenv-fusion/commit/c27abcfbdaf4fb03e86bebb1fcbdef57c2fa7b4f)) - guangtao
+#### Documentation
+- improve README with full secretspec providers and acknowledgments - ([60c6699](https://github.com/tao3k/omni-devenv-fusion/commit/60c6699ed47ab887879263cac90dc7fe81ca4b52)) - guangtao
+- rewrite README with Orchestrator workflow and SRE health checks - ([fa0ddd8](https://github.com/tao3k/omni-devenv-fusion/commit/fa0ddd821d9cde0d21bc56944a1c3145f35385b0)) - guangtao
+- update module structure documentation - ([80e2486](https://github.com/tao3k/omni-devenv-fusion/commit/80e2486fd868a71f21658ee0db710e8628f36482)) - guangtao
+- add secretspec setup documentation with 1Password integration - ([7ff15c6](https://github.com/tao3k/omni-devenv-fusion/commit/7ff15c6426efe5094369b38f327a847d248b3eb2)) - guangtao
+#### Refactoring
+- reorganize nix modules into modules/ directory - ([24422c9](https://github.com/tao3k/omni-devenv-fusion/commit/24422c972a382abe2bf51947e9d4232d26e88069)) - guangtao
+#### Miscellaneous Chores
+- stage local settings - ([1ba2b44](https://github.com/tao3k/omni-devenv-fusion/commit/1ba2b44dbc9a711a09dd3910baaf34bbf559746e)) - guangtao
+- update project name references to omni-devenv-fusion - ([ccde25e](https://github.com/tao3k/omni-devenv-fusion/commit/ccde25e0b74f1be32285c5443e91b4bce51a42ef)) - guangtao
+- formalize agent workflow with SRE health checks - ([7841d2d](https://github.com/tao3k/omni-devenv-fusion/commit/7841d2dc3dfdf28344174da84c5955b049070642)) - guangtao
+- sync with release - ([d538b85](https://github.com/tao3k/omni-devenv-fusion/commit/d538b85ae40a885f5ce5dadc11e2498bfa6b8a05)) - guangtao
+
+- - -
+
 ## [v1.0.0](https://github.com/tao3k/devenv-native/compare/5215ac951e138bb1d52350beedb0ff1381da9ed1..v1.0.0) - 2025-12-29
 #### Features
 - change claude to MINIMAX_2.0 - ([7bce13c](https://github.com/tao3k/devenv-native/commit/7bce13c9219b8707f6d36cae8615f2aec047edde)) - guangtao
