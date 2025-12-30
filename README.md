@@ -61,20 +61,42 @@ just cl        # Preview changelog
 
 ## Architecture
 
+### Module-Based Configuration
+
+The repository uses a modular architecture with `omnibus.pops.nixosProfiles` to load Nix modules from the `./modules/` directory as a tree structure:
+
+```nix
+# In devenv.nix
+nixosModules = (inputs.omnibus.pops.nixosProfiles.addLoadExtender {
+  load = {
+    src = ./modules;
+    inputs = {
+      inputs = inputs // { nixpkgs = nixpkgs-latest; };
+    };
+  };
+}).exports.default;
+```
+
+This enables clean, composable configurations organized by concern.
+
 ### Configuration Files
 
 ```
 omni-devenv-fusion/
 ├── devenv.nix              # Main devenv configuration
-├── claude.nix              # Claude Code integration
-├── lefthook.nix            # Git hooks via omnibus
+├── devenv.yaml             # Flake inputs
 ├── justfile                # Task runner commands
 ├── cog.toml                # Cocogitto configuration (generated)
 ├── .conform.yaml           # Commit message validation (generated)
 ├── lefthook.yml            # Git hook definitions (generated)
-└── modules/
-    └── flake-parts/
-        └── omnibus.nix     # Omnibus framework integration
+├── modules/
+│   ├── claude.nix          # Claude Code integration
+│   ├── files.nix           # File management
+│   ├── lefthook.nix        # Git hooks via omnibus
+│   └── flake-parts/
+│       └── omnibus.nix     # Omnibus framework integration
+└── .claude/
+    └── settings.local.json # Claude Code local settings
 ```
 
 ### Key Technologies
@@ -83,12 +105,13 @@ omni-devenv-fusion/
 |------------|---------|---------------|
 | **devenv** | Development environment | `devenv.nix`, `devenv.yaml` |
 | **direnv** | Auto-load environment | `.envrc` |
-| **Claude Code** | AI coding assistant | `claude.nix` |
-| **lefthook** | Git hook manager | `lefthook.nix`, `lefthook.yml` |
+| **Claude Code** | AI coding assistant | `modules/claude.nix` |
+| **lefthook** | Git hook manager | `modules/lefthook.nix`, `lefthook.yml` |
 | **cocogitto** | Changelog generator | `cog.toml` |
 | **conform** | Commit validation | `.conform.yaml` |
 | **just** | Task runner | `justfile` |
 | **omnibus** | Config framework | `modules/flake-parts/omnibus.nix` |
+| **secretspec** | Secret management | `secretspec.toml`, `devenv.yaml` |
 
 ## Development Workflow
 
@@ -350,15 +373,16 @@ secretspec:
 ```
 omni-devenv-fusion/
 ├── .claude/                # Claude Code configuration
+│   └── settings.local.json # Local settings (user-specific)
 ├── .direnv/                # Cached devenv profiles
 ├── modules/
+│   ├── claude.nix          # Claude Code integration
+│   ├── files.nix           # File management
+│   ├── lefthook.nix        # Git hooks configuration
 │   └── flake-parts/
-│       └── omnibus.nix     # Omnibus integration module
-├── claude.nix              # Claude Code integration
+│       └── omnibus.nix     # Omnibus framework integration
 ├── devenv.nix              # Main devenv configuration
 ├── devenv.yaml             # Flake inputs
-├── files.nix               # File management
-├── lefthook.nix            # Git hooks configuration
 ├── justfile                # Task runner
 ├── CLAUDE.md               # Detailed documentation for Claude Code
 ├── README.md               # This file
