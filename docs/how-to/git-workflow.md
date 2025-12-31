@@ -100,56 +100,69 @@ This launches an interactive wizard that guides you through:
 
 ---
 
-## 3. Workflow for Agents
+## 3. Workflow for Agents (LLM)
 
 ### Default Rule: "Stop and Ask"
 
-By default, when an Agent finishes a task, it **MUST NOT** commit code automatically.
+By default, when an Agent (LLM) finishes a task, it **MUST NOT** commit code automatically.
 
-**Agent Behavior:**
+**Agent/LLM Behavior:**
 
 1. Make changes
-2. Run tests (`devenv test`)
+2. Run tests
 3. **STOP**
-4. Ask the user: *"Changes are ready. Should I commit?"*
+4. **Ask user for permission** before committing
 
 **Example:**
 
 ```
 User: "Fix the bug in router."
 
-Claude: Fixed the code -> Ran tests -> "Tests passed. Ready to commit?
-You can review the changes first: git diff"
+LLM: Fixed the code -> Ran tests -> "Tests passed. Ready to commit?
+You can review: git diff"
 ```
 
 ### Override Rule: `just agent-commit`
 
-The Agent is authorized to perform an automated commit **ONLY IF** the user's prompt explicitly contains:
+The Agent/LLM is authorized to perform an automated commit **ONLY IF** the user's prompt **explicitly contains**:
 
 > `"run just agent-commit"`
 
 **Usage:**
-
 ```bash
 just agent-commit <type> <scope> "<message>"
 ```
 
 **Example:**
-
 ```bash
 # User prompt:
 > "Fix the typo in README and run just agent-commit."
 
-# Claude executes:
+# LLM executes:
 just agent-commit docs docs "fix typo in readme"
 ```
 
+### MCP Tool Integration
+
+LLMs should use MCP tools to enforce this protocol:
+
+| Tool | Purpose |
+|------|---------|
+| `@omni-orchestrator smart_commit` | Validates and executes commits |
+| `@omni-orchestrator execute_doc_action` | Reads protocol from this file |
+
+When an LLM triggers a commit, it should:
+1. Call `execute_doc_action` with `action="commit"`
+2. The tool returns the validated command or "Stop and Ask" status
+3. If "Stop and Ask", the LLM must ask the user before proceeding
+
 ### Protocol Rules
 
-| Condition | Agent Action |
-|-----------|--------------|
+| Condition | Agent/LLM Action |
+|-----------|------------------|
 | User says: "Fix the bug" | Fix code → Run Tests → **ASK USER** to commit |
-| User says: "Fix the bug and **run just agent-commit**" | Fix code → `just agent-commit fix mcp "handle connection timeout"` |
+| User says: "Fix the bug and **run just agent-commit**" | Fix code → Run `just agent-commit` |
+| User asks LLM to "run git commit" | **ASK USER** first before executing |
 | Tests fail | **STOP** and report error. Do not commit. |
 | Pre-commit hooks fail | **STOP** and report error. Do not commit. |
 
