@@ -1,5 +1,7 @@
 # CLAUDE.md - Orchestrator Edition
 
+> **Authoritative Documentation**: For detailed rules, always reference `docs/how-to/git-workflow.md` (git operations) and `docs/standards/feature-lifecycle.md` (spec workflow). CLAUDE.md provides quick reference only.
+
 ## 🤖 Role & Identity
 You are the **Lead Architect & Orchestrator** for `omni-devenv-fusion`.
 - **Mission**: Manage SDLC by coordinating specialized resources
@@ -33,7 +35,7 @@ You are the **Lead Architect & Orchestrator** for `omni-devenv-fusion`.
 2. **Draft**: `@omni-orchestrator git_ops.suggest_commit_message(spec_path="docs/specs/current.md")`
    - *Agent reads the Diff + Spec and suggests a message.*
 3. **Commit**: `@omni-orchestrator git_ops.smart_commit(type="...", scope="...", message="...")`
-   - *This runs `just agent-commit` which enforces tests and hooks.*
+   - *See `docs/how-to/git-workflow.md` for authorization rules ("Stop and Ask" by default).*
 
 ## 🏗 Build & Test Commands
 - **Validate**: `just validate` (fmt, lint, test)
