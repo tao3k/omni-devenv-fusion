@@ -79,6 +79,37 @@ The system divides into two distinct MCP servers, each serving a specific abstra
 
 The Orchestrator plans, the Coder executes, and both validate.
 
+### Router-Augmented Coding (New)
+The `lang_expert` tool implements a three-layer knowledge system for language-specific code:
+
+```mermaid
+graph LR
+    A[Agent: "Add mkNixago config"] --> B[lang_expert]
+    B --> C[L1: Standards]
+    B --> D[L2: Examples]
+    C --> E[docs/standards/lang-nix.md]
+    D --> F[tool-router/data/examples/nix.edit.jsonl]
+    E --> G[Project conventions]
+    F --> H[Concrete patterns]
+    G --> I[Combined context]
+    H --> I
+    I --> J[High-quality code]
+```
+
+**Usage**:
+```
+@omni-orchestrator consult_language_expert file_path="lefthook.nix" task="extend generator"
+```
+
+Returns:
+- L1: mkNixago patterns, forbidden patterns from `docs/standards/lang-nix.md`
+- L2: Relevant examples from `tool-router/data/examples/nix.edit.jsonl`
+
+**Benefits**:
+- Prevents common mistakes (e.g., `with pkgs;`, full dmerge override)
+- Provides concrete examples for complex patterns
+- Decouples knowledge from prompts
+
 ```mermaid
 sequenceDiagram
     participant User
@@ -163,6 +194,7 @@ ast-grep run -p 'try: $body except $handler: $recovery' -l py --update-all
 | `consult_specialist` | Existing | Multi-persona routing |
 | `get_codebase_context` | Existing | Holistic project view (Repomix) |
 | `run_task` | Existing | Safe execution of `just` commands |
+| `lang_expert` | New | Router-Augmented Coding (L1 Standards + L2 Examples) |
 | `read_backlog` | Future | Integration with task tracking |
 
 ### Coder Tools

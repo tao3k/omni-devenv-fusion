@@ -49,3 +49,47 @@ Good writing has a beat. It varies.
 Don't use big words to sound smart. Use simple words to make the reader feel smart.
 * *Pretentious*: "We endeavored to facilitate the implementation."
 * *Simple*: "We tried to help build it."
+
+---
+
+## 3. Router-Augmented Coding: The AI Pattern
+
+The **"Static Standards + Dynamic Examples"** pattern extends Zinsser's clarity to AI code generation.
+
+### 3.1 The Three-Layer System
+
+| Layer | Form | Purpose |
+|-------|------|---------|
+| **L1: Law** | `docs/standards/lang-*.md` | Project-specific conventions, forbidden patterns |
+| **L2: Case Law** | `tool-router/data/examples/*.jsonl` | Concrete Few-Shot examples |
+| **L3: Enforcer** | `lang_expert` MCP tool | Combines L1 + L2 for context injection |
+
+### 3.2 Why This Pattern Works
+
+**Problem**: LLMs generate generic code that doesn't match project conventions.
+
+```bash
+# LLM generates (wrong!)
+with pkgs;
+mkNixago { data = { conform = {...}; }; }  # Full override!
+```
+
+**Solution**: Router-Augmented Coding
+
+```bash
+# Agent uses lang_expert
+@omni-orchestrator consult_language_expert file_path="lefthook.nix" task="add hook"
+
+# Returns: "DO NOT use with pkgs; DO NOT full override dmerge"
+# Plus concrete example from tool-router
+```
+
+### 3.3 Writing Standards for AI
+
+When writing `docs/standards/lang-*.md` files:
+
+1. **Forbidden Patterns First**: List what NOT to do (e.g., "❌ `with pkgs;`")
+2. **Concrete Examples**: Show before/after for each pattern
+3. **Project Conventions**: Document your unique choices (mkNixago, dmerge, etc.)
+
+This follows Feynman: Example → Theory. The LLM sees the pattern first, then the rule.

@@ -60,6 +60,23 @@ Correct Locations:
 
 ## 3. Reliability Protocol
 
+### 3.0 Language-Specific Standards
+Before writing code, consult language-specific standards:
+
+| Language | Standards File | MCP Tool |
+|----------|----------------|----------|
+| Nix | `docs/standards/lang-nix.md` | `@omni-orchestrator consult_language_expert` |
+| Python | `docs/standards/lang-python.md` | `@omni-orchestrator consult_language_expert` |
+| Rust | `docs/standards/lang-rust.md` | `@omni-orchestrator consult_language_expert` |
+| Julia | `docs/standards/lang-julia.md` | `@omni-orchestrator consult_language_expert` |
+
+**Example Workflow**:
+```bash
+# Agent: "Add a new Nix module"
+@omni-orchestrator consult_language_expert file_path="units/modules/new-module.nix" task="create module with mkNixago"
+# Returns: L1 standards + L2 examples from tool-router
+```
+
 ### 3.1 Test Coverage by Complexity
 
 ```
@@ -159,8 +176,9 @@ This document is enforced by MCP tools in `mcp-server/product_owner.py`:
 | :--- | :--- |
 | `docs/how-to/git-workflow.md` | Commit conventions, Agent-Commit Protocol |
 | `docs/how-to/testing-workflows.md` | Test levels, Modified-Code Protocol |
+| `docs/standards/lang-*.md` | Language-specific coding standards |
 | `design/writing-style/01_philosophy.md` | Feynman clarity, Zinsser humanity |
-| `design/mcp-architecture-roadmap.md` | Dual-MCP architecture |
+| `design/mcp-architecture-roadmap.md` | Dual-MCP architecture, lang_expert |
 
 ---
 
