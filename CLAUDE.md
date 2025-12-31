@@ -110,6 +110,41 @@ Follow [numtide/prj-spec](https://github.com/numtide/prj-spec) for project direc
 
 All are ignored in `.gitignore`.
 
+## 🏗 Dual-MCP Server Architecture (Memorized)
+
+### Server A: Orchestrator (The "Brain")
+**File**: `mcp-server/orchestrator.py`
+**Focus**: SDLC, Architecture, DevOps, SRE - High-level decision making
+
+| Tool | Purpose |
+|------|---------|
+| `get_codebase_context` | Holistic project view (Repomix) |
+| `list_directory_structure` | Fast file tree (token optimization) |
+| `list_personas` | List expert personas |
+| `consult_specialist` | Route to Architect/Platform/DevOps/SRE |
+| `run_task` | Execute safe commands (just, nix, git) |
+
+### Server B: Coder (The "Hands")
+**File**: `mcp-server/coder.py`
+**Focus**: Surgical coding, AST-based refactoring, Quality
+
+| Tool | Purpose |
+|------|---------|
+| `read_file` | Single file reading (lightweight) |
+| `search_files` | Pattern search (grep-like) |
+| `save_file` | Write with backup & syntax validation |
+| `ast_search` | AST-based code search (ast-grep) |
+| `ast_rewrite` | Structural code refactoring (ast-grep) |
+
+### Interaction Pattern
+```
+User -> Orchestrator (宏观规划) -> Coder (微观实现) -> Validate -> User
+```
+
+### Packages (devenv.nix)
+- `nixpkgs-latest.ast-grep` - AST search/rewrite
+- `pkgs.repomix` - Codebase context
+
 ## 🔌 MCP Server Development (Memorized)
 
 ### Protocol

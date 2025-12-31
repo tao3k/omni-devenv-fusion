@@ -20,6 +20,7 @@ let
         inputs = {
           __nixpkgs__ = nixpkgs-latest;
           __inputs__ = {
+            inherit (inputs) llm-agents;
             inherit nixpkgs-latest packages;
           };
           inputs = {
@@ -78,6 +79,9 @@ in
     nixpkgs-latest.claude-code
     pkgs.secretspec
     pkgs._1password-cli
+    # MCP Server Tools
+    nixpkgs-latest.ast-grep  # AST-based code search and rewrite
+    pkgs.repomix             # Codebase context aggregation
   ];
   # https://devenv.sh/languages/
   # languages.rust.enable = true;
