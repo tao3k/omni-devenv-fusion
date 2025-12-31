@@ -22,7 +22,7 @@ Problem-oriented. Recipes for solving specific tasks.
 
 | Document | Description |
 |----------|-------------|
-| _Coming soon_ | Add your first how-to guide here |
+| [Git Workflow](./how-to/git-workflow.md) | Commit conventions and Agent-Commit Protocol |
 
 ---
 

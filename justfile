@@ -67,6 +67,10 @@ agent-commit type scope message body="" breaking_desc="":
     echo "Running pre-commit hooks..."
     lefthook run pre-commit --all-files --no-tty
 
+    # Run tests before commit
+    echo "Running tests..."
+    devenv test
+
     # Stage all modified files after formatting
     echo "Staging all modified files..."
     git add -A

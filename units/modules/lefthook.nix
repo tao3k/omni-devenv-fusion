@@ -25,6 +25,7 @@ let
       name = "lefthook";
       gen = (config.omnibus.ops.mkNixago initConfigs.nixago-lefthook) {
         data = {
+          commit-msg = lefthook.default.data.commit-msg;
           # Remove unnecessary commands from default pre-commit
           commands = builtins.removeAttrs lefthook.default.data.pre-commit.commands [
             "treefmt" # We use nixfmt instead
