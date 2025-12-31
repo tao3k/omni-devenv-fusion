@@ -6,12 +6,14 @@
 
 ## The Community Pain Points
 
+We built omni-devenv-fusion because we faced these problems every day.
+
 ### 1. AI is Context-Blind
 
 Every developer has experienced this:
 
 ```bash
-# User asks the AI
+# You ask the AI
 > Add user authentication
 
 # AI creates this (wrong stack!)
@@ -23,9 +25,7 @@ Every developer has experienced this:
 
 **Result**: 30 minutes wasted fighting the AI to use our stack.
 
-> **The Problem**: Generic AI doesn't understand your project's **institutional knowledge**—your conventions, your standards, your stack.
-
----
+> Generic AI doesn't understand your project's **institutional knowledge**—your conventions, your standards, your stack.
 
 ### 2. Engineering Rigor Disappears
 
@@ -37,9 +37,7 @@ AI-generated code often lacks:
 - Security reviews
 - Consistent formatting
 
-> **The Problem**: AI optimizes for "it works" not "it's maintainable."
-
----
+> AI optimizes for "it works" not "it's maintainable."
 
 ### 3. Tool Sprawl
 
@@ -53,23 +51,19 @@ No unified persona system
 No project memory
 ```
 
-> **The Problem**: No cohesive architecture.
-
----
+> No cohesive architecture.
 
 ### 4. AI Can Break Things
 
 ```bash
-# User asks the AI
+# You ask the AI
 > Fix the bug
 
 # AI runs this (destructive!)
 > git reset --hard
 ```
 
-> **The Problem**: AI has no safety rails.
-
----
+> AI has no safety rails.
 
 ### 5. Documentation Debt
 
@@ -86,23 +80,17 @@ AI writes docs that are:
 
 ### Solution 1: The Bridge Pattern
 
-**Not reinventing the wheel**—we extend MCP with a policy layer.
+We extend MCP with a policy layer. The Bridge isn't new—it's the **Decorator Pattern** applied to MCP.
 
 ```
 User Request → Orchestrator (The Bridge) → Personas → Coder → Validate
 ```
-
-What the Bridge provides:
 
 | Capability | Purpose |
 |------------|---------|
 | **Context Injection** | Every query gets project-aware context |
 | **Policy Enforcement** | Rejects requests that violate `CLAUDE.md` |
 | **Persona Routing** | SRE for security, Architect for design, Tech Writer for docs |
-
-> **Creative Value**: The Bridge isn't new—it's the **Decorator Pattern** applied to MCP.
-
----
 
 ### Solution 2: Personas as Guardrails
 
@@ -116,10 +104,6 @@ Use AI to check AI.
 | `sre` | Security review | Vulnerabilities |
 | `tech_writer` | Docs review | Verbose, passive docs |
 
-> **Creative Value**: Dual-MCP architecture—Orchestrator plans, Coder executes, Personas validate.
-
----
-
 ### Solution 3: Writing Standards System
 
 Automated documentation quality:
@@ -128,10 +112,6 @@ Automated documentation quality:
 2. **Persona**: `tech_writer` enforces standards
 3. **Tool**: `polish_text` auto-improves drafts
 4. **Linter**: Vale catches passive voice, wordiness
-
-> **Creative Value**: Vale is standard—we integrate it into MCP.
-
----
 
 ### Solution 4: Memory Garden
 
@@ -143,15 +123,11 @@ Long-term project memory in `.memory/`:
 | `add_task` | Track technical debt |
 | `save_context` | Snapshot project state |
 
-> **Creative Value**: Claude's context window is limited—we externalize institutional knowledge.
-
----
-
 ### Solution 5: Safe Execution
 
 Sandboxed commands with whitelist:
 
-**Allowed**:
+**Allowed:**
 ```bash
 just validate
 just test-mcp
@@ -159,20 +135,16 @@ git status
 nix fmt
 ```
 
-**Blocked**:
+**Blocked:**
 ```bash
 rm -rf
 git reset --hard
 curl | sh
 ```
 
-> **Creative Value**: Claude-box is standard—we integrate it via `run_task`.
-
----
-
 ### Solution 6: Test-First Protocol
 
-**Every feature gets tests in the same commit.**
+Every feature gets tests in the same commit:
 
 ```python
 # mcp-server/tests/test_basic.py
@@ -180,8 +152,6 @@ def test_new_tool():
     # Write the test first
     pass
 ```
-
-> **Creative Value**: Prevents the "AI writes code but no tests" problem.
 
 ---
 
@@ -212,7 +182,22 @@ We stand on the shoulders of giants:
 | **On Writing Well** | Proven writing principles |
 | **numtide/prj-spec** | Project directory conventions |
 
-> **Our Contribution**: We synthesized these into a **cohesive, documented, testable system**.
+**Our Contribution**: We synthesized these into a **cohesive, documented, testable system**.
+
+---
+
+## Project Philosophy
+
+> "Don't reinvent the wheel—perfect it."
+
+We don't claim to have invented:
+
+- MCP (Anthropic did)
+- Linting (many did)
+- Safe execution (Claude-box did)
+- Personas (many did)
+
+**What we did**: Synthesized these into a **cohesive, documented, testable system** that you can adopt incrementally.
 
 ---
 
@@ -238,27 +223,13 @@ We stand on the shoulders of giants:
 
 ---
 
-## Project Philosophy
-
-> "Don't reinvent the wheel—perfect it."
-
-We don't claim to have invented:
-
-- MCP (Anthropic did)
-- Linting (many did)
-- Safe execution (Claude-box did)
-- Personas (many did)
-
-**What we did**: Synthesized these into a **cohesive, documented, testable system** that you can adopt incrementally.
-
----
-
 ## Next Steps
 
-1. Read `design/mcp-architecture-roadmap.md` for technical details
-2. Read `design/writing-style/00_index.md` for documentation standards
-3. Run `just test-mcp` to verify your environment
-4. Explore the code in `mcp-server/`
+| Goal | Resource |
+|------|----------|
+| Get started quickly | [Tutorial: Getting Started](../tutorials/getting-started.md) |
+| Solve a specific problem | [How-to Guides](../how-to/) |
+| Browse API commands | [Reference](../reference/) |
 
 ---
 
