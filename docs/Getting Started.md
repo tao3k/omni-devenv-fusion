@@ -10,14 +10,22 @@
 
 Every developer has experienced this:
 
-```
-User: "Add user authentication"
-AI: *Creates Django auth with SQLite*
-Our Reality: We use Nix, PostgreSQL, and specific security standards.
-Result: 30 minutes wasted fighting the AI to use our stack.
+```bash
+# User asks the AI
+> Add user authentication
+
+# AI creates this (wrong stack!)
+> class UserAuth(models.Model):
+>     # Uses SQLite!
 ```
 
-**The Problem**: Generic AI doesn't understand your project's **institutional knowledge**—your conventions, your standards, your stack.
+**Our reality**: Nix, PostgreSQL, specific security standards.
+
+**Result**: 30 minutes wasted fighting the AI to use our stack.
+
+> **The Problem**: Generic AI doesn't understand your project's **institutional knowledge**—your conventions, your standards, your stack.
+
+---
 
 ### 2. Engineering Rigor Disappears
 
@@ -29,36 +37,45 @@ AI-generated code often lacks:
 - Security reviews
 - Consistent formatting
 
-**The Problem**: AI optimizes for "it works" not "it's maintainable."
+> **The Problem**: AI optimizes for "it works" not "it's maintainable."
+
+---
 
 ### 3. Tool Sprawl
 
+Every project re-invents the wheel:
+
 ```
-We have:
-├── MCP servers for Nix, Docker, GitHub...
-├── Custom scripts for commits
-├── Separate linters for docs
-├── No unified persona system
-└── No project memory
+MCP servers for Nix, Docker, GitHub...
+Custom scripts for commits
+Separate linters for docs
+No unified persona system
+No project memory
 ```
 
-**The Problem**: No cohesive architecture. Every project re-invents the wheel.
+> **The Problem**: No cohesive architecture.
+
+---
 
 ### 4. AI Can Break Things
 
-```
-User: "Fix the bug"
-AI: *Runs `git reset --hard`*
-Result: Lost three days of work.
+```bash
+# User asks the AI
+> Fix the bug
+
+# AI runs this (destructive!)
+> git reset --hard
 ```
 
-**The Problem**: AI has no safety rails. It will execute destructive commands.
+> **The Problem**: AI has no safety rails.
+
+---
 
 ### 5. Documentation Debt
 
 AI writes docs that are:
 
-- Verbose (On Writing Well: "strip the clutter")
+- Verbose ("strip the clutter" - On Writing Well)
 - Passive voice (Engineering standard: active voice)
 - Inconsistent (No single source of truth)
 - Out of date (No enforcement mechanism)
@@ -76,17 +93,20 @@ User Request → Orchestrator (The Bridge) → Personas → Coder → Validate
 ```
 
 What the Bridge provides:
-- **Context Injection**: Every query gets project-aware context
-- **Policy Enforcement**: Rejects requests that violate `CLAUDE.md`
-- **Persona Routing**: SRE for security, Architect for design, Tech Writer for docs
 
-**Creative Value**: The Bridge isn't a new concept—it's the **Decorator Pattern** applied to MCP.
+| Capability | Purpose |
+|------------|---------|
+| **Context Injection** | Every query gets project-aware context |
+| **Policy Enforcement** | Rejects requests that violate `CLAUDE.md` |
+| **Persona Routing** | SRE for security, Architect for design, Tech Writer for docs |
+
+> **Creative Value**: The Bridge isn't new—it's the **Decorator Pattern** applied to MCP.
 
 ---
 
 ### Solution 2: Personas as Guardrails
 
-Using AI to check AI.
+Use AI to check AI.
 
 | Persona | Role | What It Prevents |
 |---------|------|------------------|
@@ -96,7 +116,7 @@ Using AI to check AI.
 | `sre` | Security review | Vulnerabilities |
 | `tech_writer` | Docs review | Verbose, passive docs |
 
-**Creative Value**: Dual-MCP architecture—Orchestrator plans, Coder executes, Personas validate.
+> **Creative Value**: Dual-MCP architecture—Orchestrator plans, Coder executes, Personas validate.
 
 ---
 
@@ -104,12 +124,12 @@ Using AI to check AI.
 
 Automated documentation quality:
 
-1. **Reference**: `design/writing_style.md` (On Writing Well + Spring Into Technical Writing)
+1. **Reference**: `design/writing-style/` (modular library)
 2. **Persona**: `tech_writer` enforces standards
 3. **Tool**: `polish_text` auto-improves drafts
 4. **Linter**: Vale catches passive voice, wordiness
 
-**Creative Value**: Vale is a standard tool—we just integrated it into the MCP workflow.
+> **Creative Value**: Vale is standard—we integrate it into MCP.
 
 ---
 
@@ -123,7 +143,7 @@ Long-term project memory in `.memory/`:
 | `add_task` | Track technical debt |
 | `save_context` | Snapshot project state |
 
-**Creative Value**: Claude's context window is limited—we externalize institutional knowledge.
+> **Creative Value**: Claude's context window is limited—we externalize institutional knowledge.
 
 ---
 
@@ -131,12 +151,22 @@ Long-term project memory in `.memory/`:
 
 Sandboxed commands with whitelist:
 
-```
-Allowed: just validate, just test-mcp, git status, nix fmt
-Blocked: rm -rf, git reset --hard, curl | sh
+**Allowed**:
+```bash
+just validate
+just test-mcp
+git status
+nix fmt
 ```
 
-**Creative Value**: Claude-box is a standard concept—we integrated it via `run_task`.
+**Blocked**:
+```bash
+rm -rf
+git reset --hard
+curl | sh
+```
+
+> **Creative Value**: Claude-box is standard—we integrate it via `run_task`.
 
 ---
 
@@ -147,11 +177,11 @@ Blocked: rm -rf, git reset --hard, curl | sh
 ```python
 # mcp-server/tests/test_basic.py
 def test_new_tool():
-    # Test the tool
+    # Write the test first
     pass
 ```
 
-**Creative Value**: Prevents the "AI writes code but no tests" problem.
+> **Creative Value**: Prevents the "AI writes code but no tests" problem.
 
 ---
 
@@ -174,7 +204,7 @@ We stand on the shoulders of giants:
 
 | What We Use | Why |
 |-------------|-----|
-| **MCP (Model Context Protocol)** | Standard protocol for AI-tools integration |
+| **MCP** | Standard protocol for AI-tools integration |
 | **Vale** | Proven prose linter (we integrate, not rewrite) |
 | **Claude Cookbooks** | Orchestrator pattern, personas |
 | **ast-grep** | Standard AST-based code search |
@@ -182,23 +212,26 @@ We stand on the shoulders of giants:
 | **On Writing Well** | Proven writing principles |
 | **numtide/prj-spec** | Project directory conventions |
 
-**Our Contribution**: We synthesized these into a cohesive system with documented patterns.
+> **Our Contribution**: We synthesized these into a **cohesive, documented, testable system**.
 
 ---
 
 ## Who This Is For
 
 ### For Individual Developers
+
 - Get AI that understands your stack
 - Maintain code quality automatically
 - Learn by exploring the patterns
 
 ### For Teams
+
 - Enforce standards across all contributors
 - Institutional memory that persists
 - Safe AI experimentation
 
 ### For Tool Builders
+
 - Reference our MCP architecture
 - Copy the Writing Standards System
 - Use our Test-First Protocol
@@ -210,6 +243,7 @@ We stand on the shoulders of giants:
 > "Don't reinvent the wheel—perfect it."
 
 We don't claim to have invented:
+
 - MCP (Anthropic did)
 - Linting (many did)
 - Safe execution (Claude-box did)
@@ -222,7 +256,7 @@ We don't claim to have invented:
 ## Next Steps
 
 1. Read `design/mcp-architecture-roadmap.md` for technical details
-2. Read `design/writing_style.md` for documentation standards
+2. Read `design/writing-style/00_index.md` for documentation standards
 3. Run `just test-mcp` to verify your environment
 4. Explore the code in `mcp-server/`
 
