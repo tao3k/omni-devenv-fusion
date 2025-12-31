@@ -69,11 +69,11 @@ We maintain world-class documentation quality:
 ```
 📖 Docs           → docs/index.md (you are here)
 🎓 Tutorials      → docs/tutorials/
-🍳 How-to Guides  → docs/how-to/
-📖 Reference      → docs/reference/
 🧠 Explanation    → docs/explanation/
-✍️ Writing Style  → design/writing-style/
-🏗 Architecture   → design/mcp-architecture-roadmap.md
+🏗 Architecture   → docs/explanation/mcp-architecture-roadmap.md
+```
+
+**For AI Agents**: See [agent/](../agent/) directory for LLM context (specs, how-to, standards).
 ```
 
 ---

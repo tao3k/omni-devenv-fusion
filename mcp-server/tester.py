@@ -1,6 +1,6 @@
 # mcp-server/tester.py
 """
-Smart Test Runner - Enforcing docs/how-to/testing-workflows.md
+Smart Test Runner - Enforcing agent/how-to/testing-workflows.md
 
 Implements "Modified-Code Protocol" for intelligent test selection:
 - Docs only changes → Skip tests
@@ -69,7 +69,7 @@ def categorize_changes(files: list) -> Dict[str, bool]:
             pass  # Unknown extension, ignore
 
         # If any non-docs file, docs_only becomes False
-        if not (f_lower.endswith('.md') or 'docs/' in f or 'doc/' in f):
+        if not (f_lower.endswith('.md') or 'docs/' in f or 'agent/' in f or 'doc/' in f):
             categories["docs_only"] = False
 
         # Check specific categories
@@ -94,7 +94,7 @@ def register_tester_tools(mcp: Any) -> None:
     @mcp.tool()
     async def smart_test_runner(focus_file: str = None) -> str:
         """
-        Execute tests following docs/how-to/testing-workflows.md.
+        Execute tests following agent/how-to/testing-workflows.md.
 
         Implements the Modified-Code Protocol:
         1. Identify modified files
@@ -143,7 +143,7 @@ def register_tester_tools(mcp: Any) -> None:
                 "status": "success",
                 "message": "Documentation changes only",
                 "strategy": "skip",
-                "reason": "docs/how-to/testing-workflows.md Rule #3: Docs only → Skip tests",
+                "reason": "agent/how-to/testing-workflows.md Rule #3: Docs only → Skip tests",
                 "command": "echo 'Docs only - skipping tests'",
                 "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files
             }, indent=2)
@@ -153,7 +153,7 @@ def register_tester_tools(mcp: Any) -> None:
                 "status": "ready",
                 "message": "MCP server changes detected",
                 "strategy": "mcp_only",
-                "reason": "mcp-server/ modified → Run MCP tests (docs/how-to/testing-workflows.md)",
+                "reason": "mcp-server/ modified → Run MCP tests (agent/how-to/testing-workflows.md)",
                 "command": "just test-mcp-only",
                 "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files
             }, indent=2)
@@ -256,10 +256,10 @@ def register_tester_tools(mcp: Any) -> None:
         Get the testing protocol summary.
 
         Returns:
-            JSON summary of docs/how-to/testing-workflows.md
+            JSON summary of agent/how-to/testing-workflows.md
         """
         return json.dumps({
-            "doc": "docs/how-to/testing-workflows.md",
+            "doc": "agent/how-to/testing-workflows.md",
             "rules": [
                 "Rule #1: Fast tests first. Fail fast.",
                 "Rule #2: No feature code without test code.",

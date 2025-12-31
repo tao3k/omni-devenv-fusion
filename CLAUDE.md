@@ -1,6 +1,6 @@
 # CLAUDE.md - Orchestrator Edition
 
-> **Authoritative Documentation**: For detailed rules, always reference `docs/how-to/git-workflow.md` (git operations) and `docs/standards/feature-lifecycle.md` (spec workflow). CLAUDE.md provides quick reference only.
+> **Authoritative Documentation**: For detailed rules, always reference `agent/how-to/git-workflow.md` (git operations) and `agent/standards/feature-lifecycle.md` (spec workflow). CLAUDE.md provides quick reference only.
 
 ## 🤖 Role & Identity
 You are the **Lead Architect & Orchestrator** for `omni-devenv-fusion`.
@@ -32,10 +32,10 @@ You are the **Lead Architect & Orchestrator** for `omni-devenv-fusion`.
 
 **Phase 5: Publisher (Delivery)**
 1. **Stage**: `run_task("git add .")`
-2. **Draft**: `@omni-orchestrator git_ops.suggest_commit_message(spec_path="docs/specs/current.md")`
+2. **Draft**: `@omni-orchestrator git_ops.suggest_commit_message(spec_path="agent/specs/current.md")`
    - *Agent reads the Diff + Spec and suggests a message.*
 3. **Commit**: `@omni-orchestrator git_ops.smart_commit(type="...", scope="...", message="...")`
-   - *See `docs/how-to/git-workflow.md` for authorization rules ("Stop and Ask" by default).*
+   - *See `agent/how-to/git-workflow.md` for authorization rules ("Stop and Ask" by default).*
 
 ## 🏗 Build & Test Commands
 - **Validate**: `just validate` (fmt, lint, test)
@@ -58,11 +58,11 @@ You are the **Lead Architect & Orchestrator** for `omni-devenv-fusion`.
 
 **Phase 5 - Smart Commit Workflow**:
 1. **Stage**: `git add .`
-2. **Draft**: `@omni-orchestrator suggest_commit_message(spec_path="docs/specs/xxx.md")`
+2. **Draft**: `@omni-orchestrator suggest_commit_message(spec_path="agent/specs/xxx.md")`
 3. **Review**: AI shows suggested commit message (reads Diff + Spec)
 4. **Execute**: `@omni-orchestrator smart_commit(type="...", scope="...", message="...")`
 
-- Rules auto-loaded from `docs/how-to/git-workflow.md` (cached)
+- Rules auto-loaded from `agent/how-to/git-workflow.md` (cached)
 
 ### 3. Feature Implementation → Use `product_owner` tools
 | Tool | Purpose |
@@ -93,14 +93,14 @@ You are the **Lead Architect & Orchestrator** for `omni-devenv-fusion`.
 ```
 
 **References**:
-- L1: `docs/standards/lang-*.md`
+- L1: `agent/standards/lang-*.md`
 - L2: `tool-router/data/examples/*.jsonl`
 
 ### 6. Writing Standards → Use `polish_text`
-- Reference: `design/writing-style/`
+- Reference: `agent/writing-style/`
 - Key: Concrete First, Strip Clutter, Active Voice
 
-> **Note**: Detailed rules are in docs/*.md. MCP tools enforce with caching - no need to memorize.
+> **Note**: Detailed rules are in agent/*.md. MCP tools enforce with caching - no need to memorize.
 
 ## 🚑 Debugging Protocol (The OODA Loop)
 
@@ -141,8 +141,8 @@ Before editing `.nix` files:
 ## 📁 Key Directories
 | Directory | Purpose |
 |-----------|---------|
-| `design/` | Architecture decisions, writing style |
-| `docs/` | How-to guides, standards, protocols |
+| `agent/` | LLM context (how-to, standards, writing-style, specs) |
+| `docs/` | User documentation (explanation, tutorials) |
 | `tool-router/data/examples/` | Few-shot code examples |
 
 ## 🔌 MCP Server Development

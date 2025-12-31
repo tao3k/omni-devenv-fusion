@@ -2,7 +2,7 @@
 """
 Product Owner - Feature Lifecycle Integrity Enforcement & Spec Management
 
-Tools for enforcing docs/standards/feature-lifecycle.md and Spec-Driven Development:
+Tools for enforcing agent/standards/feature-lifecycle.md and Spec-Driven Development:
 - assess_feature_complexity: LLM-powered complexity assessment (L1-L4)
 - draft_feature_spec: Create a structured implementation plan from a description
 - verify_spec_completeness: Ensure spec is ready for coding
@@ -13,7 +13,7 @@ Tools for enforcing docs/standards/feature-lifecycle.md and Spec-Driven Developm
 Usage:
     @omni-orchestrator assess_feature_complexity code_diff="..." files_changed=[...]
     @omni-orchestrator draft_feature_spec title="..." description="..."
-    @omni-orchestrator verify_spec_completeness spec_path="docs/specs/feature.md"
+    @omni-orchestrator verify_spec_completeness spec_path="agent/specs/feature.md"
 
 Performance: Uses singleton caching - design docs loaded once per session.
 """
@@ -187,7 +187,7 @@ def heuristic_complexity(files: List[str], diff: str) -> str:
             return "L3"
 
     # Check for documentation only (L1)
-    if all(f.endswith('.md') or f.startswith('docs/') for f in files):
+    if all(f.endswith('.md') or f.startswith('agent/') for f in files):
         return "L1"
 
     # Check for nix config changes (L2-L3)
@@ -207,16 +207,16 @@ def heuristic_complexity(files: List[str], diff: str) -> str:
 
 def _load_spec_template() -> str:
     """Load the Spec template."""
-    template_path = Path("docs/specs/TEMPLATE.md")
+    template_path = Path("agent/specs/TEMPLATE.md")
     if template_path.exists():
         return template_path.read_text(encoding="utf-8")
     return "# Spec: {FEATURE_NAME}\n\n## Context\n...\n## Plan\n..."
 
 
 def _save_spec(title: str, content: str) -> str:
-    """Save a spec file to docs/specs/."""
+    """Save a spec file to agent/specs/."""
     filename = title.lower().replace(" ", "_").replace("/", "-") + ".md"
-    path = Path("docs/specs") / filename
+    path = Path("agent/specs") / filename
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
     return str(path)
@@ -224,10 +224,10 @@ def _save_spec(title: str, content: str) -> str:
 
 def _scan_standards() -> str:
     """
-    Load all markdown standards from docs/standards/.
+    Load all markdown standards from agent/standards/.
     Returns a formatted string context for the LLM.
     """
-    standards_dir = Path("docs/standards")
+    standards_dir = Path("agent/standards")
     if not standards_dir.exists():
         return "No specific standards found."
 
@@ -291,7 +291,7 @@ def register_product_owner_tools(mcp: Any) -> None:
         Assess feature complexity level (L1-L4) using LLM analysis.
 
         Analyzes the proposed changes and returns the Required Testing Level
-        based on docs/standards/feature-lifecycle.md.
+        based on agent/standards/feature-lifecycle.md.
 
         Args:
             code_diff: Git diff or code changes to analyze
@@ -328,7 +328,7 @@ Feature Description: {feature_description}
 Files Changed: {', '.join(files_changed) if files_changed else 'N/A'}
 Code Diff: {diff[:3000]}...
 
-Classify complexity (L1-L4) based on docs/standards/feature-lifecycle.md:
+Classify complexity (L1-L4) based on agent/standards/feature-lifecycle.md:
 - L1 (Trivial): Typos, config tweaks, doc updates
 - L2 (Minor): Utility function, minor tweak
 - L3 (Major): New module, API, DB schema change
@@ -372,7 +372,7 @@ Return JSON with:
             "test_requirements": test_req,
             "examples": level_info["examples"],
             "rationale": f"Based on {len(files_changed)} file(s) changed and diff analysis",
-            "reference": "docs/standards/feature-lifecycle.md"
+            "reference": "agent/standards/feature-lifecycle.md"
         }, indent=2)
 
     @mcp.tool()
@@ -452,7 +452,7 @@ Return JSON with:
             "reference_docs": [
                 "design/writing-style/01_philosophy.md",
                 "design/mcp-architecture-roadmap.md",
-                "docs/standards/feature-lifecycle.md"
+                "agent/standards/feature-lifecycle.md"
             ]
         }, indent=2)
 
@@ -484,7 +484,7 @@ Return JSON with:
             "integration_tests_required": level in ["L3", "L4"],
             "e2e_tests_required": level == "L4",
             "checklist": _get_checklist(level),
-            "reference": "docs/standards/feature-lifecycle.md"
+            "reference": "agent/standards/feature-lifecycle.md"
         }, indent=2)
 
     @mcp.tool()
@@ -501,7 +501,7 @@ Return JSON with:
         changed_files = changed_files or get_changed_files()
 
         code_files = [f for f in changed_files if not f.endswith('.md')]
-        doc_files = [f for f in changed_files if f.endswith('.md') or f.startswith('docs/')]
+        doc_files = [f for f in changed_files if f.endswith('.md') or f.startswith('agent/')]
 
         sync_status = "ok"
         recommendations = []
@@ -519,7 +519,7 @@ Return JSON with:
 
         if code_needs_doc and not doc_files:
             sync_status = "warning"
-            recommendations.append("Code changes detected but no docs updated. Update relevant docs/ files.")
+            recommendations.append("Code changes detected but no docs updated. Update relevant agent/ files.")
 
         # Check if only docs changed (ok)
         if code_files and not doc_files and not code_needs_doc:
@@ -530,7 +530,7 @@ Return JSON with:
             "code_files_changed": len(code_files),
             "doc_files_changed": len(doc_files),
             "recommendations": recommendations if recommendations else ["Documentation is in sync"],
-            "reference": "docs/standards/feature-lifecycle.md#53-documentation-sync"
+            "reference": "agent/standards/feature-lifecycle.md#53-documentation-sync"
         }, indent=2)
 
     # -------------------------------------------------------------------------
@@ -540,8 +540,8 @@ Return JSON with:
     @mcp.tool()
     async def draft_feature_spec(title: str, description: str, context_files: List[str] = None) -> str:
         """
-        Draft a new Feature Spec based on docs/specs/TEMPLATE.md.
-        Enforces project standards from docs/standards/.
+        Draft a new Feature Spec based on agent/specs/TEMPLATE.md.
+        Enforces project standards from agent/standards/.
 
         Uses LLM to fill out the template based on natural language description.
 
@@ -660,7 +660,7 @@ Return ONLY the Markdown content of the new spec (or the Rejection message)."""
         3. Vague interface definitions
 
         Args:
-            spec_path: Path to the spec file (e.g., "docs/specs/feature.md")
+            spec_path: Path to the spec file (e.g., "agent/specs/feature.md")
 
         Returns:
             JSON with verification status and issues
@@ -694,14 +694,14 @@ Return ONLY the Markdown content of the new spec (or the Rejection message)."""
     async def ingest_legacy_doc(doc_path: str) -> str:
         """
         [Migration Tool] Converts a legacy documentation file into a formal Feature Spec.
-        Applies current project standards from docs/standards/.
+        Applies current project standards from agent/standards/.
 
         It reads the legacy file, extracts:
         - The Goal (Why)
         - The Implementation details (How)
         - The Constraints
 
-        And reformats it into `docs/specs/{filename}.md` following the strict TEMPLATE.
+        And reformats it into `agent/specs/{filename}.md` following the strict TEMPLATE.
         """
         source_path = Path(doc_path)
         if not source_path.exists():
@@ -813,10 +813,10 @@ Return ONLY the Markdown content of the new Spec. Do not include markdown code b
         1. Reads the Spec.
         2. Extracts enduring technical knowledge (Architecture, Decisions, Schema).
         3. Creates a new doc in `docs/{target_category}/`.
-        4. Moves the original Spec to `docs/specs/archive/`.
+        4. Moves the original Spec to `agent/specs/archive/`.
 
         Args:
-            spec_path: Path to the spec (e.g. docs/specs/auth_module.md)
+            spec_path: Path to the spec (e.g. agent/specs/auth_module.md)
             target_category: "explanation" (concepts), "reference" (APIs), or "how-to" (guides)
         """
         src = Path(spec_path)
@@ -881,7 +881,7 @@ Return ONLY the Markdown content."""
         doc_path.write_text(doc_content, encoding="utf-8")
 
         # Archive old Spec
-        archive_dir = Path("docs/specs/archive")
+        archive_dir = Path("agent/specs/archive")
         archive_dir.mkdir(parents=True, exist_ok=True)
         archive_path = archive_dir / src.name
         src.rename(archive_path)

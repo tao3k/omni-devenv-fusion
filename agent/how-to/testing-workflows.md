@@ -28,7 +28,7 @@ When running tests during development:
                             ↓
             ┌───────────────┴───────────────┐
             ↓                               ↓
-    Only docs/*.md changed?          Code files changed?
+    Only docs/*.md, agent/*.md changed?   Code files changed?
             ↓                               ↓
         SKIP TESTS              ┌───────────┴───────────┐
                                 ↓                       ↓
@@ -43,7 +43,7 @@ When running tests during development:
 
 | Modified Files | Action | Reason |
 | :--- | :--- | :--- |
-| `docs/`, `*.md` only | **Skip tests** | Docs don't affect code |
+| `docs/`, `agent/`, `*.md` only | **Skip tests** | Docs don't affect code |
 | `mcp-server/*.py` | Run `just test-mcp` | Test MCP tools only |
 | `tool-router/**` | Run `just test-mcp` | Test routing only |
 | `*.nix`, `devenv.nix` | Run `just test` | Infrastructure affects all |

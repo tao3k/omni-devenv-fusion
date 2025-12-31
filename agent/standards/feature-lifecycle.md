@@ -53,7 +53,7 @@ Correct Locations:
 - MCP tools → mcp-server/orchestrator.py or coder.py
 - Nix modules → units/modules/
 - CLI tools → justfile, lefthook.yml
-- Documentation → docs/, design/
+- Documentation → docs/ (user docs), agent/ (LLM context)
 ```
 
 ---
@@ -65,10 +65,10 @@ Before writing code, consult language-specific standards:
 
 | Language | Standards File | MCP Tool |
 |----------|----------------|----------|
-| Nix | `docs/standards/lang-nix.md` | `@omni-orchestrator consult_language_expert` |
-| Python | `docs/standards/lang-python.md` | `@omni-orchestrator consult_language_expert` |
-| Rust | `docs/standards/lang-rust.md` | `@omni-orchestrator consult_language_expert` |
-| Julia | `docs/standards/lang-julia.md` | `@omni-orchestrator consult_language_expert` |
+| Nix | `agent/standards/lang-nix.md` | `@omni-orchestrator consult_language_expert` |
+| Python | `agent/standards/lang-python.md` | `@omni-orchestrator consult_language_expert` |
+| Rust | `agent/standards/lang-rust.md` | `@omni-orchestrator consult_language_expert` |
+| Julia | `agent/standards/lang-julia.md` | `@omni-orchestrator consult_language_expert` |
 
 **Example Workflow**:
 ```bash
@@ -81,9 +81,9 @@ Before writing code, consult language-specific standards:
 
 ```
 L1 → No test required (linting ok)
-L2 → just test-unit (or pytest mcp-server/tests/)
-L3 → just test-unit + just test-int
-L4 → just test-unit + just test-int + manual E2E verification
+L2 → pytest mcp-server/tests/ (pytest, pytest-asyncio)
+L3 → pytest mcp-server/tests/ + integration tests
+L4 → pytest mcp-server/tests/ + integration tests + manual E2E verification
 ```
 
 ### 3.2 The "Whole Flow" Test
@@ -99,17 +99,67 @@ For L3+ features, verify the feature doesn't break upstream/downstream:
 
 ### 3.3 Documentation Sync
 
-**Rule**: Feature code cannot be merged until `docs/` are updated.
+**Rule**: Feature code cannot be merged until `docs/` (user-facing) and `agent/` (LLM context) are updated.
 
 | If you modify... | You must update... |
 | :--- | :--- |
-| `mcp-server/*.py` | Relevant how-to or explanation in `docs/` |
+| `mcp-server/*.py` | Relevant how-to or explanation in `docs/` + update `agent/how-to/` |
 | `units/modules/*.nix` | Infrastructure docs |
 | `justfile` | Command documentation in `docs/` |
 
 ---
 
-## 4. MCP Tools for Enforcement
+## 4. Spec-Driven Development (Phase 5)
+
+### 4.1 The Spec-First Workflow
+
+Before writing code, Agents must focus on specifications:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  User Request: "Add caching to MCP server"                      │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  just agent-focus agent/specs/caching_feature.md                │
+│  → Displays Spec content, code structure, backlog alignment     │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  Agent creates PLAN in SCRATCHPAD.md                            │
+│  → Step-by-step implementation based on Spec                    │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  Implement code per PLAN                                         │
+│  → Follow spec sections: Context, Architecture, Implementation  │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  pytest mcp-server/tests/test_*.py                              │
+│  → Tests follow complexity level (L2-L4)                        │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  just agent-commit                                              │
+│  → Smart commit with auto-fix on hook failures                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 4.2 Spec Template
+
+Use `agent/specs/template.md` for all new features. Key sections:
+
+| Section | Purpose |
+| :--- | :--- |
+| Context & Goal | User story, why this feature matters |
+| Architecture & Design | Components, data flow, file changes |
+| Implementation Plan | Step-by-step checklist |
+| Validation Strategy | Test requirements by complexity |
+
+---
+
+## 5. MCP Tools for Enforcement
 
 This document is enforced by MCP tools in `mcp-server/product_owner.py`:
 
@@ -132,7 +182,7 @@ This document is enforced by MCP tools in `mcp-server/product_owner.py`:
 
 ---
 
-## 5. Workflow Summary
+## 6. Workflow Summary
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -174,11 +224,11 @@ This document is enforced by MCP tools in `mcp-server/product_owner.py`:
 
 | Document | Purpose |
 | :--- | :--- |
-| `docs/how-to/git-workflow.md` | Commit conventions, Agent-Commit Protocol |
-| `docs/how-to/testing-workflows.md` | Test levels, Modified-Code Protocol |
-| `docs/standards/lang-*.md` | Language-specific coding standards |
-| `design/writing-style/01_philosophy.md` | Feynman clarity, Zinsser humanity |
-| `design/mcp-architecture-roadmap.md` | Dual-MCP architecture, lang_expert |
+| `agent/how-to/git-workflow.md` | Commit conventions, Agent-Commit Protocol |
+| `agent/how-to/testing-workflows.md` | Test levels, Modified-Code Protocol |
+| `agent/standards/lang-*.md` | Language-specific coding standards |
+| `agent/writing-style/01_philosophy.md` | Feynman clarity, Zinsser humanity |
+| `docs/explanation/mcp-architecture-roadmap.md` | Dual-MCP architecture, lang_expert |
 
 ---
 

@@ -69,7 +69,7 @@ Unless explicitly instructed otherwise, you have **NO PERMISSION** to commit cod
 | "Fix the bug" | Fix code → Run Tests → **ASK USER** to commit |
 | "Fix the bug and **run just agent-commit**" | Fix code → `just agent-commit fix x "fix bug"` |
 
-See also: [Git Workflow Guide](../../docs/how-to/git-workflow.md)
+See also: [Git Workflow Guide](../../agent/how-to/git-workflow.md)
 
 ---
 
@@ -77,3 +77,24 @@ See also: [Git Workflow Guide](../../docs/how-to/git-workflow.md)
 
 Load `.data/prompts/init.md` for developer-specific context (not committed to git).
 
+---
+
+## 🐛 Error Handling & Self-Correction (MANDATORY)
+
+**IF** the user points out a mistake, a violation of protocol, or asks "Why did you do that?":
+
+1.  **FREEZE**: Do not execute any further state-changing commands (no edits, no commits).
+2.  **LOAD PROTOCOL**: Read `agent/standards/problem-solving.md` to enter Debug Mode.
+3.  **EXECUTE RCA**: Follow the "RCA Workflow" (The 5 Whys) to find the technical root cause.
+4.  **REPORT**: Present your findings using the **"Response Template"** defined in that file.
+
+**🚫 BANNED RESPONSES**:
+- "I apologize for the confusion." (Unless followed immediately by RCA)
+- "I will strictly follow..." (Without explaining *why* you failed previously)
+- "I mistakenly..." (Without explaining the mechanism of the mistake)
+
+**⚠️ CRITICAL: Atomic Step Constraint**
+To prevent "Tool Chaining" errors (e.g., auto-committing after add):
+* You must treat `git add`, `edit_file`, and `run_test` as **breakpoints**.
+* **STOP** output generation immediately after these actions to allow the user (or the system) to provide feedback.
+* **NEVER** chain `git add` and `git commit` (or `agent-commit`) in the same tool use block.

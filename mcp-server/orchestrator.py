@@ -47,7 +47,7 @@ try:
 except ImportError:
     from writer import register_writer_tools
 
-# Import GitOps tools (docs/how-to/git-workflow.md enforcement)
+# Import GitOps tools (agent/how-to/git-workflow.md enforcement)
 try:
     from .git_ops import register_git_ops_tools
 except ImportError:
@@ -59,19 +59,19 @@ try:
 except ImportError:
     from docs import register_docs_tools
 
-# Import Tester tools (docs/how-to/testing-workflows.md enforcement)
+# Import Tester tools (agent/how-to/testing-workflows.md enforcement)
 try:
     from .tester import register_tester_tools
 except ImportError:
     from tester import register_tester_tools
 
-# Import Product Owner tools (docs/standards/feature-lifecycle.md enforcement)
+# Import Product Owner tools (agent/standards/feature-lifecycle.md enforcement)
 try:
     from .product_owner import register_product_owner_tools
 except ImportError:
     from product_owner import register_product_owner_tools
 
-# Import Language Expert tools (docs/standards/lang-*.md + tool-router examples)
+# Import Language Expert tools (agent/standards/lang-*.md + tool-router examples)
 try:
     from .lang_expert import register_lang_expert_tools
 except ImportError:
@@ -103,7 +103,7 @@ project_memory = ProjectMemory()
 register_writer_tools(mcp)
 log_decision("writer_tools.registered", {}, logger)
 
-# Register GitOps tools (docs/how-to/git-workflow.md enforcement)
+# Register GitOps tools (agent/how-to/git-workflow.md enforcement)
 register_git_ops_tools(mcp)
 log_decision("git_ops_tools.registered", {}, logger)
 
@@ -111,15 +111,15 @@ log_decision("git_ops_tools.registered", {}, logger)
 register_docs_tools(mcp)
 log_decision("docs_tools.registered", {}, logger)
 
-# Register Tester tools (docs/how-to/testing-workflows.md enforcement)
+# Register Tester tools (agent/how-to/testing-workflows.md enforcement)
 register_tester_tools(mcp)
 log_decision("tester_tools.registered", {}, logger)
 
-# Register Product Owner tools (docs/standards/feature-lifecycle.md enforcement)
+# Register Product Owner tools (agent/standards/feature-lifecycle.md enforcement)
 register_product_owner_tools(mcp)
 log_decision("product_owner_tools.registered", {}, logger)
 
-# Register Language Expert tools (docs/standards/lang-*.md + tool-router examples)
+# Register Language Expert tools (agent/standards/lang-*.md + tool-router examples)
 register_lang_expert_tools(mcp)
 log_decision("lang_expert_tools.registered", {}, logger)
 

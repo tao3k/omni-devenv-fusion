@@ -658,7 +658,7 @@ def test_all_tools():
         print("\n3️⃣1️⃣  Testing 'check_doc_sync'...")
         success, text = send_tool(
             process, "check_doc_sync",
-            {"changed_files": ["mcp-server/orchestrator.py", "docs/how-to/new-feature.md"]},
+            {"changed_files": ["mcp-server/orchestrator.py", "agent/how-to/new-feature.md"]},
             35
         )
         if success and ("status" in text.lower() or "sync" in text.lower()):

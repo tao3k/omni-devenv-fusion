@@ -97,7 +97,7 @@ async def load_git_workflow_memory() -> str:
 
 # ❌ Wrong: Reload every time
 async def load_git_workflow_memory() -> str:
-    content = Path("docs/how-to/git-workflow.md").read_text()
+    content = Path("agent/how-to/git-workflow.md").read_text()
     return content
 ```
 
@@ -131,8 +131,8 @@ If mostly "Yes," use MCP.
 |------|-------------------|----------------------|
 | `load_git_workflow_memory` | git-workflow.md | ✅ CLAUDE.md git rules |
 | `get_doc_protocol` | Document protocol summary | ✅ docs/*.md |
-| `get_feature_requirements` | Complexity requirements | ✅ docs/standards/feature-lifecycle.md |
-| `get_language_standards` | Language standards | ✅ docs/standards/lang-*.md |
+| `get_feature_requirements` | Complexity requirements | ✅ agent/standards/feature-lifecycle.md |
+| `get_language_standards` | Language standards | ✅ agent/standards/lang-*.md |
 
 ---
 
@@ -143,7 +143,7 @@ If mostly "Yes," use MCP.
 ```python
 # ❌ Return raw file content in MCP (make LLM parse it)
 async def get_rules() -> str:
-    return Path("docs/how-to/git-workflow.md").read_text()
+    return Path("agent/how-to/git-workflow.md").read_text()
 
 # ✅ Return parsed structured data
 async def get_rules() -> str:

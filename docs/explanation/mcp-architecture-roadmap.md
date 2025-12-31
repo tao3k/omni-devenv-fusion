@@ -87,7 +87,7 @@ graph LR
     A[Agent: "Add mkNixago config"] --> B[lang_expert]
     B --> C[L1: Standards]
     B --> D[L2: Examples]
-    C --> E[docs/standards/lang-nix.md]
+    C --> E[agent/standards/lang-nix.md]
     D --> F[tool-router/data/examples/nix.edit.jsonl]
     E --> G[Project conventions]
     F --> H[Concrete patterns]
@@ -102,7 +102,7 @@ graph LR
 ```
 
 Returns:
-- L1: mkNixago patterns, forbidden patterns from `docs/standards/lang-nix.md`
+- L1: mkNixago patterns, forbidden patterns from `agent/standards/lang-nix.md`
 - L2: Relevant examples from `tool-router/data/examples/nix.edit.jsonl`
 
 **Benefits**:

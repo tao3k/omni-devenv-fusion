@@ -166,7 +166,7 @@ async def authenticated_tool(tool_func):
 
 ## 4. Verification Plan (Test)
 
-*How do we know it works? Matches `docs/standards/feature-lifecycle.md` requirements.*
+*How do we know it works? Matches `agent/standards/feature-lifecycle.md` requirements.*
 
 **Note**: Per task requirements, tests are excluded from this implementation. This represents a compliance deviation from feature-lifecycle.md L2 standards which require unit tests.
 

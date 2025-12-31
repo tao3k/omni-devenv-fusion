@@ -190,17 +190,17 @@ def register_docs_tools(mcp: Any) -> None:
                     "violations": violations,
                     "allowed_types": VALID_TYPES,
                     "allowed_scopes": PROJECT_SCOPES,
-                    "reference": "docs/how-to/git-workflow.md"
+                    "reference": "agent/how-to/git-workflow.md"
                 }, indent=2)
 
             # Return ready state (Stop and Ask protocol)
             return json.dumps({
                 "status": "ready",
-                "message": "Validated according to docs/how-to/git-workflow.md",
+                "message": "Validated according to agent/how-to/git-workflow.md",
                 "command": f"just agent-commit {type} {scope} \"{message}\"",
                 "protocol": "stop_and_ask",
                 "authorization_required": True,
-                "reference": "docs/how-to/git-workflow.md"
+                "reference": "agent/how-to/git-workflow.md"
             }, indent=2)
 
         # Fallback to generic

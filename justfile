@@ -120,6 +120,60 @@ agent-release type="auto" version="latest":
     just agent-publish-release {{version}}
 
 # ==============================================================================
+# 🤖 AGENT WORKFLOW AUTOMATION
+# ==============================================================================
+
+# Generate high-density context dump for agent startup
+[no-exit-message]
+agent-context:
+    @echo "<project_context_dump>"
+    @echo "=== 📋 CURRENT MISSION (Backlog Top 20) ==="
+    @head -n 20 Backlog.md 2>/dev/null || echo "⚠️ No Backlog.md found. Create one to drive the agent."
+    @echo ""
+    @echo "=== 🚦 GIT STATUS ==="
+    @git status --short --branch
+    @echo ""
+    @echo "=== ⚙️ RULES (cog.toml scopes) ==="
+    @grep -A 20 "scopes =" cog.toml 2>/dev/null | head -15 || echo "cog.toml not found"
+    @echo ""
+    @echo "=== 📝 RECENT COMMITS ==="
+    @git log --oneline -5
+    @echo ""
+    @echo "=== ✍️ WRITING STYLE (agent/writing-style/) ==="
+    @ls -1 agent/writing-style/*.md 2>/dev/null | xargs -I {} basename {} .md | sed 's/^/  - /' || echo "  No style guides found"
+    @echo "  Hint: Use 'writer.polish_text' to enforce these rules"
+    @echo ""
+    @echo "</project_context_dump>"
+    @echo ""
+    @echo "💡 INSTRUCTION: Read the context above. Identify the active task from Backlog.md and check if it aligns with git status. Await user command."
+
+# ==============================================================================
+# 🧠 COGNITION & SPECS
+# ==============================================================================
+
+# Focus Mode: Load specific Spec and prepare for development
+# Usage: just agent-focus agent/specs/feature_name.md
+agent-focus spec_path:
+    @echo "🚀 Focusing Agent on Spec: {{spec_path}}..."
+    @echo ""
+    @echo "=== 🎯 FOCUS TARGET: {{spec_path}} ==="
+    @cat {{spec_path}}
+    @echo ""
+    @echo "=== 🏗️ RELATED CODE STRUCTURE ==="
+    @echo "mcp-server modules:"
+    @ls -1 mcp-server/*.py 2>/dev/null | xargs -I {} basename {} .py | sed 's/^/  - /' || echo "  No modules found"
+    @echo ""
+    @echo "=== 📋 BACKLOG ALIGNMENT ==="
+    @grep -i "$(basename {{spec_path}} .md)" Backlog.md 2>/dev/null || echo "  No matching backlog entry found"
+    @echo ""
+    @echo "💡 INSTRUCTION: Review the Spec above. Create a PLAN in 'SCRATCHPAD.md' before modifying any code."
+
+# Start Claude with automatic context injection
+agent-start:
+    @echo "🚀 Initializing Agent with Context..."
+    @just agent-context | claude
+
+# ==============================================================================
 # HUMAN INTERFACE (Interactive commands preserved)
 # Commands with user prompts for manual operations
 # ==============================================================================
@@ -245,7 +299,7 @@ test:
     @echo "Running tests..."
     @devenv test
 
-# Granular test commands (docs/how-to/testing-workflows.md)
+# Granular test commands (agent/how-to/testing-workflows.md)
 [group('validate')]
 test-unit:
     @echo "Running unit tests..."
@@ -421,6 +475,11 @@ log n="10":
 fmt:
     @echo "Formatting code..."
     @lefthook run pre-commit --all-files
+
+[group('dev')]
+fmt-py:
+    @echo "Formatting Python with ruff..."
+    @uvx ruff format mcp-server/
 
 [group('dev')]
 clean:
@@ -694,13 +753,13 @@ examples:
 spec-list:
     @echo "Available Specs"
     @echo "================"
-    @ls -1 docs/specs/*.md 2>/dev/null | sed 's|^docs/specs/||' | sed 's/\.md$$//' | sed 's/^/  - /' || echo "  No specs found"
+    @ls -1 agent/specs/*.md 2>/dev/null | sed 's|^agent/specs/||' | sed 's/\.md$$//' | sed 's/^/  - /' || echo "  No specs found"
 
 [group('spec')]
 spec-template:
     @echo "Spec Template"
     @echo "============="
-    @cat docs/specs/TEMPLATE.md
+    @cat agent/specs/TEMPLATE.md
 
 [group('spec')]
 migrate doc_path:
@@ -732,7 +791,7 @@ archive spec_path target_category="explanation":
     set -euo pipefail
     if [ -z "{{spec_path}}" ]; then
         echo "Usage: just archive <spec-path> [category]"
-        echo "Example: just archive docs/specs/auth_module.md explanation"
+        echo "Example: just archive agent/specs/auth_module.md explanation"
         exit 1
     fi
     if [ ! -f "{{spec_path}}" ]; then

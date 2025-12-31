@@ -60,7 +60,7 @@ The **"Static Standards + Dynamic Examples"** pattern extends Zinsser's clarity 
 
 | Layer | Form | Purpose |
 |-------|------|---------|
-| **L1: Law** | `docs/standards/lang-*.md` | Project-specific conventions, forbidden patterns |
+| **L1: Law** | `agent/standards/lang-*.md` | Project-specific conventions, forbidden patterns |
 | **L2: Case Law** | `tool-router/data/examples/*.jsonl` | Concrete Few-Shot examples |
 | **L3: Enforcer** | `lang_expert` MCP tool | Combines L1 + L2 for context injection |
 
@@ -86,7 +86,7 @@ mkNixago { data = { conform = {...}; }; }  # Full override!
 
 ### 3.3 Writing Standards for AI
 
-When writing `docs/standards/lang-*.md` files:
+When writing `agent/standards/lang-*.md` files:
 
 1. **Forbidden Patterns First**: List what NOT to do (e.g., "❌ `with pkgs;`")
 2. **Concrete Examples**: Show before/after for each pattern

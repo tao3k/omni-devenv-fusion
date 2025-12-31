@@ -20,7 +20,7 @@ let
   lefthook = initConfigs.lefthook;
 
   # Project scopes shared across conform and cog
-  # Maps to: docs/how-to/git-workflow.md
+  # Maps to: agent/how-to/git-workflow.md
   project-scopes = [
     "nix" # Infrastructure: devenv.nix, modules
     "mcp" # Application: mcp-server logic
@@ -46,6 +46,11 @@ let
             "hunspell" # Vale handles documentation
             "typos" # Vale handles spelling
           ];
+          # Add ruff for Python formatting
+          "format-python" = {
+            glob = "*.py";
+            run = "ruff format {staged_files}";
+          };
           # Add Vale for documentation linting
           "check-docs" = {
             glob = "*.md";

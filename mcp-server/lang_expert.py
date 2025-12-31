@@ -4,7 +4,7 @@ Language Expert System - Router-Augmented Coding
 
 Implements "Static Standards (Law)" + "Dynamic Examples (Case Law)" pattern:
 
-L1: Standards (docs/standards/lang-*.md) - Project-specific language conventions
+L1: Standards (agent/standards/lang-*.md) - Project-specific language conventions
 L2: Examples (tool-router/data/examples/*.jsonl) - Concrete syntax patterns
 
 Usage:
@@ -24,7 +24,7 @@ from typing import Dict, Any, Optional, List
 class StandardsCache:
     """
     Singleton cache for language standards.
-    Standards are loaded from docs/standards/ on first access,
+    Standards are loaded from agent/standards/ on first access,
     then cached in memory for the lifetime of the MCP server.
     """
     _instance = None
@@ -41,9 +41,9 @@ class StandardsCache:
             StandardsCache._loaded = True
 
     def _load_standards(self):
-        """Load all language standards from docs/standards/."""
+        """Load all language standards from agent/standards/."""
         self._standards = {}
-        standards_dir = Path("docs/standards")
+        standards_dir = Path("agent/standards")
 
         if not standards_dir.exists():
             return
@@ -202,7 +202,7 @@ def register_lang_expert_tools(mcp: Any) -> None:
         Consult language-specific standards and relevant code examples.
 
         This is the primary tool for Router-Augmented Coding:
-        1. Reads L1: Project standards (docs/standards/lang-*.md)
+        1. Reads L1: Project standards (agent/standards/lang-*.md)
         2. Queries L2: Case law (tool-router/data/examples/*.jsonl)
 
         Usage:
@@ -225,7 +225,7 @@ def register_lang_expert_tools(mcp: Any) -> None:
             "file": file_path,
             "task": task_description,
             "sources": {
-                "standards": f"docs/standards/lang-{lang}.md",
+                "standards": f"agent/standards/lang-{lang}.md",
                 "examples": f"tool-router/data/examples/{lang}.edit.jsonl"
             }
         }
@@ -236,7 +236,7 @@ def register_lang_expert_tools(mcp: Any) -> None:
             # Extract relevant sections based on task
             relevant_std = _extract_relevant_standards(standard, task_description)
             result["standards"] = relevant_std
-            result["standards_source"] = "docs/standards"
+            result["standards_source"] = "agent/standards"
         else:
             result["standards"] = None
             result["standards_warning"] = f"No standards found for {lang}"
@@ -284,7 +284,7 @@ def register_lang_expert_tools(mcp: Any) -> None:
         return json.dumps({
             "status": "success",
             "language": lang_name,
-            "source": f"docs/standards/lang-{lang}.md",
+            "source": f"agent/standards/lang-{lang}.md",
             "content": standard
         }, indent=2)
 
@@ -299,7 +299,7 @@ def register_lang_expert_tools(mcp: Any) -> None:
         languages = []
 
         for lang_id, lang_name in LANG_NAMES.items():
-            std_path = Path(f"docs/standards/lang-{lang_id}.md")
+            std_path = Path(f"agent/standards/lang-{lang_id}.md")
             jsonl_path = Path(f"tool-router/data/examples/{lang_id}.edit.jsonl")
 
             languages.append({

@@ -21,7 +21,9 @@
       "Bash(direnv reload)",
       "Bash(git reset:*)",
       "Bash(python3:*)",
-      "Bash(uv run python3:*)"
+      "Bash(uv run python3:*)",
+      "Bash(uv pip install:*)",
+      "Bash(uv run pytest:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

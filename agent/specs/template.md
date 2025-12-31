@@ -77,7 +77,7 @@ def verify_doc_compliance(doc_path: str) -> bool:
 
 ## 4. Verification Plan (Test)
 
-*How do we know it works? Matches `docs/standards/feature-lifecycle.md` requirements.*
+*How do we know it works? Matches `agent/standards/feature-lifecycle.md` requirements.*
 
 - [ ] **Template Compliance**: New concept docs include all required sections (Context, Mental Model, Mechanics, Design Decisions)
 - [ ] **Cross-Reference Validation**: Each concept doc links to at least one related tutorial or how-to guide
