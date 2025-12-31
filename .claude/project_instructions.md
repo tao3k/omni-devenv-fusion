@@ -70,3 +70,10 @@ Unless explicitly instructed otherwise, you have **NO PERMISSION** to commit cod
 | "Fix the bug and **run just agent-commit**" | Fix code → `just agent-commit fix x "fix bug"` |
 
 See also: [Git Workflow Guide](../../docs/how-to/git-workflow.md)
+
+---
+
+## Local Developer Memory
+
+Load `.data/prompts/init.md` for developer-specific context (not committed to git).
+
