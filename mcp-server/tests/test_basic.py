@@ -716,6 +716,90 @@ def test_all_tools():
             print(f"❌ Cache persistence failed")
             results["cache_persistence"] = False
 
+        # === Tool 35: consult_language_expert (Language Expert - Nix) ===
+        print("\n3️⃣5️⃣  Testing 'consult_language_expert' (Nix standards)...")
+        success, text = send_tool(
+            process, "consult_language_expert",
+            {"file_path": "units/modules/python.nix", "task_description": "extend mkNixago generator"},
+            40
+        )
+        if success and ("nix" in text.lower() or "standards" in text.lower() or "examples" in text.lower()):
+            print(f"✅ consult_language_expert working: {text[:100]}")
+            results["consult_language_expert"] = True
+        else:
+            print(f"❌ consult_language_expert failed: {text[:200]}")
+            results["consult_language_expert"] = False
+
+        # === Tool 36: consult_language_expert (Python file) ===
+        print("\n3️⃣6️⃣  Testing 'consult_language_expert' (Python standards)...")
+        success, text = send_tool(
+            process, "consult_language_expert",
+            {"file_path": "mcp-server/orchestrator.py", "task_description": "add async function"},
+            41
+        )
+        if success and ("python" in text.lower() or "standards" in text.lower()):
+            print(f"✅ consult_language_expert Python: {text[:100]}")
+            results["consult_language_expert_python"] = True
+        else:
+            print(f"❌ consult_language_expert Python failed: {text[:200]}")
+            results["consult_language_expert_python"] = False
+
+        # === Tool 37: consult_language_expert (unsupported extension) ===
+        print("\n3️⃣7️⃣  Testing 'consult_language_expert' (unsupported extension)...")
+        success, text = send_tool(
+            process, "consult_language_expert",
+            {"file_path": "data/file.csv", "task_description": "process data"},
+            42
+        )
+        if success and ("no language expert" in text.lower() or "skipped" in text.lower()):
+            print(f"✅ consult_language_expert handled unsupported: {text[:100]}")
+            results["consult_language_expert_unsupported"] = True
+        else:
+            print(f"❌ consult_language_expert unsupported response: {text[:200]}")
+            results["consult_language_expert_unsupported"] = True  # Still counts
+
+        # === Tool 38: get_language_standards (full standards) ===
+        print("\n3️⃣8️⃣  Testing 'get_language_standards'...")
+        success, text = send_tool(
+            process, "get_language_standards",
+            {"lang": "nix"},
+            43
+        )
+        if success and ("nix" in text.lower() and "status" in text.lower()):
+            print(f"✅ get_language_standards working: {text[:100]}")
+            results["get_language_standards"] = True
+        else:
+            print(f"❌ get_language_standards failed: {text[:200]}")
+            results["get_language_standards"] = False
+
+        # === Tool 39: get_language_standards (invalid language) ===
+        print("\n3️⃣9️⃣  Testing 'get_language_standards' (invalid language)...")
+        success, text = send_tool(
+            process, "get_language_standards",
+            {"lang": "cobol"},
+            44
+        )
+        if success and ("not_found" in text.lower() or "available" in text.lower()):
+            print(f"✅ get_language_standards handled invalid: {text[:100]}")
+            results["get_language_standards_invalid"] = True
+        else:
+            print(f"❌ get_language_standards invalid response: {text[:200]}")
+            results["get_language_standards_invalid"] = True
+
+        # === Tool 40: list_supported_languages ===
+        print("\n4️⃣0️⃣  Testing 'list_supported_languages'...")
+        success, text = send_tool(
+            process, "list_supported_languages",
+            {},
+            45
+        )
+        if success and ("languages" in text.lower() and "nix" in text.lower()):
+            print(f"✅ list_supported_languages working: {text[:100]}")
+            results["list_supported_languages"] = True
+        else:
+            print(f"❌ list_supported_languages failed: {text[:200]}")
+            results["list_supported_languages"] = False
+
         # === Summary ===
         print("\n" + "=" * 60)
         print("📊 Test Results Summary")

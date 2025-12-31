@@ -71,6 +71,12 @@ try:
 except ImportError:
     from product_owner import register_product_owner_tools
 
+# Import Language Expert tools (docs/standards/lang-*.md + tool-router examples)
+try:
+    from .lang_expert import register_lang_expert_tools
+except ImportError:
+    from lang_expert import register_lang_expert_tools
+
 # =============================================================================
 # Configuration
 # =============================================================================
@@ -112,6 +118,10 @@ log_decision("tester_tools.registered", {}, logger)
 # Register Product Owner tools (docs/standards/feature-lifecycle.md enforcement)
 register_product_owner_tools(mcp)
 log_decision("product_owner_tools.registered", {}, logger)
+
+# Register Language Expert tools (docs/standards/lang-*.md + tool-router examples)
+register_lang_expert_tools(mcp)
+log_decision("lang_expert_tools.registered", {}, logger)
 
 
 # =============================================================================

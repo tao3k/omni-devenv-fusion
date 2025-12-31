@@ -143,6 +143,13 @@ When editing `.nix` files, you **MUST** follow this protocol to avoid syntax pit
    - **Smart test selection**: `@omni-orchestrator smart_test_runner`
    - **Get protocol**: `@omni-orchestrator get_test_protocol`
 
+5. **Language-Specific Code → Use `lang_expert` tools (Router-Augmented Coding)**
+   - **Consult expert**: `@omni-orchestrator consult_language_expert file_path="..." task="..."`
+     - Returns L1: Project standards (`docs/standards/lang-*.md`)
+     - Returns L2: Relevant examples (`tool-router/data/examples/*.jsonl`)
+   - **Get full standards**: `@omni-orchestrator get_language_standards lang="nix"`
+   - **List languages**: `@omni-orchestrator list_supported_languages`
+
 > **Note**: Detailed rules are in docs/*.md files. MCP tools enforce them with caching - no need to memorize specifics.
 
 ### Key Nix Rules (Memorized)
