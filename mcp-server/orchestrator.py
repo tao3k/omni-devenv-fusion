@@ -13,174 +13,55 @@ Tools:
 - list_personas: List available expert personas
 - consult_specialist: Route queries to Architect, Platform Expert, DevOps, SRE
 - run_task: Safe execution of just/nix commands
+
+This server uses mcp_core shared library for:
+- execution: SafeExecutor for command execution
+- memory: ProjectMemory for persistence
+- inference: InferenceClient and personas
+- utils: Logging and path checking
 """
+import asyncio
+import json
 import os
 import sys
-import json
-import asyncio
-import subprocess
-import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from anthropic import AsyncAnthropic
 from mcp.server.fastmcp import FastMCP
 
-from personas import PERSONAS
+# Import shared modules from mcp_core
+from mcp_core import (
+    setup_logging,
+    log_decision,
+    is_safe_path,
+    SafeExecutor,
+    ProjectMemory,
+    InferenceClient,
+    PERSONAS,
+    build_persona_prompt,
+)
 
-
-def _load_personas_from_config() -> Dict[str, Any]:
-    """Load personas from external JSON config if available."""
-    config_path = os.environ.get("ORCHESTRATOR_PERSONAS_FILE") or "mcp-server/personas.json"
-    if not os.path.exists(config_path):
-        return {}
-
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        _log_decision("personas_loaded", {"source": config_path, "count": len(data)})
-        return data
-    except Exception as e:
-        _log_decision("personas_load_error", {"error": str(e)})
-        return {}
-
-
-# Merge static and dynamic personas (dynamic takes precedence)
-_DYNAMIC_PERSONAS = _load_personas_from_config()
-PERSONAS = {**PERSONAS, **_DYNAMIC_PERSONAS}
-
-
-def _load_env_from_file() -> Dict[str, str]:
-    path = os.environ.get("ORCHESTRATOR_ENV_FILE") or os.path.join(os.getcwd(), ".mcp.json")
-    if not os.path.exists(path):
-        return {}
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except Exception:
-        return {}
-
-    orchestrator_env = (
-        data.get("mcpServers", {})
-        .get("orchestrator", {})
-        .get("env", {})
-        if isinstance(data, dict)
-        else {}
-    )
-    flat_env = data if isinstance(data, dict) else {}
-    merged: Dict[str, str] = {}
-    for source in (flat_env, orchestrator_env):
-        for key, value in source.items():
-            if isinstance(value, str):
-                merged[key] = value
-    return merged
-
-
-_ENV_FILE_VALUES = _load_env_from_file()
-
-
-def _env(key: str, default: str | None = None) -> str | None:
-    return _ENV_FILE_VALUES.get(key) or os.environ.get(key) or default
-
+# =============================================================================
+# Configuration
+# =============================================================================
 
 LOG_LEVEL = os.environ.get("ORCHESTRATOR_LOG_LEVEL", "INFO").upper()
-import logging
-logging.basicConfig(
-    level=getattr(logging, LOG_LEVEL, logging.INFO),
-    format="%(asctime)s %(levelname)s %(message)s",
-)
-logger = logging.getLogger("orchestrator")
+logger = setup_logging(level=LOG_LEVEL, server_name="orchestrator")
 
-
-MODEL = _env("ORCHESTRATOR_MODEL") or _env("ANTHROPIC_MODEL", "MiniMax-M2.1")
-BASE_URL = _env("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
-REQUEST_TIMEOUT = float(_env("ORCHESTRATOR_TIMEOUT", "30"))
-MAX_TOKENS = int(_env("ORCHESTRATOR_MAX_TOKENS", "4096"))
-ENABLE_STREAMING = (_env("ORCHESTRATOR_ENABLE_STREAMING", "false") or "false").lower() in (
-    "1",
-    "true",
-    "yes",
-)
-
-API_KEY = _env("ANTHROPIC_API_KEY")
+API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
+REQUEST_TIMEOUT = float(os.environ.get("ORCHESTRATOR_TIMEOUT", "30"))
 
 mcp = FastMCP("orchestrator-tools")
 
-sys.stderr.write(f"🚀 Orchestrator Server (Async + Repomix) starting... PID: {os.getpid()}\n")
+sys.stderr.write(f"🚀 Orchestrator Server starting... PID: {os.getpid()}\n")
 
 if not API_KEY:
     sys.stderr.write("⚠️ Warning: ANTHROPIC_API_KEY not found in environment.\n")
 
-client = AsyncAnthropic(api_key=API_KEY, base_url=BASE_URL)
-
-
-def _build_system_prompt(role: str) -> str:
-    persona = PERSONAS[role]
-    hints_section = ""
-    if persona.get("context_hints"):
-        hints = "\n".join(f"- {hint}" for hint in persona["context_hints"])
-        hints_section = f"\nContext hints:\n{hints}\n"
-    return (
-        f"You are {persona.get('name', role)}.\n"
-        f"{persona.get('description', '')}\n"
-        f"When to use: {persona.get('when_to_use', '')}\n"
-        f"{hints_section}\n"
-        f"{persona.get('prompt', '')}"
-    )
-
-
-def _serialize_personas() -> List[Dict[str, Any]]:
-    return [
-        {
-            "id": role,
-            "name": details.get("name"),
-            "description": details.get("description"),
-            "when_to_use": details.get("when_to_use"),
-            "context_hints": details.get("context_hints", []),
-        }
-        for role, details in PERSONAS.items()
-    ]
-
-
-def _log_decision(event: str, payload: Dict[str, Any]) -> None:
-    logger.info(json.dumps({"event": event, **payload}))
-
-
-async def _call_model(system_prompt: str, query: str, stream: bool) -> str:
-    messages = [{"role": "user", "content": query}]
-    if stream or ENABLE_STREAMING:
-        async with client.messages.stream(
-            model=MODEL,
-            max_tokens=MAX_TOKENS,
-            system=system_prompt,
-            messages=messages,
-        ) as stream_resp:
-            chunks: List[str] = []
-            async for event in stream_resp:
-                if hasattr(event, "type") and event.type == "message_stop":
-                    break
-                if hasattr(event, "delta") and getattr(event.delta, "text", None):
-                    chunks.append(event.delta.text)
-            return "".join(chunks)
-
-    response = await client.messages.create(
-        model=MODEL,
-        max_tokens=MAX_TOKENS,
-        system=system_prompt,
-        messages=messages,
-    )
-
-    final_text = []
-    for block in response.content:
-        if hasattr(block, "type") and block.type == "text":
-            final_text.append(block.text)
-        elif hasattr(block, "text"):
-            final_text.append(block.text)
-
-    if not final_text:
-        return "Error: Model returned content but no text block found."
-
-    return "\n".join(final_text)
+# Initialize shared clients
+inference_client = InferenceClient(api_key=API_KEY, base_url=BASE_URL)
+project_memory = ProjectMemory()
 
 
 # =============================================================================
@@ -197,7 +78,7 @@ async def get_codebase_context(target_dir: str = ".", ignore_files: str = "") ->
     """
     if ".." in target_dir or target_dir.startswith("/"):
         error_msg = "Error: Access to external directories is restricted for security."
-        _log_decision("get_codebase_context.security_block", {"target_dir": target_dir})
+        log_decision("get_codebase_context.security_block", {"target_dir": target_dir}, logger)
         return error_msg
 
     # Use .cache/ directory for repomix output (following numtide/prj-spec)
@@ -205,7 +86,7 @@ async def get_codebase_context(target_dir: str = ".", ignore_files: str = "") ->
     cache_dir.mkdir(parents=True, exist_ok=True)
     temp_path = str(cache_dir / "repomix-output.xml")
 
-    _log_decision("get_codebase_context.request", {"target_dir": target_dir, "temp_path": temp_path})
+    log_decision("get_codebase_context.request", {"target_dir": target_dir, "temp_path": temp_path}, logger)
 
     command = [
         "repomix",
@@ -246,7 +127,7 @@ async def get_codebase_context(target_dir: str = ".", ignore_files: str = "") ->
         if not content.strip():
             return "Repomix generated an empty file. Check directory or ignore rules."
 
-        _log_decision("get_codebase_context.success", {"length": len(content)})
+        log_decision("get_codebase_context.success", {"length": len(content)}, logger)
         return f"--- Codebase Context ({target_dir}) ---\n{content}"
 
     except FileNotFoundError:
@@ -254,7 +135,7 @@ async def get_codebase_context(target_dir: str = ".", ignore_files: str = "") ->
     except Exception as e:
         if os.path.exists(temp_path):
             os.unlink(temp_path)
-        _log_decision("get_codebase_context.exception", {"error": str(e)})
+        log_decision("get_codebase_context.exception", {"error": str(e)}, logger)
         return f"Failed to execute Repomix: {str(e)}"
 
 
@@ -301,7 +182,7 @@ async def list_directory_structure(root_dir: str = ".") -> str:
     """
     if ".." in root_dir or root_dir.startswith("/"):
         error_msg = "Error: Access to external directories is restricted for security."
-        _log_decision("list_directory_structure.security_block", {"root_dir": root_dir})
+        log_decision("list_directory_structure.security_block", {"root_dir": root_dir}, logger)
         return error_msg
 
     target_path = Path(root_dir)
@@ -312,7 +193,7 @@ async def list_directory_structure(root_dir: str = ".") -> str:
         return f"Error: '{root_dir}' is not a directory."
 
     try:
-        _log_decision("list_directory_structure.request", {"root_dir": root_dir})
+        log_decision("list_directory_structure.request", {"root_dir": root_dir}, logger)
 
         # Try 'tree' command first
         try:
@@ -327,14 +208,14 @@ async def list_directory_structure(root_dir: str = ".") -> str:
                 tree_output = stdout.decode("utf-8")
                 lines = tree_output.split("\n")[1:]
                 result = "\n".join(lines)
-                _log_decision("list_directory_structure.success", {"method": "tree"})
+                log_decision("list_directory_structure.success", {"method": "tree"}, logger)
                 return f"--- Directory Structure ({root_dir}) ---\n{result}"
         except FileNotFoundError:
             pass
 
         # Fallback to Python implementation
         tree_output = _build_directory_tree(root_dir, max_depth=3)
-        _log_decision("list_directory_structure.success", {"method": "python"})
+        log_decision("list_directory_structure.success", {"method": "python"}, logger)
 
         if not tree_output.strip():
             return f"--- Directory Structure ({root_dir}) ---\n[Empty directory]"
@@ -342,7 +223,7 @@ async def list_directory_structure(root_dir: str = ".") -> str:
         return f"--- Directory Structure ({root_dir}) ---\n{tree_output}"
 
     except Exception as e:
-        _log_decision("list_directory_structure.exception", {"error": str(e)})
+        log_decision("list_directory_structure.exception", {"error": str(e)}, logger)
         return f"Error listing directory structure: {str(e)}"
 
 
@@ -353,8 +234,17 @@ async def list_directory_structure(root_dir: str = ".") -> str:
 @mcp.tool()
 async def list_personas() -> str:
     """List available expert personas for consultation."""
-    persona_list = _serialize_personas()
-    _log_decision("list_personas", {"count": len(persona_list)})
+    persona_list = [
+        {
+            "id": role,
+            "name": details.get("name"),
+            "description": details.get("description"),
+            "when_to_use": details.get("when_to_use"),
+            "context_hints": details.get("context_hints", []),
+        }
+        for role, details in PERSONAS.items()
+    ]
+    log_decision("list_personas", {"count": len(persona_list)}, logger)
     return json.dumps(persona_list, indent=2)
 
 
@@ -376,21 +266,27 @@ async def consult_specialist(role: str, query: str, stream: bool = False) -> str
     if not API_KEY:
         return "Error: ANTHROPIC_API_KEY is missing."
 
-    system_prompt = _build_system_prompt(role)
-    _log_decision("consult_specialist.request", {"role": role})
+    system_prompt = build_persona_prompt(role)
+    log_decision("consult_specialist.request", {"role": role}, logger)
 
     try:
-        response_text = await asyncio.wait_for(
-            _call_model(system_prompt, query, stream=stream), timeout=REQUEST_TIMEOUT
+        response = await asyncio.wait_for(
+            inference_client.complete(system_prompt, query),
+            timeout=REQUEST_TIMEOUT
         )
-        _log_decision("consult_specialist.success", {"role": role})
-        return f"--- 🤖 Expert Opinion: {role.upper()} ---\n{response_text}"
+
+        if response["success"]:
+            log_decision("consult_specialist.success", {"role": role}, logger)
+            return f"--- 🤖 Expert Opinion: {role.upper()} ---\n{response['content']}"
+        else:
+            log_decision("consult_specialist.error", {"role": role, "error": response["error"]}, logger)
+            return f"Error: {response['error']}"
 
     except asyncio.TimeoutError:
-        _log_decision("consult_specialist.timeout", {"role": role})
+        log_decision("consult_specialist.timeout", {"role": role}, logger)
         return f"Request timed out after {REQUEST_TIMEOUT} seconds."
     except Exception as exc:
-        _log_decision("consult_specialist.error", {"role": role, "error": str(exc)})
+        log_decision("consult_specialist.error", {"role": role, "error": str(exc)}, logger)
         return f"Error consulting specialist: {exc}"
 
 
@@ -416,7 +312,7 @@ async def delegate_to_coder(task_type: str, details: str) -> str:
     Returns:
         Instructions for using coder tools, or delegated result
     """
-    _log_decision("delegate_to_coder.request", {"task_type": task_type, "details": details[:200]})
+    log_decision("delegate_to_coder.request", {"task_type": task_type, "details": details[:200]}, logger)
 
     task_guidance = {
         "read": (
@@ -462,7 +358,6 @@ async def delegate_to_coder(task_type: str, details: str) -> str:
 # Phase 3: Advanced Adaptation
 # =============================================================================
 
-# Supported community MCP servers ( toverified work with this project)
 _SUPPORTED_COMMUNITY_MCPS = {
     "kubernetes": {
         "description": "Kubernetes cluster management",
@@ -521,15 +416,13 @@ async def community_proxy(mcp_name: str, query: str) -> str:
     Returns:
         Response from the community MCP with project context, or guidance on setup
     """
-    _log_decision("community_proxy.request", {"mcp_name": mcp_name, "query": query[:200]})
+    log_decision("community_proxy.request", {"mcp_name": mcp_name, "query": query[:200]}, logger)
 
     if mcp_name not in _SUPPORTED_COMMUNITY_MCPS:
         available = ", ".join(_SUPPORTED_COMMUNITY_MCPS.keys())
         return f"Error: Unknown MCP '{mcp_name}'. Supported: {available}"
 
     mcp_config = _SUPPORTED_COMMUNITY_MCPS[mcp_name]
-
-    # Check if the community MCP is available
     cmd = mcp_config["command"]
     args = mcp_config["args"]
 
@@ -539,10 +432,8 @@ async def community_proxy(mcp_name: str, query: str) -> str:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
-        # Wait briefly to see if it starts
         try:
             await asyncio.wait_for(process.wait(), timeout=2.0)
-            # If it exits quickly, MCP might not be installed
             installed = False
         except asyncio.TimeoutError:
             installed = True
@@ -564,9 +455,6 @@ async def community_proxy(mcp_name: str, query: str) -> str:
             f"into the MCP's context to ensure it respects project policies."
         )
 
-    # MCP is available - provide guidance for using it
-    project_context = _load_project_context()
-
     result = f"--- Community MCP: {mcp_name} ---\n"
     result += f"Description: {mcp_config['description']}\n\n"
     result += "Project Context (automatically injected):\n"
@@ -583,45 +471,8 @@ async def community_proxy(mcp_name: str, query: str) -> str:
 
 
 # =============================================================================
-# Safe Sandbox (Phase 3: Security)
+# Safe Sandbox (uses mcp_core.execution.SafeExecutor)
 # =============================================================================
-
-# Dangerous patterns to block in commands
-_DANGEROUS_PATTERNS = [
-    r"rm\s+-rf",
-    r"dd\s+if=",
-    r">\s*/dev/",
-    r"\|\s*sh",
-    r"&&\s*rm",
-    r";\s*rm",
-    r"chmod\s+777",
-    r"chown\s+root:",
-    r":\(\)\s*{",
-    r"\$\(\s*",
-]
-
-
-def _check_for_dangerous_patterns(cmd: str, args: List[str]) -> tuple[bool, str]:
-    """Check if command contains dangerous patterns."""
-    full_cmd = f"{cmd} {' '.join(args)}"
-    for pattern in _DANGEROUS_PATTERNS:
-        if re.search(pattern, full_cmd, re.IGNORECASE):
-            return False, f"Blocked dangerous pattern: {pattern}"
-    return True, ""
-
-
-def _create_sandbox_env() -> Dict[str, str]:
-    """Create a sandboxed environment with restricted variables."""
-    env = os.environ.copy()
-    # Remove or restrict sensitive environment variables
-    sensitive_vars = ["AWS_SECRET_ACCESS_KEY", "GITHUB_TOKEN", "ANTHROPIC_API_KEY"]
-    for var in sensitive_vars:
-        if var in env:
-            env[var] = "***REDACTED***"
-    # Restrict home directory access
-    env["HOME"] = str(Path.cwd())
-    return env
-
 
 @mcp.tool()
 async def safe_sandbox(command: str, args: Optional[List[str]] = None,
@@ -648,115 +499,21 @@ async def safe_sandbox(command: str, args: Optional[List[str]] = None,
     if args is None:
         args = []
 
-    _log_decision("safe_sandbox.request", {"command": command, "timeout": timeout, "read_only": read_only})
+    log_decision("safe_sandbox.request", {"command": command, "timeout": timeout, "read_only": read_only}, logger)
 
-    # Check for dangerous patterns
-    is_safe, error_msg = _is_safe_command(command, args)
-    if not is_safe:
-        _log_decision("safe_sandbox.blocked", {"reason": error_msg})
-        return f"Error: {error_msg}"
+    result = await SafeExecutor.run_sandbox(
+        command=command,
+        args=args,
+        timeout=timeout,
+        read_only=read_only,
+    )
 
-    # Additional dangerous pattern check
-    is_safe, error_msg = _check_for_dangerous_patterns(command, args)
-    if not is_safe:
-        _log_decision("safe_sandbox.dangerous_pattern", {"reason": error_msg})
-        return f"Error: {error_msg}"
-
-    # Create sandboxed environment
-    env = _create_sandbox_env()
-    if read_only:
-        env["READ_ONLY_SANDBOX"] = "1"
-
-    _log_decision("safe_sandbox.executing", {"command": command})
-
-    try:
-        process = await asyncio.create_subprocess_exec(
-            command, *args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-            cwd=str(Path.cwd())
-        )
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(),
-            timeout=timeout
-        )
-
-        output = stdout.decode("utf-8")
-        error = stderr.decode("utf-8")
-
-        _log_decision("safe_sandbox.complete", {
-            "command": command,
-            "returncode": process.returncode,
-            "read_only": read_only
-        })
-
-        result = f"--- Sandbox Execution: {command} {' '.join(args)} ---\n"
-        result += f"Read-only mode: {read_only}\n"
-        result += f"Exit code: {process.returncode}\n\n"
-
-        if output:
-            result += f"stdout:\n{output}\n"
-        if error:
-            result += f"stderr:\n{error}\n"
-
-        if process.returncode == 0:
-            result += "\n✅ Execution completed safely."
-        else:
-            result += "\n⚠️  Execution completed with errors."
-
-        return result
-
-    except asyncio.TimeoutExpired:
-        _log_decision("safe_sandbox.timeout", {"command": command, "timeout": timeout})
-        return f"Error: Command timed out after {timeout} seconds."
-    except FileNotFoundError:
-        return f"Error: Command '{command}' not found."
-    except Exception as e:
-        _log_decision("safe_sandbox.error", {"command": command, "error": str(e)})
-        return f"Error executing command: {e}"
+    return SafeExecutor.format_result(result, command, args)
 
 
 # =============================================================================
-# Memory Persistence (Phase 3: Long-term Memory)
+# Memory Persistence (uses mcp_core.memory.ProjectMemory)
 # =============================================================================
-
-_MEMORY_DIR = Path(".memory")
-
-
-def _init_memory_dir() -> bool:
-    """Initialize the memory directory if it doesn't exist."""
-    try:
-        _MEMORY_DIR.mkdir(exist_ok=True)
-        (_MEMORY_DIR / "decisions").mkdir(exist_ok=True)
-        (_MEMORY_DIR / "tasks").mkdir(exist_ok=True)
-        (_MEMORY_DIR / "context").mkdir(exist_ok=True)
-        return True
-    except Exception:
-        return False
-
-
-def _format_decision(decision: Dict[str, Any]) -> str:
-    """Format a decision for storage."""
-    lines = [
-        f"# Decision: {decision.get('title', 'Untitled')}",
-        f"Date: {decision.get('date', 'Unknown')}",
-        f"Author: {decision.get('author', 'Unknown')}",
-        "",
-        f"## Problem",
-        decision.get("problem", "N/A"),
-        "",
-        f"## Solution",
-        decision.get("solution", "N/A"),
-        "",
-        f"## Rationale",
-        decision.get("rationale", "N/A"),
-        "",
-        f"## Status",
-        decision.get("status", "open"),
-    ]
-    return "\n".join(lines)
-
 
 @mcp.tool()
 async def memory_garden(operation: str, title: str = "", content: str = "") -> str:
@@ -764,7 +521,6 @@ async def memory_garden(operation: str, title: str = "", content: str = "") -> s
     Persist project memories for long-term context.
 
     Uses a file-based system (following numtide/prj-spec) in `.memory/`:
-
     - decisions/: Architectural decisions (ADRs)
     - tasks/: Task tracking
     - context/: Project context snapshots
@@ -783,114 +539,44 @@ async def memory_garden(operation: str, title: str = "", content: str = "") -> s
     Returns:
         Operation result or list of items
     """
-    _log_decision("memory_garden.request", {"operation": operation, "title": title})
-
-    if not _init_memory_dir():
-        return "Error: Could not initialize memory directory (.memory/)"
-
-    decisions_dir = _MEMORY_DIR / "decisions"
-    tasks_dir = _MEMORY_DIR / "tasks"
-    context_dir = _MEMORY_DIR / "context"
+    log_decision("memory_garden.request", {"operation": operation, "title": title}, logger)
 
     if operation == "read_decisions":
-        decisions = []
-        for f in decisions_dir.glob("*.md"):
-            decisions.append(f"- {f.stem}: {f.read_text().split(chr(10))[0].replace('# Decision: ', '')}")
-        if not decisions:
-            return "No decisions recorded yet."
-        return f"--- Architectural Decisions ---\n" + "\n".join(decisions)
+        return project_memory.format_decisions_list()
 
     elif operation == "add_decision":
-        if not title:
-            return "Error: Title is required for adding a decision."
-        decision = {
-            "title": title,
-            "content": content,
-            "date": str(Path(__file__).stat().st_mtime),
-            "author": "Claude",
-            "status": "open",
-        }
-        # Extract problem/solution from content if it's JSON
-        if content.startswith("{"):
-            try:
-                import json
-                data = json.loads(content)
-                decision["problem"] = data.get("problem", "")
-                decision["solution"] = data.get("solution", "")
-                decision["rationale"] = data.get("rationale", "")
-            except:
-                pass
-
-        filename = decisions_dir / f"{title.lower().replace(' ', '_')}.md"
-        filename.write_text(_format_decision(decision))
-        _log_decision("memory_garden.decision_added", {"title": title})
-        return f"✅ Decision saved: {filename}"
+        result = project_memory.add_decision(title=title, content=content)
+        if result["success"]:
+            return f"✅ Decision saved: {result['file']}"
+        return f"Error: {result['error']}"
 
     elif operation == "list_tasks":
-        tasks = []
-        for f in tasks_dir.glob("*.md"):
-            tasks.append(f"- {f.stem}")
-        if not tasks:
-            return "No tasks recorded yet."
-        return f"--- Tasks ---\n" + "\n".join(tasks)
+        return project_memory.format_tasks_list()
 
     elif operation == "add_task":
-        if not title:
-            return "Error: Title is required for adding a task."
-        filename = tasks_dir / f"{title.lower().replace(' ', '_')}.md"
-        filename.write_text(f"# Task: {title}\n\n{content}\n\nStatus: pending")
-        _log_decision("memory_garden.task_added", {"title": title})
-        return f"✅ Task saved: {filename}"
+        result = project_memory.add_task(title=title, content=content)
+        if result["success"]:
+            return f"✅ Task saved: {result['file']}"
+        return f"Error: {result['error']}"
 
     elif operation == "save_context":
-        # Save current project state
-        context = {
-            "date": str(Path(__file__).stat().st_mtime),
-            "files": str(list(Path.cwd().rglob("*"))[:100]),
-            "git_branch": "main",  # Would need git command
-        }
-        filename = context_dir / f"context_{len(list(context_dir.glob('context_*.json')))}.json"
-        import json
-        filename.write_text(json.dumps(context, indent=2))
-        return f"✅ Context saved: {filename}"
+        result = project_memory.save_context()
+        if result["success"]:
+            return f"✅ Context saved: {result['file']}"
+        return f"Error: {result['error']}"
 
     elif operation == "read_context":
-        contexts = sorted(context_dir.glob("context_*.json"), key=lambda f: f.stat().st_mtime)
-        if not contexts:
-            return "No context snapshots available."
-        latest = contexts[-1]
-        import json
-        return f"--- Latest Context ---\n{latest.read_text()}"
+        context = project_memory.get_latest_context()
+        if context:
+            return f"--- Latest Context ---\n{json.dumps(context, indent=2)}"
+        return "No context snapshots available."
 
     return f"Error: Unknown operation '{operation}'. Use: read_decisions, add_decision, list_tasks, add_task, save_context, read_context"
 
 
 # =============================================================================
-# Execution Management (Orchestration)
+# Execution Management (uses mcp_core.execution.SafeExecutor)
 # =============================================================================
-
-# Safe commands for run_task (whitelist)
-_ALLOWED_COMMANDS = {
-    "just": ["validate", "build", "test", "lint", "fmt", "test-basic", "test-mcp", "agent-commit"],
-    "nix": ["fmt", "build", "shell", "flake-check"],
-    "git": ["status", "diff", "log", "add", "checkout", "branch"],
-}
-
-
-def _is_safe_command(cmd: str, args: List[str]) -> tuple[bool, str]:
-    """Check if command is in the whitelist."""
-    if cmd not in _ALLOWED_COMMANDS:
-        return False, f"Command '{cmd}' is not allowed."
-
-    allowed_args = _ALLOWED_COMMANDS.get(cmd, [])
-    for arg in args:
-        if arg.startswith("-"):
-            continue  # Allow flags
-        if arg not in allowed_args and not any(arg.startswith(a) for a in allowed_args):
-            return False, f"Argument '{arg}' is not allowed for '{cmd}'."
-
-    return True, ""
-
 
 @mcp.tool()
 async def run_task(command: str, args: Optional[List[str]] = None) -> str:
@@ -907,41 +593,11 @@ async def run_task(command: str, args: Optional[List[str]] = None) -> str:
     if args is None:
         args = []
 
-    is_safe, error_msg = _is_safe_command(command, args)
-    if not is_safe:
-        _log_decision("run_task.security_block", {"command": command, "args": args, "reason": error_msg})
-        return f"Error: {error_msg}"
+    log_decision("run_task.request", {"command": command, "args": args}, logger)
 
-    _log_decision("run_task.request", {"command": command, "args": args})
+    result = await SafeExecutor.run(command=command, args=args)
 
-    try:
-        process = await asyncio.create_subprocess_exec(
-            command, *args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        stdout, stderr = await process.communicate()
-
-        output = stdout.decode("utf-8")
-        error = stderr.decode("utf-8")
-
-        _log_decision("run_task.complete", {"command": command, "returncode": process.returncode})
-
-        result = f"--- Task: {command} {' '.join(args)} ---\n"
-        result += f"Exit code: {process.returncode}\n\n"
-
-        if output:
-            result += f"stdout:\n{output}\n"
-        if error:
-            result += f"stderr:\n{error}\n"
-
-        return result.strip()
-
-    except FileNotFoundError:
-        return f"Error: Command '{command}' not found."
-    except Exception as e:
-        _log_decision("run_task.error", {"command": command, "error": str(e)})
-        return f"Error running task: {e}"
+    return SafeExecutor.format_result(result, command, args)
 
 
 if __name__ == "__main__":

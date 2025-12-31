@@ -5,76 +5,47 @@ Coding Expert MCP Server - The "Hands"
 Focus: High-quality code implementation, AST-based refactoring, Performance, Security.
 Role: Precise execution of coding tasks defined by the Orchestrator.
 
+Key Characteristic: "Micro" view. Uses ast-grep/tree-sitter for surgical precision.
+
 Tools:
-- read_file: Single file reading
+- read_file: Single file reading (micro-level)
 - search_files: Pattern search (grep-like)
 - save_file: Write files with backup & syntax validation
-- ast_search: Query code structure using ast-grep
+- ast_search: Query code structure using ast-grep patterns
 - ast_rewrite: Apply structural patches based on AST patterns
+
+This server uses mcp_core shared library for:
+- utils: Logging, path checking, file operations
 """
 import os
-import sys
-import json
-import asyncio
-import logging
 import subprocess
-import ast
-import re
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from mcp.server.fastmcp import FastMCP
 
+# Import shared modules from mcp_core
+from mcp_core import (
+    setup_logging,
+    log_decision,
+    is_safe_path,
+)
 
-def _load_env_from_file() -> Dict[str, str]:
-    path = os.environ.get("CODER_ENV_FILE") or os.path.join(os.getcwd(), ".mcp.json")
-    if not os.path.exists(path):
-        return {}
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except Exception:
-        return {}
-
-    coder_env = (
-        data.get("mcpServers", {})
-        .get("coder", {})
-        .get("env", {})
-        if isinstance(data, dict)
-        else {}
-    )
-    flat_env = data if isinstance(data, dict) else {}
-    merged: Dict[str, str] = {}
-    for source in (flat_env, coder_env):
-        for key, value in source.items():
-            if isinstance(value, str):
-                merged[key] = value
-    return merged
-
-
-_ENV_FILE_VALUES = _load_env_from_file()
-
-
-def _env(key: str, default: str | None = None) -> str | None:
-    return _ENV_FILE_VALUES.get(key) or os.environ.get(key) or default
-
+# =============================================================================
+# Configuration
+# =============================================================================
 
 LOG_LEVEL = os.environ.get("CODER_LOG_LEVEL", "INFO").upper()
-logging.basicConfig(
-    level=getattr(logging, LOG_LEVEL, logging.INFO),
-    format="%(asctime)s %(levelname)s %(message)s",
-)
-logger = logging.getLogger("coder")
-
-
-def _log_decision(event: str, payload: Dict[str, Any]) -> None:
-    logger.info(json.dumps({"event": event, **payload}))
-
+logger = setup_logging(level=LOG_LEVEL, server_name="coder")
 
 mcp = FastMCP("coder-tools")
 
 sys.stderr.write(f"🔧 Coder Server (AST + Surgical Coding) starting... PID: {os.getpid()}\n")
 
+# =============================================================================
+# Path Safety Configuration
+# =============================================================================
 
 # Files that should never be overwritten
 _BLOCKED_PATHS = {
@@ -83,21 +54,38 @@ _BLOCKED_PATHS = {
     "known_hosts", "authorized_keys",
 }
 
+# Safe hidden files that are allowed
+_ALLOWED_HIDDEN_FILES = {
+    ".gitignore", ".clang-format", ".prettierrc", ".markdownlintrc",
+    ".editorconfig", ".gitattributes", ".dockerignore",
+}
 
-def _is_safe_path(path: str) -> tuple[bool, str]:
+
+# =============================================================================
+# File Safety Functions (using mcp_core.utils)
+# =============================================================================
+
+def _is_safe_write_path(path: str) -> tuple[bool, str]:
     """Check if the path is safe to write within the project directory."""
+    # Check for absolute paths
     if path.startswith("/"):
         return False, "Absolute paths are not allowed."
+
+    # Check for path traversal
     if ".." in path:
         return False, "Parent directory traversal is not allowed."
+
+    # Check hidden files
     filename = Path(path).name
-    if filename.startswith(".") and filename not in {".gitignore", ".clang-format", ".prettierrc"}:
-        safe_hidden = {".gitignore", ".clang-format", ".prettierrc", ".markdownlintrc"}
-        if filename not in safe_hidden:
+    if filename.startswith("."):
+        if filename not in _ALLOWED_HIDDEN_FILES:
             return False, f"Hidden file '{filename}' is not allowed."
+
+    # Check blocked paths
     for blocked in _BLOCKED_PATHS:
         if path.startswith(blocked):
             return False, f"Blocked path: {blocked}"
+
     return True, ""
 
 
@@ -105,11 +93,12 @@ def _validate_syntax(content: str, filepath: str) -> tuple[bool, str]:
     """Validate syntax for Python and Nix files."""
     if filepath.endswith(".py"):
         try:
+            import ast
             ast.parse(content)
-            _log_decision("syntax_check.python", {"path": filepath, "valid": True})
+            log_decision("syntax_check.python", {"path": filepath, "valid": True}, logger)
             return True, ""
         except SyntaxError as e:
-            _log_decision("syntax_check.python", {"path": filepath, "valid": False, "error": str(e)})
+            log_decision("syntax_check.python", {"path": filepath, "valid": False, "error": str(e)}, logger)
             return False, f"Python syntax error at line {e.lineno}: {e.msg}"
 
     if filepath.endswith(".nix"):
@@ -122,12 +111,12 @@ def _validate_syntax(content: str, filepath: str) -> tuple[bool, str]:
                 timeout=10
             )
             if process.returncode != 0:
-                _log_decision("syntax_check.nix", {"path": filepath, "valid": False})
+                log_decision("syntax_check.nix", {"path": filepath, "valid": False}, logger)
                 return False, f"Nix syntax error: {process.stderr.strip()}"
-            _log_decision("syntax_check.nix", {"path": filepath, "valid": True})
+            log_decision("syntax_check.nix", {"path": filepath, "valid": True}, logger)
             return True, ""
         except FileNotFoundError:
-            _log_decision("syntax_check.nix", {"path": filepath, "status": "skipped"})
+            log_decision("syntax_check.nix", {"path": filepath, "status": "skipped"}, logger)
             return True, ""
         except subprocess.TimeoutExpired:
             return True, ""
@@ -137,14 +126,14 @@ def _validate_syntax(content: str, filepath: str) -> tuple[bool, str]:
 
 def _create_backup(filepath: Path) -> bool:
     """Create a .bak backup of existing file."""
+    import shutil
     try:
         backup_path = filepath.with_suffix(filepath.suffix + ".bak")
-        import shutil
         shutil.copy2(filepath, backup_path)
-        _log_decision("backup_created", {"path": str(filepath), "backup": str(backup_path)})
+        log_decision("backup_created", {"path": str(filepath), "backup": str(backup_path)}, logger)
         return True
     except Exception as e:
-        _log_decision("backup_failed", {"path": str(filepath), "error": str(e)})
+        log_decision("backup_failed", {"path": str(filepath), "error": str(e)}, logger)
         return False
 
 
@@ -160,20 +149,13 @@ async def read_file(path: str) -> str:
     Use this when you only need one file, not the entire directory context.
     Much faster and cheaper (typically < 1k tokens vs 20k+ for full scan).
     """
-    if ".." in path or path.startswith("/"):
-        _log_decision("read_file.security_block", {"path": path})
-        return "Error: Path traversal or absolute paths not allowed."
+    is_safe, error_msg = is_safe_path(path)
+    if not is_safe:
+        log_decision("read_file.security_block", {"path": path}, logger)
+        return f"Error: {error_msg}"
 
     project_root = Path.cwd()
     full_path = project_root / path
-
-    try:
-        full_path = full_path.resolve()
-        if not str(full_path).startswith(str(project_root.resolve())):
-            _log_decision("read_file.security_block", {"path": path})
-            return "Error: Path is outside the project directory."
-    except Exception as e:
-        return f"Error resolving path: {e}"
 
     if not full_path.exists():
         return f"Error: File '{path}' does not exist."
@@ -187,7 +169,7 @@ async def read_file(path: str) -> str:
             lines = f.readlines()
         numbered_lines = [f"{i+1:4d} | {line}" for i, line in enumerate(lines)]
         content = "".join(numbered_lines)
-        _log_decision("read_file.success", {"path": path, "lines": len(lines)})
+        log_decision("read_file.success", {"path": path, "lines": len(lines)}, logger)
         return f"--- File: {path} ({len(lines)} lines) ---\n{content}"
     except UnicodeDecodeError:
         return f"Error: Cannot read '{path}' - not a text file."
@@ -202,9 +184,12 @@ async def search_files(pattern: str, path: str = ".", use_regex: bool = False) -
 
     Use this to find code snippets, function definitions, or specific patterns.
     """
-    if ".." in path or path.startswith("/"):
-        _log_decision("search_files.security_block", {"path": path})
-        return "Error: Path traversal or absolute paths not allowed."
+    is_safe, error_msg = is_safe_path(path)
+    if not is_safe:
+        log_decision("search_files.security_block", {"path": path}, logger)
+        return f"Error: {error_msg}"
+
+    import re
 
     project_root = Path.cwd()
     search_root = project_root / path
@@ -220,6 +205,7 @@ async def search_files(pattern: str, path: str = ".", use_regex: bool = False) -
         max_matches = 100
 
         for root, dirs, files in os.walk(search_root):
+            # Skip hidden and cache directories
             dirs[:] = [d for d in dirs if not d.startswith(".") and d != ".cache"]
             files = [f for f in files if not f.startswith(".")]
 
@@ -242,7 +228,7 @@ async def search_files(pattern: str, path: str = ".", use_regex: bool = False) -
             if len(matches) >= max_matches:
                 break
 
-        _log_decision("search_files.success", {"pattern": pattern, "matches": len(matches)})
+        log_decision("search_files.success", {"pattern": pattern, "matches": len(matches)}, logger)
 
         if not matches:
             return f"No matches found for '{pattern}' in '{path}'"
@@ -257,19 +243,80 @@ async def search_files(pattern: str, path: str = ".", use_regex: bool = False) -
     except re.error as e:
         return f"Error: Invalid regex pattern - {e}"
     except Exception as e:
-        _log_decision("search_files.error", {"pattern": pattern, "error": str(e)})
+        log_decision("search_files.error", {"pattern": pattern, "error": str(e)}, logger)
         return f"Error searching: {e}"
+
+
+# =============================================================================
+# File Writing with Safety
+# =============================================================================
+
+@mcp.tool()
+async def save_file(
+    path: str,
+    content: str,
+    create_backup: bool = True,
+    validate_syntax: bool = True
+) -> str:
+    """
+    Write content to a file within the project directory.
+
+    Features:
+    - Auto-creates .bak backup before overwriting (safe rollback)
+    - Syntax validation for Python and Nix files
+    - Security checks for path safety
+    """
+    is_safe, error_msg = _is_safe_write_path(path)
+    if not is_safe:
+        log_decision("save_file.security_block", {"path": path, "reason": error_msg}, logger)
+        return f"Error: {error_msg}"
+
+    project_root = Path.cwd()
+    full_path = project_root / path
+
+    try:
+        full_path = full_path.resolve()
+        if not str(full_path).startswith(str(project_root.resolve())):
+            log_decision("save_file.security_block", {"path": path}, logger)
+            return "Error: Path is outside the project directory."
+    except Exception as e:
+        return f"Error resolving path: {e}"
+
+    try:
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        return f"Error creating directory: {e}"
+
+    backup_info = ""
+    if full_path.exists() and create_backup:
+        if _create_backup(full_path):
+            backup_info = " (backup: .bak file created)"
+
+    if validate_syntax:
+        is_valid, error_msg = _validate_syntax(content, path)
+        if not is_valid:
+            log_decision("save_file.syntax_error", {"path": path, "error": error_msg}, logger)
+            return f"Error: Syntax validation failed\n{error_msg}"
+
+    try:
+        with open(full_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        log_decision("save_file.success", {"path": path, "size": len(content)}, logger)
+        return f"Successfully wrote {len(content)} bytes to '{path}'{backup_info}"
+    except Exception as e:
+        log_decision("save_file.error", {"path": path, "error": str(e)}, logger)
+        return f"Error writing file: {e}"
 
 
 # =============================================================================
 # AST-Based Tools (ast-grep)
 # =============================================================================
 
-def _run_ast_grep(pattern: str, lang: str = "py", path: str = ".") -> str:
+def _run_ast_grep(pattern: str, lang: str = "py", search_path: str = ".") -> str:
     """Run ast-grep query and return matches."""
     try:
         process = subprocess.run(
-            ["ast-grep", "-p", pattern, "-l", lang, "-d", path],
+            ["ast-grep", "-p", pattern, "-l", lang, "-d", search_path],
             capture_output=True,
             text=True,
             timeout=30
@@ -281,7 +328,7 @@ def _run_ast_grep(pattern: str, lang: str = "py", path: str = ".") -> str:
         if process.returncode != 0 and "no matches" not in stderr.lower():
             return f"Error: ast-grep failed\nstderr: {stderr}"
 
-        _log_decision("ast_grep.success", {"pattern": pattern, "lang": lang})
+        log_decision("ast_grep.success", {"pattern": pattern, "lang": lang}, logger)
 
         if not output.strip():
             return f"No matches found for pattern: {pattern}"
@@ -296,7 +343,7 @@ def _run_ast_grep(pattern: str, lang: str = "py", path: str = ".") -> str:
         return f"Error running ast-grep: {e}"
 
 
-def _run_ast_rewrite(pattern: str, replacement: str, lang: str = "py", path: str = ".") -> str:
+def _run_ast_rewrite(pattern: str, replacement: str, lang: str = "py", search_path: str = ".") -> str:
     """
     Apply AST-based rewrite using ast-grep.
 
@@ -305,7 +352,7 @@ def _run_ast_rewrite(pattern: str, replacement: str, lang: str = "py", path: str
     try:
         # First, do a dry run to show what would change
         process = subprocess.run(
-            ["ast-grep", "-p", pattern, "-r", replacement, "-l", lang, "-d", path, "--rewrite"],
+            ["ast-grep", "-p", pattern, "-r", replacement, "-l", lang, "-d", search_path, "--rewrite"],
             capture_output=True,
             text=True,
             timeout=30
@@ -314,7 +361,7 @@ def _run_ast_rewrite(pattern: str, replacement: str, lang: str = "py", path: str
         output = process.stdout
         stderr = process.stderr
 
-        _log_decision("ast_rewrite.success", {"pattern": pattern, "lang": lang})
+        log_decision("ast_rewrite.success", {"pattern": pattern, "lang": lang}, logger)
 
         if process.returncode != 0:
             return f"Error: ast-rewrite failed\nstderr: {stderr}"
@@ -346,9 +393,10 @@ async def ast_search(pattern: str, lang: str = "py", path: str = ".") -> str:
         lang: Language (py, js, ts, go, rust, etc.)
         path: Directory to search (default: current directory)
     """
-    if ".." in path or path.startswith("/"):
-        _log_decision("ast_search.security_block", {"path": path})
-        return "Error: Path traversal or absolute paths not allowed."
+    is_safe, error_msg = is_safe_path(path)
+    if not is_safe:
+        log_decision("ast_search.security_block", {"path": path}, logger)
+        return f"Error: {error_msg}"
 
     return _run_ast_grep(pattern, lang, path)
 
@@ -372,74 +420,14 @@ async def ast_rewrite(pattern: str, replacement: str, lang: str = "py", path: st
         lang: Language
         path: Directory or file to modify
     """
-    if ".." in path or path.startswith("/"):
-        _log_decision("ast_rewrite.security_block", {"path": path})
-        return "Error: Path traversal or absolute paths not allowed."
-
-    _log_decision("ast_rewrite.request", {"pattern": pattern, "replacement": "***", "lang": lang, "path": path})
-
-    return _run_ast_rewrite(pattern, replacement, lang, path)
-
-
-# =============================================================================
-# File Writing with Safety
-# =============================================================================
-
-@mcp.tool()
-async def save_file(
-    path: str,
-    content: str,
-    create_backup: bool = True,
-    validate_syntax: bool = True
-) -> str:
-    """
-    Write content to a file within the project directory.
-
-    Features:
-    - Auto-creates .bak backup before overwriting (safe rollback)
-    - Syntax validation for Python and Nix files
-    - Security checks for path safety
-    """
-    is_safe, error_msg = _is_safe_path(path)
+    is_safe, error_msg = is_safe_path(path)
     if not is_safe:
-        _log_decision("save_file.security_block", {"path": path, "reason": error_msg})
+        log_decision("ast_rewrite.security_block", {"path": path}, logger)
         return f"Error: {error_msg}"
 
-    project_root = Path.cwd()
-    full_path = project_root / path
+    log_decision("ast_rewrite.request", {"pattern": "[hidden]", "lang": lang, "path": path}, logger)
 
-    try:
-        full_path = full_path.resolve()
-        if not str(full_path).startswith(str(project_root.resolve())):
-            _log_decision("save_file.security_block", {"path": path})
-            return "Error: Path is outside the project directory."
-    except Exception as e:
-        return f"Error resolving path: {e}"
-
-    try:
-        full_path.parent.mkdir(parents=True, exist_ok=True)
-    except Exception as e:
-        return f"Error creating directory: {e}"
-
-    backup_info = ""
-    if full_path.exists() and create_backup:
-        if _create_backup(full_path):
-            backup_info = " (backup: .bak file created)"
-
-    if validate_syntax:
-        is_valid, error_msg = _validate_syntax(content, path)
-        if not is_valid:
-            _log_decision("save_file.syntax_error", {"path": path, "error": error_msg})
-            return f"Error: Syntax validation failed\n{error_msg}"
-
-    try:
-        with open(full_path, "w", encoding="utf-8") as f:
-            f.write(content)
-        _log_decision("save_file.success", {"path": path, "size": len(content)})
-        return f"Successfully wrote {len(content)} bytes to '{path}'{backup_info}"
-    except Exception as e:
-        _log_decision("save_file.error", {"path": path, "error": str(e)})
-        return f"Error writing file: {e}"
+    return _run_ast_rewrite(pattern, replacement, lang, path)
 
 
 if __name__ == "__main__":

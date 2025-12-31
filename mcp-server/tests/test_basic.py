@@ -284,7 +284,7 @@ def test_all_tools():
             {"command": "rm", "args": ["-rf", "/"]},
             8
         )
-        if not success or "not allowed" in text.lower():
+        if not success or "Blocked" in text or "dangerous" in text.lower() or "not allowed" in text.lower():
             print("✅ Blocked dangerous command in sandbox")
             results["safe_sandbox_security"] = True
         else:
