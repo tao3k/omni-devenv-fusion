@@ -79,6 +79,7 @@ in
     nixpkgs-latest.claude-code
     pkgs.secretspec
     pkgs._1password-cli
+    pkgs.vale # Prose linter for documentation quality
   ];
   # https://devenv.sh/languages/
   # languages.rust.enable = true;

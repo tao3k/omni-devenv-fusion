@@ -53,11 +53,43 @@ Always prefer **Agent-Friendly** commands (non-interactive) over interactive one
    - `just test-mcp` - Orchestrator tests
    - `uv run python mcp-server/tests/test_basic.py --coder` - Coder tests
 
+## 🔍 Commit Scope Verification Protocol (Memorized)
+**Before every commit, verify ALL modified files are staged:**
+
+1. **Check Unstaged Files**: Run `git status` to list all modified (unstaged) files
+2. **Check Staged Files**: Run `git diff --cached --stat` (or `git diff --stat` after staging)
+3. **Compare Scope**: Ensure the staged diff includes ALL files that affect the feature
+4. **Stage Missing Files**: If any modified file affects the commit, stage it with `git add <file>` or `git add -A`
+5. **Verify Again**: Re-check scope after staging
+
+**Why**: A feature may depend on pre-modified files (e.g., `units/modules/llm.nix` with package changes) that must be committed together.
+
 ## 📝 Coding Standards
 - **Nix**: Prefer `flake-parts` modules. Keep `devenv.nix` clean and modular.
 - **Python**: Use `uv` for dependency management.
 - **Commits**: Follow Conventional Commits (feat, fix, chore, refactor, docs).
 - **Style**: When editing files, keep changes minimal and focused.
+
+## ✍️ Writing Standards (Memorized)
+**Reference**: `design/writing_style.md` - Combined principles from *"On Writing Well"* (Zinsser) and *"Spring Into Technical Writing"* (Rosenberg).
+
+**Key Rules**:
+1. **BLUF (Bottom Line Up Front)**: Lead with conclusion/fix/risk
+2. **Strip Clutter**: Cut every unnecessary word
+3. **Active Voice**: Use active verbs, avoid passive
+4. **What-Why-How**: Explain technical changes in this order
+5. **Authoritative**: No "I think", "maybe", or vague words
+
+**When Writing**:
+- Use backticks for commands/variables
+- Use bullet points for lists, numbered for steps
+- Be specific: no "various", "some", "a few"
+
+## 📄 Documentation Protocol (Memorized)
+**Before finalizing any markdown file**:
+1. Run `git add -A` to capture all changes
+2. Verify all affected files are staged (check `git diff --stat`)
+3. Ensure feature tests are updated (Test-First Protocol)
 
 ## 📦 Tool-Router Example Protocol
 When making code changes that establish new patterns, **always add examples** to `tool-router/data/examples/`:

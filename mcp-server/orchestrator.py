@@ -579,6 +579,51 @@ async def memory_garden(operation: str, title: str = "", content: str = "") -> s
 # =============================================================================
 
 @mcp.tool()
+async def polish_text(text: str, context: str = "general") -> str:
+    """
+    Polish text using the Tech Writer persona.
+
+    Applies writing standards from design/writing_style.md:
+    - Strip clutter (On Writing Well)
+    - Active voice, BLUF structure
+    - Clear headers and formatting
+
+    Args:
+        text: The text to polish.
+        context: Context for the polish task (e.g., "commit_message", "readme", "design_doc").
+
+    Returns:
+        Polished text following writing standards.
+    """
+    log_decision("polish_text.request", {"context": context, "input_length": len(text)}, logger)
+
+    # Delegate to tech_writer persona for polishing
+    result = await InferenceClient().complete(
+        system_prompt=build_persona_prompt("tech_writer"),
+        user_query=f"""Polish the following {context}. Apply writing standards from design/writing_style.md:
+
+1. BLUF: Put most important info first
+2. Strip Clutter: Cut unnecessary words
+3. Active Voice: Use active verbs
+4. Specificity: Be precise, avoid vague words
+5. Formatting: Use backticks for code, bullets for lists
+
+Return ONLY the polished text, no explanations.
+
+---INPUT---
+{text}
+---END INPUT---""",
+    )
+
+    if result["success"]:
+        log_decision("polish_text.success", {"output_length": len(result["content"])}, logger)
+        return f"**Polished ({context}):**\n\n{result['content']}"
+    else:
+        log_decision("polish_text.error", {"error": result["error"]}, logger)
+        return f"Error polishing text: {result['error']}"
+
+
+@mcp.tool()
 async def run_task(command: str, args: Optional[List[str]] = None) -> str:
     """
     Run safe development tasks (just, nix, git).

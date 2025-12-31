@@ -1,0 +1,14 @@
+extends: existence
+message: "Use imperative mood for headings (from design/writing_style.md)"
+level: warning
+ignorecase: true
+scope: raw
+pattern: |
+  (?i)^(?!#)
+  .*
+  (ing)\b
+  .*
+$
+
+; This checks for -ing headings which are often not imperative
+; Example: "Adding features" -> should be "Add features"

@@ -13,7 +13,8 @@
       "Bash(uv run python:*)",
       "Bash(ast-grep run:*)",
       "Bash(cat:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(git commit:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

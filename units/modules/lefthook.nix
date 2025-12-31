@@ -31,6 +31,11 @@ let
           ];
           # Exclude CHANGELOG.md from typos (false positives from commit hashes)
           exclude = prepend [ "CHANGELOG.md" ];
+          # Add Vale for documentation linting
+          "check-docs" = {
+            glob = "*.md";
+            run = "vale ${staged_files}";
+          };
         };
       } initConfigs.lefthook.nix initConfigs.lefthook.shell;
     }

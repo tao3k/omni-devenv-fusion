@@ -337,6 +337,21 @@ def test_all_tools():
             print("❌ Should have blocked dangerous command")
             results["run_task_security"] = False
 
+        # === Tool 10: polish_text ===
+        print("\n1️⃣1️⃣  Testing 'polish_text' (Tech Writer)...")
+        test_text = "This is a test that is being written to check if the polish tool is working correctly."
+        success, text = send_tool(
+            process, "polish_text",
+            {"text": test_text, "context": "test"},
+            15
+        )
+        if success and ("Polished" in text or "test" in text.lower()):
+            print(f"✅ polish_text working: {len(text)} chars")
+            results["polish_text"] = True
+        else:
+            print(f"❌ polish_text failed: {text[:200]}")
+            results["polish_text"] = False
+
         # === Summary ===
         print("\n" + "=" * 60)
         print("📊 Test Results Summary")
