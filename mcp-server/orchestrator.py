@@ -351,5 +351,94 @@ async def consult_specialist(role: str, query: str, stream: bool = False) -> str
         return f"Error consulting specialist: {exc}"
 
 
+# Files that should never be overwritten
+_BLOCKED_PATHS = {
+    "/etc/", "/usr/", "/bin/", "/sbin/", "/boot/", "/lib/", "/lib64/",
+    ".bashrc", ".bash_profile", ".zshrc", ".profile",
+    "known_hosts", "authorized_keys",
+}
+
+
+def _is_safe_path(path: str) -> tuple[bool, str]:
+    """
+    Check if the path is safe to write within the project directory.
+    Returns (is_safe, error_message).
+    """
+    # Block absolute paths outside project
+    if path.startswith("/"):
+        return False, "Absolute paths are not allowed."
+
+    # Block parent directory traversal
+    if ".." in path:
+        return False, "Parent directory traversal is not allowed."
+
+    # Block hidden system files at root
+    filename = Path(path).name
+    if filename.startswith(".") and filename not in {".gitignore", ".clang-format", ".prettierrc"}:
+        # Allow known safe hidden files
+        safe_hidden = {".gitignore", ".clang-format", ".prettierrc", ".markdownlintrc"}
+        if filename not in safe_hidden:
+            return False, f"Hidden file '{filename}' is not allowed."
+
+    # Block known dangerous paths
+    for blocked in _BLOCKED_PATHS:
+        if path.startswith(blocked):
+            return False, f"Blocked path: {blocked}"
+
+    return True, ""
+
+
+@mcp.tool()
+async def save_file(path: str, content: str) -> str:
+    """
+    Write content to a file within the project directory.
+
+    CAUTION: This tool can overwrite existing files. Use with caution.
+
+    Args:
+        path: Relative path from project root (e.g., "CLAUDE.md", "modules/new.nix")
+        content: The content to write to the file
+
+    Returns:
+        Success message or error description
+    """
+    # Security check
+    is_safe, error_msg = _is_safe_path(path)
+    if not is_safe:
+        _log_decision("save_file.security_block", {"path": path, "reason": error_msg})
+        return f"Error: {error_msg}"
+
+    project_root = Path.cwd()
+    full_path = project_root / path
+
+    # Ensure path is within project
+    try:
+        full_path = full_path.resolve()
+        if not str(full_path).startswith(str(project_root.resolve())):
+            _log_decision("save_file.security_block", {"path": path, "reason": "Outside project"})
+            return "Error: Path is outside the project directory."
+    except Exception as e:
+        _log_decision("save_file.error", {"path": path, "error": str(e)})
+        return f"Error resolving path: {e}"
+
+    # Create parent directories if needed
+    try:
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        _log_decision("save_file.error", {"path": path, "error": str(e)})
+        return f"Error creating directory: {e}"
+
+    # Write file
+    try:
+        with open(full_path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+        _log_decision("save_file.success", {"path": path, "size": len(content)})
+        return f"Successfully wrote {len(content)} bytes to '{path}'"
+    except Exception as e:
+        _log_decision("save_file.error", {"path": path, "error": str(e)})
+        return f"Error writing file: {e}"
+
+
 if __name__ == "__main__":
     mcp.run()

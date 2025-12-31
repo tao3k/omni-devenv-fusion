@@ -232,6 +232,62 @@ def test_all_tools():
             print(f"❌ {text}")
             results["consult_specialist"] = False
 
+        # === Tool 5: save_file ===
+        print("\n6️⃣  Testing 'save_file'...")
+        test_file = "test_save_output.txt"
+        test_content = "Test content from save_file tool"
+        success, text = send_tool(
+            process, "save_file",
+            {"path": test_file, "content": test_content},
+            6
+        )
+        if success:
+            print(f"✅ {text}")
+            # Verify file was created
+            if os.path.exists(test_file):
+                with open(test_file, "r") as f:
+                    saved_content = f.read()
+                if saved_content == test_content:
+                    print("✅ File content verified")
+                else:
+                    print("⚠️  Content mismatch")
+                os.remove(test_file)
+                print("✅ File cleaned up")
+            else:
+                print("⚠️  File not found")
+            results["save_file"] = True
+        else:
+            print(f"❌ {text}")
+            results["save_file"] = False
+
+        # === Security Tests for save_file ===
+        print("\n7️⃣  Testing 'save_file' security (blocked paths)...")
+        # Test absolute path
+        success, text = send_tool(
+            process, "save_file",
+            {"path": "/etc/malicious.txt", "content": "bad"},
+            7
+        )
+        if not success or "Absolute paths are not allowed" in text:
+            print("✅ Blocked absolute path")
+            results["save_file_security_abs"] = True
+        else:
+            print("❌ Should have blocked absolute path")
+            results["save_file_security_abs"] = False
+
+        # Test path traversal
+        success, text = send_tool(
+            process, "save_file",
+            {"path": "../outside.txt", "content": "bad"},
+            8
+        )
+        if not success or "traversal" in text.lower():
+            print("✅ Blocked path traversal")
+            results["save_file_securityTraversal"] = True
+        else:
+            print("❌ Should have blocked path traversal")
+            results["save_file_securityTraversal"] = False
+
         # === Summary ===
         print("\n" + "=" * 60)
         print("📊 Test Results Summary")

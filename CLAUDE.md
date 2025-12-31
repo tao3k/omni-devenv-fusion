@@ -143,3 +143,18 @@ Response:
 4. Run `just test_basic` before commit
 5. Test via `/mcp` in Claude Code
 
+### Write Tool (Phase 3: Agentic Capabilities)
+`save_file` - Write content to files within project:
+
+| Feature | Implementation |
+|---------|----------------|
+| Path validation | Block absolute paths, `..` traversal |
+| Blocked paths | `/etc/`, `/usr/`, system files |
+| Parent dirs | Auto-create with `mkdir(parents=True)` |
+| Logging | `_log_decision()` for all operations |
+
+Example usage:
+```
+@omni-orchestrator save_file path="CLAUDE.md" content="# Updated..."
+```
+
