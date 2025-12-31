@@ -152,7 +152,7 @@ Follow [numtide/prj-spec](https://github.com/numtide/prj-spec) for project direc
 | `.data/` | Data files (direnv layout) |
 | `.bin/` | Project binaries |
 
-All are ignored in `.gitignore`.
+Git ignores these directories (`.gitignore`).
 
 ## 🏗 Dual-MCP Server Architecture (Memorized)
 
@@ -166,7 +166,11 @@ All are ignored in `.gitignore`.
 | `list_directory_structure` | Fast file tree (token optimization) |
 | `list_personas` | List expert personas |
 | `consult_specialist` | Route to Architect/Platform/DevOps/SRE |
+| `delegate_to_coder` | Bridge to Coder server |
+| `polish_text` | Polish text using Tech Writer persona |
 | `run_task` | Execute safe commands (just, nix, git) |
+| `safe_sandbox` | Run commands with safety checks |
+| `memory_garden` | Long-term project memory |
 
 ### Server B: Coder (The "Hands")
 **File**: `mcp-server/coder.py`

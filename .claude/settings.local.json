@@ -14,7 +14,11 @@
       "Bash(ast-grep run:*)",
       "Bash(cat:*)",
       "Bash(echo:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(cog bump:*)",
+      "Bash(cg bump:*)",
+      "Bash(direnv allow:*)",
+      "Bash(direnv reload)"
     ]
   },
   "enableAllProjectMcpServers": true,
