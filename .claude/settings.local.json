@@ -19,7 +19,9 @@
       "Bash(cg bump:*)",
       "Bash(direnv allow:*)",
       "Bash(direnv reload)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(python3:*)",
+      "Bash(uv run python3:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

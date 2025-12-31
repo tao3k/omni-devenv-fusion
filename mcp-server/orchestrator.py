@@ -635,6 +635,93 @@ async def memory_garden(operation: str, title: str = "", content: str = "") -> s
 
 
 # =============================================================================
+# NEW: Context Management Tools (Backmark Interface)
+# =============================================================================
+
+@mcp.tool()
+async def manage_context(action: str, phase: str = None, focus: str = None, note: str = None) -> str:
+    """
+    Manage the Project's Active Context (Short-term Memory / RAM).
+
+    Use this to KEEP TRACK of where you are.
+
+    Args:
+        action: "read", "update_status", "add_note"
+        phase: (For update) Current phase: Planning, Spec-Drafting, Coding, Testing
+        focus: (For update) What are you working on NOW?
+        note: (For add_note) A thought, error log, or partial result.
+
+    Returns:
+        Status or confirmation message
+    """
+    if action == "read":
+        # 1. Read macro status
+        status = project_memory.get_status()
+
+        # 2. Read recent flight recorder logs (Tail Scratchpad)
+        scratchpad_path = project_memory.active_dir / "SCRATCHPAD.md"
+        recent_logs = ""
+        if scratchpad_path.exists():
+            content = scratchpad_path.read_text(encoding="utf-8")
+            lines = content.split("\n")
+            # Only take last 15 lines as "short-term working memory"
+            recent_logs = "\n".join(lines[-15:])
+
+        return f"""{status}
+
+## 🎞️ Recent Activity (Last 15 lines from Scratchpad)
+{recent_logs or "(No recent activity)"}
+"""
+
+    elif action == "update_status":
+        if not phase or not focus:
+            return "Error: 'phase' and 'focus' are required for update_status."
+        result = project_memory.update_status(phase=phase, focus=focus)
+        return f"✅ Context Updated: Phase={phase}, Focus={focus}"
+
+    elif action == "add_note":
+        if not note:
+            return "Error: 'note' is required."
+        project_memory.log_scratchpad(note, source="User")
+        return "✅ Note added to Scratchpad."
+
+    return "Error: Unknown action. Use read, update_status, or add_note."
+
+
+@mcp.tool()
+async def analyze_last_error() -> str:
+    """
+    [Debug Tool] Deeply analyzes the LAST failed command in the Flight Recorder.
+
+    Use this when the error log in `manage_context("read")` is truncated or unclear.
+    It retrieves the full stderr/stdout and asks the AI to pinpoint the root cause.
+    """
+    # Read the scratchpad's last 50 lines (usually contains full error stack)
+    scratchpad_path = project_memory.active_dir / "SCRATCHPAD.md"
+    if not scratchpad_path.exists():
+        return "No crash logs found."
+
+    content = scratchpad_path.read_text(encoding="utf-8")
+    lines = content.split("\n")
+
+    # Take last 50 lines for crash analysis
+    recent_log = "\n".join(lines[-50:])
+
+    return f"""--- 🕵️‍♀️ Crash Analysis Context ---
+
+The following is the raw log of the recent crash.
+Please analyze it to find:
+1. The specific error message.
+2. The file and line number causing it.
+3. A suggested fix.
+
+--- LOG START ---
+{recent_log}
+--- LOG END ---
+"""
+
+
+# =============================================================================
 # Execution Management (uses mcp_core.execution.SafeExecutor)
 # =============================================================================
 
@@ -686,9 +773,10 @@ Return ONLY the polished text, no explanations.
 @mcp.tool()
 async def run_task(command: str, args: Optional[List[str]] = None) -> str:
     """
-    Run safe development tasks (just, nix, git).
+    Run safe development tasks (just, nix, git) with FLIGHT RECORDER.
 
-    Provides execution loop capability for "write -> validate -> fix" workflow.
+    All executions are automatically logged to .memory/active_context/SCRATCHPAD.md
+    so you don't lose track of error messages.
 
     Allowed commands:
     - just: validate, build, test, lint, fmt, test-basic, test-mcp, agent-commit
@@ -698,11 +786,29 @@ async def run_task(command: str, args: Optional[List[str]] = None) -> str:
     if args is None:
         args = []
 
+    # 1. Execute command
     log_decision("run_task.request", {"command": command, "args": args}, logger)
-
     result = await SafeExecutor.run(command=command, args=args)
+    formatted_output = SafeExecutor.format_result(result, command, args)
 
-    return SafeExecutor.format_result(result, command, args)
+    # 2. Flight Recorder - auto-log execution
+    cmd_str = f"{command} {' '.join(args)}"
+    status_icon = "✅" if result.get("exit_code", -1) == 0 else "❌"
+
+    log_content = f"{status_icon} `{cmd_str}`"
+    if result.get("stdout"):
+        stdout_preview = result["stdout"][:300].strip()
+        if stdout_preview:
+            log_content += f"\n  Out: {stdout_preview}"
+    if result.get("stderr"):
+        stderr_preview = result["stderr"][:300].strip()
+        if stderr_preview:
+            log_content += f"\n  Err: {stderr_preview}"
+
+    # Write to background memory
+    project_memory.log_scratchpad(log_content, source="System")
+
+    return formatted_output
 
 
 if __name__ == "__main__":

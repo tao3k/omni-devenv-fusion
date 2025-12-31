@@ -687,6 +687,71 @@ examples:
     @echo "BREAKING CHANGE: description"
 
 # ==============================================================================
+# SPEC KIT (Spec-Driven Development)
+# ==============================================================================
+
+[group('spec')]
+spec-list:
+    @echo "Available Specs"
+    @echo "================"
+    @ls -1 docs/specs/*.md 2>/dev/null | sed 's|^docs/specs/||' | sed 's/\.md$$//' | sed 's/^/  - /' || echo "  No specs found"
+
+[group('spec')]
+spec-template:
+    @echo "Spec Template"
+    @echo "============="
+    @cat docs/specs/TEMPLATE.md
+
+[group('spec')]
+migrate doc_path:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "{{doc_path}}" ]; then
+        echo "Usage: just migrate <path-to-doc>"
+        echo "Example: just migrate docs/explanation/template.md"
+        exit 1
+    fi
+    if [ ! -f "{{doc_path}}" ]; then
+        echo "Error: File '{{doc_path}}' not found"
+        exit 1
+    fi
+    echo "============================================"
+    echo "📦 Migrating legacy doc to Spec format..."
+    echo "============================================"
+    echo "Source: {{doc_path}}"
+    echo ""
+    echo "Ask the Agent to perform migration:"
+    echo ""
+    echo "  @omni-orchestrator ingest_legacy_doc doc_path=\"{{doc_path}}\""
+    echo ""
+    echo "============================================"
+
+[group('spec')]
+archive spec_path target_category="explanation":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "{{spec_path}}" ]; then
+        echo "Usage: just archive <spec-path> [category]"
+        echo "Example: just archive docs/specs/auth_module.md explanation"
+        exit 1
+    fi
+    if [ ! -f "{{spec_path}}" ]; then
+        echo "Error: Spec '{{spec_path}}' not found"
+        exit 1
+    fi
+    echo "============================================"
+    echo "📦 Archiving completed spec..."
+    echo "============================================"
+    echo "Spec: {{spec_path}}"
+    echo "Category: {{target_category}}"
+    echo ""
+    echo "Ask the Agent to archive:"
+    echo ""
+    echo "  @omni-orchestrator archive_spec_to_doc spec_path=\"{{spec_path}}\" target_category=\"{{target_category}}\""
+    echo ""
+    echo "============================================"
+
+# ==============================================================================
 # ALIASES (using recipe definitions instead of variable assignments)
 # ==============================================================================
 

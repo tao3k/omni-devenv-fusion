@@ -10,11 +10,12 @@ Features:
 - Task tracking (backlog-md compatible)
 - Context snapshots
 
-Follows numtide/prj-spec with .memory/ directory structure:
-    .memory/
-        decisions/  - ADRs
-        tasks/      - Task tracking
-        context/    - Project snapshots
+Follows numtide/prj-spec with .cache/<namespace>/.memory structure:
+    .cache/omni-devenv-fusion/.memory/
+        decisions/      - ADRs
+        tasks/          - Task tracking
+        context/        - Project snapshots
+        active_context/ - Active context (The "RAM")
 """
 import json
 from datetime import datetime
@@ -25,8 +26,9 @@ import structlog
 
 log = structlog.get_logger("mcp-core.memory")
 
-# Default memory directory
-MEMORY_DIR = Path(".memory")
+# Default memory directory (per prj-spec: .cache/<namespace>/.memory)
+# Using project identifier as namespace for isolation
+MEMORY_DIR = Path(".cache/omni-devenv-fusion/.memory")
 
 
 # =============================================================================
@@ -51,6 +53,7 @@ def init_memory_dir(dir_path: Path = None) -> bool:
         (dir_path / "decisions").mkdir(exist_ok=True)
         (dir_path / "tasks").mkdir(exist_ok=True)
         (dir_path / "context").mkdir(exist_ok=True)
+        (dir_path / "active_context").mkdir(exist_ok=True)  # NEW
         return True
     except Exception as e:
         log.info("memory.init_failed", error=str(e))
@@ -149,8 +152,12 @@ class ProjectMemory:
         self.tasks_dir = self.dir_path / "tasks"
         self.context_dir = self.dir_path / "context"
 
+        # NEW: Active Context Directory (The "RAM")
+        self.active_dir = self.dir_path / "active_context"
+
         # Ensure directories exist
         init_memory_dir(self.dir_path)
+        self.active_dir.mkdir(exist_ok=True)
 
     # =============================================================================
     # Decision Operations
@@ -384,3 +391,90 @@ class ProjectMemory:
             lines.append(f"- {t.get('title', 'Untitled')} [{task_status}] @{assignee}")
 
         return "\n".join(lines)
+
+    # =============================================================================
+    # NEW: Active Context Management (Backmark Core)
+    # =============================================================================
+
+    def update_status(self, phase: str, focus: str, blockers: str = "None", sentiment: str = "Neutral") -> Dict[str, Any]:
+        """
+        Update the global project status (The 'RAM').
+
+        Args:
+            phase: Current lifecycle phase (Planning, Spec-Drafting, Coding, Testing, Review)
+            focus: The specific task/spec currently being worked on
+            blockers: Any issues preventing progress
+            sentiment: Subjective assessment of progress (On Track, Stuck, Confused)
+
+        Returns:
+            Dict with success status and file path
+        """
+        status_file = self.active_dir / "STATUS.md"
+
+        timestamp = datetime.now().isoformat()
+
+        content = f"""# 🧠 Active Project Context
+> Last Updated: {timestamp}
+
+## 📍 Current Status
+- **Phase**: {phase}
+- **Focus**: {focus}
+- **Blockers**: {blockers}
+- **Sentiment**: {sentiment}
+
+## 📝 Scratchpad (Latest Thoughts)
+*(Agent should update this via `log_scratchpad` tool)*
+"""
+        status_file.write_text(content, encoding="utf-8")
+
+        # Also append to a history log for auditability
+        log_file = self.active_dir / "history.log"
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(f"[{timestamp}] [{phase}] {focus} (Blockers: {blockers})\n")
+
+        return {"success": True, "file": str(status_file)}
+
+    def get_status(self) -> str:
+        """
+        Read the current project status.
+        Orchestrator should call this FIRST upon waking up.
+
+        Returns:
+            Status content or "No active context" message
+        """
+        status_file = self.active_dir / "STATUS.md"
+        if not status_file.exists():
+            return "No active context found. System is idle."
+        return status_file.read_text(encoding="utf-8")
+
+    def log_scratchpad(self, entry: str, source: str = "Note") -> Dict[str, Any]:
+        """
+        Append a thought, observation, or COMMAND LOG to the scratchpad.
+
+        Args:
+            entry: The content to log
+            source: Source of the entry ("Note", "System", "User")
+
+        Returns:
+            Dict with success status and file path
+        """
+        scratchpad_file = self.active_dir / "SCRATCHPAD.md"
+        timestamp = datetime.now().strftime("%H:%M:%S")
+
+        # Auto-create file if it doesn't exist
+        if not scratchpad_file.exists():
+            scratchpad_file.write_text(f"# 📝 Scratchpad (Session Log)\nStarted: {datetime.now()}\n\n", encoding="utf-8")
+
+        # Format different types of logs
+        if source == "System":
+            # Flight recorder format: compact, emphasize command and result
+            entry_text = f"\n> `[{timestamp}]` **EXEC**: {entry}\n"
+        else:
+            # Thought note format
+            entry_text = f"\n### [{timestamp}] {source}\n{entry}\n"
+
+        # Append mode
+        with open(scratchpad_file, "a", encoding="utf-8") as f:
+            f.write(entry_text)
+
+        return {"success": True, "file": str(scratchpad_file)}

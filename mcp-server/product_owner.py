@@ -1,17 +1,19 @@
 # mcp-server/product_owner.py
 """
-Product Owner - Feature Lifecycle Integrity Enforcement
+Product Owner - Feature Lifecycle Integrity Enforcement & Spec Management
 
-Tools for enforcing docs/standards/feature-lifecycle.md:
+Tools for enforcing docs/standards/feature-lifecycle.md and Spec-Driven Development:
 - assess_feature_complexity: LLM-powered complexity assessment (L1-L4)
+- draft_feature_spec: Create a structured implementation plan from a description
+- verify_spec_completeness: Ensure spec is ready for coding
 - verify_design_alignment: Check alignment with design/roadmap/philosophy
 - get_feature_requirements: Return complete requirements for a feature
 - check_doc_sync: Verify docs are updated with code changes
 
 Usage:
     @omni-orchestrator assess_feature_complexity code_diff="..." files_changed=[...]
-    @omni-orchestrator verify_design_alignment feature_description="..."
-    @omni-orchestrator check_doc_sync changed_files=[...]
+    @omni-orchestrator draft_feature_spec title="..." description="..."
+    @omni-orchestrator verify_spec_completeness spec_path="docs/specs/feature.md"
 
 Performance: Uses singleton caching - design docs loaded once per session.
 """
@@ -197,6 +199,79 @@ def heuristic_complexity(files: List[str], diff: str) -> str:
         return "L2"
 
     return "L2"  # Default to L2
+
+
+# =============================================================================
+# Spec Management Functions
+# =============================================================================
+
+def _load_spec_template() -> str:
+    """Load the Spec template."""
+    template_path = Path("docs/specs/TEMPLATE.md")
+    if template_path.exists():
+        return template_path.read_text(encoding="utf-8")
+    return "# Spec: {FEATURE_NAME}\n\n## Context\n...\n## Plan\n..."
+
+
+def _save_spec(title: str, content: str) -> str:
+    """Save a spec file to docs/specs/."""
+    filename = title.lower().replace(" ", "_").replace("/", "-") + ".md"
+    path = Path("docs/specs") / filename
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    return str(path)
+
+
+def _scan_standards() -> str:
+    """
+    Load all markdown standards from docs/standards/.
+    Returns a formatted string context for the LLM.
+    """
+    standards_dir = Path("docs/standards")
+    if not standards_dir.exists():
+        return "No specific standards found."
+
+    context = []
+    # Priority standards
+    priority_files = ["feature-lifecycle.md", "lang-python.md", "lang-nix.md"]
+
+    for fname in priority_files:
+        fpath = standards_dir / fname
+        if fpath.exists():
+            content = fpath.read_text(encoding="utf-8")
+            context.append(f"=== STANDARD: {fname} ===\n{content}\n")
+
+    return "\n".join(context) if context else "No standards found."
+
+
+def _check_spec_completeness(content: str) -> List[str]:
+    """Static check for common spec completeness issues."""
+    issues = []
+
+    # Check for template placeholders
+    if "[ ] Step 1: ..." in content:
+        issues.append("Implementation Plan contains template placeholders")
+    if "function_name(arg: Type)" in content:
+        issues.append("API Signatures contain template placeholders")
+    if "{FEATURE_NAME}" in content:
+        issues.append("Template placeholder {FEATURE_NAME} not replaced")
+
+    # Check for required sections
+    if "## 1. Context & Goal" not in content and "## Context" not in content:
+        issues.append("Missing Context section")
+    if "## 2. Architecture" not in content and "## Interface" not in content:
+        issues.append("Missing Architecture/Interface section")
+    if "## 3. Implementation" not in content and "## Plan" not in content:
+        issues.append("Missing Implementation Plan section")
+    if "## 4. Verification" not in content and "## Test" not in content:
+        issues.append("Missing Verification Plan section")
+
+    # Check for meaningful content
+    lines = [l for l in content.split('\n') if l.strip() and not l.strip().startswith('>')]
+    if len(lines) < 10:
+        issues.append("Spec appears too short - missing detail")
+
+    return issues
 
 
 # =============================================================================
@@ -456,6 +531,366 @@ Return JSON with:
             "doc_files_changed": len(doc_files),
             "recommendations": recommendations if recommendations else ["Documentation is in sync"],
             "reference": "docs/standards/feature-lifecycle.md#53-documentation-sync"
+        }, indent=2)
+
+    # -------------------------------------------------------------------------
+    # Spec Management Tools
+    # -------------------------------------------------------------------------
+
+    @mcp.tool()
+    async def draft_feature_spec(title: str, description: str, context_files: List[str] = None) -> str:
+        """
+        Draft a new Feature Spec based on docs/specs/TEMPLATE.md.
+        Enforces project standards from docs/standards/.
+
+        Uses LLM to fill out the template based on natural language description.
+
+        Args:
+            title: Short name of the feature (e.g. "auth_login_flow")
+            description: Detailed description of what needs to be built
+            context_files: Optional list of existing files to reference
+
+        Returns:
+            JSON with spec path and status
+        """
+        template = _load_spec_template()
+        standards = _scan_standards()  # <--- Load standards
+
+        # Check for InferenceClient availability
+        try:
+            from mcp_core import InferenceClient
+        except ImportError:
+            return json.dumps({
+                "status": "error",
+                "message": "mcp_core.InferenceClient not available"
+            }, indent=2)
+
+        try:
+            inference = InferenceClient(
+                api_key="",
+                base_url="https://api.minimax.io/anthropic"
+            )
+        except Exception as e:
+            return json.dumps({
+                "status": "error",
+                "message": f"Failed to initialize InferenceClient: {str(e)}"
+            }, indent=2)
+
+        # STRICT ENFORCEMENT PROMPT WITH VETO POWER
+        system_prompt = f"""You are a Principal Software Architect with VETO POWER.
+Your goal is to write a rigorous implementation spec that complies with PROJECT STANDARDS.
+
+--- PROJECT STANDARDS (THE LAW) ---
+{standards}
+--- END STANDARDS ---
+
+RULES:
+1. Be precise. Use pseudo-code for interfaces.
+2. Define data structures explicitly.
+3. MANDATORY: The 'Verification Plan' MUST match the testing requirements in 'feature-lifecycle.md'.
+   - L2: Unit Tests
+   - L3: Unit + Integration
+   - L4: Unit + Integration + Manual E2E
+
+!!! CONFLICT RESOLUTION !!!
+If the User Request explicitly asks you to violate a Standard (e.g., "skip tests"), you MUST REFUSE.
+Do NOT generate the spec.
+Instead, return ONLY: "⛔️ REJECTION: Cannot draft spec for '{title}'. Standard 'feature-lifecycle.md' classifies this as L4 (Critical), which mandates Unit + Integration + E2E tests."
+4. If no conflict, use the provided Template structure exactly."""
+
+        user_prompt = f"""Task: Create a spec for '{title}'.
+Description: {description}
+Context Files: {context_files or 'None'}
+
+Template:
+{template}
+
+Return ONLY the Markdown content of the new spec (or the Rejection message)."""
+
+        result = await inference.complete(
+            system_prompt=system_prompt,
+            user_query=user_prompt,
+            max_tokens=2000
+        )
+
+        if not result.get("success"):
+            return json.dumps({
+                "status": "error",
+                "message": f"Error generating spec: {result.get('error', 'Unknown error')}"
+            }, indent=2)
+
+        content = result.get("content", "").strip()
+
+        # HANDLE REJECTION (VETO)
+        if content.startswith("⛔️ REJECTION"):
+            return json.dumps({
+                "status": "rejected",
+                "message": f"{content}\n\n💡 **Agentic OS Policy Enforcement**:\nYour request was blocked for violating safety standards.",
+                "violated_standard": "feature-lifecycle.md",
+                "recommendation": "Add required tests based on complexity level"
+            }, indent=2)
+
+        # Clean up any markdown code block markers
+        spec_content = content
+        if spec_content.startswith("```markdown"):
+            spec_content = spec_content[10:]
+        if spec_content.startswith("```"):
+            spec_content = spec_content[3:]
+        if spec_content.endswith("```"):
+            spec_content = spec_content[:-3]
+        spec_content = spec_content.strip()
+
+        saved_path = _save_spec(title, spec_content)
+
+        return json.dumps({
+            "status": "success",
+            "spec_path": saved_path,
+            "message": f"✅ Spec Drafted (Standards Enforced): {saved_path}",
+            "next_step": "Review spec and proceed to implementation"
+        }, indent=2)
+
+    @mcp.tool()
+    async def verify_spec_completeness(spec_path: str) -> str:
+        """
+        Review a Spec file to ensure it's ready for implementation.
+
+        Checks for:
+        1. Empty sections (TODOs)
+        2. Missing test plans
+        3. Vague interface definitions
+
+        Args:
+            spec_path: Path to the spec file (e.g., "docs/specs/feature.md")
+
+        Returns:
+            JSON with verification status and issues
+        """
+        path = Path(spec_path)
+        if not path.exists():
+            return json.dumps({
+                "status": "error",
+                "message": f"File {spec_path} not found"
+            }, indent=2)
+
+        content = path.read_text(encoding="utf-8")
+        issues = _check_spec_completeness(content)
+
+        if issues:
+            return json.dumps({
+                "status": "failed",
+                "spec_path": spec_path,
+                "issues": issues,
+                "recommendation": "Fix issues above before proceeding to code"
+            }, indent=2)
+
+        return json.dumps({
+            "status": "passed",
+            "spec_path": spec_path,
+            "message": "Spec verification passed - ready for Coder",
+            "next_step": "Use @omni-coder tools to implement"
+        }, indent=2)
+
+    @mcp.tool()
+    async def ingest_legacy_doc(doc_path: str) -> str:
+        """
+        [Migration Tool] Converts a legacy documentation file into a formal Feature Spec.
+        Applies current project standards from docs/standards/.
+
+        It reads the legacy file, extracts:
+        - The Goal (Why)
+        - The Implementation details (How)
+        - The Constraints
+
+        And reformats it into `docs/specs/{filename}.md` following the strict TEMPLATE.
+        """
+        source_path = Path(doc_path)
+        if not source_path.exists():
+            return json.dumps({
+                "status": "error",
+                "message": f"Source file '{doc_path}' not found"
+            }, indent=2)
+
+        source_content = source_path.read_text(encoding="utf-8")
+        template = _load_spec_template()
+        standards = _scan_standards()  # <--- Load standards
+
+        # Check for InferenceClient availability
+        try:
+            from mcp_core import InferenceClient
+        except ImportError:
+            return json.dumps({
+                "status": "error",
+                "message": "mcp_core.InferenceClient not available"
+            }, indent=2)
+
+        try:
+            inference = InferenceClient(
+                api_key="",
+                base_url="https://api.minimax.io/anthropic"
+            )
+        except Exception as e:
+            return json.dumps({
+                "status": "error",
+                "message": f"Failed to initialize InferenceClient: {str(e)}"
+            }, indent=2)
+
+        # Enhanced System Prompt with Standards Injection
+        system_prompt = f"""You are a Technical Documentation Refactoring Expert.
+Your goal is to convert unstructured legacy documentation into a rigorous Feature Spec.
+
+--- PROJECT STANDARDS (ENFORCE THESE) ---
+{standards}
+--- END STANDARDS ---
+
+RULES:
+1. Extract the CORE INTENT (Why are we doing this?).
+2. Extract all TECHNICAL DETAILS (File paths, code snippets, logic).
+3. Map them into the provided TEMPLATE structure.
+4. If the legacy doc violates a Standard (e.g., missing tests), FIX IT in the new Spec.
+5. Generate a Verification Plan based on 'feature-lifecycle.md'.
+6. Keep the content concise but technically precise."""
+
+        user_prompt = f"""Task: Convert this legacy doc into a Spec.
+
+--- SOURCE DOCUMENT ({doc_path}) ---
+{source_content}
+--- END SOURCE ---
+
+--- TARGET TEMPLATE ---
+{template}
+--- END TEMPLATE ---
+
+Return ONLY the Markdown content of the new Spec. Do not include markdown code blocks."""
+
+        try:
+            result = await inference.complete(
+                system_prompt=system_prompt,
+                user_query=user_prompt,
+                max_tokens=2000
+            )
+
+            # Extract content from result
+            spec_content = result.get("content", "") if isinstance(result, dict) else str(result)
+
+            # Clean up any markdown code block markers
+            spec_content = spec_content.strip()
+            if spec_content.startswith("```markdown"):
+                spec_content = spec_content[10:]
+            if spec_content.startswith("```"):
+                spec_content = spec_content[3:]
+            if spec_content.endswith("```"):
+                spec_content = spec_content[:-3]
+            spec_content = spec_content.strip()
+
+            # Save as new spec
+            saved_path = _save_spec(source_path.stem, spec_content)
+
+            return json.dumps({
+                "status": "success",
+                "legacy_doc": doc_path,
+                "new_spec": saved_path,
+                "message": "Migration successful! Review the new spec before coding."
+            }, indent=2)
+
+        except Exception as e:
+            return json.dumps({
+                "status": "error",
+                "message": f"Failed to migrate doc: {str(e)}"
+            }, indent=2)
+
+    # -------------------------------------------------------------------------
+    # NEW: Spec Archiving (The Cycle Closer)
+    # -------------------------------------------------------------------------
+
+    @mcp.tool()
+    async def archive_spec_to_doc(spec_path: str, target_category: str = "explanation") -> str:
+        """
+        [Lifecycle Tool] Archives a completed Spec and converts it into permanent documentation.
+
+        Use this when a feature is DONE (Code Merged + Tests Passed).
+
+        Actions:
+        1. Reads the Spec.
+        2. Extracts enduring technical knowledge (Architecture, Decisions, Schema).
+        3. Creates a new doc in `docs/{target_category}/`.
+        4. Moves the original Spec to `docs/specs/archive/`.
+
+        Args:
+            spec_path: Path to the spec (e.g. docs/specs/auth_module.md)
+            target_category: "explanation" (concepts), "reference" (APIs), or "how-to" (guides)
+        """
+        src = Path(spec_path)
+        if not src.exists():
+            return json.dumps({
+                "status": "error",
+                "message": f"Spec '{spec_path}' not found."
+            }, indent=2)
+
+        content = src.read_text(encoding="utf-8")
+
+        try:
+            from mcp_core import InferenceClient
+            client = InferenceClient()
+        except ImportError:
+            return json.dumps({
+                "status": "error",
+                "message": "mcp_core.InferenceClient not available"
+            }, indent=2)
+
+        system_prompt = """You are a Technical Documentation Curator.
+Your goal is to convert a "Implementation Spec" into permanent "System Documentation".
+
+INPUT: A Feature Spec (contains Context, Architecture, Plan, Tests).
+OUTPUT: A Clean Documentation File.
+
+RULES:
+1. KEEP: Context/Goal (Why we built this).
+2. KEEP: Architecture & Interface (How it works).
+3. DISCARD: Implementation Plan (Step-by-step instructions are now irrelevant).
+4. DISCARD: Verification Plan (Tests are now in the codebase).
+5. ADD: A "Status" badge indicating this is a live feature."""
+
+        user_prompt = f"""Convert this Spec into {target_category} documentation.
+
+--- SPEC CONTENT ---
+{content}
+--- END SPEC ---
+
+Return ONLY the Markdown content."""
+
+        result = await client.complete(system_prompt, user_prompt)
+        if not result.get("success"):
+            return json.dumps({
+                "status": "error",
+                "message": f"Error converting spec: {result.get('error', 'Unknown error')}"
+            }, indent=2)
+
+        # Save new Doc
+        doc_content = result.get("content", "").strip()
+        doc_content = doc_content.strip()
+        if doc_content.startswith("```markdown"):
+            doc_content = doc_content[10:]
+        if doc_content.startswith("```"):
+            doc_content = doc_content[3:]
+        if doc_content.endswith("```"):
+            doc_content = doc_content[:-3]
+        doc_content = doc_content.strip()
+
+        doc_path = Path(f"docs/{target_category}") / src.name
+        doc_path.parent.mkdir(parents=True, exist_ok=True)
+        doc_path.write_text(doc_content, encoding="utf-8")
+
+        # Archive old Spec
+        archive_dir = Path("docs/specs/archive")
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        archive_path = archive_dir / src.name
+        src.rename(archive_path)
+
+        return json.dumps({
+            "status": "success",
+            "new_doc": str(doc_path),
+            "archived_spec": str(archive_path),
+            "message": "✅ Spec Archived & Documented!\n\n1. New Doc Created: {doc_path}\n2. Spec Archived: {archive_path}\n\nCycle Complete. 🔄"
         }, indent=2)
 
 
