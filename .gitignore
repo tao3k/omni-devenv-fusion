@@ -19,7 +19,8 @@ devenv.local.nix
 .mcp.json
 
 .claude/settings.json
-
+.env.development
+.env
 # nixago: ignore-linked-files
 /cog.toml
 /.conform.yaml

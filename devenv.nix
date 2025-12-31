@@ -78,9 +78,12 @@ in
     pkgs.just
     nixpkgs-latest.claude-code
     pkgs.secretspec
-    pkgs._1password-cli
     pkgs.vale # Prose linter for documentation quality
   ];
+
+  dotenv.enable = true;
+
+  dotenv.filename = [ ".env.development" ];
   # https://devenv.sh/languages/
   # languages.rust.enable = true;
 

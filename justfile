@@ -570,7 +570,7 @@ health-secrets:
     else
         echo "Secrets Health"
         echo "=============="
-        echo "Provider: onepassword"
+        echo "Provider: dotenv"
         if [ -z "$MISSING" ]; then
             echo "Status: OK"
         else
@@ -640,7 +640,7 @@ secrets-check:
 secrets-info:
     @echo "Secret Management Info"
     @echo "======================"
-    @echo "Provider: onepassword"
+    @echo "Provider: dotenv"
     @echo "Profile: development"
     @echo ""
     @echo "Configured secrets:"

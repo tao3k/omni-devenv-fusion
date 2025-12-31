@@ -336,7 +336,7 @@ Secrets are managed via **secretspec**, a tool for secure credential handling. M
 ```yaml
 secretspec:
   enable: true
-  provider: keyring  # or: onepassword, lastpass, dotenv, env
+  provider: dotenv  # or: keyring, onepassword, lastpass, env
   profile: development
 ```
 
@@ -374,16 +374,13 @@ secretspec set MINIMAX_API_KEY --profile development --value "dev-key"
 secretspec get MINIMAX_API_KEY
 ```
 
-### 1Password Setup (Optional)
+### Dotenv Setup (Optional)
 
-If using 1Password as provider:
+If using dotenv as provider:
 
 ```bash
-# 1. Install 1Password CLI (handled by devenv)
-# 2. Sign in
-op signin
-
-# 3. Add secret to 1Password
+# 1. Create .env.development file in project root
+# 2. Add secrets to .env.development file
 #    Run: just secrets-set-minimax
 ```
 

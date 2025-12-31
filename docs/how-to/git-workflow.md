@@ -163,8 +163,17 @@ When an LLM triggers a commit, it should:
 | User says: "Fix the bug" | Fix code → Run Tests → **ASK USER** to commit |
 | User says: "Fix the bug and **run just agent-commit**" | Fix code → Run `just agent-commit` |
 | User asks LLM to "run git commit" | **ASK USER** first before executing |
+| User asks to force push | **REFUSE** - Explain risks, ask user to confirm explicitly |
 | Tests fail | **STOP** and report error. Do not commit. |
 | Pre-commit hooks fail | **STOP** and report error. Do not commit. |
+
+### Git Safety Rules
+
+- **NEVER** use `git push --force` or `git push --force-with-lease`
+- **NEVER** use `git reset --hard` that discards uncommitted changes
+- **NEVER** use `git commit --amend` on pushed commits
+- For history correction: Use `git revert` or create a new commit
+- If force is required: **ASK USER** for explicit confirmation first
 
 ---
 

@@ -11,4 +11,4 @@ allowUnfree: true
 secretspec:
   enable: true
   profile: development
-  provider: onepassword
+  provider: dotenv
