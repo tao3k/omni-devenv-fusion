@@ -25,12 +25,12 @@ let
       name = "lefthook";
       gen = (config.omnibus.ops.mkNixago initConfigs.nixago-lefthook) {
         data = {
-          # Remove treefmt from commands
+          # Remove unnecessary commands from default pre-commit
           commands = builtins.removeAttrs lefthook.default.data.pre-commit.commands [
-            "treefmt"
+            "treefmt"    # We use nixfmt instead
+            "hunspell"   # Vale handles documentation
+            "typos"      # Vale handles spelling
           ];
-          # Exclude CHANGELOG.md from typos (false positives from commit hashes)
-          exclude = prepend [ "CHANGELOG.md" ];
           # Add Vale for documentation linting
           "check-docs" = {
             glob = "*.md";
