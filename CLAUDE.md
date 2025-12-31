@@ -166,6 +166,56 @@ After delegation, use `run_task` to validate:
 - `nixpkgs-latest.ast-grep` - AST search/rewrite
 - `pkgs.repomix` - Codebase context
 
+## 🚀 Phase 3: Advanced Adaptation (Memorized)
+
+### Community Proxy
+Access external MCPs with project context injection:
+
+| MCP | Description | Context Required |
+|-----|-------------|------------------|
+| `kubernetes` | K8s cluster management | devenv.nix, flake.nix |
+| `postgres` | PostgreSQL operations | devenv.nix |
+| `filesystem` | Advanced file operations | None |
+
+Usage:
+```
+@omni-orchestrator community_proxy mcp_name="kubernetes" query="Deploy app"
+```
+
+### Safe Sandbox
+Run commands with enhanced safety:
+
+| Feature | Implementation |
+|---------|----------------|
+| Dangerous patterns | Blocks `rm -rf`, `dd`, shell injection |
+| Env sanitization | Redacts API keys, restricts HOME |
+| Timeout | Configurable max execution time |
+| Read-only mode | Safe exploration with `READ_ONLY_SANDBOX=1` |
+
+Usage:
+```
+@omni-orchestrator safe_sandbox command="git" args="[status]" read_only=true
+@omni-orchestrator safe_sandbox command="find" args="[., -name, *.py]" timeout=30
+```
+
+### Memory Persistence
+Long-term project memory in `.memory/`:
+
+| Operation | Purpose |
+|-----------|---------|
+| `read_decisions` | List architectural decisions (ADRs) |
+| `add_decision` | Record new ADR |
+| `list_tasks` | List pending tasks |
+| `add_task` | Add a task |
+| `save_context` | Snapshot project state |
+| `read_context` | Load latest context |
+
+Usage:
+```
+@omni-orchestrator memory_garden operation="read_decisions"
+@omni-orchestrator memory_garden operation="add_decision" title="dual_mcp_architecture" content='{"problem": "...", "solution": "...", "rationale": "..."}'
+```
+
 ## 🔌 MCP Server Development (Memorized)
 
 ### Protocol

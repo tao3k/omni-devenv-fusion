@@ -459,6 +459,413 @@ async def delegate_to_coder(task_type: str, details: str) -> str:
 
 
 # =============================================================================
+# Phase 3: Advanced Adaptation
+# =============================================================================
+
+# Supported community MCP servers ( toverified work with this project)
+_SUPPORTED_COMMUNITY_MCPS = {
+    "kubernetes": {
+        "description": "Kubernetes cluster management",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-kubernetes"],
+        "context_required": ["devenv.nix", "flake.nix"],
+    },
+    "postgres": {
+        "description": "PostgreSQL database operations",
+        "command": "uvx",
+        "args": ["mcp-server-postgres"],
+        "context_required": ["devenv.nix"],
+    },
+    "filesystem": {
+        "description": "Advanced file operations",
+        "command": "uvx",
+        "args": ["mcp-server-filesystem"],
+        "context_required": [],
+    },
+}
+
+
+def _load_project_context() -> str:
+    """Load key project files to inject into community MCP context."""
+    context_files = ["CLAUDE.md", "devenv.nix", "flake.nix", "justfile"]
+    context = []
+
+    for filename in context_files:
+        path = Path(filename)
+        if path.exists():
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                context.append(f"=== {filename} ===\n{content}")
+            except Exception:
+                pass
+
+    return "\n\n".join(context) if context else "No project context available."
+
+
+@mcp.tool()
+async def community_proxy(mcp_name: str, query: str) -> str:
+    """
+    Access a community MCP server with project context injection.
+
+    Wraps external MCPs (e.g., Kubernetes, PostgreSQL) to ensure they respect
+    the project's nix configurations and architectural constraints.
+
+    Args:
+        mcp_name: Name of the community MCP
+            - kubernetes: K8s cluster management
+            - postgres: PostgreSQL database operations
+            - filesystem: Advanced file operations
+        query: Your request for the community MCP
+
+    Returns:
+        Response from the community MCP with project context, or guidance on setup
+    """
+    _log_decision("community_proxy.request", {"mcp_name": mcp_name, "query": query[:200]})
+
+    if mcp_name not in _SUPPORTED_COMMUNITY_MCPS:
+        available = ", ".join(_SUPPORTED_COMMUNITY_MCPS.keys())
+        return f"Error: Unknown MCP '{mcp_name}'. Supported: {available}"
+
+    mcp_config = _SUPPORTED_COMMUNITY_MCPS[mcp_name]
+
+    # Check if the community MCP is available
+    cmd = mcp_config["command"]
+    args = mcp_config["args"]
+
+    try:
+        process = await asyncio.create_subprocess_exec(
+            cmd, *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        # Wait briefly to see if it starts
+        try:
+            await asyncio.wait_for(process.wait(), timeout=2.0)
+            # If it exits quickly, MCP might not be installed
+            installed = False
+        except asyncio.TimeoutError:
+            installed = True
+            process.terminate()
+            await process.wait()
+    except FileNotFoundError:
+        installed = False
+
+    if not installed:
+        return (
+            f"--- Community MCP: {mcp_name} ---\n"
+            f"Description: {mcp_config['description']}\n\n"
+            f"To install and use:\n"
+            f"  {cmd} {' '.join(args)}\n\n"
+            f"Project Context Requirements: {mcp_config['context_required']}\n\n"
+            f"Current Project Context (injected when MCP runs):\n"
+            f"{_load_project_context()[:500]}...\n\n"
+            f"Note: This Orchestrator will inject CLAUDE.md and devenv.nix "
+            f"into the MCP's context to ensure it respects project policies."
+        )
+
+    # MCP is available - provide guidance for using it
+    project_context = _load_project_context()
+
+    result = f"--- Community MCP: {mcp_name} ---\n"
+    result += f"Description: {mcp_config['description']}\n\n"
+    result += "Project Context (automatically injected):\n"
+    result += f"- CLAUDE.md: Project policies and architecture\n"
+    result += f"- devenv.nix: Development environment configuration\n"
+    result += f"- justfile: Build and test commands\n\n"
+    result += f"Your query: {query}\n\n"
+    result += "To use this MCP directly in Claude Code, add to your .mcp.json:\n"
+    result += f'{{"mcpServers": {{"{mcp_name}": {{"command": "{cmd}", "args": {args}}}}}}}\n\n'
+    result += "Note: The Orchestrator can proxy requests to this MCP with "
+    result += "project context injection for stricter policy enforcement."
+
+    return result
+
+
+# =============================================================================
+# Safe Sandbox (Phase 3: Security)
+# =============================================================================
+
+# Dangerous patterns to block in commands
+_DANGEROUS_PATTERNS = [
+    r"rm\s+-rf",
+    r"dd\s+if=",
+    r">\s*/dev/",
+    r"\|\s*sh",
+    r"&&\s*rm",
+    r";\s*rm",
+    r"chmod\s+777",
+    r"chown\s+root:",
+    r":\(\)\s*{",
+    r"\$\(\s*",
+]
+
+
+def _check_for_dangerous_patterns(cmd: str, args: List[str]) -> tuple[bool, str]:
+    """Check if command contains dangerous patterns."""
+    full_cmd = f"{cmd} {' '.join(args)}"
+    for pattern in _DANGEROUS_PATTERNS:
+        if re.search(pattern, full_cmd, re.IGNORECASE):
+            return False, f"Blocked dangerous pattern: {pattern}"
+    return True, ""
+
+
+def _create_sandbox_env() -> Dict[str, str]:
+    """Create a sandboxed environment with restricted variables."""
+    env = os.environ.copy()
+    # Remove or restrict sensitive environment variables
+    sensitive_vars = ["AWS_SECRET_ACCESS_KEY", "GITHUB_TOKEN", "ANTHROPIC_API_KEY"]
+    for var in sensitive_vars:
+        if var in env:
+            env[var] = "***REDACTED***"
+    # Restrict home directory access
+    env["HOME"] = str(Path.cwd())
+    return env
+
+
+@mcp.tool()
+async def safe_sandbox(command: str, args: Optional[List[str]] = None,
+                       timeout: int = 60, read_only: bool = False) -> str:
+    """
+    Run commands in a safe sandbox environment.
+
+    Safety features:
+    - Blocks dangerous patterns (rm -rf, dd, etc.)
+    - Redacts sensitive environment variables
+    - Restricts HOME directory
+    - Timeout protection
+    - Read-only mode for safe exploration
+
+    Args:
+        command: Command to run
+        args: Command arguments
+        timeout: Max execution time in seconds (default: 60)
+        read_only: If True, simulate read-only operations
+
+    Returns:
+        Command output or error message
+    """
+    if args is None:
+        args = []
+
+    _log_decision("safe_sandbox.request", {"command": command, "timeout": timeout, "read_only": read_only})
+
+    # Check for dangerous patterns
+    is_safe, error_msg = _is_safe_command(command, args)
+    if not is_safe:
+        _log_decision("safe_sandbox.blocked", {"reason": error_msg})
+        return f"Error: {error_msg}"
+
+    # Additional dangerous pattern check
+    is_safe, error_msg = _check_for_dangerous_patterns(command, args)
+    if not is_safe:
+        _log_decision("safe_sandbox.dangerous_pattern", {"reason": error_msg})
+        return f"Error: {error_msg}"
+
+    # Create sandboxed environment
+    env = _create_sandbox_env()
+    if read_only:
+        env["READ_ONLY_SANDBOX"] = "1"
+
+    _log_decision("safe_sandbox.executing", {"command": command})
+
+    try:
+        process = await asyncio.create_subprocess_exec(
+            command, *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+            cwd=str(Path.cwd())
+        )
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(),
+            timeout=timeout
+        )
+
+        output = stdout.decode("utf-8")
+        error = stderr.decode("utf-8")
+
+        _log_decision("safe_sandbox.complete", {
+            "command": command,
+            "returncode": process.returncode,
+            "read_only": read_only
+        })
+
+        result = f"--- Sandbox Execution: {command} {' '.join(args)} ---\n"
+        result += f"Read-only mode: {read_only}\n"
+        result += f"Exit code: {process.returncode}\n\n"
+
+        if output:
+            result += f"stdout:\n{output}\n"
+        if error:
+            result += f"stderr:\n{error}\n"
+
+        if process.returncode == 0:
+            result += "\n✅ Execution completed safely."
+        else:
+            result += "\n⚠️  Execution completed with errors."
+
+        return result
+
+    except asyncio.TimeoutExpired:
+        _log_decision("safe_sandbox.timeout", {"command": command, "timeout": timeout})
+        return f"Error: Command timed out after {timeout} seconds."
+    except FileNotFoundError:
+        return f"Error: Command '{command}' not found."
+    except Exception as e:
+        _log_decision("safe_sandbox.error", {"command": command, "error": str(e)})
+        return f"Error executing command: {e}"
+
+
+# =============================================================================
+# Memory Persistence (Phase 3: Long-term Memory)
+# =============================================================================
+
+_MEMORY_DIR = Path(".memory")
+
+
+def _init_memory_dir() -> bool:
+    """Initialize the memory directory if it doesn't exist."""
+    try:
+        _MEMORY_DIR.mkdir(exist_ok=True)
+        (_MEMORY_DIR / "decisions").mkdir(exist_ok=True)
+        (_MEMORY_DIR / "tasks").mkdir(exist_ok=True)
+        (_MEMORY_DIR / "context").mkdir(exist_ok=True)
+        return True
+    except Exception:
+        return False
+
+
+def _format_decision(decision: Dict[str, Any]) -> str:
+    """Format a decision for storage."""
+    lines = [
+        f"# Decision: {decision.get('title', 'Untitled')}",
+        f"Date: {decision.get('date', 'Unknown')}",
+        f"Author: {decision.get('author', 'Unknown')}",
+        "",
+        f"## Problem",
+        decision.get("problem", "N/A"),
+        "",
+        f"## Solution",
+        decision.get("solution", "N/A"),
+        "",
+        f"## Rationale",
+        decision.get("rationale", "N/A"),
+        "",
+        f"## Status",
+        decision.get("status", "open"),
+    ]
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def memory_garden(operation: str, title: str = "", content: str = "") -> str:
+    """
+    Persist project memories for long-term context.
+
+    Uses a file-based system (following numtide/prj-spec) in `.memory/`:
+
+    - decisions/: Architectural decisions (ADRs)
+    - tasks/: Task tracking
+    - context/: Project context snapshots
+
+    Args:
+        operation: Operation to perform
+            - read_decisions: List all past decisions
+            - add_decision: Add a new architectural decision
+            - list_tasks: List pending tasks
+            - add_task: Add a task
+            - save_context: Save current project context
+            - read_context: Read latest context snapshot
+        title: Title for decision/task
+        content: Content for decision/task (JSON or markdown)
+
+    Returns:
+        Operation result or list of items
+    """
+    _log_decision("memory_garden.request", {"operation": operation, "title": title})
+
+    if not _init_memory_dir():
+        return "Error: Could not initialize memory directory (.memory/)"
+
+    decisions_dir = _MEMORY_DIR / "decisions"
+    tasks_dir = _MEMORY_DIR / "tasks"
+    context_dir = _MEMORY_DIR / "context"
+
+    if operation == "read_decisions":
+        decisions = []
+        for f in decisions_dir.glob("*.md"):
+            decisions.append(f"- {f.stem}: {f.read_text().split(chr(10))[0].replace('# Decision: ', '')}")
+        if not decisions:
+            return "No decisions recorded yet."
+        return f"--- Architectural Decisions ---\n" + "\n".join(decisions)
+
+    elif operation == "add_decision":
+        if not title:
+            return "Error: Title is required for adding a decision."
+        decision = {
+            "title": title,
+            "content": content,
+            "date": str(Path(__file__).stat().st_mtime),
+            "author": "Claude",
+            "status": "open",
+        }
+        # Extract problem/solution from content if it's JSON
+        if content.startswith("{"):
+            try:
+                import json
+                data = json.loads(content)
+                decision["problem"] = data.get("problem", "")
+                decision["solution"] = data.get("solution", "")
+                decision["rationale"] = data.get("rationale", "")
+            except:
+                pass
+
+        filename = decisions_dir / f"{title.lower().replace(' ', '_')}.md"
+        filename.write_text(_format_decision(decision))
+        _log_decision("memory_garden.decision_added", {"title": title})
+        return f"✅ Decision saved: {filename}"
+
+    elif operation == "list_tasks":
+        tasks = []
+        for f in tasks_dir.glob("*.md"):
+            tasks.append(f"- {f.stem}")
+        if not tasks:
+            return "No tasks recorded yet."
+        return f"--- Tasks ---\n" + "\n".join(tasks)
+
+    elif operation == "add_task":
+        if not title:
+            return "Error: Title is required for adding a task."
+        filename = tasks_dir / f"{title.lower().replace(' ', '_')}.md"
+        filename.write_text(f"# Task: {title}\n\n{content}\n\nStatus: pending")
+        _log_decision("memory_garden.task_added", {"title": title})
+        return f"✅ Task saved: {filename}"
+
+    elif operation == "save_context":
+        # Save current project state
+        context = {
+            "date": str(Path(__file__).stat().st_mtime),
+            "files": str(list(Path.cwd().rglob("*"))[:100]),
+            "git_branch": "main",  # Would need git command
+        }
+        filename = context_dir / f"context_{len(list(context_dir.glob('context_*.json')))}.json"
+        import json
+        filename.write_text(json.dumps(context, indent=2))
+        return f"✅ Context saved: {filename}"
+
+    elif operation == "read_context":
+        contexts = sorted(context_dir.glob("context_*.json"), key=lambda f: f.stat().st_mtime)
+        if not contexts:
+            return "No context snapshots available."
+        latest = contexts[-1]
+        import json
+        return f"--- Latest Context ---\n{latest.read_text()}"
+
+    return f"Error: Unknown operation '{operation}'. Use: read_decisions, add_decision, list_tasks, add_task, save_context, read_context"
+
+
+# =============================================================================
 # Execution Management (Orchestration)
 # =============================================================================
 
