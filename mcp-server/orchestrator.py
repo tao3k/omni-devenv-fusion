@@ -221,6 +221,102 @@ async def get_codebase_context(target_dir: str = ".", ignore_files: str = "") ->
         return f"Failed to execute Repomix: {str(e)}"
 
 
+def _build_directory_tree(root_path: str, max_depth: int = 3, current_depth: int = 0) -> str:
+    """
+    Build a directory tree structure using os.walk.
+    Returns a tree-like representation without file content.
+    """
+    if current_depth >= max_depth:
+        return ""
+
+    tree_lines = []
+    root_path = Path(root_path)
+
+    try:
+        # Sort directories and files separately
+        items = sorted(root_path.iterdir(), key=lambda x: (x.is_file(), x.name))
+
+        for i, item in enumerate(items):
+            is_last = (i == len(items) - 1)
+            prefix = "└── " if is_last else "├── "
+            connector = "    " if is_last else "│   "
+
+            if item.is_dir():
+                tree_lines.append(f"{prefix}{item.name}/")
+                if current_depth < max_depth - 1:
+                    sub_tree = _build_directory_tree(
+                        str(item), max_depth, current_depth + 1
+                    )
+                    for line in sub_tree.split("\n"):
+                        if line:
+                            tree_lines.append(f"{connector}{line}")
+            else:
+                tree_lines.append(f"{prefix}{item.name}")
+    except PermissionError:
+        tree_lines.append(f"[Permission Denied]")
+
+    return "\n".join(tree_lines)
+
+
+@mcp.tool()
+async def list_directory_structure(root_dir: str = ".") -> str:
+    """
+    Fast & Cheap: Lists the file tree WITHOUT content.
+
+    Use this FIRST to explore the project structure before calling get_codebase_context.
+    This tool consumes < 1k tokens and helps you understand the codebase layout.
+    """
+    # Security check: prevent access to external directories
+    if ".." in root_dir or root_dir.startswith("/"):
+        error_msg = "Error: Access to external directories is restricted for security."
+        _log_decision("list_directory_structure.security_block", {"root_dir": root_dir})
+        return error_msg
+
+    target_path = Path(root_dir)
+
+    # Verify directory exists
+    if not target_path.exists():
+        return f"Error: Directory '{root_dir}' does not exist."
+
+    if not target_path.is_dir():
+        return f"Error: '{root_dir}' is not a directory."
+
+    try:
+        _log_decision("list_directory_structure.request", {"root_dir": root_dir})
+
+        # Try to use 'tree' command if available (more beautiful output)
+        try:
+            process = await asyncio.create_subprocess_exec(
+                "tree", root_dir, "-L", "3", "--dirsfirst",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+
+            if process.returncode == 0 and stdout:
+                tree_output = stdout.decode("utf-8")
+                # Remove the first line (root_dir path) for cleaner output
+                lines = tree_output.split("\n")[1:]
+                result = "\n".join(lines)
+                _log_decision("list_directory_structure.success", {"method": "tree"})
+                return f"--- Directory Structure ({root_dir}) ---\n{result}"
+        except FileNotFoundError:
+            pass  # Fall back to Python implementation
+
+        # Fallback: Use Python os.walk implementation
+        tree_output = _build_directory_tree(root_dir, max_depth=3)
+        _log_decision("list_directory_structure.success", {"method": "python"})
+
+        if not tree_output.strip():
+            return f"--- Directory Structure ({root_dir}) ---\n[Empty directory]"
+
+        return f"--- Directory Structure ({root_dir}) ---\n{tree_output}"
+
+    except Exception as e:
+        _log_decision("list_directory_structure.exception", {"error": str(e)})
+        return f"Error listing directory structure: {str(e)}"
+
+
 @mcp.tool()
 async def list_personas() -> str:
     persona_list = _serialize_personas()
