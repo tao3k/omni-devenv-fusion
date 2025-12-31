@@ -21,6 +21,7 @@ CODER TOOLS (Micro-level):
 5. ast_rewrite - AST-based code rewrite
 
 Run: uv run python mcp-server/tests/test_basic.py
+Run Coder tests: uv run python mcp-server/tests/test_basic.py --coder
 """
 import json
 import os
@@ -90,7 +91,7 @@ def send_tool(process, name: str, arguments: dict, tool_id: int) -> tuple[bool, 
     return False, str(response)
 
 def test_all_tools():
-    """Test all 4 MCP tools in orchestrator.py."""
+    """Test all Orchestrator MCP tools."""
     config_path = find_config()
 
     if not config_path:
@@ -372,6 +373,245 @@ def test_all_tools():
             pass
         process.wait()
 
+
+# =============================================================================
+# Coder Server Tests
+# =============================================================================
+
+def test_coder_tools():
+    """Test all Coder MCP tools (ast-grep, file operations)."""
+    config_path = find_config()
+
+    if not config_path:
+        print("\n🚫 Fatal Error: No config file found!")
+        return False
+
+    print(f"\n🚀 Using config file: {config_path}")
+
+    try:
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+    except Exception as e:
+        print(f"❌ Failed to parse JSON: {e}")
+        return False
+
+    servers = config.get("mcpServers", {})
+    if "coder" not in servers:
+        print("❌ No 'coder' field in config file.")
+        return False
+
+    server_conf = servers["coder"]
+    env_vars = server_conf.get("env", {})
+
+    # Setup environment
+    run_env = os.environ.copy()
+    run_env.update(env_vars)
+
+    # Command setup
+    cmd = server_conf.get("command")
+    args = server_conf.get("args", [])
+    executable = sys.executable if cmd in ["python", "python3"] else cmd
+
+    print(f"▶️  Starting Coder Server: {executable} {' '.join(args)}")
+
+    process = subprocess.Popen(
+        [executable] + args,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=run_env,
+        text=True,
+        bufsize=1
+    )
+
+    results = {}
+
+    try:
+        print("\n" + "=" * 60)
+        print("🧪 Coder Server Tools Test Suite")
+        print("=" * 60)
+
+        # === Step 1: Initialize ===
+        print("\n1️⃣  Initialize Coder Server...")
+        init_msg = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "test-script", "version": "1.0"}
+            }
+        }
+        process.stdin.write(json.dumps(init_msg) + "\n")
+        process.stdin.flush()
+
+        response = read_json_rpc(process)
+        if response and "result" in response:
+            server_name = response['result']['serverInfo']['name']
+            print(f"✅ Server Initialized: {server_name}")
+            results["initialize"] = True
+        else:
+            print(f"❌ Initialization Failed: {response}")
+            print(f"Stderr: {process.stderr.read()}")
+            return False
+
+        # Send initialized notification
+        process.stdin.write(json.dumps({
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized"
+        }) + "\n")
+        process.stdin.flush()
+
+        # === Tool 1: read_file ===
+        print("\n2️⃣  Testing 'read_file'...")
+        success, text = send_tool(
+            process, "read_file",
+            {"path": "mcp-server/tests/test_basic.py"},
+            2
+        )
+        if success and "test_all_tools" in text:
+            print(f"✅ read_file working: {len(text)} chars")
+            results["read_file"] = True
+        else:
+            print(f"❌ read_file failed: {text[:200]}")
+            results["read_file"] = False
+
+        # === Tool 2: search_files ===
+        print("\n3️⃣  Testing 'search_files'...")
+        success, text = send_tool(
+            process, "search_files",
+            {"pattern": "def test_all_tools", "path": "mcp-server/tests"},
+            3
+        )
+        if success and ("test_basic.py" in text or "matches found" in text.lower()):
+            print(f"✅ search_files working: {len(text)} chars")
+            results["search_files"] = True
+        else:
+            print(f"❌ search_files failed: {text[:200]}")
+            results["search_files"] = False
+
+        # === Tool 3: save_file (create temp file) ===
+        print("\n4️⃣  Testing 'save_file'...")
+        success, text = send_tool(
+            process, "save_file",
+            {"path": "test_temp_output.txt", "content": "Hello from test!\nTimestamp: " + str(os.getpid())},
+            4
+        )
+        if success and "Successfully wrote" in text:
+            print(f"✅ save_file working: {text[:100]}")
+            results["save_file"] = True
+        else:
+            print(f"❌ save_file failed: {text[:200]}")
+            results["save_file"] = False
+
+        # === Tool 4: ast_search ===
+        print("\n5️⃣  Testing 'ast_search' (ast-grep)...")
+        success, text = send_tool(
+            process, "ast_search",
+            {"pattern": "def $name", "lang": "py", "path": "mcp-server/tests"},
+            5
+        )
+        if success and ("ast-grep Results" in text or "def " in text):
+            print(f"✅ ast_search working: {len(text)} chars")
+            results["ast_search"] = True
+        else:
+            print(f"❌ ast_search failed: {text[:300]}")
+            results["ast_search"] = False
+
+        # === Tool 5: ast_rewrite ===
+        print("\n6️⃣  Testing 'ast_rewrite' (ast-grep)...")
+        # Use a unique pattern that won't match anything to test the tool
+        unique_pattern = "UNIQUE_PATTERN_DOES_NOT_EXIST_xyz123"
+        success, text = send_tool(
+            process, "ast_rewrite",
+            {"pattern": unique_pattern, "replacement": "replaced", "lang": "py", "path": "mcp-server/tests"},
+            6
+        )
+        # Should return "no matches" but still work
+        if success and ("no matches" in text.lower() or "Applied" in text):
+            print(f"✅ ast_rewrite working: {len(text)} chars")
+            results["ast_rewrite"] = True
+        else:
+            print(f"❌ ast_rewrite failed: {text[:300]}")
+            results["ast_rewrite"] = False
+
+        # === Security Tests ===
+        print("\n7️⃣  Testing 'read_file' security (blocked path)...")
+        success, text = send_tool(
+            process, "read_file",
+            {"path": "/etc/passwd"},
+            7
+        )
+        if not success or "Absolute paths are not allowed" in text or "not allowed" in text:
+            print("✅ Blocked absolute path read")
+            results["read_file_security"] = True
+        else:
+            print("❌ Should have blocked absolute path")
+            results["read_file_security"] = False
+
+        print("\n8️⃣  Testing 'save_file' security (blocked path)...")
+        success, text = send_tool(
+            process, "save_file",
+            {"path": "/tmp/hacked.txt", "content": "malicious"},
+            8
+        )
+        if not success or "Absolute paths are not allowed" in text:
+            print("✅ Blocked absolute path write")
+            results["save_file_security"] = True
+        else:
+            print("❌ Should have blocked absolute path")
+            results["save_file_security"] = False
+
+        # === Cleanup temp file ===
+        try:
+            Path("test_temp_output.txt").unlink()
+            print("\n🧹 Cleaned up temp file")
+        except:
+            pass
+
+        # === Summary ===
+        print("\n" + "=" * 60)
+        print("📊 Coder Server Test Results Summary")
+        print("=" * 60)
+
+        all_passed = True
+        for tool, passed in results.items():
+            status = "✅ PASS" if passed else "❌ FAIL"
+            print(f"   {tool}: {status}")
+            if not passed:
+                all_passed = False
+
+        print("=" * 60)
+        if all_passed:
+            print("🎉 All Coder server tools are working correctly!")
+        else:
+            print("⚠️  Some Coder tools failed. Please review the output above.")
+        print("=" * 60)
+
+        return all_passed
+
+    except Exception as e:
+        print(f"❌ Exception during Coder test: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+    finally:
+        print("\n🧹 Cleaning up Coder server...")
+        process.terminate()
+        try:
+            stderr_output = process.stderr.read()
+            if stderr_output:
+                print(f"📋 Server Logs (Stderr):\n{stderr_output}")
+        except:
+            pass
+        process.wait()
+
+
 if __name__ == "__main__":
-    success = test_all_tools()
+    if len(sys.argv) > 1 and sys.argv[1] == "--coder":
+        success = test_coder_tools()
+    else:
+        success = test_all_tools()
     sys.exit(0 if success else 1)

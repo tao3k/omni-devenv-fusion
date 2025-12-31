@@ -316,7 +316,7 @@ def _run_ast_grep(pattern: str, lang: str = "py", search_path: str = ".") -> str
     """Run ast-grep query and return matches."""
     try:
         process = subprocess.run(
-            ["ast-grep", "-p", pattern, "-l", lang, "-d", search_path],
+            ["ast-grep", "run", "-p", pattern, "-l", lang, search_path],
             capture_output=True,
             text=True,
             timeout=30
@@ -352,7 +352,7 @@ def _run_ast_rewrite(pattern: str, replacement: str, lang: str = "py", search_pa
     try:
         # First, do a dry run to show what would change
         process = subprocess.run(
-            ["ast-grep", "-p", pattern, "-r", replacement, "-l", lang, "-d", search_path, "--rewrite"],
+            ["ast-grep", "run", "-p", pattern, "-r", replacement, "-l", lang, search_path, "--update-all"],
             capture_output=True,
             text=True,
             timeout=30
@@ -362,6 +362,10 @@ def _run_ast_rewrite(pattern: str, replacement: str, lang: str = "py", search_pa
         stderr = process.stderr
 
         log_decision("ast_rewrite.success", {"pattern": pattern, "lang": lang}, logger)
+
+        # ast-grep returns exit code 1 when no matches found (not an error)
+        if process.returncode == 1 and not output.strip() and not stderr.strip():
+            return f"No matches found for pattern: {pattern}"
 
         if process.returncode != 0:
             return f"Error: ast-rewrite failed\nstderr: {stderr}"

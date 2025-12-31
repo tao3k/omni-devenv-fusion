@@ -41,6 +41,18 @@ Always prefer **Agent-Friendly** commands (non-interactive) over interactive one
 - **Format**: `just fmt`
 - **Commit**: When user says "run `just agent-commit`", **automatically determine** type, scope, and message from the changes made. Use `just agent-commit <type> "" <message>` (no scope).
 
+## 🧪 Test-First Protocol (Memorized)
+**When adding or removing features, the corresponding test system must be updated simultaneously.**
+
+1. **Add Feature**: Add tests in `mcp-server/tests/test_basic.py` before or alongside the feature implementation
+2. **Remove Feature**: Remove or update corresponding tests
+3. **New MCP Tool**: Add tool test to both:
+   - Orchestrator: `test_all_tools()` function
+   - Coder: `test_coder_tools()` function (use `--coder` flag)
+4. **Run Tests**:
+   - `just test-mcp` - Orchestrator tests
+   - `uv run python mcp-server/tests/test_basic.py --coder` - Coder tests
+
 ## 📝 Coding Standards
 - **Nix**: Prefer `flake-parts` modules. Keep `devenv.nix` clean and modular.
 - **Python**: Use `uv` for dependency management.

@@ -8,7 +8,12 @@
       "Bash(lefthook run:*)",
       "Bash(git add:*)",
       "Bash(just agent-commit:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(just:*)",
+      "Bash(uv run python:*)",
+      "Bash(ast-grep run:*)",
+      "Bash(cat:*)",
+      "Bash(echo:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
