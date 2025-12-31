@@ -41,6 +41,36 @@ from mcp_core import (
     build_persona_prompt,
 )
 
+# Import DocuSmith writing tools (handle both package and direct execution)
+try:
+    from .writer import register_writer_tools
+except ImportError:
+    from writer import register_writer_tools
+
+# Import GitOps tools (docs/how-to/git-workflow.md enforcement)
+try:
+    from .git_ops import register_git_ops_tools
+except ImportError:
+    from git_ops import register_git_ops_tools
+
+# Import Docs Executor (docs as code)
+try:
+    from .docs import register_docs_tools
+except ImportError:
+    from docs import register_docs_tools
+
+# Import Tester tools (docs/how-to/testing-workflows.md enforcement)
+try:
+    from .tester import register_tester_tools
+except ImportError:
+    from tester import register_tester_tools
+
+# Import Product Owner tools (docs/standards/feature-lifecycle.md enforcement)
+try:
+    from .product_owner import register_product_owner_tools
+except ImportError:
+    from product_owner import register_product_owner_tools
+
 # =============================================================================
 # Configuration
 # =============================================================================
@@ -62,6 +92,26 @@ if not API_KEY:
 # Initialize shared clients
 inference_client = InferenceClient(api_key=API_KEY, base_url=BASE_URL)
 project_memory = ProjectMemory()
+
+# Register DocuSmith writing tools
+register_writer_tools(mcp)
+log_decision("writer_tools.registered", {}, logger)
+
+# Register GitOps tools (docs/how-to/git-workflow.md enforcement)
+register_git_ops_tools(mcp)
+log_decision("git_ops_tools.registered", {}, logger)
+
+# Register Docs Executor (docs as code)
+register_docs_tools(mcp)
+log_decision("docs_tools.registered", {}, logger)
+
+# Register Tester tools (docs/how-to/testing-workflows.md enforcement)
+register_tester_tools(mcp)
+log_decision("tester_tools.registered", {}, logger)
+
+# Register Product Owner tools (docs/standards/feature-lifecycle.md enforcement)
+register_product_owner_tools(mcp)
+log_decision("product_owner_tools.registered", {}, logger)
 
 
 # =============================================================================

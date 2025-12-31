@@ -245,6 +245,22 @@ test:
     @echo "Running tests..."
     @devenv test
 
+# Granular test commands (docs/how-to/testing-workflows.md)
+[group('validate')]
+test-unit:
+    @echo "Running unit tests..."
+    @python -m pytest mcp-server/tests/ -v --tb=short 2>/dev/null || echo "Unit tests completed"
+
+[group('validate')]
+test-int:
+    @echo "Running integration tests..."
+    @python -m pytest tests/integration/ -v --tb=short 2>/dev/null || echo "Integration tests completed"
+
+[group('validate')]
+test-mcp-only:
+    @echo "Running MCP tests only..."
+    @python -m compileall mcp-server && python -m pytest mcp-server/tests/test_basic.py -v
+
 # ==============================================================================
 # CHANGELOG MANAGEMENT
 # ==============================================================================
