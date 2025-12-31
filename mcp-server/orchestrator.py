@@ -395,6 +395,70 @@ async def consult_specialist(role: str, query: str, stream: bool = False) -> str
 
 
 # =============================================================================
+# Delegation (The Bridge)
+# =============================================================================
+
+@mcp.tool()
+async def delegate_to_coder(task_type: str, details: str) -> str:
+    """
+    Delegate a coding task to the Coder MCP server.
+
+    Use this after planning with consult_specialist to hand off implementation.
+
+    Args:
+        task_type: Type of coding task
+            - read: Read a file (use read_file in coder)
+            - search: Search code patterns (use search_files in coder)
+            - write: Write/modify files (use save_file in coder)
+            - refactor: Structural refactoring (use ast_search/ast_rewrite in coder)
+        details: Specific details about what to do
+
+    Returns:
+        Instructions for using coder tools, or delegated result
+    """
+    _log_decision("delegate_to_coder.request", {"task_type": task_type, "details": details[:200]})
+
+    task_guidance = {
+        "read": (
+            "Use the 'read_file' tool in the Coder MCP server:\n"
+            f"@omni-coder read_file path=\"{details}\""
+        ),
+        "search": (
+            "Use the 'search_files' or 'ast_search' tool in the Coder MCP server:\n"
+            f"@omni-coder search_files pattern=\"{details}\"\n"
+            f"# Or for structural search:\n"
+            f"@omni-coder ast_search pattern=\"{details}\""
+        ),
+        "write": (
+            "Use the 'save_file' tool in the Coder MCP server:\n"
+            f"@omni-coder save_file path=\"{details}\" content=\"...\""
+        ),
+        "refactor": (
+            "Use the 'ast_search' and 'ast_rewrite' tools in the Coder MCP server:\n"
+            f"# First, find the pattern:\n"
+            f"@omni-coder ast_search pattern=\"{details}\"\n"
+            f"# Then, rewrite:\n"
+            f"@omni-coder ast_rewrite pattern=\"$old\" replacement=\"$new\""
+        ),
+    }
+
+    if task_type not in task_guidance:
+        available = ", ".join(task_guidance.keys())
+        return f"Error: Unknown task_type '{task_type}'. Choose from: {available}"
+
+    result = f"--- Delegation: {task_type.upper()} ---\n\n"
+    result += f"Task: {details}\n\n"
+    result += "Coder Server Instructions:\n"
+    result += task_guidance[task_type]
+    result += "\n\nNote: The Coder MCP server will handle file operations with:\n"
+    result += "- Backup (.bak) before overwriting\n"
+    result += "- Syntax validation for Python/Nix files\n"
+    result += "- Path safety checks"
+
+    return result
+
+
+# =============================================================================
 # Execution Management (Orchestration)
 # =============================================================================
 

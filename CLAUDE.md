@@ -138,7 +138,28 @@ All are ignored in `.gitignore`.
 
 ### Interaction Pattern
 ```
-User -> Orchestrator (宏观规划) -> Coder (微观实现) -> Validate -> User
+User -> Orchestrator (macro planning) -> Coder (micro implementation) -> Validate -> User
+```
+
+### The Bridge: delegate_to_coder
+Use `delegate_to_coder` to hand off implementation to the Coder server:
+
+| task_type | Purpose | Example |
+|-----------|---------|---------|
+| read | Read a file | `delegate_to_coder("read", "modules/python.nix")` |
+| search | Search code patterns | `delegate_to_coder("search", "function_call name:$_")` |
+| write | Write/modify files | `delegate_to_coder("write", "new-feature.py")` |
+| refactor | AST-based refactoring | `delegate_to_coder("refactor", "for $x in $list: $x")` |
+
+### Execution Loop
+After delegation, use `run_task` to validate:
+
+```bash
+# Validate changes
+@omni-orchestrator run_task command="just" args="[validate]"
+
+# Run MCP tests
+@omni-orchestrator run_task command="just" args="[test-mcp]"
 ```
 
 ### Packages (devenv.nix)

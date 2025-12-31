@@ -80,8 +80,8 @@ in
     pkgs.secretspec
     pkgs._1password-cli
     # MCP Server Tools
-    nixpkgs-latest.ast-grep  # AST-based code search and rewrite
-    pkgs.repomix             # Codebase context aggregation
+    nixpkgs-latest.ast-grep # AST-based code search and rewrite
+    pkgs.repomix # Codebase context aggregation
   ];
   # https://devenv.sh/languages/
   # languages.rust.enable = true;
