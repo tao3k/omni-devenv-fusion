@@ -145,6 +145,54 @@ Most competitors use simple solutions:
 | Cross-platform consistency | Works on macOS, Linux, CI |
 | Nix language for logic | We can write build logic in `devenv.nix` |
 
+### 3. Environment as Code
+
+This is the key differentiator. In `omni-devenv-fusion`, we treat `devenv.nix` as the **Ground Truth**.
+
+**The Old Way (Guessing):**
+```
+Agent: "I need pandas. Let me pip install it."
+Result: Fails. System packages conflict.
+```
+
+**The Fusion Way (Declarative):**
+```
+Agent: "I need pandas."
+Agent: Reads devenv.nix → finds languages.python.libraries = []
+Agent: Edits devenv.nix → adds "pandas" to the list
+Agent: Runs "devenv up" → Nix downloads and installs pandas
+Agent: Writes Python code → Uses pandas with guaranteed availability
+Result: Success. Every time.
+```
+
+### 3.1 Self-Healing Infrastructure
+
+The Agent doesn't just write code. It manages the environment.
+
+| Step | Action | Why It Matters |
+|------|--------|----------------|
+| 1 | Agent reads `devenv.nix` | Knows the current state |
+| 2 | Agent detects missing dependency | "I need Redis" |
+| 3 | Agent edits `devenv.nix` | Adds `services.redis.enable = true` |
+| 4 | Agent runs `devenv up` | Service starts automatically |
+| 5 | Agent writes code | Uses `redis-py`, connects to localhost:6379 |
+
+**The result:** The Agent is a full-stack developer, not just a code generator.
+
+### 3.2 The Technical Bet: Reproducibility vs. Agency
+
+We are betting that **Reproducibility is the prerequisite for Agency**.
+
+| Feature | Standard Approach (venv/Docker) | Omni-DevEnv (Nix) |
+| :--- | :--- | :--- |
+| **Portability** | "Should work" (if OS matches) | **Guaranteed** (Bit-for-bit identical) |
+| **Introspection** | Black Box (Binary blobs) | **White Box** (Text-based config) |
+| **Agent Safety** | Low (Agent acts globally) | **High** (Sandboxed inputs) |
+| **Environment Discovery** | Implicit (guesswork) | **Explicit** (devenv.nix is readable) |
+| **Dependency Conflicts** | Common (pip hell) | **Impossible** (Nix isolates everything) |
+
+We believe that in the future, **code without a defined environment will be considered a bug**. We are building the runtime that enforces this discipline.
+
 ---
 
 ## 4. The Developer Experience

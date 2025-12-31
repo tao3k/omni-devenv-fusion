@@ -128,6 +128,80 @@ The Agent works autonomously:
 
 ---
 
+## 2. The Missing Link: A Safe Runtime
+
+### Why Aren't We There Yet?
+
+Giving an AI "root access" to your terminal is terrifying.
+
+```bash
+# Imagine this scenario:
+> Agent, refactor the authentication module
+
+# The AI runs:
+> rm -rf node_modules
+> git reset --hard
+> curl | sh
+```
+
+Without safety rails, the Agent can destroy your project in seconds.
+
+### The Three Requirements for Autonomous Agents
+
+To reach the Autopilot Era, we need a **Safe Runtime** that provides:
+
+| Requirement | Description | How Fusion Provides It |
+|-------------|-------------|------------------------|
+| **Isolation** | The AI cannot delete your home folder | Nix sandbox restricts filesystem access |
+| **Tool-Rich** | The AI has access to compilers, linters, clouds | MCP servers provide structured APIs |
+| **Observable** | You can replay exactly what the AI did | `.memory/` logs every action |
+
+### How Fusion Provides Safety
+
+```bash
+# Without Fusion (Dangerous)
+> Agent runs: rm -rf /
+# Result: Your entire home directory is gone
+
+# With Fusion (Safe)
+> Agent runs: rm -rf /
+# Result: Blocked. Nix sandbox is read-only.
+#         Logged in .memory/
+#         Human receives alert
+```
+
+**Omni-DevEnv Fusion is that runtime.** It wraps the chaos of development tools into a safe, structured API that Agents can understand.
+
+### The Safety Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│              FUSION SAFETY LAYER                │
+│                                                 │
+│  ┌───────────────────────────────────────────┐  │
+│  │  Human Approval                           │  │
+│  │  - All PRs require human review           │  │
+│  │  - Dangerous actions blocked              │  │
+│  └───────────────────────────────────────────┘  │
+│                      ↑                          │
+│  ┌───────────────────────────────────────────┐  │
+│  │  Nix Sandbox                              │  │
+│  │  - Read-only filesystem                   │  │
+│  │  - No network access (configurable)       │  │
+│  │  - Timeout on long-running commands       │  │
+│  └───────────────────────────────────────────┘  │
+│                      ↑                          │
+│  ┌───────────────────────────────────────────┐  │
+│  │  Whitelist Only                           │  │
+│  │  - Only approved commands allowed         │  │
+│  │  - No `rm -rf`, no `git reset --hard`    │  │
+│  └───────────────────────────────────────────┘  │
+│                                                 │
+└─────────────────────────────────────────────────┘
+```
+
+---
+
 ## 3. The Architecture: Agentic OS
 
 ### What Is an Agentic OS?
@@ -216,6 +290,24 @@ We don't want to build everything. We want to **orchestrate** everything.
 | **Documentation** | Vale / Custom | Integrated into pipeline |
 
 **Our contribution**: The **Orchestrator Layer** that connects them all.
+
+---
+
+## 5. Our Mission
+
+We are not just building a CLI tool. We are building the **Neural Interface** between human intent and machine execution.
+
+| What We Believe | What We Do |
+|-----------------|------------|
+| "Code without a defined environment is a bug" | Nix guarantees environment consistency |
+| "AI should be autonomous, not fragile" | Fusion provides safe sandbox for agents |
+| "Humans should architect, not implement" | Agents handle implementation; humans review |
+
+**We ensure that when the AI builds software, it builds it on solid ground.**
+
+The future of development is not "AI writes code." The future is "AI understands the system, manages the environment, and delivers working software."
+
+**We are building that future.**
 
 ---
 
