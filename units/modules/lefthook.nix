@@ -30,6 +30,8 @@ let
     "deps" # Dependency management
     "ci" # GitHub Actions, DevContainer
     "data" # JSONL examples, assets
+    "version" # Version bump commits
+    "claude" # Claude configuration
   ];
 
   # Define generator configurations
@@ -72,7 +74,7 @@ let
           {
             hook.mode = "copy";
             data = {
-              scope.options = project-scopes;
+              scopes = project-scopes;
               changelog = {
                 path = "CHANGELOG.md";
                 template = "remote";
