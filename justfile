@@ -416,13 +416,17 @@ test-mcp:
 
 [group('mcp')]
 test_basic:
-    @echo "Running basic tests..."
+    @echo "Running basic tests (all 4 tools)..."
     @uv run python tests/test_basic.py
 
 [group('mcp')]
 test_workflow:
     @echo "Running workflow tests..."
     @uv run python tests/workflows.py
+
+[group('mcp')]
+test-mcp-all: test-mcp test_basic test_workflow
+    @echo "All MCP tests passed!"
 
 # ==============================================================================
 # SRE HEALTH CHECKS

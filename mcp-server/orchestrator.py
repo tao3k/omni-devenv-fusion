@@ -158,7 +158,7 @@ async def get_codebase_context(target_dir: str = ".", ignore_files: str = "") ->
 
     # Use .cache/ directory for repomix output (following numtide/prj-spec)
     cache_dir = Path(target_dir) / ".cache"
-    cache_dir.mkdir(exist_ok=True)
+    cache_dir.mkdir(parents=True, exist_ok=True)
     temp_path = str(cache_dir / "repomix-output.xml")
 
     _log_decision("get_codebase_context.request", {"target_dir": target_dir, "temp_path": temp_path})

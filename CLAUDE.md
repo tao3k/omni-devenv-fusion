@@ -110,3 +110,36 @@ Follow [numtide/prj-spec](https://github.com/numtide/prj-spec) for project direc
 
 All are ignored in `.gitignore`.
 
+## 🔌 MCP Server Development (Memorized)
+
+### Protocol
+- **Transport**: stdio (subprocess)
+- **Format**: JSON-RPC 2.0 over stdin/stdout
+
+### Data Format
+Request:
+```
+{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {...}}
+{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "tool_name", "arguments": {...}}}
+```
+
+Response:
+```
+{"jsonrpc": "2.0", "id": 1, "result": {"serverInfo": {...}}}
+{"jsonrpc": "2.0", "id": 2, "result": {"content": [{"type": "text", "text": "..."}]}}
+```
+
+### Test Requirements
+1. **Syntax Check**: `python -m compileall mcp-server/`
+2. **Startup Test**: Server runs without error
+3. **Initialize**: Responds to JSON-RPC initialize
+4. **Tool Call**: Every `@mcp.tool()` must return valid response
+5. **Response Format**: Must contain `content[].text`
+
+### Development Workflow
+1. Add tool with `@mcp.tool()` decorator
+2. Add security check (path validation)
+3. Add `_log_decision()` for logging
+4. Run `just test_basic` before commit
+5. Test via `/mcp` in Claude Code
+
