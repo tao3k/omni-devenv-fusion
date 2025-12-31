@@ -67,17 +67,23 @@ class GitRulesCache:
         """Parse types and scopes from document."""
         import re
 
-        # Extract types from type table
-        type_match = re.search(r"types?[:\s]+([^\n]+)", content, re.IGNORECASE)
-        if type_match:
-            types = [t.strip().strip('`') for t in type_match.group(1).split(',')]
-            self.valid_types = [t for t in types if t]
+        # Extract types from "Type Meanings" table (first table with `feat`, `fix`, etc.)
+        # Pattern: | `type` | Description on its own line after "Type Meanings"
+        type_section = re.search(r"### Type Meanings.*?(?=### Suggested Scopes)", content, re.DOTALL)
+        if type_section:
+            # Find all table rows: | `xxx` | something |
+            type_rows = re.findall(r"\|\s*`([^`]+)`\s*\|\s*[^|]+\s*\|", type_section.group())
+            # Filter valid commit types
+            valid = ["feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore"]
+            self.valid_types = [t for t in type_rows if t in valid]
 
-        # Extract scopes from scope table
-        scope_match = re.search(r"scopes?[:\s]+([^\n]+)", content, re.IGNORECASE)
-        if scope_match:
-            scopes = [s.strip().strip('`') for s in scope_match.group(1).split(',')]
-            self.project_scopes = [s for s in scopes if s]
+        # Extract scopes from "Suggested Scopes" table
+        scope_section = re.search(r"### Suggested Scopes.*?(?=##)", content, re.DOTALL)
+        if scope_section:
+            scope_rows = re.findall(r"\|\s*`([^`]+)`\s*\|\s*[^|]+\s*\|", scope_section.group())
+            # Filter valid scopes
+            valid_scopes = ["nix", "mcp", "router", "docs", "cli", "deps", "ci", "data"]
+            self.project_scopes = [s for s in scope_rows if s in valid_scopes]
 
     def get_full_doc(self) -> str:
         """Get full git-workflow.md content for persistent memory."""
@@ -337,6 +343,155 @@ def register_git_ops_tools(mcp: Any) -> None:
             "memory": full_doc,
             "note": "Load this into persistent context when handling git/gh operations"
         }, indent=2)
+
+    @mcp.tool()
+    async def git_status() -> str:
+        """
+        Show working tree status.
+
+        Automatically loads git-workflow.md rules before execution.
+
+        Returns:
+            JSON result with git status output
+        """
+        # Step 1: Load workflow rules first (triggers singleton cache init)
+        _git_rules_cache.get_full_doc()
+
+        # Step 2: Execute git status
+        try:
+            result = subprocess.run(
+                ["git", "status"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            return json.dumps({
+                "status": "success",
+                "rules_loaded": True,
+                "source": "docs/how-to/git-workflow.md",
+                "output": result.stdout,
+                "stderr": result.stderr if result.stderr else None
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({
+                "status": "error",
+                "message": f"git status failed: {str(e)}"
+            }, indent=2)
+
+    @mcp.tool()
+    async def git_log(n: int = 10) -> str:
+        """
+        Show recent commit history.
+
+        Automatically loads git-workflow.md rules before execution.
+
+        Args:
+            n: Number of commits to show (default: 10)
+
+        Returns:
+            JSON result with git log output
+        """
+        # Step 1: Load workflow rules first (triggers singleton cache init)
+        _git_rules_cache.get_full_doc()
+
+        # Step 2: Execute git log
+        try:
+            result = subprocess.run(
+                ["git", "log", f"-{n}", "--oneline"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            return json.dumps({
+                "status": "success",
+                "rules_loaded": True,
+                "source": "docs/how-to/git-workflow.md",
+                "commits": [line.strip() for line in result.stdout.strip().split('\n') if line.strip()],
+                "raw_output": result.stdout
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({
+                "status": "error",
+                "message": f"git log failed: {str(e)}"
+            }, indent=2)
+
+    @mcp.tool()
+    async def git_diff() -> str:
+        """
+        Show unstaged changes in working directory.
+
+        Automatically loads git-workflow.md rules before execution.
+
+        Returns:
+            JSON result with git diff output
+        """
+        # Step 1: Load workflow rules first (triggers singleton cache init)
+        _git_rules_cache.get_full_doc()
+
+        # Step 2: Execute git diff
+        try:
+            result = subprocess.run(
+                ["git", "diff"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            has_changes = bool(result.stdout.strip())
+
+            return json.dumps({
+                "status": "success",
+                "rules_loaded": True,
+                "source": "docs/how-to/git-workflow.md",
+                "has_changes": has_changes,
+                "diff": result.stdout if result.stdout else None,
+                "stderr": result.stderr if result.stderr else None
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({
+                "status": "error",
+                "message": f"git diff failed: {str(e)}"
+            }, indent=2)
+
+    @mcp.tool()
+    async def git_diff_staged() -> str:
+        """
+        Show staged changes (diff --cached).
+
+        Automatically loads git-workflow.md rules before execution.
+
+        Returns:
+            JSON result with staged diff output
+        """
+        # Step 1: Load workflow rules first (triggers singleton cache init)
+        _git_rules_cache.get_full_doc()
+
+        # Step 2: Execute git diff --cached
+        try:
+            result = subprocess.run(
+                ["git", "diff", "--cached"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            has_staged = bool(result.stdout.strip())
+
+            return json.dumps({
+                "status": "success",
+                "rules_loaded": True,
+                "source": "docs/how-to/git-workflow.md",
+                "has_staged_changes": has_staged,
+                "staged_diff": result.stdout if result.stdout else None,
+                "stderr": result.stderr if result.stderr else None
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({
+                "status": "error",
+                "message": f"git diff --cached failed: {str(e)}"
+            }, indent=2)
 
 
 def _get_scope_description(scope: str) -> str:
