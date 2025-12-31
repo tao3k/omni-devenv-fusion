@@ -13,3 +13,14 @@ template = "remote"
 [[changelog.authors]]
 signature = "Guangtao"
 username = "gtrunsec"
+
+[scope]
+options = [
+    "nix",
+    "mcp",
+    "router",
+    "docs",
+    "cli",
+    "deps",
+    "ci",
+]

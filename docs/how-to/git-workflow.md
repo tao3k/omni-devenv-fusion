@@ -63,7 +63,23 @@ This project uses **standardized scopes** for better traceability:
 
 ### Enforcing Standards
 
-This project uses **conform** to validate commit messages. Invalid formats are rejected at commit time.
+This project uses two tools to enforce commit standards:
+
+| Tool | Role | Responsibility |
+|------|------|----------------|
+| **Conform** | 🛡️ Police (Enforcer) | Validates commit format at `git commit` time. Rejects invalid messages. |
+| **Cog** | 📋 Secretary (Helper) | Provides interactive menu for humans, groups changes in CHANGELOG. |
+
+**Conform** checks:
+- Format: `<type>(<scope>): <description>`
+- Scope must be lowercase
+- No illegal characters
+
+**Cog** provides:
+- Interactive scope selection menu (for `just commit`)
+- CHANGELOG categorization by type and scope
+
+Both tools share the same scope definitions (nix, mcp, router, docs, cli, deps, ci) configured in `lefthook.nix`.
 
 ---
 
@@ -125,21 +141,21 @@ just agent-commit <type> <scope> "<message>"
 > "Fix the typo in README and run just agent-commit."
 
 # Claude executes:
-just agent-commit docs root "fix typo in readme"
+just agent-commit docs docs "fix typo in readme"
 ```
-
----
-
-## 4. The Agent-Commit Protocol
 
 ### Protocol Rules
 
 | Condition | Agent Action |
 |-----------|--------------|
 | User says: "Fix the bug" | Fix code → Run Tests → **ASK USER** to commit |
-| User says: "Fix the bug and **run just agent-commit**" | Fix code → `just agent-commit fix x "fix bug"` |
+| User says: "Fix the bug and **run just agent-commit**" | Fix code → `just agent-commit fix mcp "handle connection timeout"` |
 | Tests fail | **STOP** and report error. Do not commit. |
 | Pre-commit hooks fail | **STOP** and report error. Do not commit. |
+
+---
+
+## 4. The Agent-Commit Protocol
 
 ### Safety First
 

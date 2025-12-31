@@ -6,7 +6,7 @@
   lib,
 }:
 let
-  inherit (inputs.omnibus.inputs.flops.inputs.dmerge) prepend append;
+  inherit (inputs.omnibus.inputs.flops.inputs.dmerge) prepend append merge;
   initConfigs =
     (inputs.omnibus.units.configs {
       inputs = {
@@ -18,6 +18,17 @@ let
     }).exports.default;
 
   lefthook = initConfigs.lefthook;
+
+  # Project scopes shared across conform and cog
+  project-scopes = [
+    "nix"
+    "mcp"
+    "router"
+    "docs"
+    "cli"
+    "deps"
+    "ci"
+  ];
 
   # Define generator configurations
   generators = [
@@ -47,15 +58,7 @@ let
           {
             data.commit = {
               conventional = {
-                scopes = append [
-                  "nix"
-                  "mcp"
-                  "router"
-                  "docs"
-                  "cli"
-                  "deps"
-                  "ci"
-                ];
+                scopes = append project-scopes;
               };
             };
           };
@@ -67,6 +70,7 @@ let
           {
             hook.mode = "copy";
             data = {
+              scope.options = project-scopes;
               changelog = {
                 path = "CHANGELOG.md";
                 template = "remote";
