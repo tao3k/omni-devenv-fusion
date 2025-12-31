@@ -52,33 +52,36 @@ class GitRulesCache:
         self.project_scopes = [
             "nix", "mcp", "router", "docs", "cli", "deps", "ci", "data"
         ]
+        # Full document content for persistent memory
+        self.full_doc = ""
 
         if doc_path.exists():
             try:
-                content = doc_path.read_text()
-                # Parse types from markdown tables or lists
-                # This is a simple parser - extend as needed
-                self._parse_from_doc(content)
+                self.full_doc = doc_path.read_text()
+                self._parse_simple_rules(self.full_doc)
             except Exception as e:
-                # Log but use defaults
                 import sys
                 print(f"⚠️ [GitRulesCache] Failed to load rules: {e}", file=sys.stderr)
 
-    def _parse_from_doc(self, content: str):
-        """Parse rules from documentation content."""
+    def _parse_simple_rules(self, content: str):
+        """Parse types and scopes from document."""
         import re
 
-        # Extract types (look for type table or list)
+        # Extract types from type table
         type_match = re.search(r"types?[:\s]+([^\n]+)", content, re.IGNORECASE)
         if type_match:
             types = [t.strip().strip('`') for t in type_match.group(1).split(',')]
             self.valid_types = [t for t in types if t]
 
-        # Extract scopes (look for scope table or list)
+        # Extract scopes from scope table
         scope_match = re.search(r"scopes?[:\s]+([^\n]+)", content, re.IGNORECASE)
         if scope_match:
             scopes = [s.strip().strip('`') for s in scope_match.group(1).split(',')]
             self.project_scopes = [s for s in scopes if s]
+
+    def get_full_doc(self) -> str:
+        """Get full git-workflow.md content for persistent memory."""
+        return self.full_doc
 
     def get_types(self) -> list:
         """Get valid commit types."""
@@ -314,6 +317,25 @@ def register_git_ops_tools(mcp: Any) -> None:
             "scope": scope,
             "message": f"'{scope}' is not a valid scope",
             "allowed_scopes": PROJECT_SCOPES
+        }, indent=2)
+
+    @mcp.tool()
+    async def load_git_workflow_memory() -> str:
+        """
+        Load full git-workflow.md as persistent memory.
+
+        When conversation involves git/gh operations, call this tool
+        to cache the complete workflow rules in context.
+
+        Returns:
+            Full git-workflow.md content for memory
+        """
+        full_doc = _git_rules_cache.get_full_doc()
+        return json.dumps({
+            "status": "success",
+            "source": "docs/how-to/git-workflow.md",
+            "memory": full_doc,
+            "note": "Load this into persistent context when handling git/gh operations"
         }, indent=2)
 
 

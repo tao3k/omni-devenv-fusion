@@ -206,6 +206,31 @@ git reset --soft HEAD~1
 
 ---
 
+## 6. GitHub CLI (gh) Integration
+
+### When to Prefer gh Over git
+
+| Condition | Use | Rationale |
+|-----------|-----|-----------|
+| gh installed + auth valid | `gh` | Handles auth, richer context |
+| Clone private repo | `gh repo clone` | No manual URL/credential handling |
+| PR workflow | `gh pr *` | Structured PR lifecycle |
+| Basic git operations | `git` | Direct, no abstraction overhead |
+
+### gh Integration Rules
+
+1. **Check availability first**: If unsure, `gh auth status` to verify
+2. **PR workflow**: Always use `gh pr` for create/status/review/checkout
+3. **Repo cloning**: Prefer `gh repo clone` for authenticated access
+4. **Fallback**: If gh unavailable or unauthenticated, use native git
+
+### Anti-Patterns
+
+- Don't mix gh and git for same workflow (e.g., `gh pr create` + manual `git push`)
+- Don't assume gh exists in CI; keep git fallback ready
+
+---
+
 ## Related Documentation
 
 - [Commit Conventions](../../design/writing-style/02_mechanics.md) - Writing clear commit messages
