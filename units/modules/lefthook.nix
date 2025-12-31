@@ -6,7 +6,7 @@
   lib,
 }:
 let
-  inherit (inputs.omnibus.inputs.flops.inputs.dmerge) prepend;
+  inherit (inputs.omnibus.inputs.flops.inputs.dmerge) prepend append;
   initConfigs =
     (inputs.omnibus.units.configs {
       inputs = {
@@ -25,7 +25,6 @@ let
       name = "lefthook";
       gen = (config.omnibus.ops.mkNixago initConfigs.nixago-lefthook) {
         data = {
-          commit-msg = lefthook.default.data.commit-msg;
           # Remove unnecessary commands from default pre-commit
           commands = builtins.removeAttrs lefthook.default.data.pre-commit.commands [
             "treefmt" # We use nixfmt instead
@@ -42,7 +41,24 @@ let
     }
     {
       name = "conform";
-      gen = (config.omnibus.ops.mkNixago initConfigs.nixago-conform) initConfigs.conform.default;
+      gen =
+        (config.omnibus.ops.mkNixago initConfigs.nixago-conform)
+          initConfigs.conform.default
+          {
+            data.commit = {
+              conventional = {
+                scopes = append [
+                  "nix"
+                  "mcp"
+                  "router"
+                  "docs"
+                  "cli"
+                  "deps"
+                  "ci"
+                ];
+              };
+            };
+          };
     }
     {
       name = "cog";

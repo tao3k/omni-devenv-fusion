@@ -15,7 +15,59 @@
 
 ---
 
-## 1. Workflow for Humans
+## 1. Commit Message Standard
+
+All commits follow the **Conventional Commits** specification:
+
+```
+<type>(<scope>): <description>
+```
+
+### Type Meanings
+
+| Type | Description |
+|------|-------------|
+| `feat` | New feature or capability |
+| `fix` | Bug fix |
+| `docs` | Documentation changes |
+| `style` | Formatting, whitespace, etc. (no code change) |
+| `refactor` | Code restructure (no behavior change) |
+| `perf` | Performance improvement |
+| `test` | Adding or fixing tests |
+| `build` | Build system or dependencies |
+| `ci` | CI/CD pipeline changes |
+| `chore` | Maintenance tasks |
+
+### Suggested Scopes
+
+This project uses **standardized scopes** for better traceability:
+
+| Scope | Covers |
+|-------|--------|
+| `nix` | `devenv.nix`, `units/`, `*.nix` files |
+| `mcp` | `mcp-server/` directory |
+| `router` | `tool-router/` directory |
+| `docs` | `docs/`, `design/`, `README.md` |
+| `cli` | `justfile`, `lefthook.yml` |
+| `deps` | `pyproject.toml`, `devenv.lock`, `package.json` |
+| `ci` | `.github/`, `.devcontainer/` |
+
+### Good vs Bad Examples
+
+| Bad | Good |
+|-----|------|
+| `fix: bug` | `fix(mcp): handle connection timeout` |
+| `feat: added stuff` | `feat(nix): add redis service` |
+| `docs: update` | `docs(readme): add setup instructions` |
+| `chore: misc` | `chore(cli): bump just version` |
+
+### Enforcing Standards
+
+This project uses **conform** to validate commit messages. Invalid formats are rejected at commit time.
+
+---
+
+## 2. Workflow for Humans
 
 For manual development, use the interactive commit tool:
 
@@ -32,7 +84,7 @@ This launches an interactive wizard that guides you through:
 
 ---
 
-## 2. Workflow for Agents
+## 3. Workflow for Agents
 
 ### Default Rule: "Stop and Ask"
 
@@ -78,7 +130,7 @@ just agent-commit docs root "fix typo in readme"
 
 ---
 
-## 3. The Agent-Commit Protocol
+## 4. The Agent-Commit Protocol
 
 ### Protocol Rules
 
@@ -100,7 +152,7 @@ This protocol enforces **"Human-in-the-loop"** by default:
 
 ---
 
-## 4. Troubleshooting
+## 5. Troubleshooting
 
 ### "just agent-commit" Fails
 
