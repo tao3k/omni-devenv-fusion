@@ -1,123 +1,231 @@
-# What is omni-devenv-fusion?
+# Why omni-devenv-fusion?
 
-> Exploring the potential of AI and LLMs in software development
-
----
-
-## The Problem: Generic Genius Fallacy
-
-LLMs like Claude are incredibly smart, but they're **contextually blind** to project-specific constraints.
-
-| Generic Agent | Our Reality |
-|---------------|-------------|
-| "I'll create a `requirements.txt`" | We use `pyproject.toml` with `uv` |
-| "Here's the fix" | Fix is valid only if it passes `just validate` |
-| "Configure Docker" | We use `devenv.nix` |
-
-Without a custom layer, we spend 50% of our time "fighting" the AI to follow our rules.
+> Addressing the real problems in AI-assisted software development.
 
 ---
 
-## The Solution: The "Bridge" Pattern
+## The Community Pain Points
 
-We built a **Policy Engine** and **Context Adapter** that translates generic LLM capabilities into project-compliant execution.
+### 1. AI is Context-Blind
+
+Every developer has experienced this:
 
 ```
-User Request
-    ↓
-Orchestrator (The "Brain")
-    ├─ get_codebase_context → Holistic project view
-    ├─ consult_specialist → Route to personas
-    └─ delegate_to_coder → Bridge to Coder
-    ↓
-Expert Personas
-    ├─ architect → Design decisions
-    ├─ platform_expert → Nix/infrastructure
-    ├─ devops_mlops → CI/CD
-    ├─ sre → Security/Reliability
-    └─ tech_writer → Documentation standards
-    ↓
-Coder (The "Hands")
-    ├─ ast_search → Structural code search
-    ├─ ast_rewrite → AST-based refactoring
-    └─ save_file → Safe file operations
-    ↓
-Validate & Commit
+User: "Add user authentication"
+AI: *Creates Django auth with SQLite*
+Our Reality: We use Nix, PostgreSQL, and specific security standards.
+Result: 30 minutes wasted fighting the AI to use our stack.
 ```
 
+**The Problem**: Generic AI doesn't understand your project's **institutional knowledge**—your conventions, your standards, your stack.
+
+### 2. Engineering Rigor Disappears
+
+AI-generated code often lacks:
+
+- Tests
+- Documentation
+- Type safety
+- Security reviews
+- Consistent formatting
+
+**The Problem**: AI optimizes for "it works" not "it's maintainable."
+
+### 3. Tool Sprawl
+
+```
+We have:
+├── MCP servers for Nix, Docker, GitHub...
+├── Custom scripts for commits
+├── Separate linters for docs
+├── No unified persona system
+└── No project memory
+```
+
+**The Problem**: No cohesive architecture. Every project re-invents the wheel.
+
+### 4. AI Can Break Things
+
+```
+User: "Fix the bug"
+AI: *Runs `git reset --hard`*
+Result: Lost three days of work.
+```
+
+**The Problem**: AI has no safety rails. It will execute destructive commands.
+
+### 5. Documentation Debt
+
+AI writes docs that are:
+
+- Verbose (On Writing Well: "strip the clutter")
+- Passive voice (Engineering standard: active voice)
+- Inconsistent (No single source of truth)
+- Out of date (No enforcement mechanism)
+
 ---
 
-## Why omni-devenv-fusion?
+## Our Solutions
 
-### 1. Institutional Knowledge
-The Bridge understands our stack, standards, and history—so every interaction is **project-aware**.
+### Solution 1: The Bridge Pattern
 
-### 2. Quality Assurance
-Personas act as guardrails. An `architect` review prevents bad infrastructure decisions. An `sre` review catches security issues.
+**Not reinventing the wheel**—we extend MCP with a policy layer.
 
-### 3. Automation without Sacrifice
-We automate workflows (`just agent-commit`, `run_task`) without losing engineering rigor.
+```
+User Request → Orchestrator (The Bridge) → Personas → Coder → Validate
+```
 
-### 4. Living Documentation
-Writing standards are enforced via `tech_writer` persona and `polish_text` tool—documentation stays clean automatically.
+What the Bridge provides:
+- **Context Injection**: Every query gets project-aware context
+- **Policy Enforcement**: Rejects requests that violate `CLAUDE.md`
+- **Persona Routing**: SRE for security, Architect for design, Tech Writer for docs
 
-### 5. Safe Experimentation
-`safe_sandbox` and `run_task` allow exploration without risking the repository.
-
----
-
-## Core Capabilities
-
-| Capability | Tool | Purpose |
-|------------|------|---------|
-| **Context Aggregation** | `get_codebase_context` | Holistic view without N+1 latency |
-| **Expert Consultation** | `consult_specialist` | Route to specialized personas |
-| **Documentation** | `polish_text` | Enforce writing standards |
-| **Code Quality** | `ast_search/rewrite` | Surgical, structural changes |
-| **Safe Execution** | `run_task` | Sandboxed `just` commands |
-| **Memory** | `memory_garden` | Long-term project memory |
+**Creative Value**: The Bridge isn't a new concept—it's the **Decorator Pattern** applied to MCP.
 
 ---
 
-## Who is this for?
+### Solution 2: Personas as Guardrails
 
-Developers who want to:
-- **Explore** what LLMs can do in software engineering
-- **Maintain** engineering standards while leveraging AI
-- **Build** custom AI workflows without losing control
-- **Learn** by experimenting with MCP-based automation
+Using AI to check AI.
+
+| Persona | Role | What It Prevents |
+|---------|------|------------------|
+| `architect` | Design review | Bad architectural decisions |
+| `platform_expert` | Nix review | Broken devenv configs |
+| `devops_mlops` | CI/CD review | Failing pipelines |
+| `sre` | Security review | Vulnerabilities |
+| `tech_writer` | Docs review | Verbose, passive docs |
+
+**Creative Value**: Dual-MCP architecture—Orchestrator plans, Coder executes, Personas validate.
 
 ---
 
-## Key Principles
+### Solution 3: Writing Standards System
 
-1. **The Bridge First**: Every LLM interaction goes through the Bridge (Orchestrator)
-2. **Personas as Guardrails**: Different hats for different tasks
-3. **Test Everything**: `just test-mcp` before every commit
-4. **Write Clearly**: Follow `design/writing_style.md`
-5. **Experiment Safely**: Use `safe_sandbox` for exploration
+Automated documentation quality:
+
+1. **Reference**: `design/writing_style.md` (On Writing Well + Spring Into Technical Writing)
+2. **Persona**: `tech_writer` enforces standards
+3. **Tool**: `polish_text` auto-improves drafts
+4. **Linter**: Vale catches passive voice, wordiness
+
+**Creative Value**: Vale is a standard tool—we just integrated it into the MCP workflow.
+
+---
+
+### Solution 4: Memory Garden
+
+Long-term project memory in `.memory/`:
+
+| Operation | Purpose |
+|-----------|---------|
+| `add_decision` | Record ADRs (Architectural Decision Records) |
+| `add_task` | Track technical debt |
+| `save_context` | Snapshot project state |
+
+**Creative Value**: Claude's context window is limited—we externalize institutional knowledge.
+
+---
+
+### Solution 5: Safe Execution
+
+Sandboxed commands with whitelist:
+
+```
+Allowed: just validate, just test-mcp, git status, nix fmt
+Blocked: rm -rf, git reset --hard, curl | sh
+```
+
+**Creative Value**: Claude-box is a standard concept—we integrated it via `run_task`.
+
+---
+
+### Solution 6: Test-First Protocol
+
+**Every feature gets tests in the same commit.**
+
+```python
+# mcp-server/tests/test_basic.py
+def test_new_tool():
+    # Test the tool
+    pass
+```
+
+**Creative Value**: Prevents the "AI writes code but no tests" problem.
+
+---
+
+## What We Bring to the Community
+
+| Community Problem | Our Solution |
+|-------------------|--------------|
+| AI is context-blind | Bridge Pattern with persona delegation |
+| No engineering rigor | Test-First Protocol + Personas as Guardrails |
+| Tool sprawl | Unified MCP architecture (Orchestrator + Coder) |
+| AI breaks things | Safe execution whitelist |
+| Documentation debt | Writing Standards System (Vale + Tech Writer) |
+| No project memory | Memory Garden for ADRs and lessons |
+
+---
+
+## Not Reinventing the Wheel
+
+We stand on the shoulders of giants:
+
+| What We Use | Why |
+|-------------|-----|
+| **MCP (Model Context Protocol)** | Standard protocol for AI-tools integration |
+| **Vale** | Proven prose linter (we integrate, not rewrite) |
+| **Claude Cookbooks** | Orchestrator pattern, personas |
+| **ast-grep** | Standard AST-based code search |
+| **Nix** | Reproducible builds (the foundation) |
+| **On Writing Well** | Proven writing principles |
+| **numtide/prj-spec** | Project directory conventions |
+
+**Our Contribution**: We synthesized these into a cohesive system with documented patterns.
+
+---
+
+## Who This Is For
+
+### For Individual Developers
+- Get AI that understands your stack
+- Maintain code quality automatically
+- Learn by exploring the patterns
+
+### For Teams
+- Enforce standards across all contributors
+- Institutional memory that persists
+- Safe AI experimentation
+
+### For Tool Builders
+- Reference our MCP architecture
+- Copy the Writing Standards System
+- Use our Test-First Protocol
 
 ---
 
 ## Project Philosophy
 
-> "Writing is thinking on paper." — William Zinsser
+> "Don't reinvent the wheel—perfect it."
 
-This project is not just about automation. It's about **pushing the boundaries** of what's possible when we combine:
-- LLMs (intelligence)
-- Nix (reproducibility)
-- MCP (extensibility)
-- Engineering rigor (quality)
+We don't claim to have invented:
+- MCP (Anthropic did)
+- Linting (many did)
+- Safe execution (Claude-box did)
+- Personas (many did)
+
+**What we did**: Synthesized these into a **cohesive, documented, testable system** that you can adopt incrementally.
 
 ---
 
 ## Next Steps
 
-- Read `design/mcp-architecture-roadmap.md` for technical details
-- Read `design/writing_style.md` for documentation standards
-- Read `CLAUDE.md` for agent instructions
-- Run `just validate` to verify your environment
+1. Read `design/mcp-architecture-roadmap.md` for technical details
+2. Read `design/writing_style.md` for documentation standards
+3. Run `just test-mcp` to verify your environment
+4. Explore the code in `mcp-server/`
 
 ---
 
-*Built with devenv, Nix, and Claude Code*
+*Built on standards. Not reinventing the wheel.*
