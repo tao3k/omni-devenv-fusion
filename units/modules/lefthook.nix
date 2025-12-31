@@ -20,14 +20,16 @@ let
   lefthook = initConfigs.lefthook;
 
   # Project scopes shared across conform and cog
+  # Maps to: docs/how-to/git-workflow.md
   project-scopes = [
-    "nix"
-    "mcp"
-    "router"
-    "docs"
-    "cli"
-    "deps"
-    "ci"
+    "nix" # Infrastructure: devenv.nix, modules
+    "mcp" # Application: mcp-server logic
+    "router" # Logic: Tool routing & intent
+    "docs" # Documentation
+    "cli" # Tooling: justfile, lefthook
+    "deps" # Dependency management
+    "ci" # GitHub Actions, DevContainer
+    "data" # JSONL examples, assets
   ];
 
   # Define generator configurations

@@ -23,4 +23,5 @@ options = [
     "cli",
     "deps",
     "ci",
+    "data",
 ]
