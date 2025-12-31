@@ -11,13 +11,16 @@ Features:
 - Retry logic
 - Streaming support
 - Error handling
+- Config file support (.mcp.json, .claude/settings.json)
 
 Usage:
     client = InferenceClient()
     result = await client.complete("You are a Python expert.", "Write a function to sort a list.")
 """
 import asyncio
+import json
 import os
+from pathlib import Path
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 import structlog
@@ -30,6 +33,55 @@ DEFAULT_MODEL = "MiniMax-M2.1"
 DEFAULT_BASE_URL = "https://api.minimax.io/anthropic"
 DEFAULT_TIMEOUT = 30
 DEFAULT_MAX_TOKENS = 4096
+
+
+def _load_api_key_from_config() -> Optional[str]:
+    """
+    Load API key from project config files.
+
+    Checks in order:
+    1. Project root/.mcp.json (Claude Desktop format: mcpServers.orchestrator.env.ANTHROPIC_API_KEY)
+    2. Project root/.mcp.json (Simple format: {"api_key": "..."})
+    3. Project root/.claude/settings.json ({"ANTHROPIC_API_KEY": "..."})
+    4. Environment variables
+
+    Returns:
+        API key string or None
+    """
+    # Determine project root (handles mcp-server/ subdirectory)
+    # inference.py is at mcp-server/mcp_core/inference.py
+    # We need: mcp-server/mcp_core/ -> mcp-server/ -> project_root/
+    module_dir = Path(__file__).parent.resolve()
+    project_root = module_dir.parent.parent.resolve()
+
+    config_files = [
+        project_root / ".mcp.json",
+        project_root / ".claude" / "settings.json",
+    ]
+
+    for config_path in config_files:
+        if config_path.exists():
+            try:
+                content = config_path.read_text(encoding="utf-8")
+                data = json.loads(content)
+
+                # Try Claude Desktop .mcp.json format
+                if "mcpServers" in data:
+                    orchestrator_env = data.get("mcpServers", {}).get("orchestrator", {}).get("env", {})
+                    if "ANTHROPIC_API_KEY" in orchestrator_env:
+                        return orchestrator_env["ANTHROPIC_API_KEY"]
+
+                # Try simple .mcp.json format
+                if "api_key" in data:
+                    return data["api_key"]
+
+                # Try .claude/settings.json format
+                if "ANTHROPIC_API_KEY" in data:
+                    return data["ANTHROPIC_API_KEY"]
+            except (json.JSONDecodeError, IOError) as e:
+                log.debug(f"inference.config_read_failed", path=str(config_path), error=str(e))
+
+    return None
 
 
 # =============================================================================
@@ -68,7 +120,7 @@ class InferenceClient:
             timeout: Request timeout in seconds
             max_tokens: Max tokens per response
         """
-        self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+        self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY") or _load_api_key_from_config()
         self.base_url = base_url or DEFAULT_BASE_URL
         self.model = model or DEFAULT_MODEL
         self.timeout = timeout or DEFAULT_TIMEOUT
