@@ -71,19 +71,21 @@ Always prefer **Agent-Friendly** commands (non-interactive) over interactive one
 - **Style**: When editing files, keep changes minimal and focused.
 
 ## ✍️ Writing Standards (Memorized)
-**Reference**: `design/writing_style.md` - Combined principles from *"On Writing Well"* (Zinsser) and *"Spring Into Technical Writing"* (Rosenberg).
+**Reference**: `design/writing-style/` - Modular documentation library for humans and AI.
+
+| Module | Focus |
+| :--- | :--- |
+| `00_index.md` | Entry point + Final Commit Checklist |
+| `01_philosophy.md` | Mindset: Feynman (Concrete First), Zinsser (Humanity) |
+| `02_mechanics.md` | Mechanics: Rosenberg (De-clutter, Active Voice, Parallelism) |
+| `03_structure_and_ai.md` | Structure: Markdown hierarchy, Few-Shot Examples |
 
 **Key Rules**:
-1. **BLUF (Bottom Line Up Front)**: Lead with conclusion/fix/risk
-2. **Strip Clutter**: Cut every unnecessary word
-3. **Active Voice**: Use active verbs, avoid passive
-4. **What-Why-How**: Explain technical changes in this order
-5. **Authoritative**: No "I think", "maybe", or vague words
-
-**When Writing**:
-- Use backticks for commands/variables
-- Use bullet points for lists, numbered for steps
-- Be specific: no "various", "some", "a few"
+1. **Concrete First**: Example $\rightarrow$ Theory (Feynman)
+2. **Strip Clutter**: Replace "utilize" with "use"
+3. **Active Voice**: "The script builds" not "App is built"
+4. **Few-Shot**: Always show `Input -> Output` examples
+5. **Explicit Context**: Avoid floating pronouns ("it", "that")
 
 ## 📄 Documentation Protocol (Memorized)
 **Before finalizing any markdown file**:
