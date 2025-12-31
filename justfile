@@ -177,9 +177,50 @@ commit:
 
 [group('setup')]
 setup:
-    @echo "Setting up development environment..."
-    @direnv allow
-    @echo "Ready! Run 'just' to see commands."
+    @echo "🚀 Setting up development environment..."
+    @echo ""
+    @echo "Step 1/3: Checking secrets configuration..."
+    -@secretspec check --profile development 2>/dev/null || true
+    @if ! secretspec check --profile development >/dev/null 2>&1; then \
+        echo "⚠️  Secrets not configured."; \
+        echo "   Checking if claude module needs to be disabled..."; \
+        if grep -q "^    nixosModules.claude$" devenv.nix; then \
+            echo "   Disabling claude module for initial setup..."; \
+            sed -i '' 's/^    nixosModules.claude$/    # nixosModules.claude  # Disabled: configure secrets first/g' devenv.nix; \
+            echo "   ✅ claude module disabled."; \
+        else \
+            echo "   ✅ claude module already disabled."; \
+        fi; \
+        echo ""; \
+        echo "Step 2/3: Activating direnv (without claude module)..."; \
+        direnv allow 2>/dev/null || true; \
+        echo ""; \
+        echo "Step 3/3: Environment ready (limited mode)."; \
+        echo ""; \
+        echo "📝 Next steps:"; \
+        echo "   1. Configure secrets: https://secretspec.dev/concepts/providers/"; \
+        echo "   2. Verify: just secrets-check"; \
+        echo "   3. Re-run: just setup"; \
+        echo ""; \
+        echo "Run 'just' to see available commands."; \
+    else \
+        echo "✅ Secrets OK!"; \
+        echo ""; \
+        echo "Step 2/3: Restoring claude module if needed..."; \
+        if grep -q "^    # nixosModules.claude  # Disabled:" devenv.nix; then \
+            sed -i '' 's/^    # nixosModules.claude  # Disabled:/    nixosModules.claude/g' devenv.nix; \
+            echo "   ✅ claude module restored!"; \
+        else \
+            echo "   ✅ claude module already enabled."; \
+        fi; \
+        echo ""; \
+        echo "Step 3/3: Activating direnv..."; \
+        direnv allow; \
+        echo ""; \
+        echo "🎉 Environment fully ready!"; \
+        echo ""; \
+        echo "Run 'just' to see available commands."; \
+    fi
 
 [group('validate')]
 validate: check-format check-commits lint test

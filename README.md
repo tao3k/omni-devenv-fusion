@@ -29,7 +29,7 @@ User Request -> Orchestrator (Plan) -> Expert Personas (Consult) -> Coder (Imple
 git clone https://github.com/tao3k/omni-devenv-fusion.git
 cd omni-devenv-fusion
 
-# Setup (direnv auto-loads the environment)
+# Setup (checks secrets first, then activates direnv)
 just setup
 
 # View all commands
@@ -38,6 +38,60 @@ just
 # Validate everything
 just validate
 ```
+
+### First-Time Setup
+
+The `just setup` command automates the initial configuration:
+
+1. **Detects secrets status** - Checks if secrets are configured
+2. **Auto-manages claude module** - If secrets missing, disables claude module automatically
+3. **Activates direnv** - Loads the development environment
+
+**First run (secrets not configured):**
+```bash
+just setup
+
+# Output:
+# 🚀 Setting up development environment...
+# Step 1/3: Checking secrets configuration...
+# ⚠️  Secrets not configured.
+#    Disabling claude module for initial setup...
+#    ✅ claude module disabled.
+# Step 2/3: Activating direnv (without claude module)...
+# Step 3/3: Environment ready (limited mode).
+#
+# 📝 Next steps:
+#    1. Configure secrets: https://secretspec.dev/concepts/providers/
+#    2. Verify: just secrets-check
+#    3. Re-run: just setup
+```
+
+**After secrets configured:**
+```bash
+just secrets-check  # Verify secrets are working
+just setup          # Re-run to restore claude module
+
+# Output:
+# 🚀 Setting up development environment...
+# Step 1/3: Checking secrets configuration...
+# ✅ Secrets OK!
+# Step 2/3: Restoring claude module if needed...
+#    ✅ claude module restored!
+# Step 3/3: Activating direnv...
+# 🎉 Environment fully ready!
+```
+
+### Secret Providers
+
+Configure secrets using one of these providers:
+
+| Provider | Description | Docs |
+|----------|-------------|------|
+| `keyring` | System keyring (macOS Keychain, KWallet) | [secretspec.dev](https://secretspec.dev/concepts/providers/) |
+| `1password` | 1Password | [secretspec.dev](https://secretspec.dev/concepts/providers/) |
+| `lastpass` | LastPass | [secretspec.dev](https://secretspec.dev/concepts/providers/) |
+| `dotenv` | .env file | [secretspec.dev](https://secretspec.dev/concepts/providers/) |
+| `env` | Environment variables | [secretspec.dev](https://secretspec.dev/concepts/providers/) |
 
 ## Key Features
 

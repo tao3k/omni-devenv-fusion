@@ -27,9 +27,9 @@ let
         data = {
           # Remove unnecessary commands from default pre-commit
           commands = builtins.removeAttrs lefthook.default.data.pre-commit.commands [
-            "treefmt"    # We use nixfmt instead
-            "hunspell"   # Vale handles documentation
-            "typos"      # Vale handles spelling
+            "treefmt" # We use nixfmt instead
+            "hunspell" # Vale handles documentation
+            "typos" # Vale handles spelling
           ];
           # Add Vale for documentation linting
           "check-docs" = {
@@ -75,12 +75,5 @@ in
   config = {
     packages = lib.flatten (map (g: g.__passthru.packages) generatedHooks);
     enterShell = lib.concatMapStringsSep "\n" (g: g.shellHook) generatedHooks;
-    # perSystem = {...}:{
-    #   devenv.shells.default = {
-    #     enterShell = ''
-    #       ${config.omnibus.ops.mkNixago initConfigs.nixago-lefthook}
-    #     '';
-    #   };
-    # };
   };
 }
