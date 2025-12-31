@@ -1,202 +1,122 @@
-# Getting Started with omni-devenv-fusion
+# What is omni-devenv-fusion?
 
 > Exploring the potential of AI and LLMs in software development
 
 ---
 
-## What is omni-devenv-fusion?
+## The Problem: Generic Genius Fallacy
 
-A sandbox for exploring what LLMs can do in software development. We transform Claude Code from a "smart chatbot" into an **exploratory partner** that:
-- Understands our stack (Nix, devenv, Python)
-- Follows our standards (Conventional Commits, Writing Standards)
-- Adapts to our architecture (Modular, Orchestrated)
-- Learns from our history (Lessons, ADRs)
+LLMs like Claude are incredibly smart, but they're **contextually blind** to project-specific constraints.
 
-This is not just about automation—it's about **pushing the boundaries** of AI-assisted engineering.
+| Generic Agent | Our Reality |
+|---------------|-------------|
+| "I'll create a `requirements.txt`" | We use `pyproject.toml` with `uv` |
+| "Here's the fix" | Fix is valid only if it passes `just validate` |
+| "Configure Docker" | We use `devenv.nix` |
 
-## The "Bridge" Pattern
+Without a custom layer, we spend 50% of our time "fighting" the AI to follow our rules.
+
+---
+
+## The Solution: The "Bridge" Pattern
+
+We built a **Policy Engine** and **Context Adapter** that translates generic LLM capabilities into project-compliant execution.
 
 ```
 User Request
     ↓
-Orchestrator (Plan & Delegate)
+Orchestrator (The "Brain")
+    ├─ get_codebase_context → Holistic project view
+    ├─ consult_specialist → Route to personas
+    └─ delegate_to_coder → Bridge to Coder
     ↓
-Expert Personas (Consult)
+Expert Personas
     ├─ architect → Design decisions
     ├─ platform_expert → Nix/infrastructure
     ├─ devops_mlops → CI/CD
     ├─ sre → Security/Reliability
-    └─ tech_writer → Documentation
+    └─ tech_writer → Documentation standards
     ↓
-Coder (Implement with AST)
+Coder (The "Hands")
+    ├─ ast_search → Structural code search
+    ├─ ast_rewrite → AST-based refactoring
+    └─ save_file → Safe file operations
     ↓
 Validate & Commit
 ```
 
-## Prerequisites
+---
 
-- **Nix** with flakes enabled
-- **direnv** (for auto-loading the environment)
-- **just** (command runner)
-- **uv** (Python package manager)
+## Why omni-devenv-fusion?
 
-## Initial Setup
+### 1. Institutional Knowledge
+The Bridge understands our stack, standards, and history—so every interaction is **project-aware**.
 
-```bash
-# 1. Clone and enter
-git clone https://github.com/tao3k/omni-devenv-fusion.git
-cd omni-devenv-fusion
+### 2. Quality Assurance
+Personas act as guardrails. An `architect` review prevents bad infrastructure decisions. An `sre` review catches security issues.
 
-# 2. Allow direnv to load the environment
-direnv allow .
+### 3. Automation without Sacrifice
+We automate workflows (`just agent-commit`, `run_task`) without losing engineering rigor.
 
-# 3. Verify setup
-just info
-```
+### 4. Living Documentation
+Writing standards are enforced via `tech_writer` persona and `polish_text` tool—documentation stays clean automatically.
 
-## Core Concepts
+### 5. Safe Experimentation
+`safe_sandbox` and `run_task` allow exploration without risking the repository.
 
-### Dual-MCP Architecture
+---
 
-This project uses two MCP servers:
+## Core Capabilities
 
-| Server | File | Purpose |
-|--------|------|---------|
-| **Orchestrator** | `mcp-server/orchestrator.py` | Macro planning, persona delegation |
-| **Coder** | `mcp-server/coder.py` | Surgical code operations |
+| Capability | Tool | Purpose |
+|------------|------|---------|
+| **Context Aggregation** | `get_codebase_context` | Holistic view without N+1 latency |
+| **Expert Consultation** | `consult_specialist` | Route to specialized personas |
+| **Documentation** | `polish_text` | Enforce writing standards |
+| **Code Quality** | `ast_search/rewrite` | Surgical, structural changes |
+| **Safe Execution** | `run_task` | Sandboxed `just` commands |
+| **Memory** | `memory_garden` | Long-term project memory |
 
-**Workflow:**
-```
-User -> Orchestrator (plan) -> Coder (implement) -> Validate -> User
-```
+---
 
-### Personas
+## Who is this for?
 
-Specialized AI experts accessible via `consult_specialist`:
+Developers who want to:
+- **Explore** what LLMs can do in software engineering
+- **Maintain** engineering standards while leveraging AI
+- **Build** custom AI workflows without losing control
+- **Learn** by experimenting with MCP-based automation
 
-| Persona | When to Use |
-|---------|-------------|
-| `architect` | Design decisions, refactoring strategies |
-| `platform_expert` | Nix, devenv, infrastructure |
-| `devops_mlops` | CI/CD, pipelines, ML workflows |
-| `sre` | Security, reliability, performance |
-| `tech_writer` | Documentation polishing |
+---
 
-### Writing Standards
+## Key Principles
 
-All documentation follows `design/writing_style.md`:
+1. **The Bridge First**: Every LLM interaction goes through the Bridge (Orchestrator)
+2. **Personas as Guardrails**: Different hats for different tasks
+3. **Test Everything**: `just test-mcp` before every commit
+4. **Write Clearly**: Follow `design/writing_style.md`
+5. **Experiment Safely**: Use `safe_sandbox` for exploration
 
-- **BLUF**: Lead with the most important information
-- **Strip Clutter**: Cut unnecessary words
-- **Active Voice**: Use active verbs
-- **Be Specific**: Avoid vague words
+---
 
-## Daily Workflow
+## Project Philosophy
 
-### 1. Start Your Session
+> "Writing is thinking on paper." — William Zinsser
 
-```bash
-# Check environment health
-just health
+This project is not just about automation. It's about **pushing the boundaries** of what's possible when we combine:
+- LLMs (intelligence)
+- Nix (reproducibility)
+- MCP (extensibility)
+- Engineering rigor (quality)
 
-# View available commands
-just
-```
-
-### 2. Make Changes
-
-```bash
-# Validate before committing
-just validate
-
-# Non-interactive commit (for AI agents)
-just agent-commit "feat" "" "add new feature"
-```
-
-### 3. Run Tests
-
-```bash
-# MCP server tests
-just test-mcp
-
-# Orchestrator tests
-uv run python mcp-server/tests/test_basic.py
-
-# Coder tests
-uv run python mcp-server/tests/test_basic.py --coder
-```
-
-### 4. Document Changes
-
-Use the `polish_text` tool to polish documentation:
-
-```python
-# Via MCP
-polish_text(text="rough draft...", context="readme")
-```
-
-Or consult the Tech Writer persona:
-
-```python
-consult_specialist(role="tech_writer", query="Polish this text...")
-```
-
-## Project Structure
-
-```
-omni-devenv-fusion/
-├── mcp-server/
-│   ├── orchestrator.py    # Orchestrator MCP server
-│   ├── coder.py           # Coder MCP server
-│   ├── mcp_core/          # Shared MCP core library
-│   └── tests/             # Test suites
-├── design/                # Design documents
-├── docs/                  # Documentation
-├── units/modules/         # Nix modules
-├── CLAUDE.md              # Agent instructions
-├── devenv.nix             # Devenv config
-└── justfile               # Task runner
-```
-
-## Key Commands
-
-| Command | Purpose |
-|---------|---------|
-| `just validate` | Run all checks (fmt, lint, test) |
-| `just agent-commit` | Non-interactive commit |
-| `just test-mcp` | Test MCP servers |
-| `just health` | Environment health check |
-| `just bump-minor` | Bump minor version |
-
-## Troubleshooting
-
-### direnv not loading
-
-```bash
-direnv allow .
-```
-
-### MCP server fails to start
-
-```bash
-just test-mcp
-```
-
-Check `.mcp.json` configuration.
-
-### Tests failing
-
-```bash
-uv run python -m compileall mcp-server/
-```
-
-Verify syntax.
+---
 
 ## Next Steps
 
-- Read `design/mcp-architecture-roadmap.md` for architecture details
+- Read `design/mcp-architecture-roadmap.md` for technical details
 - Read `design/writing_style.md` for documentation standards
-- Explore `CLAUDE.md` for agent instructions
+- Read `CLAUDE.md` for agent instructions
+- Run `just validate` to verify your environment
 
 ---
 
