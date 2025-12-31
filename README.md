@@ -1,8 +1,26 @@
 # omni-devenv-fusion
 
-> Orchestrator-Worker workflow with devenv, Nix, and Claude Code
+> Exploring the potential of AI and LLMs in software development
 
-A development environment showcasing AI-assisted software development lifecycle (SDLC) with the Orchestrator pattern.
+A development environment for **AI-assisted SDLC**: leveraging Claude Code + MCP to orchestrate expert personas, automate workflows, and push the boundaries of what's possible in software engineering.
+
+## Core Philosophy
+
+**"The Bridge" Pattern**: Translate generic LLM capabilities into project-compliant execution.
+
+```
+User Request -> Orchestrator (Plan) -> Expert Personas (Consult) -> Coder (Implement) -> Validate -> User
+```
+
+## Key Capabilities
+
+| Capability | Description |
+|------------|-------------|
+| **Persona Delegation** | Route queries to `architect`, `platform_expert`, `devops_mlops`, `sre`, `tech_writer` |
+| **Writing Standards** | Automated documentation polishing via `polish_text` tool |
+| **Code Quality** | AST-based refactoring with `ast-grep` |
+| **Safe Execution** | Sandboxed `just` commands via `run_task` |
+| **Memory Persistence** | Long-term project memory via `memory_garden` |
 
 ## Quick Start
 
