@@ -1,13 +1,17 @@
 """
 Comprehensive test suite for all MCP tools in orchestrator.py
 
-Tests all 4 tools:
+Tests all 9 tools:
 1. get_codebase_context - Full codebase context via Repomix
 2. list_directory_structure - Fast directory tree (token optimization)
-3. list_personas - List available personas
-4. consult_specialist - Expert consultation
+3. read_file - Single file reading (micro-level)
+4. search_files - Pattern search (grep-like)
+5. list_personas - List available personas
+6. consult_specialist - Expert consultation
+7. save_file - Write files with backup & syntax validation
+8. run_task - Execute safe commands (just, nix)
 
-Run: uv run python tests/test_basic.py
+Run: uv run python mcp-server/tests/test_basic.py
 """
 import json
 import os
@@ -287,6 +291,97 @@ def test_all_tools():
         else:
             print("❌ Should have blocked path traversal")
             results["save_file_securityTraversal"] = False
+
+        # === Tool 6: read_file ===
+        print("\n6️⃣  Testing 'read_file'...")
+        success, text = send_tool(
+            process, "read_file",
+            {"path": "mcp-server/tests/test_basic.py"},
+            9
+        )
+        if success:
+            print(f"✅ Response: {len(text)} chars")
+            if "4   |" in text or "File:" in text:
+                print("✅ File content with line numbers detected")
+            results["read_file"] = True
+        else:
+            print(f"❌ {text}")
+            results["read_file"] = False
+
+        # === Tool 7: search_files ===
+        print("\n7️⃣  Testing 'search_files'...")
+        success, text = send_tool(
+            process, "search_files",
+            {"pattern": "read_file", "path": "mcp-server"},
+            10
+        )
+        if success:
+            print(f"✅ Response: {len(text)} chars")
+            if "matches" in text.lower() or "read_file" in text:
+                print("✅ Search results contain matches")
+            results["search_files"] = True
+        else:
+            print(f"❌ {text}")
+            results["search_files"] = False
+
+        # === Tool 8: save_file with backup ===
+        print("\n8️⃣  Testing 'save_file' with backup...")
+        test_file = "test_backup.txt"
+        test_content = "Original content"
+        # First create the file
+        send_tool(process, "save_file", {"path": test_file, "content": test_content, "create_backup": False}, 11)
+        # Then overwrite with backup
+        success, text = send_tool(
+            process, "save_file",
+            {"path": test_file, "content": "Updated content", "create_backup": True},
+            12
+        )
+        if success and ".bak" in text:
+            print(f"✅ Backup created: {text}")
+            # Check if backup exists
+            backup_file = test_file + ".bak"
+            if os.path.exists(backup_file):
+                with open(backup_file, "r") as f:
+                    backup_content = f.read()
+                if backup_content == test_content:
+                    print("✅ Backup content verified")
+                os.remove(backup_file)
+            if os.path.exists(test_file):
+                os.remove(test_file)
+            results["save_file_backup"] = True
+        else:
+            print(f"❌ {text}")
+            results["save_file_backup"] = False
+
+        # === Tool 9: run_task ===
+        print("\n9️⃣  Testing 'run_task'...")
+        success, text = send_tool(
+            process, "run_task",
+            {"command": "just", "args": ["--version"]},
+            13
+        )
+        if success:
+            print(f"✅ Response: {len(text)} chars")
+            if "just" in text.lower() or "Exit code" in text:
+                print("✅ Task execution working")
+            results["run_task"] = True
+        else:
+            print(f"❌ {text}")
+            results["run_task"] = False
+
+        # Test blocked command
+        print("\n🔟  Testing 'run_task' security (blocked command)...")
+        success, text = send_tool(
+            process, "run_task",
+            {"command": "rm", "args": ["-rf", "/"]},
+            14
+        )
+        if not success or "not allowed" in text.lower():
+            print("✅ Blocked dangerous command")
+            results["run_task_security"] = True
+        else:
+            print("❌ Should have blocked dangerous command")
+            results["run_task_security"] = False
 
         # === Summary ===
         print("\n" + "=" * 60)

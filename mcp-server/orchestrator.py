@@ -5,13 +5,36 @@ import json
 import asyncio
 import logging
 import subprocess
+import ast
+import re
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from anthropic import AsyncAnthropic
 from mcp.server.fastmcp import FastMCP
 
 from personas import PERSONAS
+
+
+def _load_personas_from_config() -> Dict[str, Any]:
+    """Load personas from external JSON config if available."""
+    config_path = os.environ.get("ORCHESTRATOR_PERSONAS_FILE") or "mcp-server/personas.json"
+    if not os.path.exists(config_path):
+        return {}
+
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        _log_decision("personas_loaded", {"source": config_path, "count": len(data)})
+        return data
+    except Exception as e:
+        _log_decision("personas_load_error", {"error": str(e)})
+        return {}
+
+
+# Merge static and dynamic personas (dynamic takes precedence)
+_DYNAMIC_PERSONAS = _load_personas_from_config()
+PERSONAS = {**PERSONAS, **_DYNAMIC_PERSONAS}
 
 
 def _load_env_from_file() -> Dict[str, str]:
@@ -318,6 +341,152 @@ async def list_directory_structure(root_dir: str = ".") -> str:
 
 
 @mcp.tool()
+async def read_file(path: str) -> str:
+    """
+    Read a single file (lightweight alternative to get_codebase_context).
+
+    Use this when you only need one file, not the entire directory context.
+    Much faster and cheaper (typically < 1k tokens vs 20k+ for full scan).
+
+    Args:
+        path: Relative path from project root (e.g., "README.md", "modules/python.nix")
+
+    Returns:
+        File content with line numbers, or error message
+    """
+    # Security check
+    if ".." in path or path.startswith("/"):
+        _log_decision("read_file.security_block", {"path": path})
+        return "Error: Path traversal or absolute paths not allowed."
+
+    project_root = Path.cwd()
+    full_path = project_root / path
+
+    # Verify within project
+    try:
+        full_path = full_path.resolve()
+        if not str(full_path).startswith(str(project_root.resolve())):
+            _log_decision("read_file.security_block", {"path": path, "reason": "Outside project"})
+            return "Error: Path is outside the project directory."
+    except Exception as e:
+        _log_decision("read_file.error", {"path": path, "error": str(e)})
+        return f"Error resolving path: {e}"
+
+    # Check if file exists and is file
+    if not full_path.exists():
+        _log_decision("read_file.not_found", {"path": path})
+        return f"Error: File '{path}' does not exist."
+
+    if not full_path.is_file():
+        _log_decision("read_file.not_file", {"path": path})
+        return f"Error: '{path}' is not a file."
+
+    # Check file size (limit to 100KB to prevent memory issues)
+    if full_path.stat().st_size > 100 * 1024:
+        _log_decision("read_file.too_large", {"path": path})
+        return f"Error: File '{path}' is too large (> 100KB). Use get_codebase_context for large files."
+
+    try:
+        with open(full_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        # Add line numbers for reference
+        numbered_lines = [f"{i+1:4d} | {line}" for i, line in enumerate(lines)]
+        content = "".join(numbered_lines)
+
+        _log_decision("read_file.success", {"path": path, "lines": len(lines)})
+        return f"--- File: {path} ({len(lines)} lines) ---\n{content}"
+
+    except UnicodeDecodeError:
+        _log_decision("read_file.encoding_error", {"path": path})
+        return f"Error: Cannot read '{path}' - not a text file."
+    except Exception as e:
+        _log_decision("read_file.error", {"path": path, "error": str(e)})
+        return f"Error reading file: {e}"
+
+
+@mcp.tool()
+async def search_files(pattern: str, path: str = ".", use_regex: bool = False) -> str:
+    """
+    Search for text patterns in files (like grep).
+
+    Use this to find code snippets, function definitions, or specific patterns.
+
+    Args:
+        pattern: Search pattern (string or regex if use_regex=True)
+        path: Root directory to search (default: current directory)
+        use_regex: Treat pattern as regex (default: False)
+
+    Returns:
+        Matching lines with file paths and line numbers
+    """
+    # Security check
+    if ".." in path or path.startswith("/"):
+        _log_decision("search_files.security_block", {"path": path})
+        return "Error: Path traversal or absolute paths not allowed."
+
+    project_root = Path.cwd()
+    search_root = project_root / path
+
+    if not search_root.exists() or not search_root.is_dir():
+        return f"Error: Directory '{path}' does not exist."
+
+    try:
+        # Compile regex if needed
+        flags = re.IGNORECASE if not use_regex else re.IGNORECASE | re.MULTILINE
+        regex = re.compile(pattern, flags) if use_regex else None
+
+        matches = []
+        max_matches = 100  # Limit results
+
+        for root, dirs, files in os.walk(search_root):
+            # Skip hidden and cache directories
+            dirs[:] = [d for d in dirs if not d.startswith(".") and d != ".cache"]
+            files = [f for f in files if not f.startswith(".")]
+
+            for filename in files:
+                filepath = Path(root) / filename
+                try:
+                    with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                        for i, line in enumerate(f, 1):
+                            if len(matches) >= max_matches:
+                                break
+
+                            # Check for match
+                            if use_regex:
+                                if regex.search(line):
+                                    matches.append(f"{filepath.relative_to(project_root)}:{i}: {line.rstrip()}")
+                            else:
+                                if pattern.lower() in line.lower():
+                                    matches.append(f"{filepath.relative_to(project_root)}:{i}: {line.rstrip()}")
+                except Exception:
+                    continue  # Skip unreadable files
+
+            if len(matches) >= max_matches:
+                break
+
+        _log_decision("search_files.success", {"pattern": pattern, "matches": len(matches)})
+
+        if not matches:
+            return f"No matches found for '{pattern}' in '{path}'"
+
+        result = f"--- Search Results: '{pattern}' in {path} ---\n"
+        result += f"Found {len(matches)} matches:\n\n"
+        result += "\n".join(matches[:max_matches])
+
+        if len(matches) >= max_matches:
+            result += f"\n... (showing first {max_matches} matches)"
+
+        return result
+
+    except re.error as e:
+        return f"Error: Invalid regex pattern - {e}"
+    except Exception as e:
+        _log_decision("search_files.error", {"pattern": pattern, "error": str(e)})
+        return f"Error searching: {e}"
+
+
+@mcp.tool()
 async def list_personas() -> str:
     persona_list = _serialize_personas()
     _log_decision("list_personas", {"count": len(persona_list)})
@@ -388,19 +557,82 @@ def _is_safe_path(path: str) -> tuple[bool, str]:
     return True, ""
 
 
+def _validate_syntax(content: str, filepath: str) -> tuple[bool, str]:
+    """
+    Validate syntax for Python and Nix files.
+    Returns (is_valid, error_message).
+    """
+    # Python syntax check
+    if filepath.endswith(".py"):
+        try:
+            ast.parse(content)
+            _log_decision("syntax_check.python", {"path": filepath, "valid": True})
+            return True, ""
+        except SyntaxError as e:
+            _log_decision("syntax_check.python", {"path": filepath, "valid": False, "error": str(e)})
+            return False, f"Python syntax error at line {e.lineno}: {e.msg}"
+
+    # Nix syntax check (if nix-instantiate is available)
+    if filepath.endswith(".nix"):
+        try:
+            process = subprocess.run(
+                ["nix-instantiate", "--parse", "-"],
+                input=content,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if process.returncode != 0:
+                _log_decision("syntax_check.nix", {"path": filepath, "valid": False})
+                return False, f"Nix syntax error: {process.stderr.strip()}"
+            _log_decision("syntax_check.nix", {"path": filepath, "valid": True})
+            return True, ""
+        except FileNotFoundError:
+            _log_decision("syntax_check.nix", {"path": filepath, "status": "skipped", "reason": "nix-instantiate not found"})
+            return True, ""  # Skip check if nix not available
+        except subprocess.TimeoutExpired:
+            _log_decision("syntax_check.nix", {"path": filepath, "status": "timeout"})
+            return True, ""  # Skip on timeout
+
+    return True, ""
+
+
+def _create_backup(filepath: Path) -> bool:
+    """Create a .bak backup of existing file."""
+    try:
+        backup_path = filepath.with_suffix(filepath.suffix + ".bak")
+        import shutil
+        shutil.copy2(filepath, backup_path)
+        _log_decision("backup_created", {"path": str(filepath), "backup": str(backup_path)})
+        return True
+    except Exception as e:
+        _log_decision("backup_failed", {"path": str(filepath), "error": str(e)})
+        return False
+
+
 @mcp.tool()
-async def save_file(path: str, content: str) -> str:
+async def save_file(
+    path: str,
+    content: str,
+    create_backup: bool = True,
+    validate_syntax: bool = True
+) -> str:
     """
     Write content to a file within the project directory.
 
-    CAUTION: This tool can overwrite existing files. Use with caution.
+    Features:
+    - Auto-creates .bak backup before overwriting (safe rollback)
+    - Syntax validation for Python and Nix files
+    - Security checks for path safety
 
     Args:
         path: Relative path from project root (e.g., "CLAUDE.md", "modules/new.nix")
         content: The content to write to the file
+        create_backup: Create .bak backup before overwriting (default: True)
+        validate_syntax: Validate syntax for Python/Nix files (default: True)
 
     Returns:
-        Success message or error description
+        Success message with backup info, or error description
     """
     # Security check
     is_safe, error_msg = _is_safe_path(path)
@@ -428,16 +660,106 @@ async def save_file(path: str, content: str) -> str:
         _log_decision("save_file.error", {"path": path, "error": str(e)})
         return f"Error creating directory: {e}"
 
+    # Create backup if file exists
+    backup_info = ""
+    if full_path.exists() and create_backup:
+        if _create_backup(full_path):
+            backup_info = " (backup: .bak file created)"
+
+    # Validate syntax before saving
+    if validate_syntax:
+        is_valid, error_msg = _validate_syntax(content, path)
+        if not is_valid:
+            _log_decision("save_file.syntax_error", {"path": path, "error": error_msg})
+            return f"Error: Syntax validation failed\n{error_msg}"
+
     # Write file
     try:
         with open(full_path, "w", encoding="utf-8") as f:
             f.write(content)
 
         _log_decision("save_file.success", {"path": path, "size": len(content)})
-        return f"Successfully wrote {len(content)} bytes to '{path}'"
+        return f"Successfully wrote {len(content)} bytes to '{path}'{backup_info}"
     except Exception as e:
         _log_decision("save_file.error", {"path": path, "error": str(e)})
         return f"Error writing file: {e}"
+
+
+# Safe commands for run_task (whitelist)
+_ALLOWED_COMMANDS = {
+    "just": ["validate", "build", "test", "lint", "fmt", "test-basic", "test-mcp"],
+    "nix": ["fmt", "build", "shell"],
+}
+
+
+def _is_safe_command(cmd: str, args: List[str]) -> tuple[bool, str]:
+    """Check if command is in the whitelist."""
+    if cmd not in _ALLOWED_COMMANDS:
+        return False, f"Command '{cmd}' is not allowed."
+
+    allowed_args = _ALLOWED_COMMANDS.get(cmd, [])
+    for arg in args:
+        if arg.startswith("-"):
+            continue  # Allow flags
+        if arg not in allowed_args and not any(arg.startswith(a) for a in allowed_args):
+            return False, f"Argument '{arg}' is not allowed for '{cmd}'."
+
+    return True, ""
+
+
+@mcp.tool()
+async def run_task(command: str, args: Optional[List[str]] = None) -> str:
+    """
+    Run safe development tasks (just, nix).
+
+    Provides execution loop capability for "write -> validate -> fix" workflow.
+
+    Args:
+        command: Command to run (just, nix)
+        args: Command arguments
+
+    Returns:
+        Command output or error message
+    """
+    if args is None:
+        args = []
+
+    # Security check
+    is_safe, error_msg = _is_safe_command(command, args)
+    if not is_safe:
+        _log_decision("run_task.security_block", {"command": command, "args": args, "reason": error_msg})
+        return f"Error: {error_msg}"
+
+    _log_decision("run_task.request", {"command": command, "args": args})
+
+    try:
+        process = await asyncio.create_subprocess_exec(
+            command, *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+
+        output = stdout.decode("utf-8")
+        error = stderr.decode("utf-8")
+
+        _log_decision("run_task.complete", {"command": command, "returncode": process.returncode})
+
+        result = f"--- Task: {command} {' '.join(args)} ---\n"
+        result += f"Exit code: {process.returncode}\n\n"
+
+        if output:
+            result += f"stdout:\n{output}\n"
+        if error:
+            result += f"stderr:\n{error}\n"
+
+        return result.strip()
+
+    except FileNotFoundError:
+        return f"Error: Command '{command}' not found."
+    except Exception as e:
+        _log_decision("run_task.error", {"command": command, "error": str(e)})
+        return f"Error running task: {e}"
 
 
 if __name__ == "__main__":

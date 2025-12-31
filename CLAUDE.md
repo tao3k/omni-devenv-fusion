@@ -144,17 +144,30 @@ Response:
 5. Test via `/mcp` in Claude Code
 
 ### Write Tool (Phase 3: Agentic Capabilities)
-`save_file` - Write content to files within project:
+`save_file` - Write files with safety features:
 
 | Feature | Implementation |
 |---------|----------------|
-| Path validation | Block absolute paths, `..` traversal |
-| Blocked paths | `/etc/`, `/usr/`, system files |
-| Parent dirs | Auto-create with `mkdir(parents=True)` |
+| Backup | Auto-creates .bak before overwriting |
+| Syntax validation | Python (ast.parse), Nix (nix-instantiate) |
+| Path validation | Blocks absolute paths, `..`, system files |
 | Logging | `_log_decision()` for all operations |
 
-Example usage:
+Example:
 ```
 @omni-orchestrator save_file path="CLAUDE.md" content="# Updated..."
+```
+
+### Execution Loop (Phase 4:闭环)
+`run_task` - Execute safe dev commands (whitelist only):
+
+| Command | Allowed Args |
+|---------|--------------|
+| just | validate, build, test, lint, fmt, test-basic, test-mcp |
+| nix | fmt, build, shell |
+
+Example:
+```
+@omni-orchestrator run_task command="just" args="[validate]"
 ```
 
