@@ -2,6 +2,37 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.2.0](https://github.com/tao3k/omni-devenv-fusion/compare/f869d85de10377cea9de095d67420719a4702704..v1.2.0) - 2025-12-31
+#### Features
+- (**mcp**) complete dual-server architecture with Phase 3 features - ([8f64a16](https://github.com/tao3k/omni-devenv-fusion/commit/8f64a1690ed4ef812920093fe148b92c42eef0ed)) - guangtao
+- (**mcp**) add delegate_to_coder bridge tool (Phase 2) - ([75f5c8f](https://github.com/tao3k/omni-devenv-fusion/commit/75f5c8fc9fc7709d97fc6148d5d8152b6ee7c1ac)) - guangtao
+- (**mcp**) add micro-level tools and safety enhancements - ([207a104](https://github.com/tao3k/omni-devenv-fusion/commit/207a104b922fb8b7228134b56e315629bf69c76b)) - guangtao
+- (**mcp**) add save_file tool for write capabilities (Phase 3) - ([c99444f](https://github.com/tao3k/omni-devenv-fusion/commit/c99444f544280363053d25e8f5421b0cbdfee308)) - guangtao
+- (**mcp**) add list_directory_structure tool for token optimization - ([d6aff17](https://github.com/tao3k/omni-devenv-fusion/commit/d6aff17e8198be3dfdd214aca1f11feb19994af9)) - guangtao
+- allow orchestrator env from json file - ([a33406e](https://github.com/tao3k/omni-devenv-fusion/commit/a33406e3793ee1e844bfd7097b518c1e9f20f11e)) - GuangTao Zhang
+#### Bug Fixes
+- correct dmerge import and lefthook commands path in lefthook.nix - ([fb9c84e](https://github.com/tao3k/omni-devenv-fusion/commit/fb9c84e4f5eaba7cbbdd5ef939b68b0b1007b1f1)) - guangtao
+#### Documentation
+- update CLAUDE.md with new tools and fix passive voice - ([2a7d657](https://github.com/tao3k/omni-devenv-fusion/commit/2a7d6573454361898df42f50c17dd29c834c9ee5)) - guangtao
+- add writing standards system with internalization - ([ba7e69c](https://github.com/tao3k/omni-devenv-fusion/commit/ba7e69c103433033b899529a5b5014ccf9031ee7)) - guangtao
+#### Tests
+- (**mcp**) add comprehensive test suite for all MCP tools - ([83b5d3f](https://github.com/tao3k/omni-devenv-fusion/commit/83b5d3fce1d70e165fcb1de6bd969d603db283a3)) - guangtao
+#### Refactoring
+- (**mcp**) extract shared library mcp_core for dual-server architecture - ([5e69232](https://github.com/tao3k/omni-devenv-fusion/commit/5e692325ee1a69782b5d8f937e97455e04353b83)) - guangtao
+- (**mcp**) split into dual-server architecture (Phase 1) - ([7102bc1](https://github.com/tao3k/omni-devenv-fusion/commit/7102bc1cef3c5ed6cf1841959bdeb121bebbb240)) - guangtao
+#### Miscellaneous Chores
+- (**mcp**) add Coder server tests and fix ast-grep commands - ([651e087](https://github.com/tao3k/omni-devenv-fusion/commit/651e087978eda5fcbcd69b624f8c20f4943772c7)) - guangtao
+- (**mcp**) remove orphaned personas.py (moved to mcp_core/inference.py) - ([7ce721b](https://github.com/tao3k/omni-devenv-fusion/commit/7ce721b7373c908a0f74cd59c1669e53a2325722)) - guangtao
+- follow numtide/prj-spec for project directories - ([476ff03](https://github.com/tao3k/omni-devenv-fusion/commit/476ff0397ce91aac67167183cc91bf7fd8486f49)) - guangtao
+- add mcp test commands and infrastructure - ([e524acf](https://github.com/tao3k/omni-devenv-fusion/commit/e524acfbd013dd4eda643832596d42d0593b6a6e)) - guangtao
+- add omnibus devenv inputs filtering example to tool-router - ([4ad856c](https://github.com/tao3k/omni-devenv-fusion/commit/4ad856cd2bdaf8cbeb23c2b360c2b4d56564b9aa)) - guangtao
+- add tool-router example protocol to CLAUDE.md - ([5fb4a41](https://github.com/tao3k/omni-devenv-fusion/commit/5fb4a410121155d005ec4d50431186c2a04b4e22)) - guangtao
+- add tool-router with nix edit protocol examples - ([7baed74](https://github.com/tao3k/omni-devenv-fusion/commit/7baed74dc682ac920f4dee307f80b0b8db5af5bc)) - guangtao
+- add mcp debug commands to justfile - ([9ea9030](https://github.com/tao3k/omni-devenv-fusion/commit/9ea9030d6cc0404251be14d0af17d0307296c287)) - guangtao
+- sync with release - ([f869d85](https://github.com/tao3k/omni-devenv-fusion/commit/f869d85de10377cea9de095d67420719a4702704)) - guangtao
+
+- - -
+
 ## [v1.1.0](https://github.com/tao3k/omni-devenv-fusion/compare/d538b85ae40a885f5ce5dadc11e2498bfa6b8a05..v1.1.0) - 2025-12-30
 #### Features
 - rename repo to omni-devenv-fusion with MiniMax integration - ([a0f3c18](https://github.com/tao3k/omni-devenv-fusion/commit/a0f3c186aef0854a4fbb7ce057599fce595a1140)) - guangtao

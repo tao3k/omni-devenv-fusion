@@ -34,7 +34,7 @@ let
           # Add Vale for documentation linting
           "check-docs" = {
             glob = "*.md";
-            run = "vale ${staged_files}";
+            run = "vale {staged_files}";
           };
         };
       } initConfigs.lefthook.nix initConfigs.lefthook.shell;
