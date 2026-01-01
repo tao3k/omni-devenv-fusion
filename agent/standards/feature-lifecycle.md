@@ -111,6 +111,34 @@ For L3+ features, verify the feature doesn't break upstream/downstream:
 
 ## 4. Spec-Driven Development (Phase 5)
 
+### 4.0 Pre-Implementation Enforcer (MANDATORY)
+
+**BEFORE writing ANY code, you MUST verify:**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ 1. Does a spec exist?                                               │
+│    - YES → Use it as the source of truth                            │
+│    - NO  → Create `agent/specs/{feature_name}.md` FIRST             │
+│                                                                      │
+│ 2. Is the spec complete?                                            │
+│    - Run `verify_spec_completeness(spec_path="...")`                │
+│    - Fix any TODOs/empty sections before proceeding                 │
+│                                                                      │
+│ 3. Has the user approved the spec?                                  │
+│    - Get explicit confirmation before implementation                 │
+└─────────────────────────────────────────────────────────────────────┘
+
+**VIOLATION**: Implementing without a verified spec = SYSTEMATIC ERROR
+**ACTION**: If you catch yourself about to code without a spec → STOP → Create spec first
+```
+
+**Enforced by MCP Tools**:
+| Tool | Purpose |
+| :--- | :--- |
+| `verify_spec_completeness()` | Checks for empty sections, TODOs, missing test plans |
+| `assess_feature_complexity()` | Requires code diff to determine testing level |
+
 ### 4.1 The Spec-First Workflow
 
 Before writing code, Agents must focus on specifications:

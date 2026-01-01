@@ -23,7 +23,10 @@
       "Bash(python3:*)",
       "Bash(uv run python3:*)",
       "Bash(uv pip install:*)",
-      "Bash(uv run pytest:*)"
+      "Bash(uv run pytest:*)",
+      "Bash(timeout 3 uv run:*)",
+      "Bash(timeout:*)",
+      "mcp__orchestrator__spec_aware_commit"
     ]
   },
   "enableAllProjectMcpServers": true,

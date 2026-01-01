@@ -564,12 +564,12 @@ test_workflow:
 test-mcp-all: test-mcp test_basic test_workflow
     @echo "All MCP tests passed!"
 
-# Phase 9: Code Intelligence - Stress & Benchmark Tests
+# Stress Test Framework - All Suites
 [group('mcp')]
 stress-test:
-    @echo "Running Stress Test Framework..."
-    @echo "================================="
-    @python -m pytest mcp-server/tests/test_stress.py -v
+    @echo "Running Modular Stress Test Framework..."
+    @echo "========================================="
+    @uv run python mcp-server/tests/test_stress.py
 
 # ==============================================================================
 # SRE HEALTH CHECKS

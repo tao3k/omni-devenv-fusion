@@ -546,11 +546,18 @@ Output format (JSON only):
 
 Return JSON only."""
 
-            result = inference.complete(system_prompt=system_prompt, user_query=user_query)
+            # Note: complete() returns Dict[str, Any] with keys: success, content, error, usage
+            result = await inference.complete(system_prompt=system_prompt, user_query=user_query)
+
+            # Extract content from the response dict
+            if isinstance(result, dict):
+                result_text = result.get("content", str(result))
+            else:
+                result_text = str(result)
 
             import re
 
-            json_match = re.search(r"\{[\s\S]*\}", result)
+            json_match = re.search(r"\{[\s\S]*\}", result_text)
             if json_match:
                 commit_data = json.loads(json_match.group())
                 generated_type = commit_data.get("type", "chore")
