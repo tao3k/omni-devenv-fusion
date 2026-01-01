@@ -49,6 +49,24 @@ Edit `.nix` → `consult_language_expert` → Review standards → Apply edits �
 - `mcp-server/` - MCP server code & docs
 - `tool-router/data/examples/` - Few-shot examples
 
+## 📚 Documentation Classification
+
+Understand audience before reading/writing docs:
+
+| Directory         | Audience         | Purpose                                                   |
+| ----------------- | ---------------- | --------------------------------------------------------- |
+| `agent/`          | LLM (Claude)     | How-to guides, standards, specs - context for AI behavior |
+| `docs/`           | Users            | Human-readable manuals, tutorials, explanations           |
+| `mcp-server/*.md` | Developers       | Technical implementation docs, architecture decisions     |
+| `agent/specs/`    | LLM + Developers | Feature specifications, implementation contracts          |
+
+### When to Write Documentation
+
+- **New workflow/process** → `agent/how-to/` (for LLM to follow)
+- **User-facing guide** → `docs/` (for humans)
+- **Implementation details** → `mcp-server/` (for contributors)
+- **Feature spec** → `agent/specs/` (contract between需求 and 实现)
+
 ## 🔌 MCP Dev
 
 Add `@mcp.tool()` → Add security check → Add test → `just test-mcp`

@@ -221,6 +221,7 @@ When an LLM triggers a commit, it should:
 | Condition                         | Agent/LLM Action                                           |
 | --------------------------------- | ---------------------------------------------------------- |
 | User says: "Fix the bug"          | Fix code → Run Tests → **ASK USER** for permission         |
+| User says: "submit/commit"        | **ASK USER** for permission first - do NOT assume!         |
 | User grants permission            | Execute commit                                             |
 | User asks LLM to "run git commit" | **ASK USER** first before executing                        |
 | User asks to force push           | **REFUSE** - Explain risks, ask user to confirm explicitly |
