@@ -133,9 +133,9 @@ This launches an interactive wizard that guides you through:
 
 ## 3. Workflow for Agents (LLM)
 
-### Default Rule: "Stop and Ask"
+### Default Rule: "Stop and Ask" - ALWAYS
 
-By default, when an Agent (LLM) finishes a task, it **MUST NOT** commit code automatically.
+**By default, when an Agent (LLM) finishes a task, it MUST NOT commit code automatically.**
 
 **Agent/LLM Behavior:**
 
@@ -143,34 +143,55 @@ By default, when an Agent (LLM) finishes a task, it **MUST NOT** commit code aut
 2. Run tests
 3. **STOP**
 4. **Ask user for permission** before committing
+5. **Wait for explicit authorization**
+6. Execute commit ONLY after authorization is granted
+
+**Authorization Principles:**
+
+| Aspect | Rule |
+|--------|------|
+| **Permission** | User must explicitly grant authorization to commit |
+| **Scope** | Authorization covers ONE specific commit action only |
+| **Expiration** | Authorization expires immediately after the action completes or when the conversation ends |
 
 **Example:**
 
 ```
 User: "Fix the bug in router."
 
-LLM: Fixed the code -> Ran tests -> "Tests passed. Ready to commit?
-You can review: git diff"
+LLM: Fixed the code → Ran tests → "Tests passed.
+Commit message: fix(mcp): handle router timeout
+
+Please review: git diff
+
+Please grant permission to proceed, or provide feedback."
 ```
 
-### Override Rule: `just agent-commit`
+### Authorization Grant
 
-The Agent/LLM is authorized to perform an automated commit **ONLY IF** the user's prompt **explicitly contains**:
+The Agent/LLM is authorized to commit **ONLY IF** the user explicitly grants permission.
 
-> `"run just agent-commit"`
-
-**Usage:**
-```bash
-just agent-commit <type> <scope> "<message>"
-```
+**Authorization detection:**
+- If user says "you have permission to commit" or "go ahead" or similar → authorized
+- If user says "run just agent-commit" or similar → authorized
+- If user simply describes a task without granting permission → **ASK FIRST**
 
 **Example:**
 ```bash
-# User prompt:
-> "Fix the typo in README and run just agent-commit."
+# User prompt (grants permission):
+> "Fix the typo in README and go ahead with commit."
 
 # LLM executes:
 just agent-commit docs docs "fix typo in readme"
+
+# User prompt (no explicit grant):
+> "Fix the typo in README."
+
+# LLM must:
+1. Fix the typo
+2. Run tests
+3. "Done. Ready to commit. Please grant permission to proceed."
+# WAIT - do not execute until user grants authorization
 ```
 
 ### MCP Tool Integration
@@ -191,12 +212,35 @@ When an LLM triggers a commit, it should:
 
 | Condition | Agent/LLM Action |
 |-----------|------------------|
-| User says: "Fix the bug" | Fix code → Run Tests → **ASK USER** to commit |
-| User says: "Fix the bug and **run just agent-commit**" | Fix code → Run `just agent-commit` |
+| User says: "Fix the bug" | Fix code → Run Tests → **ASK USER** for permission |
+| User grants permission | Execute commit |
 | User asks LLM to "run git commit" | **ASK USER** first before executing |
 | User asks to force push | **REFUSE** - Explain risks, ask user to confirm explicitly |
 | Tests fail | **STOP** and report error. Do not commit. |
 | Pre-commit hooks fail | **STOP** and report error. Do not commit. |
+
+### Never Auto-Commit Without Authorization
+
+**This is NOT allowed:**
+
+```python
+# Wrong: Automatically committing after user says "Fix the bug"
+if user_message == "Fix the bug":
+    fix_code()
+    run_tests()
+    git_commit(...)  # ❌ FORBIDDEN - Must get explicit permission first!
+```
+
+**This is CORRECT:**
+
+```python
+# Correct: Ask user for authorization
+if user_message == "Fix the bug":
+    fix_code()
+    run_tests()
+    ask_user("Done. Ready to commit. Please grant permission to proceed.")
+    # Only execute commit after user grants authorization
+```
 
 ### Git Safety Rules
 
