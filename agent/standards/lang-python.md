@@ -109,68 +109,11 @@ async def my_tool(param: str) -> str:
 - Use `pytest` for unit tests
 - MCP tool tests: Use `test_basic.py` pattern with `send_tool()`
 
-### 4.4 Concurrency Patterns
+### 4.4 Troubleshooting
 
-#### Threading.Lock with Lazy Loading (Critical)
-
-**Anti-Pattern: Eager Loading + Lock = Deadlock**
-```python
-# WRONG - Will deadlock in uv run / multiprocessing environments
-import threading
-
-_lock = threading.Lock()
-_data = {}
-
-def _ensure_loaded():
-    with _lock:
-        # Load data...
-
-_ensure_loaded()  # <-- Eager loading at import time!
-```
-
-**Root Cause:**
-1. Lock acquired during `import`
-2. Process forks (uv run spawns workers)
-3. Child inherits locked state but no thread to release it
-4. Deadlock!
-
-**Correct Pattern: Pure Lazy Loading + Double-Checked Locking**
-```python
-# CORRECT - Thread-safe and fork-safe
-import threading
-
-_data = {}
-_loaded = False
-_lock = threading.Lock()
-
-def _ensure_loaded():
-    # Fast path: No lock if already loaded
-    if _loaded:
-        return
-    # Slow path: Acquire lock and load
-    with _lock:
-        _load_data_internal()
-
-def _load_data_internal():
-    global _data, _loaded
-    if _loaded:
-        return
-    # Load data...
-    _loaded = True
-
-# NOTE: No eager loading! Deferred to first get_xxx() call.
-```
-
-**Key Rules:**
-1. ❌ Never call `_ensure_loaded()` at module level
-2. ✅ Use `with _lock:` for atomic operations
-3. ✅ Double-check pattern for performance
-4. ✅ Pure lazy loading avoids fork deadlock
-
-#### Wrong Solution: Boolean Flag (Race Condition)
-Using `_lock_locked = True/False` instead of Lock causes:
-- Thread B returns empty data while Thread A is loading
-- Race condition leads to `KeyError` or missing data
+For Python-specific issues (threading, uv, concurrency), see:
+- `agent/knowledge/threading-lock-deadlock.md`
+- `agent/knowledge/uv-workspace-config.md`
 
 ## 5. Related Documentation
 

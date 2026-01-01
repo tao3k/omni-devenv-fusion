@@ -62,10 +62,23 @@ When a command times out repeatedly:
 
 | Cause | Solution |
 |-------|----------|
-| Process fork deadlock | Use lazy loading pattern (see `lang-python.md`) |
+| Process fork deadlock | See `agent/knowledge/threading-lock-deadlock.md` |
 | Import cycle | Refactor to break circular dependencies |
 | Network timeout | Check connectivity, increase timeout |
 | Infinite loop | Add timeout, simplify logic |
+
+### Knowledge Base
+
+For language-specific issues, search the knowledge base:
+
+```bash
+# When you encounter a specific technical issue:
+# 1. Identify keywords (e.g., "threading", "deadlock", "uv")
+# 2. Search in agent/knowledge/
+# 3. Read the corresponding .md file for solution
+
+# Example: Python threading deadlock
+See: agent/knowledge/threading-lock-deadlock.md
 
 ---
 
@@ -126,7 +139,7 @@ cd module_dir && python -c "import module"
 - Timeout persists after 3 different investigation approaches
 - Deadlock involving system resources (locks, threads, signals)
 - Import path conflicts that `uv sync` doesn't resolve
-- Language-specific concurrency issues → See `lang-*.md`
+- Language-specific issues → Search `agent/knowledge/`
 
 ---
 
