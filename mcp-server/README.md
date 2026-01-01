@@ -4,11 +4,11 @@
 
 This server exposes three tool categories:
 
-| Tool | Purpose |
-|------|---------|
-| `list_personas` | Advertises available roles with use cases |
-| `consult_specialist` | Routes questions to specialized personas |
-| `consult_router` | [Cortex] Routes queries to Tool Domains (GitOps, ProductOwner, Coder, etc.) |
+| Tool                 | Purpose                                                                     |
+| -------------------- | --------------------------------------------------------------------------- |
+| `list_personas`      | Advertises available roles with use cases                                   |
+| `consult_specialist` | Routes questions to specialized personas                                    |
+| `consult_router`     | [Cortex] Routes queries to Tool Domains (GitOps, ProductOwner, Coder, etc.) |
 
 ## The Problem It Solves
 
@@ -60,27 +60,27 @@ Expected output:
 
 Control client and runtime behavior via environment variables:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | _required_ | API key for the orchestrator. |
-| `ANTHROPIC_BASE_URL` | `https://api.minimax.io/anthropic` | Anthropic-compatible endpoint. |
-| `ORCHESTRATOR_MODEL` | `MiniMax-M2.1` | Model name. Falls back to `ANTHROPIC_MODEL`. |
-| `ORCHESTRATOR_TIMEOUT` | `30` | Request timeout in seconds. |
-| `ORCHESTRATOR_MAX_TOKENS` | `4096` | Max response tokens. |
-| `ORCHESTRATOR_ENABLE_STREAMING` | `false` | Set to `true` for streaming responses. |
-| `ORCHESTRATOR_LOG_LEVEL` | `INFO` | Logging level for JSON output. |
-| `ORCHESTRATOR_ENV_FILE` | `.mcp.json` | Preload env from JSON (flat or `mcpServers.orchestrator.env`). |
+| Variable                        | Default                            | Description                                                    |
+| ------------------------------- | ---------------------------------- | -------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`             | _required_                         | API key for the orchestrator.                                  |
+| `ANTHROPIC_BASE_URL`            | `https://api.minimax.io/anthropic` | Anthropic-compatible endpoint.                                 |
+| `ORCHESTRATOR_MODEL`            | `MiniMax-M2.1`                     | Model name. Falls back to `ANTHROPIC_MODEL`.                   |
+| `ORCHESTRATOR_TIMEOUT`          | `30`                               | Request timeout in seconds.                                    |
+| `ORCHESTRATOR_MAX_TOKENS`       | `4096`                             | Max response tokens.                                           |
+| `ORCHESTRATOR_ENABLE_STREAMING` | `false`                            | Set to `true` for streaming responses.                         |
+| `ORCHESTRATOR_LOG_LEVEL`        | `INFO`                             | Logging level for JSON output.                                 |
+| `ORCHESTRATOR_ENV_FILE`         | `.mcp.json`                        | Preload env from JSON (flat or `mcpServers.orchestrator.env`). |
 
 ---
 
 ## Available Personas
 
-| Persona | Role | When to Use |
-|---------|------|-------------|
-| `architect` | High-level design | Splitting modules, defining boundaries, refactoring strategies |
-| `platform_expert` | Nix/OS infrastructure | devenv configs, containers, environment variables |
-| `devops_mlops` | CI/CD and pipelines | Build workflows, reproducibility, model training |
-| `sre` | Reliability and security | Error handling, performance, vulnerability checks |
+| Persona           | Role                     | When to Use                                                    |
+| ----------------- | ------------------------ | -------------------------------------------------------------- |
+| `architect`       | High-level design        | Splitting modules, defining boundaries, refactoring strategies |
+| `platform_expert` | Nix/OS infrastructure    | devenv configs, containers, environment variables              |
+| `devops_mlops`    | CI/CD and pipelines      | Build workflows, reproducibility, model training               |
+| `sre`             | Reliability and security | Error handling, performance, vulnerability checks              |
 
 ---
 
@@ -88,15 +88,15 @@ Control client and runtime behavior via environment variables:
 
 The Orchestrator includes **The Cortex** - a semantic tool routing system that maps user intent to the correct Tool Domain.
 
-| Domain | Description | Example Tools |
-|--------|-------------|---------------|
-| `GitOps` | Version control, commits | smart_commit, git_status, git_log |
-| `ProductOwner` | Specs, requirements | draft_feature_spec, verify_spec_completeness |
-| `Coder` | Code exploration | get_codebase_context, delegate_to_coder |
-| `QA` | Quality assurance | review_staged_changes, run_tests, analyze_test_results |
-| `Memory` | Context, tasks | manage_context, memory_garden |
-| `DevOps` | Nix, infra | community_proxy, consult_specialist, run_task |
-| `Search` | Code search | search_project_code |
+| Domain         | Description              | Example Tools                                          |
+| -------------- | ------------------------ | ------------------------------------------------------ |
+| `GitOps`       | Version control, commits | smart_commit, git_status, git_log                      |
+| `ProductOwner` | Specs, requirements      | draft_feature_spec, verify_spec_completeness           |
+| `Coder`        | Code exploration         | get_codebase_context, delegate_to_coder                |
+| `QA`           | Quality assurance        | review_staged_changes, run_tests, analyze_test_results |
+| `Memory`       | Context, tasks           | manage_context, memory_garden                          |
+| `DevOps`       | Nix, infra               | community_proxy, consult_specialist, run_task          |
+| `Search`       | Code search              | search_project_code                                    |
 
 ### Consult the Router
 
@@ -112,6 +112,7 @@ Use `consult_router` when you're unsure which tool to use:
 ```
 
 **Response:**
+
 ```
 --- 🧠 Cortex Routing Result ---
 Domain: ProductOwner (Confidence: 0.9)
@@ -143,12 +144,14 @@ Call this tool to perform a Tech Lead level code review on staged changes:
 ```
 
 **What it checks:**
+
 - **Style**: Alignment with `agent/standards/*`
 - **Safety**: Security vulnerabilities
 - **Clarity**: Descriptive naming, complexity
 - **Docs**: Docstrings and comments
 
 **Response:**
+
 ```
 --- The Immune System (Code Review) ---
 
@@ -294,6 +297,7 @@ Give the Agent this prompt to add a new capability:
 ```
 
 The Agent will:
+
 1. Route to ProductOwner → Draft a spec
 2. Route to Coder → Implement the tool
 3. Route to Immune System → Review the code
@@ -316,6 +320,7 @@ The Agent will:
 ```
 
 **Parameters:**
+
 - `pattern`: Regex pattern to search (required)
 - `path`: Search directory (default: ".")
 - `file_type`: Filter by extension (e.g., "py", "nix")
@@ -323,6 +328,7 @@ The Agent will:
 - `context_lines`: Lines of context around matches (default: 2)
 
 **Output:**
+
 ```
 Found 5 matches in 2 files (12.34ms):
 
@@ -355,6 +361,7 @@ The Orchestrator includes **Code Intelligence** capabilities using `ast-grep` fo
 ```
 
 **Pattern Examples:**
+
 - `def $NAME` - Find all function definitions
 - `async def $NAME` - Find all async functions
 - `if $COND:` - Find all if statements
@@ -378,17 +385,18 @@ The Orchestrator includes **Code Intelligence** capabilities using `ast-grep` fo
 ```
 
 **Benefits:**
+
 - **Zero False Positives**: Understands code structure, not just text
 - **Safe Refactoring**: Preview changes before applying
 - **Language-Aware**: Supports Python, Rust, Go, TypeScript, and more
 
 ### When to Use
 
-| Tool | Use Case |
-|------|----------|
-| `search_project_code` | General text search across all files |
-| `ast_search` | Find code by AST structure (functions, classes, imports) |
-| `ast_rewrite` | Refactor code patterns safely |
+| Tool                  | Use Case                                                 |
+| --------------------- | -------------------------------------------------------- |
+| `search_project_code` | General text search across all files                     |
+| `ast_search`          | Find code by AST structure (functions, classes, imports) |
+| `ast_rewrite`         | Refactor code patterns safely                            |
 
 ---
 
@@ -414,14 +422,14 @@ mcp-server/tests/
 
 ### Core Components
 
-| Component | Purpose |
-|-----------|---------|
-| `StressConfig` | Configuration (files, thresholds, cleanup) |
-| `BenchmarkRunner` | Performance benchmarks |
-| `LogicTestRunner` | Logic depth tests |
-| `StabilityTestRunner` | Chaos/stability tests |
-| `StressReporter` | Report generation |
-| `Phase9Suite` | Complete Phase 9 test suite |
+| Component             | Purpose                                    |
+| --------------------- | ------------------------------------------ |
+| `StressConfig`        | Configuration (files, thresholds, cleanup) |
+| `BenchmarkRunner`     | Performance benchmarks                     |
+| `LogicTestRunner`     | Logic depth tests                          |
+| `StabilityTestRunner` | Chaos/stability tests                      |
+| `StressReporter`      | Report generation                          |
+| `Phase9Suite`         | Complete Phase 9 test suite                |
 
 ### Run Tests
 
@@ -471,10 +479,12 @@ print(f"Duration: {result.duration}s")
 
 ```json
 {
-  "content": [{
-    "type": "text",
-    "text": "Available personas:\n- architect: High-level design decisions\n- platform_expert: Nix and infrastructure\n- devops_mlops: CI/CD and pipelines\n- sre: Security and reliability"
-  }]
+  "content": [
+    {
+      "type": "text",
+      "text": "Available personas:\n- architect: High-level design decisions\n- platform_expert: Nix and infrastructure\n- devops_mlops: CI/CD and pipelines\n- sre: Security and reliability"
+    }
+  ]
 }
 ```
 
@@ -497,10 +507,12 @@ print(f"Duration: {result.duration}s")
 
 ```json
 {
-  "content": [{
-    "type": "text",
-    "text": "For a multitenant control plane, consider..."
-  }]
+  "content": [
+    {
+      "type": "text",
+      "text": "For a multitenant control plane, consider..."
+    }
+  ]
 }
 ```
 

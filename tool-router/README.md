@@ -6,15 +6,15 @@ Claude tool-router practice with a driver script. Follows the cookbook pattern: 
 
 Each line is a JSON object:
 
-| Field | Description | Cookbook Mapping |
-| --- | --- | --- |
-| `id` | Unique tool identifier. | Tool name exposed to router. |
-| `intent` | One-line task summary. | User's task description. |
-| `syntax_focus` | Required syntax/APIs. | Router tool capabilities. |
-| `do_not` | Anti-patterns to avoid. | Negative constraints. |
-| `allowed_edits` | Valid edit examples. | "Capabilities" lists. |
-| `checks` | Post-edit tests to run. | "Post-call checks". |
-| `notes` | Edge case clarifications. | Tool card nuances. |
+| Field           | Description               | Cookbook Mapping             |
+| --------------- | ------------------------- | ---------------------------- |
+| `id`            | Unique tool identifier.   | Tool name exposed to router. |
+| `intent`        | One-line task summary.    | User's task description.     |
+| `syntax_focus`  | Required syntax/APIs.     | Router tool capabilities.    |
+| `do_not`        | Anti-patterns to avoid.   | Negative constraints.        |
+| `allowed_edits` | Valid edit examples.      | "Capabilities" lists.        |
+| `checks`        | Post-edit tests to run.   | "Post-call checks".          |
+| `notes`         | Edge case clarifications. | Tool card nuances.           |
 
 Entries may include `before`/`after`/`example` snippets—usage examples that help disambiguate similar tools.
 

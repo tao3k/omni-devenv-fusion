@@ -7,12 +7,12 @@
 
 ### Why Did Version Bump Fail Repeatedly?
 
-| Problem | Root Cause | Solution |
-|---------|------------|----------|
-| Cog skipped v1.3.0 | Remote v1.2.0 tag existed but VERSION was 1.3.0-dev | Delete stale remote tags before bump |
-| Merge conflicts in release branch | Previous failed bump left unresolved state | Delete stale release branches |
-| Wrong version target | Local tag didn't match remote tag | Sync local/remote tags |
-| Release created wrong version | Cog used latest remote tag (v1.2.0) as base | Ensure tags are clean before bump |
+| Problem                           | Root Cause                                          | Solution                             |
+| --------------------------------- | --------------------------------------------------- | ------------------------------------ |
+| Cog skipped v1.3.0                | Remote v1.2.0 tag existed but VERSION was 1.3.0-dev | Delete stale remote tags before bump |
+| Merge conflicts in release branch | Previous failed bump left unresolved state          | Delete stale release branches        |
+| Wrong version target              | Local tag didn't match remote tag                   | Sync local/remote tags               |
+| Release created wrong version     | Cog used latest remote tag (v1.2.0) as base         | Ensure tags are clean before bump    |
 
 ### Core Issues
 
@@ -85,11 +85,11 @@ git push origin main
 
 ### Tag States
 
-| State | When | Command |
-|-------|------|---------|
-| Release tag | After version commit | `git tag vX.Y.0` |
-| Delete stale | Before new release | `git tag -d vX.Y.0 && git push origin :refs/tags/vX.Y.0` |
-| Sync | VERSION mismatch | Delete old, create new |
+| State        | When                 | Command                                                  |
+| ------------ | -------------------- | -------------------------------------------------------- |
+| Release tag  | After version commit | `git tag vX.Y.0`                                         |
+| Delete stale | Before new release   | `git tag -d vX.Y.0 && git push origin :refs/tags/vX.Y.0` |
+| Sync         | VERSION mismatch     | Delete old, create new                                   |
 
 ### Before Every Release
 
@@ -159,23 +159,23 @@ Development (X.Y.0-dev) → Release (X.Y.0) → Development ((X+1).Y.0-dev)
 
 ## 6. Configuration Source of Truth
 
-| File | Purpose | Update Via |
-|------|---------|------------|
+| File       | Purpose           | Update Via                            |
+| ---------- | ----------------- | ------------------------------------- |
 | `cog.toml` | Cog configuration | `units/modules/lefthook.nix` (nixago) |
-| `VERSION` | Current version | Manual or `cog bump` |
-| Tags | Release markers | Manual or `cog bump` |
+| `VERSION`  | Current version   | Manual or `cog bump`                  |
+| Tags       | Release markers   | Manual or `cog bump`                  |
 
 **IMPORTANT**: Never edit `cog.toml` directly. Modify `units/modules/lefthook.nix` and run `direnv reload`.
 
 ## 7. Anti-Patterns to Avoid
 
-| Anti-Pattern | Correct Approach |
-|--------------|------------------|
+| Anti-Pattern                                  | Correct Approach             |
+| --------------------------------------------- | ---------------------------- |
 | Manually editing VERSION without syncing tags | Sync local/remote tags first |
-| Force pushing to release branches | Create new branch or PR |
-| Deleting worktree/repo | Use `git reset --soft` |
-| Merging with unresolved conflicts | Delete and recreate branch |
-| Editing cog.toml directly | Edit lefthook.nix instead |
+| Force pushing to release branches             | Create new branch or PR      |
+| Deleting worktree/repo                        | Use `git reset --soft`       |
+| Merging with unresolved conflicts             | Delete and recreate branch   |
+| Editing cog.toml directly                     | Edit lefthook.nix instead    |
 
 ## 8. Quick Reference Commands
 
@@ -209,4 +209,4 @@ release() {
 
 ---
 
-*Last updated: 2026-01-01*
+_Last updated: 2026-01-01_

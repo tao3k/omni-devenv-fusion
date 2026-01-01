@@ -86,23 +86,23 @@ We extend MCP with a policy layer. The Bridge isn't new—it's the **Decorator P
 User Request → Orchestrator (The Bridge) → Personas → Coder → Validate
 ```
 
-| Capability | Purpose |
-|------------|---------|
-| **Context Injection** | Every query gets project-aware context |
-| **Policy Enforcement** | Rejects requests that violate `CLAUDE.md` |
-| **Persona Routing** | SRE for security, Architect for design, Tech Writer for docs |
+| Capability             | Purpose                                                      |
+| ---------------------- | ------------------------------------------------------------ |
+| **Context Injection**  | Every query gets project-aware context                       |
+| **Policy Enforcement** | Rejects requests that violate `CLAUDE.md`                    |
+| **Persona Routing**    | SRE for security, Architect for design, Tech Writer for docs |
 
 ### Solution 2: Personas as Guardrails
 
 Use AI to check AI.
 
-| Persona | Role | What It Prevents |
-|---------|------|------------------|
-| `architect` | Design review | Bad architectural decisions |
-| `platform_expert` | Nix review | Broken devenv configs |
-| `devops_mlops` | CI/CD review | Failing pipelines |
-| `sre` | Security review | Vulnerabilities |
-| `tech_writer` | Docs review | Verbose, passive docs |
+| Persona           | Role            | What It Prevents            |
+| ----------------- | --------------- | --------------------------- |
+| `architect`       | Design review   | Bad architectural decisions |
+| `platform_expert` | Nix review      | Broken devenv configs       |
+| `devops_mlops`    | CI/CD review    | Failing pipelines           |
+| `sre`             | Security review | Vulnerabilities             |
+| `tech_writer`     | Docs review     | Verbose, passive docs       |
 
 ### Solution 3: Writing Standards System
 
@@ -117,17 +117,18 @@ Automated documentation quality:
 
 Long-term project memory in `.memory/`:
 
-| Operation | Purpose |
-|-----------|---------|
+| Operation      | Purpose                                      |
+| -------------- | -------------------------------------------- |
 | `add_decision` | Record ADRs (Architectural Decision Records) |
-| `add_task` | Track technical debt |
-| `save_context` | Snapshot project state |
+| `add_task`     | Track technical debt                         |
+| `save_context` | Snapshot project state                       |
 
 ### Solution 5: Safe Execution
 
 Sandboxed commands with whitelist:
 
 **Allowed:**
+
 ```bash
 just validate
 just test-mcp
@@ -136,6 +137,7 @@ nix fmt
 ```
 
 **Blocked:**
+
 ```bash
 rm -rf
 git reset --hard
@@ -157,14 +159,14 @@ def test_new_tool():
 
 ## What We Bring to the Community
 
-| Community Problem | Our Solution |
-|-------------------|--------------|
-| AI is context-blind | Bridge Pattern with persona delegation |
-| No engineering rigor | Test-First Protocol + Personas as Guardrails |
-| Tool sprawl | Unified MCP architecture (Orchestrator + Coder) |
-| AI breaks things | Safe execution whitelist |
-| Documentation debt | Writing Standards System (Vale + Tech Writer) |
-| No project memory | Memory Garden for ADRs and lessons |
+| Community Problem    | Our Solution                                    |
+| -------------------- | ----------------------------------------------- |
+| AI is context-blind  | Bridge Pattern with persona delegation          |
+| No engineering rigor | Test-First Protocol + Personas as Guardrails    |
+| Tool sprawl          | Unified MCP architecture (Orchestrator + Coder) |
+| AI breaks things     | Safe execution whitelist                        |
+| Documentation debt   | Writing Standards System (Vale + Tech Writer)   |
+| No project memory    | Memory Garden for ADRs and lessons              |
 
 ---
 
@@ -172,15 +174,15 @@ def test_new_tool():
 
 We stand on the shoulders of giants:
 
-| What We Use | Why |
-|-------------|-----|
-| **MCP** | Standard protocol for AI-tools integration |
-| **Vale** | Proven prose linter (we integrate, not rewrite) |
-| **Claude Cookbooks** | Orchestrator pattern, personas |
-| **ast-grep** | Standard AST-based code search |
-| **Nix** | Reproducible builds (the foundation) |
-| **On Writing Well** | Proven writing principles |
-| **numtide/prj-spec** | Project directory conventions |
+| What We Use          | Why                                             |
+| -------------------- | ----------------------------------------------- |
+| **MCP**              | Standard protocol for AI-tools integration      |
+| **Vale**             | Proven prose linter (we integrate, not rewrite) |
+| **Claude Cookbooks** | Orchestrator pattern, personas                  |
+| **ast-grep**         | Standard AST-based code search                  |
+| **Nix**              | Reproducible builds (the foundation)            |
+| **On Writing Well**  | Proven writing principles                       |
+| **numtide/prj-spec** | Project directory conventions                   |
 
 **Our Contribution**: We synthesized these into a **cohesive, documented, testable system**.
 
@@ -225,12 +227,12 @@ We don't claim to have invented:
 
 ## Next Steps
 
-| Goal | Resource |
-|------|----------|
-| Get started quickly | [Tutorial: Getting Started](../tutorials/getting-started.md) |
-| Solve a specific problem | [How-to Guides](../how-to/) |
-| Browse API commands | [Reference](../reference/) |
+| Goal                     | Resource                                                     |
+| ------------------------ | ------------------------------------------------------------ |
+| Get started quickly      | [Tutorial: Getting Started](../tutorials/getting-started.md) |
+| Solve a specific problem | [How-to Guides](../how-to/)                                  |
+| Browse API commands      | [Reference](../reference/)                                   |
 
 ---
 
-*Built on standards. Not reinventing the wheel.*
+_Built on standards. Not reinventing the wheel._

@@ -10,13 +10,13 @@
 
 MCP tools provide flexibility that Claude.md cannot match:
 
-| Capability | MCP Tools | Claude.md |
-|------------|-----------|-----------|
-| Dynamic Query | ✅ Runtime filtering by params | ❌ Full content load |
-| Structured Return | ✅ JSON / parsed data | ❌ Raw text |
-| Cross-session Persistence | ✅ File system / DB | ❌ Current session only |
-| Conditional Logic | ✅ Different content per input | ❌ Static content |
-| Version Control | ✅ Tools can evolve | ❌ Manual sync needed |
+| Capability                | MCP Tools                      | Claude.md               |
+| ------------------------- | ------------------------------ | ----------------------- |
+| Dynamic Query             | ✅ Runtime filtering by params | ❌ Full content load    |
+| Structured Return         | ✅ JSON / parsed data          | ❌ Raw text             |
+| Cross-session Persistence | ✅ File system / DB            | ❌ Current session only |
+| Conditional Logic         | ✅ Different content per input | ❌ Static content       |
+| Version Control           | ✅ Tools can evolve            | ❌ Manual sync needed   |
 
 ### 1.2 Real-World Scenario
 
@@ -41,12 +41,12 @@ MCP tools provide flexibility that Claude.md cannot match:
 
 Claude.md remains the "top-level guidance," but excels in these scenarios:
 
-| Scenario | Reason |
-|----------|--------|
-| Behavioral Rules | "What not to do" matters more than "what to query" |
-| Workflow SOP | Multi-step processes need global view |
-| Role Definition | System-level roles don't fit into tools |
-| First Conversation | Avoid cold-start tool chain breakage |
+| Scenario           | Reason                                             |
+| ------------------ | -------------------------------------------------- |
+| Behavioral Rules   | "What not to do" matters more than "what to query" |
+| Workflow SOP       | Multi-step processes need global view              |
+| Role Definition    | System-level roles don't fit into tools            |
+| First Conversation | Avoid cold-start tool chain breakage               |
 
 ### 2.1 Decision Boundary
 
@@ -103,12 +103,12 @@ async def load_git_workflow_memory() -> str:
 
 ### 3.3 Tool Naming Convention
 
-| Type | Prefix | Example |
-|------|--------|---------|
-| Load/Read | `load_*` | `load_git_workflow_memory` |
-| Validate | `validate_*` | `validate_commit_message` |
-| Query | `get_*` | `get_feature_requirements` |
-| Execute | `*_operation` | `execute_doc_action` |
+| Type      | Prefix        | Example                    |
+| --------- | ------------- | -------------------------- |
+| Load/Read | `load_*`      | `load_git_workflow_memory` |
+| Validate  | `validate_*`  | `validate_commit_message`  |
+| Query     | `get_*`       | `get_feature_requirements` |
+| Execute   | `*_operation` | `execute_doc_action`       |
 
 ---
 
@@ -127,12 +127,12 @@ If mostly "Yes," use MCP.
 
 ## 5. Existing MCP Memory Tools Reference
 
-| Tool | Persisted Content | Claude.md Equivalent |
-|------|-------------------|----------------------|
-| `load_git_workflow_memory` | git-workflow.md | ✅ CLAUDE.md git rules |
-| `get_doc_protocol` | Document protocol summary | ✅ docs/*.md |
-| `get_feature_requirements` | Complexity requirements | ✅ agent/standards/feature-lifecycle.md |
-| `get_language_standards` | Language standards | ✅ agent/standards/lang-*.md |
+| Tool                       | Persisted Content         | Claude.md Equivalent                    |
+| -------------------------- | ------------------------- | --------------------------------------- |
+| `load_git_workflow_memory` | git-workflow.md           | ✅ CLAUDE.md git rules                  |
+| `get_doc_protocol`         | Document protocol summary | ✅ docs/\*.md                           |
+| `get_feature_requirements` | Complexity requirements   | ✅ agent/standards/feature-lifecycle.md |
+| `get_language_standards`   | Language standards        | ✅ agent/standards/lang-\*.md           |
 
 ---
 
@@ -157,11 +157,14 @@ async def get_rules() -> str:
 
 ```markdown
 # ❌ Claude.md with lots of queryable rules
+
 ## git-workflow.md rules
+
 type can be: feat, fix, docs, style...
 scope can be: nix, mcp, router...
 
 # ✅ Migrate to MCP tool
+
 @omni-orchestrator check_commit_scope scope="mcp"
 ```
 
@@ -185,11 +188,11 @@ Target State:
 
 ## 8. Summary
 
-| Question | Answer |
-|----------|--------|
-| Memory via MCP or Claude.md? | **Prefer MCP** |
-| When to use Claude.md? | Behavioral rules, workflow SOP, first-time guidance |
-| MCP advantages? | Dynamic, cached, structured, composable |
-| When to skip MCP? | Static content, low frequency, security-sensitive |
+| Question                     | Answer                                              |
+| ---------------------------- | --------------------------------------------------- |
+| Memory via MCP or Claude.md? | **Prefer MCP**                                      |
+| When to use Claude.md?       | Behavioral rules, workflow SOP, first-time guidance |
+| MCP advantages?              | Dynamic, cached, structured, composable             |
+| When to skip MCP?            | Static content, low frequency, security-sensitive   |
 
 > **Remember**: MCP is the "API layer" for memory, Claude.md is the "documentation layer" for memory. APIs are more precise and reusable than documentation.

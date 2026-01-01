@@ -22,14 +22,14 @@ mcp-server/tests/
 
 ### Core Components
 
-| Component | Purpose |
-|-----------|---------|
-| `StressConfig` | Configuration management |
-| `TestRunner` | Orchestrates test execution |
-| `TestSuite` | Groups related test cases |
-| `TestCase` | Individual test definition |
+| Component         | Purpose                                |
+| ----------------- | -------------------------------------- |
+| `StressConfig`    | Configuration management               |
+| `TestRunner`      | Orchestrates test execution            |
+| `TestSuite`       | Groups related test cases              |
+| `TestCase`        | Individual test definition             |
 | `MetricCollector` | Collects performance/stability metrics |
-| `Reporter` | Generates reports in multiple formats |
+| `Reporter`        | Generates reports in multiple formats  |
 
 ## Usage
 
@@ -132,12 +132,12 @@ runner.report(result, ReportFormat.MARKDOWN)
 
 ## Metrics Collected
 
-| Metric | Type | Description |
-|--------|------|-------------|
-| `duration` | PERFORMANCE | Average test execution time |
-| `throughput` | PERFORMANCE | Operations per second |
-| `stability_passed` | STABILITY | Number of passed stability tests |
-| `stability_failed` | STABILITY | Number of failed stability tests |
+| Metric             | Type        | Description                      |
+| ------------------ | ----------- | -------------------------------- |
+| `duration`         | PERFORMANCE | Average test execution time      |
+| `throughput`       | PERFORMANCE | Operations per second            |
+| `stability_passed` | STABILITY   | Number of passed stability tests |
+| `stability_failed` | STABILITY   | Number of failed stability tests |
 
 ## Phase 9: Code Intelligence Suite
 

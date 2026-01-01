@@ -6,13 +6,13 @@
 
 All auto-generated/temporary files MUST follow [numtide/prj-spec](https://github.com/numtide/prj-spec):
 
-| Directory | Purpose |
-|-----------|---------|
-| `.cache/` | Caches, build artifacts, temporary data |
+| Directory  | Purpose                                 |
+| ---------- | --------------------------------------- |
+| `.cache/`  | Caches, build artifacts, temporary data |
 | `.config/` | Auto-generated configs (nixago outputs) |
-| `.data/` | Runtime data, databases |
-| `.run/` | PID files, runtime state |
-| `.bin/` | Generated binaries, scripts |
+| `.data/`   | Runtime data, databases                 |
+| `.run/`    | PID files, runtime state                |
+| `.bin/`    | Generated binaries, scripts             |
 
 **Rules:**
 
@@ -25,11 +25,11 @@ All auto-generated/temporary files MUST follow [numtide/prj-spec](https://github
 
 Use devenv/direnv for all development tasks:
 
-| Command | Purpose |
-|---------|---------|
+| Command         | Purpose                                   |
+| --------------- | ----------------------------------------- |
 | `direnv reload` | Reload environment after `.envrc` changes |
-| `devenv shell` | Enter isolated development shell |
-| `devenv up` | Start devenv services |
+| `devenv shell`  | Enter isolated development shell          |
+| `devenv up`     | Start devenv services                     |
 
 **Workflow:**
 
@@ -40,8 +40,8 @@ Use devenv/direnv for all development tasks:
 
 ## 3. Related Documentation
 
-| File | Purpose |
-|------|---------|
-| `agent/how-to/git-workflow.md` | Git operations and commit protocol |
-| `agent/standards/feature-lifecycle.md` | Spec-driven development workflow |
-| `agent/writing-style/` | Writing standards |
+| File                                   | Purpose                            |
+| -------------------------------------- | ---------------------------------- |
+| `agent/how-to/git-workflow.md`         | Git operations and commit protocol |
+| `agent/standards/feature-lifecycle.md` | Spec-driven development workflow   |
+| `agent/writing-style/`                 | Writing standards                  |

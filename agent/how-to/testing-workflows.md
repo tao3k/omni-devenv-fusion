@@ -8,12 +8,12 @@
 
 ## 1. Test Levels
 
-| Level | Path | Scope | Command | Timeout | Rules |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Unit** | `mcp-server/tests/` | Single module | `just test-unit` | < 30s | Fast, no network/disk I/O |
-| **Integration** | `tests/integration/` | Module interaction | `just test-int` | < 2m | Can touch DB/FS, mock external APIs |
-| **E2E** | `tests/e2e/` | Full system | `just test-e2e` | < 10m | CI only, real external services |
-| **MCP** | `mcp-server/tests/test_basic.py` | MCP tools | `just test-mcp` | < 60s | Verify all tools work |
+| Level           | Path                             | Scope              | Command          | Timeout | Rules                               |
+| :-------------- | :------------------------------- | :----------------- | :--------------- | :------ | :---------------------------------- |
+| **Unit**        | `mcp-server/tests/`              | Single module      | `just test-unit` | < 30s   | Fast, no network/disk I/O           |
+| **Integration** | `tests/integration/`             | Module interaction | `just test-int`  | < 2m    | Can touch DB/FS, mock external APIs |
+| **E2E**         | `tests/e2e/`                     | Full system        | `just test-e2e`  | < 10m   | CI only, real external services     |
+| **MCP**         | `mcp-server/tests/test_basic.py` | MCP tools          | `just test-mcp`  | < 60s   | Verify all tools work               |
 
 ---
 
@@ -41,13 +41,13 @@ When running tests during development:
 
 ### Decision Matrix
 
-| Modified Files | Action | Reason |
-| :--- | :--- | :--- |
-| `docs/`, `agent/`, `*.md` only | **Skip tests** | Docs don't affect code |
-| `mcp-server/*.py` | Run `just test-mcp` | Test MCP tools only |
-| `tool-router/**` | Run `just test-mcp` | Test routing only |
-| `*.nix`, `devenv.nix` | Run `just test` | Infrastructure affects all |
-| Mixed (code + docs) | Run `just test` | Code changes need testing |
+| Modified Files                 | Action              | Reason                     |
+| :----------------------------- | :------------------ | :------------------------- |
+| `docs/`, `agent/`, `*.md` only | **Skip tests**      | Docs don't affect code     |
+| `mcp-server/*.py`              | Run `just test-mcp` | Test MCP tools only        |
+| `tool-router/**`               | Run `just test-mcp` | Test routing only          |
+| `*.nix`, `devenv.nix`          | Run `just test`     | Infrastructure affects all |
+| Mixed (code + docs)            | Run `just test`     | Code changes need testing  |
 
 ---
 
@@ -66,14 +66,17 @@ just test           # All tests (devenv test)
 ## 4. Standards Enforcement
 
 ### Test Naming
+
 - Test files must match `test_*.py`
 - Test functions must match `test_*`
 
 ### Coverage
+
 - New logic must maintain or increase coverage
 - Critical paths (orchestrator, coder) require tests
 
 ### MCP Tool Tests
+
 Every new MCP tool must have a test in `mcp-server/tests/test_basic.py`:
 
 ```python
@@ -104,4 +107,4 @@ just test-unit && just test-int && just test-mcp
 
 ---
 
-*Built on the principle: "Test smart, not hard."*
+_Built on the principle: "Test smart, not hard."_

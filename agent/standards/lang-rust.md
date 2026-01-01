@@ -5,6 +5,7 @@
 ## 1. Core Principles
 
 ### 1.1 Error Handling (Mandatory)
+
 ```rust
 // ✅ Correct: Use Result/Option appropriately
 fn parse_config(content: &str) -> Result<Config, ParseError> {
@@ -16,6 +17,7 @@ let config = serde_yaml::from_str(&content).unwrap();
 ```
 
 ### 1.2 Explicit Lifetimes
+
 ```rust
 // ✅ Correct: Explicit when needed
 fn process_string(s: &str) -> &str {
@@ -27,6 +29,7 @@ fn process_string(s: &str) -> &str {
 ```
 
 ### 1.3 Ownership Clarity
+
 ```rust
 // ✅ Correct: Clear ownership transfer
 fn process_file(mut file: File) -> io::Result<File> {
@@ -39,16 +42,17 @@ fn process_file(mut file: File) -> io::Result<File> {
 
 ## 2. Forbidden Patterns (Anti-Patterns)
 
-| Pattern | Why | Correct Alternative |
-|---------|-----|---------------------|
-| `.unwrap()` in production | Panic risk | `?` or `match` |
-| `clone()` without thought | Performance | Borrow when possible |
-| `use std::io::*` | Namespace pollution | Specific imports |
-| `String` + `&str` mixing | Allocation confusion | `format!()` or conversion |
+| Pattern                   | Why                  | Correct Alternative       |
+| ------------------------- | -------------------- | ------------------------- |
+| `.unwrap()` in production | Panic risk           | `?` or `match`            |
+| `clone()` without thought | Performance          | Borrow when possible      |
+| `use std::io::*`          | Namespace pollution  | Specific imports          |
+| `String` + `&str` mixing  | Allocation confusion | `format!()` or conversion |
 
 ## 3. Project Conventions
 
 ### 3.1 Crate Structure
+
 ```
 crates/
 ├── core/           # Core functionality
@@ -57,6 +61,7 @@ crates/
 ```
 
 ### 3.2 Cargo Features
+
 ```toml
 [features]
 default = ["cli"]
@@ -65,7 +70,8 @@ full = ["cli", "api"]
 ```
 
 ### 3.3 Documentation
-```rust
+
+````rust
 /// Process the input configuration.
 ///
 /// # Arguments
@@ -81,11 +87,12 @@ full = ["cli", "api"]
 /// ```
 /// let config = process_config("key: value");
 /// ```
-```
+````
 
 ## 4. Tool-Specific Notes
 
 ### 4.1 Cargo Commands
+
 - `cargo check` - Fast type checking
 - `cargo build --release` - Production build
 - `cargo test` - Run tests
@@ -93,19 +100,21 @@ full = ["cli", "api"]
 - `cargo fmt` - Formatting
 
 ### 4.2 WASM Target (if applicable)
+
 ```toml
 [target.wasm32-unknown-unknown]
 runner = "wasm-server-runner"
 ```
 
 ### 4.3 Testing Strategy
+
 - Unit tests in same file (`#[cfg(test)]` mod)
 - Integration tests in `tests/`
 - Doc tests in comments
 
 ## 5. Related Documentation
 
-| Document | Purpose |
-|----------|---------|
+| Document              | Purpose              |
+| --------------------- | -------------------- |
 | `crates/*/Cargo.toml` | Crate configurations |
-| `rust-toolchain.toml` | Toolchain version |
+| `rust-toolchain.toml` | Toolchain version    |

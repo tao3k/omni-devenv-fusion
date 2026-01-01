@@ -18,11 +18,11 @@ In this tutorial, you will:
 
 ## Prerequisites
 
-| Tool | Required Version |
-|------|------------------|
-| Nix | 2.4+ |
-| direnv | 2.21+ |
-| uv | 0.4+ |
+| Tool   | Required Version |
+| ------ | ---------------- |
+| Nix    | 2.4+             |
+| direnv | 2.21+            |
+| uv     | 0.4+             |
 
 ---
 
@@ -132,12 +132,12 @@ OK
 
 ## Next Steps
 
-| If you want to... | Go to... |
-|-------------------|----------|
-| Learn why we built this | [Explanation: Why Omni-DevEnv?](../explanation/why-omni-devenv.md) |
-| Solve a specific problem | [How-to Guides](../how-to/) |
-| Browse API commands | [Reference](../reference/) |
+| If you want to...        | Go to...                                                           |
+| ------------------------ | ------------------------------------------------------------------ |
+| Learn why we built this  | [Explanation: Why Omni-DevEnv?](../explanation/why-omni-devenv.md) |
+| Solve a specific problem | [How-to Guides](../how-to/)                                        |
+| Browse API commands      | [Reference](../reference/)                                         |
 
 ---
 
-*Built on standards. Not reinventing the wheel.*
+_Built on standards. Not reinventing the wheel._

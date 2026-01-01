@@ -10,12 +10,12 @@
 
 Today's AI coding tools are **Copilots**:
 
-| Feature | Copilot | What It Means |
-|---------|---------|---------------|
-| **Scope** | One file | Completes your sentence |
+| Feature     | Copilot      | What It Means                 |
+| ----------- | ------------ | ----------------------------- |
+| **Scope**   | One file     | Completes your sentence       |
 | **Context** | Current file | Doesn't see the whole project |
-| **Agency** | None | Waits for your command |
-| **Safety** | Minimal | Can suggest dangerous code |
+| **Agency**  | None         | Waits for your command        |
+| **Safety**  | Minimal      | Can suggest dangerous code    |
 
 You open VS Code. You write code. You run tests. You commit.
 
@@ -25,12 +25,12 @@ You open VS Code. You write code. You run tests. You commit.
 
 Tomorrow's tools will be **Autopilots**:
 
-| Feature | Autopilot | What It Means |
-|---------|-----------|---------------|
-| **Scope** | The whole ticket | Completes your Jira ticket |
+| Feature     | Autopilot         | What It Means                              |
+| ----------- | ----------------- | ------------------------------------------ |
+| **Scope**   | The whole ticket  | Completes your Jira ticket                 |
 | **Context** | The entire system | Knows your architecture, policies, history |
-| **Agency** | Full lifecycle | Plan → Implement → Test → Review |
-| **Safety** | Enforced | Policy engine blocks dangerous actions |
+| **Agency**  | Full lifecycle    | Plan → Implement → Test → Review           |
+| **Safety**  | Enforced          | Policy engine blocks dangerous actions     |
 
 You open Omni Dashboard. You approve a plan. The system executes.
 
@@ -40,11 +40,11 @@ You open Omni Dashboard. You approve a plan. The system executes.
 
 To go from Copilot to Autopilot, we need:
 
-| Missing Capability | Why It Matters |
-|--------------------|----------------|
-| **State Management** | The AI must know the current state of the system |
-| **Tool Orchestration** | Multiple tools must work together seamlessly |
-| **Policy Enforcement** | Safety rails are non-negotiable |
+| Missing Capability     | Why It Matters                                      |
+| ---------------------- | --------------------------------------------------- |
+| **State Management**   | The AI must know the current state of the system    |
+| **Tool Orchestration** | Multiple tools must work together seamlessly        |
+| **Policy Enforcement** | Safety rails are non-negotiable                     |
 | **Memory Persistence** | Institutional knowledge must survive context resets |
 
 **This is what Fusion provides. It is the runtime for autonomous agents.**
@@ -150,11 +150,11 @@ Without safety rails, the Agent can destroy your project in seconds.
 
 To reach the Autopilot Era, we need a **Safe Runtime** that provides:
 
-| Requirement | Description | How Fusion Provides It |
-|-------------|-------------|------------------------|
-| **Isolation** | The AI cannot delete your home folder | Nix sandbox restricts filesystem access |
-| **Tool-Rich** | The AI has access to compilers, linters, clouds | MCP servers provide structured APIs |
-| **Observable** | You can replay exactly what the AI did | `.memory/` logs every action |
+| Requirement    | Description                                     | How Fusion Provides It                  |
+| -------------- | ----------------------------------------------- | --------------------------------------- |
+| **Isolation**  | The AI cannot delete your home folder           | Nix sandbox restricts filesystem access |
+| **Tool-Rich**  | The AI has access to compilers, linters, clouds | MCP servers provide structured APIs     |
+| **Observable** | You can replay exactly what the AI did          | `.memory/` logs every action            |
 
 ### How Fusion Provides Safety
 
@@ -208,14 +208,14 @@ To reach the Autopilot Era, we need a **Safe Runtime** that provides:
 
 An operating system provides:
 
-| OS Capability | Agentic OS Equivalent |
-|---------------|----------------------|
-| **Process management** | Task orchestration (Orchestrator MCP) |
-| **Memory management** | Context injection (Repomix) |
-| **File system** | File tools (Coder MCP) |
-| **Security** | Policy enforcement (CLAUDE.md + Personas) |
-| **APIs** | MCP protocol |
-| **Package manager** | Nix (devenv.nix) |
+| OS Capability          | Agentic OS Equivalent                     |
+| ---------------------- | ----------------------------------------- |
+| **Process management** | Task orchestration (Orchestrator MCP)     |
+| **Memory management**  | Context injection (Repomix)               |
+| **File system**        | File tools (Coder MCP)                    |
+| **Security**           | Policy enforcement (CLAUDE.md + Personas) |
+| **APIs**               | MCP protocol                              |
+| **Package manager**    | Nix (devenv.nix)                          |
 
 **Fusion is the kernel. MCP servers are the drivers. The Agent is the process.**
 
@@ -260,19 +260,19 @@ An operating system provides:
 
 Three forces are converging:
 
-| Force | What It Means |
-|-------|---------------|
-| **LLM capability** | Claude can handle complex, multi-step tasks |
-| **MCP standardization** | Protocol exists for tool integration |
-| **Developer burnout** | We're drowning in boilerplate and context switching |
+| Force                   | What It Means                                       |
+| ----------------------- | --------------------------------------------------- |
+| **LLM capability**      | Claude can handle complex, multi-step tasks         |
+| **MCP standardization** | Protocol exists for tool integration                |
+| **Developer burnout**   | We're drowning in boilerplate and context switching |
 
 **The timing is perfect.**
 
-| Year | What Happens |
-|------|--------------|
-| **2024** | Fusion builds the foundation (Nix + Orchestrator + Coder) |
-| **2025** | Agents complete L2 tasks (multi-file, multi-step) |
-| **2026** | Agents complete L3 tasks (whole features, Jira tickets) |
+| Year     | What Happens                                                |
+| -------- | ----------------------------------------------------------- |
+| **2024** | Fusion builds the foundation (Nix + Orchestrator + Coder)   |
+| **2025** | Agents complete L2 tasks (multi-file, multi-step)           |
+| **2026** | Agents complete L3 tasks (whole features, Jira tickets)     |
 | **2027** | Agents become the primary authors; humans become architects |
 
 ---
@@ -281,13 +281,13 @@ Three forces are converging:
 
 We don't want to build everything. We want to **orchestrate** everything.
 
-| Component | Built By | How We Integrate |
-|-----------|----------|------------------|
-| **LLM** | Anthropic / Google | API calls via `ANTHROPIC_API_KEY` |
-| **Git tools** | Community MCPs | Standard MCP protocol |
-| **Kubernetes** | Community MCPs | Community proxy |
-| **Database** | Community MCPs | Community proxy |
-| **Documentation** | Vale / Custom | Integrated into pipeline |
+| Component         | Built By           | How We Integrate                  |
+| ----------------- | ------------------ | --------------------------------- |
+| **LLM**           | Anthropic / Google | API calls via `ANTHROPIC_API_KEY` |
+| **Git tools**     | Community MCPs     | Standard MCP protocol             |
+| **Kubernetes**    | Community MCPs     | Community proxy                   |
+| **Database**      | Community MCPs     | Community proxy                   |
+| **Documentation** | Vale / Custom      | Integrated into pipeline          |
 
 **Our contribution**: The **Orchestrator Layer** that connects them all.
 
@@ -297,11 +297,11 @@ We don't want to build everything. We want to **orchestrate** everything.
 
 We are not just building a CLI tool. We are building the **Neural Interface** between human intent and machine execution.
 
-| What We Believe | What We Do |
-|-----------------|------------|
-| "Code without a defined environment is a bug" | Nix guarantees environment consistency |
-| "AI should be autonomous, not fragile" | Fusion provides safe sandbox for agents |
-| "Humans should architect, not implement" | Agents handle implementation; humans review |
+| What We Believe                               | What We Do                                  |
+| --------------------------------------------- | ------------------------------------------- |
+| "Code without a defined environment is a bug" | Nix guarantees environment consistency      |
+| "AI should be autonomous, not fragile"        | Fusion provides safe sandbox for agents     |
+| "Humans should architect, not implement"      | Agents handle implementation; humans review |
 
 **We ensure that when the AI builds software, it builds it on solid ground.**
 
@@ -315,10 +315,10 @@ The future of development is not "AI writes code." The future is "AI understands
 
 **What are we building?**
 
-| Level | Description |
-|-------|-------------|
-| **Today** | A better MCP architecture for individual developers |
-| **Tomorrow** | An operating system for autonomous AI agents |
+| Level          | Description                                             |
+| -------------- | ------------------------------------------------------- |
+| **Today**      | A better MCP architecture for individual developers     |
+| **Tomorrow**   | An operating system for autonomous AI agents            |
 | **The Vision** | Human architects + AI builders = Faster, safer software |
 
 **The developer of 2026:**
@@ -334,13 +334,13 @@ The future of development is not "AI writes code." The future is "AI understands
 
 ## Related Documentation
 
-* [Tutorial: Getting Started with Fusion](../tutorials/getting-started.md)
-* [Existential Value: Why Fusion Exists](./why-fusion-exists.md)
-* [Technical Bet: Why Nix?](./why-nix-for-ai.md)
+- [Tutorial: Getting Started with Fusion](../tutorials/getting-started.md)
+- [Existential Value: Why Fusion Exists](./why-fusion-exists.md)
+- [Technical Bet: Why Nix?](./why-nix-for-ai.md)
 
 ---
 
-*The IDE is dead. Long live the Agentic OS.*
+_The IDE is dead. Long live the Agentic OS._
 
 ---
 
@@ -352,12 +352,12 @@ We agree. They shouldn't.
 
 **Our vision is not "Agents replace humans." Our vision is "Agents handle implementation; humans handle architecture."**
 
-| Task | Who Does It (2024) | Who Does It (2026) |
-|------|-------------------|-------------------|
-| Writing boilerplate code | Human (boring) | Agent (fast) |
-| Debugging edge cases | Human (expertise) | Human (expertise) |
-| Architectural decisions | Human (experience) | Human (experience) |
-| Code review | Human (final check) | Human + Agent |
+| Task                     | Who Does It (2024)  | Who Does It (2026) |
+| ------------------------ | ------------------- | ------------------ |
+| Writing boilerplate code | Human (boring)      | Agent (fast)       |
+| Debugging edge cases     | Human (expertise)   | Human (expertise)  |
+| Architectural decisions  | Human (experience)  | Human (experience) |
+| Code review              | Human (final check) | Human + Agent      |
 
 **Humans remain essential. We just remove the boring parts.**
 
@@ -367,11 +367,11 @@ We agree. The technology is evolving.
 
 **Our approach is incremental:**
 
-| Phase | Reality |
-|-------|---------|
-| **Phase 1 (Now)** | Agents complete L1 tasks (single file edits) |
+| Phase              | Reality                                        |
+| ------------------ | ---------------------------------------------- |
+| **Phase 1 (Now)**  | Agents complete L1 tasks (single file edits)   |
 | **Phase 2 (2025)** | Agents complete L2 tasks (multi-file features) |
-| **Phase 3 (2026)** | Agents complete L3 tasks (whole Jira tickets) |
+| **Phase 3 (2026)** | Agents complete L3 tasks (whole Jira tickets)  |
 
 **We don't claim agents can do everything today. We build the infrastructure for when they can.**
 
@@ -379,15 +379,15 @@ We agree. The technology is evolving.
 
 Trust requires safety. Safety requires:
 
-| Requirement | How Fusion Provides It |
-|-------------|------------------------|
-| **Auditability** | Every action logged in `.memory/` |
-| **Policy enforcement** | Dangerous commands blocked |
-| **Human oversight** | Approve-before-merge workflow |
-| **Reproducibility** | Nix guarantees environment consistency |
+| Requirement            | How Fusion Provides It                 |
+| ---------------------- | -------------------------------------- |
+| **Auditability**       | Every action logged in `.memory/`      |
+| **Policy enforcement** | Dangerous commands blocked             |
+| **Human oversight**    | Approve-before-merge workflow          |
+| **Reproducibility**    | Nix guarantees environment consistency |
 
 **Enterprises need trust. Fusion provides it.**
 
 ---
 
-*The vision is ambitious. The path is incremental. The future is agentic.*
+_The vision is ambitious. The path is incremental. The future is agentic._

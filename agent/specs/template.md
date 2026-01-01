@@ -5,19 +5,23 @@
 > **Owner**: @omni-coder
 
 ## 1. Context & Goal (Why)
-*Standardizing conceptual documentation structure across the codebase to improve onboarding and reduce cognitive load.*
+
+_Standardizing conceptual documentation structure across the codebase to improve onboarding and reduce cognitive load._
 
 - **Goal**: Create a reusable template that ensures all concept documentation follows a consistent structure, making it easier for developers to understand complex systems.
 - **User Story**: As a new developer, I want documentation that explains not just what a system does, but why it exists and how it works, so I can contribute effectively without extensive mentorship.
 
 ## 2. Architecture & Interface (What)
-*Defines the documentation template contract that all concept docs must follow.*
+
+_Defines the documentation template contract that all concept docs must follow._
 
 ### 2.1 File Changes
+
 - `docs/explanation/template.md`: Created (this template serves as both documentation and the template itself)
 - `docs/explanation/{concept-name}.md`: Created (new concept docs follow this structure)
 
 ### 2.2 Data Structures / Schema
+
 ```python
 class ConceptDocumentation(BaseModel):
     """Schema for all concept documentation."""
@@ -47,6 +51,7 @@ class DesignDecision(BaseModel):
 ```
 
 ### 2.3 API Signatures (Pseudo-code)
+
 ```python
 def create_concept_doc(
     name: str,
@@ -77,7 +82,7 @@ def verify_doc_compliance(doc_path: str) -> bool:
 
 ## 4. Verification Plan (Test)
 
-*How do we know it works? Matches `agent/standards/feature-lifecycle.md` requirements.*
+_How do we know it works? Matches `agent/standards/feature-lifecycle.md` requirements._
 
 - [ ] **Template Compliance**: New concept docs include all required sections (Context, Mental Model, Mechanics, Design Decisions)
 - [ ] **Cross-Reference Validation**: Each concept doc links to at least one related tutorial or how-to guide

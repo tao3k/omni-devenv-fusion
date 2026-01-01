@@ -17,10 +17,10 @@
 
 ### 2.1 Tool Definitions
 
-| Tool | Binary | Purpose |
-|------|--------|---------|
-| `ast_search` | `sg run -p <pattern>` | Structural code search |
-| `ast_rewrite` | `sg run -p <pattern> -r <replacement>` | Safe code refactoring |
+| Tool          | Binary                                 | Purpose                |
+| ------------- | -------------------------------------- | ---------------------- |
+| `ast_search`  | `sg run -p <pattern>`                  | Structural code search |
+| `ast_rewrite` | `sg run -p <pattern> -r <replacement>` | Safe code refactoring  |
 
 ### 2.2 Pattern Syntax (ast-grep)
 
@@ -38,9 +38,9 @@
 
 ### 2.3 File Changes
 
-| File | Action | Purpose |
-|------|--------|---------|
-| `mcp-server/coder.py` | Modified | Updated to use `sg` binary, added logging |
+| File                   | Action   | Purpose                                           |
+| ---------------------- | -------- | ------------------------------------------------- |
+| `mcp-server/coder.py`  | Modified | Updated to use `sg` binary, added logging         |
 | `mcp-server/router.py` | Modified | Added `ast_search`, `ast_rewrite` to Coder domain |
 
 ## 3. Usage Examples
@@ -75,19 +75,22 @@
 ## 4. Verification Plan
 
 ### 4.1 Unit Tests (L2)
-| Test Case | Description | Expected |
-|-----------|-------------|----------|
-| `test_ast_search_basic` | Search for function definitions | Returns matches with file:line |
-| `test_ast_rewrite_dry_run` | Preview refactoring changes | Shows diff without modifying |
-| `test_pattern_syntax` | Use wildcard patterns | Correctly matches multiple forms |
+
+| Test Case                  | Description                     | Expected                         |
+| -------------------------- | ------------------------------- | -------------------------------- |
+| `test_ast_search_basic`    | Search for function definitions | Returns matches with file:line   |
+| `test_ast_rewrite_dry_run` | Preview refactoring changes     | Shows diff without modifying     |
+| `test_pattern_syntax`      | Use wildcard patterns           | Correctly matches multiple forms |
 
 ### 4.2 Integration Tests (L3)
-| Test Case | Description | Expected |
-|-----------|-------------|----------|
+
+| Test Case                  | Description                                    | Expected                          |
+| -------------------------- | ---------------------------------------------- | --------------------------------- |
 | `test_router_coder_domain` | Router suggests ast tools for refactor queries | Coder domain, ast_search in tools |
-| `test_coder_ast_tools` | Coder has ast_search and ast_rewrite | Tools registered and callable |
+| `test_coder_ast_tools`     | Coder has ast_search and ast_rewrite           | Tools registered and callable     |
 
 ### 4.3 Acceptance Criteria
+
 - [ ] `sg` command available in devenv shell
 - [ ] `ast_search` returns structured results
 - [ ] `ast_rewrite` shows preview diff

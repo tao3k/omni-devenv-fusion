@@ -27,50 +27,50 @@ The Bridge Pattern solves this by routing through personas that understand your 
 
 The system divides into two distinct MCP servers, each serving a specific abstraction level.
 
-| Server | Focus | Role |
-|--------|-------|------|
-| **Orchestrator** | SDLC, DevOps, SRE, Architecture | High-level decision making, context gathering |
-| **Coder** | Code implementation, AST refactoring | Precise execution, surgical precision |
+| Server           | Focus                                | Role                                          |
+| ---------------- | ------------------------------------ | --------------------------------------------- |
+| **Orchestrator** | SDLC, DevOps, SRE, Architecture      | High-level decision making, context gathering |
+| **Coder**        | Code implementation, AST refactoring | Precise execution, surgical precision         |
 
 ### Server A: The Orchestrator (The "Brain")
 
-* **Focus**: SDLC, DevOps, MLOps, SRE, Architecture, Policy Enforcement.
-* **View**: "Macro." Uses `Repomix` to see the forest, not the trees.
+- **Focus**: SDLC, DevOps, MLOps, SRE, Architecture, Policy Enforcement.
+- **View**: "Macro." Uses `Repomix` to see the forest, not the trees.
 
 **Core Responsibilities:**
 
-| Responsibility | Description |
-|----------------|-------------|
-| **SDLC Guardrails** | Enforce "Plan -> Consult -> Implement -> Validate" loop |
-| **Context Aggregation** | Fetch holistic project views via `get_codebase_context` |
+| Responsibility            | Description                                                  |
+| ------------------------- | ------------------------------------------------------------ |
+| **SDLC Guardrails**       | Enforce "Plan -> Consult -> Implement -> Validate" loop      |
+| **Context Aggregation**   | Fetch holistic project views via `get_codebase_context`      |
 | **Specialist Delegation** | Route queries to personas (Architect, Platform, DevOps, SRE) |
-| **Execution Management** | Safely trigger `just` commands to verify changes |
+| **Execution Management**  | Safely trigger `just` commands to verify changes             |
 
 **The Bridge Role:**
 
-| Capability | Implementation |
-|------------|----------------|
+| Capability                | Implementation                                                    |
+| ------------------------- | ----------------------------------------------------------------- |
 | **Contextual Adaptation** | Translate "Deploy to K8s" → "Configure devenv.nix + helm modules" |
-| **Policy Enforcement** | Reject commits that violate `CLAUDE.md` rules |
+| **Policy Enforcement**    | Reject commits that violate `CLAUDE.md` rules                     |
 
 ### Server B: The Coder (The "Hands")
 
-* **Focus**: High-quality code, AST-based refactoring, Performance, Security.
-* **View**: "Micro." Uses `ast-grep` for surgical precision.
+- **Focus**: High-quality code, AST-based refactoring, Performance, Security.
+- **View**: "Micro." Uses `ast-grep` for surgical precision.
 
 **Core Responsibilities:**
 
-| Responsibility | Description |
-|----------------|-------------|
+| Responsibility           | Description                                              |
+| ------------------------ | -------------------------------------------------------- |
 | **Surgical Refactoring** | Structural code changes, not line-based text replacement |
-| **Quality Assurance** | Apply linters (`ruff`, `nixfmt`) before returning code |
-| **Security Scanning** | Detect hardcoded secrets or unsafe patterns |
+| **Quality Assurance**    | Apply linters (`ruff`, `nixfmt`) before returning code   |
+| **Security Scanning**    | Detect hardcoded secrets or unsafe patterns              |
 
 **The Bridge Role:**
 
-| Capability | Implementation |
-|------------|----------------|
-| **Syntax Adaptation** | Match code to `treefmt.toml` or `.editorconfig` |
+| Capability                   | Implementation                                              |
+| ---------------------------- | ----------------------------------------------------------- |
+| **Syntax Adaptation**        | Match code to `treefmt.toml` or `.editorconfig`             |
 | **Performance Optimization** | Optimize patterns (e.g., Python `uv` dependency management) |
 
 ---
@@ -80,6 +80,7 @@ The system divides into two distinct MCP servers, each serving a specific abstra
 The Orchestrator plans, the Coder executes, and both validate.
 
 ### Router-Augmented Coding (New)
+
 The `lang_expert` tool implements a three-layer knowledge system for language-specific code:
 
 ```mermaid
@@ -97,15 +98,18 @@ graph LR
 ```
 
 **Usage**:
+
 ```
 @omni-orchestrator consult_language_expert file_path="lefthook.nix" task="extend generator"
 ```
 
 Returns:
+
 - L1: mkNixago patterns, forbidden patterns from `agent/standards/lang-nix.md`
 - L2: Relevant examples from `tool-router/data/examples/nix.edit.jsonl`
 
 **Benefits**:
+
 - Prevents common mistakes (e.g., `with pkgs;`, full dmerge override)
 - Provides concrete examples for complex patterns
 - Decouples knowledge from prompts
@@ -189,34 +193,34 @@ ast-grep run -p 'try: $body except $handler: $recovery' -l py --update-all
 
 ### Orchestrator Tools
 
-| Tool | Status | Purpose |
-|------|--------|---------|
-| `consult_specialist` | Existing | Multi-persona routing |
-| `get_codebase_context` | Existing | Holistic project view (Repomix) |
-| `run_task` | Existing | Safe execution of `just` commands |
-| `lang_expert` | New | Router-Augmented Coding (L1 Standards + L2 Examples) |
-| `read_backlog` | Future | Integration with task tracking |
+| Tool                   | Status   | Purpose                                              |
+| ---------------------- | -------- | ---------------------------------------------------- |
+| `consult_specialist`   | Existing | Multi-persona routing                                |
+| `get_codebase_context` | Existing | Holistic project view (Repomix)                      |
+| `run_task`             | Existing | Safe execution of `just` commands                    |
+| `lang_expert`          | New      | Router-Augmented Coding (L1 Standards + L2 Examples) |
+| `read_backlog`         | Future   | Integration with task tracking                       |
 
 ### Coder Tools
 
-| Tool | Status | Purpose |
-|------|--------|---------|
-| `ast_search` | Existing | Query code structure using `ast-grep` patterns |
-| `ast_rewrite` | Existing | Apply structural patches via AST |
-| `read_file` | Existing | Lightweight single-file reading |
-| `search_files` | Existing | Pattern search (grep-like) |
-| `save_file` | Existing | Write with backup and syntax validation |
+| Tool           | Status   | Purpose                                        |
+| -------------- | -------- | ---------------------------------------------- |
+| `ast_search`   | Existing | Query code structure using `ast-grep` patterns |
+| `ast_rewrite`  | Existing | Apply structural patches via AST               |
+| `read_file`    | Existing | Lightweight single-file reading                |
+| `search_files` | Existing | Pattern search (grep-like)                     |
+| `save_file`    | Existing | Write with backup and syntax validation        |
 
 ---
 
 ## Why Dual-MCP?
 
-| Challenge | Single Server | Dual-MCP Solution |
-|-----------|---------------|-------------------|
-| **Context overload** | One server handles all tools | Orchestrator aggregates; Coder executes surgically |
-| **Role confusion** | Same tools for planning and coding | Specialized personas for each domain |
-| **Latency** | N+1 tool calls for complex tasks | Parallel context fetching via Repomix |
-| **Quality** | Generic code generation | AST-based refactoring ensures syntactic correctness |
+| Challenge            | Single Server                      | Dual-MCP Solution                                   |
+| -------------------- | ---------------------------------- | --------------------------------------------------- |
+| **Context overload** | One server handles all tools       | Orchestrator aggregates; Coder executes surgically  |
+| **Role confusion**   | Same tools for planning and coding | Specialized personas for each domain                |
+| **Latency**          | N+1 tool calls for complex tasks   | Parallel context fetching via Repomix               |
+| **Quality**          | Generic code generation            | AST-based refactoring ensures syntactic correctness |
 
 ---
 

@@ -6,7 +6,7 @@
 
 ## 1. Context & Goal (Why)
 
-*Creating a high-performance code search capability for the MCP Orchestrator that leverages ripgrep for fast, parallel code searching across the project codebase.*
+_Creating a high-performance code search capability for the MCP Orchestrator that leverages ripgrep for fast, parallel code searching across the project codebase._
 
 - **Goal**: Enable developers to quickly search through codebase files using regex patterns with rich context output, integrated directly into the MCP tool ecosystem.
 - **User Story**: As a developer using the MCP tools, I want to search for code patterns across the project with line numbers and match context, so I can quickly understand code usage, find bugs, and navigate the codebase without leaving my IDE.
@@ -14,16 +14,16 @@
 
 ## 2. Architecture & Interface (What)
 
-*Defines the advanced_search_tool module contract that integrates with the MCP Orchestrator using ripgrep as the search engine.*
+_Defines the advanced_search_tool module contract that integrates with the MCP Orchestrator using ripgrep as the search engine._
 
 ### 2.1 File Changes
 
-| File | Action | Purpose |
-|------|--------|---------|
-| `mcp-server/advanced_search.py` | Created | Main module containing the `search_project_code` tool implementation |
-| `mcp-server/orchestrator.py` | Modified | Register `search_project_code` tool with the MCP server |
-| `mcp-server/tests/test_advanced_search.py` | Created | Unit tests for the search tool |
-| `tests/integration/test_search_integration.py` | Created | Integration tests verifying end-to-end functionality |
+| File                                           | Action   | Purpose                                                              |
+| ---------------------------------------------- | -------- | -------------------------------------------------------------------- |
+| `mcp-server/advanced_search.py`                | Created  | Main module containing the `search_project_code` tool implementation |
+| `mcp-server/orchestrator.py`                   | Modified | Register `search_project_code` tool with the MCP server              |
+| `mcp-server/tests/test_advanced_search.py`     | Created  | Unit tests for the search tool                                       |
+| `tests/integration/test_search_integration.py` | Created  | Integration tests verifying end-to-end functionality                 |
 
 ### 2.2 Data Structures / Schema
 
@@ -188,24 +188,27 @@ def register_tool(mcp: FastMCP) -> None:
 ## 4. Verification Plan
 
 ### 4.1 Unit Tests (L2)
-| Test Case | Description | Expected Result |
-|-----------|-------------|-----------------|
-| `test_build_ripgrep_command` | Test command construction with various parameters | Correct CLI arguments generated |
-| `test_parse_ripgrep_output` | Test parsing of ripgrep output format | Structured SearchResult list |
-| `test_search_config_defaults` | Test SearchConfig default values | All defaults applied correctly |
-| `test_invalid_pattern_handling` | Test error handling for invalid regex | ValueError raised with message |
-| `test_empty_path_handling` | Test handling of non-existent paths | RuntimeError with clear message |
+
+| Test Case                       | Description                                       | Expected Result                 |
+| ------------------------------- | ------------------------------------------------- | ------------------------------- |
+| `test_build_ripgrep_command`    | Test command construction with various parameters | Correct CLI arguments generated |
+| `test_parse_ripgrep_output`     | Test parsing of ripgrep output format             | Structured SearchResult list    |
+| `test_search_config_defaults`   | Test SearchConfig default values                  | All defaults applied correctly  |
+| `test_invalid_pattern_handling` | Test error handling for invalid regex             | ValueError raised with message  |
+| `test_empty_path_handling`      | Test handling of non-existent paths               | RuntimeError with clear message |
 
 ### 4.2 Integration Tests (L3)
-| Test Case | Description | Expected Result |
-|-----------|-------------|-----------------|
-| `test_tool_registration` | Verify tool is registered with MCP | Tool appears in tool list |
-| `test_search_python_files` | Search in .py files only | Results filtered by extension |
-| `test_search_nix_files` | Search in .nix files only | Results filtered by extension |
-| `test_search_with_context` | Search with context lines | Results include surrounding lines |
-| `test_hidden_file_search` | Search including hidden files | Hidden files included in results |
+
+| Test Case                  | Description                        | Expected Result                   |
+| -------------------------- | ---------------------------------- | --------------------------------- |
+| `test_tool_registration`   | Verify tool is registered with MCP | Tool appears in tool list         |
+| `test_search_python_files` | Search in .py files only           | Results filtered by extension     |
+| `test_search_nix_files`    | Search in .nix files only          | Results filtered by extension     |
+| `test_search_with_context` | Search with context lines          | Results include surrounding lines |
+| `test_hidden_file_search`  | Search including hidden files      | Hidden files included in results  |
 
 ### 4.3 Acceptance Criteria
+
 - [ ] `mcp-server/advanced_search.py` created with all TypedDict classes
 - [ ] `search_project_code` tool registered in `orchestrator.py`
 - [ ] All L2 unit tests pass (`pytest mcp-server/tests/test_advanced_search.py`)

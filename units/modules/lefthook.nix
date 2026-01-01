@@ -42,27 +42,32 @@ let
   generators = [
     {
       name = "lefthook";
-      gen = (config.omnibus.ops.mkNixago initConfigs.nixago-lefthook) {
-        data = {
-          commit-msg = lefthook.default.data.commit-msg;
-          # Remove unnecessary commands from default pre-commit
-          commands = builtins.removeAttrs lefthook.default.data.pre-commit.commands [
-            "treefmt" # We use nixfmt instead
-            "hunspell" # Vale handles documentation
-            "typos" # Vale handles spelling
-          ];
-          # Add ruff for Python formatting
-          "format-python" = {
-            glob = "*.py";
-            run = "ruff format {staged_files}";
-          };
-          # Add Vale for documentation linting
-          "check-docs" = {
-            glob = "*.md";
-            run = "vale {staged_files}";
-          };
-        };
-      } initConfigs.lefthook.nix initConfigs.lefthook.shell initConfigs.lefthook.prettier;
+      gen =
+        (config.omnibus.ops.mkNixago initConfigs.nixago-lefthook)
+          {
+            data = {
+              commit-msg = lefthook.default.data.commit-msg;
+              # Remove unnecessary commands from default pre-commit
+              commands = builtins.removeAttrs lefthook.default.data.pre-commit.commands [
+                "treefmt" # We use nixfmt instead
+                "hunspell" # Vale handles documentation
+                "typos" # Vale handles spelling
+              ];
+              # Add ruff for Python formatting
+              "format-python" = {
+                glob = "*.py";
+                run = "ruff format {staged_files}";
+              };
+              # Add Vale for documentation linting
+              "check-docs" = {
+                glob = "*.md";
+                run = "vale {staged_files}";
+              };
+            };
+          }
+          initConfigs.lefthook.nix
+          initConfigs.lefthook.shell
+          initConfigs.lefthook.prettier;
     }
     {
       name = "conform";

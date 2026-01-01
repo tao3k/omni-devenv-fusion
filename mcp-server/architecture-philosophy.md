@@ -56,6 +56,7 @@ See `mcp-server/dual-mode-context.md` for detailed implementation.
 ```
 
 **Benefits:**
+
 - **Token Optimization**: Only relevant tool schemas sent to LLM
 - **Reduced Confusion**: Clear tool selection guidance
 - **Extensibility**: Add new domains without modifying core logic
@@ -84,6 +85,7 @@ See `mcp-server/dual-mode-context.md` for detailed implementation.
 ```
 
 **Checks:**
+
 - **Style**: Language standards compliance
 - **Safety**: Security vulnerabilities
 - **Clarity**: Naming, complexity, duplication
@@ -126,6 +128,7 @@ that uses ripgrep. Follow the full Agentic Workflow: spec, implement, review, te
 ```
 
 **What Happens**:
+
 1. 🧠 Cortex routes to ProductOwner → Spec is drafted
 2. 📋 Spec is verified → Coder receives implementation task
 3. 💻 Coder creates `advanced_search.py` → Registers in `orchestrator.py`
@@ -137,6 +140,7 @@ that uses ripgrep. Follow the full Agentic Workflow: spec, implement, review, te
 ---
 
 **See Also**:
+
 - `agent/specs/advanced_search_tool.md` - Example of a Phase 8 implementation spec
 
 ## Phase 9: Code Intelligence (ast-grep Integration)
@@ -170,6 +174,7 @@ that uses ripgrep. Follow the full Agentic Workflow: spec, implement, review, te
 ```
 
 **Pattern Syntax (ast-grep)**:
+
 ```python
 # Simple pattern
 "def $NAME"                       # Find all function definitions
@@ -191,6 +196,7 @@ that uses ripgrep. Follow the full Agentic Workflow: spec, implement, review, te
 | Use Case | General search | Refactoring |
 
 **Practical Example**:
+
 ```json
 // Find all async function definitions
 {"tool": "ast_search", "arguments": {
@@ -209,6 +215,7 @@ that uses ripgrep. Follow the full Agentic Workflow: spec, implement, review, te
 ```
 
 **See Also**:
+
 - `agent/specs/code_intelligence_phase9.md` - Phase 9 specification
 - `mcp-server/tests/stress/` - Modular stress test framework
 
@@ -226,6 +233,7 @@ mcp-server/tests/stress/
 ```
 
 **Test Categories:**
+
 - **Benchmarks**: Performance measurement (ast-grep search/rewrite speed)
 - **Logic Tests**: Pattern detection accuracy (Silent Killer detection)
 - **Stability Tests**: Chaos engineering (malformed syntax, edge cases)
@@ -269,24 +277,24 @@ mcp-server/tests/stress/
 
 ### The 5-Bucket Model
 
-| Directory | Content Type | Queryable By |
-|-----------|--------------|--------------|
+| Directory          | Content Type                       | Queryable By          |
+| ------------------ | ---------------------------------- | --------------------- |
 | `agent/standards/` | **公共标准** - 语言/框架无关的规范 | `consult_*` loads all |
-| `agent/knowledge/` | **问题解决方案** - 症状→原因→修复 | `consult_*` searches |
-| `agent/specs/` | **功能规格** - What to build | `draft_feature_spec` |
-| `agent/how-to/` | **操作指南** - How to do X | `execute_doc_action` |
-| `design/` | **设计决策** - Why we chose X | Human reference |
+| `agent/knowledge/` | **问题解决方案** - 症状→原因→修复  | `consult_*` searches  |
+| `agent/specs/`     | **功能规格** - What to build       | `draft_feature_spec`  |
+| `agent/how-to/`    | **操作指南** - How to do X         | `execute_doc_action`  |
+| `design/`          | **设计决策** - Why we chose X      | Human reference       |
 
 ## problem-solving.md Philosophy
 
 **定位**: 思维方式 (Thinking Method)，不是具体问题的解决方案
 
-| ✅ Should Contain | ❌ Should NOT Contain |
-|------------------|----------------------|
+| ✅ Should Contain        | ❌ Should NOT Contain      |
+| ------------------------ | -------------------------- |
 | 调试协议 (Rule of Three) | Python 特定 threading 问题 |
-| 问题诊断流程 | UV workspace 配置细节 |
-| 纠错能力培养 | 特定语言的 import 冲突 |
-| 工具使用心智模型 | 具体错误消息的解决方案 |
+| 问题诊断流程             | UV workspace 配置细节      |
+| 纠错能力培养             | 特定语言的 import 冲突     |
+| 工具使用心智模型         | 具体错误消息的解决方案     |
 
 ## knowledge/ Philosophy
 
@@ -295,12 +303,16 @@ mcp-server/tests/stress/
 ```markdown
 # Title of the Problem
 
-> Keywords: tag1, tag2, tag3  ← MCP search target
+> Keywords: tag1, tag2, tag3 ← MCP search target
 
 ## Symptom
+
 ## Root Cause
+
 ## Solution
-## Wrong Solutions  ← Critical: anti-patterns to avoid
+
+## Wrong Solutions ← Critical: anti-patterns to avoid
+
 ## Related
 ```
 

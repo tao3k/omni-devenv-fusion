@@ -6,13 +6,16 @@
 
 ## Quick Reference
 
-| Task | Command |
-|------|---------|
-| Interactive commit | `just commit` |
+| Task                           | Command                                        |
+| ------------------------------ | ---------------------------------------------- |
+| Interactive commit             | `just commit`                                  |
 | Non-interactive commit (agent) | `just agent-commit <type> <scope> "<message>"` |
-| Focus on a Spec | `just agent-focus <spec_path>` |
-| Check commit messages | `just log` |
-| View status | `just status` |
+| Focus on a Spec                | `just agent-focus <spec_path>`                 |
+| Check commit messages          | `just log`                                     |
+| View status                    | `just status`                                  |
+
+> **⚠️ Important**: Agents MUST use `just agent-commit`, NOT `git commit`.
+> The `agent-commit` command runs pre-commit hooks (prettier, formatting) and stages all modified files before committing.
 
 ---
 
@@ -26,67 +29,69 @@ All commits follow the **Conventional Commits** specification:
 
 ### Type Meanings
 
-| Type | Description |
-|------|-------------|
-| `feat` | New feature or capability |
-| `fix` | Bug fix |
-| `docs` | Documentation changes |
-| `style` | Formatting, whitespace, etc. (no code change) |
-| `refactor` | Code restructure (no behavior change) |
-| `perf` | Performance improvement |
-| `test` | Adding or fixing tests |
-| `build` | Build system or dependencies |
-| `ci` | CI/CD pipeline changes |
-| `chore` | Maintenance tasks |
+| Type       | Description                                   |
+| ---------- | --------------------------------------------- |
+| `feat`     | New feature or capability                     |
+| `fix`      | Bug fix                                       |
+| `docs`     | Documentation changes                         |
+| `style`    | Formatting, whitespace, etc. (no code change) |
+| `refactor` | Code restructure (no behavior change)         |
+| `perf`     | Performance improvement                       |
+| `test`     | Adding or fixing tests                        |
+| `build`    | Build system or dependencies                  |
+| `ci`       | CI/CD pipeline changes                        |
+| `chore`    | Maintenance tasks                             |
 
 ### Suggested Scopes
 
 This project uses **standardized scopes** for better traceability:
 
-| Scope | Covers |
-|-------|--------|
-| `nix` | `devenv.nix`, `units/`, `*.nix` files |
-| `mcp` | `mcp-server/` directory |
-| `router` | `tool-router/` directory |
-| `docs` | `docs/` (user docs), `agent/` (LLM context), `README.md` |
-| `cli` | `justfile`, `lefthook.yml` |
-| `deps` | `pyproject.toml`, `devenv.lock`, `package.json` |
-| `ci` | `.github/`, `.devcontainer/` |
+| Scope    | Covers                                                   |
+| -------- | -------------------------------------------------------- |
+| `nix`    | `devenv.nix`, `units/`, `*.nix` files                    |
+| `mcp`    | `mcp-server/` directory                                  |
+| `router` | `tool-router/` directory                                 |
+| `docs`   | `docs/` (user docs), `agent/` (LLM context), `README.md` |
+| `cli`    | `justfile`, `lefthook.yml`                               |
+| `deps`   | `pyproject.toml`, `devenv.lock`, `package.json`          |
+| `ci`     | `.github/`, `.devcontainer/`                             |
 
 ### Scope Sub-categorization (Optional)
 
 For finer granularity, use parentheses after scope:
 
-| Scope | Sub-categories | Examples |
-|-------|---------------|----------|
-| `docs` | `explanation`, `tutorials`, `readme` | `docs(explanation): add auth concept`, `docs(tutorials): add getting started` |
-| `agent` | `specs`, `how-to`, `standards`, `writing-style` | `agent(specs): add feature spec`, `agent(standards): update python style` |
-| `cli` | `just`, `lefthook`, `conform` | `cli(just): add new recipe` |
+| Scope   | Sub-categories                                  | Examples                                                                      |
+| ------- | ----------------------------------------------- | ----------------------------------------------------------------------------- |
+| `docs`  | `explanation`, `tutorials`, `readme`            | `docs(explanation): add auth concept`, `docs(tutorials): add getting started` |
+| `agent` | `specs`, `how-to`, `standards`, `writing-style` | `agent(specs): add feature spec`, `agent(standards): update python style`     |
+| `cli`   | `just`, `lefthook`, `conform`                   | `cli(just): add new recipe`                                                   |
 
 ### Good vs Bad Examples
 
-| Bad | Good |
-|-----|------|
-| `fix: bug` | `fix(mcp): handle connection timeout` |
-| `feat: added stuff` | `feat(nix): add redis service` |
-| `docs: update` | `docs(readme): add setup instructions` |
-| `chore: misc` | `chore(cli): bump just version` |
+| Bad                 | Good                                   |
+| ------------------- | -------------------------------------- |
+| `fix: bug`          | `fix(mcp): handle connection timeout`  |
+| `feat: added stuff` | `feat(nix): add redis service`         |
+| `docs: update`      | `docs(readme): add setup instructions` |
+| `chore: misc`       | `chore(cli): bump just version`        |
 
 ### Enforcing Standards
 
 This project uses two tools to enforce commit standards:
 
-| Tool | Role | Responsibility |
-|------|------|----------------|
-| **Conform** | 🛡️ Police (Enforcer) | Validates commit format at `git commit` time. Rejects invalid messages. |
-| **Cog** | 📋 Secretary (Helper) | Provides interactive menu for humans, groups changes in CHANGELOG. |
+| Tool        | Role                  | Responsibility                                                          |
+| ----------- | --------------------- | ----------------------------------------------------------------------- |
+| **Conform** | 🛡️ Police (Enforcer)  | Validates commit format at `git commit` time. Rejects invalid messages. |
+| **Cog**     | 📋 Secretary (Helper) | Provides interactive menu for humans, groups changes in CHANGELOG.      |
 
 **Conform** checks:
+
 - Format: `<type>(<scope>): <description>`
 - Scope must be lowercase
 - No illegal characters
 
 **Cog** provides:
+
 - Interactive scope selection menu (for `just commit`)
 
 ### Agentic OS Smart Commit
@@ -102,11 +107,11 @@ The MCP Server provides a **Smart Commit** tool that generates Conventional Comm
 
 **Configuration Source of Truth:**
 
-| File | Generated By | Purpose |
-|------|-------------|---------|
-| `cog.toml` | `nix run` via `lefthook.nix` (nixago) | Valid scopes for Conventional Commits |
-| `.conform.yaml` | `nix run` via `lefthook.nix` (nixago) | Commit message validation rules |
-| `agent/how-to/git-workflow.md` | Manual / Spec Kit | Human-readable documentation |
+| File                           | Generated By                          | Purpose                               |
+| ------------------------------ | ------------------------------------- | ------------------------------------- |
+| `cog.toml`                     | `nix run` via `lefthook.nix` (nixago) | Valid scopes for Conventional Commits |
+| `.conform.yaml`                | `nix run` via `lefthook.nix` (nixago) | Commit message validation rules       |
+| `agent/how-to/git-workflow.md` | Manual / Spec Kit                     | Human-readable documentation          |
 
 **Key Point:** The MCP tool (`git_ops.py`) dynamically reads `cog.toml` and `.conform.yaml` at runtime, ensuring AI-generated commit messages **always pass CI validation**. These config files are generated by nix, so edits should be made in `units/modules/lefthook.nix` rather than directly.
 
@@ -148,10 +153,10 @@ This launches an interactive wizard that guides you through:
 
 **Authorization Principles:**
 
-| Aspect | Rule |
-|--------|------|
-| **Permission** | User must explicitly grant authorization to commit |
-| **Scope** | Authorization covers ONE specific commit action only |
+| Aspect         | Rule                                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------ |
+| **Permission** | User must explicitly grant authorization to commit                                         |
+| **Scope**      | Authorization covers ONE specific commit action only                                       |
 | **Expiration** | Authorization expires immediately after the action completes or when the conversation ends |
 
 **Example:**
@@ -172,11 +177,13 @@ Please grant permission to proceed, or provide feedback."
 The Agent/LLM is authorized to commit **ONLY IF** the user explicitly grants permission.
 
 **Authorization detection:**
+
 - If user says "you have permission to commit" or "go ahead" or similar → authorized
 - If user says "run just agent-commit" or similar → authorized
 - If user simply describes a task without granting permission → **ASK FIRST**
 
 **Example:**
+
 ```bash
 # User prompt (grants permission):
 > "Fix the typo in README and go ahead with commit."
@@ -198,26 +205,27 @@ just agent-commit docs docs "fix typo in readme"
 
 LLMs should use MCP tools to enforce this protocol:
 
-| Tool | Purpose |
-|------|---------|
-| `@omni-orchestrator smart_commit` | Validates and executes commits |
-| `@omni-orchestrator execute_doc_action` | Reads protocol from this file |
+| Tool                                    | Purpose                        |
+| --------------------------------------- | ------------------------------ |
+| `@omni-orchestrator smart_commit`       | Validates and executes commits |
+| `@omni-orchestrator execute_doc_action` | Reads protocol from this file  |
 
 When an LLM triggers a commit, it should:
+
 1. Call `execute_doc_action` with `action="commit"`
 2. The tool returns the validated command or "Stop and Ask" status
 3. If "Stop and Ask", the LLM must ask the user before proceeding
 
 ### Protocol Rules
 
-| Condition | Agent/LLM Action |
-|-----------|------------------|
-| User says: "Fix the bug" | Fix code → Run Tests → **ASK USER** for permission |
-| User grants permission | Execute commit |
-| User asks LLM to "run git commit" | **ASK USER** first before executing |
-| User asks to force push | **REFUSE** - Explain risks, ask user to confirm explicitly |
-| Tests fail | **STOP** and report error. Do not commit. |
-| Pre-commit hooks fail | **STOP** and report error. Do not commit. |
+| Condition                         | Agent/LLM Action                                           |
+| --------------------------------- | ---------------------------------------------------------- |
+| User says: "Fix the bug"          | Fix code → Run Tests → **ASK USER** for permission         |
+| User grants permission            | Execute commit                                             |
+| User asks LLM to "run git commit" | **ASK USER** first before executing                        |
+| User asks to force push           | **REFUSE** - Explain risks, ask user to confirm explicitly |
+| Tests fail                        | **STOP** and report error. Do not commit.                  |
+| Pre-commit hooks fail             | **STOP** and report error. Do not commit.                  |
 
 ### Never Auto-Commit Without Authorization
 
@@ -269,15 +277,16 @@ This protocol enforces **"Human-in-the-loop"** by default:
 
 When `just agent-commit` fails due to pre-commit hooks, the MCP tool provides intelligent diagnosis and suggested fixes:
 
-| Error Type | Analysis | Suggested Fix |
-|------------|----------|---------------|
-| `nixfmt` / `fmt` | Formatting checks failed | `just agent-fmt` |
-| `vale` | Writing style checks failed | Use `writer.polish_text` to fix |
-| `ruff` / `pyflakes` | Python linting failed | Fix python errors shown in logs |
-| `secrets` | Secret detection failed | Remove secrets from code immediately |
-| `typos` | Spelling check failed | Fix typos shown in output |
+| Error Type          | Analysis                    | Suggested Fix                        |
+| ------------------- | --------------------------- | ------------------------------------ |
+| `nixfmt` / `fmt`    | Formatting checks failed    | `just agent-fmt`                     |
+| `vale`              | Writing style checks failed | Use `writer.polish_text` to fix      |
+| `ruff` / `pyflakes` | Python linting failed       | Fix python errors shown in logs      |
+| `secrets`           | Secret detection failed     | Remove secrets from code immediately |
+| `typos`             | Spelling check failed       | Fix typos shown in output            |
 
 **Example Recovery Flow:**
+
 ```
 1. Agent runs: just agent-commit fix mcp "handle timeout"
 2. Pre-commit fails: nixfmt formatting issues
@@ -300,11 +309,13 @@ just agent-focus <spec_path>
 ```
 
 Example:
+
 ```bash
 just agent-focus agent/specs/auth_module.md
 ```
 
 This displays:
+
 - The full Spec content
 - Related code structure (mcp-server modules)
 - Backlog alignment check
@@ -331,20 +342,24 @@ Use `agent/specs/template.md` for new features. Required sections:
 # [Feature Name] Technical Specification
 
 ## 1. Context & Goal
-* User Story: As a [role], I want [feature], so that [benefit].
+
+- User Story: As a [role], I want [feature], so that [benefit].
 
 ## 2. Architecture & Design
-* Components: Which files will be touched?
-* Data Flow: Input -> Process -> Output
+
+- Components: Which files will be touched?
+- Data Flow: Input -> Process -> Output
 
 ## 3. Implementation Plan (Step-by-Step)
+
 1. [ ] Create module_x.py
 2. [ ] Add test_module_x.py
 3. [ ] Integrate into main.py
 
 ## 4. Validation Strategy
-* [ ] Unit Test: pytest tests/test_x.py
-* [ ] Manual Verify: just run-x
+
+- [ ] Unit Test: pytest tests/test_x.py
+- [ ] Manual Verify: just run-x
 ```
 
 ### 6.4 Workflow Summary
@@ -369,11 +384,11 @@ Use `agent/specs/template.md` for new features. Required sections:
 
 ### "just agent-commit" Fails
 
-| Error | Solution |
-|-------|----------|
+| Error        | Solution                                                            |
+| ------------ | ------------------------------------------------------------------- |
 | Invalid type | Use: feat, fix, docs, style, refactor, perf, test, build, ci, chore |
-| Tests failed | Fix failing tests first |
-| Hooks failed | Run `just agent-fmt` to auto-fix formatting |
+| Tests failed | Fix failing tests first                                             |
+| Hooks failed | Run `just agent-fmt` to auto-fix formatting                         |
 
 ### Reverting a Commit
 
@@ -394,12 +409,12 @@ git reset --soft HEAD~1
 
 ### When to Prefer gh Over git
 
-| Condition | Use | Rationale |
-|-----------|-----|-----------|
-| gh installed + auth valid | `gh` | Handles auth, richer context |
-| Clone private repo | `gh repo clone` | No manual URL/credential handling |
-| PR workflow | `gh pr *` | Structured PR lifecycle |
-| Basic git operations | `git` | Direct, no abstraction overhead |
+| Condition                 | Use             | Rationale                         |
+| ------------------------- | --------------- | --------------------------------- |
+| gh installed + auth valid | `gh`            | Handles auth, richer context      |
+| Clone private repo        | `gh repo clone` | No manual URL/credential handling |
+| PR workflow               | `gh pr *`       | Structured PR lifecycle           |
+| Basic git operations      | `git`           | Direct, no abstraction overhead   |
 
 ### gh Integration Rules
 
@@ -423,4 +438,4 @@ git reset --soft HEAD~1
 
 ---
 
-*Built on standards. Not reinventing the wheel.*
+_Built on standards. Not reinventing the wheel._

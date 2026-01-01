@@ -14,13 +14,13 @@ User Request -> Orchestrator (Plan) -> Expert Personas (Consult) -> Coder (Imple
 
 ## Key Capabilities
 
-| Capability | Description |
-|------------|-------------|
+| Capability             | Description                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------- |
 | **Persona Delegation** | Route queries to `architect`, `platform_expert`, `devops_mlops`, `sre`, `tech_writer` |
-| **Writing Standards** | Automated documentation polishing via `polish_text` tool |
-| **Code Quality** | AST-based refactoring with `ast-grep` |
-| **Safe Execution** | Sandboxed `just` commands via `run_task` |
-| **Memory Persistence** | Long-term project memory via `memory_garden` |
+| **Writing Standards**  | Automated documentation polishing via `polish_text` tool                              |
+| **Code Quality**       | AST-based refactoring with `ast-grep`                                                 |
+| **Safe Execution**     | Sandboxed `just` commands via `run_task`                                              |
+| **Memory Persistence** | Long-term project memory via `memory_garden`                                          |
 
 ## Quick Start
 
@@ -48,6 +48,7 @@ The `just setup` command automates the initial configuration:
 3. **Activates direnv** - Loads the development environment
 
 **First run (secrets not configured):**
+
 ```bash
 just setup
 
@@ -67,6 +68,7 @@ just setup
 ```
 
 **After secrets configured:**
+
 ```bash
 just secrets-check  # Verify secrets are working
 just setup          # Re-run to restore claude module
@@ -85,13 +87,13 @@ just setup          # Re-run to restore claude module
 
 Configure secrets using one of these providers:
 
-| Provider | Description | Docs |
-|----------|-------------|------|
-| `keyring` | System keyring (macOS Keychain, KWallet) | [secretspec.dev](https://secretspec.dev/concepts/providers/) |
-| `1password` | 1Password | [secretspec.dev](https://secretspec.dev/concepts/providers/) |
-| `lastpass` | LastPass | [secretspec.dev](https://secretspec.dev/concepts/providers/) |
-| `dotenv` | .env file | [secretspec.dev](https://secretspec.dev/concepts/providers/) |
-| `env` | Environment variables | [secretspec.dev](https://secretspec.dev/concepts/providers/) |
+| Provider    | Description                              | Docs                                                         |
+| ----------- | ---------------------------------------- | ------------------------------------------------------------ |
+| `keyring`   | System keyring (macOS Keychain, KWallet) | [secretspec.dev](https://secretspec.dev/concepts/providers/) |
+| `1password` | 1Password                                | [secretspec.dev](https://secretspec.dev/concepts/providers/) |
+| `lastpass`  | LastPass                                 | [secretspec.dev](https://secretspec.dev/concepts/providers/) |
+| `dotenv`    | .env file                                | [secretspec.dev](https://secretspec.dev/concepts/providers/) |
+| `env`       | Environment variables                    | [secretspec.dev](https://secretspec.dev/concepts/providers/) |
 
 ## Key Features
 
@@ -115,13 +117,13 @@ just agent-commit "feat" "" "add redis service"
 
 All commands support non-interactive execution for AI agents:
 
-| Command | Description |
-|---------|-------------|
-| `just agent-commit <type> "" <msg>` | Non-interactive commit |
-| `just agent-validate` | Run all checks |
-| `just agent-fmt` | Apply formatting fixes |
-| `just agent-bump [auto\|patch\|minor\|major]` | Version bump |
-| `just agent-release` | Complete release workflow |
+| Command                                       | Description               |
+| --------------------------------------------- | ------------------------- |
+| `just agent-commit <type> "" <msg>`           | Non-interactive commit    |
+| `just agent-validate`                         | Run all checks            |
+| `just agent-fmt`                              | Apply formatting fixes    |
+| `just agent-bump [auto\|patch\|minor\|major]` | Version bump              |
+| `just agent-release`                          | Complete release workflow |
 
 ### 🏥 SRE Health Checks
 
@@ -137,6 +139,7 @@ JUST_JSON=true just health-report
 ```
 
 Available checks:
+
 - `health-git` - Repository status
 - `health-nix` - Nix environment
 - `health-devenv` - Devenv configuration
@@ -321,13 +324,13 @@ Secrets are managed via **secretspec**, a tool for secure credential handling. M
 
 ### Supported Providers
 
-| Provider | Description | Use Case |
-|----------|-------------|----------|
-| `keyring` | System keyring (macOS Keychain, KWallet) | Local development |
-| `1password` | 1Password | Team sharing |
-| `lastpass` | LastPass | Team sharing |
-| `dotenv` | .env file | Local development |
-| `env` | Environment variables | CI/CD |
+| Provider    | Description                              | Use Case          |
+| ----------- | ---------------------------------------- | ----------------- |
+| `keyring`   | System keyring (macOS Keychain, KWallet) | Local development |
+| `1password` | 1Password                                | Team sharing      |
+| `lastpass`  | LastPass                                 | Team sharing      |
+| `dotenv`    | .env file                                | Local development |
+| `env`       | Environment variables                    | CI/CD             |
 
 ### Configuration
 
@@ -336,7 +339,7 @@ Secrets are managed via **secretspec**, a tool for secure credential handling. M
 ```yaml
 secretspec:
   enable: true
-  provider: dotenv  # or: keyring, onepassword, lastpass, env
+  provider: dotenv # or: keyring, onepassword, lastpass, env
   profile: development
 ```
 

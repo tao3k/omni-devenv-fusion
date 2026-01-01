@@ -8,10 +8,10 @@
 
 The Agentic OS uses a **dual-cache pattern** for context management:
 
-| Cache Type | Source | Purpose | Behavior |
-|------------|--------|---------|----------|
-| **Protocol Cache** | `agent/how-to/*.md` | Enforce workflow rules | Singleton, load once at startup |
-| **Spec Cache** | `agent/specs/*.md` | Feature context for commits | Per-commit, optional loading |
+| Cache Type         | Source              | Purpose                     | Behavior                        |
+| ------------------ | ------------------- | --------------------------- | ------------------------------- |
+| **Protocol Cache** | `agent/how-to/*.md` | Enforce workflow rules      | Singleton, load once at startup |
+| **Spec Cache**     | `agent/specs/*.md`  | Feature context for commits | Per-commit, optional loading    |
 
 ---
 
@@ -20,19 +20,20 @@ The Agentic OS uses a **dual-cache pattern** for context management:
 ### What It Is
 
 Protocol caches store **static project policies** that rarely change:
+
 - Git commit workflow rules (`git-workflow.md`)
 - Writing style guidelines (`agent/writing-style/*.md`)
 - Language-specific standards (`agent/standards/lang-*.md`)
 
 ### Characteristics
 
-| Property | Description |
-|----------|-------------|
-| **Change Frequency** | Rare (project policy changes) |
-| **Loading Pattern** | Singleton, lazy-load once at startup |
-| **Access Pattern** | High-frequency reads, no writes |
-| **Invalidation** | Process restart required |
-| **Scope** | Global to the MCP server |
+| Property             | Description                          |
+| -------------------- | ------------------------------------ |
+| **Change Frequency** | Rare (project policy changes)        |
+| **Loading Pattern**  | Singleton, lazy-load once at startup |
+| **Access Pattern**   | High-frequency reads, no writes      |
+| **Invalidation**     | Process restart required             |
+| **Scope**            | Global to the MCP server             |
 
 ### Examples
 
@@ -76,6 +77,7 @@ class GitWorkflowCache:
 ### When to Use
 
 Use Protocol Cache when you need:
+
 - ✅ Enforce consistent behavior across all operations
 - ✅ High-frequency reads (performance critical)
 - ✅ Static configuration that rarely changes
@@ -88,19 +90,20 @@ Use Protocol Cache when you need:
 ### What It Is
 
 Spec caches store **dynamic feature context** that changes per feature:
+
 - Feature specifications (`agent/specs/feature_name.md`)
 - Implementation plans from SCRATCHPAD.md
 - Design decisions and requirements
 
 ### Characteristics
 
-| Property | Description |
-|----------|-------------|
-| **Change Frequency** | Per feature implementation |
-| **Loading Pattern** | On-demand, per commit |
-| **Access Pattern** | Low-frequency, read-once |
-| **Invalidation** | Context expiry after commit |
-| **Scope** | Per operation/feature |
+| Property             | Description                 |
+| -------------------- | --------------------------- |
+| **Change Frequency** | Per feature implementation  |
+| **Loading Pattern**  | On-demand, per commit       |
+| **Access Pattern**   | Low-frequency, read-once    |
+| **Invalidation**     | Context expiry after commit |
+| **Scope**            | Per operation/feature       |
 
 ### Examples
 
@@ -119,6 +122,7 @@ async def spec_aware_commit(spec_path: str = None) -> str:
 ### When to Use
 
 Use Spec loading when you need:
+
 - ✅ Context specific to a feature
 - ✅ One-time context per operation
 - ✅ Dynamic content that changes frequently
@@ -128,15 +132,15 @@ Use Spec loading when you need:
 
 ## 3. Comparison Table
 
-| Aspect | Protocol Cache | Spec Loading |
-|--------|---------------|--------------|
-| **Files** | `agent/how-to/*.md`, `agent/writing-style/*.md` | `agent/specs/*.md` |
-| **Caching Strategy** | Singleton, lazy-load at startup | On-demand, per operation |
-| **Memory Lifetime** | MCP server lifetime | Single commit |
-| **Refresh Mechanism** | Process restart | Each call |
-| **Use Case** | Rules enforcement | Context injection |
-| **Performance** | Optimized for frequent access | One-time read |
-| **Examples** | `WritingStyleCache`, `GitWorkflowCache` | `spec_aware_commit()` |
+| Aspect                | Protocol Cache                                  | Spec Loading             |
+| --------------------- | ----------------------------------------------- | ------------------------ |
+| **Files**             | `agent/how-to/*.md`, `agent/writing-style/*.md` | `agent/specs/*.md`       |
+| **Caching Strategy**  | Singleton, lazy-load at startup                 | On-demand, per operation |
+| **Memory Lifetime**   | MCP server lifetime                             | Single commit            |
+| **Refresh Mechanism** | Process restart                                 | Each call                |
+| **Use Case**          | Rules enforcement                               | Context injection        |
+| **Performance**       | Optimized for frequent access                   | One-time read            |
+| **Examples**          | `WritingStyleCache`, `GitWorkflowCache`         | `spec_aware_commit()`    |
 
 ---
 
@@ -205,13 +209,13 @@ Use Spec loading when you need:
 
 ## 6. Related Documentation
 
-| Document | Purpose |
-|----------|---------|
+| Document                       | Purpose                                  |
+| ------------------------------ | ---------------------------------------- |
 | `agent/how-to/git-workflow.md` | Git commit protocol, "Stop and Ask" rule |
-| `agent/writing-style/*.md` | Writing style guidelines |
-| `agent/specs/template.md` | Feature spec template |
-| `mcp-server/git_ops.py` | Git workflow MCP tools |
+| `agent/writing-style/*.md`     | Writing style guidelines                 |
+| `agent/specs/template.md`      | Feature spec template                    |
+| `mcp-server/git_ops.py`        | Git workflow MCP tools                   |
 
 ---
 
-*Last updated: 2024-12-31*
+_Last updated: 2024-12-31_

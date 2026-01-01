@@ -9,6 +9,7 @@
 ### The Timeout Anti-Pattern
 
 **Wrong Approach:**
+
 ```python
 # Running the same command multiple times hoping it will succeed
 uv run python test.py
@@ -18,6 +19,7 @@ uv run python test.py  # Still failing? Try again!
 ```
 
 **Correct Approach - Error Correction:**
+
 ```
 1st timeout: "Might be temporary issue, retry"
 2nd timeout: "Pattern detected! Stop repeating, start investigating"
@@ -28,18 +30,20 @@ uv run python test.py  # Still failing? Try again!
 
 When a command times out **3 times**, must execute error correction:
 
-| Attempt | Action | Reason |
-|---------|--------|--------|
-| 1 | Retry | Might be temporary issue |
-| 2 | Check processes | `ps aux \| grep python` for zombie processes |
-| 3 | **Systematic investigation** | Start problem solving workflow |
+| Attempt | Action                       | Reason                                       |
+| ------- | ---------------------------- | -------------------------------------------- |
+| 1       | Retry                        | Might be temporary issue                     |
+| 2       | Check processes              | `ps aux \| grep python` for zombie processes |
+| 3       | **Systematic investigation** | Start problem solving workflow               |
 
 **Must stop doing:**
+
 - ❌ Continue repeating same command
 - ❌ Assume "next time will succeed"
 - ❌ Ignore logs and process states
 
 **Must start doing:**
+
 - ✅ Check for lingering processes
 - ✅ Simplify test case
 - ✅ Binary search for problematic module
@@ -49,23 +53,23 @@ When a command times out **3 times**, must execute error correction:
 
 When a command times out repeatedly:
 
-| Step | Action | Why |
-|------|--------|-----|
-| 1 | Check for zombie processes | `ps aux \| grep python` |
-| 2 | Check for file locks | `.pyc`, `__pycache__` |
-| 3 | Simplify the test case | Remove unrelated imports |
-| 4 | Test in isolation | Run file directly, not via framework |
-| 5 | Check syntax first | `python -m py_compile file.py` |
-| 6 | Check imports one by one | Binary search the problematic module |
+| Step | Action                     | Why                                  |
+| ---- | -------------------------- | ------------------------------------ |
+| 1    | Check for zombie processes | `ps aux \| grep python`              |
+| 2    | Check for file locks       | `.pyc`, `__pycache__`                |
+| 3    | Simplify the test case     | Remove unrelated imports             |
+| 4    | Test in isolation          | Run file directly, not via framework |
+| 5    | Check syntax first         | `python -m py_compile file.py`       |
+| 6    | Check imports one by one   | Binary search the problematic module |
 
 ### Common Timeout Causes
 
-| Cause | Solution |
-|-------|----------|
+| Cause                 | Solution                                         |
+| --------------------- | ------------------------------------------------ |
 | Process fork deadlock | See `agent/knowledge/threading-lock-deadlock.md` |
-| Import cycle | Refactor to break circular dependencies |
-| Network timeout | Check connectivity, increase timeout |
-| Infinite loop | Add timeout, simplify logic |
+| Import cycle          | Refactor to break circular dependencies          |
+| Network timeout       | Check connectivity, increase timeout             |
+| Infinite loop         | Add timeout, simplify logic                      |
 
 ### Knowledge Base
 
@@ -86,8 +90,10 @@ See: agent/knowledge/threading-lock-deadlock.md
 
 ### Symptom
 ```
+
 ModuleNotFoundError: No module named 'module_name'
-```
+
+````
 
 ### Diagnosis
 ```bash
@@ -96,7 +102,7 @@ python3 -c "import sys; print(sys.path)"
 
 # Find all module locations
 find /project -name "module_name" -type d
-```
+````
 
 ### Solution: Workspace Configuration
 
@@ -143,4 +149,4 @@ cd module_dir && python -c "import module"
 
 ---
 
-*Document patterns. Break the loop.*
+_Document patterns. Break the loop._

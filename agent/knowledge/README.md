@@ -5,6 +5,7 @@
 ## Structure
 
 Each `.md` file contains:
+
 - **Keywords**: Tags for search
 - **Symptom**: What the problem looks like
 - **Root Cause**: Why it happens
@@ -23,10 +24,10 @@ When encountering a technical issue:
 
 ## Available Knowledge
 
-| File | Topic | Keywords |
-|------|-------|----------|
-| `threading-lock-deadlock.md` | Threading.Lock deadlock in uv run | python, threading, deadlock, uv, fork |
-| `uv-workspace-config.md` | UV workspace configuration | uv, workspace, pyproject, dependencies |
+| File                         | Topic                             | Keywords                               |
+| ---------------------------- | --------------------------------- | -------------------------------------- |
+| `threading-lock-deadlock.md` | Threading.Lock deadlock in uv run | python, threading, deadlock, uv, fork  |
+| `uv-workspace-config.md`     | UV workspace configuration        | uv, workspace, pyproject, dependencies |
 
 ## Adding New Knowledge
 
@@ -39,7 +40,9 @@ Create a new `.md` file:
 
 ## Symptom
 ```
+
 Error message or behavior
+
 ```
 
 ## Root Cause
@@ -55,6 +58,7 @@ See: other/related/files.md
 ## MCP Tool Integration
 
 Knowledge base files can be queried by:
+
 - `consult_language_expert` - Language-specific issues
 - `consult_specialist` - Architecture/Platform issues
 - Future: `consult_knowledge` - Direct knowledge search

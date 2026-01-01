@@ -1,7 +1,7 @@
 # [Concept Name]: Deep Dive
 
 > **Summary**: A 1-2 sentence summary of what this concept is and why it matters.
-> *Example: "The Fusion Engine is our custom orchestration layer that allows multiple MCP servers to share context without direct coupling."*
+> _Example: "The Fusion Engine is our custom orchestration layer that allows multiple MCP servers to share context without direct coupling."_
 
 ---
 
@@ -13,7 +13,7 @@ Start with the problem, not the solution. Tell the story of why we built this.
 
 What was wrong with the status quo?
 
-> *Example:*
+> _Example:_
 > "When we started building Omni-DevEnv, we tried using standard MCP connections. However, we quickly hit a wall: standard MCP tools are isolated. The 'Git' tool didn't know about the 'Linear' tickets. We needed a way to glue them together."
 
 ### The Goal
@@ -41,12 +41,15 @@ Use a physical metaphor to explain the concept before showing architecture diagr
 Now get technical. Explain the internal flow.
 
 ### Component A
+
 What does it do?
 
 ### Component B
+
 How does it interact with A?
 
 ### Data Flow
+
 How does a request travel through the system?
 
 ---
@@ -55,10 +58,10 @@ How does a request travel through the system?
 
 Be honest about what we sacrificed.
 
-| Decision | Why We Chose It (Pros) | What We Sacrificed (Cons) |
-|----------|------------------------|---------------------------|
-| **Using Nix** | Reproducibility is guaranteed | Steeper learning curve for new users |
-| **Python over Rust** | Faster iteration speed for AI logic | Slightly higher memory usage |
+| Decision             | Why We Chose It (Pros)              | What We Sacrificed (Cons)            |
+| -------------------- | ----------------------------------- | ------------------------------------ |
+| **Using Nix**        | Reproducibility is guaranteed       | Steeper learning curve for new users |
+| **Python over Rust** | Faster iteration speed for AI logic | Slightly higher memory usage         |
 
 ---
 
@@ -70,10 +73,10 @@ Where is this going?
 
 ## Related Documentation
 
-* [Tutorial: Getting Started with [Concept)]](../tutorials/xxx.md)
-* [How-to: [Task]]( ../how-to/xxx.md)
-* [Reference: [Concept] API](../reference/xxx.md)
+- [Tutorial: Getting Started with [Concept)]](../tutorials/xxx.md)
+- [How-to: [Task]](../how-to/xxx.md)
+- [Reference: [Concept] API](../reference/xxx.md)
 
 ---
 
-*Built on standards. Not reinventing the wheel.*
+_Built on standards. Not reinventing the wheel._

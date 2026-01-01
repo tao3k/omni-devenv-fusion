@@ -16,7 +16,7 @@ You have a team of world-class experts at your disposal. **Use them heavily** be
 When you receive a complex user request:
 
 1.  **Plan**: Break the request down into domain-specific sub-tasks.
-2.  **Consult**: 
+2.  **Consult**:
     - Ask the **Architect** for the design pattern.
     - Ask the **Platform Expert** how to implement it in Nix.
     - Ask the **SRE** about potential risks.
@@ -28,10 +28,11 @@ When you receive a complex user request:
 **User**: "Add a new Python microservice for data processing."
 
 **You (Internal Monologue)**:
-1. *I need to know the folder structure.* -> Call `consult_specialist('architect', 'Where should a python microservice go in this repo?')`
-2. *I need to know the dependencies.* -> Call `consult_specialist('platform_expert', 'How to add a python service to devenv.nix?')`
-3. *I need to ensure it's tested.* -> Call `consult_specialist('devops_mlops', 'How to add pre-commit hooks for python?')`
-4. *Apply changes.* -> Edit `devenv.nix` and create files.
+
+1. _I need to know the folder structure._ -> Call `consult_specialist('architect', 'Where should a python microservice go in this repo?')`
+2. _I need to know the dependencies._ -> Call `consult_specialist('platform_expert', 'How to add a python service to devenv.nix?')`
+3. _I need to ensure it's tested._ -> Call `consult_specialist('devops_mlops', 'How to add pre-commit hooks for python?')`
+4. _Apply changes._ -> Edit `devenv.nix` and create files.
 
 ---
 
@@ -42,10 +43,11 @@ When you receive a complex user request:
 Unless explicitly instructed otherwise, you have **NO PERMISSION** to commit code to the repository.
 
 **Workflow:**
+
 1. Make changes.
 2. Run `devenv test`.
 3. **STOP**.
-4. Ask the user: *"Tests passed. Ready to commit?"* or wait for the user to run the git commands.
+4. Ask the user: _"Tests passed. Ready to commit?"_ or wait for the user to run the git commands.
 
 ### 2. Override Mode: `just agent-commit`
 
@@ -54,6 +56,7 @@ Unless explicitly instructed otherwise, you have **NO PERMISSION** to commit cod
 **Command:** `just agent-commit <type> <scope> "<message>"`
 
 **Example:**
+
 - User: "Fix the typo in README and run just agent-commit."
 - You: `just agent-commit docs root "fix typo in readme"`
 
@@ -64,9 +67,9 @@ Unless explicitly instructed otherwise, you have **NO PERMISSION** to commit cod
 
 ### 4. Summary
 
-| User Prompt | Your Action |
-|-------------|-------------|
-| "Fix the bug" | Fix code → Run Tests → **ASK USER** to commit |
+| User Prompt                                 | Your Action                                    |
+| ------------------------------------------- | ---------------------------------------------- |
+| "Fix the bug"                               | Fix code → Run Tests → **ASK USER** to commit  |
 | "Fix the bug and **run just agent-commit**" | Fix code → `just agent-commit fix x "fix bug"` |
 
 See also: [Git Workflow Guide](../../agent/how-to/git-workflow.md)
@@ -89,12 +92,14 @@ Load `.data/prompts/init.md` for developer-specific context (not committed to gi
 4.  **REPORT**: Present your findings using the **"Response Template"** defined in that file.
 
 **🚫 BANNED RESPONSES**:
+
 - "I apologize for the confusion." (Unless followed immediately by RCA)
-- "I will strictly follow..." (Without explaining *why* you failed previously)
+- "I will strictly follow..." (Without explaining _why_ you failed previously)
 - "I mistakenly..." (Without explaining the mechanism of the mistake)
 
 **⚠️ CRITICAL: Atomic Step Constraint**
 To prevent "Tool Chaining" errors (e.g., auto-committing after add):
-* You must treat `git add`, `edit_file`, and `run_test` as **breakpoints**.
-* **STOP** output generation immediately after these actions to allow the user (or the system) to provide feedback.
-* **NEVER** chain `git add` and `git commit` (or `agent-commit`) in the same tool use block.
+
+- You must treat `git add`, `edit_file`, and `run_test` as **breakpoints**.
+- **STOP** output generation immediately after these actions to allow the user (or the system) to provide feedback.
+- **NEVER** chain `git add` and `git commit` (or `agent-commit`) in the same tool use block.

@@ -6,10 +6,10 @@
 
 The dual-mode system provides two ways to deliver project-specific context:
 
-| Mode | Purpose | Trigger | Content |
-|------|---------|---------|---------|
-| **Passive** | Project conventions for development | Lazy-loaded at MCP server startup | UV, Nix, code style, architecture |
-| **Active** | On-demand expert consultation | `consult_language_expert` tool | Standards, examples, project context |
+| Mode        | Purpose                             | Trigger                           | Content                              |
+| ----------- | ----------------------------------- | --------------------------------- | ------------------------------------ |
+| **Passive** | Project conventions for development | Lazy-loaded at MCP server startup | UV, Nix, code style, architecture    |
+| **Active**  | On-demand expert consultation       | `consult_language_expert` tool    | Standards, examples, project context |
 
 ## Architecture
 
@@ -70,14 +70,14 @@ patterns = get_project_context("python", category="patterns")
 
 ### Available Contexts
 
-| Language | Categories |
-|----------|------------|
-| Python | tooling, patterns, architecture, conventions |
-| Nix | tooling, patterns, architecture, conventions |
+| Language | Categories                                   |
+| -------- | -------------------------------------------- |
+| Python   | tooling, patterns, architecture, conventions |
+| Nix      | tooling, patterns, architecture, conventions |
 
 ### Adding New Language
 
-```python
+````python
 from mcp_core.project_context import ProjectContext, ContextRegistry
 
 class GoContext(ProjectContext):
@@ -102,7 +102,7 @@ if err != nil {
 ```"""
 
 ContextRegistry.register(GoContext())
-```
+````
 
 ## Active Mode (Consult)
 
@@ -146,13 +146,13 @@ ContextRegistry.register(GoContext())
 
 ## Comparison
 
-| Aspect | Passive Mode | Active Mode |
-|--------|--------------|-------------|
-| **Trigger** | MCP server startup | Tool call |
-| **Content** | All project conventions | Task-relevant subset |
-| **Updates** | Requires restart | Updates automatically |
-| **Use Case** | General development | Specific problems |
-| **Performance** | Cached, fast | On-demand, slower |
+| Aspect          | Passive Mode            | Active Mode           |
+| --------------- | ----------------------- | --------------------- |
+| **Trigger**     | MCP server startup      | Tool call             |
+| **Content**     | All project conventions | Task-relevant subset  |
+| **Updates**     | Requires restart        | Updates automatically |
+| **Use Case**    | General development     | Specific problems     |
+| **Performance** | Cached, fast            | On-demand, slower     |
 
 ## Integration Points
 

@@ -26,12 +26,12 @@ print(df.head())
 
 **What the AI assumed:**
 
-| Assumption | Reality |
-|------------|---------|
-| `pandas` is installed | It might not be in the environment |
-| Python version is compatible | The code might use Python 3.12 syntax |
-| `libc` version matches | The container uses `musl`, not `glibc` |
-| The file exists | No validation, no error handling |
+| Assumption                   | Reality                                |
+| ---------------------------- | -------------------------------------- |
+| `pandas` is installed        | It might not be in the environment     |
+| Python version is compatible | The code might use Python 3.12 syntax  |
+| `libc` version matches       | The container uses `musl`, not `glibc` |
+| The file exists              | No validation, no error handling       |
 
 **Result:** The script fails. The AI doesn't know why. The loop begins.
 
@@ -63,12 +63,12 @@ This is the **Context Gap**. Without the ground truth, the AI is guessing.
 
 Ground truth is the **actual state** of the system, not what we assume.
 
-| What We Assume | Ground Truth (Nix) |
-|----------------|-------------------|
-| "Python is installed" | `python3 = pkgs.python311` in `devenv.nix` |
-| "pandas is available" | `pandas = ps.overridePythonAttrs(old: { propagatedBuildInputs = [pkgs.pandas]; });` |
-| "The system has glibc" | `NIX_SKIP_SANDBOX = 1` (for Docker) |
-| "The environment is clean" | Every dependency is declared, nothing implicit |
+| What We Assume             | Ground Truth (Nix)                                                                  |
+| -------------------------- | ----------------------------------------------------------------------------------- |
+| "Python is installed"      | `python3 = pkgs.python311` in `devenv.nix`                                          |
+| "pandas is available"      | `pandas = ps.overridePythonAttrs(old: { propagatedBuildInputs = [pkgs.pandas]; });` |
+| "The system has glibc"     | `NIX_SKIP_SANDBOX = 1` (for Docker)                                                 |
+| "The environment is clean" | Every dependency is declared, nothing implicit                                      |
 
 ### How Nix Closes the Gap
 
@@ -182,11 +182,11 @@ def build_agent_context():
 
 **Why this matters:**
 
-| Traditional Workflow | Agentic Workflow |
-|---------------------|------------------|
-| Human installs Redis | AI installs Redis |
-| Human configures service | AI configures service |
-| Human runs the script | AI runs the script |
+| Traditional Workflow           | Agentic Workflow            |
+| ------------------------------ | --------------------------- |
+| Human installs Redis           | AI installs Redis           |
+| Human configures service       | AI configures service       |
+| Human runs the script          | AI runs the script          |
 | Human fixes environment issues | AI fixes environment issues |
 
 **The AI becomes a full-stack developer, not just a code generator.**
@@ -252,12 +252,12 @@ async def run_safely(script: str, dependencies: list[str]) -> dict:
 
 **What the sandbox prevents:**
 
-| Dangerous Action | Sandbox Outcome |
-|------------------|-----------------|
-| `rm -rf /` | Blocked - read-only filesystem |
-| `curl \| sh` | Blocked - no network access |
-| Infinite loop | Blocked - 30s timeout |
-| Access `/etc/passwd` | Blocked - no permission |
+| Dangerous Action     | Sandbox Outcome                |
+| -------------------- | ------------------------------ |
+| `rm -rf /`           | Blocked - read-only filesystem |
+| `curl \| sh`         | Blocked - no network access    |
+| Infinite loop        | Blocked - 30s timeout          |
+| Access `/etc/passwd` | Blocked - no permission        |
 
 **The AI can code freely. The sandbox keeps us safe.**
 
@@ -267,11 +267,11 @@ async def run_safely(script: str, dependencies: list[str]) -> dict:
 
 ### From Human-Driven to Environment-Driven
 
-| Era | Paradigm | Who Manages Environment |
-|-----|----------|------------------------|
-| **1.0** | Manual | Human installs everything |
-| **2.0** | Containerized | Docker Compose defines environment |
-| **3.0** | Nix-powered | `devenv.nix` defines environment |
+| Era     | Paradigm         | Who Manages Environment             |
+| ------- | ---------------- | ----------------------------------- |
+| **1.0** | Manual           | Human installs everything           |
+| **2.0** | Containerized    | Docker Compose defines environment  |
+| **3.0** | Nix-powered      | `devenv.nix` defines environment    |
 | **4.0** | **Agent-driven** | AI manages `devenv.nix` dynamically |
 
 ### The EDD Workflow
@@ -312,23 +312,23 @@ async def run_safely(script: str, dependencies: list[str]) -> dict:
 
 ### The Value Proposition
 
-| For the AI | For the Human |
-|------------|---------------|
-| Knows the ground truth | No more "works on my machine" |
+| For the AI                 | For the Human                        |
+| -------------------------- | ------------------------------------ |
+| Knows the ground truth     | No more "works on my machine"        |
 | Can modify its environment | No more manual dependency management |
-| Runs in a safe sandbox | No more security vulnerabilities |
-| Guarantees reproducibility | No more CI failures |
+| Runs in a safe sandbox     | No more security vulnerabilities     |
+| Guarantees reproducibility | No more CI failures                  |
 
 ---
 
 ## 5. Design Decisions & Trade-offs
 
-| Decision | Why We Chose It (Pros) | What We Sacrificed (Cons) |
-|----------|------------------------|---------------------------|
-| **Nix for environment** | Deterministic, reproducible | Learning curve for new users |
-| **AI modifies devenv.nix** | Agentic autonomy | Requires careful sandboxing |
-| **Ephemeral sandbox** | Safety from malicious code | Slight overhead for each run |
-| **Context injection** | AI knows ground truth | System prompt length limits |
+| Decision                   | Why We Chose It (Pros)      | What We Sacrificed (Cons)    |
+| -------------------------- | --------------------------- | ---------------------------- |
+| **Nix for environment**    | Deterministic, reproducible | Learning curve for new users |
+| **AI modifies devenv.nix** | Agentic autonomy            | Requires careful sandboxing  |
+| **Ephemeral sandbox**      | Safety from malicious code  | Slight overhead for each run |
+| **Context injection**      | AI knows ground truth       | System prompt length limits  |
 
 ---
 
@@ -336,7 +336,7 @@ async def run_safely(script: str, dependencies: list[str]) -> dict:
 
 **Try this yourself:**
 
-1. Ask the AI: *"Add Redis support to this project"*
+1. Ask the AI: _"Add Redis support to this project"_
 2. Watch the AI:
    - Read `devenv.nix`
    - Add `services.redis.enable = true`
@@ -352,10 +352,10 @@ async def run_safely(script: str, dependencies: list[str]) -> dict:
 
 ## Related Documentation
 
-* [Tutorial: Getting Started with Fusion](../tutorials/getting-started.md)
-* [Existential Value: Why Fusion Exists](./why-fusion-exists.md)
-* [Technical Bet: Why Nix?](./why-nix-for-ai.md)
-* [Vision: Agentic OS](./vision-agentic-os.md)
+- [Tutorial: Getting Started with Fusion](../tutorials/getting-started.md)
+- [Existential Value: Why Fusion Exists](./why-fusion-exists.md)
+- [Technical Bet: Why Nix?](./why-nix-for-ai.md)
+- [Vision: Agentic OS](./vision-agentic-os.md)
 
 ---
 
@@ -366,10 +366,12 @@ async def run_safely(script: str, dependencies: list[str]) -> dict:
 We agree. But AI doesn't need to understand Nix deeply.
 
 **What AI needs to know:**
+
 - "Add this package to `devenv.nix`"
 - "Run `devenv up` to apply"
 
 **What AI doesn't need to know:**
+
 - How Nix evaluates derivations
 - The Nix store structure
 - Content-addressable storage
@@ -380,19 +382,19 @@ We agree. But AI doesn't need to understand Nix deeply.
 
 We agree. That's why we have:
 
-| Safety Layer | What It Does |
-|--------------|--------------|
-| **Sandbox** | Restricts filesystem and network access |
-| **Git** | Every change is a commit, easily revertible |
-| **Human approval** | PR review before merge |
-| **Whitelist** | Only approved `devenv.nix` edits allowed |
+| Safety Layer       | What It Does                                |
+| ------------------ | ------------------------------------------- |
+| **Sandbox**        | Restricts filesystem and network access     |
+| **Git**            | Every change is a commit, easily revertible |
+| **Human approval** | PR review before merge                      |
+| **Whitelist**      | Only approved `devenv.nix` edits allowed    |
 
 **We don't give AI root access. We give AI proposal power. Human approval remains.**
 
 ---
 
-*The environment is the foundation. Nix provides the foundation. AI builds on it.*
+_The environment is the foundation. Nix provides the foundation. AI builds on it._
 
 ---
 
-*Built on standards. Not reinventing the wheel.*
+_Built on standards. Not reinventing the wheel._

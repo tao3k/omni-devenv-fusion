@@ -12,7 +12,7 @@
       "**/.devenv/**",
       "**/.direnv/**",
       "**/__pycache__/**",
-      "**/*.ipynb", 
+      "**/*.ipynb",
       "**/target/**",
       "**/mcp-server/__pycache__/**"
     ]

@@ -73,13 +73,13 @@ def _load_data_internal():
 
 ## Why This Works
 
-| Property | How It's Achieved |
-|----------|-------------------|
-| **Thread-Safe** | `with _lock:` ensures atomic check-and-set |
-| **Fork-Safe** | No lock acquired at import time |
-| **No Race** | Lock held during entire `_load_data_internal` |
-| **Fast Path** | After first load, `_loaded=True` → no lock |
-| **Correct Double-Check** | Lock acquires → recheck `_loaded` → load |
+| Property                 | How It's Achieved                             |
+| ------------------------ | --------------------------------------------- |
+| **Thread-Safe**          | `with _lock:` ensures atomic check-and-set    |
+| **Fork-Safe**            | No lock acquired at import time               |
+| **No Race**              | Lock held during entire `_load_data_internal` |
+| **Fast Path**            | After first load, `_loaded=True` → no lock    |
+| **Correct Double-Check** | Lock acquires → recheck `_loaded` → load      |
 
 ## Key Rules for Python Thread-Safety
 
@@ -90,9 +90,9 @@ def _load_data_internal():
 
 ## Related Files
 
-| File | Purpose |
-|------|---------|
-| `mcp-server/mcp_core/instructions.py` | Implementation |
-| `mcp-server/tests/test_instructions.py` | 15 thread-safety tests |
-| `agent/knowledge/threading-lock-deadlock.md` | Knowledge base entry |
-| `docs/explanation/cache-patterns.md` | Cache patterns explanation |
+| File                                         | Purpose                    |
+| -------------------------------------------- | -------------------------- |
+| `mcp-server/mcp_core/instructions.py`        | Implementation             |
+| `mcp-server/tests/test_instructions.py`      | 15 thread-safety tests     |
+| `agent/knowledge/threading-lock-deadlock.md` | Knowledge base entry       |
+| `docs/explanation/cache-patterns.md`         | Cache patterns explanation |
