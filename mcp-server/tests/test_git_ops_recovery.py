@@ -10,6 +10,7 @@ Tests cover:
 
 Run: uv run pytest mcp-server/tests/test_git_ops_recovery.py -v
 """
+
 import asyncio
 import json
 import sys
@@ -24,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Import git_ops module functions
 from git_ops import (
     GitRulesCache,
+    GitWorkflowCache,
     _validate_type,
     _validate_scope,
     _validate_message_format,
@@ -34,6 +36,7 @@ from git_ops import (
 # =============================================================================
 # Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def git_cache():
@@ -79,7 +82,9 @@ class TestSmartCommitRecovery:
         ],
         ids=["nixfmt_failure", "fmt_failure"],
     )
-    def test_formatting_failure_suggests_fmt(self, mock_subprocess, mock_cache, stdout, expected_fix):
+    def test_formatting_failure_suggests_fmt(
+        self, mock_subprocess, mock_cache, stdout, expected_fix
+    ):
         """When nixfmt/fmt fails, suggest 'just agent-fmt'."""
         mock_process, _ = mock_subprocess
         mock_process.returncode = 1
@@ -233,6 +238,61 @@ class TestValidationLogic:
         assert valid == expected_valid
         if not expected_valid and error_hint:
             assert error_hint.lower() in error.lower()
+
+
+# =============================================================================
+# GitWorkflowCache Tests
+# =============================================================================
+
+
+class TestGitWorkflowCache:
+    """Tests for GitWorkflowCache - protocol loaded from git-workflow.md."""
+
+    @pytest.fixture
+    def workflow_cache(self):
+        """Reset and return GitWorkflowCache instance."""
+        GitWorkflowCache._loaded = False
+        GitWorkflowCache._instance = None
+        cache = GitWorkflowCache()
+        yield cache
+        GitWorkflowCache._loaded = False
+        GitWorkflowCache._instance = None
+
+    def test_cache_is_singleton(self, workflow_cache):
+        """GitWorkflowCache follows singleton pattern."""
+        cache2 = GitWorkflowCache()
+        assert cache2 is workflow_cache
+
+    def test_default_protocol_is_stop_and_ask(self, workflow_cache):
+        """Default protocol should be 'stop_and_ask'."""
+        protocol = workflow_cache.get_protocol()
+        assert protocol == "stop_and_ask"
+
+    def test_get_rules_returns_dict(self, workflow_cache):
+        """get_rules should return a dictionary."""
+        rules = workflow_cache.get_rules()
+        assert isinstance(rules, dict)
+
+    def test_should_ask_user_without_force(self, workflow_cache):
+        """should_ask_user returns True when force_execute=False."""
+        assert workflow_cache.should_ask_user(force_execute=False) is True
+
+    def test_should_ask_user_with_force_on_stop_and_ask(self, workflow_cache):
+        """should_ask_user returns False when force_execute=True."""
+        # force_execute means user has authorized, so don't ask
+        assert workflow_cache.should_ask_user(force_execute=True) is False
+
+    def test_protocol_loaded_from_workflow_file(self, workflow_cache):
+        """Protocol should be loaded from git-workflow.md."""
+        # The cache should have loaded the file
+        assert workflow_cache.protocol in ["stop_and_ask", "auto_commit"]
+
+    def test_reload_functionality(self, workflow_cache):
+        """reload() should refresh the cache."""
+        original_protocol = workflow_cache.protocol
+        workflow_cache.reload()
+        # After reload, protocol should still be the same (file didn't change)
+        assert workflow_cache.protocol == original_protocol
 
 
 # =============================================================================

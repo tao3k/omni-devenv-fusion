@@ -151,6 +151,9 @@ Before editing `.nix` files:
 3. Add test in `mcp-server/tests/test_basic.py`
 4. Run `just test-mcp` before commit
 
+## 📦 Project Spec Compliance
+→ See `agent/instructions/project-conventions.md`
+
 ## ⌨️ Slash Commands (Shortcuts)
 | Command | Action (Tool Call) |
 |---------|--------------------|

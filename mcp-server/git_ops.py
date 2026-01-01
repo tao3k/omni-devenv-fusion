@@ -136,6 +136,96 @@ class GitRulesCache:
 
 _git_rules_cache = GitRulesCache()
 
+
+class GitWorkflowCache:
+    """
+    Singleton cache that reads agent/how-to/git-workflow.md to determine
+    the commit protocol ("stop_and_ask" or "auto_commit") and other rules.
+
+    This ensures the Agent respects the protocol defined in documentation,
+    rather than hardcoded values.
+    """
+
+    _instance = None
+    _loaded = False
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self):
+        if not GitWorkflowCache._loaded:
+            self.protocol = "stop_and_ask"  # Default protocol
+            self.rules = {}
+            self._load_workflow()
+            GitWorkflowCache._loaded = True
+
+    def _load_workflow(self):
+        """Load workflow protocol and rules from git-workflow.md"""
+        module_dir = Path(__file__).parent.resolve()
+        project_root = module_dir.parent.resolve()
+        doc_path = project_root / "agent/how-to/git-workflow.md"
+
+        if not doc_path.exists():
+            return
+
+        try:
+            content = doc_path.read_text(encoding="utf-8")
+
+            # Parse protocol from markdown
+            import re
+
+            # Extract default protocol (Stop and Ask vs Auto-commit)
+            # Look for: "Default Rule: 'Stop and Ask'" or similar
+            stop_and_ask_match = re.search(
+                r"Default Rule.*?Stop and Ask|Double Quote.*?stop and ask.*?Double Quote",
+                content,
+                re.IGNORECASE | re.DOTALL,
+            )
+            auto_commit_match = re.search(
+                r"Override Rule.*?just agent-commit", content, re.IGNORECASE
+            )
+
+            if stop_and_ask_match:
+                self.protocol = "stop_and_ask"
+            elif auto_commit_match:
+                self.protocol = "auto_commit"  # If user explicitly allows
+
+            # Extract key rules
+            self.rules = {
+                "force_push_forbidden": "git push --force" in content,
+                "reset_hard_forbidden": "git reset --hard" in content,
+                "amend_pushed_forbidden": "git commit --amend" in content
+                and "pushed" in content.lower(),
+                "requires_user_confirmation": self.protocol == "stop_and_ask",
+            }
+
+        except Exception:
+            # Keep defaults on parse failure
+            pass
+
+    def get_protocol(self) -> str:
+        """Returns the commit protocol: 'stop_and_ask' or 'auto_commit'"""
+        return self.protocol
+
+    def get_rules(self) -> dict:
+        """Returns the workflow rules dictionary."""
+        return self.rules
+
+    def should_ask_user(self, force_execute: bool = False) -> bool:
+        """Determine if agent should ask user before committing."""
+        if self.protocol == "auto_commit" and force_execute:
+            return False
+        return self.protocol == "stop_and_ask" and not force_execute
+
+    def reload(self):
+        """Reload workflow from markdown file."""
+        self._load_workflow()
+
+
+_git_workflow_cache = GitWorkflowCache()
+
 # =============================================================================
 # Helper Functions
 # =============================================================================
@@ -259,6 +349,8 @@ def register_git_ops_tools(mcp: Any) -> None:
         """
         Execute a commit with "Auto-Fix" intelligence.
         If the commit fails due to linting (Lefthook), it suggests the fix.
+
+        Protocol is loaded from agent/how-to/git-workflow.md via GitWorkflowCache.
         """
         # 1. Re-validate against dynamic rules
         v_type, e_type = _validate_type(type)
@@ -271,20 +363,25 @@ def register_git_ops_tools(mcp: Any) -> None:
                 indent=2,
             )
 
-        if not force_execute:
+        # 2. Check protocol from GitWorkflowCache (loaded from git-workflow.md)
+        protocol = _git_workflow_cache.get_protocol()
+        should_ask = _git_workflow_cache.should_ask_user(force_execute)
+
+        if should_ask:
             return json.dumps(
                 {
                     "status": "ready",
-                    "protocol": "stop_and_ask",
-                    "message": "Changes validated against cog.toml. Ready to commit.",
+                    "protocol": protocol,
+                    "message": "Changes validated. Protocol requires user confirmation.",
                     "command": f'just agent-commit {type.lower()} {scope.lower() if scope else ""} "{message}"',
                     "authorization_required": True,
                     "user_prompt_hint": "Reply 'run just agent-commit' to authorize",
+                    "rules_source": "agent/how-to/git-workflow.md",
                 },
                 indent=2,
             )
 
-        # 2. Execution with Smart Error Recovery
+        # 3. Execution with Smart Error Recovery
         try:
             return await _execute_smart_commit_with_recovery(type, scope, message)
         except subprocess.TimeoutExpired:

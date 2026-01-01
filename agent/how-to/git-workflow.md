@@ -315,7 +315,13 @@ Use `agent/specs/template.md` for new features. Required sections:
 
 ---
 
-## 7. Troubleshooting
+## 7. Project Compliance
+
+→ See `agent/instructions/project-conventions.md`
+
+---
+
+## 8. Troubleshooting
 
 ### "just agent-commit" Fails
 
@@ -340,7 +346,7 @@ git reset --soft HEAD~1
 
 ---
 
-## 8. GitHub CLI (gh) Integration
+## 9. GitHub CLI (gh) Integration
 
 ### When to Prefer gh Over git
 

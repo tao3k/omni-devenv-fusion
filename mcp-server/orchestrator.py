@@ -41,6 +41,12 @@ from mcp_core import (
     build_persona_prompt,
 )
 
+# Import instructions loader (agent/instructions/ - eager loaded at startup)
+from mcp_core.instructions import (
+    get_all_instructions_merged,
+    list_instruction_names,
+)
+
 # Import DocuSmith writing tools (handle both package and direct execution)
 try:
     from .writer import register_writer_tools
@@ -98,6 +104,37 @@ if not API_KEY:
 # Initialize shared clients
 inference_client = InferenceClient(api_key=API_KEY, base_url=BASE_URL)
 project_memory = ProjectMemory()
+
+# =============================================================================
+# Preload Protocol Caches (loaded once per session)
+# =============================================================================
+# This ensures all rules are cached before any tool execution,
+# avoiding repeated file reads and token waste.
+
+# Preload GitWorkflowCache (from agent/how-to/git-workflow.md)
+try:
+    from .git_ops import GitWorkflowCache, _git_workflow_cache
+    _ = _git_workflow_cache  # Eager load to cache git workflow protocol
+    log_decision("git_ops_cache.preloaded", {"protocol": _git_workflow_cache.get_protocol()}, logger)
+except ImportError:
+    pass
+
+# Preload WritingStyleCache (from agent/writing-style/*.md)
+try:
+    from .writer import WritingStyleCache, _writing_style_cache
+    _ = _writing_style_cache  # Eager load to cache writing style guidelines
+    log_decision("writer_cache.preloaded", {}, logger)
+except ImportError:
+    pass
+
+# Preload Instructions (from agent/instructions/ - DEFAULT PROMPTS)
+try:
+    from mcp_core.instructions import _instructions_loader, list_instruction_names
+    _ = _instructions_loader  # Eager load to cache project instructions
+    instruction_names = list_instruction_names()
+    log_decision("instructions.preloaded", {"count": len(instruction_names), "names": instruction_names}, logger)
+except ImportError:
+    pass
 
 # Register DocuSmith writing tools
 register_writer_tools(mcp)
@@ -285,6 +322,43 @@ async def list_directory_structure(root_dir: str = ".") -> str:
     except Exception as e:
         log_decision("list_directory_structure.exception", {"error": str(e)}, logger)
         return f"Error listing directory structure: {str(e)}"
+
+
+# =============================================================================
+# Project Instructions (Eager Loaded at Session Start)
+# =============================================================================
+
+@mcp.tool()
+async def get_project_instructions(name: str = "") -> str:
+    """
+    Get project instructions that are pre-loaded at session start.
+
+    These instructions from agent/instructions/ are loaded when the MCP server starts,
+    ensuring they're always available as default prompts for LLM sessions.
+
+    Args:
+        name: Specific instruction name (without .md), e.g., "project-conventions"
+              If empty, returns all instructions merged.
+
+    Returns:
+        Project instruction(s) content.
+    """
+    from mcp_core.instructions import get_instruction, get_all_instructions_merged, list_instruction_names
+
+    if name:
+        content = get_instruction(name)
+        if content:
+            log_decision("get_project_instructions.single", {"name": name}, logger)
+            return f"=== {name} ===\n\n{content}"
+        else:
+            available = list_instruction_names()
+            return f"Error: Instruction '{name}' not found.\nAvailable: {available}"
+    else:
+        all_instructions = get_all_instructions_merged()
+        if all_instructions:
+            log_decision("get_project_instructions.all", {"count": len(list_instruction_names())}, logger)
+            return f"=== Project Instructions (All) ===\n\n{all_instructions}"
+        return "No project instructions available."
 
 
 # =============================================================================

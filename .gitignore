@@ -10,6 +10,7 @@ devenv.local.nix
 
 # prj-spec directories (numtide/prj-spec)
 # See: https://github.com/numtide/prj-spec
+# All content in these dirs is auto-generated and ignored
 .config/
 .run/
 .cache/
@@ -21,6 +22,7 @@ devenv.local.nix
 .claude/settings.json
 .env.development
 .env
+
 # nixago: ignore-linked-files
 /cog.toml
 /.conform.yaml

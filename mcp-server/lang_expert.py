@@ -4,22 +4,36 @@ Language Expert System - Router-Augmented Coding
 
 Implements "Static Standards (Law)" + "Dynamic Examples (Case Law)" pattern:
 
-L1: Standards (agent/standards/lang-*.md) - Project-specific language conventions
+L1a: Standards (agent/standards/lang-*.md) - Language-specific conventions
+L1b: Project Context (mcp_core/project_context.py) - Project-specific conventions
 L2: Examples (tool-router/data/examples/*.jsonl) - Concrete syntax patterns
+
+Dual-Mode System:
+1. **Passive Mode (Lazy Load)**: Project context auto-loaded for this repo's development
+2. **Active Mode (Consult)**: On-demand queries for specific problems
 
 Usage:
     @omni-orchestrator consult_language_expert file_path="units/modules/python.nix" task="extend generator"
 
-Performance: Uses singleton caching for standards docs.
+Performance: Uses singleton caching for standards docs and project context.
 """
+
 import json
 import re
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
+# Import project context framework
+from mcp_core.project_context import (
+    get_project_context,
+    has_project_context,
+    list_project_languages,
+)
+
 # =============================================================================
 # Singleton Cache - Standards loaded once per MCP session
 # =============================================================================
+
 
 class StandardsCache:
     """
@@ -27,6 +41,7 @@ class StandardsCache:
     Standards are loaded from agent/standards/ on first access,
     then cached in memory for the lifetime of the MCP server.
     """
+
     _instance = None
     _loaded = False
 
@@ -103,6 +118,7 @@ LANG_NAMES = {
 # Helper Functions
 # =============================================================================
 
+
 def get_language_from_path(file_path: str) -> Optional[str]:
     """Detect language from file extension."""
     path = Path(file_path)
@@ -122,7 +138,7 @@ def search_examples(jsonl_path: Path, task_description: str, limit: int = 3) -> 
         return matches
 
     try:
-        with open(jsonl_path, 'r') as f:
+        with open(jsonl_path, "r") as f:
             task_lower = task_description.lower()
 
             for line in f:
@@ -130,15 +146,17 @@ def search_examples(jsonl_path: Path, task_description: str, limit: int = 3) -> 
                     entry = json.loads(line)
 
                     # Build searchable text from entry
-                    search_text = " ".join([
-                        entry.get("intent", ""),
-                        entry.get("syntax_focus", ""),
-                        entry.get("description", ""),
-                    ]).lower()
+                    search_text = " ".join(
+                        [
+                            entry.get("intent", ""),
+                            entry.get("syntax_focus", ""),
+                            entry.get("description", ""),
+                        ]
+                    ).lower()
 
                     # Keyword matching
-                    task_words = set(re.findall(r'\w+', task_lower))
-                    entry_words = set(re.findall(r'\w+', search_text))
+                    task_words = set(re.findall(r"\w+", task_lower))
+                    entry_words = set(re.findall(r"\w+", search_text))
 
                     # Calculate overlap
                     overlap = task_words & entry_words
@@ -173,14 +191,14 @@ def format_examples(matches: List[Dict]) -> str:
         formatted.append(f"\n**Case {i}:** {m.get('intent', 'Unknown')}")
         formatted.append(f"- **Syntax Focus:** {', '.join(m.get('syntax_focus', []))}")
 
-        if m.get('do_not'):
+        if m.get("do_not"):
             formatted.append(f"- **⚠️ DO NOT:** {'; '.join(m.get('do_not'))}")
 
-        if m.get('allowed_edits'):
-            edits = m.get('allowed_edits', [])
+        if m.get("allowed_edits"):
+            edits = m.get("allowed_edits", [])
             formatted.append(f"- **✅ Allowed Edits:** {edits[0] if edits else 'See JSONL'}")
 
-        if m.get('example'):
+        if m.get("example"):
             formatted.append(f"\n```\n{m['example']}\n```")
 
     return "\n".join(formatted)
@@ -190,35 +208,48 @@ def format_examples(matches: List[Dict]) -> str:
 # MCP Tools
 # =============================================================================
 
+
 def register_lang_expert_tools(mcp: Any) -> None:
     """Register all language expert tools with the MCP server."""
 
     @mcp.tool()
     async def consult_language_expert(
-        file_path: str,
-        task_description: str
+        file_path: str, task_description: str, include_project_context: bool = True
     ) -> str:
         """
         Consult language-specific standards and relevant code examples.
 
         This is the primary tool for Router-Augmented Coding:
-        1. Reads L1: Project standards (agent/standards/lang-*.md)
-        2. Queries L2: Case law (tool-router/data/examples/*.jsonl)
+        1. Reads L1a: Project standards (agent/standards/lang-*.md)
+        2. Reads L1b: Project context (mcp_core/project_context.py) - lazy loaded
+        3. Queries L2: Case law (tool-router/data/examples/*.jsonl)
+
+        Dual-Mode:
+        - Passive: Project context is cached and always available
+        - Active: On-demand queries for specific coding problems
 
         Usage:
             @omni-orchestrator consult_language_expert file_path="units/modules/python.nix" task="extend generator"
 
+        Args:
+            file_path: Path to the file being edited
+            task_description: Description of the coding task
+            include_project_context: Include project-specific conventions (default: True)
+
         Returns:
-            JSON with standards context and matching examples.
+            JSON with project context, standards, and matching examples.
         """
         lang = get_language_from_path(file_path)
 
         if not lang:
-            return json.dumps({
-                "status": "skipped",
-                "reason": f"No language expert for extension: {Path(file_path).suffix}",
-                "supported_extensions": list(EXT_TO_LANG.keys())
-            }, indent=2)
+            return json.dumps(
+                {
+                    "status": "skipped",
+                    "reason": f"No language expert for extension: {Path(file_path).suffix}",
+                    "supported_extensions": list(EXT_TO_LANG.keys()),
+                },
+                indent=2,
+            )
 
         result = {
             "language": LANG_NAMES.get(lang, lang),
@@ -226,14 +257,21 @@ def register_lang_expert_tools(mcp: Any) -> None:
             "task": task_description,
             "sources": {
                 "standards": f"agent/standards/lang-{lang}.md",
-                "examples": f"tool-router/data/examples/{lang}.edit.jsonl"
-            }
+                "examples": f"tool-router/data/examples/{lang}.edit.jsonl",
+                "project_context": f"mcp_core/project_context.py ({lang})",
+            },
         }
 
-        # L1: Load Standards
+        # L1b: Load Project Context (lazy-loaded via get_project_context)
+        if include_project_context and has_project_context(lang):
+            project_ctx = get_project_context(lang)
+            if project_ctx:
+                result["project_context"] = project_ctx
+                result["project_context_source"] = "mcp_core/project_context.py"
+
+        # L1a: Load Standards (existing logic)
         standard = _standards_cache.get_standard(lang)
         if standard:
-            # Extract relevant sections based on task
             relevant_std = _extract_relevant_standards(standard, task_description)
             result["standards"] = relevant_std
             result["standards_source"] = "agent/standards"
@@ -241,7 +279,7 @@ def register_lang_expert_tools(mcp: Any) -> None:
             result["standards"] = None
             result["standards_warning"] = f"No standards found for {lang}"
 
-        # L2: Query Examples
+        # L2: Query Examples (existing logic)
         jsonl_path = Path(f"tool-router/data/examples/{lang}.edit.jsonl")
         examples = search_examples(jsonl_path, task_description)
 
@@ -253,7 +291,9 @@ def register_lang_expert_tools(mcp: Any) -> None:
             result["examples_note"] = "No matching examples found in tool-router"
 
         # Summary
-        has_content = result.get("standards") or result.get("examples")
+        has_content = (
+            result.get("standards") or result.get("examples") or result.get("project_context")
+        )
         result["status"] = "complete" if has_content else "partial"
 
         return json.dumps(result, indent=2)
@@ -275,18 +315,24 @@ def register_lang_expert_tools(mcp: Any) -> None:
         standard = _standards_cache.get_standard(lang)
 
         if not standard:
-            return json.dumps({
-                "status": "not_found",
-                "language": lang_name,
-                "available_languages": list(LANG_NAMES.keys())
-            }, indent=2)
+            return json.dumps(
+                {
+                    "status": "not_found",
+                    "language": lang_name,
+                    "available_languages": list(LANG_NAMES.keys()),
+                },
+                indent=2,
+            )
 
-        return json.dumps({
-            "status": "success",
-            "language": lang_name,
-            "source": f"agent/standards/lang-{lang}.md",
-            "content": standard
-        }, indent=2)
+        return json.dumps(
+            {
+                "status": "success",
+                "language": lang_name,
+                "source": f"agent/standards/lang-{lang}.md",
+                "content": standard,
+            },
+            indent=2,
+        )
 
     @mcp.tool()
     async def list_supported_languages() -> str:
@@ -302,43 +348,45 @@ def register_lang_expert_tools(mcp: Any) -> None:
             std_path = Path(f"agent/standards/lang-{lang_id}.md")
             jsonl_path = Path(f"tool-router/data/examples/{lang_id}.edit.jsonl")
 
-            languages.append({
-                "id": lang_id,
-                "name": lang_name,
-                "standards_exists": std_path.exists(),
-                "examples_exists": jsonl_path.exists(),
-                "file_extensions": [k for k, v in EXT_TO_LANG.items() if v == lang_id]
-            })
+            languages.append(
+                {
+                    "id": lang_id,
+                    "name": lang_name,
+                    "standards_exists": std_path.exists(),
+                    "examples_exists": jsonl_path.exists(),
+                    "file_extensions": [k for k, v in EXT_TO_LANG.items() if v == lang_id],
+                }
+            )
 
-        return json.dumps({
-            "status": "success",
-            "languages": languages,
-            "total": len(languages)
-        }, indent=2)
+        return json.dumps(
+            {"status": "success", "languages": languages, "total": len(languages)}, indent=2
+        )
 
 
 def _extract_relevant_standards(standard: str, task: str) -> str:
     """Extract standards sections relevant to the task."""
     # Simple keyword-based extraction
-    task_words = set(re.findall(r'\w+', task.lower()))
+    task_words = set(re.findall(r"\w+", task.lower()))
     common_words = {"the", "a", "an", "to", "for", "in", "add", "file", "use", "code"}
 
     # Find sections that contain task-related keywords
-    lines = standard.split('\n')
+    lines = standard.split("\n")
     relevant_lines = []
     in_relevant_section = False
 
     for line in lines:
         # Section headers are markdown headers
-        if line.startswith('##'):
+        if line.startswith("##"):
             # Check previous section for relevance
             if relevant_lines and len(relevant_lines) > 2:
                 # Keep the section if it has task keywords
-                section_text = ' '.join(relevant_lines).lower()
-                overlap = task_words & set(re.findall(r'\w+', section_text)) - common_words
+                section_text = " ".join(relevant_lines).lower()
+                overlap = task_words & set(re.findall(r"\w+", section_text)) - common_words
                 if overlap:
                     relevant_lines.append(line)
-                elif any(kw in section_text for kw in ["forbidden", "anti-pattern", "correct", "wrong"]):
+                elif any(
+                    kw in section_text for kw in ["forbidden", "anti-pattern", "correct", "wrong"]
+                ):
                     # Always include anti-pattern sections
                     relevant_lines.append(line)
                 else:
@@ -350,21 +398,16 @@ def _extract_relevant_standards(standard: str, task: str) -> str:
 
     # Handle last section
     if relevant_lines:
-        section_text = ' '.join(relevant_lines).lower()
-        overlap = task_words & set(re.findall(r'\w+', section_text)) - common_words
+        section_text = " ".join(relevant_lines).lower()
+        overlap = task_words & set(re.findall(r"\w+", section_text)) - common_words
         if not overlap and len(relevant_lines) < 5:
             return None
 
-    return '\n'.join(relevant_lines[:30]) if relevant_lines else None
+    return "\n".join(relevant_lines[:30]) if relevant_lines else None
 
 
 # =============================================================================
 # Export
 # =============================================================================
 
-__all__ = [
-    "register_lang_expert_tools",
-    "StandardsCache",
-    "EXT_TO_LANG",
-    "LANG_NAMES"
-]
+__all__ = ["register_lang_expert_tools", "StandardsCache", "EXT_TO_LANG", "LANG_NAMES"]

@@ -167,6 +167,22 @@ agent-focus spec_path:
     @grep -i "$(basename {{spec_path}} .md)" Backlog.md 2>/dev/null || echo "  No matching backlog entry found"
     @echo ""
     @echo "💡 INSTRUCTION: Review the Spec above. Create a PLAN in 'SCRATCHPAD.md' before modifying any code."
+    @echo "SCRATCHPAD Location: .cache/omni-devenv-fusion/.memory/active_context/SCRATCHPAD.md"
+
+# Quick create new Spec from template
+# Usage: just spec-new "feature_name" "Feature description..."
+spec-new name description:
+    @echo "🏗️ Scaffolding Spec: {{name}}..."
+    @cp agent/specs/template.md agent/specs/{{name}}.md
+    @( \
+        echo "=== 📝 TASK: DRAFT SPEC ==="; \
+        echo "Target File: agent/specs/{{name}}.md"; \
+        echo "Feature Name: {{name}}"; \
+        echo "User Description: {{description}}"; \
+        echo ""; \
+        echo "💡 INSTRUCTION: Read the 'Target File' template. Fill in Sections 1 (Context) and 2 (Architecture) based on the 'User Description'. Leave Section 3 (Plan) for later."; \
+    ) | claude
+    @echo "✅ Spec draft created at agent/specs/{{name}}.md"
 
 # Start Claude with automatic context injection
 agent-start:
