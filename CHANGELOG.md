@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.4.0](https://github.com/tao3k/omni-devenv-fusion/compare/v1.3.0..v1.4.0) - 2026-01-01
+#### Features
+- (**docs**) add modular stress test framework specification - ([1ce76c5](https://github.com/tao3k/omni-devenv-fusion/commit/1ce76c5ab17372d4f1737b3fac1bf60f33400dc5)) - guangtao
+
+- - -
+
 ## [v1.2.0](https://github.com/tao3k/omni-devenv-fusion/compare/f869d85de10377cea9de095d67420719a4702704..v1.2.0) - 2025-12-31
 #### Features
 - (**mcp**) complete dual-server architecture with Phase 3 features - ([8f64a16](https://github.com/tao3k/omni-devenv-fusion/commit/8f64a1690ed4ef812920093fe148b92c42eef0ed)) - guangtao
