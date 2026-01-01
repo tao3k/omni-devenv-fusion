@@ -32,14 +32,19 @@ let
     "data" # JSONL examples, assets
     "version" # Version bump commits
     "claude" # Claude configuration
+    "git-workflow" # Git workflow documentation
+    "mcp-core" # Core MCP server modules
+    "inference" # AI inference engine
+    "orchestrator" # Orchestrator module
+    "git-ops" # Git operations tools
   ];
-
   # Define generator configurations
   generators = [
     {
       name = "lefthook";
       gen = (config.omnibus.ops.mkNixago initConfigs.nixago-lefthook) {
         data = {
+          commit-msg = lefthook.default.data.commit-msg;
           # Remove unnecessary commands from default pre-commit
           commands = builtins.removeAttrs lefthook.default.data.pre-commit.commands [
             "treefmt" # We use nixfmt instead
@@ -57,7 +62,7 @@ let
             run = "vale {staged_files}";
           };
         };
-      } initConfigs.lefthook.nix initConfigs.lefthook.shell;
+      } initConfigs.lefthook.nix initConfigs.lefthook.shell initConfigs.lefthook.prettier;
     }
     {
       name = "conform";
@@ -77,7 +82,6 @@ let
       gen =
         (config.omnibus.ops.mkNixago initConfigs.nixago-cog) initConfigs.cog.default
           {
-            hook.mode = "copy";
             data = {
               scopes = project-scopes;
               changelog = {
