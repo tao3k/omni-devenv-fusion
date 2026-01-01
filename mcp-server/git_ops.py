@@ -318,7 +318,12 @@ async def _execute_smart_commit_with_recovery(type: str, scope: str, message: st
 
 
 def register_git_ops_tools(mcp: Any) -> None:
-    """Register all git operations tools."""
+    """Register all git operations tools.
+
+    Automatically loads git-workflow.md memory on first call.
+    """
+    # Trigger workflow memory load - any git action will now have protocol context
+    _ = _git_workflow_cache.get_protocol()
 
     @mcp.tool()
     async def validate_commit_message(type: str, scope: str, message: str) -> str:
@@ -662,7 +667,18 @@ Return JSON only."""
     @mcp.tool()
     async def load_git_workflow_memory() -> str:
         """
-        Load full git-workflow.md as persistent memory.
+        Load git-workflow.md into context for answering git-related questions.
+
+        Use this tool ONCE per session when user asks about:
+        - Git flow, workflow, branch strategy
+        - Commit message rules, conventional commits
+        - Git operations, git commands
+
+        This tool reads agent/how-to/git-workflow.md and returns its full content.
+        The loaded content persists in context for the entire session.
+
+        NOTE: Call this tool exactly once at the start of a git-related conversation.
+        Subsequent questions about git will use the already-loaded context.
         """
         doc_path = Path("agent/how-to/git-workflow.md")
         if doc_path.exists():
@@ -682,6 +698,7 @@ Return JSON only."""
             {
                 "status": "success" if result.returncode == 0 else "error",
                 "rules_loaded": True,
+                "workflow_protocol": _git_workflow_cache.get_protocol(),
                 "source": "cog.toml/.conform.yaml",
                 "output": result.stdout,
                 "stderr": result.stderr if result.stderr else None,
@@ -700,6 +717,7 @@ Return JSON only."""
             {
                 "status": "success",
                 "rules_loaded": True,
+                "workflow_protocol": _git_workflow_cache.get_protocol(),
                 "commits": [
                     line.strip() for line in result.stdout.strip().split("\n") if line.strip()
                 ],
@@ -716,6 +734,7 @@ Return JSON only."""
             {
                 "status": "success",
                 "has_changes": bool(result.stdout.strip()),
+                "workflow_protocol": _git_workflow_cache.get_protocol(),
                 "diff": result.stdout if result.stdout else None,
             },
             indent=2,
@@ -730,6 +749,7 @@ Return JSON only."""
             {
                 "status": "success",
                 "has_staged_changes": bool(result.stdout.strip()),
+                "workflow_protocol": _git_workflow_cache.get_protocol(),
                 "staged_diff": result.stdout if result.stdout else None,
             },
             indent=2,

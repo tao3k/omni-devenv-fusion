@@ -26,7 +26,9 @@
       "Bash(uv run pytest:*)",
       "Bash(timeout 3 uv run:*)",
       "Bash(timeout:*)",
-      "mcp__orchestrator__spec_aware_commit"
+      "mcp__orchestrator__spec_aware_commit",
+      "mcp__orchestrator__git_diff",
+      "mcp__orchestrator__git_diff_staged"
     ]
   },
   "enableAllProjectMcpServers": true,
