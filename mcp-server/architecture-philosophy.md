@@ -139,6 +139,101 @@ that uses ripgrep. Follow the full Agentic Workflow: spec, implement, review, te
 **See Also**:
 - `agent/specs/advanced_search_tool.md` - Example of a Phase 8 implementation spec
 
+## Phase 9: Code Intelligence (ast-grep Integration)
+
+**Code Intelligence** bridges the gap between text-based search and syntactic understanding using `ast-grep`.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              Code Intelligence (ast-grep)               │
+│  Text Search vs Syntax Search                           │
+│  ─────────────────────────────────────────────────      │
+│  ripgrep: Fast, universal, context-oblivious            │
+│  ast-grep: Precise, structural, language-specific       │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          │ ast_search / ast_rewrite
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│                    Tool Capabilities                     │
+├─────────────────────────────────────────────────────────┤
+│  ast_search: Query code by AST structure                │
+│    - "Find all function definitions"                    │
+│    - "Find all try-except blocks"                       │
+│    - Wildcard patterns: "print($ARGS)"                  │
+├─────────────────────────────────────────────────────────┤
+│  ast_rewrite: Safe structural refactoring               │
+│    - "Replace print with logger.info"                   │
+│    - Preview before applying (--dry-run)                │
+│    - Zero false positives                               │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Pattern Syntax (ast-grep)**:
+```python
+# Simple pattern
+"def $NAME"                       # Find all function definitions
+"async def $NAME"                 # Find async functions
+"if $COND:"                       # Find if statements
+"print($ARGS)"                    # Match print calls with any args
+"import $MODULE"                  # Find import statements
+
+# Note: ast-grep uses $VAR for wildcards, not pattern:kind syntax
+```
+
+**Comparison with ripgrep**:
+| Aspect | ripgrep (Phase 8) | ast-grep (Phase 9) |
+|--------|-------------------|-------------------|
+| Speed | Fastest | Fast |
+| Context | Oblivious | Structural |
+| Precision | May have false positives | Zero false positives |
+| Languages | All | Language-specific |
+| Use Case | General search | Refactoring |
+
+**Practical Example**:
+```json
+// Find all async function definitions
+{"tool": "ast_search", "arguments": {
+  "pattern": "function_def kind:async name:$_",
+  "lang": "py",
+  "path": "mcp-server"
+}}
+
+// Replace print with logger.info
+{"tool": "ast_rewrite", "arguments": {
+  "pattern": "print($MSG)",
+  "replacement": "logger.info($MSG)",
+  "lang": "py",
+  "path": "mcp-server"
+}}
+```
+
+**See Also**:
+- `agent/specs/code_intelligence_phase9.md` - Phase 9 specification
+- `mcp-server/tests/stress/` - Modular stress test framework
+
+## Phase 9+: Stress Test Framework
+
+**Modular testing system for performance, logic depth, and stability:**
+
+```
+mcp-server/tests/stress/
+├── __init__.py           # Core: Config, Runner, Reporter
+├── core/fixtures.py      # Pytest fixtures
+└── suites/
+    ├── phase9.py         # Phase 9 tests
+    └── template.py       # Phase X template
+```
+
+**Test Categories:**
+- **Benchmarks**: Performance measurement (ast-grep search/rewrite speed)
+- **Logic Tests**: Pattern detection accuracy (Silent Killer detection)
+- **Stability Tests**: Chaos engineering (malformed syntax, edge cases)
+
+**Run:** `just stress-test`
+
+**Extensibility:** Copy `template.py` to create Phase 10+ suites.
+
 ## Router-Augmented Coding (RAC)
 
 **Three-Tier Knowledge System**:

@@ -42,7 +42,8 @@ TOOL_DOMAINS = {
         "description": "Codebase exploration, implementation, and file operations.",
         "tools": [
             "get_codebase_context", "list_directory_structure",
-            "delegate_to_coder", "safe_sandbox"
+            "delegate_to_coder", "safe_sandbox",
+            "ast_search", "ast_rewrite"
         ]
     },
     "QA": {

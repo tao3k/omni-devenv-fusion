@@ -313,7 +313,7 @@ async def save_file(
 # =============================================================================
 
 def _run_ast_grep(pattern: str, lang: str = "py", search_path: str = ".") -> str:
-    """Run ast-grep query and return matches."""
+    """Run ast-grep query and returns matches."""
     try:
         process = subprocess.run(
             ["ast-grep", "run", "-p", pattern, "-l", lang, search_path],
@@ -361,7 +361,7 @@ def _run_ast_rewrite(pattern: str, replacement: str, lang: str = "py", search_pa
         output = process.stdout
         stderr = process.stderr
 
-        log_decision("ast_rewrite.success", {"pattern": pattern, "lang": lang}, logger)
+        log_decision("ast_rewrite.success", {"pattern": "[hidden]", "lang": lang}, logger)
 
         # ast-grep returns exit code 1 when no matches found (not an error)
         if process.returncode == 1 and not output.strip() and not stderr.strip():
@@ -373,7 +373,7 @@ def _run_ast_rewrite(pattern: str, replacement: str, lang: str = "py", search_pa
         return f"--- ast-rewrite Applied ---\n{output}"
 
     except FileNotFoundError:
-        return "Error: 'ast-grep' command not found. Install with: nix-env -iA nixpkgs.ast-grep"
+        return "Error: 'ast-grep' not found. Install with: nix-env -iA nixpkgs.ast-grep"
     except subprocess.TimeoutExpired:
         return "Error: ast-rewrite timed out"
     except Exception as e:
@@ -387,10 +387,13 @@ async def ast_search(pattern: str, lang: str = "py", path: str = ".") -> str:
 
     Use this for structural code search (e.g., "Find all functions calling API X").
 
-    Examples:
-    - pattern: "function_call name:$_" (find function calls)
-    - pattern: "try_stmt" (find all try-except blocks)
-    - pattern: "assign $left = $right where $right: string" (find string assignments)
+    Pattern Examples (ast-grep syntax):
+    - "def $NAME" - Find all function definitions
+    - "async def $NAME" - Find all async functions
+    - "if $COND:" - Find all if statements
+    - "print($ARGS)" - Find print calls with any args
+    - "import $MODULE" - Find all import statements
+    - "class $NAME" - Find class definitions (use class_def kind)
 
     Args:
         pattern: AST pattern to search for
@@ -410,13 +413,14 @@ async def ast_rewrite(pattern: str, replacement: str, lang: str = "py", path: st
     """
     Apply AST-based code rewrite using ast-grep.
 
-    Use this for structural refactoring (e.g., "Replace all list comprehensions with map").
+    Use this for structural refactoring (e.g., "Replace all print statements with logger.info").
 
     CAUTION: This modifies files. Backups are recommended.
 
-    Examples:
-    - pattern: "for $x in $list: $x" -> replacement: "$list.map($x)"
-    - pattern: "try: $body except:$handler" -> replacement: "try:\n    $body\ncatch:\n    $handler"
+    Rewrite Examples:
+    - pattern: "print($MSG)" -> replacement: "logger.info($MSG)"
+    - pattern: "def $NAME($ARGS):" -> replacement: "async def $NAME($ARGS):"
+    - pattern: "if $COND:" -> replacement: "if $COND:  # TODO: review condition"
 
     Args:
         pattern: AST pattern to find

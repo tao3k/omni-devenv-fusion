@@ -564,6 +564,13 @@ test_workflow:
 test-mcp-all: test-mcp test_basic test_workflow
     @echo "All MCP tests passed!"
 
+# Phase 9: Code Intelligence - Stress & Benchmark Tests
+[group('mcp')]
+stress-test:
+    @echo "Running Stress Test Framework..."
+    @echo "================================="
+    @python -m pytest mcp-server/tests/test_stress.py -v
+
 # ==============================================================================
 # SRE HEALTH CHECKS
 # Outputs machine-parseable JSON for AI agents and CI/CD

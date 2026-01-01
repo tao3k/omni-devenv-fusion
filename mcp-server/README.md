@@ -335,6 +335,125 @@ mcp-server/mcp_core/memory.py:156:    def update_context(self, updates: dict[str
 
 ---
 
+## Phase 9: Code Intelligence (ast-grep)
+
+The Orchestrator includes **Code Intelligence** capabilities using `ast-grep` for structural code search and refactoring.
+
+### ast_search
+
+**Structural code search using AST patterns:**
+
+```json
+{
+  "tool": "ast_search",
+  "arguments": {
+    "pattern": "function_def name:$_",
+    "lang": "py",
+    "path": "mcp-server"
+  }
+}
+```
+
+**Pattern Examples:**
+- `def $NAME` - Find all function definitions
+- `async def $NAME` - Find all async functions
+- `if $COND:` - Find all if statements
+- `print($ARGS)` - Find print calls with any arguments
+- `import $MODULE` - Find import statements
+
+### ast_rewrite
+
+**Safe structural refactoring:**
+
+```json
+{
+  "tool": "ast_rewrite",
+  "arguments": {
+    "pattern": "print($MSG)",
+    "replacement": "logger.info($MSG)",
+    "lang": "py",
+    "path": "mcp-server"
+  }
+}
+```
+
+**Benefits:**
+- **Zero False Positives**: Understands code structure, not just text
+- **Safe Refactoring**: Preview changes before applying
+- **Language-Aware**: Supports Python, Rust, Go, TypeScript, and more
+
+### When to Use
+
+| Tool | Use Case |
+|------|----------|
+| `search_project_code` | General text search across all files |
+| `ast_search` | Find code by AST structure (functions, classes, imports) |
+| `ast_rewrite` | Refactor code patterns safely |
+
+---
+
+## Stress Test Framework
+
+A modular, system化 stress testing framework for Phase 9+.
+
+### Directory Structure
+
+```
+mcp-server/tests/
+├── stress/                    # Stress test framework
+│   ├── __init__.py            # Core (Config, Runner, Reporter)
+│   ├── core/
+│   │   └── fixtures.py        # Pytest fixtures
+│   ├── suites/
+│   │   ├── phase9.py          # Phase 9 test suite
+│   │   └── template.py        # Phase X template
+│   └── conftest.py            # Pytest configuration
+├── conftest.py                # Shared fixtures
+└── test_stress.py             # Test entry point
+```
+
+### Core Components
+
+| Component | Purpose |
+|-----------|---------|
+| `StressConfig` | Configuration (files, thresholds, cleanup) |
+| `BenchmarkRunner` | Performance benchmarks |
+| `LogicTestRunner` | Logic depth tests |
+| `StabilityTestRunner` | Chaos/stability tests |
+| `StressReporter` | Report generation |
+| `Phase9Suite` | Complete Phase 9 test suite |
+
+### Run Tests
+
+```bash
+just stress-test          # Run all stress tests
+pytest mcp-server/tests/test_stress.py -v  # Verbose
+```
+
+### Adding New Phase Tests
+
+1. Copy `stress/suites/template.py` → `stress/suites/phase10.py`
+2. Implement `run_benchmarks()`, `run_logic_tests()`, `run_stability_tests()`
+3. Register in `stress/suites/__init__.py`
+4. Import in `test_stress.py`
+
+### Example: Custom Benchmark
+
+```python
+from stress import BenchmarkRunner, StressConfig
+
+runner = BenchmarkRunner(StressConfig())
+result = runner.run(
+    name="My Benchmark",
+    pattern="my_pattern",
+    lang="py",
+    path="/path/to/code"
+)
+print(f"Duration: {result.duration}s")
+```
+
+---
+
 ## Example Calls
 
 ### List Available Personas
