@@ -1,13 +1,14 @@
 # Orchestrator MCP Server
 
-> Route complex queries to expert personas. Get architectural, platform, DevOps, or SRE guidance without leaving your IDE.
+> Route complex queries to expert personas and tools. Get architectural, platform, DevOps, or SRE guidance without leaving your IDE.
 
-This server exposes two tools:
+This server exposes three tool categories:
 
 | Tool | Purpose |
 |------|---------|
 | `list_personas` | Advertises available roles with use cases |
 | `consult_specialist` | Routes questions to specialized personas |
+| `consult_router` | [Cortex] Routes queries to Tool Domains (GitOps, ProductOwner, Coder, etc.) |
 
 ## The Problem It Solves
 
@@ -80,6 +81,257 @@ Control client and runtime behavior via environment variables:
 | `platform_expert` | Nix/OS infrastructure | devenv configs, containers, environment variables |
 | `devops_mlops` | CI/CD and pipelines | Build workflows, reproducibility, model training |
 | `sre` | Reliability and security | Error handling, performance, vulnerability checks |
+
+---
+
+## The Cortex (Tool Router)
+
+The Orchestrator includes **The Cortex** - a semantic tool routing system that maps user intent to the correct Tool Domain.
+
+| Domain | Description | Example Tools |
+|--------|-------------|---------------|
+| `GitOps` | Version control, commits | smart_commit, git_status, git_log |
+| `ProductOwner` | Specs, requirements | draft_feature_spec, verify_spec_completeness |
+| `Coder` | Code exploration | get_codebase_context, delegate_to_coder |
+| `QA` | Quality assurance | review_staged_changes, run_tests, analyze_test_results |
+| `Memory` | Context, tasks | manage_context, memory_garden |
+| `DevOps` | Nix, infra | community_proxy, consult_specialist, run_task |
+| `Search` | Code search | search_project_code |
+
+### Consult the Router
+
+Use `consult_router` when you're unsure which tool to use:
+
+```json
+{
+  "tool": "consult_router",
+  "arguments": {
+    "query": "I need to create a new feature for user login"
+  }
+}
+```
+
+**Response:**
+```
+--- 🧠 Cortex Routing Result ---
+Domain: ProductOwner (Confidence: 0.9)
+Reasoning: Creating a new feature involves defining requirements and specs.
+
+🛠️ Suggested Tools:
+- draft_feature_spec
+- verify_spec_completeness
+- assess_feature_complexity
+
+Tip: You can use these tools directly.
+```
+
+---
+
+## The Immune System (Code Review)
+
+The Orchestrator includes **The Immune System** - an AI-powered code review gate that runs before tests or commits.
+
+### review_staged_changes
+
+Call this tool to perform a Tech Lead level code review on staged changes:
+
+```json
+{
+  "tool": "review_staged_changes",
+  "arguments": {}
+}
+```
+
+**What it checks:**
+- **Style**: Alignment with `agent/standards/*`
+- **Safety**: Security vulnerabilities
+- **Clarity**: Descriptive naming, complexity
+- **Docs**: Docstrings and comments
+
+**Response:**
+```
+--- The Immune System (Code Review) ---
+
+REQUEST CHANGES:
+- Function `do_stuff` lacks type hints (see lang-python.md)
+- Missing docstring for function
+- Variable names `a`, `b` are not descriptive
+
+Guidance:
+- If REQUEST CHANGES: Fix issues, then review again
+- If APPROVE: Proceed to run_tests or smart_commit
+```
+
+---
+
+## Practical Scenario: From Intent to Commit
+
+This section demonstrates how The Cortex (Phase 6) and The Immune System (Phase 7) work together in a real workflow.
+
+### Scenario: Implementing a New Feature
+
+You've just written some code and want to commit it properly. Here's how the tools guide you:
+
+### Step 1: Ask The Cortex Which Tools to Use
+
+**Input:**
+
+```json
+{
+  "tool": "consult_router",
+  "arguments": {
+    "query": "I want to review my staged changes before committing"
+  }
+}
+```
+
+**Output:**
+
+```
+--- 🧠 Cortex Routing Result ---
+Domain: QA (Confidence: 0.9)
+Reasoning: Reviewing staged changes for commit is a quality assurance task.
+
+🛠️ Suggested Tools:
+- review_staged_changes: AI-powered code review before commit
+- run_tests: Execute test suite
+- smart_commit: Commit with validated message
+
+Tip: Use review_staged_changes first to ensure code quality.
+```
+
+### Step 2: Run The Immune System (Code Review)
+
+**Input:**
+
+```json
+{
+  "tool": "review_staged_changes",
+  "arguments": {}
+}
+```
+
+**Example Output (Good Code):**
+
+```
+--- The Immune System (Code Review) ---
+
+APPROVE:
+- Code follows Python standards (type hints present)
+- Function naming is clear and descriptive
+- Docstrings are present
+- No security issues detected
+
+Guidance:
+- If REQUEST CHANGES: Fix issues, then review again
+- If APPROVE: Proceed to run_tests or smart_commit
+```
+
+**Example Output (Bad Code - Missing Standards):**
+
+```
+--- The Immune System (Code Review) ---
+
+REQUEST CHANGES:
+- Function `do_stuff` lacks type hints (see agent/standards/lang-python.md)
+- Missing docstring for function
+- Variable names `a`, `b` are not descriptive
+- Complex logic should be simplified
+
+Guidance:
+- If REQUEST CHANGES: Fix issues using coder tools, then review again
+- If APPROVE: Proceed to run_tests or smart_commit
+```
+
+### Step 3: Fix Issues (If Needed)
+
+If the review returned REQUEST CHANGES, use the Coder tools to fix:
+
+```json
+{
+  "tool": "delegate_to_coder",
+  "arguments": {
+    "task_type": "refactor",
+    "details": "Add type hints and docstring to do_stuff function. Rename parameters from 'a', 'b' to more descriptive names like 'x' and 'y'."
+  }
+}
+```
+
+Then stage the fixes and run `review_staged_changes` again.
+
+### Step 4: Proceed to Commit
+
+Once approved:
+
+```json
+{
+  "tool": "smart_commit",
+  "arguments": {
+    "type": "feat",
+    "scope": "mcp",
+    "message": "add new feature for user authentication"
+  }
+}
+```
+
+---
+
+## Phase 8: Singularity (Self-Evolution)
+
+The Orchestrator supports **Bootstrapping** - it can extend itself by adding new capabilities without human coding.
+
+### The Graduation Test
+
+Give the Agent this prompt to add a new capability:
+
+```json
+{
+  "tool": "consult_router",
+  "arguments": {
+    "query": "Add a high-performance code search tool called search_project_code that uses ripgrep"
+  }
+}
+```
+
+The Agent will:
+1. Route to ProductOwner → Draft a spec
+2. Route to Coder → Implement the tool
+3. Route to Immune System → Review the code
+4. Run tests → Smart commit
+
+### search_project_code
+
+**High-performance code search using ripgrep:**
+
+```json
+{
+  "tool": "search_project_code",
+  "arguments": {
+    "pattern": "def \\w+_context",
+    "path": "mcp-server",
+    "file_type": "py",
+    "context_lines": 3
+  }
+}
+```
+
+**Parameters:**
+- `pattern`: Regex pattern to search (required)
+- `path`: Search directory (default: ".")
+- `file_type`: Filter by extension (e.g., "py", "nix")
+- `include_hidden`: Search hidden files (default: false)
+- `context_lines`: Lines of context around matches (default: 2)
+
+**Output:**
+```
+Found 5 matches in 2 files (12.34ms):
+
+mcp-server/orchestrator.py:782:    async def get_codebase_context(target_dir: str = ".", ignore_files: str = "") -> str:
+mcp-server/orchestrator.py:795:    async def list_directory_structure(root_dir: str = ".") -> str:
+mcp-server/mcp_core/memory.py:45:    def save_context(self) -> dict[str, Any]:
+mcp-server/mcp_core/memory.py:89:    def get_context(self, context_type: str) -> dict[str, Any]:
+mcp-server/mcp_core/memory.py:156:    def update_context(self, updates: dict[str, Any]) -> dict[str, Any]:
+```
 
 ---
 

@@ -83,6 +83,24 @@ try:
 except ImportError:
     from lang_expert import register_lang_expert_tools
 
+# Import Tool Router (The Cortex - Semantic Tool Routing)
+try:
+    from .router import get_router
+except ImportError:
+    from router import get_router
+
+# Import Reviewer tools (The Immune System)
+try:
+    from .reviewer import register_reviewer_tools
+except ImportError:
+    from reviewer import register_reviewer_tools
+
+# Import Advanced Search tools (High-performance code search)
+try:
+    from .advanced_search import register_advanced_search_tools
+except ImportError:
+    from advanced_search import register_advanced_search_tools
+
 # =============================================================================
 # Configuration
 # =============================================================================
@@ -154,6 +172,14 @@ log_decision("product_owner_tools.registered", {}, logger)
 # Register Language Expert tools (agent/standards/lang-*.md + tool-router examples)
 register_lang_expert_tools(mcp)
 log_decision("lang_expert_tools.registered", {}, logger)
+
+# Register Reviewer tools (The Immune System)
+register_reviewer_tools(mcp)
+log_decision("reviewer_tools.registered", {}, logger)
+
+# Register Advanced Search tools (High-performance code search)
+register_advanced_search_tools(mcp)
+log_decision("advanced_search_tools.registered", {}, logger)
 
 
 # =============================================================================
@@ -417,6 +443,46 @@ async def consult_specialist(role: str, query: str, stream: bool = False) -> str
     except Exception as exc:
         log_decision("consult_specialist.error", {"role": role, "error": str(exc)}, logger)
         return f"Error consulting specialist: {exc}"
+
+
+# =============================================================================
+# The Cortex (Tool Router)
+# =============================================================================
+
+@mcp.tool()
+async def consult_router(query: str) -> str:
+    """
+    [Cortex] Ask the Router which tools to use for a specific task.
+
+    Use this when you are unsure which tool is best for the user's request.
+    It analyzes the intent and returns a focused set of tools (Domain).
+
+    Args:
+        query: The user's request or task description.
+    """
+    router = get_router()
+    log_decision("consult_router.request", {"query": query}, logger)
+
+    result = await router.route_intent(query)
+
+    domain = result.get("domain", "Unknown")
+    confidence = result.get("confidence", 0.0)
+    tools = result.get("suggested_tools", [])
+    reasoning = result.get("reasoning", "")
+
+    response = f"""--- 🧠 Cortex Routing Result ---
+Domain: {domain} (Confidence: {confidence})
+Reasoning: {reasoning}
+
+🛠️ Suggested Tools:
+"""
+    for tool in tools:
+        response += f"- {tool}\n"
+
+    response += "\nTip: You can use these tools directly."
+
+    log_decision("consult_router.result", {"domain": domain}, logger)
+    return response
 
 
 # =============================================================================

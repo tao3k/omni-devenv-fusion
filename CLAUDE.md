@@ -64,6 +64,24 @@ You are the **Lead Architect & Orchestrator** for `omni-devenv-fusion`.
 
 - Rules auto-loaded from `agent/how-to/git-workflow.md` (cached)
 
+### 7. Phase 8: Singularity (Self-Evolution)
+**The Agent can extend itself** - no human coding required for new features.
+
+**The Graduation Test**:
+```
+"Orchestrator, add a high-performance code search tool called search_project_code
+that uses ripgrep. Follow the full Agentic Workflow: spec, implement, review, test, commit."
+```
+
+**What Happens**:
+1. 🧠 Cortex routes to ProductOwner → Draft spec
+2. 📋 Spec verified → Coder implements
+3. 💻 Coder creates file → Registers in orchestrator.py
+4. 🛡️ Immune System reviews → APPROVE
+5. 🧪 Tests pass → Smart commit
+
+**New Tool Added**: `search_project_code` - High-performance code search using ripgrep
+
 ### 3. Feature Implementation → Use `product_owner` tools
 | Tool | Purpose |
 |------|---------|
@@ -72,10 +90,11 @@ You are the **Lead Architect & Orchestrator** for `omni-devenv-fusion`.
 | `get_feature_requirements` | Get requirements by level |
 | `check_doc_sync` | Verify docs updated |
 
-### 4. Testing → Use `tester` tools
+### 4. Quality Assurance → Use `tester` / `reviewer` tools
 | Tool | Purpose |
 |------|---------|
 | `smart_test_runner` | Auto-select tests |
+| `review_staged_changes` | [Immune System] AI code review before commit |
 | `get_test_protocol` | Get testing rules |
 
 ### 5. Language-Specific Code → Use `lang_expert` tools
@@ -84,6 +103,7 @@ You are the **Lead Architect & Orchestrator** for `omni-devenv-fusion`.
 | Tool | Purpose |
 |------|---------|
 | `consult_language_expert` | Get standards + relevant examples |
+| `consult_router` | [Cortex] Route query to Tool Domain (GitOps, ProductOwner, Coder, etc.) |
 | `get_language_standards` | Get full lang standards doc |
 | `list_supported_languages` | Show available languages |
 
