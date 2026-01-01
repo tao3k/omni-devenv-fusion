@@ -43,7 +43,7 @@ When a command times out **3 times**, must execute error correction:
 - ✅ Check for lingering processes
 - ✅ Simplify test case
 - ✅ Binary search for problematic module
-- ✅ Document in `agent/standards/problem-solving.md`
+- ✅ Document findings
 
 ### Timeout Investigation Checklist
 
@@ -54,55 +54,18 @@ When a command times out repeatedly:
 | 1 | Check for zombie processes | `ps aux \| grep python` |
 | 2 | Check for file locks | `.pyc`, `__pycache__` |
 | 3 | Simplify the test case | Remove unrelated imports |
-| 4 | Test in isolation | Run file directly, not via uv run |
+| 4 | Test in isolation | Run file directly, not via framework |
 | 5 | Check syntax first | `python -m py_compile file.py` |
 | 6 | Check imports one by one | Binary search the problematic module |
 
-### Case Study: threading.Lock Deadlock
+### Common Timeout Causes
 
-**Symptom:**
-```
-timeout 5 uv run python -c "import mcp_core"
-# Hangs indefinitely
-```
-
-**Investigation:**
-```
-1. Checked processes: Found zombie Python processes
-2. Cleared __pycache__: Still hangs
-3. Tested in isolation: Works from mcp_core dir
-4. Binary search imports: Hangs at 'import instructions'
-5. Simplified instructions.py: Removed threading.Lock → WORKS!
-```
-
-**Root Cause:**
-`threading.Lock()` at class level + eager loading in `__new__` caused deadlock in uv run's isolated environment.
-
-**Solution:**
-Replace Lock with simple boolean flag for single-threaded use case:
-```python
-# Before (problematic)
-class Loader:
-    _lock = threading.Lock()
-    def __new__(cls):
-        with cls._lock:  # Deadlock in uv run
-            ...
-
-# After (working)
-_locked = False
-def _ensure_loaded():
-    global _locked
-    if _locked:
-        return
-    _locked = True
-    try:
-        ...
-    finally:
-        _locked = False
-```
-
-**Lesson:**
-> Threading primitives in module-level singletons with eager loading are high-risk. For single-threaded MCP server startup, simple boolean flags are safer.
+| Cause | Solution |
+|-------|----------|
+| Process fork deadlock | Use lazy loading pattern (see `lang-python.md`) |
+| Import cycle | Refactor to break circular dependencies |
+| Network timeout | Check connectivity, increase timeout |
+| Infinite loop | Add timeout, simplify logic |
 
 ---
 
@@ -110,7 +73,7 @@ def _ensure_loaded():
 
 ### Symptom
 ```
-ModuleNotFoundError: No module named 'mcp_core'
+ModuleNotFoundError: No module named 'module_name'
 ```
 
 ### Diagnosis
@@ -118,8 +81,8 @@ ModuleNotFoundError: No module named 'mcp_core'
 # Check where Python is looking
 python3 -c "import sys; print(sys.path)"
 
-# Find all mcp_core locations
-find /project -name "mcp_core" -type d
+# Find all module locations
+find /project -name "module_name" -type d
 ```
 
 ### Solution: Workspace Configuration
@@ -130,10 +93,10 @@ find /project -name "mcp_core" -type d
 members = ["mcp-server"]
 
 [tool.uv.sources]
-omni-orchestrator = { workspace = true }
+package_name = { workspace = true }
 ```
 
-**Key insight:** `project.dependencies` must be PEP 508 compliant (standard format). Use `[tool.uv.sources]` to tell uv where to find workspace packages.
+**Key insight:** `project.dependencies` must be PEP 508 compliant. Use `[tool.uv.sources]` for workspace packages.
 
 ---
 
@@ -153,7 +116,7 @@ find . -name "__pycache__" -exec rm -rf {} +
 python -m py_compile suspicious.py
 
 # Test in isolation
-cd mcp_core && python -c "import module"
+cd module_dir && python -c "import module"
 ```
 
 ---
@@ -163,6 +126,7 @@ cd mcp_core && python -c "import module"
 - Timeout persists after 3 different investigation approaches
 - Deadlock involving system resources (locks, threads, signals)
 - Import path conflicts that `uv sync` doesn't resolve
+- Language-specific concurrency issues → See `lang-*.md`
 
 ---
 

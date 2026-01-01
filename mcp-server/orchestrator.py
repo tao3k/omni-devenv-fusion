@@ -41,7 +41,7 @@ from mcp_core import (
     build_persona_prompt,
 )
 
-# Import instructions loader (agent/instructions/ - eager loaded at startup)
+# Import instructions loader (agent/instructions/ - lazy loaded on first access)
 from mcp_core.instructions import (
     get_all_instructions_merged,
     list_instruction_names,
@@ -127,14 +127,9 @@ try:
 except ImportError:
     pass
 
-# Preload Instructions (from agent/instructions/ - DEFAULT PROMPTS)
-try:
-    from mcp_core.instructions import _instructions_loader, list_instruction_names
-    _ = _instructions_loader  # Eager load to cache project instructions
-    instruction_names = list_instruction_names()
-    log_decision("instructions.preloaded", {"count": len(instruction_names), "names": instruction_names}, logger)
-except ImportError:
-    pass
+# NOTE: Instructions are now pure lazy loaded (no eager loading)
+# This avoids fork deadlock issues with threading.Lock.
+# First call to get_instruction_names() will trigger loading.
 
 # Register DocuSmith writing tools
 register_writer_tools(mcp)
