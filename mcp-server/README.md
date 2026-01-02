@@ -9,6 +9,7 @@ This server exposes three tool categories:
 | `list_personas`      | Advertises available roles with use cases                                   |
 | `consult_specialist` | Routes questions to specialized personas                                    |
 | `consult_router`     | [Cortex] Routes queries to Tool Domains (GitOps, ProductOwner, Coder, etc.) |
+| `start_spec`         | [Legislation Gate] Enforces spec exists before coding new work              |
 
 ## The Problem It Solves
 
@@ -88,15 +89,15 @@ Control client and runtime behavior via environment variables:
 
 The Orchestrator includes **The Cortex** - a semantic tool routing system that maps user intent to the correct Tool Domain.
 
-| Domain         | Description              | Example Tools                                          |
-| -------------- | ------------------------ | ------------------------------------------------------ |
-| `GitOps`       | Version control, commits | smart_commit, git_status, git_log                      |
-| `ProductOwner` | Specs, requirements      | draft_feature_spec, verify_spec_completeness           |
-| `Coder`        | Code exploration         | get_codebase_context, delegate_to_coder                |
-| `QA`           | Quality assurance        | review_staged_changes, run_tests, analyze_test_results |
-| `Memory`       | Context, tasks           | manage_context, memory_garden                          |
-| `DevOps`       | Nix, infra               | community_proxy, consult_specialist, run_task          |
-| `Search`       | Code search              | search_project_code                                    |
+| Domain         | Description              | Example Tools                                              |
+| -------------- | ------------------------ | ---------------------------------------------------------- |
+| `GitOps`       | Version control, commits | smart_commit, git_status, git_log                          |
+| `ProductOwner` | Specs, requirements      | start_spec, draft_feature_spec, verify_spec_completeness   |
+| `Coder`        | Code exploration         | get_codebase_context, delegate_to_coder                    |
+| `QA`           | Quality assurance        | review_staged_changes, run_tests, analyze_test_results     |
+| `Memory`       | Context, tasks           | manage_context, memory_garden                              |
+| `DevOps`       | Nix, infra               | community_proxy, consult_specialist, run_task              |
+| `Search`       | Code search              | search_project_code                                        |
 
 ### Consult the Router
 
@@ -125,6 +126,48 @@ Reasoning: Creating a new feature involves defining requirements and specs.
 
 Tip: You can use these tools directly.
 ```
+
+---
+
+## The Legislation Gate (start_spec)
+
+The Orchestrator enforces **Spec-First Development** - you cannot code new work without a verified spec.
+
+### start_spec
+
+Call this tool FIRST when you judge the user is requesting new work:
+
+```json
+{
+  "tool": "start_spec",
+  "arguments": {
+    "name": "Feature Name"
+  }
+}
+```
+
+**Response (spec exists):**
+
+```json
+{
+  "status": "allowed",
+  "spec_path": "agent/specs/phase10_hive_architecture.md",
+  "message": "Legislation complete for 'Hive Architecture'. Ready for execution."
+}
+```
+
+**Response (no spec):**
+
+```json
+{
+  "status": "blocked",
+  "reason": "Legislation is MANDATORY for new work",
+  "spec_required": true,
+  "next_action": "draft_feature_spec"
+}
+```
+
+**Auto-Spec-Path**: When `start_spec` returns "allowed", it auto-saves the spec path. Subsequent calls to `verify_spec_completeness()` will auto-detect the path without manual input.
 
 ---
 
