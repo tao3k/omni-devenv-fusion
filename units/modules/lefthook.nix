@@ -37,6 +37,7 @@ let
     "inference" # AI inference engine
     "orchestrator" # Orchestrator module
     "git-ops" # Git operations tools
+    "mcp-server" # Legacy: for old commits (DEPRECATED, use "mcp")
   ];
   # Define generator configurations
   generators = [
