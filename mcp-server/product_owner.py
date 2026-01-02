@@ -495,6 +495,8 @@ Return JSON with:
         """
         Verify that documentation is updated when code changes.
 
+        Reference: agent/how-to/documentation-workflow.md
+
         Args:
             changed_files: List of code files that changed
 
@@ -508,32 +510,62 @@ Return JSON with:
 
         sync_status = "ok"
         recommendations = []
+        required_docs = []
 
         # Check if code changes require doc updates
-        code_needs_doc = any(
-            f.startswith(prefix) for f in code_files
-            for prefix in [
-                "mcp-server/",
-                "units/modules/",
-                "justfile",
-                "lefthook"
-            ]
-        )
+        for f in code_files:
+            if f.startswith("mcp-server/"):
+                if not any(d in doc_files for d in ["mcp-server/README.md", "CLAUDE.md"]):
+                    sync_status = "warning"
+                    required_docs.append({
+                        "file": "mcp-server/README.md and/or CLAUDE.md",
+                        "reason": f"mcp-server code changed: {f}",
+                        "action": "Add new tool to tool tables"
+                    })
+            elif f.startswith("units/modules/"):
+                required_docs.append({
+                    "file": "docs/ or infrastructure docs",
+                    "reason": f"Nix module changed: {f}",
+                    "action": "Update infrastructure documentation"
+                })
+            elif f == "justfile":
+                required_docs.append({
+                    "file": "docs/ and/or command help",
+                    "reason": "justfile changed",
+                    "action": "Update command documentation"
+                })
 
-        if code_needs_doc and not doc_files:
+        # Check for spec changes
+        spec_files = [f for f in changed_files if f.startswith("agent/specs/")]
+        if spec_files:
+            if "agent/standards/feature-lifecycle.md" not in doc_files:
+                sync_status = "warning"
+                required_docs.append({
+                    "file": "agent/standards/feature-lifecycle.md",
+                    "reason": f"Spec added/modified: {spec_files[0]}",
+                    "action": "Update workflow diagrams if needed"
+                })
+
+        # Check for agent/standards changes
+        std_files = [f for f in changed_files if f.startswith("agent/standards/")]
+        if std_files and not doc_files:
             sync_status = "warning"
-            recommendations.append("Code changes detected but no docs updated. Update relevant agent/ files.")
+            recommendations.append(f"Standards changed: {std_files}. Update related docs if needed.")
 
-        # Check if only docs changed (ok)
-        if code_files and not doc_files and not code_needs_doc:
+        if code_files and not doc_files and not required_docs:
             sync_status = "ok"
+            recommendations.append("Documentation is in sync")
+
+        if required_docs:
+            recommendations = [f"Update {d['file']}: {d['action']}" for d in required_docs]
 
         return json.dumps({
             "status": sync_status,
             "code_files_changed": len(code_files),
             "doc_files_changed": len(doc_files),
+            "required_docs": required_docs,
             "recommendations": recommendations if recommendations else ["Documentation is in sync"],
-            "reference": "agent/standards/feature-lifecycle.md#53-documentation-sync"
+            "reference": "agent/how-to/documentation-workflow.md"
         }, indent=2)
 
     # -------------------------------------------------------------------------
