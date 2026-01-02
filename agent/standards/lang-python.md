@@ -94,15 +94,100 @@ except ValueError as e:
     raise
 ```
 
-## 4. Tool-Specific Notes
+## 4. UV Best Practices
 
-### 4.1 UV Usage
+### 4.1 Timeout Debugging Protocol
 
-- Use `uv run python script.py` for scripts
-- Use `uv run pytest` for tests
-- Dependencies in `pyproject.toml`
+**The Timeout Anti-Pattern:**
 
-### 4.2 MCP Server Pattern
+```python
+# ❌ Wrong: Running the same command multiple times
+uv run python test.py
+uv run python test.py
+uv run python test.py  # Still failing? Try again!
+# Trapped in endless test loop
+```
+
+**Correct Approach - Rule of Three:**
+
+When a command times out **3 times**, execute error correction:
+
+| Attempt | Action                       | Reason             |
+| ------- | ---------------------------- | ------------------ | ------------------------ |
+| 1       | Retry                        | Might be temporary |
+| 2       | Check processes              | `ps aux            | grep python` for zombies |
+| 3       | **Systematic investigation** | Start debugging    |
+
+**Timeout Investigation Checklist:**
+
+| Step | Action                                       |
+| ---- | -------------------------------------------- | ------------ |
+| 1    | Check for zombie processes: `ps aux          | grep python` |
+| 2    | Check for file locks: `.pyc`, `__pycache__`  |
+| 3    | Simplify test case: remove unrelated imports |
+| 4    | Test in isolation: run file directly         |
+| 5    | Check syntax: `python -m py_compile file.py` |
+| 6    | Binary search imports: remove half at a time |
+
+**Common Timeout Causes:**
+
+| Cause                 | Solution                                         |
+| --------------------- | ------------------------------------------------ |
+| Process fork deadlock | See `agent/knowledge/threading-lock-deadlock.md` |
+| Import cycle          | Refactor to break circular dependencies          |
+| Infinite loop         | Add timeout, simplify logic                      |
+
+### 4.2 Import Path Conflicts
+
+**Symptom:**
+
+```
+ModuleNotFoundError: No module named 'module_name'
+```
+
+**Diagnosis:**
+
+```bash
+# Check where Python is looking
+python3 -c "import sys; print(sys.path)"
+
+# Find all module locations
+find /project -name "module_name" -type d
+```
+
+**Solution: Workspace Configuration**
+
+```toml
+# pyproject.toml (root)
+[tool.uv.workspace]
+members = ["mcp-server"]
+
+[tool.uv.sources]
+package_name = { workspace = true }
+```
+
+**Key insight:** `project.dependencies` must be PEP 508 compliant. Use `[tool.uv.sources]` for workspace packages.
+
+### 4.3 Essential Debugging Commands
+
+```bash
+# Check for hanging processes
+ps aux | grep python
+
+# Kill stuck processes
+pkill -9 -f "python.*mcp"
+
+# Clear cache
+find . -name "__pycache__" -exec rm -rf {} +
+
+# Syntax check
+python -m py_compile suspicious.py
+
+# Test in isolation
+cd module_dir && python -c "import module"
+```
+
+### 4.4 MCP Server Pattern
 
 ```python
 from mcp.server.fastmcp import FastMCP
@@ -115,12 +200,12 @@ async def my_tool(param: str) -> str:
     return f"Result: {param}"
 ```
 
-### 4.3 Testing
+### 4.5 Testing
 
 - Use `pytest` for unit tests
 - MCP tool tests: Use `test_basic.py` pattern with `send_tool()`
 
-### 4.4 Troubleshooting
+### 4.6 Troubleshooting
 
 For Python-specific issues (threading, uv, concurrency), see:
 

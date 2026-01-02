@@ -1184,9 +1184,61 @@ async def run_task(command: str, args: Optional[List[str]] = None) -> str:
     - just: validate, build, test, lint, fmt, test-basic, test-mcp, agent-commit
     - nix: fmt, build, shell, flake-check
     - git: status, diff, log, add, checkout, branch
+
+    ⚠️ SECURITY: Git commit operations are BLOCKED. Use @omni-orchestrator smart_commit instead.
     """
     if args is None:
         args = []
+
+    # =============================================================================
+    # GIT COMMIT BLOCKLIST - Prevents bypass of authorization protocol
+    # =============================================================================
+    # This check prevents agents from bypassing smart_commit() authorization
+    # by using run_task to execute git commit directly.
+
+    # Check 1: Direct git commit command
+    if command == "git" and args and "commit" in args:
+        blocked_msg = """🚫 GIT COMMIT BLOCKED
+
+This command was blocked because git commit operations MUST go through the authorization protocol.
+
+**Why this is blocked:**
+- Agents must use @omni-orchestrator smart_commit() for commit validation
+- Authorization requires user to say "run just agent-commit"
+- Direct git commit bypasses pre-commit hooks and authorization
+
+**Correct workflow:**
+1. @omni-orchestrator smart_commit(type="feat", scope="mcp", message="description")
+2. System returns: {authorization_required: true, auth_token: "..."}
+3. Ask user: "Please say: run just agent-commit"
+4. @omni-orchestrator execute_authorized_commit(auth_token="xxx")
+
+**Allowed git operations (non-committing):**
+- git status, git diff, git log, git add, git checkout, git branch
+"""
+        log_decision("run_task.blocked", {"command": command, "args": args, "reason": "git_commit_blocked"}, logger)
+        return blocked_msg
+
+    # Check 2: bash command containing "git commit"
+    if command == "bash" and args:
+        full_cmd = " ".join(args) if isinstance(args, list) else str(args)
+        if "git commit" in full_cmd:
+            blocked_msg = """🚫 GIT COMMIT BLOCKED (via bash)
+
+Running `git commit` through bash is FORBIDDEN.
+
+**Use the authorized commit path instead:**
+1. @omni-orchestrator smart_commit(type="...", scope="...", message="...")
+2. Wait for authorization token
+3. @omni-orchestrator execute_authorized_commit(auth_token="...")
+
+**This is a protocol violation if you intentionally wrote this.**
+"""
+            log_decision("run_task.blocked", {"command": command, "reason": "bash_git_commit_blocked"}, logger)
+            return blocked_msg
+
+    # Check 3: just agent-commit is allowed, but only through smart_commit workflow
+    # The actual execution happens in git_ops.py via AuthorizationGuard
 
     # 1. Execute command
     log_decision("run_task.request", {"command": command, "args": args}, logger)

@@ -364,8 +364,8 @@ class AuthorizationGuard:
 
         auth_data = self._tokens[token]
 
-        # Check expiration
-        if time.time() - auth_data["created_at"] > auth_data["expires_in"]:
+        # Check expiration (>= to handle immediate expiration with expires_in=0)
+        if time.time() - auth_data["created_at"] >= auth_data["expires_in"]:
             del self._tokens[token]
             return None
 
@@ -762,6 +762,12 @@ Return JSON only."""
         commit_msg = f"{generated_type}{scope_str}: {generated_message}"
 
         if not force_execute:
+            # Create authorization token (same as smart_commit)
+            command = f'just agent-commit {generated_type} {generated_scope or ""} "{generated_message}"'
+            auth_token = _auth_guard.create_authorization(
+                command, generated_type, generated_scope or "", generated_message
+            )
+
             return json.dumps(
                 {
                     "status": "ready",
@@ -769,8 +775,10 @@ Return JSON only."""
                     "spec": spec_title,
                     "message": commit_msg,
                     "body": generated_body,
-                    "command": f'just agent-commit {generated_type} {generated_scope or ""} "{generated_message}"',
+                    "command": command,
                     "authorization_required": True,
+                    "auth_token": auth_token,
+                    "user_prompt_hint": "Run: execute_authorized_commit with the auth_token above",
                     "note": "AI-generated commit message from Spec + Scratchpad",
                 },
                 indent=2,
@@ -913,6 +921,47 @@ Return JSON only."""
                 "has_staged_changes": bool(result.stdout.strip()),
                 "workflow_protocol": _git_workflow_cache.get_protocol(),
                 "staged_diff": result.stdout if result.stdout else None,
+            },
+            indent=2,
+        )
+
+    @mcp.tool()
+    async def check_commit_authorization() -> str:
+        """
+        Verify the authorization protocol and check pending authorizations.
+
+        Use this tool to:
+        1. Understand the current authorization state
+        2. Check if there are any pending authorization tokens
+        3. Get a reminder of the correct workflow
+
+        Returns:
+            JSON with authorization status and workflow guidance
+        """
+        # Count active (unused, non-expired) tokens
+        import time
+
+        active_tokens = 0
+        for token, data in _auth_guard._tokens.items():
+            if not data["used"] and (time.time() - data["created_at"]) <= data["expires_in"]:
+                active_tokens += 1
+
+        protocol = _git_workflow_cache.get_protocol()
+        should_ask = _git_workflow_cache.should_ask_user()
+
+        return json.dumps(
+            {
+                "status": "success",
+                "protocol": protocol,
+                "requires_authorization": should_ask or protocol == "stop_and_ask",
+                "pending_tokens": active_tokens,
+                "workflow": {
+                    "step_1": "Call smart_commit(type, scope, message)",
+                    "step_2": "System returns auth_token if authorization required",
+                    "step_3": "Ask user: 'Please say: run just agent-commit'",
+                    "step_4": "Call execute_authorized_commit(auth_token='...')",
+                },
+                "note": "Only execute_authorized_commit() can commit after authorization",
             },
             indent=2,
         )

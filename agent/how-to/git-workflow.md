@@ -142,6 +142,18 @@ This launches an interactive wizard that guides you through:
 
 **By default, when an Agent (LLM) finishes a task, it MUST NOT commit code automatically.**
 
+### 🚨 MANDATORY: Use MCP Tools Only
+
+**Agents MUST use MCP tools for ALL git commit operations. Direct shell commands are FORBIDDEN.**
+
+| Allowed (Safe)                                 | Forbidden (Bypass Risk)                  |
+| ---------------------------------------------- | ---------------------------------------- |
+| `@omni-orchestrator smart_commit`              | `run_task("git", ["commit", ...])`       |
+| `@omni-orchestrator execute_authorized_commit` | `run_task("bash", "git commit ...")`     |
+| `@omni-orchestrator spec_aware_commit`         | Any Bash command containing "git commit" |
+
+**Enforcement**: The `run_task` tool blocks all git commit commands. Attempting to bypass via shell will fail.
+
 **Agent/LLM Behavior:**
 
 1. Make changes
@@ -182,6 +194,24 @@ The Agent/LLM is authorized to commit **ONLY IF** the user explicitly grants per
 - User must say exactly: "run just agent-commit"
 - **DO NOT assume** "ok", "yes", "go", "hao" = authorization
 - Only the exact phrase grants permission
+
+### 🔒 Authorization Token System (Code-Enforced)
+
+The system uses a token-based authorization to prevent bypass:
+
+1. **Step 1**: Agent calls `smart_commit(type, scope, message)`
+2. **Step 2**: System returns `auth_token` (hex string, expires in 5 minutes)
+3. **Step 3**: Agent asks user: "Please say: run just agent-commit"
+4. **Step 4**: User authorizes with the exact phrase
+5. **Step 5**: Agent calls `execute_authorized_commit(auth_token="xxx")`
+6. **Step 6**: Token is validated AND consumed (one-time use only)
+
+**Why this prevents bypass:**
+
+- Token expires after 5 minutes
+- Token can only be used ONCE
+- Direct `git commit` is blocked by `run_task` guard
+- Only `execute_authorized_commit` can execute commits after authorization
 
 **Correct workflow:**
 
@@ -228,6 +258,30 @@ When an LLM triggers a commit, it should:
 | Tests fail                                            | **STOP** and report error. Do not commit.                      |
 | Pre-commit hooks fail                                 | **STOP** and report error. Do not commit.                      |
 | `smart_commit` returns `authorization_required: true` | **IMMEDIATELY STOP** → Ask user to say "run just agent-commit" |
+
+### ⚠️ Bypass Detection & Prevention
+
+**Attempting to bypass MCP tools will FAIL. The system enforces this at multiple levels:**
+
+| Bypass Attempt                       | Result                                      |
+| ------------------------------------ | ------------------------------------------- |
+| `run_task("git", ["commit", ...])`   | ❌ Blocked - git commit not in allowed list |
+| `run_task("bash", "git commit ...")` | ❌ Blocked - contains "commit" keyword      |
+| Direct subprocess with `git commit`  | ❌ Blocked - not an allowed command         |
+
+**Violations will be logged and may result in:**
+
+1. Immediate rejection of the command
+2. Warning message about protocol violation
+3. Recurring violations may trigger session termination
+
+**The ONLY authorized commit path is:**
+
+```
+smart_commit() → user says "run just agent-commit" → execute_authorized_commit(token)
+```
+
+**ANY other path is a protocol violation.**
 
 ### Never Auto-Commit Without Authorization
 

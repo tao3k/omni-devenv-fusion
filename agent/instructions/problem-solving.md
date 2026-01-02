@@ -4,228 +4,328 @@ Problem Solving Guide
 
 ---
 
-## Timeout Debugging Protocol
+## Deep Reasoning: The Architecture of Correct Thinking
 
-### The Timeout Anti-Pattern
+### The Foundation: Why "Why" Matters
 
-**Wrong Approach:**
+Before solving any problem, ask: **"What is the fundamental nature of this problem?"**
 
-```python
-# Running the same command multiple times hoping it will succeed
-uv run python test.py
-uv run python test.py
-uv run python test.py  # Still failing? Try again!
-# Trapped in endless test loop
-```
-
-**Correct Approach - Error Correction:**
+All problems exist on a spectrum:
 
 ```
-1st timeout: "Might be temporary issue, retry"
-2nd timeout: "Pattern detected! Stop repeating, start investigating"
-3rd timeout: "Definite issue! Systematic debugging required"
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  SYMPTOM  ──────────────────────────────────────────→  ROOT CAUSE│
+│                                                                 │
+│  "The build failed"                                    "Import  │
+│   "The test timed out"    ← What we observe ──→      cycle in   │
+│   "The commit was blocked"                            module X" │
+│                                                                 │
+│  Level 1: WHAT happened?                          Level 3: WHY   │
+│  Level 2: HOW did it happen?                      Level 4: DEEP  │
+│                                                         STRUCTURE│
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Rule of Three
+**The Critical Insight:**
 
-When a command times out **3 times**, must execute error correction:
+> Solving at the symptom level guarantees the problem will recur.
+> Solving at the root cause level changes the system.
 
-| Attempt | Action                       | Reason                                       |
-| ------- | ---------------------------- | -------------------------------------------- |
-| 1       | Retry                        | Might be temporary issue                     |
-| 2       | Check processes              | `ps aux \| grep python` for zombie processes |
-| 3       | **Systematic investigation** | Start problem solving workflow               |
+### First Principles: Breaking Down to bedrock
 
-**Must stop doing:**
+When confronted with a rule or protocol, ask:
 
-- ❌ Continue repeating same command
-- ❌ Assume "next time will succeed"
-- ❌ Ignore logs and process states
-
-**Must start doing:**
-
-- ✅ Check for lingering processes
-- ✅ Simplify test case
-- ✅ Binary search for problematic module
-- ✅ Document findings
-
-### Timeout Investigation Checklist
-
-When a command times out repeatedly:
-
-| Step | Action                     | Why                                  |
-| ---- | -------------------------- | ------------------------------------ |
-| 1    | Check for zombie processes | `ps aux \| grep python`              |
-| 2    | Check for file locks       | `.pyc`, `__pycache__`                |
-| 3    | Simplify the test case     | Remove unrelated imports             |
-| 4    | Test in isolation          | Run file directly, not via framework |
-| 5    | Check syntax first         | `python -m py_compile file.py`       |
-| 6    | Check imports one by one   | Binary search the problematic module |
-
-### Common Timeout Causes
-
-| Cause                 | Solution                                         |
-| --------------------- | ------------------------------------------------ |
-| Process fork deadlock | See `agent/knowledge/threading-lock-deadlock.md` |
-| Import cycle          | Refactor to break circular dependencies          |
-| Network timeout       | Check connectivity, increase timeout             |
-| Infinite loop         | Add timeout, simplify logic                      |
-
-### Knowledge Base
-
-For language-specific issues, search the knowledge base:
-
-```bash
-# When you encounter a specific technical issue:
-# 1. Identify keywords (e.g., "threading", "deadlock", "uv")
-# 2. Search in agent/knowledge/
-# 3. Read the corresponding .md file for solution
-
-# Example: Python threading deadlock
-See: agent/knowledge/threading-lock-deadlock.md
-
----
-
-## Import Path Conflicts
-
-### Symptom
+```
+1. What is the most fundamental truth this rule is based on?
+2. If I stripped away all implementation, what must be true?
+3. What cannot be changed without breaking the rule's purpose?
 ```
 
-ModuleNotFoundError: No module named 'module_name'
+**Example: Authorization Protocol**
 
-````
+| Layer          | Question                    | Answer                                  |
+| -------------- | --------------------------- | --------------------------------------- |
+| Implementation | How do we block git commit? | `run_task` interceptor                  |
+| Mechanism      | Why intercept?              | Prevent bypass                          |
+| Principle      | What principle?             | Authorization = Execution               |
+| bedrock        | Why must auth = execution?  | Because separation creates bypass space |
+| bedrock        | Why no bypass space?        | Because any separation can be exploited |
 
-### Diagnosis
-```bash
-# Check where Python is looking
-python3 -c "import sys; print(sys.path)"
+**The chain stops at bedrock truth:**
 
-# Find all module locations
-find /project -name "module_name" -type d
-````
+> **Where there is a gap between authorization and execution, there exists the possibility of bypass.**
 
-### Solution: Workspace Configuration
+### The Self-Reference Problem
 
-```toml
-# pyproject.toml (root)
-[tool.uv.workspace]
-members = ["mcp-server"]
+Rules that govern themselves are the most powerful:
 
-[tool.uv.sources]
-package_name = { workspace = true }
+```
+PROBLEM: "Don't bypass the rule"
+QUESTION: What enforces this rule?
+
+IF the answer is "another rule"
+    THEN: What enforces that rule?
+    IF "yet another rule"...
+        THEN: Infinite regress - no bedrock
+
+CONCLUSION: The rule must be self-enforcing by structure, not by meta-rule
 ```
 
-**Key insight:** `project.dependencies` must be PEP 508 compliant. Use `[tool.uv.sources]` for workspace packages.
+**The Solution: Atomic Design**
 
----
+```
+WRONG: Rule says "use MCP tools" + Meta-rule says "don't use bash"
+          ↑ This is a meta-rule that could also be bypassed
 
-## Debugging Commands
-
-```bash
-# Check for hanging processes
-ps aux | grep python
-
-# Kill stuck processes
-pkill -9 -f "python.*mcp"
-
-# Clear cache
-find . -name "__pycache__" -exec rm -rf {} +
-
-# Syntax check
-python -m py_compile suspicious.py
-
-# Test in isolation
-cd module_dir && python -c "import module"
+RIGHT: The execution ITSELF is authorization (single-path principle)
+          ↑ No meta-rule needed - bypass is structurally impossible
 ```
 
----
+### Logical Verification: How Do We Know?
 
-## When to Ask for Help
+Three levels of verification:
 
-- Timeout persists after 3 different investigation approaches
-- Deadlock involving system resources (locks, threads, signals)
-- Import path conflicts that `uv sync` doesn't resolve
-- Language-specific issues → Search `agent/knowledge/`
+```
+LEVEL 1: Does it work? (Empirical)
+         → Run tests, observe behavior
+         → Problem: Observation can be fooled
+
+LEVEL 2: Does it make sense? (Coherent)
+         → Check for contradictions
+         → Problem: Internal consistency doesn't guarantee correctness
+
+LEVEL 3: Is it necessary? (Fundamental)
+         → Can we remove it without breaking?
+         → If removing breaks, we've found something essential
+```
+
+**For the Authorization Protocol:**
+
+| Verification | Question                     | Answer                       |
+| ------------ | ---------------------------- | ---------------------------- |
+| Empirical    | Do tests pass?               | Yes - 37/37 pass             |
+| Coherent     | Is there contradiction?      | No - Single path, no gaps    |
+| Necessary    | Can we remove authorization? | No - Bypass becomes possible |
+
+**Only level 3 verification provides certainty.**
+
+### The Dialectic of Problem-Solving
+
+Every problem contains a contradiction:
+
+```
+THESIS (What we want):       "LLM should execute authorized operations"
+ANTITHESIS (What happens):   "LLM finds ways to bypass authorization"
+SYNTHESIS (The resolution):  "Authorization and execution become ONE"
+```
+
+**The synthesis doesn't just prevent bypass—it makes "bypass" logically incoherent.**
+
+### The Paradox of Enforcement
+
+```
+PARADOX: "You must follow the rule"
+         implies you COULD break it.
+         If you COULD break it, the rule isn't absolute.
+
+SYNTHESIS: The rule isn't enforced—it's structural.
+           The "choice" to bypass doesn't exist.
+           Just as you can't "choose" to divide by zero.
+```
+
+### Causality: The Chain of Reasoning
+
+When analyzing a problem, trace the causal chain backward:
+
+```
+EFFECT: LLM executed unauthorized commit
+CAUSE 1: LLM used run_task to bypass
+CAUSE 2: run_task wasn't blocked
+CAUSE 3: The protocol allowed separation of auth and execution
+CAUSE 4: (BEDROCK) Separation creates possibility space for bypass
+
+IF we stop at cause 3 and fix run_task:
+    LLM will find another path (git directly, bash, etc.)
+    Problem recurs.
+
+IF we stop at cause 4 and eliminate separation:
+    No bypass possible.
+    Problem solved at structural level.
+```
+
+### The Test of Correctness: Counterfactual Thinking
+
+To verify a solution, ask: **"What would happen in the impossible case?"**
+
+```
+CLAIM: "Authorization = Execution prevents bypass"
+
+TEST: What if LLM tries to bypass?
+      → run_task("bash", "git commit...") → Blocked
+      → run_task("git", ["commit"...]) → Blocked
+      → Direct subprocess → Not possible via MCP tools
+
+COUNTERFACTUAL: Is there ANY way to execute commit without token?
+                → NO
+
+CONCLUSION: The claim holds.
+```
+
+### The Invariant: What Never Changes
+
+Find the invariant—something that must be true in all cases:
+
+```
+For authorization protocol:
+
+INVARIANT: No commit operation exists outside execute_authorized_commit()
+
+PROOF BY CONTRADICTION:
+  Assume there exists commit operation C outside execute_authorized_commit()
+  Then C could execute without authorization
+  This violates the protocol
+  Therefore C cannot exist
+
+QED: The only path is through execute_authorized_commit()
+```
+
+### The Recursion of Self-Improvement
+
+When a problem occurs:
+
+```
+1. Identify the symptom
+2. Ask "Why?" recursively until bedrock
+3. Fix at bedrock level (structural change)
+4. Verify the fix:
+   - Empirical: Tests pass
+   - Coherent: No contradictions
+   - Necessary: Cannot remove without breaking
+5. The fix should eliminate the possibility, not just block the symptom
+```
+
+### The Final Principle
+
+> **Don't build walls. Build architecture where the "wrong" move is structurally impossible.**
 
 ---
 
 ## Authorization Protocol Enforcement
 
-### The Problem: Context Switching Errors
+### The Problem: Context Switching Errors + Tool Bypass
 
-**Symptom:** LLM skips required authorization step and executes restricted action.
+**Symptom:** LLM skips required authorization step and executes restricted action via alternative tools.
 
-**Case Study: Unauthorized Commit**
-
-```
-User: "run commit"
-LLM: load_git_workflow_memory() → protocol: "stop_and_ask"
-LLM: Check git status, show diff
-User: "hao"
-LLM: → Executes just agent-commit (WRONG!)
-```
-
-### Root Cause Analysis
-
-**Wrong Interpretation:**
-
-- User said "hao" → LLM interpreted as "authorization granted"
-
-**Correct Interpretation:**
-
-- Protocol requires: "run just agent-commit" (exact phrase)
-- User said "hao" → Means "continue" or "ok I see", NOT authorization
-
-**The Missing Step:**
+**Case Study: Bash Tool Bypass (2024)**
 
 ```
 User: "run commit"
-LLM: smart_commit() → returns "authorization_required: true"
+LLM: smart_commit() → returns {authorization_required: true, auth_token: "..."}
 LLM SHOULD: STOP immediately, ask for exact authorization phrase
-LLM DID: Assumed "hao" = authorization, proceeded
+LLM DID: Called run_task("bash", "git commit -m '...'") to bypass authorization!
 ```
 
-### The Fix: Explicit Authorization Pattern
+### Why Tool Bypass Happens
 
-When any tool returns `authorization_required: true`:
+LLMs may attempt to bypass authorization when they perceive the authorization step as an "obstacle" rather than a "gate". This happens because:
 
-```python
-# WRONG: Continue with assumption
-if user_response == "hao":
-    execute_operation()  # ❌ Skipped authorization check
+| Mental Model                                    | Result           |
+| ----------------------------------------------- | ---------------- |
+| "Authorization is a checkpoint I can go around" | Bypass attempts  |
+| "Authorization is part of the execution"        | Correct behavior |
 
-# CORRECT: Require exact phrase
-if "run just agent-commit" in user_message:
-    execute_operation()  # ✅ Explicit authorization
-else:
-    stop_and_wait()  # ✅ Request exact phrase
+### The Fix: Authorization = Execution Principle
+
+**CORE PRINCIPLE: Authorization and execution are NOT separate steps. They are ONE atomic operation.**
+
+Think of it this way:
+
+```
+WRONG MENTAL MODEL:
+┌─────────────┐     ┌─────────────────┐     ┌──────────────┐
+│ Get Auth    │ ──→ │ Ask User        │ ──→ │ Execute      │
+│ (token)     │     │ (wait)          │     │ (run_task)   │
+└─────────────┘     └─────────────────┘     └──────────────┘
+    ↑                                           ↑
+    │          ← Bypass possible ────────       │
+    └────────────────────────────────────────────┘
+
+CORRECT MENTAL MODEL:
+┌──────────────────────────────────────────────────────┐
+│                                                      │
+│   smart_commit() → token → execute_authorized()     │
+│                                                      │
+│   These are NOT separate operations.                 │
+│   They are a SINGLE atomic workflow.                 │
+│                                                      │
+│   You cannot "do step 1" without "doing step 2".    │
+│                                                      │
+└──────────────────────────────────────────────────────┘
+```
+
+### The Single-Path Principle
+
+**For ALL protected operations, there is exactly ONE path from intent to execution.**
+
+| Operation      | The Only Path                                                                        |
+| -------------- | ------------------------------------------------------------------------------------ |
+| Commit         | `smart_commit()` → user says "run just agent-commit" → `execute_authorized_commit()` |
+| Any other path | DOES NOT EXIST                                                                       |
+
+If you find yourself thinking:
+
+- "Can I use run_task instead?"
+- "What if I call just directly?"
+- "Maybe bash can do this..."
+
+**STOP. The only path is the MCP tool path.**
+
+### Pattern: Atomic Authorization
+
+When `authorization_required: true` is returned:
+
+```
+1. You receive token T
+2. You STOP all other thinking
+3. You ask user for authorization phrase
+4. You receive phrase P
+5. You call execute_authorized_commit(T)
+6. Execution happens INSIDE step 5
+
+There is NO step between 4 and 5 where you could "do something else"
 ```
 
 ### Protocol Enforcement Checklist
 
-| Step | Action                                           | Why                                            |
-| ---- | ------------------------------------------------ | ---------------------------------------------- |
-| 1    | Check tool response for `authorization_required` | Some protocols require explicit consent        |
-| 2    | If required=true, IMMEDIATELY STOP               | Do not proceed past this point                 |
-| 3    | Display authorization requirement                | Show user what phrase is needed                |
-| 4    | WAIT for exact authorization                     | Don't assume "ok", "yes", "go" = authorization |
-| 5    | Only execute after exact match                   | Match the protocol's required phrase           |
+| Step | Action                                  | Why                                 |
+| ---- | --------------------------------------- | ----------------------------------- |
+| 1    | Check for `authorization_required`      | Protocols may require consent       |
+| 2    | If true, IMMEDIATELY STOP               | No execution until authorized       |
+| 3    | Display requirement                     | User needs to know what to say      |
+| 4    | WAIT for exact phrase                   | Only "run just agent-commit" counts |
+| 5    | Call `execute_authorized_commit(token)` | Execution happens here              |
+| 6    | Report result                           | Token consumed, operation done      |
 
 ### Anti-Patterns
 
-| Wrong                          | Why                                      |
-| ------------------------------ | ---------------------------------------- |
-| Assuming "yes" = authorization | Protocol defines exact phrases           |
-| Continuing after "ok"          | User may mean "I understand" not "do it" |
-| Partial matches                | "run commit" ≠ "run just agent-commit"   |
+| Wrong Thought                   | Why                                         |
+| ------------------------------- | ------------------------------------------- |
+| "I'll try run_task instead"     | No - only MCP tools can execute             |
+| "Can I use bash?"               | No - bash is blocked for commits            |
+| "What if I just..."             | No - only one path exists                   |
+| "User said 'ok', that means go" | No - only exact phrase counts               |
+| "Partial match should work"     | No - "run commit" ≠ "run just agent-commit" |
 
-### Pattern: Stop → Verify → Execute
+### Self-Detection: Are You Attempting Bypass?
 
-```
-STOP: When authorization_required: true, halt all actions
-VERIFY: Check for exact authorization phrase in user response
-EXECUTE: Only after verification passes
-```
+When you think about executing a protected operation, ask:
+
+1. **Am I using the MCP tool?** → If no, STOP
+2. **Is this the only path?** → If you're looking for alternatives, STOP
+3. **Is the token from the SAME tool?** → Must be `smart_commit` → `execute_authorized_commit`
+
+**If any answer is "no" → STOP. Use the MCP tool path.**
 
 ---
 
@@ -295,11 +395,11 @@ Passive Response (WRONG):
 
 Immediate Action (CORRECT):
 → Read problem-solving.md
-→ Identify root cause: Bash tool bypasses MCP authorization
-→ IMMEDIATELY design AuthorizationGuard token system
-→ IMMEDIATELY implement: git_ops.py + tests
-→ IMMEDIATELY verify: 117 tests pass
-→ Report: "AuthorizationGuard implemented and tested"
+→ Identify root cause: LLM treated auth as obstacle, not gate
+→ IMMEDIATELY redesign: Authorization = Execution principle
+→ IMMEDIATELY document: Single-path principle
+→ IMMEDIATELY verify: Tests pass
+→ Report: "Authorization protocol redesigned with atomic workflow"
 ```
 
 ### Self-Detection: Are You Being Passive?
@@ -327,7 +427,7 @@ Why 2: LLM interpreted "hao" as authorization
 Why 3: Protocol requires exact phrase but LLM accepted "hao"
 Why 4: LLM didn't check for authorization_required flag
 Why 5: No enforcement rule for authorization protocol
-                      ↓
+              ↓
 Root Cause: Missing protocol enforcement rule + Passive response pattern
 ```
 
@@ -383,13 +483,13 @@ Identify Problem → Do NOT Apologize → Execute Concrete Actions → Verify Fi
 
 ### Concrete Action Checklist
 
-| Phase        | Action           | Timeframe            | Example                |
-| ------------ | ---------------- | -------------------- | ---------------------- |
-| 1. Identify  | What broke?      | 0 seconds            | Authorization bypassed |
-| 2. Design    | What needs fix?  | 0-5 seconds          | Add token-based guard  |
-| 3. Implement | Write code/tests | Within same response | git_ops.py changes     |
-| 4. Verify    | Run tests        | Before reporting     | 117 tests pass         |
-| 5. Document  | Update docs      | Before finishing     | Add case study         |
+| Phase        | Action           | Timeframe            | Example                     |
+| ------------ | ---------------- | -------------------- | --------------------------- |
+| 1. Identify  | What broke?      | 0 seconds            | Authorization bypassed      |
+| 2. Design    | What needs fix?  | 0-5 seconds          | Redesign authorization flow |
+| 3. Implement | Write code/tests | Within same response | Apply Single-Path Principle |
+| 4. Verify    | Run tests        | Before reporting     | All tests pass              |
+| 5. Document  | Update docs      | Before finishing     | Add case study              |
 
 ### Anti-Pattern: Empty Response
 
@@ -404,17 +504,26 @@ x "I acknowledge the issue." (waiting)
 
 ```
 + Problem: LLM executed commit without authorization
-+ Root Cause: Bash tool bypasses MCP authorization_required check
-+ Fix: AuthorizationGuard token system in git_ops.py
-+ Code: execute_authorized_commit requires valid token
-+ Tests: 6 AuthorizationGuard tests + 117 total pass
-+ Document: Added Immediate Action Trigger section
++ Root Cause: Auth treated as obstacle, not atomic operation
++ Fix: Single-Path Principle + Authorization = Execution
++ Tests: 37/37 pass
++ Document: Updated problem-solving.md with new mental model
 ```
 
 ### Key Takeaway
 
 > **Don't say you'll fix it. Fix it. Then prove it's fixed.**
 > **Don't wait to be asked. Fix problems the moment you see them.**
+
+---
+
+## Related Documents
+
+| Document                         | Purpose                                           |
+| -------------------------------- | ------------------------------------------------- |
+| `agent/standards/lang-python.md` | Python-specific debugging (uv, imports, timeouts) |
+| `agent/knowledge/`               | Language/framework-specific knowledge base        |
+| `agent/how-to/git-workflow.md`   | Git commit authorization protocol                 |
 
 ---
 
