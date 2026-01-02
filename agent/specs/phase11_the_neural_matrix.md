@@ -9,11 +9,13 @@
 _Building a RAG-enhanced, self-evolving system with persistent state and human-in-the-loop authorization._
 
 The original system lacked:
+
 1. **Type-safe AI outputs**: Prompt-based responses without schema validation
 2. **Persistent workflow state**: Token-based auth that required manual copy-paste
 3. **Neural memory**: No semantic retrieval of past decisions and patterns
 
 **Goal**: Create a "Neural Matrix" that:
+
 - Uses Pydantic for type-safe, structured AI outputs
 - Uses LangGraph for persistent, interruptible workflows
 - Supports RAG-based memory recall for context-aware decisions
@@ -22,12 +24,12 @@ The original system lacked:
 
 ### 2.1 File Changes
 
-| File | Action | Purpose |
-|------|--------|---------|
-| `src/agent/core/schema.py` | Created | Pydantic models for type-safe outputs |
-| `src/agent/core/workflows/commit_flow.py` | Created | LangGraph workflow for Smart Commit V2 |
-| `src/agent/capabilities/product_owner.py` | Modified | Added `start_spec` tool with Pydantic patterns |
-| `src/agent/main.py` | Modified | Added `smart_commit_v2`, `confirm_commit` tools |
+| File                                      | Action   | Purpose                                         |
+| ----------------------------------------- | -------- | ----------------------------------------------- |
+| `src/agent/core/schema.py`                | Created  | Pydantic models for type-safe outputs           |
+| `src/agent/core/workflows/commit_flow.py` | Created  | LangGraph workflow for Smart Commit V2          |
+| `src/agent/capabilities/product_owner.py` | Modified | Added `start_spec` tool with Pydantic patterns  |
+| `src/agent/main.py`                       | Modified | Added `smart_commit_v2`, `confirm_commit` tools |
 
 ### 2.2 Data Structures / Schema
 

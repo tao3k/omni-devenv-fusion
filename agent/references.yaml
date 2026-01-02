@@ -59,8 +59,8 @@ git_protocol:
   rules_cache: "GitRulesCache"
   description: "Git commit workflow protocol and authorization rules"
   rules:
-    - "stop_and_ask"  # Default: require user authorization
-    - "auto_commit"   # Override: allow automatic commits
+    - "stop_and_ask" # Default: require user authorization
+    - "auto_commit" # Override: allow automatic commits
 
 # =============================================================================
 # Feature Lifecycle References

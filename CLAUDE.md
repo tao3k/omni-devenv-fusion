@@ -2,6 +2,33 @@
 
 > **Quick Reference Only**. Detailed docs: `agent/instructions/*.md`, `docs/reference/mcp-orchestrator.md`, `agent/how-to/*.md`, `agent/standards/*.md`
 
+## 🚨🚨🚨 GIT COMMIT IS NOT "git commit" - CRITICAL 🚨🚨🚨
+
+**This is the #1 rule violation that keeps happening:**
+
+| What I Did Wrong                  | Why It's Wrong                               |
+| --------------------------------- | -------------------------------------------- |
+| `git commit -m "..."` (Bash)      | ❌ BYPASSES authorization protocol           |
+| `git add -A && git commit` (Bash) | ❌ BYPASSES pre-commit hooks + authorization |
+| `just agent-commit` (Bash)        | ❌ MUST use smart_commit() workflow first    |
+
+**The ONLY correct way to commit:**
+
+```
+1. @omni-orchestrator smart_commit(type="chore", scope="git-ops", message="...")
+   → Returns: {authorization_required: true, auth_token: "xxx..."}
+
+2. Display to user: "Authorization Required. Please say: run just agent-commit"
+
+3. Wait for user to say exactly: "run just agent-commit"
+
+4. @omni-orchestrator execute_authorized_commit(auth_token="xxx")
+```
+
+**If you catch yourself typing `git ...` in Bash → STOP and use MCP tools instead.**
+
+---
+
 ## 🏗️ Tri-MCP Architecture Protocol (CRITICAL)
 
 The system is strictly divided into three specialized MCP servers. You MUST route your requests to the correct server based on the task type.
