@@ -102,6 +102,18 @@ except ImportError:
     from advanced_search import register_advanced_search_tools
 
 # =============================================================================
+# Phase 10: The Hive - Swarm Infrastructure (v2)
+# =============================================================================
+# Import Swarm Infrastructure (Neural Link v2)
+try:
+    # We now use SwarmNode instead of MCPClientNode
+    from services.swarm import SwarmNode
+    _SWARM_AVAILABLE = True
+except ImportError:
+    _SWARM_AVAILABLE = False
+    SwarmNode = None
+
+# =============================================================================
 # Configuration
 # =============================================================================
 
@@ -122,6 +134,67 @@ if not API_KEY:
 # Initialize shared clients
 inference_client = InferenceClient(api_key=API_KEY, base_url=BASE_URL)
 project_memory = ProjectMemory()
+
+# =============================================================================
+# Phase 10: The Hive - Swarm Initialization (v2)
+# =============================================================================
+
+_coder_node: Optional[Any] = None  # Type is SwarmNode, simplified for runtime
+_coder_node_lock = asyncio.Lock()
+
+# Disable direct worker execution in test mode
+_SWARM_DIRECT_MODE = os.environ.get("ORCHESTRATOR_SWARM_DIRECT", "1") == "1"
+
+async def _get_coder_node() -> Optional[Any]:
+    """
+    Lazy loader for the Coder Worker.
+    Ensures we always get a connected node or None.
+    Uses lock to prevent concurrent connection attempts.
+    """
+    global _coder_node
+
+    if not _SWARM_AVAILABLE:
+        return None
+
+    # Skip direct mode in test environment
+    if not _SWARM_DIRECT_MODE:
+        return None
+
+    async with _coder_node_lock:
+        # Double-check after acquiring lock
+        if _coder_node and _coder_node.is_connected:
+            return _coder_node
+
+        sys.stderr.write("[Orchestrator] Waking up Coder Worker...\n")
+
+        # Locate the service script
+        script_path = Path(__file__).parent / "services" / "coder_service.py"
+
+        if not script_path.exists():
+            sys.stderr.write(f"[Orchestrator] Worker script not found: {script_path}\n")
+            return None
+
+        # Initialize new node
+        node = SwarmNode("coder-worker", str(script_path))
+
+        # Attempt connection with timeout protection
+        try:
+            # Use a short initial timeout for first connection
+            async with asyncio.timeout(15.0):
+                if await node.connect():
+                    _coder_node = node
+                    sys.stderr.write("[Orchestrator] Coder Worker ready\n")
+                    return node
+                else:
+                    sys.stderr.write("[Orchestrator] Failed to connect to Coder Worker\n")
+                    return None
+        except asyncio.TimeoutError:
+            sys.stderr.write("[Orchestrator] Connection timeout to Coder Worker\n")
+            await node.close()
+            return None
+        except Exception as e:
+            sys.stderr.write(f"[Orchestrator] Error connecting to Worker: {e}\n")
+            return None
 
 # =============================================================================
 # Preload Protocol Caches (loaded once per session)
@@ -492,23 +565,100 @@ Reasoning: {reasoning}
 @mcp.tool()
 async def delegate_to_coder(task_type: str, details: str) -> str:
     """
-    Delegate a coding task to the Coder MCP server.
+    Delegate a coding task to the Coder Worker (Separate Process).
 
-    Use this after planning with consult_specialist to hand off implementation.
+    This uses the 'Hive' architecture to execute tasks safely in a worker process.
 
     Args:
-        task_type: Type of coding task
-            - read: Read a file (use read_file in coder)
-            - search: Search code patterns (use search_files in coder)
-            - write: Write/modify files (use save_file in coder)
-            - refactor: Structural refactoring (use ast_search/ast_rewrite in coder)
-        details: Specific details about what to do
-
-    Returns:
-        Instructions for using coder tools, or delegated result
+        task_type:
+            - read: Read file content
+            - search: Search text (ripgrep)
+            - write: Create/Update file
+            - ast_search: Structural code search
+            - ast_rewrite: Structural refactoring
+        details: Arguments string.
+                 Format 1 (Simple): path="src/main.py"
+                 Format 2 (Implicit): src/main.py
     """
-    log_decision("delegate_to_coder.request", {"task_type": task_type, "details": details[:200]}, logger)
+    log_decision("delegate_to_coder.request", {"task": task_type, "details": details[:100]}, logger)
 
+    # 1. Get Worker node (lazy connect)
+    node = await _get_coder_node()
+
+    # If Worker is available, execute remote call
+    if node:
+        # 2. Parse arguments
+        import re
+        args = {}
+
+        # Extract key="value" pattern
+        matches = re.findall(r'(\w+)="([^"]*)"', details)
+        for k, v in matches:
+            args[k] = v
+
+        # If no key=value found and details not empty, try as default argument
+        if not args and details.strip():
+            default_keys = {
+                "read": "path",
+                "search": "pattern",
+                "write": "path",
+                "ast_search": "pattern",
+                "ast_rewrite": "pattern"
+            }
+            if key := default_keys.get(task_type):
+                args[key] = details.strip()
+
+        # 特殊处理 write: 尝试提取 content
+        if task_type == "write" and "content" not in args:
+            if "content=" in details:
+                try:
+                    content_part = details.split("content=", 1)[1]
+                    if content_part.startswith('"') and content_part.endswith('"'):
+                        content_part = content_part[1:-1]
+                    args["content"] = content_part
+                except IndexError:
+                    pass
+
+        # 3. 工具映射 (Tool Mapping)
+        tool_map = {
+            "read": "read_file",
+            "search": "search_files",
+            "write": "save_file",
+            "ast_search": "ast_search",
+            "ast_rewrite": "ast_rewrite"
+        }
+
+        worker_tool = tool_map.get(task_type)
+        if not worker_tool:
+            return f"Error: Unknown task type '{task_type}'"
+
+        # 4. Remote execution
+        try:
+            result = await node.call_tool(worker_tool, args)
+
+            output = []
+            if result.content:
+                for item in result.content:
+                    if hasattr(item, 'text'):
+                        output.append(item.text)
+
+            final_output = "\n".join(output)
+            if not final_output:
+                return "Task completed successfully (No output returned)."
+            return final_output
+
+        except TimeoutError:
+            return f"Timeout: Worker took too long to execute '{worker_tool}'."
+        except Exception as e:
+            # Fallback: return instruction string instead of crashing
+            return _format_delegation_fallback(task_type, details)
+
+    # 5. Fallback mode: Worker unavailable, return instruction string
+    return _format_delegation_fallback(task_type, details)
+
+
+def _format_delegation_fallback(task_type: str, details: str) -> str:
+    """Return legacy instruction format (for fallback mode or testing)"""
     task_guidance = {
         "read": (
             "Use the 'read_file' tool in the Coder MCP server:\n"
@@ -531,6 +681,14 @@ async def delegate_to_coder(task_type: str, details: str) -> str:
             f"# Then, rewrite:\n"
             f"@omni-coder ast_rewrite pattern=\"$old\" replacement=\"$new\""
         ),
+        "ast_search": (
+            "Use the 'ast_search' tool:\n"
+            f"@omni-coder ast_search pattern=\"{details}\""
+        ),
+        "ast_rewrite": (
+            "Use the 'ast_rewrite' tool:\n"
+            f"@omni-coder ast_rewrite pattern=\"$old\" replacement=\"$new\""
+        ),
     }
 
     if task_type not in task_guidance:
@@ -547,6 +705,26 @@ async def delegate_to_coder(task_type: str, details: str) -> str:
     result += "- Path safety checks"
 
     return result
+
+
+@mcp.tool()
+async def swarm_status() -> str:
+    """Check the status of the Coder Worker."""
+    import os
+    status = [f"Orchestrator (PID: {os.getpid()})"]
+
+    if _coder_node and _coder_node.is_connected:
+        status.append("Coder Worker: ONLINE")
+        try:
+            tools = await _coder_node.list_tools()
+            names = [t.name for t in tools]
+            status.append(f"   Tools: {', '.join(names)}")
+        except Exception:
+            status.append("   (Worker responsive but failed to list tools)")
+    else:
+        status.append("Coder Worker: OFFLINE (Will wake on first use)")
+
+    return "\n".join(status)
 
 
 # =============================================================================

@@ -406,6 +406,118 @@ class TestGitWorkflowCache(unittest.TestCase):
         )
 
 
+class TestAuthorizationGuard(unittest.IsolatedAsyncioTestCase):
+    """Test AuthorizationGuard - Token-based commit authorization system"""
+
+    def setUp(self):
+        """Reset authorization guard before each test"""
+        from git_ops import AuthorizationGuard
+        AuthorizationGuard._instance = None
+        AuthorizationGuard._tokens = {}
+
+    def tearDown(self):
+        """Clean up after each test"""
+        from git_ops import AuthorizationGuard
+        AuthorizationGuard._instance = None
+        AuthorizationGuard._tokens = {}
+
+    def test_create_authorization_returns_token(self):
+        """Test that create_authorization returns a hex token"""
+        from git_ops import AuthorizationGuard, _auth_guard
+
+        token = _auth_guard.create_authorization(
+            command="just agent-commit mcp test",
+            type="mcp",
+            scope="test",
+            message="test message"
+        )
+        self.assertIsInstance(token, str)
+        self.assertEqual(len(token), 32)  # 16 bytes = 32 hex chars
+
+    def test_validate_and_consume_returns_data(self):
+        """Test that valid token returns auth data"""
+        from git_ops import _auth_guard
+
+        # Create authorization
+        token = _auth_guard.create_authorization(
+            command="just agent-commit mcp test",
+            type="mcp",
+            scope="test",
+            message="test message"
+        )
+
+        # Validate and consume
+        result = _auth_guard.validate_and_consume(token)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["command"], "just agent-commit mcp test")
+        self.assertEqual(result["type"], "mcp")
+        self.assertEqual(result["scope"], "test")
+        self.assertEqual(result["message"], "test message")
+
+    def test_token_can_only_be_used_once(self):
+        """Test that token is invalidated after use"""
+        from git_ops import _auth_guard
+
+        token = _auth_guard.create_authorization(
+            command="just agent-commit mcp test",
+            type="mcp",
+            scope="test",
+            message="test message"
+        )
+
+        # First use - should succeed
+        result1 = _auth_guard.validate_and_consume(token)
+        self.assertIsNotNone(result1)
+
+        # Second use - should fail (already consumed)
+        result2 = _auth_guard.validate_and_consume(token)
+        self.assertIsNone(result2)
+
+    def test_invalid_token_returns_none(self):
+        """Test that invalid token returns None"""
+        from git_ops import _auth_guard
+
+        result = _auth_guard.validate_and_consume("invalid_token_xxxx")
+        self.assertIsNone(result)
+
+    def test_token_expires_after_timeout(self):
+        """Test that token expires after 5 minutes"""
+        from git_ops import AuthorizationGuard, _auth_guard
+
+        # Create a new guard with short expiration
+        guard = object.__new__(AuthorizationGuard)
+        guard._tokens = {}
+
+        # Create token with 0 second expiration (already expired)
+        token = guard.create_authorization(
+            command="just agent-commit mcp test",
+            type="mcp",
+            scope="test",
+            message="test message"
+        )
+        guard._tokens[token]["expires_in"] = 0  # Immediate expiration
+
+        # Token should be expired
+        result = guard.validate_and_consume(token)
+        self.assertIsNone(result)
+
+    def test_clear_all_removes_tokens(self):
+        """Test that clear_all removes all tokens"""
+        from git_ops import _auth_guard
+
+        # Create some tokens
+        _auth_guard.create_authorization("cmd1", "t1", "s1", "m1")
+        _auth_guard.create_authorization("cmd2", "t2", "s2", "m2")
+
+        self.assertEqual(len(_auth_guard._tokens), 2)
+
+        # Clear all
+        _auth_guard.clear_all()
+
+        self.assertEqual(len(_auth_guard._tokens), 0)
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("🧪 Git Ops V2 Test Suite")

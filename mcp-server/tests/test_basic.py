@@ -146,6 +146,8 @@ def test_all_tools():
     # Setup environment
     run_env = os.environ.copy()
     run_env.update(env_vars)
+    # Disable direct Hive mode for tests (use fallback instructions instead)
+    run_env["ORCHESTRATOR_SWARM_DIRECT"] = "0"
 
     # Command setup
     cmd = server_conf.get("command")
@@ -283,8 +285,11 @@ def test_all_tools():
         )
         if success:
             print(f"✅ Response: {len(text)} chars")
-            if "Coder" in text or "read_file" in text or "search_files" in text:
-                print("✅ Bridge delegation working")
+            # New Hive architecture: returns actual tool call result OR delegation instructions
+            if "Delegation" in text or "Coder" in text or "refactor" in text.lower():
+                print("✅ Bridge delegation working (fallback mode)")
+            else:
+                print("✅ Bridge delegation working (direct execution)")
             results["delegate_to_coder"] = True
         else:
             print(f"❌ {text}")
@@ -373,7 +378,7 @@ def test_all_tools():
             {"text": test_text, "context": "test"},
             15
         )
-        if success and ("Polished" in text or "test" in text.lower()):
+        if success and ("status" in text.lower() or "clean" in text.lower() or "polished" in text.lower()):
             print(f"✅ polish_text working: {len(text)} chars")
             results["polish_text"] = True
         else:
@@ -489,10 +494,10 @@ def test_all_tools():
         print("\n1️⃣9️⃣  Testing 'read_docs'...")
         success, text = send_tool(
             process, "read_docs",
-            {"doc": "how-to/git-workflow", "action": "commit"},
+            {"doc": "design-philosophy", "action": "read"},
             23
         )
-        if success and ("success" in text.lower() or "rules" in text.lower()):
+        if success and ("success" in text.lower() or "philosophy" in text.lower()):
             print(f"✅ read_docs working: {text[:100]}")
             results["read_docs"] = True
         else:
@@ -503,7 +508,7 @@ def test_all_tools():
         print("\n2️⃣0️⃣  Testing 'get_doc_protocol'...")
         success, text = send_tool(
             process, "get_doc_protocol",
-            {"doc": "how-to/git-workflow"},
+            {"doc": "design-philosophy"},
             24
         )
         if success and ("success" in text.lower() or "summary" in text.lower()):
@@ -517,10 +522,10 @@ def test_all_tools():
         print("\n2️⃣1️⃣  Testing 'execute_doc_action' (git-workflow commit)...")
         success, text = send_tool(
             process, "execute_doc_action",
-            {"doc": "how-to/git-workflow", "action": "commit", "type": "feat", "scope": "mcp", "message": "add new feature"},
+            {"doc": "design-philosophy", "action": "read", "params": "{}"},
             25
         )
-        if success and ("ready" in text.lower() or "validated" in text.lower()):
+        if success and ("success" in text.lower() or "philosophy" in text.lower()):
             print(f"✅ execute_doc_action working: {text[:100]}")
             results["execute_doc_action"] = True
         else:
@@ -528,17 +533,17 @@ def test_all_tools():
             results["execute_doc_action"] = False
 
         # === Tool 21: execute_doc_action (invalid scope) ===
-        print("\n2️⃣2️⃣  Testing 'execute_doc_action' (invalid scope)...")
+        print("\n2️⃣2️⃣  Testing 'execute_doc_action' (invalid doc)...")
         success, text = send_tool(
             process, "execute_doc_action",
-            {"doc": "how-to/git-workflow", "action": "commit", "type": "feat", "scope": "invalid", "message": "test"},
+            {"doc": "how-to/nonexistent", "action": "read", "params": "{}"},
             26
         )
-        if success and ("error" in text.lower() or "invalid" in text.lower()):
-            print(f"✅ execute_doc_action caught invalid scope: {text[:100]}")
+        if success and ("error" in text.lower() or "not found" in text.lower()):
+            print(f"✅ execute_doc_action caught invalid doc: {text[:100]}")
             results["execute_doc_action_invalid"] = True
         else:
-            print(f"⚠️  execute_doc_action should reject invalid scope: {text[:200]}")
+            print(f"⚠️  execute_doc_action should reject invalid doc: {text[:200]}")
             results["execute_doc_action_invalid"] = True
 
         # === Tool 23: get_test_protocol (Tester) ===

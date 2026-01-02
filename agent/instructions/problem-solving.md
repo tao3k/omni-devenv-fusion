@@ -229,6 +229,91 @@ EXECUTE: Only after verification passes
 
 ---
 
+## Immediate Action Trigger
+
+### The Critical Rule
+
+> **When a problem is identified, IMMEDIATE ACTION is REQUIRED.**
+> Do not wait for external triggers. Do not "acknowledge and wait."
+
+### The Anti-Pattern: Passive Response
+
+```
+❌ WRONG PATTERN:
+1. Problem identified
+2. "I understand the issue"
+3. Wait for user to ask again
+4. Only then implement fix
+```
+
+```
+✅ CORRECT PATTERN:
+1. Problem identified
+2. IMMEDIATELY design fix
+3. IMMEDIATELY implement fix
+4. IMMEDIATELY verify fix
+5. Report completion
+```
+
+### Why "Wait and Acknowledge" Fails
+
+| Aspect           | Passive Response | Immediate Action |
+| ---------------- | ---------------- | ---------------- |
+| Problem Solving  | Delayed          | Instant          |
+| User Trust       | Eroded           | Built            |
+| Error Recurrence | Likely           | Prevented        |
+| Documentation    | Outdated         | Updated          |
+
+### Action Trigger Checklist
+
+When ANY problem is identified:
+
+- [ ] **Stop all other tasks** - Problem takes priority
+- [ ] **Design fix** - What needs to change?
+- [ ] **Implement fix** - Write code/docs/tests
+- [ ] **Verify fix** - Run tests, confirm working
+- [ ] **Report** - "Problem X fixed with Y"
+
+### The 5-Second Rule
+
+After identifying a problem, you have **5 seconds** to:
+
+1. Start implementing a fix OR
+2. Ask clarifying question (if truly needed)
+
+**You do NOT need permission to fix problems.**
+
+### Case Study: Authorization Bypass (2024)
+
+```
+Problem: LLM bypassed authorization_required: true and executed commit
+
+Passive Response (WRONG):
+→ "I understand the protocol now"
+→ Wait for user to ask again
+→ Only then implement AuthorizationGuard
+
+Immediate Action (CORRECT):
+→ Read problem-solving.md
+→ Identify root cause: Bash tool bypasses MCP authorization
+→ IMMEDIATELY design AuthorizationGuard token system
+→ IMMEDIATELY implement: git_ops.py + tests
+→ IMMEDIATELY verify: 117 tests pass
+→ Report: "AuthorizationGuard implemented and tested"
+```
+
+### Self-Detection: Are You Being Passive?
+
+Ask yourself after identifying a problem:
+
+1. Am I about to say "I understand" instead of implementing?
+2. Am I waiting for the user to ask again?
+3. Have I started writing code yet?
+
+**If yes to any → STOP. Start implementing now.**
+
+---
+
 ## Root Cause Analysis Framework
 
 ### The Five Whys Method
@@ -243,18 +328,33 @@ Why 3: Protocol requires exact phrase but LLM accepted "hao"
 Why 4: LLM didn't check for authorization_required flag
 Why 5: No enforcement rule for authorization protocol
                       ↓
-Root Cause: Missing protocol enforcement rule
+Root Cause: Missing protocol enforcement rule + Passive response pattern
 ```
 
 ### Verification Checklist
 
-Before executing any action that requires authorization:
+#### Authorization Check
 
 - [ ] Does the protocol require explicit authorization?
 - [ ] Did I check for `authorization_required: true`?
 - [ ] Did I receive the exact authorization phrase?
 - [ ] Did I verify the phrase matches protocol requirements?
 - [ ] Am I about to execute without verification?
+
+#### Problem-Solving Check
+
+- [ ] Did I implement a fix, not just acknowledge the problem?
+- [ ] Did I run tests to verify the fix works?
+- [ ] Did I update documentation to prevent recurrence?
+- [ ] Am I waiting for user to ask again before acting?
+
+#### Self-Detection Check
+
+- [ ] Did I start writing code within 5 seconds of identifying the problem?
+- [ ] Am I saying "I understand" instead of showing the fix?
+- [ ] Am I waiting for external permission to fix?
+
+**If any Problem-Solving or Self-Detection check fails → STOP. Implement fix NOW.**
 
 ### Self-Correction Loop
 
@@ -283,13 +383,13 @@ Identify Problem → Do NOT Apologize → Execute Concrete Actions → Verify Fi
 
 ### Concrete Action Checklist
 
-| Phase           | Action                                | Example                                                 |
-| --------------- | ------------------------------------- | ------------------------------------------------------- |
-| 1. Verify Docs  | Check if rule docs are correct        | `git-workflow.md` authorization rules are explicit      |
-| 2. Check Code   | Validate Python implementation        | `smart_commit()` returns `authorization_required: true` |
-| 3. Update Rules | Fix docs or code                      | Add explicit enforcement rules                          |
-| 4. Verify       | Ensure fix works                      | Test in new session                                     |
-| 5. Document     | Update this file (problem-solving.md) | Add case study to prevent recurrence                    |
+| Phase        | Action           | Timeframe            | Example                |
+| ------------ | ---------------- | -------------------- | ---------------------- |
+| 1. Identify  | What broke?      | 0 seconds            | Authorization bypassed |
+| 2. Design    | What needs fix?  | 0-5 seconds          | Add token-based guard  |
+| 3. Implement | Write code/tests | Within same response | git_ops.py changes     |
+| 4. Verify    | Run tests        | Before reporting     | 117 tests pass         |
+| 5. Document  | Update docs      | Before finishing     | Add case study         |
 
 ### Anti-Pattern: Empty Response
 
@@ -297,22 +397,24 @@ Identify Problem → Do NOT Apologize → Execute Concrete Actions → Verify Fi
 x "Sorry, I will improve." (no action)
 x "I understand, won't happen again." (no fix)
 x "I will be careful." (no verification)
+x "I acknowledge the issue." (waiting)
 ```
 
 ### Correct Pattern: Demonstrated Fix
 
 ```
 + Problem: LLM executed commit without authorization
-+ Check: git-workflow.md logic correct, Python implementation correct
-+ Fix: Updated git-workflow.md with "IMMEDIATELY STOP" rule
-+ Code: manage_context now auto-loads project rules
-+ Verify: New session calls manage_context to get rules automatically
-+ Document: Added case study to this file
++ Root Cause: Bash tool bypasses MCP authorization_required check
++ Fix: AuthorizationGuard token system in git_ops.py
++ Code: execute_authorized_commit requires valid token
++ Tests: 6 AuthorizationGuard tests + 117 total pass
++ Document: Added Immediate Action Trigger section
 ```
 
 ### Key Takeaway
 
 > **Don't say you'll fix it. Fix it. Then prove it's fixed.**
+> **Don't wait to be asked. Fix problems the moment you see them.**
 
 ---
 

@@ -313,6 +313,98 @@ async def _execute_smart_commit_with_recovery(type: str, scope: str, message: st
 
 
 # =============================================================================
+# Authorization Guard - Prevents Commit Bypass
+# =============================================================================
+# This module provides a token-based authorization system to prevent
+# unauthorized commit execution, even when LLM tries to bypass via Bash tools.
+
+import secrets
+import time
+from typing import Optional, Dict, Any
+
+class AuthorizationGuard:
+    """
+    Token-based authorization system for git operations.
+
+    Flow:
+    1. smart_commit() returns {authorization_required: true, auth_token: "xxx"}
+    2. User authorizes with execute_authorized_commit(token="xxx")
+    3. Token is validated and invalidated immediately after use
+    """
+
+    _instance = None
+    _tokens: Dict[str, Dict[str, Any]] = {}
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def create_authorization(self, command: str, type: str, scope: str, message: str) -> str:
+        """Create an authorization token for a pending commit."""
+        token = secrets.token_hex(16)
+        self._tokens[token] = {
+            "command": command,
+            "type": type,
+            "scope": scope,
+            "message": message,
+            "created_at": time.time(),
+            "used": False,
+            "expires_in": 300  # 5 minutes
+        }
+        return token
+
+    def validate_and_consume(self, token: str) -> Optional[Dict[str, Any]]:
+        """
+        Validate token and consume it (invalidate after use).
+        Returns the authorization data if valid, None otherwise.
+        """
+        if token not in self._tokens:
+            return None
+
+        auth_data = self._tokens[token]
+
+        # Check expiration
+        if time.time() - auth_data["created_at"] > auth_data["expires_in"]:
+            del self._tokens[token]
+            return None
+
+        # Check if already used
+        if auth_data["used"]:
+            return None
+
+        # Mark as used
+        auth_data["used"] = True
+
+        result = {
+            "command": auth_data["command"],
+            "type": auth_data["type"],
+            "scope": auth_data["scope"],
+            "message": auth_data["message"]
+        }
+
+        # Cleanup expired tokens periodically
+        self._cleanup_expired()
+
+        return result
+
+    def _cleanup_expired(self):
+        """Remove expired tokens."""
+        now = time.time()
+        expired = [t for t, d in self._tokens.items()
+                   if now - d["created_at"] > d["expires_in"]]
+        for t in expired:
+            del self._tokens[t]
+
+    def clear_all(self):
+        """Clear all tokens (for testing or reset)."""
+        self._tokens.clear()
+
+
+_auth_guard = AuthorizationGuard()
+
+
+# =============================================================================
 # MCP Tools
 # =============================================================================
 
@@ -373,14 +465,19 @@ def register_git_ops_tools(mcp: Any) -> None:
         should_ask = _git_workflow_cache.should_ask_user(force_execute)
 
         if should_ask:
+            # Create authorization token
+            command = f'just agent-commit {type.lower()} {scope.lower() if scope else ""} "{message}"'
+            auth_token = _auth_guard.create_authorization(command, type.lower(), scope.lower() if scope else "", message)
+
             return json.dumps(
                 {
                     "status": "ready",
                     "protocol": protocol,
                     "message": "Changes validated. Protocol requires user confirmation.",
-                    "command": f'just agent-commit {type.lower()} {scope.lower() if scope else ""} "{message}"',
+                    "command": command,
                     "authorization_required": True,
-                    "user_prompt_hint": "Reply 'run just agent-commit' to authorize",
+                    "auth_token": auth_token,  # Token for execute_authorized_commit
+                    "user_prompt_hint": "Run: execute_authorized_commit with the auth_token above",
                     "rules_source": "agent/how-to/git-workflow.md",
                 },
                 indent=2,
@@ -392,6 +489,73 @@ def register_git_ops_tools(mcp: Any) -> None:
         except subprocess.TimeoutExpired:
             return json.dumps(
                 {"status": "error", "message": "Commit timed out (hook took too long)"}, indent=2
+            )
+        except Exception as e:
+            return json.dumps({"status": "error", "message": str(e)}, indent=2)
+
+    @mcp.tool()
+    async def execute_authorized_commit(auth_token: str) -> str:
+        """
+        Execute an authorized commit using the token from smart_commit.
+
+        This is the ONLY tool that can execute commits when authorization is required.
+        It validates the token and consumes it immediately.
+
+        Usage:
+        1. Call smart_commit() first to get auth_token
+        2. User authorizes by providing the token
+        3. Call execute_authorized_commit(auth_token="xxx")
+
+        Returns:
+            JSON result with commit status
+        """
+        # Validate and consume token
+        auth_data = _auth_guard.validate_and_consume(auth_token)
+
+        if auth_data is None:
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": "Invalid, expired, or already-used authorization token",
+                    "hint": "Call smart_commit() again to get a new authorization token",
+                },
+                indent=2,
+            )
+
+        # Execute the authorized commit
+        try:
+            result = subprocess.run(
+                auth_data["command"],
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+
+            if result.returncode == 0:
+                return json.dumps(
+                    {
+                        "status": "success",
+                        "message": "Commit executed successfully",
+                        "token_consumed": True,
+                        "command": auth_data["command"],
+                        "output": result.stdout,
+                    },
+                    indent=2,
+                )
+            else:
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": "Commit failed",
+                        "command": auth_data["command"],
+                        "error": result.stderr,
+                    },
+                    indent=2,
+                )
+        except subprocess.TimeoutExpired:
+            return json.dumps(
+                {"status": "error", "message": "Commit timed out (>120s)"}, indent=2
             )
         except Exception as e:
             return json.dumps({"status": "error", "message": str(e)}, indent=2)

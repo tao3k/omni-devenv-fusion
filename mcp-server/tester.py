@@ -11,6 +11,7 @@ Usage:
     @omni-orchestrator smart_test_runner
 """
 import json
+import os
 import subprocess
 from typing import Dict, Any, Optional
 
@@ -58,18 +59,27 @@ def categorize_changes(files: list) -> Dict[str, bool]:
         "code_changes": False,
     }
 
+    # Extensions for docs and code files
+    doc_extensions = {'.md', '.txt', '.rst', '.adoc'}
+    code_extensions = {'.py', '.nix', '.yaml', '.yml', '.json', '.toml'}
+
     all_files = files
     for f in all_files:
         f_lower = f.lower()
-        # Docs check (must be only docs to be docs_only)
-        if not any(ext in f_lower for extensions in [
-            ['.md', '.txt', '.rst', '.adoc'],
-            ['.py', '.nix', '.yaml', '.yml', '.json', '.toml']
-        ]):
-            pass  # Unknown extension, ignore
+        # Get file extension
+        _, ext = os.path.splitext(f_lower)
+        ext = ext.lower()
 
-        # If any non-docs file, docs_only becomes False
-        if not (f_lower.endswith('.md') or 'docs/' in f or 'agent/' in f or 'doc/' in f):
+        # Check if it's a known file type
+        is_doc = ext in doc_extensions
+        is_code = ext in code_extensions
+
+        # If unknown extension or not a doc file, docs_only becomes False
+        if not (is_doc or is_code):
+            categories["docs_only"] = False
+
+        # If it's a code file (not docs), docs_only becomes False
+        if is_code and not is_doc:
             categories["docs_only"] = False
 
         # Check specific categories

@@ -60,6 +60,44 @@ def load_doc(doc_path: str) -> Optional[str]:
     return None
 
 
+def extract_section(content: str, section_name: str) -> str:
+    """
+    Extract a section from markdown content.
+
+    Looks for headers like '## Section Name' or '### Section Name'
+    and returns the content until the next header or end of file.
+    """
+    # Pattern for section headers (## or ###)
+    patterns = [
+        rf"(?i)^##+\s*{re.escape(section_name)}\s*$",
+        rf"(?i)^##+\s*{re.escape(section_name)}[^\n]*$",
+    ]
+
+    lines = content.split('\n')
+    in_section = False
+    result_lines = []
+
+    for line in lines:
+        # Check if this line is a header
+        is_header = False
+        for pattern in patterns:
+            if re.match(pattern, line.strip()):
+                is_header = True
+                break
+
+        if is_header:
+            if in_section:
+                # We've hit the next section, stop
+                break
+            else:
+                # Start of target section
+                in_section = True
+        elif in_section:
+            result_lines.append(line)
+
+    return '\n'.join(result_lines).strip()
+
+
 def list_docs() -> list:
     """List available documentation files from all configured sources."""
     docs = []
