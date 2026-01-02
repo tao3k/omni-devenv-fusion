@@ -1,6 +1,10 @@
-# omni-dev-fusion
+# Omni-DevEnv Fusion
 
-> From Copilot to Autopilot: Building the OS for the post-IDE era.
+> From Copilot to Autopilot: Building the Agentic OS for the post-IDE era.
+
+Omni-DevEnv Fusion is an Agentic OS kernel that bridges the gap between human intent and machine execution. By integrating the innovative **Tri-MCP Tri-Core Architecture**, Fusion strictly separates cognitive planning (Brain/Orchestrator), atomic execution (Hands/Executor), and precision coding (Pen/Coder) at the physical layer.
+
+With **Nix** for absolute environment reproducibility and a rigorous "Legislation-Execution" policy engine, Fusion empowers AI to autonomously handle the complete SDLC—from architectural design to AST-level refactoring.
 
 ## The Vision
 
@@ -8,44 +12,156 @@
 
 **Autopilot** (tomorrow): AI drives, you architect.
 
-The gap is State, Memory, Policy, Orchestration. omni-dev-fusion fills this gap.
+The gap is State, Memory, Policy, Orchestration. **Fusion fills this gap.**
+
+## Tri-MCP Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│   Claude Desktop                                               │
+│        │                                                       │
+│        ├── 🧠 orchestrator (The Brain)                         │
+│        │      └── Planning, Routing, Reviewing, Policy         │
+│        │                                                         │
+│        ├── 🛠️ executor (The Hands)                             │
+│        │      └── Git, Testing, Shell, Documentation           │
+│        │                                                         │
+│        └── 📝 coder (The Pen)                                   │
+│               └── File I/O, AST Search/Rewrite                 │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+| Component        | Role      | Responsibilities                                    |
+| ---------------- | --------- | --------------------------------------------------- |
+| **Orchestrator** | The Brain | Planning, Routing, Spec enforcement, Code Review    |
+| **Executor**     | The Hands | Git operations, Testing, Shell execution, Docs      |
+| **Coder**        | The Pen   | File I/O, AST-based search/rewrite, Code generation |
+
+## Core Philosophy: Legislation Before Execution
+
+Fusion enforces a strict **"Spec-First" SDLC**. The core concept is: **Legislation First, Then Execution, Then Review**. The system prevents Cowboy Coding through Orchestrator enforcement.
+
+### The SDLC Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  1. LEGISLATION    →   2. PLANNING   →   3. CODING             │
+│  (The Brain)             (The Brain)        (The Pen)           │
+│                                                                 │
+│  4. TESTING        →   5. REVIEW     →   6. COMMIT             │
+│  (The Hands)            (The Immune)      (Protocol)            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 1. Legislation Phase - "The Brain"
+
+Any new feature or major change must start here.
+
+- **Trigger**: User requests a new feature or refactor.
+- **Gatekeeper**: Orchestrator calls `start_spec(name="...")`.
+- **Actions**:
+  1. If spec doesn't exist, the system **blocks** direct coding, returns "blocked".
+  2. Call `draft_feature_spec` to write requirements (usually in `agent/specs/`).
+  3. Call `verify_spec_completeness` to verify the spec includes goals, architecture, test plan.
+
+- **Output**: An approved `.md` specification document.
+
+### 2. Planning & Routing Phase - "The Brain"
+
+- **Actions**:
+  - Use `manage_context` to update current status (Phase: Planning).
+  - Use `consult_router` to decide which tools to use.
+  - Consult expert personas (`consult_specialist`) when needed, e.g., ask "Architect" for design patterns, "SRE" for reliability.
+
+### 3. Coding Phase - "The Pen"
+
+- **Status**: `manage_context(phase="Coding")`
+- **Executor**: **Coder MCP** (`src/mcp_server/coder/main.py`)
+- **Actions**:
+  - `read_file` / `search_files`: Understand existing code (micro view).
+  - `save_file`: Atomic file writes (.bak backup + syntax validation).
+  - `ast_search` / `ast_rewrite`: AST-based precise refactoring (not simple text replacement).
+
+### 4. Testing Phase - "The Hands"
+
+- **Status**: `manage_context(phase="Testing")`
+- **Executor**: **Executor MCP** (`src/mcp_server/executor/main.py`)
+- **Actions**:
+  - `run_task("just test-basic")`: Run basic tests.
+  - `run_task("just test-mcp")`: Integration tests for MCP servers.
+  - `safe_sandbox`: Execute validation commands in restricted environment.
+
+### 5. Review & Commit Phase - "The Immune System"
+
+- **Actions**:
+  1. **Review**: Call `review_staged_changes`. Orchestrator checks code against Spec and `agent/writing-style/*.md` standards.
+  2. **Authorized Commit**:
+     - Call `smart_commit`. **Note**: Agent cannot run `git commit` directly.
+     - System generates an Auth Token and pauses.
+     - **User Intervention**: User confirms changes and runs authorization command.
+     - Call `execute_authorized_commit` to complete the final commit.
+
+### Tri-MCP Division in SDLC
+
+| SDLC Stage                | Responsible Entity  | Key Actions                             |
+| ------------------------- | ------------------- | --------------------------------------- |
+| **Requirements & Design** | 🧠 **Orchestrator** | `start_spec`, `draft_feature_spec`      |
+| **Implementation**        | 📝 **Coder**        | `save_file`, `ast_rewrite`              |
+| **Build & Test**          | 🛠️ **Executor**     | `run_task`, `just test`                 |
+| **Code Review**           | 🧠 **Orchestrator** | `review_staged_changes`                 |
+| **Publish/Commit**        | 🧠 + 🛠️ **Joint**   | `smart_commit` (protocol) -> `git push` |
+
+## SDLC Capabilities
+
+### Planning & Routing (The Brain)
+
+| Tool                       | Description                                                         |
+| -------------------------- | ------------------------------------------------------------------- |
+| `start_spec`               | Gatekeeper—blocks new work without a spec                           |
+| `draft_feature_spec`       | AI-assisted spec generation                                         |
+| `verify_spec_completeness` | Validates spec completeness                                         |
+| `manage_context`           | Updates workflow state                                              |
+| `consult_router`           | Intent → Right Tool, every time                                     |
+| `consult_specialist`       | Expert consultation (architect, sre, devops_mlops, platform_expert) |
+
+### Implementation (The Pen)
+
+| Tool           | Description                                        |
+| -------------- | -------------------------------------------------- |
+| `read_file`    | Single file reading (micro-level)                  |
+| `search_files` | Pattern search (grep-like)                         |
+| `save_file`    | Atomic writes with .bak backup & syntax validation |
+| `ast_search`   | Query code structure using ast-grep patterns       |
+| `ast_rewrite`  | Apply structural patches based on AST patterns     |
+
+### Verification (The Hands)
+
+| Tool                | Description                                       |
+| ------------------- | ------------------------------------------------- |
+| `run_task`          | Execute `just` commands safely                    |
+| `smart_test_runner` | Modified-Code Protocol for minimal test execution |
+| `safe_sandbox`      | Restricted command execution                      |
+| `smart_commit`      | Protocol-driven commit with authorization         |
+
+### Review & Quality (The Immune System)
+
+| Tool                      | Description                                    |
+| ------------------------- | ---------------------------------------------- |
+| `review_staged_changes`   | Code review against project standards          |
+| `check_doc_sync`          | Verify documentation updated with code changes |
+| `verify_design_alignment` | Check spec compliance                          |
 
 ## Key Differentiators
 
 | Differentiator             | Why It Matters                                       |
 | -------------------------- | ---------------------------------------------------- |
-| **Dual-MCP**               | Strategy (Orchestrator) + Tactics (Coder)            |
-| **The Cortex**             | Intent → Right Tool, every time                      |
-| **The Immune System**      | AI reviews code against your standards before commit |
-| **Auto-Loaded Context**    | Project rules loaded at session start                |
+| **Physical Tri-MCP**       | Brain/Hands/Pen never mix—guaranteed context hygiene |
+| **Policy Engine**          | Spec-first prevents Cowboy Coding                    |
+| **AST Precision**          | Refactor with trees, not regex                       |
+| **Nix Reproducibility**    | Same environment, everywhere                         |
 | **Actions Over Apologies** | LLM demonstrates fixes, not apologies                |
-
-## Quick Links
-
-| Topic        | Location                                                                          |
-| ------------ | --------------------------------------------------------------------------------- |
-| Architecture | `docs/reference/mcp-orchestrator.md`, `docs/explanation/dual-mcp-architecture.md` |
-| MCP Tools    | `src/agent/main.py` (orchestrator), `src/mcp_server/`                             |
-| Workflows    | `agent/how-to/*.md`                                                               |
-| Standards    | `agent/standards/*.md`                                                            |
-
-## Core Philosophy
-
-**"The Bridge" Pattern**: Translate generic LLM capabilities into project-compliant execution.
-
-```
-User Request -> Orchestrator (Plan) -> Expert Personas (Consult) -> Coder (Implement) -> Validate -> User
-```
-
-## Key Capabilities
-
-| Capability             | Description                                                                           |
-| ---------------------- | ------------------------------------------------------------------------------------- |
-| **Persona Delegation** | Route queries to `architect`, `platform_expert`, `devops_mlops`, `sre`, `tech_writer` |
-| **Writing Standards**  | Automated documentation polishing via `polish_text` tool                              |
-| **Code Quality**       | AST-based refactoring with `ast-grep`                                                 |
-| **Safe Execution**     | Sandboxed `just` commands via `run_task`                                              |
-| **Memory Persistence** | Long-term project memory via `memory_garden`                                          |
 
 ## Quick Start
 
@@ -54,410 +170,27 @@ User Request -> Orchestrator (Plan) -> Expert Personas (Consult) -> Coder (Imple
 git clone https://github.com/tao3k/omni-dev-fusion.git
 cd omni-dev-fusion
 
-# Setup (checks secrets first, then activates direnv)
+# Setup development environment
 just setup
-
-# View all commands
-just
 
 # Validate everything
 just validate
 ```
 
-### First-Time Setup
-
-The `just setup` command automates the initial configuration:
-
-1. **Detects secrets status** - Checks if secrets are configured
-2. **Auto-manages claude module** - If secrets missing, disables claude module automatically
-3. **Activates direnv** - Loads the development environment
-
-**First run (secrets not configured):**
-
-```bash
-just setup
-
-# Output:
-# 🚀 Setting up development environment...
-# Step 1/3: Checking secrets configuration...
-# ⚠️  Secrets not configured.
-#    Disabling claude module for initial setup...
-#    ✅ claude module disabled.
-# Step 2/3: Activating direnv (without claude module)...
-# Step 3/3: Environment ready (limited mode).
-#
-# 📝 Next steps:
-#    1. Configure secrets: https://secretspec.dev/concepts/providers/
-#    2. Verify: just secrets-check
-#    3. Re-run: just setup
-```
-
-**After secrets configured:**
-
-```bash
-just secrets-check  # Verify secrets are working
-just setup          # Re-run to restore claude module
-
-# Output:
-# 🚀 Setting up development environment...
-# Step 1/3: Checking secrets configuration...
-# ✅ Secrets OK!
-# Step 2/3: Restoring claude module if needed...
-#    ✅ claude module restored!
-# Step 3/3: Activating direnv...
-# 🎉 Environment fully ready!
-```
-
-### Secret Providers
-
-Configure secrets using one of these providers:
-
-| Provider    | Description                              | Docs                                                         |
-| ----------- | ---------------------------------------- | ------------------------------------------------------------ |
-| `keyring`   | System keyring (macOS Keychain, KWallet) | [secretspec.dev](https://secretspec.dev/concepts/providers/) |
-| `1password` | 1Password                                | [secretspec.dev](https://secretspec.dev/concepts/providers/) |
-| `lastpass`  | LastPass                                 | [secretspec.dev](https://secretspec.dev/concepts/providers/) |
-| `dotenv`    | .env file                                | [secretspec.dev](https://secretspec.dev/concepts/providers/) |
-| `env`       | Environment variables                    | [secretspec.dev](https://secretspec.dev/concepts/providers/) |
-
-## Key Features
-
-### 🤖 Orchestrator-Worker Pattern
-
-Claude Code acts as the **Lead Architect & Orchestrator**, delegating complex tasks to specialized experts via MCP:
-
-- **`architect`**: High-level design, refactoring strategies
-- **`platform_expert`**: Nix/OS configuration, infrastructure
-- **`devops_mlops`**: CI/CD pipelines, build workflows
-- **`sre`**: Reliability, observability, security
-
-```bash
-# Example: Consult multiple experts for a complex task
-just agent-commit "feat" "" "add redis service"
-# Delegates to platform_expert for devenv config,
-# devops_mlops for CI/CD, sre for health checks
-```
-
-### ⚡ Agent-Friendly Commands
-
-All commands support non-interactive execution for AI agents:
-
-| Command                                       | Description               |
-| --------------------------------------------- | ------------------------- |
-| `just agent-commit <type> "" <msg>`           | Non-interactive commit    |
-| `just agent-validate`                         | Run all checks            |
-| `just agent-fmt`                              | Apply formatting fixes    |
-| `just agent-bump [auto\|patch\|minor\|major]` | Version bump              |
-| `just agent-release`                          | Complete release workflow |
-
-### 🏥 SRE Health Checks
-
-Built-in health monitoring with machine-parseable JSON output:
-
-```bash
-# Human-readable
-just health
-
-# Machine-parseable (for CI/AI)
-JUST_JSON=true just health-report
-# {"component":"git","branch":"main",...}
-```
-
-Available checks:
-
-- `health-git` - Repository status
-- `health-nix` - Nix environment
-- `health-devenv` - Devenv configuration
-- `health-secrets` - Secret availability
-- `health-api-keys` - API key validation
-
-### 📦 Reproducible Environments
-
-- **devenv**: Declarative development shells with Nix
-- **direnv**: Automatic environment loading
-- **omnibus**: Modular configuration framework
-- **flake-parts**: Composable Nix modules
-
-### 🔄 Modern SDLC
-
-- **Conventional Commits**: Enforced via conform
-- **Automated Changelog**: Generated with cocogitto
-- **Semantic Versioning**: Auto-bump based on commits
-- **Git Hooks**: lefthook + omnibus framework
-
-## Architecture (DDD)
-
-```
-omni-dev-fusion/
-├── devenv.nix              # Main devenv configuration
-├── devenv.yaml             # Flake inputs
-├── justfile                # Task runner (40+ commands)
-├── CLAUDE.md               # Orchestrator instructions
-├── modules/
-│   ├── claude.nix          # Claude Code + MCP servers
-│   ├── lefthook.nix        # Git hooks (omnibus)
-│   ├── python.nix          # Python environment
-│   └── flake-parts/
-│       └── omnibus.nix     # Omnibus framework
-└── src/
-    ├── agent/              # The Brain (orchestrator, pure business logic)
-    │   ├── main.py         # Orchestrator MCP server
-    │   ├── capabilities/   # Product owner, lang expert
-    │   └── core/           # Router, reviewer
-    ├── mcp_server/         # Infrastructure (MCP drivers)
-    │   ├── executor/       # Git, testing, docs, writing
-    │   └── coder/          # File I/O, AST search/rewrite
-    └── common/             # Shared kernel
-        └── mcp_core/       # Logging, memory, inference, utils
-```
-
-## Available Commands
-
-### Validation & Quality
-
-```bash
-just validate      # Run all checks (fmt, lint, test)
-just check-format  # Check formatting only
-just check-commits # Validate commit messages
-just lint          # Run linters
-just fmt           # Format code
-just test          # Run tests
-```
-
-### Changelog & Version
-
-```bash
-just changelog-preview  # Preview next release
-just changelog-stats    # Commit statistics
-just version            # Show current version
-just bump-auto          # Auto-bump version
-just bump-patch         # Bump patch (0.0.X)
-```
-
-### Git Operations
-
-```bash
-just status            # Repository status
-just log               # Recent commits
-just agent-commit      # Non-interactive commit
-just commit            # Interactive commit (human)
-```
-
-### Health & Diagnostics
-
-```bash
-just health            # Full health check
-just health-report     # JSON report (for AI/CI)
-just secrets-check     # Secret availability
-just info              # Environment info
-```
-
-### Release
-
-```bash
-just pre-release       # Pre-release checklist
-just release           # Complete release
-just publish-release   # Publish to GitHub
-```
-
-### MCP Server
-
-```bash
-just run               # Run MCP server
-just debug             # Debug with MCP Inspector
-just test-mcp          # Syntax check + startup test
-just test_basic        # Basic MCP tests
-just test_workflow     # Workflow integration tests
-```
-
-## Claude Code Integration
-
-### PostToolUse Hook
-
-Claude Code automatically runs quality checks after edits:
-
-```nix
-claude.code.hooks = {
-  PostToolUse = {
-    command = "lefthook run pre-commit";
-    matcher = "^(Edit|MultiEdit|Write)$";
-  };
-};
-```
-
-### MCP Servers
-
-- **devenv**: Local devenv context
-- **nixos**: NixOS package/option search
-- **orchestrator**: Expert consultation (architect, platform_expert, devops_mlops, sre)
-
-### MCP Server Commands
-
-```bash
-# Run the MCP orchestrator server
-just run
-
-# Debug with MCP Inspector
-just debug
-
-# Test MCP server functionality
-just test-mcp       # Syntax check + server startup
-just test_basic     # Run basic MCP tests
-just test_workflow  # Run workflow integration tests
-```
-
-### Testing
-
-```bash
-# Run basic tests (MCP initialization, tools, context)
-uv run python tests/test_basic.py
-
-# Run full workflow tests (consult_specialist, personas)
-uv run python tests/workflows.py
-```
-
-### Orchestrator Workflow
-
-```python
-# MCP orchestrator.py provides expert consultation
-from mcp.server.fastmcp import FastMCP
-
-mcp = FastMCP("orchestrator-tools")
-
-@mcp.tool()
-def consult_specialist(role: str, query: str) -> str:
-    """Consult AI expert for domain-specific guidance"""
-    # Returns expert opinion based on role
-```
-
-## Conventional Commits
-
-All commits follow the specification:
-
-```
-<type>: <description>
-
-Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
-```
-
-### Examples
-
-```bash
-# Agent (automated)
-just agent-commit "feat" "" "add sre health checks"
-
-# Human (interactive)
-just commit
-# Guides through type/scope/body/breaking change selection
-```
-
-## Secret Management
-
-Secrets are managed via **secretspec**, a tool for secure credential handling. Multiple providers are supported.
-
-### Supported Providers
-
-| Provider    | Description                              | Use Case          |
-| ----------- | ---------------------------------------- | ----------------- |
-| `keyring`   | System keyring (macOS Keychain, KWallet) | Local development |
-| `1password` | 1Password                                | Team sharing      |
-| `lastpass`  | LastPass                                 | Team sharing      |
-| `dotenv`    | .env file                                | Local development |
-| `env`       | Environment variables                    | CI/CD             |
-
-### Configuration
-
-**Provider Selection** (in `devenv.yaml`):
-
-```yaml
-secretspec:
-  enable: true
-  provider: dotenv # or: keyring, onepassword, lastpass, env
-  profile: development
-```
-
-**Secret Definitions** (in `secretspec.toml`):
-
-```toml
-[project]
-name = "omni-dev-fusion"
-revision = "1.0"
-
-[profiles.default]
-MINIMAX_API_KEY = { description = "API key for MiniMax", required = true }
-
-[profiles.development]
-# Inherits from default, override as needed
-```
-
-### Setup Commands
-
-```bash
-# Check secret status
-just secrets-check
-
-# View secrets info
-just secrets-info
-
-# Set a secret (interactive)
-just secrets-set-minimax
-
-# Or use secretspec directly
-secretspec set MINIMAX_API_KEY --value "your-api-key"
-secretspec set MINIMAX_API_KEY --profile development --value "dev-key"
-
-# Get secret value (masked)
-secretspec get MINIMAX_API_KEY
-```
-
-### Dotenv Setup (Optional)
-
-If using dotenv as provider:
-
-```bash
-# 1. Create .env.development file in project root
-# 2. Add secrets to .env.development file
-#    Run: just secrets-set-minimax
-```
-
-## Development
-
-```bash
-# Setup
-just setup
-
-# Iterate
-just validate  # Before committing
-just agent-commit "fix" "" "fix bug"
-
-# Release
-just pre-release
-just release
-```
-
-## Resources
-
-- [devenv.sh](https://devenv.sh) - Development environments with Nix
-- [Nix Manual](https://nixos.org/manual/nix/stable/) - Nix package manager
-- [just](https://github.com/casey/just) - Command runner
-- [Conventional Commits](https://www.conventionalcommits.org/) - Commit message specification
-- [cocogitto](https://github.com/cocogitto/cocogitto) - Changelog and version management
-- [lefthook](https://github.com/evilmartians/lefthook) - Git hooks manager
-- [omnibus](https://github.com/tao3k/omnibus) - Configuration framework
-- [secretspec](https://github.com/tao3k/secretspec) - Secret management
-- [Claude Code](https://claude.com/claude-code) - AI coding assistant
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make changes following conventional commits
-4. Run `just validate` to ensure checks pass
-5. Submit a pull request
+## Documentation Structure
+
+| Topic          | Location                                              |
+| -------------- | ----------------------------------------------------- |
+| Architecture   | `docs/reference/mcp-orchestrator.md`                  |
+| Tri-MCP Design | `docs/explanation/dual-mcp-architecture.md`           |
+| MCP Tools      | `src/agent/main.py` (Orchestrator), `src/mcp_server/` |
+| Workflows      | `agent/how-to/*.md`                                   |
+| Standards      | `agent/standards/*.md`                                |
+| Specs          | `agent/specs/*.md`                                    |
 
 ## License
 
-This project is licensed under the MIT License.
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
 
 ## Acknowledgments
 
@@ -469,6 +202,7 @@ Built with modern tools that empower AI-assisted software development:
 - **omnibus framework** - Advanced configuration management
 - **cocogitto** - Automated changelog and versioning
 - **lefthook** - Fast and powerful Git hooks
+- **ast-grep** - AST-based code search and transformation
 
 Special thanks to the maintainers of these projects for enabling the AI-SDLC workflow.
 
