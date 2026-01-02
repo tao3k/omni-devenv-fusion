@@ -1,8 +1,33 @@
 # omni-devenv-fusion
 
-> Exploring the potential of AI and LLMs in software development
+> From Copilot to Autopilot: Building the OS for the post-IDE era.
 
-A development environment for **AI-assisted SDLC**: leveraging Claude Code + MCP to orchestrate expert personas, automate workflows, and push the boundaries of what's possible in software engineering.
+## The Vision
+
+**Copilot** (today): AI helps you write code, you drive.
+
+**Autopilot** (tomorrow): AI drives, you architect.
+
+The gap is State, Memory, Policy, Orchestration. omni-devenv-fusion fills this gap.
+
+## Key Differentiators
+
+| Differentiator             | Why It Matters                                       |
+| -------------------------- | ---------------------------------------------------- |
+| **Dual-MCP**               | Strategy (Orchestrator) + Tactics (Coder)            |
+| **The Cortex**             | Intent → Right Tool, every time                      |
+| **The Immune System**      | AI reviews code against your standards before commit |
+| **Auto-Loaded Context**    | Project rules loaded at session start                |
+| **Actions Over Apologies** | LLM demonstrates fixes, not apologies                |
+
+## Quick Links
+
+| Topic        | Location                                                        |
+| ------------ | --------------------------------------------------------------- |
+| Architecture | `mcp-server/README.md`, `mcp-server/architecture-philosophy.md` |
+| MCP Tools    | `mcp-server/orchestrator.py`                                    |
+| Workflows    | `agent/how-to/*.md`                                             |
+| Standards    | `agent/standards/*.md`                                          |
 
 ## Core Philosophy
 
