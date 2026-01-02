@@ -102,9 +102,9 @@ except ImportError:
     from advanced_search import register_advanced_search_tools
 
 # =============================================================================
-# Phase 10: The Hive - Swarm Infrastructure (v2)
+# Phase 10: The Hive - Swarm Infrastructure (v3 Antifragile)
 # =============================================================================
-# Import Swarm Infrastructure (Neural Link v2)
+# Import Swarm Infrastructure (Neural Link v3: Auto-healing + Circuit Breaker)
 try:
     # We now use SwarmNode instead of MCPClientNode
     from services.swarm import SwarmNode
@@ -136,7 +136,7 @@ inference_client = InferenceClient(api_key=API_KEY, base_url=BASE_URL)
 project_memory = ProjectMemory()
 
 # =============================================================================
-# Phase 10: The Hive - Swarm Initialization (v2)
+# Phase 10: The Hive - Swarm Initialization (v3 Antifragile)
 # =============================================================================
 
 _coder_node: Optional[Any] = None  # Type is SwarmNode, simplified for runtime

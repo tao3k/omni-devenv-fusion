@@ -94,11 +94,21 @@ Your job is to route a user's request to the correct Tool Domain.
 AVAILABLE DOMAINS:
 {domains_desc}
 
-RULES:
-1. Analyze the user's intent.
-2. Choose the SINGLE most relevant Domain.
-3. If the request is ambiguous or general, choose "Memory" or "Coder".
-4. Return JSON ONLY: {{ "domain": "Name", "confidence": 0.0-1.0, "reasoning": "..." }}
+DECISION RULES:
+1. **Commit/Version Control** → GitOps (smart_commit, validate_commit_message, git_status, git_log, git_diff)
+2. **Code Review** → QA (review_staged_changes, run_tests, analyze_test_results)
+3. **Feature Specs** → ProductOwner (draft_feature_spec, verify_spec_completeness)
+4. **Code Implementation** → Coder (delegate_to_coder, ast_search, ast_rewrite)
+5. **Context/Memory** → Memory (manage_context, memory_garden)
+6. **Infrastructure** → DevOps (run_task, consult_specialist)
+
+EXAMPLES:
+- "Validate this commit message" → GitOps (uses validate_commit_message)
+- "Verify if the latest commit follows our guidelines" → GitOps (commit validation)
+- "Run tests and check results" → QA (testing workflow)
+- "Review staged changes" → QA (code review)
+
+Return JSON ONLY: {{ "domain": "Name", "confidence": 0.0-1.0, "reasoning": "..." }}
 """
 
         user_query = f"User Request: {query}"
