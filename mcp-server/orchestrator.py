@@ -515,26 +515,25 @@ Reasoning: {reasoning}
 
 
 # =============================================================================
-# Delegation (The Bridge)
+# Delegation (Legacy Bridge - Deprecated for Tri-MCP)
 # =============================================================================
 
 @mcp.tool()
 async def delegate_to_coder(task_type: str, details: str) -> str:
     """
-    Delegate a coding task to the Coder Worker (Separate Process).
+    [DEPRECATED] Use coder.py MCP server directly instead.
 
-    This uses the 'Hive' architecture to execute tasks safely in a worker process.
+    This was the old 'Hive' bridge. With Tri-MCP architecture:
+    - Claude Desktop calls coder.py tools directly (save_file, read_file, search_files)
+    - This function is kept as a fallback for non-MCP clients or legacy compatibility.
+
+    For new code, use these tools directly from the coder MCP server:
+    - save_file, read_file, search_files (from coder.py)
+    - ast_search, ast_rewrite (from coder.py)
 
     Args:
-        task_type:
-            - read: Read file content
-            - search: Search text (ripgrep)
-            - write: Create/Update file
-            - ast_search: Structural code search
-            - ast_rewrite: Structural refactoring
-        details: Arguments string.
-                 Format 1 (Simple): path="src/main.py"
-                 Format 2 (Implicit): src/main.py
+        task_type: read/search/write/ast_search/ast_rewrite
+        details: Arguments string (for backward compatibility only)
     """
     log_decision("delegate_to_coder.request", {"task": task_type, "details": details[:100]}, logger)
 

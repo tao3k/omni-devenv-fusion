@@ -101,3 +101,22 @@ Understand audience before reading/writing docs:
 ## 🔌 MCP Dev
 
 Add `@mcp.tool()` → Add security check → Add test → `just test-mcp`
+
+## 🧠 Tri-MCP Architecture
+
+```
+Claude Desktop
+       │
+       ├── 🧠 orchestrator (The Brain)
+       │      └── router, reviewer, product_owner, lang_expert, memory...
+       │
+       ├── 🛠️ executor (The Hands)
+       │      └── git_ops, tester, docs, advanced_search, writer...
+       │
+       └── 📝 coder (File Operations)
+              └── save_file, read_file, search_files, ast_search, ast_rewrite
+
+Tool Routing Rules:
+1. **Planning/Routing/Review** → orchestrator (router, start_spec, review_staged_changes)
+2. **Execution/Testing/Docs** → executor (git_ops, smart_test_runner, lint_writing_style)
+3. **File Operations** → coder (save_file, read_file, search_files)
