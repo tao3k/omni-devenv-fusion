@@ -179,6 +179,15 @@ def load_config(config_path: Optional[Path] = None) -> StressConfig:
     return ConfigLoader.load(config_path)
 
 
+# Alias for backwards compatibility
+get_config = load_config
+
+
+def set_config(config: StressConfig) -> None:
+    """Set global configuration."""
+    ConfigLoader._config = config
+
+
 # =============================================================================
 # Result System
 # =============================================================================

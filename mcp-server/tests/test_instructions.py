@@ -50,6 +50,26 @@ class TestInstructionsBasic:
         result = list_instruction_names()
         assert isinstance(result, list)
 
+    def test_problem_solving_is_loaded(self):
+        """problem-solving.md should be auto-loaded in instructions."""
+        names = list_instruction_names()
+        assert "problem-solving" in names, f"problem-solving not in instructions: {names}"
+
+    def test_problem_solving_contains_actions_over_apologies(self):
+        """problem-solving.md should contain core principle."""
+        content = get_instruction("problem-solving")
+        assert content is not None, "problem-solving instruction not found"
+        assert "Actions Over Apologies" in content or "actions over apologies" in content.lower(), \
+            "Core principle not found in problem-solving.md"
+        # Verify the formula is present
+        assert "Identify Problem" in content, "Formula not found in problem-solving.md"
+
+    def test_problem_solving_in_merged_output(self):
+        """problem-solving content should appear in merged output."""
+        merged = get_all_instructions_merged()
+        assert "problem-solving" in merged.lower() or "Problem Solving" in merged, \
+            "problem-solving not in merged instructions"
+
 
 class TestInstructionsLazyLoading:
     """Lazy loading tests."""

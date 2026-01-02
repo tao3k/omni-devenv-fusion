@@ -128,16 +128,38 @@ Feature implementation complete
 - Documentation updated
 - Code reviewed
 
-## 5. Related Documentation
+## 5. Problem Solving Protocol
 
-| File                                   | Purpose                            |
-| -------------------------------------- | ---------------------------------- |
-| `agent/how-to/git-workflow.md`         | Git operations and commit protocol |
-| `agent/standards/feature-lifecycle.md` | Spec-driven development workflow   |
-| `agent/writing-style/`                 | Writing standards                  |
-| `agent/standards/lang-*.md`            | Language-specific conventions      |
+When problems occur, follow the **Actions Over Apologies** principle:
 
-## 6. Python Development with UV
+```
+Identify Problem → Do NOT Apologize → Execute Concrete Actions → Verify Fix → Document Lessons
+```
+
+**Core Rules:**
+
+- DO NOT say "sorry" or "I will improve"
+- Instead, demonstrate concrete actions that solve the root cause
+- Follow the 5-phase checklist:
+  1. Verify Docs - Check if rule docs are correct
+  2. Check Code - Validate Python implementation
+  3. Update Rules - Fix docs or code
+  4. Verify - Ensure fix works in new session
+  5. Document - Update this file with case study
+
+**Full Guidelines:** See `agent/instructions/problem-solving.md` (auto-loaded)
+
+## 7. Related Documentation
+
+| File                                    | Purpose                                  |
+| --------------------------------------- | ---------------------------------------- |
+| `agent/how-to/git-workflow.md`          | Git operations and commit protocol       |
+| `agent/instructions/problem-solving.md` | Problem-solving guidelines (auto-loaded) |
+| `agent/standards/feature-lifecycle.md`  | Spec-driven development workflow         |
+| `agent/writing-style/`                  | Writing standards                        |
+| `agent/standards/lang-*.md`             | Language-specific conventions            |
+
+## 8. Python Development with UV
 
 **UV is our Python package manager.**
 

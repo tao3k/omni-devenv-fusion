@@ -87,7 +87,7 @@ Load `.data/prompts/init.md` for developer-specific context (not committed to gi
 **IF** the user points out a mistake, a violation of protocol, or asks "Why did you do that?":
 
 1.  **FREEZE**: Do not execute any further state-changing commands (no edits, no commits).
-2.  **LOAD PROTOCOL**: Read `agent/standards/problem-solving.md` to enter Debug Mode.
+2.  **LOAD PROTOCOL**: Read `agent/instructions/problem-solving.md` to enter Debug Mode.
 3.  **EXECUTE RCA**: Follow the "RCA Workflow" (The 5 Whys) to find the technical root cause.
 4.  **REPORT**: Present your findings using the **"Response Template"** defined in that file.
 

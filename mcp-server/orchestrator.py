@@ -780,6 +780,9 @@ async def manage_context(action: str, phase: str = None, focus: str = None, note
 
     Use this to KEEP TRACK of where you are.
 
+    IMPORTANT: Call this FIRST at the start of every session.
+    This returns project rules, current status, and recent activity.
+
     Args:
         action: "read", "update_status", "add_note"
         phase: (For update) Current phase: Planning, Spec-Drafting, Coding, Testing
@@ -790,10 +793,14 @@ async def manage_context(action: str, phase: str = None, focus: str = None, note
         Status or confirmation message
     """
     if action == "read":
-        # 1. Read macro status
+        # 1. Load project instructions (CLAUDE.md + project-conventions)
+        from mcp_core.instructions import get_all_instructions_merged
+        project_instructions = get_all_instructions_merged()
+
+        # 2. Read macro status
         status = project_memory.get_status()
 
-        # 2. Read recent flight recorder logs (Tail Scratchpad)
+        # 3. Read recent flight recorder logs (Tail Scratchpad)
         scratchpad_path = project_memory.active_dir / "SCRATCHPAD.md"
         recent_logs = ""
         if scratchpad_path.exists():
@@ -802,7 +809,13 @@ async def manage_context(action: str, phase: str = None, focus: str = None, note
             # Only take last 15 lines as "short-term working memory"
             recent_logs = "\n".join(lines[-15:])
 
-        return f"""{status}
+        return f"""## 📋 Project Context (Auto-loaded at Session Start)
+
+### 🎯 Project Instructions
+{project_instructions}
+
+### 📊 Current Status
+{status}
 
 ## 🎞️ Recent Activity (Last 15 lines from Scratchpad)
 {recent_logs or "(No recent activity)"}

@@ -67,12 +67,16 @@ agent-commit type scope message body="" breaking_desc="":
     echo "Running pre-commit hooks..."
     lefthook run pre-commit --all-files --no-tty
 
+    # Re-stage all files after formatting (prettier modifies files but doesn't auto-stage)
+    echo "Re-staging all modified files..."
+    git add -A
+
     # Run tests before commit
     echo "Running tests..."
     devenv test
 
-    # Stage all modified files after formatting
-    echo "Staging all modified files..."
+    # Stage again after tests (in case tests modify files)
+    echo "Staging all files..."
     git add -A
 
     # Commit with staged changes
@@ -559,6 +563,17 @@ test_basic:
 test_workflow:
     @echo "Running workflow tests..."
     @uv run python mcp-server/tests/workflows.py
+
+[group('mcp')]
+test-mcp-actual:
+    @echo "Running actual LLM session test..."
+    @echo "This test CONSUMES API TOKENS and requires ANTHROPIC_API_KEY in .mcp.json"
+    @uv run python mcp-server/tests/test_actual_session.py
+
+[group('mcp')]
+test-mcp-session:
+    @echo "Testing manage_context returns problem-solving.md (NO tokens)..."
+    @uv run python mcp-server/tests/test_mcp_session.py
 
 [group('mcp')]
 test-mcp-all: test-mcp test_basic test_workflow

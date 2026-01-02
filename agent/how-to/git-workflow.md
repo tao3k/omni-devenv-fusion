@@ -178,27 +178,27 @@ The Agent/LLM is authorized to commit **ONLY IF** the user explicitly grants per
 
 **Authorization detection:**
 
-- If user says "you have permission to commit" or "go ahead" or similar → authorized
-- If user says "run just agent-commit" or similar → authorized
-- If user simply describes a task without granting permission → **ASK FIRST**
+- `smart_commit` returns `authorization_required: true` → **IMMEDIATELY STOP**
+- User must say exactly: "run just agent-commit"
+- **DO NOT assume** "ok", "yes", "go", "hao" = authorization
+- Only the exact phrase grants permission
 
-**Example:**
+**Correct workflow:**
 
 ```bash
-# User prompt (grants permission):
-> "Fix the typo in README and go ahead with commit."
+# User prompt (no authorization):
+> "run commit"
 
-# LLM executes:
-just agent-commit docs docs "fix typo in readme"
+# LLM calls smart_commit() → returns authorization_required: true
+# LLM MUST:
+1. Display: "Protocol requires explicit authorization. Please say: run just agent-commit"
+2. WAIT for exact phrase
 
-# User prompt (no explicit grant):
-> "Fix the typo in README."
+# User grants authorization:
+> "run just agent-commit"
 
-# LLM must:
-1. Fix the typo
-2. Run tests
-3. "Done. Ready to commit. Please grant permission to proceed."
-# WAIT - do not execute until user grants authorization
+# Now LLM executes:
+just agent-commit ...
 ```
 
 ### MCP Tool Integration
@@ -218,15 +218,16 @@ When an LLM triggers a commit, it should:
 
 ### Protocol Rules
 
-| Condition                         | Agent/LLM Action                                           |
-| --------------------------------- | ---------------------------------------------------------- |
-| User says: "Fix the bug"          | Fix code → Run Tests → **ASK USER** for permission         |
-| User says: "submit/commit"        | **ASK USER** for permission first - do NOT assume!         |
-| User grants permission            | Execute commit                                             |
-| User asks LLM to "run git commit" | **ASK USER** first before executing                        |
-| User asks to force push           | **REFUSE** - Explain risks, ask user to confirm explicitly |
-| Tests fail                        | **STOP** and report error. Do not commit.                  |
-| Pre-commit hooks fail             | **STOP** and report error. Do not commit.                  |
+| Condition                                             | Agent/LLM Action                                               |
+| ----------------------------------------------------- | -------------------------------------------------------------- |
+| User says: "Fix the bug"                              | Fix code → Run Tests → **ASK USER** for permission             |
+| User says: "submit/commit"                            | **ASK USER** for permission first - do NOT assume!             |
+| User grants permission                                | Execute commit                                                 |
+| User asks LLM to "run git commit"                     | **ASK USER** first before executing                            |
+| User asks to force push                               | **REFUSE** - Explain risks, ask user to confirm explicitly     |
+| Tests fail                                            | **STOP** and report error. Do not commit.                      |
+| Pre-commit hooks fail                                 | **STOP** and report error. Do not commit.                      |
+| `smart_commit` returns `authorization_required: true` | **IMMEDIATELY STOP** → Ask user to say "run just agent-commit" |
 
 ### Never Auto-Commit Without Authorization
 

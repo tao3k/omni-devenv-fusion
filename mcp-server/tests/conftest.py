@@ -5,8 +5,7 @@ import pytest
 from pathlib import Path
 
 from stress import (
-    StressConfig, get_config, set_config, BenchmarkRunner, LogicTestRunner,
-    StabilityTestRunner, StressReporter
+    StressConfig, load_config, set_config
 )
 
 
@@ -66,30 +65,6 @@ def normal_func_{i}():
     # Cleanup
     if stress_config.cleanup_after and stress_dir.exists():
         shutil.rmtree(stress_dir)
-
-
-@pytest.fixture
-def benchmark_runner(stress_config: StressConfig) -> BenchmarkRunner:
-    """Provide a benchmark runner with config."""
-    return BenchmarkRunner(stress_config)
-
-
-@pytest.fixture
-def logic_runner(stress_config: StressConfig) -> LogicTestRunner:
-    """Provide a logic test runner with config."""
-    return LogicTestRunner(stress_config)
-
-
-@pytest.fixture
-def stability_runner(stress_config: StressConfig) -> StabilityTestRunner:
-    """Provide a stability test runner with config."""
-    return StabilityTestRunner(stress_config)
-
-
-@pytest.fixture
-def reporter() -> StressReporter:
-    """Provide a stress test reporter."""
-    return StressReporter(phase="9")
 
 
 @pytest.fixture

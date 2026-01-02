@@ -4,10 +4,10 @@
 
 This project defines two clear patterns for how AI agents interact with project knowledge:
 
-| Pattern | When LLM reads... | Purpose |
-|---------|------------------|---------|
+| Pattern            | When LLM reads...  | Purpose                                            |
+| ------------------ | ------------------ | -------------------------------------------------- |
 | **Memory Loading** | `agent/` directory | Follow rules to **act** (commit, write code, etc.) |
-| **Document Query** | `docs/` directory | Find info to **answer** user questions |
+| **Document Query** | `docs/` directory  | Find info to **answer** user questions             |
 
 ### Memory Loading (For LLM Actions)
 
@@ -31,10 +31,10 @@ User: "What is the git flow?"
 
 ## Why This Separation?
 
-| Directory | Audience | Content |
-|-----------|----------|---------|
-| `agent/` | LLM (Claude) | Rules, protocols, standards - for AI behavior |
-| `docs/` | Users | Manuals, tutorials, explanations - for humans |
+| Directory | Audience     | Content                                       |
+| --------- | ------------ | --------------------------------------------- |
+| `agent/`  | LLM (Claude) | Rules, protocols, standards - for AI behavior |
+| `docs/`   | Users        | Manuals, tutorials, explanations - for humans |
 
 ### Design Rationale
 
@@ -42,31 +42,32 @@ LLMs often "hallucinate" by skipping project-specific rules when answering quest
 By separating documentation into two audiences:
 
 - **`agent/`**: Explicitly tells LLM "this is for you, read before acting"
-- **`docs/``: Clearly marked as "for users", LLM can reference it when answering
+- \*\*`docs/``: Clearly marked as "for users", LLM can reference it when answering
 
 This forces the LLM to:
+
 1. Use `load_*_memory` tools when **acting** (follows rules)
 2. Use `read_docs` tool when **answering** (finds information)
 
 ## Key Tools
 
-| Tool | Pattern | Reads |
-|------|---------|-------|
+| Tool                         | Pattern        | Reads                          |
+| ---------------------------- | -------------- | ------------------------------ |
 | `load_git_workflow_memory()` | Memory Loading | `agent/how-to/git-workflow.md` |
-| `load_writing_memory()` | Memory Loading | `agent/writing-style/*.md` |
-| `get_language_standards()` | Memory Loading | `agent/standards/lang-*.md` |
-| `read_docs()` | Document Query | `docs/*.md` |
+| `load_writing_memory()`      | Memory Loading | `agent/writing-style/*.md`     |
+| `get_language_standards()`   | Memory Loading | `agent/standards/lang-*.md`    |
+| `read_docs()`                | Document Query | `docs/*.md`                    |
 
 ## Documentation Sources
 
-| Source | Purpose |
-|--------|---------|
-| `agent/how-to/` | Process guides (git workflow, testing, release) |
-| `agent/standards/` | Language conventions, feature lifecycle |
-| `agent/writing-style/` | Writing quality rules |
-| `agent/specs/` | Feature specifications |
-| `docs/` | User-facing documentation |
+| Source                 | Purpose                                         |
+| ---------------------- | ----------------------------------------------- |
+| `agent/how-to/`        | Process guides (git workflow, testing, release) |
+| `agent/standards/`     | Language conventions, feature lifecycle         |
+| `agent/writing-style/` | Writing quality rules                           |
+| `agent/specs/`         | Feature specifications                          |
+| `docs/`                | User-facing documentation                       |
 
 ---
 
-*See [agent/instructions/project-conventions.md](../agent/instructions/project-conventions.md) for LLM-specific instructions.*
+_See [agent/instructions/project-conventions.md](../agent/instructions/project-conventions.md) for LLM-specific instructions._
