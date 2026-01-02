@@ -89,15 +89,15 @@ Control client and runtime behavior via environment variables:
 
 The Orchestrator includes **The Cortex** - a semantic tool routing system that maps user intent to the correct Tool Domain.
 
-| Domain         | Description              | Example Tools                                              |
-| -------------- | ------------------------ | ---------------------------------------------------------- |
-| `GitOps`       | Version control, commits | smart_commit, git_status, git_log                          |
-| `ProductOwner` | Specs, requirements      | start_spec, draft_feature_spec, verify_spec_completeness   |
-| `Coder`        | Code exploration         | get_codebase_context, delegate_to_coder                    |
-| `QA`           | Quality assurance        | review_staged_changes, run_tests, analyze_test_results     |
-| `Memory`       | Context, tasks           | manage_context, memory_garden                              |
-| `DevOps`       | Nix, infra               | community_proxy, consult_specialist, run_task              |
-| `Search`       | Code search              | search_project_code                                        |
+| Domain         | Description              | Example Tools                                            |
+| -------------- | ------------------------ | -------------------------------------------------------- |
+| `GitOps`       | Version control, commits | smart_commit, git_status, git_log                        |
+| `ProductOwner` | Specs, requirements      | start_spec, draft_feature_spec, verify_spec_completeness |
+| `Coder`        | Code exploration         | get_codebase_context, delegate_to_coder                  |
+| `QA`           | Quality assurance        | review_staged_changes, run_tests, analyze_test_results   |
+| `Memory`       | Context, tasks           | manage_context, memory_garden                            |
+| `DevOps`       | Nix, infra               | community_proxy, consult_specialist, run_task            |
+| `Search`       | Code search              | search_project_code                                      |
 
 ### Consult the Router
 
