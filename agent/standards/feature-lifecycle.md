@@ -193,15 +193,15 @@ Use `agent/specs/template.md` for all new features. Key sections:
 
 This document is enforced by MCP tools in `mcp-server/orchestrator.py` and `mcp-server/product_owner.py`:
 
-| Tool                          | Purpose                                               |
-| :---------------------------- | :---------------------------------------------------- |
-| `start_spec(name)`            | Gatekeeper - enforces spec exists before coding       |
-| `draft_feature_spec()`        | Creates structured spec from description              |
+| Tool                          | Purpose                                              |
+| :---------------------------- | :--------------------------------------------------- |
+| `start_spec(name)`            | Gatekeeper - enforces spec exists before coding      |
+| `draft_feature_spec()`        | Creates structured spec from description             |
 | `verify_spec_completeness()`  | Checks for empty sections, TODOs (auto-detects path) |
-| `assess_feature_complexity()` | LLM-powered analysis → Returns L1-L4 level            |
+| `assess_feature_complexity()` | LLM-powered analysis → Returns L1-L4 level           |
 | `verify_design_alignment()`   | Checks alignment with design/roadmap/philosophy      |
-| `get_feature_requirements()`  | Returns complete requirements for a feature           |
-| `check_doc_sync()`            | Verifies docs are updated with code changes           |
+| `get_feature_requirements()`  | Returns complete requirements for a feature          |
+| `check_doc_sync()`            | Verifies docs are updated with code changes          |
 
 **Usage**:
 
