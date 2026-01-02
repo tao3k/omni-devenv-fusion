@@ -6,11 +6,11 @@
 
 ## Quick Reference
 
-| Task | Tool/Command |
-| ---- | ------------ |
-| Check docs sync | `@omni-orchestrator check_doc_sync()` |
+| Task                | Tool/Command                               |
+| ------------------- | ------------------------------------------ |
+| Check docs sync     | `@omni-orchestrator check_doc_sync()`      |
 | List available docs | `@omni-orchestrator list_available_docs()` |
-| Read doc for action | `@omni-orchestrator read_docs()` |
+| Read doc for action | `@omni-orchestrator read_docs()`           |
 
 ---
 
@@ -18,14 +18,14 @@
 
 > **Rule**: Feature code cannot be merged until documentation is updated.
 
-| If you modify... | You must update... |
-| ---------------- | ------------------ |
-| `mcp-server/*.py` | `mcp-server/README.md`, `agent/how-to/*.md` |
-| `agent/specs/*.md` | `agent/standards/feature-lifecycle.md` (workflow diagrams) |
-| `agent/standards/*.md` | Update the standard itself |
-| `docs/*.md` | User-facing guides (if breaking changes) |
-| `CLAUDE.md` | Project conventions |
-| `justfile` | Command documentation in `docs/` |
+| If you modify...       | You must update...                                         |
+| ---------------------- | ---------------------------------------------------------- |
+| `mcp-server/*.py`      | `mcp-server/README.md`, `agent/how-to/*.md`                |
+| `agent/specs/*.md`     | `agent/standards/feature-lifecycle.md` (workflow diagrams) |
+| `agent/standards/*.md` | Update the standard itself                                 |
+| `docs/*.md`            | User-facing guides (if breaking changes)                   |
+| `CLAUDE.md`            | Project conventions                                        |
+| `justfile`             | Command documentation in `docs/`                           |
 
 ---
 
@@ -92,47 +92,47 @@ Call this tool before committing to verify docs are updated:
 
 Understand where to write documentation:
 
-| Directory | Audience | Purpose |
-| --------- | -------- | ------- |
-| `agent/` | LLM (Claude) | How-to guides, standards - context for AI behavior |
-| `docs/` | Users | Human-readable manuals, tutorials |
-| `mcp-server/*.md` | Developers | Technical implementation docs |
-| `agent/specs/` | LLM + Devs | Feature specifications |
+| Directory         | Audience     | Purpose                                            |
+| ----------------- | ------------ | -------------------------------------------------- |
+| `agent/`          | LLM (Claude) | How-to guides, standards - context for AI behavior |
+| `docs/`           | Users        | Human-readable manuals, tutorials                  |
+| `mcp-server/*.md` | Developers   | Technical implementation docs                      |
+| `agent/specs/`    | LLM + Devs   | Feature specifications                             |
 
 ---
 
 ## 5. When to Write Documentation
 
-| Scenario | Write To |
-| -------- | -------- |
-| New MCP tool | `mcp-server/README.md` (tool table), `agent/how-to/*.md` |
-| New workflow/process | `agent/how-to/` (for LLM to follow) |
-| User-facing guide | `docs/` (for humans) |
-| Implementation details | `mcp-server/` (for contributors) |
-| Feature spec | `agent/specs/` (contract between requirements and implementation) |
-| Project convention | `CLAUDE.md` (quick reference) |
+| Scenario               | Write To                                                          |
+| ---------------------- | ----------------------------------------------------------------- |
+| New MCP tool           | `mcp-server/README.md` (tool table), `agent/how-to/*.md`          |
+| New workflow/process   | `agent/how-to/` (for LLM to follow)                               |
+| User-facing guide      | `docs/` (for humans)                                              |
+| Implementation details | `mcp-server/` (for contributors)                                  |
+| Feature spec           | `agent/specs/` (contract between requirements and implementation) |
+| Project convention     | `CLAUDE.md` (quick reference)                                     |
 
 ---
 
 ## 6. Anti-Patterns
 
-| Wrong | Correct |
-| ----- | ------- |
-| Commit code without updating README | Check `check_doc_sync()` first |
-| Update docs in a separate commit | Update docs in the SAME commit as code |
-| Write user docs in `agent/` | Write user docs in `docs/` |
-| Forget to update CLAUDE.md | Update CLAUDE.md for new tools/commands |
+| Wrong                               | Correct                                 |
+| ----------------------------------- | --------------------------------------- |
+| Commit code without updating README | Check `check_doc_sync()` first          |
+| Update docs in a separate commit    | Update docs in the SAME commit as code  |
+| Write user docs in `agent/`         | Write user docs in `docs/`              |
+| Forget to update CLAUDE.md          | Update CLAUDE.md for new tools/commands |
 
 ---
 
 ## 7. Related Documentation
 
-| Document | Purpose |
-| -------- | ------- |
+| Document                               | Purpose                          |
+| -------------------------------------- | -------------------------------- |
 | `agent/standards/feature-lifecycle.md` | Spec-driven development workflow |
-| `agent/how-to/git-workflow.md` | Commit conventions |
-| `agent/how-to/testing-workflows.md` | Test requirements |
-| `mcp-server/README.md` | MCP tools reference |
+| `agent/how-to/git-workflow.md`         | Commit conventions               |
+| `agent/how-to/testing-workflows.md`    | Test requirements                |
+| `mcp-server/README.md`                 | MCP tools reference              |
 
 ---
 
