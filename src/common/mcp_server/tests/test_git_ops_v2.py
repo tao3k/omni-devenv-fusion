@@ -16,10 +16,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch, MagicMock, mock_open
 
-# Add mcp-server to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add mcp-server/executor to path for imports
+# git_ops.py is at src/mcp_server/executor/git_ops.py
+PROJECT_ROOT = Path(__file__).resolve().parents[3]  # /src/common/mcp_server/tests -> /src/common -> /src
+sys.path.insert(0, str(PROJECT_ROOT / "mcp_server" / "executor"))
 
-# Import git_ops module
+# Import git_ops module directly (not as package)
 from git_ops import GitRulesCache, GitWorkflowCache, _validate_type, _validate_scope, _validate_message_format
 
 
@@ -253,7 +255,7 @@ class TestConfigDrivenBehavior(unittest.TestCase):
 
 
 class TestGitWorkflowCache(unittest.TestCase):
-    """Test GitWorkflowCache - Auto-load git-workflow.md memory"""
+    """Test GitWorkflowCache - Auto-load gitops.md memory"""
 
     def setUp(self):
         GitRulesCache._loaded = False
@@ -268,7 +270,7 @@ class TestGitWorkflowCache(unittest.TestCase):
         GitWorkflowCache._instance = None
 
     def test_workflow_cache_loads_git_workflow_md(self):
-        """Test that GitWorkflowCache loads from agent/how-to/git-workflow.md"""
+        """Test that GitWorkflowCache loads from agent/how-to/gitops.md"""
         cache = GitWorkflowCache()
         # Should load the workflow protocol
         protocol = cache.get_protocol()
@@ -294,7 +296,7 @@ class TestGitWorkflowCache(unittest.TestCase):
     def test_workflow_protocol_stop_and_ask(self):
         """Test default protocol is stop_and_ask when markdown exists"""
         cache = GitWorkflowCache()
-        # The actual git-workflow.md should have "Stop and Ask" as default
+        # The actual gitops.md should have "Stop and Ask" as default
         self.assertEqual(cache.get_protocol(), "stop_and_ask")
 
     def test_workflow_rules_loaded(self):
@@ -335,7 +337,7 @@ class TestGitWorkflowCache(unittest.TestCase):
     def test_git_log_returns_workflow_protocol(self):
         """Test that git_log tool source contains workflow_protocol."""
         import inspect
-        import git_ops
+        import git_ops as git_ops
 
         # Get the source of git_log (defined in the module, decorated with @mcp.tool())
         # We can't directly access it, but we can check the module's source
@@ -347,7 +349,7 @@ class TestGitWorkflowCache(unittest.TestCase):
     def test_git_diff_returns_workflow_protocol(self):
         """Test that git_diff tool source contains workflow_protocol."""
         import inspect
-        import git_ops
+        import git_ops as git_ops
 
         source = inspect.getsource(git_ops)
         self.assertIn('"workflow_protocol"', source)
@@ -355,7 +357,7 @@ class TestGitWorkflowCache(unittest.TestCase):
     def test_git_diff_staged_returns_workflow_protocol(self):
         """Test that git_diff_staged tool source contains workflow_protocol."""
         import inspect
-        import git_ops
+        import git_ops as git_ops
 
         source = inspect.getsource(git_ops)
         self.assertIn('"workflow_protocol"', source)
@@ -367,7 +369,7 @@ class TestGitWorkflowCache(unittest.TestCase):
         the expected call to ensure auto-load is implemented.
         """
         import inspect
-        import git_ops
+        import git_ops as git_ops
 
         source = inspect.getsource(git_ops)
 
@@ -381,7 +383,7 @@ class TestGitWorkflowCache(unittest.TestCase):
     def test_git_status_includes_workflow_protocol_in_response(self):
         """Test that git_status response includes workflow_protocol field."""
         import inspect
-        import git_ops
+        import git_ops as git_ops
 
         source = inspect.getsource(git_ops)
 
@@ -394,7 +396,7 @@ class TestGitWorkflowCache(unittest.TestCase):
         This verifies the centralized loading pattern in register_git_ops_tools.
         """
         import inspect
-        import git_ops
+        import git_ops as git_ops
 
         source = inspect.getsource(git_ops)
 

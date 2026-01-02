@@ -3,6 +3,7 @@
 Product Owner - Feature Lifecycle Integrity Enforcement & Spec Management
 
 Tools for enforcing agent/standards/feature-lifecycle.md and Spec-Driven Development:
+- start_spec: [Gatekeeper] Enforces spec exists before coding new work (Phase 11 PydanticAI)
 - assess_feature_complexity: LLM-powered complexity assessment (L1-L4)
 - draft_feature_spec: Create a structured implementation plan from a description
 - verify_spec_completeness: Ensure spec is ready for coding (auto-detects from start_spec)
@@ -10,7 +11,10 @@ Tools for enforcing agent/standards/feature-lifecycle.md and Spec-Driven Develop
 - get_feature_requirements: Return complete requirements for a feature
 - check_doc_sync: Verify docs are updated with code changes
 
+Phase 11 Enhancement: Uses PydanticAI for type-safe agent outputs.
+
 Usage:
+    @omni-orchestrator start_spec(name="Feature Name")  # Returns LegislationDecision
     @omni-orchestrator assess_feature_complexity code_diff="..." files_changed=[...]
     @omni-orchestrator draft_feature_spec title="..." description="..."
     @omni-orchestrator verify_spec_completeness  # Auto-detects spec_path from start_spec
@@ -21,6 +25,14 @@ import json
 import subprocess
 from pathlib import Path
 from typing import Dict, Any, Optional, List
+
+# Phase 11: PydanticAI imports (lazy loaded for backward compatibility)
+try:
+    from pydantic import BaseModel
+    PYDANTIC_AVAILABLE = True
+except ImportError:
+    PYDANTIC_AVAILABLE = False
+    BaseModel = object  # type: ignore
 
 # Import project_memory for spec_path auto-detection
 from common.mcp_core.memory import ProjectMemory
@@ -141,6 +153,127 @@ CRITICAL_PATTERNS = [
 ]
 
 # =============================================================================
+# Phase 11: PydanticAI Schemas (Type-Safe Outputs)
+# =============================================================================
+
+def _get_spec_path_from_name(name: str) -> Optional[str]:
+    """
+    Find spec file path from feature name using GitOps and advanced pattern matching.
+
+    Uses the same logic as start_spec in main.py for consistency.
+    Path resolved from references.yaml.
+    """
+    import re
+    from pathlib import Path
+
+    # GitOps - Get project root using single source of truth
+    from common.mcp_core.gitops import get_project_root
+    from common.mcp_core.reference_library import get_reference_path
+
+    project_root = get_project_root()
+    spec_dir = project_root / get_reference_path("specs.dir")
+
+    # Generate candidate filenames (same logic as main.py)
+    candidates = set()
+
+    # Candidate 1: Normalize with underscores
+    normalized = re.sub(r'[^a-zA-Z0-9]+', '_', name.lower())
+    normalized = re.sub(r'_+', '_', normalized).strip('_')
+    candidates.add(normalized)
+
+    # Candidate 2: Compact (no underscores)
+    compact = re.sub(r'[^a-z0-9]+', '', name.lower())
+    candidates.add(compact)
+
+    # Candidate 3: Handle "Phase X" prefix
+    phase_match = re.search(r'phase\s*(\d+)', name.lower())
+    if phase_match:
+        phase_num = phase_match.group(1)
+        remaining = re.sub(r'phase\s*\d+\s*', '', name.lower())
+        remaining_underscore = re.sub(r'[^a-z0-9]+', '_', remaining)
+        remaining_underscore = re.sub(r'_+', '_', remaining_underscore).strip('_')
+        phase_style = f"phase{phase_num}_{remaining_underscore}"
+        candidates.add(phase_style)
+        candidates.add(f"phase{phase_num}{remaining_underscore}")
+
+    # Try to find matching file
+    for c in candidates:
+        for pattern in [f"{c}.md", f"{c.replace('_', '')}.md"]:
+            matches = list(spec_dir.glob(pattern))
+            if matches:
+                return str(matches[0])
+
+    return None
+
+
+def _analyze_spec_gap(spec_path: Optional[str]) -> Dict[str, Any]:
+    """
+    Analyze spec completeness gaps.
+
+    Returns dict matching SpecGapAnalysis schema.
+    """
+    if not spec_path:
+        return {
+            "spec_exists": False,
+            "spec_path": None,
+            "completeness_score": 0,
+            "missing_sections": ["all"],
+            "has_template_placeholders": False,
+            "test_plan_defined": False
+        }
+
+    path = Path(spec_path)
+    if not path.exists():
+        return {
+            "spec_exists": False,
+            "spec_path": None,
+            "completeness_score": 0,
+            "missing_sections": ["file not found"],
+            "has_template_placeholders": False,
+            "test_plan_defined": False
+        }
+
+    content = path.read_text(encoding="utf-8")
+    issues = []
+
+    # Check for placeholders
+    placeholders = ["[ ] Step", "function_name", "{FEATURE_NAME}", "TODO"]
+    has_placeholders = any(p in content for p in placeholders)
+
+    # Check for required sections
+    required_sections = [
+        ("## 1. Context", "Context & Goal"),
+        ("## 2. Architecture", "Architecture"),
+        ("## 3. Implementation", "Implementation Plan"),
+        ("## 4. Verification", "Verification Plan"),
+    ]
+    missing = []
+    for section, name in required_sections:
+        if section not in content:
+            missing.append(name)
+
+    # Check for test plan
+    test_plan_keywords = ["Test", "Verify", "test", "verify"]
+    has_test_plan = any(kw in content for kw in test_plan_keywords)
+
+    # Calculate score
+    score = 100
+    score -= len(missing) * 20
+    score -= 10 if has_placeholders else 0
+    score -= 10 if not has_test_plan else 0
+    score = max(0, score)
+
+    return {
+        "spec_exists": True,
+        "spec_path": spec_path,
+        "completeness_score": score,
+        "missing_sections": missing,
+        "has_template_placeholders": has_placeholders,
+        "test_plan_defined": has_test_plan
+    }
+
+
+# =============================================================================
 # Helper Functions
 # =============================================================================
 
@@ -215,17 +348,24 @@ def heuristic_complexity(files: List[str], diff: str) -> str:
 # =============================================================================
 
 def _load_spec_template() -> str:
-    """Load the Spec template."""
-    template_path = Path("agent/specs/TEMPLATE.md")
+    """Load the Spec template (from references.yaml)."""
+    from common.mcp_core.reference_library import get_reference_path
+    from common.mcp_core.gitops import get_project_root
+
+    template_path = get_project_root() / get_reference_path("specs.template")
     if template_path.exists():
         return template_path.read_text(encoding="utf-8")
     return "# Spec: {FEATURE_NAME}\n\n## Context\n...\n## Plan\n..."
 
 
 def _save_spec(title: str, content: str) -> str:
-    """Save a spec file to agent/specs/."""
+    """Save a spec file (to specs.dir from references.yaml)."""
+    from common.mcp_core.reference_library import get_reference_path
+    from common.mcp_core.gitops import get_project_root
+
     filename = title.lower().replace(" ", "_").replace("/", "-") + ".md"
-    path = Path("agent/specs") / filename
+    specs_dir = get_project_root() / get_reference_path("specs.dir")
+    path = specs_dir / filename
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
     return str(path)
@@ -233,10 +373,14 @@ def _save_spec(title: str, content: str) -> str:
 
 def _scan_standards() -> str:
     """
-    Load all markdown standards from agent/standards/.
+    Load all markdown standards from standards.dir.
     Returns a formatted string context for the LLM.
+    Path resolved from references.yaml.
     """
-    standards_dir = Path("agent/standards")
+    from common.mcp_core.reference_library import get_reference_path
+    from common.mcp_core.gitops import get_project_root
+
+    standards_dir = get_project_root() / get_reference_path("standards.dir")
     if not standards_dir.exists():
         return "No specific standards found."
 
@@ -289,6 +433,86 @@ def _check_spec_completeness(content: str) -> List[str]:
 
 def register_product_owner_tools(mcp: Any) -> None:
     """Register all product owner tools with the MCP server."""
+
+    # -------------------------------------------------------------------------
+    # Phase 11: start_spec (The Gatekeeper - PydanticAI Enhanced)
+    # -------------------------------------------------------------------------
+
+    @mcp.tool()
+    async def start_spec(name: str) -> str:
+        """
+        [Gatekeeper] Enforce spec exists before coding new work.
+
+        This is the FIRST tool to call when you judge the user is requesting NEW work:
+        - New feature or capability
+        - Refactoring that changes public APIs
+        - Any work that doesn't have an existing spec
+
+        Phase 11 Enhancement: Uses PydanticAI-inspired type-safe output pattern.
+
+        Args:
+            name: Descriptive name for the new work (e.g. "auth_login_flow")
+
+        Returns:
+            JSON with status and guidance:
+            - "allowed": Spec exists and is complete → Proceed to coding
+            - "blocked": Spec missing or incomplete → Must create/update spec
+
+        Examples:
+            @omni-orchestrator start_spec(name="user_authentication")
+            @omni-orchestrator start_spec(name="api_rate_limiting")
+
+        Reference: agent/how-to/gitops.md
+        """
+        # Step 1: Detect if spec already exists
+        detected_spec_path = _get_spec_path_from_name(name)
+
+        # Step 2: Auto-detect from ProjectMemory if available
+        memory = ProjectMemory()
+        memory_spec_path = memory.get_spec_path()
+
+        # Use whichever spec path we found
+        spec_path = detected_spec_path or memory_spec_path
+
+        # Step 3: Analyze gaps (returns SpecGapAnalysis-like dict)
+        gap_analysis = _analyze_spec_gap(spec_path)
+
+        # Step 4: Make legislation decision
+        if gap_analysis["spec_exists"] and gap_analysis["completeness_score"] >= 80:
+            # Spec exists and is complete enough
+            decision = "allowed"
+            reasoning = f"Legislation complete for '{name}'. Spec found at {spec_path} with score {gap_analysis['completeness_score']}."
+            required_action = "proceed_to_code"
+        elif gap_analysis["spec_exists"]:
+            # Spec exists but needs work
+            decision = "blocked"
+            reasoning = f"Spec exists at {spec_path} but has gaps: {', '.join(gap_analysis['missing_sections'])}"
+            required_action = "update_spec"
+        else:
+            # No spec - must create one
+            decision = "blocked"
+            reasoning = f"Legislation is MANDATORY for new work. No spec found for '{name}'."
+            required_action = "create_spec"
+
+        # Step 5: Save spec_path to ProjectMemory for auto-detection
+        if spec_path:
+            memory.set_spec_path(spec_path)
+
+        # Step 6: Return type-safe decision (PydanticAI pattern)
+        result = {
+            "status": decision,
+            "spec_path": spec_path,
+            "message": reasoning,
+            "next_action": required_action,
+            "gap_analysis": gap_analysis,
+            "tools": {
+                "create_spec": "draft_feature_spec",
+                "update_spec": "draft_feature_spec (with existing spec context)",
+                "proceed_to_code": "@omni-coder tools"
+            }
+        }
+
+        return json.dumps(result, indent=2)
 
     @mcp.tool()
     async def assess_feature_complexity(
@@ -863,14 +1087,16 @@ Return ONLY the Markdown content of the new Spec. Do not include markdown code b
 
         Use this when a feature is DONE (Code Merged + Tests Passed).
 
+        Paths resolved from references.yaml.
+
         Actions:
         1. Reads the Spec.
         2. Extracts enduring technical knowledge (Architecture, Decisions, Schema).
         3. Creates a new doc in `docs/{target_category}/`.
-        4. Moves the original Spec to `agent/specs/archive/`.
+        4. Moves the original Spec to specs.archive directory.
 
         Args:
-            spec_path: Path to the spec (e.g. agent/specs/auth_module.md)
+            spec_path: Path to the spec
             target_category: "explanation" (concepts), "reference" (APIs), or "how-to" (guides)
         """
         src = Path(spec_path)
@@ -934,8 +1160,11 @@ Return ONLY the Markdown content."""
         doc_path.parent.mkdir(parents=True, exist_ok=True)
         doc_path.write_text(doc_content, encoding="utf-8")
 
-        # Archive old Spec
-        archive_dir = Path("agent/specs/archive")
+        # Archive old Spec (path from references.yaml)
+        from common.mcp_core.reference_library import get_reference_path
+        from common.mcp_core.gitops import get_project_root
+
+        archive_dir = get_project_root() / get_reference_path("specs.archive")
         archive_dir.mkdir(parents=True, exist_ok=True)
         archive_path = archive_dir / src.name
         src.rename(archive_path)
@@ -996,5 +1225,9 @@ __all__ = [
     "register_product_owner_tools",
     "COMPLEXITY_LEVELS",
     "TEST_REQUIREMENTS",
-    "heuristic_complexity"
+    "heuristic_complexity",
+    # Phase 11 exports
+    "start_spec",
+    "_get_spec_path_from_name",
+    "_analyze_spec_gap",
 ]

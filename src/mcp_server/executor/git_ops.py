@@ -9,10 +9,13 @@ Tools for safe, protocol-compliant Git operations:
 - suggest_commit_message: AI-powered commit generation based on real config
 - spec_aware_commit: Generate commit from Spec + Scratchpad (Phase 5)
 
+Uses GitOps via common.mcp_core.gitops for path detection.
+References configured in agent/knowledge/references.yaml.
+
 Configuration Source of Truth:
 1. cog.toml (Primary for scopes)
 2. .conform.yaml (Primary for types, if available)
-3. agent/how-to/git-workflow.md (Fallback)
+3. agent/how-to/gitops.md (Fallback)
 """
 
 import asyncio
@@ -27,6 +30,12 @@ try:
     import tomllib
 except ImportError:
     import tomli as tomllib  # Fallback for older python if installed
+
+# GitOps - Project root detection
+from common.mcp_core.gitops import get_project_root
+
+# Reference Library - Dynamic path resolution from references.yaml
+from common.mcp_core.reference_library import get_reference_path
 
 # =============================================================================
 # Singleton Cache - Rules loaded dynamically from Config Files
@@ -68,9 +77,8 @@ class GitRulesCache:
     def _load_configuration(self):
         """Load rules from configuration files (Priority: Config > Doc > Default)"""
 
-        # Determine project root (handles mcp-server/ subdirectory)
-        module_dir = Path(__file__).parent.resolve()
-        project_root = module_dir.parent.resolve()  # Go up from mcp-server/
+        # GitOps - Use git toplevel as project root (single source of truth)
+        project_root = get_project_root()
 
         # 1. Load Scopes from cog.toml (Highest Priority for Scopes)
         cog_path = project_root / "cog.toml"
@@ -104,10 +112,8 @@ class GitRulesCache:
             self._load_from_markdown()
 
     def _load_from_markdown(self):
-        """Fallback: Parse agent/how-to/git-workflow.md"""
-        module_dir = Path(__file__).parent.resolve()
-        project_root = module_dir.parent.resolve()
-        doc_path = project_root / "agent/how-to/git-workflow.md"
+        """Fallback: Parse git protocol doc (from references.yaml)"""
+        doc_path = get_project_root() / get_reference_path("git_protocol.doc")
         if not doc_path.exists():
             return
 
@@ -139,7 +145,7 @@ _git_rules_cache = GitRulesCache()
 
 class GitWorkflowCache:
     """
-    Singleton cache that reads agent/how-to/git-workflow.md to determine
+    Singleton cache that reads agent/how-to/gitops.md to determine
     the commit protocol ("stop_and_ask" or "auto_commit") and other rules.
 
     This ensures the Agent respects the protocol defined in documentation,
@@ -162,10 +168,8 @@ class GitWorkflowCache:
             GitWorkflowCache._loaded = True
 
     def _load_workflow(self):
-        """Load workflow protocol and rules from git-workflow.md"""
-        module_dir = Path(__file__).parent.resolve()
-        project_root = module_dir.parent.resolve()
-        doc_path = project_root / "agent/how-to/git-workflow.md"
+        """Load workflow protocol and rules (from references.yaml)"""
+        doc_path = get_project_root() / get_reference_path("git_protocol.doc")
 
         if not doc_path.exists():
             return
@@ -412,7 +416,7 @@ _auth_guard = AuthorizationGuard()
 def register_git_ops_tools(mcp: Any) -> None:
     """Register all git operations tools.
 
-    Automatically loads git-workflow.md memory on first call.
+    Automatically loads gitops.md memory on first call.
     """
     # Trigger workflow memory load - any git action will now have protocol context
     _ = _git_workflow_cache.get_protocol()
@@ -447,7 +451,7 @@ def register_git_ops_tools(mcp: Any) -> None:
         Execute a commit with "Auto-Fix" intelligence.
         If the commit fails due to linting (Lefthook), it suggests the fix.
 
-        Protocol is loaded from agent/how-to/git-workflow.md via GitWorkflowCache.
+        Protocol is loaded from agent/how-to/gitops.md via GitWorkflowCache.
         """
         # 1. Re-validate against dynamic rules
         v_type, e_type = _validate_type(type)
@@ -460,7 +464,7 @@ def register_git_ops_tools(mcp: Any) -> None:
                 indent=2,
             )
 
-        # 2. Check protocol from GitWorkflowCache (loaded from git-workflow.md)
+        # 2. Check protocol from GitWorkflowCache (loaded from gitops.md)
         protocol = _git_workflow_cache.get_protocol()
         should_ask = _git_workflow_cache.should_ask_user(force_execute)
 
@@ -478,7 +482,7 @@ def register_git_ops_tools(mcp: Any) -> None:
                     "authorization_required": True,
                     "auth_token": auth_token,  # Token for execute_authorized_commit
                     "user_prompt_hint": "Run: execute_authorized_commit with the auth_token above",
-                    "rules_source": "agent/how-to/git-workflow.md",
+                    "rules_source": "agent/how-to/gitops.md",
                 },
                 indent=2,
             )
@@ -844,20 +848,20 @@ Return JSON only."""
         This tool reads from agent/how-to/ - content written FOR LLM.
         Use this when you need to perform git operations (commit, push, etc.)
 
-        This tool reads agent/how-to/git-workflow.md and returns its full content.
+        Path resolved dynamically from references.yaml.
         The loaded content persists in context for the entire session.
 
         NOTE: Call this tool exactly once at the start of a git-related conversation.
         Subsequent questions about git will use the already-loaded context.
         """
-        doc_path = Path("agent/how-to/git-workflow.md")
+        doc_path = get_project_root() / get_reference_path("git_protocol.doc")
         if doc_path.exists():
             content = doc_path.read_text(encoding="utf-8")
             return json.dumps(
-                {"status": "success", "source": "agent/how-to/git-workflow.md", "memory": content},
+                {"status": "success", "source": str(doc_path), "memory": content},
                 indent=2,
             )
-        return json.dumps({"status": "error", "message": "git-workflow.md not found"}, indent=2)
+        return json.dumps({"status": "error", "message": f"{doc_path} not found"}, indent=2)
 
     @mcp.tool()
     async def git_status() -> str:

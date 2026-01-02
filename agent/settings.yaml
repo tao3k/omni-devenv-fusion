@@ -1,0 +1,62 @@
+# agent/settings.yaml
+# Project Settings - Configuration File Paths
+#
+# This file centralizes paths to configuration files like cog.toml, .conform.yaml
+# Use --conf flag to override the configuration directory (default: ./agent)
+#
+# Usage:
+#   python script.py --conf ./agent
+#
+#   from common.mcp_core.settings import get_setting
+#   cog_path = get_setting("config.cog_toml")
+#
+# Note: Actual commit types/scopes are read from cog.toml/.conform.yaml,
+# not from this file. This file only defines the paths to those files.
+
+# =============================================================================
+# Configuration Directory
+# =============================================================================
+# Root directory for all agent-related configurations
+# Override with: --conf /path/to/conf
+
+conf_dir: "agent"
+
+# =============================================================================
+# Configuration Files
+# =============================================================================
+config:
+  # Commit message validation configuration files
+  cog_toml: "cog.toml"
+  conform_yaml: ".conform.yaml"
+
+  # Project root marker
+  project_marker: ".git"
+
+# =============================================================================
+# Git Commit Settings
+# =============================================================================
+# Note: Actual types and scopes are loaded from cog.toml/.conform.yaml
+# These are fallback values only when config files don't exist
+
+commit:
+  # Default protocol: "stop_and_ask" or "auto_commit"
+  protocol: "stop_and_ask"
+
+# =============================================================================
+# MCP Server Settings
+# =============================================================================
+mcp:
+  # Server names
+  orchestrator: "orchestrator"
+  coder: "coder"
+  executor: "executor"
+
+  # Default timeout (seconds)
+  timeout: 120
+
+# =============================================================================
+# Logging Settings
+# =============================================================================
+logging:
+  format: "json"
+  level: "info"

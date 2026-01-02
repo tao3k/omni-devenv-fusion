@@ -1,0 +1,117 @@
+# agent/knowledge/references.yaml
+# Reference Knowledge Library - Knowledge Document Paths
+#
+# This file provides paths to knowledge documents.
+# Path resolved from settings.yaml > conf_dir.
+#
+# Usage:
+#   from common.mcp_core.reference_library import get_reference_path
+#   path = get_reference_path("knowledge.specs_dir")
+
+# =============================================================================
+# Spec Directory References
+# =============================================================================
+specs:
+  dir: "agent/specs"
+  template: "agent/specs/TEMPLATE.md"
+  archive: "agent/specs/archive"
+  description: "Feature specifications directory"
+
+# =============================================================================
+# Standards Directory References
+# =============================================================================
+standards:
+  dir: "agent/standards"
+  python: "agent/standards/lang-python.md"
+  nix: "agent/standards/lang-nix.md"
+  feature_lifecycle: "agent/standards/feature-lifecycle.md"
+  mcp_guidelines: "agent/standards/mcp-guidelines.md"
+  description: "Coding standards and guidelines"
+
+# =============================================================================
+# Writing Style References
+# =============================================================================
+writing_style:
+  dir: "agent/writing-style/"
+  cache: "WritingStyleCache"
+  files:
+    - "concise.md"
+    - "formatting.md"
+    - "technical.md"
+  description: "Engineering writing style guidelines"
+
+# =============================================================================
+# Language Standards References
+# =============================================================================
+language_standards:
+  patterns:
+    python: "agent/standards/lang-python.md"
+    nix: "agent/standards/lang-nix.md"
+  cache: "LangStandardsCache"
+  description: "Language-specific coding standards"
+
+# =============================================================================
+# GitOps Protocol References
+# =============================================================================
+git_protocol:
+  doc: "agent/how-to/gitops.md"
+  cache: "GitWorkflowCache"
+  rules_cache: "GitRulesCache"
+  description: "Git commit workflow protocol and authorization rules"
+  rules:
+    - "stop_and_ask"  # Default: require user authorization
+    - "auto_commit"   # Override: allow automatic commits
+
+# =============================================================================
+# Feature Lifecycle References
+# =============================================================================
+feature_lifecycle:
+  doc: "agent/standards/feature-lifecycle.md"
+  description: "Feature lifecycle and complexity classification (L1-L4)"
+
+# =============================================================================
+# Testing Workflow References
+# =============================================================================
+testing_workflows:
+  doc: "agent/how-to/testing-workflows.md"
+  description: "Testing strategies and workflows"
+
+# =============================================================================
+# Documentation Workflow References
+# =============================================================================
+documentation_workflow:
+  doc: "agent/how-to/documentation-workflow.md"
+  description: "Documentation update workflow and sync rules"
+
+# =============================================================================
+# MCP Guidelines References
+# =============================================================================
+mcp_guidelines:
+  doc: "agent/standards/mcp-guidelines.md"
+  description: "MCP server design guidelines and best practices"
+
+# =============================================================================
+# Cache Patterns References
+# =============================================================================
+cache_patterns:
+  doc: "docs/explanation/cache-patterns.md"
+  description: "Caching patterns and implementation details"
+
+# =============================================================================
+# Knowledge Cache References (Internal)
+# =============================================================================
+knowledge_caches:
+  git_protocol:
+    class: "GitWorkflowCache"
+    source: "agent/knowledge/gitops-cache.md"
+  git_rules:
+    class: "GitRulesCache"
+    source: "agent/how-to/gitops.md"
+  writing_style:
+    class: "WritingStyleCache"
+    source: "agent/writing-style/"
+  language_standards:
+    class: "LangStandardsCache"
+    sources:
+      - "agent/standards/lang-python.md"
+      - "agent/standards/lang-nix.md"

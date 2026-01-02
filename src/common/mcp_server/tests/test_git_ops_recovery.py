@@ -19,8 +19,10 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-# Add mcp-server to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add mcp-server/executor to path for imports
+# git_ops.py is at src/mcp_server/executor/git_ops.py
+PROJECT_ROOT = Path(__file__).resolve().parents[3]  # /src/common/mcp_server/tests -> /src/common -> /src
+sys.path.insert(0, str(PROJECT_ROOT / "mcp_server" / "executor"))
 
 # Import git_ops module functions
 from git_ops import (
@@ -246,7 +248,7 @@ class TestValidationLogic:
 
 
 class TestGitWorkflowCache:
-    """Tests for GitWorkflowCache - protocol loaded from git-workflow.md."""
+    """Tests for GitWorkflowCache - protocol loaded from gitops.md."""
 
     @pytest.fixture
     def workflow_cache(self):
@@ -283,7 +285,7 @@ class TestGitWorkflowCache:
         assert workflow_cache.should_ask_user(force_execute=True) is False
 
     def test_protocol_loaded_from_workflow_file(self, workflow_cache):
-        """Protocol should be loaded from git-workflow.md."""
+        """Protocol should be loaded from gitops.md."""
         # The cache should have loaded the file
         assert workflow_cache.protocol in ["stop_and_ask", "auto_commit"]
 

@@ -10,6 +10,8 @@ Key Design:
 - Double-checked locking: Fast path after first load
 - thread-safe with Lock: No race conditions or empty data
 
+Uses GitOps via common.mcp_core.project_root for path detection.
+
 Usage:
     from mcp_core.instructions import get_instructions, get_instruction
 
@@ -20,9 +22,11 @@ Usage:
 from pathlib import Path
 import threading
 
-# Project root detection
-_PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
-instructions_dir = _PROJECT_ROOT / "agent" / "instructions"
+# Project root detection using GitOps
+from common.mcp_core.gitops import get_project_root, get_instructions_dir
+
+_PROJECT_ROOT = get_project_root()
+instructions_dir = get_instructions_dir()
 
 # Internal state
 _data: dict[str, str] = {}

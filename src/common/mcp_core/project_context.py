@@ -5,6 +5,8 @@ Project-Specific Context Framework
 A framework for providing project-specific coding context.
 Designed for extensibility - easy to add new languages and categories.
 
+Uses GitOps via common.mcp_core.gitops for path detection.
+
 Architecture:
 - ProjectContext: Base class for language contexts
 - ContextRegistry: Registry for all language contexts
@@ -34,15 +36,17 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Generic, TypeVar, Callable
 
-# Project root detection (follows pattern from lazy_cache.py)
+# Project root detection using GitOps
+from common.mcp_core.gitops import get_project_root
+
 _PROJECT_ROOT: Path | None = None
 
 
 def _get_project_root() -> Path:
-    """Get the project root directory."""
+    """Get the project root directory (uses GitOps)."""
     global _PROJECT_ROOT
     if _PROJECT_ROOT is None:
-        _PROJECT_ROOT = Path(__file__).parent.parent.resolve()
+        _PROJECT_ROOT = get_project_root()
     return _PROJECT_ROOT
 
 

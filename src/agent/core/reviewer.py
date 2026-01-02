@@ -25,9 +25,13 @@ logger = setup_logging(server_name="reviewer")
 def _scan_standards(file_extensions: List[str]) -> str:
     """
     Load relevant standards based on file extensions in the diff.
-    e.g., if .py files changed, load agent/standards/lang-python.md
+    e.g., if .py files changed, load lang-python.md
+    Path resolved from references.yaml.
     """
-    standards_dir = Path("agent/standards")
+    from common.mcp_core.reference_library import get_reference_path
+    from common.mcp_core.gitops import get_project_root
+
+    standards_dir = get_project_root() / get_reference_path("standards.dir")
     if not standards_dir.exists():
         return "No specific standards found."
 

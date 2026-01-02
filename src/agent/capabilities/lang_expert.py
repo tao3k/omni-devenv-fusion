@@ -38,7 +38,7 @@ from common.mcp_core.project_context import (
 class StandardsCache:
     """
     Singleton cache for language standards.
-    Standards are loaded from agent/standards/ on first access,
+    Standards are loaded from standards.dir (references.yaml) on first access,
     then cached in memory for the lifetime of the MCP server.
     """
 
@@ -56,9 +56,12 @@ class StandardsCache:
             StandardsCache._loaded = True
 
     def _load_standards(self):
-        """Load all language standards from agent/standards/."""
+        """Load all language standards (from references.yaml)."""
+        from common.mcp_core.reference_library import get_reference_path
+        from common.mcp_core.gitops import get_project_root
+
         self._standards = {}
-        standards_dir = Path("agent/standards")
+        standards_dir = get_project_root() / get_reference_path("standards.dir")
 
         if not standards_dir.exists():
             return

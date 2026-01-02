@@ -39,22 +39,14 @@ def _get_git_toplevel() -> Optional[Path]:
     """
     Get git toplevel directory using GitOps approach.
 
+    DEPRECATED: Use get_project_root() from common.mcp_core.gitops instead.
+    This function is kept for backwards compatibility.
+
     Returns:
         Path to git repository root or None
     """
-    try:
-        import subprocess
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            return Path(result.stdout.strip())
-    except Exception:
-        pass
-    return None
+    from common.mcp_core.gitops import get_git_toplevel
+    return get_git_toplevel()
 
 
 def _load_api_key_from_config() -> Optional[str]:
@@ -67,16 +59,11 @@ def _load_api_key_from_config() -> Optional[str]:
     3. Git toplevel/.claude/settings.json ({"ANTHROPIC_API_KEY": "..."} or {"env": {...}})
     4. Environment variables
 
-    Returns:
-        API key string or None
+    Uses GitOps via common.mcp_core.gitops for project root detection.
     """
-    # Determine project root using GitOps approach
-    project_root = _get_git_toplevel()
-
-    if not project_root:
-        # Fallback to module-based detection
-        module_dir = Path(__file__).parent.resolve()
-        project_root = module_dir.parent.parent.resolve()
+    # Determine project root using GitOps (via gitops module)
+    from common.mcp_core.gitops import get_project_root
+    project_root = get_project_root()
 
     config_files = [
         project_root / ".mcp.json",

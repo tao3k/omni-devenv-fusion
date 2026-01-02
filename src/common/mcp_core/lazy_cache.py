@@ -4,10 +4,13 @@ Lazy Loading Singleton Cache - Memory-efficient caching for protocol and config 
 
 This module provides a base class for implementing lazy-loading singleton caches,
 which are ideal for:
-- Protocol rules (git-workflow.md, testing-workflows.md)
+- Protocol rules (gitops.md, testing-workflows.md)
 - Configuration files (cog.toml, .conform.yaml)
 - Writing style guidelines (agent/writing-style/*.md)
 - Language-specific standards (agent/standards/lang-*.md)
+
+Uses GitOps via common.mcp_core.gitops for path detection.
+References configured in agent/knowledge/references.yaml.
 
 Features:
 - Singleton pattern: Only one instance per cache type
@@ -42,19 +45,17 @@ from typing import Any, Generic, TypeVar, Callable, Optional
 
 T = TypeVar("T")
 
-# Project root detection (follows pattern from git_ops.py, memory.py)
+# Project root detection using GitOps
+from common.mcp_core.gitops import get_project_root
+
 _PROJECT_ROOT: Path | None = None
 
 
-def get_project_root() -> Path:
-    """Get the project root directory.
-
-    Returns:
-        Path to the project root directory.
-    """
+def _get_project_root() -> Path:
+    """Get the project root directory (uses GitOps)."""
     global _PROJECT_ROOT
     if _PROJECT_ROOT is None:
-        _PROJECT_ROOT = Path(__file__).parent.parent.resolve()
+        _PROJECT_ROOT = get_project_root()
     return _PROJECT_ROOT
 
 
@@ -182,7 +183,7 @@ class FileCache(LazyCache[str]):
     """Lazy cache for loading and caching file contents.
 
     Example:
-        cache = FileCache(get_project_root() / "agent/how-to/git-workflow.md")
+        cache = FileCache(get_project_root() / "agent/how-to/gitops.md")
         content = cache.get()  # Loaded once, cached forever
     """
 
@@ -222,7 +223,7 @@ class MarkdownCache(LazyCache[dict[str, Any]]):
     Extracts title, content, and sections from markdown files.
 
     Example:
-        cache = MarkdownCache(get_project_root() / "agent/how-to/git-workflow.md")
+        cache = MarkdownCache(get_project_root() / "agent/how-to/gitops.md")
         data = cache.get()  # {"title": "...", "content": "...", "sections": {...}}
     """
 
@@ -368,7 +369,7 @@ class CompositeCache(LazyCache[dict[str, Any]]):
     Example:
         cache = CompositeCache([
             ConfigCache(get_project_root() / "cog.toml"),
-            MarkdownCache(get_project_root() / "agent/how-to/git-workflow.md"),
+            MarkdownCache(get_project_root() / "agent/how-to/gitops.md"),
         ])
         data = cache.get()  # Merged from all sources
     """

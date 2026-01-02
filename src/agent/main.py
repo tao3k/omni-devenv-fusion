@@ -82,6 +82,9 @@ from common.mcp_core import (
     _load_api_key_from_config,
 )
 
+# GitOps - Project root detection (single source of truth)
+from common.mcp_core.gitops import get_project_root
+
 # Import instructions loader (agent/instructions/ - lazy loaded on first access)
 from common.mcp_core.instructions import (
     get_all_instructions_merged,
@@ -99,6 +102,12 @@ from agent.core.router import get_router
 
 # Import Reviewer tools (The Immune System)
 from agent.core.reviewer import register_reviewer_tools
+
+# Import LangGraph Workflows (Phase 11: The Neural Matrix)
+from agent.core.workflows.commit_flow import get_workflow as get_commit_workflow
+
+# Thread-safe storage for commit workflow sessions
+_commit_workflow_sessions: dict = {}
 
 # =============================================================================
 # Configuration
@@ -993,20 +1002,60 @@ async def start_spec(name: str) -> str:
             "message": "Invalid name. Provide a descriptive name for the work."
         })
 
-    # Check if spec file exists (search both patterns)
-    spec_dir = Path(__file__).parent.parent / "agent" / "specs"
+    # Check if spec file exists (search in project root's agent/specs/)
+    # Use GitOps approach to find project root - THE single source of truth
+    project_root = get_project_root()
+    if project_root:
+        spec_dir = project_root / "agent" / "specs"
+    else:
+        # This should NEVER happen in production - fail fast
+        return json.dumps({
+            "status": "error",
+            "message": "CRITICAL: Cannot determine project root. Not in a git repository."
+        }, indent=2)
 
-    # Try: feature_name.md, feature-name.md, or *_feature_name*.md
-    safe_name = name.lower().replace(" ", "_").replace("-", "_")
-    possible_patterns = [
-        f"{safe_name}.md",
-        f"*_{safe_name}.md",
-        f"{safe_name}_*.md",
-    ]
+    # Try multiple naming patterns for spec files
+    # Pattern: phase{phase_number}_{name}.md (e.g., phase11_neural_matrix.md)
+    import re
+
+    # Strategy: Generate multiple candidate filenames and try to match
+    candidates = set()
+
+    # Candidate 1: Normalize with underscores
+    normalized = re.sub(r'[^a-zA-Z0-9]+', '_', name.lower())
+    normalized = re.sub(r'_+', '_', normalized).strip('_')
+    candidates.add(normalized)
+
+    # Candidate 2: Remove underscores (compact)
+    compact = re.sub(r'[^a-z0-9]+', '', name.lower())
+    candidates.add(compact)
+
+    # Candidate 3: Handle "Phase X" prefix specially
+    # "Phase 11 The Neural Matrix" -> "phase11_neural_matrix"
+    phase_match = re.search(r'phase\s*(\d+)', name.lower())
+    if phase_match:
+        phase_num = phase_match.group(1)
+        remaining = re.sub(r'phase\s*\d+\s*', '', name.lower())
+        remaining_underscore = re.sub(r'[^a-z0-9]+', '_', remaining)
+        remaining_underscore = re.sub(r'_+', '_', remaining_underscore).strip('_')
+        phase_style = f"phase{phase_num}_{remaining_underscore}"
+        candidates.add(phase_style)
+        candidates.add(f"phase{phase_num}{remaining_underscore}")
+
+    # Candidate 4: Add glob patterns
+    patterns = []
+    for c in candidates:
+        patterns.extend([
+            f"*{c}.md",
+            f"*{c.replace('_', '')}.md",
+            f"phase*_{c}.md",
+            f"phase*_{c.replace('_', '')}.md",
+        ])
+
+    possible_patterns = list(set(patterns))  # Remove duplicates
 
     spec_file = None
     for pattern in possible_patterns:
-        import glob
         matches = list(spec_dir.glob(pattern))
         if matches:
             spec_file = matches[0]
@@ -1041,6 +1090,195 @@ async def start_spec(name: str) -> str:
         "message": f"Legislation complete for '{name}'. Ready for execution.",
         "next_action": "manage_context(update_status, phase=Coding, focus=...)"
     }, indent=2)
+
+
+# =============================================================================
+# Phase 11: LangGraph Smart Commit V2 (Human-in-the-loop)
+# =============================================================================
+
+def _get_commit_session_id() -> str:
+    """Generate a session ID for commit workflow."""
+    import uuid
+    session_id = f"commit_{uuid.uuid4().hex[:8]}"
+    return session_id
+
+
+def _get_git_diff(staged: bool = True) -> str:
+    """Get git diff for the workflow."""
+    try:
+        import subprocess
+        cmd = ["git", "diff", "--cached"] if staged else ["git", "diff"]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        return result.stdout
+    except Exception:
+        return ""
+
+
+@mcp.tool()
+async def smart_commit_v2(context: str = "") -> str:
+    """
+    [LangGraph V2] Start the Smart Commit workflow with Human-in-the-loop.
+
+    Uses LangGraph's persistent state and interrupt mechanism for a smoother
+    authorization flow than the original token-based system.
+
+    Flow: Analyze -> Wait for User -> Execute
+
+    Args:
+        context: Optional description of the changes being committed
+
+    Returns:
+        Analysis summary and authorization instructions. The workflow will
+        suspend before execution and wait for confirm_commit.
+
+    Example:
+        @omni-orchestrator smart_commit_v2(context="Adding new Phase 11 workflow")
+        # Returns: Authorization required with analysis and next steps
+
+        @omni-orchestrator confirm_commit(decision="approved")
+        # Resumes workflow and executes the commit
+    """
+    session_id = _get_commit_session_id()
+    _commit_workflow_sessions[session_id] = {
+        "status": "pending",
+        "context": context
+    }
+
+    try:
+        commit_workflow = get_commit_workflow()
+        config = {"configurable": {"thread_id": session_id}}
+
+        # Get current diff
+        diff = _get_git_diff(staged=True)
+        if not diff:
+            return json.dumps({
+                "status": "error",
+                "message": "No staged changes found. Stage files first with `git add`."
+            }, indent=2)
+
+        inputs = {
+            "diff": diff,
+            "context": context or "Automated commit",
+            "user_decision": "pending"
+        }
+
+        # Stream through the workflow (will stop at interrupt_before=["execute"])
+        events = list(commit_workflow.stream(inputs, config=config))
+
+        # Get current state
+        snapshot = commit_workflow.get_state(config)
+        state = snapshot.values
+
+        # Update session info
+        _commit_workflow_sessions[session_id].update({
+            "status": "waiting",
+            "analysis": state.get("analysis", ""),
+            "risk_level": state.get("risk_level", "unknown"),
+            "suggested_msg": state.get("suggested_msg", "")
+        })
+
+        return json.dumps({
+            "status": "authorization_required",
+            "session_id": session_id,
+            "analysis": state.get("analysis", ""),
+            "risk_level": state.get("risk_level", ""),
+            "suggested_message": state.get("suggested_msg", ""),
+            "message": """🛑 **Authorization Required**
+
+Review the analysis above. To proceed with the commit, call:
+`confirm_commit(session_id="{session_id}", decision="approved")`
+
+To cancel:
+`confirm_commit(session_id="{session_id}", decision="rejected")`""".format(session_id=session_id)
+        }, indent=2)
+
+    except Exception as e:
+        log_decision("smart_commit_v2.error", {"error": str(e)}, logger)
+        _commit_workflow_sessions.pop(session_id, None)
+        return json.dumps({
+            "status": "error",
+            "message": f"Failed to start commit workflow: {str(e)}"
+        }, indent=2)
+
+
+@mcp.tool()
+async def confirm_commit(session_id: str, decision: str, final_msg: str = "") -> str:
+    """
+    [LangGraph V2] Resume the suspended commit workflow with user decision.
+
+    Args:
+        session_id: The session ID returned by smart_commit_v2
+        decision: "approved" or "rejected"
+        final_msg: Optional override for the commit message
+
+    Returns:
+        Commit result (success hash or rejection message)
+
+    Example:
+        @omni-orchestrator confirm_commit(
+            session_id="abc12345",
+            decision="approved",
+            final_msg="feat: add Phase 11 LangGraph workflow"
+        )
+    """
+    if session_id not in _commit_workflow_sessions:
+        return json.dumps({
+            "status": "error",
+            "message": f"Session {session_id} not found. Start a new workflow with smart_commit_v2."
+        }, indent=2)
+
+    if decision not in ["approved", "rejected"]:
+        return json.dumps({
+            "status": "error",
+            "message": "Invalid decision. Use 'approved' or 'rejected'."
+        }, indent=2)
+
+    try:
+        commit_workflow = get_commit_workflow()
+        config = {"configurable": {"thread_id": session_id}}
+
+        # Update state with user decision
+        updates = {"user_decision": decision}
+        if final_msg:
+            updates["final_msg"] = final_msg
+
+        commit_workflow.update_state(config, updates)
+
+        # Resume execution (None means continue from interrupt)
+        events = list(commit_workflow.stream(None, config=config))
+
+        # Get final state
+        snapshot = commit_workflow.get_state(config)
+        final_state = snapshot.values
+
+        # Cleanup session
+        _commit_workflow_sessions.pop(session_id, None)
+
+        if final_state.get("commit_hash"):
+            return json.dumps({
+                "status": "success",
+                "commit_hash": final_state["commit_hash"],
+                "message": f"✅ Commit Successful! Hash: {final_state['commit_hash']}"
+            }, indent=2)
+        elif final_state.get("error"):
+            return json.dumps({
+                "status": "rejected",
+                "error": final_state["error"],
+                "message": f"❌ Commit Failed/Rejected: {final_state['error']}"
+            }, indent=2)
+        else:
+            return json.dumps({
+                "status": "unknown",
+                "message": "⚠️ Unknown state reached."
+            }, indent=2)
+
+    except Exception as e:
+        log_decision("confirm_commit.error", {"error": str(e)}, logger)
+        _commit_workflow_sessions.pop(session_id, None)
+        return json.dumps({
+            "status": "error",
+            "message": f"Failed to execute commit: {str(e)}"
+        }, indent=2)
 
 
 @mcp.tool()
