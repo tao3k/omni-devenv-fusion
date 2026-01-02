@@ -120,3 +120,4 @@ Tool Routing Rules:
 1. **Planning/Routing/Review** → orchestrator (router, start_spec, review_staged_changes)
 2. **Execution/Testing/Docs** → executor (git_ops, smart_test_runner, lint_writing_style)
 3. **File Operations** → coder (save_file, read_file, search_files)
+```

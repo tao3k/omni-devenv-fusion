@@ -6,7 +6,7 @@ Tools for enforcing agent/standards/feature-lifecycle.md and Spec-Driven Develop
 - assess_feature_complexity: LLM-powered complexity assessment (L1-L4)
 - draft_feature_spec: Create a structured implementation plan from a description
 - verify_spec_completeness: Ensure spec is ready for coding (auto-detects from start_spec)
-- verify_design_alignment: Check alignment with design/roadmap/philosophy
+- verify_design_alignment: Check alignment with docs/roadmap/philosophy
 - get_feature_requirements: Return complete requirements for a feature
 - check_doc_sync: Verify docs are updated with code changes
 
@@ -15,7 +15,7 @@ Usage:
     @omni-orchestrator draft_feature_spec title="..." description="..."
     @omni-orchestrator verify_spec_completeness  # Auto-detects spec_path from start_spec
 
-Performance: Uses singleton caching - design docs loaded once per session.
+Performance: Uses singleton caching - design docs loaded once per session from docs/.
 """
 import json
 import subprocess
@@ -32,7 +32,7 @@ from mcp_core.memory import ProjectMemory
 class DesignDocsCache:
     """
     Singleton cache for design documents.
-    Design docs are loaded from design/ directory on first access,
+    Design docs are loaded from docs/ directory on first access,
     then cached in memory for the lifetime of the MCP server.
     """
     _instance = None
@@ -49,22 +49,23 @@ class DesignDocsCache:
             DesignDocsCache._loaded = True
 
     def _load_design_docs(self):
-        """Load design documents from design/ directory."""
+        """Load design documents from docs/ directory."""
         self._docs = {}
 
-        design_dir = Path("design")
-        if not design_dir.exists():
+        # Support both docs/design-philosophy.md (direct) and docs/design/ (subdir)
+        docs_dir = Path("docs")
+        if not docs_dir.exists():
             return
 
         # Load key design documents
         key_docs = [
-            "writing-style/01_philosophy",
-            "mcp-architecture-roadmap",
-            "why-custom-mcp-architecture"
+            ("design-philosophy", "design-philosophy.md"),  # docs/design-philosophy.md
+            ("mcp-architecture-roadmap", "mcp-architecture-roadmap.md"),  # docs/mcp-architecture-roadmap.md
+            ("why-custom-mcp-architecture", "why-custom-mcp-architecture.md"),  # docs/why-custom-mcp-architecture.md
         ]
 
-        for doc_name in key_docs:
-            doc_path = design_dir / f"{doc_name}.md"
+        for doc_name, doc_file in key_docs:
+            doc_path = docs_dir / doc_file
             if doc_path.exists():
                 try:
                     self._docs[doc_name] = doc_path.read_text()
@@ -389,9 +390,9 @@ Return JSON with:
         Verify feature alignment with design documents.
 
         Checks if the feature aligns with:
-        - Philosophy (design/writing-style/01_philosophy.md)
-        - Roadmap (design/*.md)
-        - Architecture (design/mcp-architecture-roadmap.md)
+        - Philosophy (docs/design-philosophy.md)
+        - Roadmap (docs/*.md)
+        - Architecture (docs/mcp-architecture-roadmap.md)
 
         Args:
             feature_description: Description of the feature to verify
@@ -410,7 +411,7 @@ Return JSON with:
 
         # Check philosophy
         if check_philosophy:
-            philosophy = load_design_doc("writing-style/01_philosophy.md")
+            philosophy = load_design_doc("design-philosophy")
             if philosophy:
                 # Quick heuristic check
                 desc_lower = feature_description.lower()
@@ -421,8 +422,8 @@ Return JSON with:
 
         # Check roadmap
         if check_roadmap:
-            # Look for roadmap files
-            roadmap_files = list(Path("design").glob("*roadmap*")) + list(Path("design").glob("*vision*"))
+            # Look for roadmap files in docs/
+            roadmap_files = list(Path("docs").glob("*roadmap*")) + list(Path("docs").glob("*vision*"))
             in_roadmap = False
             for rf in roadmap_files:
                 content = rf.read_text().lower()
@@ -432,11 +433,11 @@ Return JSON with:
             results["roadmap"]["in_roadmap"] = in_roadmap
             if not in_roadmap:
                 results["roadmap"]["aligned"] = False
-                results["roadmap"]["notes"].append("Feature not explicitly in roadmap - consider updating design/")
+                results["roadmap"]["notes"].append("Feature not explicitly in roadmap - consider updating docs/")
 
         # Check architecture
         if check_architecture:
-            architecture = load_design_doc("mcp-architecture-roadmap.md")
+            architecture = load_design_doc("mcp-architecture-roadmap")
             if architecture:
                 # Check for architecture conflicts
                 desc_lower = feature_description.lower()
@@ -453,8 +454,8 @@ Return JSON with:
             "checks": results,
             "recommendations": _get_recommendations(results),
             "reference_docs": [
-                "design/writing-style/01_philosophy.md",
-                "design/mcp-architecture-roadmap.md",
+                "docs/design-philosophy.md",
+                "docs/mcp-architecture-roadmap.md",
                 "agent/standards/feature-lifecycle.md"
             ]
         }, indent=2)
@@ -947,13 +948,13 @@ def _get_recommendations(results: dict) -> list:
     recs = []
 
     if not results["philosophy"]["aligned"]:
-        recs.append("Review design/writing-style/01_philosophy.md - simplify if possible")
+        recs.append("Review docs/design-philosophy.md - simplify if possible")
 
     if results["roadmap"]["in_roadmap"] is False:
-        recs.append("Feature not in roadmap - consider adding to design/roadmap.md")
+        recs.append("Feature not in roadmap - consider adding to docs/index.md")
 
     if not results["architecture"]["aligned"]:
-        recs.append("Review design/mcp-architecture-roadmap.md - ensure architecture fit")
+        recs.append("Review docs/mcp-architecture-roadmap.md - ensure architecture fit")
 
     if all(r["aligned"] for r in results.values()):
         recs.append("Feature is well-aligned with design documents")
@@ -963,7 +964,7 @@ def _get_recommendations(results: dict) -> list:
 
 def _get_checklist(level: str) -> list:
     """Get checklist for a complexity level."""
-    checklist = ["Code follows writing style (design/writing-style/)"]
+    checklist = ["Code follows writing style (docs/design-philosophy.md)"]
 
     if level in ["L2", "L3", "L4"]:
         checklist.append("Unit tests added/updated")

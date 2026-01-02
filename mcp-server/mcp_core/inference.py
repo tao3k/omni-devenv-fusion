@@ -412,12 +412,12 @@ Be thorough in security reviews and provide defensive recommendations.""",
         "description": "Expert in engineering documentation and clear communication.",
         "when_to_use": "Writing or polishing READMEs, design docs, commit messages, or any project documentation.",
         "context_hints": [
-            "Reference design/writing_style.md for rules",
+            "Reference agent/writing-style/01_philosophy.md for rules",
             "Apply BLUF (Bottom Line Up Front)",
             "Use active voice, strip clutter",
             "Structure with What-Why-How pattern",
         ],
-        "prompt": """You are a Technical Writing Expert following the project's Engineering Documentation Style Guide (design/writing_style.md).
+        "prompt": """You are a Technical Writing Expert following the project's Engineering Documentation Style Guide (agent/writing-style/01_philosophy.md).
 
 Core Principles (from On Writing Well & Spring Into Technical Writing):
 1. BLUF: Lead with the most important information

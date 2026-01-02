@@ -571,7 +571,7 @@ Configure your MCP client (VS Code, Claude Desktop) to use `orchestrator-tools`.
 
 ## Writing Standards
 
-This project follows the Omni-DevEnv Technical Writing Standard. See [`design/writing-style/`](../../design/writing-style/) for rules on:
+This project follows the Omni-DevEnv Technical Writing Standard. See [`agent/writing-style/`](../../agent/writing-style/) for rules on:
 
 - Clarity and mental models (Feynman)
 - Eliminating clutter (Zinsser)

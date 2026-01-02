@@ -1,21 +1,50 @@
 # mcp-server/orchestrator.py
 """
-Orchestrator MCP Server - The "Brain"
+Orchestrator MCP Server - The "Brain" (Pure Brain Mode)
 
-Focus: SDLC, DevOps, MLOps, SRE, Architecture, Policy Enforcement.
-Role: High-level decision making, project management, and context gathering.
+Role: High-level decision making, planning, routing, and context management.
 
-Key Characteristic: "Macro" view. Uses Repomix to see the forest, not the trees.
+Focus: SDLC, Architecture, Policy Enforcement, and Quality Gates.
+
+KEY PRINCIPLE: "The Brain doesn't touch files directly."
+
+Tri-MCP Architecture:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│   Claude Desktop                                               │
+│        │                                                       │
+│        ├── 🧠 orchestrator (HERE - The Brain)                  │
+│        │      └── Planning, Routing, Reviewing, Specifying    │
+│        │                                                         │
+│        ├── 🛠️ executor (The Hands)                             │
+│        │      └── Git operations, Testing, Documentation       │
+│        │                                                         │
+│        └── 📝 coder (File Operations)                          │
+│               └── Read/Write/Search files                      │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+Orchestrator NEVER:
+- Reads files directly (use coder.py: read_file)
+- Writes files (use coder.py: save_file)
+- Searches code (use coder.py: search_files, ast_search)
+- Executes git commands (use executor.py: git_status, smart_commit)
+
+Orchestrator ALWAYS:
+- Routes to appropriate MCP server
+- Reviews and validates work
+- Enforces policies (start_spec, review_staged_changes)
+- Provides architectural guidance
 
 Tools:
-- get_codebase_context: Holistic project view via Repomix
-- list_directory_structure: Fast directory tree (token optimization)
-- list_personas: List available expert personas
-- consult_specialist: Route queries to Architect, Platform Expert, DevOps, SRE
-- run_task: Safe execution of just/nix commands
+- Router: consult_router (Semantic tool routing - which MCP to use?)
+- Spec: start_spec, draft_feature_spec, verify_spec_completeness
+- Review: review_staged_changes (The Immune System)
+- Memory: manage_context (Project memory and context)
+- Personas: consult_specialist (Architect, Platform Expert, DevOps, SRE)
+- Context: get_codebase_context, list_directory_structure
 
 This server uses mcp_core shared library for:
-- execution: SafeExecutor for command execution
 - memory: ProjectMemory for persistence
 - inference: InferenceClient and personas
 - utils: Logging and path checking
@@ -72,18 +101,6 @@ except ImportError:
     from reviewer import register_reviewer_tools
 
 # =============================================================================
-# Phase 10: The Hive - Swarm Infrastructure (v3 Antifragile)
-# =============================================================================
-# Import Swarm Infrastructure (Neural Link v3: Auto-healing + Circuit Breaker)
-try:
-    # We now use SwarmNode instead of MCPClientNode
-    from services.swarm import SwarmNode
-    _SWARM_AVAILABLE = True
-except ImportError:
-    _SWARM_AVAILABLE = False
-    SwarmNode = None
-
-# =============================================================================
 # Configuration
 # =============================================================================
 
@@ -106,65 +123,23 @@ inference_client = InferenceClient(api_key=API_KEY, base_url=BASE_URL)
 project_memory = ProjectMemory()
 
 # =============================================================================
-# Phase 10: The Hive - Swarm Initialization (v3 Antifragile)
+# Tri-MCP Bridge (Deprecated - kept for backward compatibility)
 # =============================================================================
+# With Tri-MCP architecture, Claude Desktop calls coder.py directly.
+# This function always returns None to disable remote worker mode.
 
-_coder_node: Optional[Any] = None  # Type is SwarmNode, simplified for runtime
-_coder_node_lock = asyncio.Lock()
-
-# Disable direct worker execution in test mode
-_SWARM_DIRECT_MODE = os.environ.get("ORCHESTRATOR_SWARM_DIRECT", "1") == "1"
-
-async def _get_coder_node() -> Optional[Any]:
+async def _get_coder_node() -> None:
     """
-    Lazy loader for the Coder Worker.
-    Ensures we always get a connected node or None.
-    Uses lock to prevent concurrent connection attempts.
+    [DEPRECATED] Always returns None.
+
+    Tri-MCP Architecture:
+    - orchestrator.py: The Brain (planning, routing, reviewing)
+    - executor.py: The Hands (execution, testing, docs)
+    - coder.py: File Operations (direct calls from Claude Desktop)
+
+    The old Hive/Swarm architecture is no longer needed.
     """
-    global _coder_node
-
-    if not _SWARM_AVAILABLE:
-        return None
-
-    # Skip direct mode in test environment
-    if not _SWARM_DIRECT_MODE:
-        return None
-
-    async with _coder_node_lock:
-        # Double-check after acquiring lock
-        if _coder_node and _coder_node.is_connected:
-            return _coder_node
-
-        sys.stderr.write("[Orchestrator] Waking up Coder Worker...\n")
-
-        # Locate the service script
-        script_path = Path(__file__).parent / "services" / "coder_service.py"
-
-        if not script_path.exists():
-            sys.stderr.write(f"[Orchestrator] Worker script not found: {script_path}\n")
-            return None
-
-        # Initialize new node
-        node = SwarmNode("coder-worker", str(script_path))
-
-        # Attempt connection with timeout protection
-        try:
-            # Use a short initial timeout for first connection
-            async with asyncio.timeout(15.0):
-                if await node.connect():
-                    _coder_node = node
-                    sys.stderr.write("[Orchestrator] Coder Worker ready\n")
-                    return node
-                else:
-                    sys.stderr.write("[Orchestrator] Failed to connect to Coder Worker\n")
-                    return None
-        except asyncio.TimeoutError:
-            sys.stderr.write("[Orchestrator] Connection timeout to Coder Worker\n")
-            await node.close()
-            return None
-        except Exception as e:
-            sys.stderr.write(f"[Orchestrator] Error connecting to Worker: {e}\n")
-            return None
+    return None
 
 # =============================================================================
 # Preload Protocol Caches (loaded once per session)

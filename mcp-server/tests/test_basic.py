@@ -24,7 +24,7 @@ GIT OPS TOOLS (git-workflow.md enforcement):
 2. validate_commit_message - Validate commit format
 3. check_commit_scope - Validate scope
 
-WRITING TOOLS (design/writing-style enforcement):
+WRITING TOOLS (agent/writing-style enforcement):
 1. lint_writing_style - Check for clutter words
 2. check_markdown_structure - Validate header hierarchy
 3. run_vale_check - Vale CLI wrapper
@@ -37,7 +37,7 @@ TESTING TOOLS (testing-workflows.md enforcement):
 
 PRODUCT OWNER TOOLS (feature-lifecycle.md enforcement):
 1. assess_feature_complexity - LLM-powered complexity assessment (L1-L4)
-2. verify_design_alignment - Check alignment with design/roadmap/philosophy
+2. verify_design_alignment - Check alignment with docs/roadmap/philosophy
 3. get_feature_requirements - Return complete requirements for a feature
 4. check_doc_sync - Verify docs are updated with code changes
 

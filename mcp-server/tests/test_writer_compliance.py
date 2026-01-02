@@ -43,7 +43,7 @@ class TestWritingStyleCache(unittest.TestCase):
         self.assertIs(cache1, cache2)
 
     def test_guidelines_loaded_from_files(self):
-        """Test that guidelines are loaded from design/writing-style/*.md"""
+        """Test that guidelines are loaded from agent/writing-style/*.md"""
         cache = WritingStyleCache()
         guidelines = WritingStyleCache.get_guidelines()
 
@@ -156,7 +156,7 @@ if __name__ == "__main__":
     print("=" * 60)
     print("\nTesting Writing Style Cache...")
     print("1. WritingStyleCache singleton pattern")
-    print("2. Guidelines loading from design/writing-style/*.md")
+    print("2. Guidelines loading from agent/writing-style/*.md")
     print("3. polish_text tool integration")
     print("=" * 60)
 
