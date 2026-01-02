@@ -119,12 +119,13 @@ For L3+ features, verify the feature doesn't break upstream/downstream:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ 1. Does a spec exist?                                               │
-│    - YES → Use it as the source of truth                            │
-│    - NO  → Create `agent/specs/{feature_name}.md` FIRST             │
+│ 1. Does a spec exist for this new work?                             │
+│    - Call `start_spec(name="Feature Name")` FIRST                   │
+│    - Returns "allowed" if spec exists → Proceed                     │
+│    - Returns "blocked" if no spec → Create spec first               │
 │                                                                      │
 │ 2. Is the spec complete?                                            │
-│    - Run `verify_spec_completeness(spec_path="...")`                │
+│    - Call `verify_spec_completeness()` (auto-detects spec_path)     │
 │    - Fix any TODOs/empty sections before proceeding                 │
 │                                                                      │
 │ 3. Has the user approved the spec?                                  │
@@ -132,13 +133,14 @@ For L3+ features, verify the feature doesn't break upstream/downstream:
 └─────────────────────────────────────────────────────────────────────┘
 
 **VIOLATION**: Implementing without a verified spec = SYSTEMATIC ERROR
-**ACTION**: If you catch yourself about to code without a spec → STOP → Create spec first
+**ACTION**: If you catch yourself about to code without a spec → STOP → start_spec first
 ```
 
 **Enforced by MCP Tools**:
 | Tool | Purpose |
 | :--- | :--- |
-| `verify_spec_completeness()` | Checks for empty sections, TODOs, missing test plans |
+| `start_spec(name)` | Gatekeeper - checks if spec exists, auto-saves spec_path for downstream |
+| `verify_spec_completeness()` | Checks for empty sections, TODOs, missing test plans (auto-detects spec_path) |
 | `assess_feature_complexity()` | Requires code diff to determine testing level |
 
 ### 4.1 The Spec-First Workflow
@@ -151,29 +153,27 @@ Before writing code, Agents must focus on specifications:
 └─────────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  just agent-focus agent/specs/caching_feature.md                │
-│  → Displays Spec content, code structure, backlog alignment     │
+│  start_spec(name="Caching Feature")                             │
+│  → Checks if spec exists, auto-saves spec_path                  │
+│  → "allowed" = proceed, "blocked" = create spec first           │
 └─────────────────────────────────────────────────────────────────┘
                             ↓
-┌─────────────────────────────────────────────────────────────────┐
-│  Agent creates PLAN in SCRATCHPAD.md                            │
-│  → Step-by-step implementation based on Spec                    │
-└─────────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────────┐
-│  Implement code per PLAN                                         │
-│  → Follow spec sections: Context, Architecture, Implementation  │
-└─────────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────────┐
-│  pytest mcp-server/tests/test_*.py                              │
-│  → Tests follow complexity level (L2-L4)                        │
-└─────────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────────┐
-│  just agent-commit                                              │
-│  → Smart commit with auto-fix on hook failures                  │
-└─────────────────────────────────────────────────────────────────┘
+        ┌───────────────────┴───────────────────┐
+        ↓                                       ↓
+    Spec exists                            No spec
+        ↓                                       ↓
+    verify_spec_completeness()          draft_feature_spec(title="...", description="...")
+    (auto-detects spec_path)             verify_spec_completeness(spec_path="...")
+        ↓                                       ↓
+    ┌─────────────────────┐                 ┌─────────────────────┐
+    │ Spec complete?      │                 │ Spec complete?      │
+    └─────────────────────┘                 └─────────────────────┘
+            ↓                                       ↓
+    Implement code per spec              Implement code per spec
+            ↓                                       ↓
+    pytest mcp-server/tests/             pytest mcp-server/tests/
+            ↓                                       ↓
+    just agent-commit                    just agent-commit
 ```
 
 ### 4.2 Spec Template
@@ -191,24 +191,42 @@ Use `agent/specs/template.md` for all new features. Key sections:
 
 ## 5. MCP Tools for Enforcement
 
-This document is enforced by MCP tools in `mcp-server/product_owner.py`:
+This document is enforced by MCP tools in `mcp-server/orchestrator.py` and `mcp-server/product_owner.py`:
 
-| Tool                          | Purpose                                         |
-| :---------------------------- | :---------------------------------------------- |
-| `assess_feature_complexity()` | LLM-powered analysis → Returns L1-L4 level      |
-| `verify_design_alignment()`   | Checks alignment with design/roadmap/philosophy |
-| `get_feature_requirements()`  | Returns complete requirements for a feature     |
-| `check_doc_sync()`            | Verifies docs are updated with code changes     |
+| Tool                          | Purpose                                               |
+| :---------------------------- | :---------------------------------------------------- |
+| `start_spec(name)`            | Gatekeeper - enforces spec exists before coding       |
+| `draft_feature_spec()`        | Creates structured spec from description              |
+| `verify_spec_completeness()`  | Checks for empty sections, TODOs (auto-detects path) |
+| `assess_feature_complexity()` | LLM-powered analysis → Returns L1-L4 level            |
+| `verify_design_alignment()`   | Checks alignment with design/roadmap/philosophy      |
+| `get_feature_requirements()`  | Returns complete requirements for a feature           |
+| `check_doc_sync()`            | Verifies docs are updated with code changes           |
 
 **Usage**:
 
 ```python
 # Agent: "I want to add a Redis caching module"
-@omni-orchestrator assess_feature_complexity code_diff="..." files_changed=["units/modules/redis.nix"]
+
+# Step 1: Check if spec exists (GATEKEEPER)
+@omni-orchestrator start_spec(name="Redis Caching")
+    → Returns: {"status": "blocked", "next_action": "draft_feature_spec"}
+
+# Step 2: Create spec
+@omni-orchestrator draft_feature_spec(title="Redis Caching", description="...")
+    → Returns: {"status": "success", "spec_path": "agent/specs/redis_caching.md"}
+
+# Step 3: Verify completeness
+@omni-orchestrator verify_spec_completeness()  # Auto-detects spec_path!
+    → Returns: {"status": "passed"} or {"status": "failed", "issues": [...]}
+
+# Step 4: Assess complexity
+@omni-orchestrator assess_feature_complexity code_diff="..." files_changed=["..."]
     → Returns: "L3 (Major) - Requires Unit + Integration Tests"
 
+# Step 5: Verify design alignment
 @omni-orchestrator verify_design_alignment feature_description="Redis caching"
-    → Returns: Alignment status with references to design docs
+    → Returns: Alignment status with references
 ```
 
 ---
@@ -221,12 +239,27 @@ This document is enforced by MCP tools in `mcp-server/product_owner.py`:
 └─────────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  Step 1: assess_feature_complexity()                            │
+│  Step 0: start_spec(name="File Validation")                     │
+│  → Returns: "blocked" (no spec exists)                          │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  Step 1: draft_feature_spec(title="File Validation", ...)       │
+│  → Creates spec, returns spec_path                              │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  Step 2: verify_spec_completeness()                             │
+│  → Auto-detects spec_path, checks for empty sections            │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  Step 3: assess_feature_complexity()                            │
 │  → Returns: L3 (Major) - New module, requires Integration Tests │
 └─────────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  Step 2: verify_design_alignment()                              │
+│  Step 4: verify_design_alignment()                              │
 │  → Checks: Is this in roadmap? Does it fit architecture?        │
 │  → Returns: Alignment status + references                       │
 └─────────────────────────────────────────────────────────────────┘
@@ -236,11 +269,11 @@ This document is enforced by MCP tools in `mcp-server/product_owner.py`:
     Aligned?                               Not Aligned?
         ↓                                       ↓
     Implement code                     Update roadmap/design docs
-    Add L3 tests                       Then retry Step 2
+    Add L3 tests                       Then retry Step 4
     Update docs
         ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  Step 3: check_doc_sync()                                       │
+│  Step 5: check_doc_sync()                                       │
 │  → Verifies docs are updated                                    │
 └─────────────────────────────────────────────────────────────────┘
                             ↓

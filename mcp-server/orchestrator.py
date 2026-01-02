@@ -1023,19 +1023,36 @@ async def start_spec(name: str) -> str:
     """
     Gatekeeper: Enforces Legislation phase before any new work.
 
-    When you are about to work on something NEW (feature, refactor, fix),
-    you MUST call this tool FIRST. It checks if a spec exists.
+    CRITICAL: When you judge that the user is requesting NEW work (new feature, refactor, fix, enhancement),
+    you MUST call this tool FIRST before proceeding. DO NOT proceed with coding until this tool returns "allowed".
 
-    Flow:
-    1. Call this tool with the feature name (e.g., "Hive Architecture")
-    2. If spec exists: Proceed to execution
-    3. If spec missing: REQUIRED to create spec via draft_feature_spec first
+    ## Your Judgment Criteria
+    Call start_spec when the user is:
+    - Requesting a NEW feature or capability
+    - Asking to build, implement, add, create something new
+    - Starting work that doesn't have an existing spec
+
+    DO NOT call start_spec for:
+    - Questions about existing code
+    - Debugging or fixing known issues in existing features
+    - Refactoring within existing feature scope
+    - Routine development on features with existing specs
+
+    ## Workflow:
+    1. Judge: User is requesting something NEW?
+    2. If yes: Call start_spec(name="Descriptive Feature Name")
+    3. If returns "blocked":
+       - Call draft_feature_spec(title="...", description="...")
+       - Then call verify_spec_completeness
+       - Only then proceed to code
+    4. If returns "allowed":
+       - Proceed with manage_context(update_status, phase="Coding") then code
 
     Args:
-        name: What you're about to work on (e.g., "The Hive", "Auth Fix", "New Feature")
+        name: Descriptive name for the new work (feature name)
 
     Returns:
-        Error with spec creation instructions OR success to proceed
+        JSON with status: "allowed" (proceed) or "blocked" (spec required)
     """
     # Validate input
     if not name or len(name.strip()) < 2:
@@ -1080,11 +1097,15 @@ async def start_spec(name: str) -> str:
         }, indent=2)
 
     # Spec exists - allow proceed
+    spec_path = str(spec_file)
+    # Auto-save spec_path for downstream tools (verify_spec_completeness, etc.)
+    project_memory.set_spec_path(spec_path)
+
     return json.dumps({
         "status": "allowed",
         "work_name": name,
         "spec_required": False,
-        "spec_path": str(spec_file),
+        "spec_path": spec_path,
         "message": f"Legislation complete for '{name}'. Ready for execution.",
         "next_action": "manage_context(update_status, phase=Coding, focus=...)"
     }, indent=2)

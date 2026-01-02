@@ -478,3 +478,45 @@ class ProjectMemory:
             f.write(entry_text)
 
         return {"success": True, "file": str(scratchpad_file)}
+
+    # =============================================================================
+    # NEW: Spec Path Management (Legislation Workflow)
+    # =============================================================================
+
+    def set_spec_path(self, spec_path: str) -> Dict[str, Any]:
+        """
+        Store the current spec path for the legislation workflow.
+
+        Used by start_spec to save the path, and by verify_spec_completeness
+        to auto-detect the current spec without manual input.
+
+        Args:
+            spec_path: Path to the spec file
+
+        Returns:
+            Dict with success status and file path
+        """
+        spec_file = self.active_dir / "current_spec.json"
+        data = {
+            "spec_path": spec_path,
+            "timestamp": datetime.now().isoformat()
+        }
+        spec_file.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        log.info("memory.spec_path_set", spec_path=spec_path)
+        return {"success": True, "file": str(spec_file)}
+
+    def get_spec_path(self) -> Optional[str]:
+        """
+        Get the current spec path stored by start_spec.
+
+        Returns:
+            Spec path string or None if not set
+        """
+        spec_file = self.active_dir / "current_spec.json"
+        if not spec_file.exists():
+            return None
+        try:
+            data = json.loads(spec_file.read_text(encoding="utf-8"))
+            return data.get("spec_path")
+        except (json.JSONDecodeError, IOError):
+            return None

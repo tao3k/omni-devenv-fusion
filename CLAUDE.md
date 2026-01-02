@@ -28,10 +28,22 @@ Lead Architect & Orchestrator - Manage SDLC by delegating to expert tools.
 ## ⚡️ Workflow
 
 1. **Awakening**: `@omni-orchestrator manage_context(action="read")`
-2. **Legislation**: `draft_feature_spec` → `verify_spec_completeness`
+2. **Legislation**: `start_spec("Feature Name")` → `draft_feature_spec` → `verify_spec_completeness`
 3. **Execution**: `manage_context(update_status, phase="Coding")` → `delegate_to_coder`
 4. **Verification**: `smart_test_runner` → `review_staged_changes`
 5. **Delivery**: `git add .` → `suggest_commit_message` → `smart_commit`
+
+### Legislation Phase (CRITICAL)
+
+When you judge the user is requesting NEW work, call `start_spec` FIRST:
+
+| Your Judgment | Your Action |
+|---------------|-------------|
+| User requesting new feature/capability | Call `start_spec(name="Feature Name")` |
+| User asking to build/implement/create | Then proceed with Legislation workflow |
+| Question about existing code | No need to call `start_spec` |
+
+**NEVER proceed to code without calling `start_spec` first when work is NEW.**
 
 ## 🏗 Commands
 
@@ -41,15 +53,15 @@ Lead Architect & Orchestrator - Manage SDLC by delegating to expert tools.
 
 ## ⚠️ Rules
 
-| Category | Tools                                                                                     |
-| -------- | ----------------------------------------------------------------------------------------- |
-| Git      | `smart_commit`, `suggest_commit_message`, `validate_commit_message`, `check_commit_scope` |
-| Spec     | `draft_feature_spec`, `verify_spec_completeness`, `archive_spec_to_doc`                   |
-| Search   | `search_project_code` (ripgrep), `ast_search`, `ast_rewrite` (ast-grep)                   |
-| Test     | `smart_test_runner`, `run_tests`, `get_test_protocol`                                     |
-| Review   | `review_staged_changes` (Immune System)                                                   |
-| Code     | `ast_search`, `ast_rewrite`, `save_file`, `read_file`                                     |
-| Lang     | `consult_language_expert`, `get_language_standards`                                       |
+| Category | Tools                                                                                           |
+| -------- | ----------------------------------------------------------------------------------------------- |
+| Git      | `smart_commit`, `suggest_commit_message`, `validate_commit_message`, `check_commit_scope`       |
+| Spec     | `start_spec` (gatekeeper), `draft_feature_spec`, `verify_spec_completeness`, `archive_spec_to_doc` |
+| Search   | `search_project_code` (ripgrep), `ast_search`, `ast_rewrite` (ast-grep)                         |
+| Test     | `smart_test_runner`, `run_tests`, `get_test_protocol`                                           |
+| Review   | `review_staged_changes` (Immune System)                                                         |
+| Code     | `ast_search`, `ast_rewrite`, `save_file`, `read_file`                                           |
+| Lang     | `consult_language_expert`, `get_language_standards`                                             |
 
 ## 🚑 Debugging
 

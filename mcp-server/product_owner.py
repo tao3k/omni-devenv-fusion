@@ -5,7 +5,7 @@ Product Owner - Feature Lifecycle Integrity Enforcement & Spec Management
 Tools for enforcing agent/standards/feature-lifecycle.md and Spec-Driven Development:
 - assess_feature_complexity: LLM-powered complexity assessment (L1-L4)
 - draft_feature_spec: Create a structured implementation plan from a description
-- verify_spec_completeness: Ensure spec is ready for coding
+- verify_spec_completeness: Ensure spec is ready for coding (auto-detects from start_spec)
 - verify_design_alignment: Check alignment with design/roadmap/philosophy
 - get_feature_requirements: Return complete requirements for a feature
 - check_doc_sync: Verify docs are updated with code changes
@@ -13,7 +13,7 @@ Tools for enforcing agent/standards/feature-lifecycle.md and Spec-Driven Develop
 Usage:
     @omni-orchestrator assess_feature_complexity code_diff="..." files_changed=[...]
     @omni-orchestrator draft_feature_spec title="..." description="..."
-    @omni-orchestrator verify_spec_completeness spec_path="agent/specs/feature.md"
+    @omni-orchestrator verify_spec_completeness  # Auto-detects spec_path from start_spec
 
 Performance: Uses singleton caching - design docs loaded once per session.
 """
@@ -21,6 +21,9 @@ import json
 import subprocess
 from pathlib import Path
 from typing import Dict, Any, Optional, List
+
+# Import project_memory for spec_path auto-detection
+from mcp_core.memory import ProjectMemory
 
 # =============================================================================
 # Singleton Cache - Design docs loaded once per MCP session
@@ -650,7 +653,7 @@ Return ONLY the Markdown content of the new spec (or the Rejection message)."""
         }, indent=2)
 
     @mcp.tool()
-    async def verify_spec_completeness(spec_path: str) -> str:
+    async def verify_spec_completeness(spec_path: str = None) -> str:
         """
         Review a Spec file to ensure it's ready for implementation.
 
@@ -660,11 +663,24 @@ Return ONLY the Markdown content of the new spec (or the Rejection message)."""
         3. Vague interface definitions
 
         Args:
-            spec_path: Path to the spec file (e.g., "agent/specs/feature.md")
+            spec_path: Path to the spec file. If not provided, auto-detects from start_spec.
 
         Returns:
             JSON with verification status and issues
         """
+        # Auto-detect spec_path from start_spec if not provided
+        if not spec_path:
+            memory = ProjectMemory()
+            detected_path = memory.get_spec_path()
+            if detected_path:
+                spec_path = detected_path
+                print(f"[verify_spec_completeness] Auto-detected spec_path: {spec_path}")
+            else:
+                return json.dumps({
+                    "status": "error",
+                    "message": "No spec_path provided and no spec detected from start_spec. Call start_spec first or provide spec_path explicitly."
+                }, indent=2)
+
         path = Path(spec_path)
         if not path.exists():
             return json.dumps({
