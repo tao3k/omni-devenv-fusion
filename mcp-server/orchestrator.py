@@ -709,20 +709,44 @@ def _format_delegation_fallback(task_type: str, details: str) -> str:
 
 @mcp.tool()
 async def swarm_status() -> str:
-    """Check the status of the Coder Worker."""
+    """
+    Check the detailed health and metrics of the Swarm.
+    """
     import os
-    status = [f"Orchestrator (PID: {os.getpid()})"]
+    import time
 
-    if _coder_node and _coder_node.is_connected:
-        status.append("Coder Worker: ONLINE")
-        try:
-            tools = await _coder_node.list_tools()
-            names = [t.name for t in tools]
-            status.append(f"   Tools: {', '.join(names)}")
-        except Exception:
-            status.append("   (Worker responsive but failed to list tools)")
+    status = [f"👑 Orchestrator (PID: {os.getpid()})"]
+    status.append("-" * 40)
+
+    if _coder_node:
+        # Get health check report
+        health = await _coder_node.health_check()
+        metrics = health.get("metrics", {})
+
+        # Status icon
+        icon = "🟢" if health.get("healthy") else "🔴"
+        if health.get("circuit") == "OPEN":
+            icon = "🔥"  # Circuit breaker open
+
+        status.append(f"🐝 Coder Worker: {icon} {health.get('circuit')} Circuit")
+        status.append(f"   • Connected: {health.get('connected')}")
+        status.append(f"   • Latency: {metrics.get('avg_latency_ms', 0):.2f} ms")
+        status.append(f"   • Restarts: {metrics.get('restarts', 0)}")
+        status.append(f"   • Success/Fail: {metrics.get('success_count')}/{metrics.get('failure_count')}")
+
+        if not health.get("healthy") and metrics.get("last_error"):
+            status.append(f"   ⚠️ Last Error: {metrics.get('last_error')[:50]}...")
+
+        # List tools if connected
+        if health.get("connected"):
+            try:
+                tools = await _coder_node.list_tools()
+                names = [t.name for t in tools]
+                status.append(f"   • Tools: {len(names)} available")
+            except Exception:
+                pass
     else:
-        status.append("Coder Worker: OFFLINE (Will wake on first use)")
+        status.append("🐝 Coder Worker: ⚪ OFFLINE (Lazy Loading)")
 
     return "\n".join(status)
 
