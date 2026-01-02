@@ -42,6 +42,7 @@ Understanding-oriented. Deep dives into architecture and design philosophy.
 
 | Document                                                                      | Description                                         |
 | ----------------------------------------------------------------------------- | --------------------------------------------------- |
+| [Design Philosophy](./design-philosophy.md)                                   | Two interaction patterns (Memory Loading vs Query)  |
 | [Why Fusion Exists](./explanation/why-fusion-exists.md)                       | The Silo Problem - why standard tools aren't enough |
 | [Why Nix Is the Agent Runtime](./explanation/why-nix-is-the-agent-runtime.md) | The three paths to Agentic Infrastructure           |
 | [Why Nix for AI?](./explanation/why-nix-for-ai.md)                            | The Technical Bet - reproducibility as foundation   |

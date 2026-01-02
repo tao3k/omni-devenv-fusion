@@ -413,10 +413,21 @@ def register_writer_tools(mcp: Any) -> None:
     @mcp.tool()
     async def load_writing_memory() -> str:
         """
-        Load writing guidelines into current context.
+        Load writing guidelines into LLM context for writing tasks.
+
+        This tool reads from agent/writing-style/ - content written FOR LLM.
+        Use this when you need to write or polish documentation.
+
+        This tool reads all files from agent/writing-style/*.md and injects
+        them into your context. Use the loaded guidelines to:
+        - Write new content that follows project standards
+        - Polish/edit text according to style rules
+
+        NOTE: Call this tool exactly once at the start of a writing task.
+        The guidelines persist in context for that conversation.
 
         Returns:
-            JSON string with current writing style guidelines
+            JSON with writing guidelines from agent/writing-style/*.md
         """
         return await _load_writing_memory_impl()
 
@@ -537,17 +548,26 @@ async def _load_writing_memory_impl() -> str:
     Implementation of load_writing_memory tool.
 
     Returns:
-        JSON string with current writing style guidelines
+        JSON string with full writing guidelines content
     """
-    guidelines = WritingStyleCache.get_guidelines_for_prompt()
     guidelines_dict = WritingStyleCache.get_guidelines_dict()
+    full_content = "\n\n".join(guidelines_dict.values())
 
     return json.dumps({
         "status": "loaded",
-        "guidelines_summary": guidelines,
+        "source": "agent/writing-style/*.md",
         "files_loaded": list(guidelines_dict.keys()),
         "total_files": len(guidelines_dict),
+        "content": full_content,
+        "note": "Full writing guidelines loaded into context. Apply these rules to all writing tasks."
     }, indent=2)
+
+
+# =============================================================================
+# Singleton Instance for Eager Loading
+# =============================================================================
+# This instance is used by orchestrator.py for eager loading at MCP server startup
+_writing_style_cache = WritingStyleCache()
 
 
 # =============================================================================
@@ -558,6 +578,7 @@ __all__ = [
     "register_writer_tools",
     "WritingStyleCache",
     "CLUTTER_WORDS",
+    "_writing_style_cache",
     # Standalone implementations for testing
     "_lint_writing_style_impl",
     "_check_markdown_structure_impl",

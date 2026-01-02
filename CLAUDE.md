@@ -1,6 +1,6 @@
 # CLAUDE.md - Orchestrator Edition
 
-> **Quick Reference Only**. Detailed docs: `mcp-server/README.md`, `agent/how-to/*.md`, `agent/standards/*.md`
+> **Quick Reference Only**. Detailed docs: `agent/instructions/*.md`, `mcp-server/README.md`, `agent/how-to/*.md`, `agent/standards/*.md`
 
 ## 🤖 Role
 

@@ -301,13 +301,19 @@ def register_lang_expert_tools(mcp: Any) -> None:
     @mcp.tool()
     async def get_language_standards(lang: str) -> str:
         """
-        Get full standards document for a language.
+        Load language-specific standards into LLM context for coding tasks.
+
+        This tool reads from agent/standards/ - content written FOR LLM.
+        Use this when you need to write, edit, or review code.
+
+        This tool reads agent/standards/lang-{lang}.md and returns its content.
+        The loaded standards persist in context for the conversation.
 
         Args:
             lang: Language ID (nix, python, rust, julia)
 
         Returns:
-            JSON with full standards document
+            JSON with full standards document from agent/standards/lang-{lang}.md
         """
         lang = lang.lower()
         lang_name = LANG_NAMES.get(lang, lang.title())

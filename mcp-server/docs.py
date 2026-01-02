@@ -2,7 +2,7 @@
 """
 Docs Executor - Execute documentation as code
 
-Reads docs/*.md files and applies their rules to operations.
+Reads docs from multiple source directories and applies their rules to operations.
 Enables: "When Agent needs X → Read docs/X.md → Execute according to rules"
 
 Philosophy:
@@ -19,28 +19,76 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 
 
+# =============================================================================
+# Documentation Sources Configuration
+# =============================================================================
+# Add new documentation sources here. Format: (prefix, directory_path)
+# - prefix: Used in doc parameter (e.g., "how-to/git-workflow" uses "how-to" prefix)
+# - directory: Where the actual .md files are located
+
+# Documentation sources queryable via read_docs (for answering user questions)
+# agent/ is loaded via load_*_memory tools (for LLM to follow rules when acting)
+DOC_SOURCES = [
+    ("docs", "docs"),              # User-facing documentation (for answering questions)
+    ("mcp-server", "mcp-server"),  # MCP server implementation docs
+]
+
+# =============================================================================
+# Core Functions
+# =============================================================================
+
+
 def load_doc(doc_path: str) -> Optional[str]:
-    """Load documentation content from docs/ directory."""
-    path = Path(f"docs/{doc_path}.md")
-    if path.exists():
-        return path.read_text()
+    """
+    Load documentation content from configured sources.
+
+    Searches through DOC_SOURCES in order and returns the first match.
+    """
+    for prefix, directory in DOC_SOURCES:
+        # Try matching the full doc_path
+        full_path = Path(directory) / f"{doc_path}.md"
+        if full_path.exists():
+            return full_path.read_text()
+
+        # Try with prefix stripped (e.g., "how-to/git-workflow" -> "git-workflow")
+        if "/" in doc_path:
+            suffix = doc_path.split("/", 1)[1]
+            prefix_path = Path(directory) / f"{suffix}.md"
+            if prefix_path.exists():
+                return prefix_path.read_text()
+
     return None
 
 
-def extract_section(content: str, section: str) -> str:
-    """Extract a section from documentation."""
-    # Match headers like ## Section, ### Section
-    pattern = rf"(?i)(?:^|\n)##?\s*{re.escape(section)}.*?(?=\n##?\s|\Z)"
-    match = re.search(pattern, content, re.DOTALL)
-    return match.group(0) if match else ""
-
-
 def list_docs() -> list:
-    """List available documentation files."""
-    docs_dir = Path("docs")
-    if not docs_dir.exists():
-        return []
-    return [f.stem for f in docs_dir.glob("*.md")]
+    """List available documentation files from all configured sources."""
+    docs = []
+
+    for prefix, directory in DOC_SOURCES:
+        dir_path = Path(directory)
+        if not dir_path.exists():
+            continue
+
+        # Use **/*.md to recursively find all .md files in subdirectories
+        for md_file in dir_path.rglob("*.md"):
+            if md_file.name.startswith("_"):
+                continue  # Skip partials
+            # Calculate relative path from the base directory
+            try:
+                relative_path = md_file.relative_to(dir_path)
+                # Build doc path: prefix/subdir/filename
+                doc_path = f"{prefix}/{relative_path}"
+                # Use stem for files without subdirectory
+                if str(relative_path) == md_file.name:
+                    docs.append(f"{prefix}/{md_file.stem}")
+                else:
+                    # Convert extension back to path format
+                    doc_path = str(relative_path).replace(".md", "")
+                    docs.append(f"{prefix}/{doc_path}")
+            except ValueError:
+                continue
+
+    return sorted(set(docs))  # Remove duplicates and sort
 
 
 def register_docs_tools(mcp: Any) -> None:
@@ -53,7 +101,10 @@ def register_docs_tools(mcp: Any) -> None:
         params: Dict[str, Any] = None
     ) -> str:
         """
-        Read documentation and execute according to its rules.
+        Read user documentation to answer questions.
+
+        This tool reads from docs/ directory - content written FOR USERS.
+        LLM uses this to answer user questions about the project.
 
         Args:
             doc: Documentation file (e.g., "how-to/git-workflow")
@@ -69,7 +120,7 @@ def register_docs_tools(mcp: Any) -> None:
         if not content:
             return json.dumps({
                 "status": "error",
-                "message": f"docs/{doc}.md not found",
+                "message": f"docs/{doc}.md or mcp-server/{doc}.md not found",
                 "available_docs": list_docs()
             }, indent=2)
 
@@ -103,7 +154,7 @@ def register_docs_tools(mcp: Any) -> None:
         if not content:
             return json.dumps({
                 "status": "error",
-                "message": f"docs/{doc}.md not found",
+                "message": f"docs/{doc}.md or mcp-server/{doc}.md not found",
                 "available_docs": list_docs()
             }, indent=2)
 

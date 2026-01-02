@@ -667,12 +667,10 @@ Return JSON only."""
     @mcp.tool()
     async def load_git_workflow_memory() -> str:
         """
-        Load git-workflow.md into context for answering git-related questions.
+        Load git workflow rules into LLM context.
 
-        Use this tool ONCE per session when user asks about:
-        - Git flow, workflow, branch strategy
-        - Commit message rules, conventional commits
-        - Git operations, git commands
+        This tool reads from agent/how-to/ - content written FOR LLM.
+        Use this when you need to perform git operations (commit, push, etc.)
 
         This tool reads agent/how-to/git-workflow.md and returns its full content.
         The loaded content persists in context for the entire session.
