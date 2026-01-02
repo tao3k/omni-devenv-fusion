@@ -47,30 +47,6 @@ from mcp_core.instructions import (
     list_instruction_names,
 )
 
-# Import DocuSmith writing tools (handle both package and direct execution)
-try:
-    from .writer import register_writer_tools
-except ImportError:
-    from writer import register_writer_tools
-
-# Import GitOps tools (agent/how-to/git-workflow.md enforcement)
-try:
-    from .git_ops import register_git_ops_tools
-except ImportError:
-    from git_ops import register_git_ops_tools
-
-# Import Docs Executor (docs as code)
-try:
-    from .docs import register_docs_tools
-except ImportError:
-    from docs import register_docs_tools
-
-# Import Tester tools (agent/how-to/testing-workflows.md enforcement)
-try:
-    from .tester import register_tester_tools
-except ImportError:
-    from tester import register_tester_tools
-
 # Import Product Owner tools (agent/standards/feature-lifecycle.md enforcement)
 try:
     from .product_owner import register_product_owner_tools
@@ -94,12 +70,6 @@ try:
     from .reviewer import register_reviewer_tools
 except ImportError:
     from reviewer import register_reviewer_tools
-
-# Import Advanced Search tools (High-performance code search)
-try:
-    from .advanced_search import register_advanced_search_tools
-except ImportError:
-    from advanced_search import register_advanced_search_tools
 
 # =============================================================================
 # Phase 10: The Hive - Swarm Infrastructure (v3 Antifragile)
@@ -222,21 +192,11 @@ except ImportError:
 # This avoids fork deadlock issues with threading.Lock.
 # First call to get_instruction_names() will trigger loading.
 
-# Register DocuSmith writing tools
-register_writer_tools(mcp)
-log_decision("writer_tools.registered", {}, logger)
-
-# Register GitOps tools (agent/how-to/git-workflow.md enforcement)
-register_git_ops_tools(mcp)
-log_decision("git_ops_tools.registered", {}, logger)
-
-# Register Docs Executor (docs as code)
-register_docs_tools(mcp)
-log_decision("docs_tools.registered", {}, logger)
-
-# Register Tester tools (agent/how-to/testing-workflows.md enforcement)
-register_tester_tools(mcp)
-log_decision("tester_tools.registered", {}, logger)
+# =============================================================================
+# Brain Tools (Orchestration - The Cortex)
+# =============================================================================
+# These tools handle planning, routing, reviewing, and context management.
+# Execution tools have been moved to executor.py for Dual-MCP architecture.
 
 # Register Product Owner tools (agent/standards/feature-lifecycle.md enforcement)
 register_product_owner_tools(mcp)
@@ -249,10 +209,6 @@ log_decision("lang_expert_tools.registered", {}, logger)
 # Register Reviewer tools (The Immune System)
 register_reviewer_tools(mcp)
 log_decision("reviewer_tools.registered", {}, logger)
-
-# Register Advanced Search tools (High-performance code search)
-register_advanced_search_tools(mcp)
-log_decision("advanced_search_tools.registered", {}, logger)
 
 
 # =============================================================================

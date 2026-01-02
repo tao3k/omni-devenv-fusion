@@ -68,6 +68,11 @@
         PYTHONPATH = "${config.devenv.root}/mcp-server";
       };
     };
+    executor = {
+      type = "stdio";
+      command = "python";
+      args = [ "./mcp-server/executor.py" ];
+    };
     coder = {
       type = "stdio";
       command = "python";
