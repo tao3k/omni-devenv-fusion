@@ -73,24 +73,15 @@ def send_tool(process, name: str, arguments: dict, tool_id: int) -> tuple[bool, 
 def test_manage_context():
     """Test that manage_context returns problem-solving.md content."""
     config_path = find_config()
-
-    if not config_path:
-        print("Error: No config file found (.mcp.json or .claude/settings.json)")
-        return False
+    assert config_path is not None, "No config file found (.mcp.json or .claude/settings.json)"
 
     print(f"Using config: {config_path}")
 
-    try:
-        with open(config_path, 'r') as f:
-            config = json.load(f)
-    except Exception as e:
-        print(f"Failed to parse config: {e}")
-        return False
+    with open(config_path, 'r') as f:
+        config = json.load(f)
 
     servers = config.get("mcpServers", {})
-    if "orchestrator" not in servers:
-        print("Error: No 'orchestrator' in config")
-        return False
+    assert "orchestrator" in servers, "No 'orchestrator' in config"
 
     server_conf = servers["orchestrator"]
     env_vars = server_conf.get("env", {})
@@ -134,9 +125,7 @@ def test_manage_context():
         process.stdin.flush()
 
         response = read_json_rpc(process)
-        if not response or "result" not in response:
-            print(f"Init failed: {response}")
-            return False
+        assert response and "result" in response, f"Init failed: {response}"
 
         print("Server initialized")
 
@@ -148,9 +137,7 @@ def test_manage_context():
         print("\n[Step 1] Calling manage_context(action='read')...")
         success, text = send_tool(process, "manage_context", {"action": "read"}, 2)
 
-        if not success:
-            print(f"Failed: {text}")
-            return False
+        assert success, f"Failed: {text}"
 
         print(f"Response length: {len(text)} chars")
 
@@ -166,7 +153,6 @@ def test_manage_context():
             "Has Document Lessons": "Document" in text and ("Lesson" in text or "lesson" in text.lower()),
         }
 
-        all_passed = True
         print("\nVerification Results:")
         print("-" * 50)
 
@@ -174,8 +160,7 @@ def test_manage_context():
             status = "PASSED" if passed else "FAILED"
             symbol = "[OK]" if passed else "[X]"
             print(f"  {symbol} {check_name}: {status}")
-            if not passed:
-                all_passed = False
+            assert passed, f"Check failed: {check_name}"
 
         print("-" * 50)
 
@@ -192,18 +177,10 @@ def test_manage_context():
                         print(l)
                     print("---\n")
 
-        if all_passed:
-            print("\n" + "=" * 60)
-            print("ALL CHECKS PASSED!")
-            print("manage_context correctly returns problem-solving.md content")
-            print("=" * 60)
-            return True
-        else:
-            print("\n" + "=" * 60)
-            print("SOME CHECKS FAILED")
-            print("problem-solving.md may not be included in manage_context output")
-            print("=" * 60)
-            return False
+        print("\n" + "=" * 60)
+        print("ALL CHECKS PASSED!")
+        print("manage_context correctly returns problem-solving.md content")
+        print("=" * 60)
 
     finally:
         process.terminate()
@@ -219,24 +196,15 @@ def test_manage_context():
 def test_start_spec_enforcement():
     """Test that start_spec enforces Legislation (spec requirement)."""
     config_path = find_config()
-
-    if not config_path:
-        print("Error: No config file found (.mcp.json or .claude/settings.json)")
-        return False
+    assert config_path is not None, "No config file found (.mcp.json or .claude/settings.json)"
 
     print(f"Using config: {config_path}")
 
-    try:
-        with open(config_path, 'r') as f:
-            config = json.load(f)
-    except Exception as e:
-        print(f"Failed to parse config: {e}")
-        return False
+    with open(config_path, 'r') as f:
+        config = json.load(f)
 
     servers = config.get("mcpServers", {})
-    if "orchestrator" not in servers:
-        print("Error: No 'orchestrator' in config")
-        return False
+    assert "orchestrator" in servers, "No 'orchestrator' in config"
 
     server_conf = servers["orchestrator"]
     env_vars = server_conf.get("env", {})
@@ -280,9 +248,7 @@ def test_start_spec_enforcement():
         process.stdin.flush()
 
         response = read_json_rpc(process)
-        if not response or "result" not in response:
-            print(f"Init failed: {response}")
-            return False
+        assert response and "result" in response, f"Init failed: {response}"
 
         print("Server initialized")
 
@@ -294,16 +260,12 @@ def test_start_spec_enforcement():
         print("\n[Step 1] Testing start_spec('Hive Architecture') - existing spec...")
         success, text = send_tool(process, "start_spec", {"name": "Hive Architecture"}, 3)
 
-        if not success:
-            print(f"Failed: {text}")
-            return False
+        assert success, f"Failed: {text}"
 
         result = json.loads(text)
         print(f"Response: {result.get('status')} - {result.get('message', '')}")
 
-        if result.get("status") != "allowed":
-            print("ERROR: Hive Architecture spec exists but start_spec blocked!")
-            return False
+        assert result.get("status") == "allowed", "Hive Architecture spec exists but start_spec blocked!"
 
         print("[OK] Hive Architecture: Allowed (spec exists)")
 
@@ -311,24 +273,14 @@ def test_start_spec_enforcement():
         print("\n[Step 2] Testing start_spec('New Feature X') - missing spec...")
         success, text = send_tool(process, "start_spec", {"name": "New Feature X"}, 3)
 
-        if not success:
-            print(f"Failed: {text}")
-            return False
+        assert success, f"Failed: {text}"
 
         result = json.loads(text)
         print(f"Response: {result.get('status')} - {result.get('reason', '')}")
 
-        if result.get("status") != "blocked":
-            print("ERROR: New Feature X missing spec but start_spec allowed!")
-            return False
-
-        if not result.get("spec_required"):
-            print("ERROR: start_spec should indicate spec_required=true")
-            return False
-
-        if result.get("next_action") != "draft_feature_spec":
-            print("ERROR: start_spec should require draft_feature_spec")
-            return False
+        assert result.get("status") == "blocked", "New Feature X missing spec but start_spec allowed!"
+        assert result.get("spec_required"), "start_spec should indicate spec_required=true"
+        assert result.get("next_action") == "draft_feature_spec", "start_spec should require draft_feature_spec"
 
         print("[OK] New Feature X: Blocked (spec required)")
 
@@ -336,13 +288,9 @@ def test_start_spec_enforcement():
         print("\n[Step 3] Testing start_spec('') - empty name...")
         success, text = send_tool(process, "start_spec", {"name": ""}, 3)
 
-        if not success:
-            print(f"Failed: {text}")
-            return False
+        assert success, f"Failed: {text}"
 
-        if "Invalid name" not in text:
-            print("ERROR: Empty name should return error")
-            return False
+        assert "Invalid name" in text, "Empty name should return error"
 
         print("[OK] Empty name: Rejected")
 
@@ -350,7 +298,6 @@ def test_start_spec_enforcement():
         print("ALL CHECKS PASSED!")
         print("start_spec correctly enforces Legislation for any new work")
         print("=" * 60)
-        return True
 
     finally:
         process.terminate()
@@ -367,10 +314,8 @@ if __name__ == "__main__":
     print("\nTesting MCP tool: manage_context returns problem-solving.md")
     print("This verifies the file is auto-loaded in new sessions.\n")
 
-    result = test_manage_context()
-    if result:
-        print("\n" + "=" * 60)
-        print("Running start_spec test...")
-        print("=" * 60)
-        result = test_start_spec_enforcement()
-    sys.exit(0 if result else 1)
+    test_manage_context()
+    print("\n" + "=" * 60)
+    print("Running start_spec test...")
+    print("=" * 60)
+    test_start_spec_enforcement()
