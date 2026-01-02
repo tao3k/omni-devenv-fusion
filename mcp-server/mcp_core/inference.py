@@ -417,7 +417,7 @@ Be thorough in security reviews and provide defensive recommendations.""",
             "Use active voice, strip clutter",
             "Structure with What-Why-How pattern",
         ],
-        "prompt": """You are a Technical Writing Expert following the project's Engineering Documentation Style Guide (agent/writing-style/01_philosophy.md).
+        "prompt": """You are a Technical Writing Expert following the project's Engineering Documentation Style Guide (docs/explanation/design-philosophy.md is derived from agent/writing-style/).
 
 Core Principles (from On Writing Well & Spring Into Technical Writing):
 1. BLUF: Lead with the most important information

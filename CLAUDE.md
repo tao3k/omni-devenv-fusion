@@ -70,6 +70,28 @@ When you judge the user is requesting NEW work, call `start_spec` FIRST:
 3. ORIENT - `manage_context(action="add_note", note="Hypothesis...")`
 4. ACT - Use `search_files`/`read_file` → Apply fix → Retry
 
+## 🔒 Git Operations Security
+
+**CRITICAL: Use MCP tools for ALL git operations, NEVER use Bash directly.**
+
+| Operation | Tool to Use | Why |
+|-----------|-------------|-----|
+| Commit | `run_task("git", ["commit", ...])` OR `smart_commit()` | Authorization enforcement |
+| Git status | `run_task("git", ["status"])` | Safe read-only |
+| Git add | `run_task("git", ["add", ...])` | Safe staging |
+| Direct bash git | ❌ NEVER | Bypasses security checks |
+
+**If you catch yourself typing `git commit` or `git add` in bash → STOP and use `run_task` instead.**
+
+## 📚 Documentation Classification
+
+| Directory | Audience | Purpose |
+|-----------|----------|---------|
+| `docs/explanation/` | Users | Why we chose X (design decisions, philosophy) |
+| `docs/reference/` | Users | API docs, configuration reference |
+| `docs/tutorials/` | Users | Step-by-step guides |
+| `agent/` | LLM | How-to guides, standards, specs |
+
 ## 🔧 Nix
 
 Edit `.nix` → `consult_language_expert` → Review standards → Apply edits → `nix fmt`

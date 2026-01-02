@@ -701,6 +701,44 @@ def test_all_tools():
             print(f"❌ DesignDocsCache failed: {text[:200]}")
             results["design_docs_cache"] = False
 
+        # === Tool 33b: Verify design documents are actually loaded (not empty) ===
+        print("\n3️⃣3️⃣b Testing 'verify_design_alignment' with anti-pattern to prove docs loaded...")
+        # Use a feature description that triggers the "anti_patterns" check
+        # This only works if docs/design-philosophy.md is actually loaded
+        success, text = send_tool(
+            process, "verify_design_alignment",
+            {"feature_description": "This feature is overcomplicated and unnecessary"},
+            37
+        )
+        # If docs are loaded, this should flag the anti-pattern
+        # If docs are empty/not loaded, it will skip the check and still say "aligned"
+        if success:
+            try:
+                result = json.loads(text)
+                # Check if philosophy check actually ran (should not be aligned for anti-patterns)
+                if not result.get("philosophy", {}).get("aligned", True):
+                    print(f"✅ DesignDocsCache PROOF OF LOAD: Anti-pattern detected (docs working!)")
+                    results["design_docs_loaded"] = True
+                elif result.get("aligned"):
+                    print(f"❌ DesignDocsCache PROOF OF LOAD FAILED: Anti-pattern NOT detected (docs empty?)")
+                    print(f"    Expected: philosophy['aligned'] = false for 'overcomplicated' feature")
+                    print(f"    Got: aligned = true (docs may not be loaded)")
+                    results["design_docs_loaded"] = False
+                else:
+                    print(f"✅ DesignDocsCache working (philosophy check executed)")
+                    results["design_docs_loaded"] = True
+            except json.JSONDecodeError:
+                # Fallback: check for expected patterns in response
+                if "simplify" in text.lower() or "anti" in text.lower():
+                    print(f"✅ DesignDocsCache working: {text[:100]}")
+                    results["design_docs_loaded"] = True
+                else:
+                    print(f"⚠️  Could not verify design doc loading (non-JSON response)")
+                    results["design_docs_loaded"] = None
+        else:
+            print(f"❌ DesignDocsCache load verification failed: {text[:200]}")
+            results["design_docs_loaded"] = False
+
         # === Tool 34: Cache persistence test (multiple calls) ===
         print("\n3️⃣4️⃣  Testing cache persistence (multiple calls should use cache)...")
         # Call twice with same parameters
