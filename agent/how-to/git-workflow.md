@@ -1,6 +1,6 @@
 # Git Workflow Guide
 
-> **TL;DR**: Use `just agent-commit` only when explicitly authorized. Otherwise, always ask the user before committing.
+> **TL;DR**: In LLM context, `git commit` means `just agent-commit`. Never use raw `git commit`.
 
 ---
 
@@ -16,6 +16,18 @@
 
 > **⚠️ Important**: Agents MUST use `just agent-commit`, NOT `git commit`.
 > The `agent-commit` command runs pre-commit hooks (prettier, formatting) and stages all modified files before committing.
+
+### Git Commit ≡ just agent-commit
+
+**In LLM context, these are equivalent:**
+
+| Written in Prompt    | LLM Should Execute                               |
+| -------------------- | ------------------------------------------------ |
+| `git commit`         | `just agent-commit <type> "<scope>" "<message>"` |
+| `run git commit`     | `just agent-commit ...`                          |
+| `commit the changes` | `just agent-commit ...`                          |
+
+**Rule:** When you see any commit-related instruction, translate it to `just agent-commit` with appropriate type/scope/message.
 
 ---
 
