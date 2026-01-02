@@ -1,7 +1,7 @@
 # agent/settings.yaml
 # Project Settings - Configuration File Paths
 #
-# This file centralizes paths to configuration files like cog.toml, .conform.yaml
+# This file centralizes paths to configuration files.
 # Use --conf flag to override the configuration directory (default: ./agent)
 #
 # Usage:
@@ -33,6 +33,30 @@ config:
   project_marker: ".git"
 
 # =============================================================================
+# API Key Configuration
+# =============================================================================
+# API key files - paths relative to project root (git toplevel)
+api:
+  # Anthropic API key configuration file
+  anthropic_settings: ".claude/settings.json"
+
+# =============================================================================
+# MCP Configuration
+# =============================================================================
+# MCP configuration files
+mcp:
+  # Main MCP configuration file
+  config_file: ".mcp.json"
+
+  # Server names
+  orchestrator: "orchestrator"
+  coder: "coder"
+  executor: "executor"
+
+  # Default timeout (seconds)
+  timeout: 120
+
+# =============================================================================
 # Git Commit Settings
 # =============================================================================
 # Note: Actual types and scopes are loaded from cog.toml/.conform.yaml
@@ -41,18 +65,6 @@ config:
 commit:
   # Default protocol: "stop_and_ask" or "auto_commit"
   protocol: "stop_and_ask"
-
-# =============================================================================
-# MCP Server Settings
-# =============================================================================
-mcp:
-  # Server names
-  orchestrator: "orchestrator"
-  coder: "coder"
-  executor: "executor"
-
-  # Default timeout (seconds)
-  timeout: 120
 
 # =============================================================================
 # Logging Settings
