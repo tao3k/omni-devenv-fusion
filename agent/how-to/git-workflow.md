@@ -23,11 +23,11 @@
 
 **This is the #1 rule violation that keeps happening:**
 
-| What I Did Wrong | Why It's Wrong |
-|------------------|----------------|
-| `git status` (Bash) | Bypasses MCP `run_task` security |
-| `git add -A && git commit` (Bash) | Bypasses authorization protocol |
-| `git diff` (Bash) | Should use `run_task("git", ["diff"])` |
+| What I Did Wrong                  | Why It's Wrong                         |
+| --------------------------------- | -------------------------------------- |
+| `git status` (Bash)               | Bypasses MCP `run_task` security       |
+| `git add -A && git commit` (Bash) | Bypasses authorization protocol        |
+| `git diff` (Bash)                 | Should use `run_task("git", ["diff"])` |
 
 ### The Correct Workflow After Tests
 
@@ -48,12 +48,12 @@
 
 The `run_task` MCP tool blocks these commands:
 
-| Blocked Command | Replacement |
-|----------------|-------------|
-| `git commit` | `smart_commit()` via MCP |
-| `git add` | `run_task("git", ["add", ...])` |
-| `git status` | `run_task("git", ["status"])` |
-| `git diff` | `run_task("git", ["diff"])` |
+| Blocked Command | Replacement                     |
+| --------------- | ------------------------------- |
+| `git commit`    | `smart_commit()` via MCP        |
+| `git add`       | `run_task("git", ["add", ...])` |
+| `git status`    | `run_task("git", ["status"])`   |
+| `git diff`      | `run_task("git", ["diff"])`     |
 
 **If you catch yourself typing `git ...` in Bash → STOP and use MCP tools instead.**
 

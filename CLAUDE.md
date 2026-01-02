@@ -6,13 +6,14 @@
 
 The system is strictly divided into three specialized MCP servers. You MUST route your requests to the correct server based on the task type.
 
-| Role | Server | Responsibilities | Key Tools |
-| :--- | :--- | :--- | :--- |
+| Role             | Server         | Responsibilities                   | Key Tools                                                              |
+| :--------------- | :------------- | :--------------------------------- | :--------------------------------------------------------------------- |
 | **🧠 The Brain** | `orchestrator` | Planning, Routing, Context, Policy | `consult_router`, `start_spec`, `manage_context`, `consult_specialist` |
-| **📝 The Pen** | `coder` | File I/O, Code Search | `read_file`, `save_file`, `search_files`, `ast_search` |
-| **🛠️ The Hands** | `executor` | Git, Testing, Shell, Docs | `git_status`, `smart_commit`, `run_tests`, `run_task` |
+| **📝 The Pen**   | `coder`        | File I/O, Code Search              | `read_file`, `save_file`, `search_files`, `ast_search`                 |
+| **🛠️ The Hands** | `executor`     | Git, Testing, Shell, Docs          | `git_status`, `smart_commit`, `run_tests`, `run_task`                  |
 
 **Routing Rules:**
+
 1. **Never** ask `orchestrator` to read/write files or run git commands. It has no access.
 2. **Always** consult `orchestrator` first for new features or complex tasks (`start_spec`).
 3. **Use** `executor` for all terminal-like operations (tests, git).
@@ -90,11 +91,11 @@ When you judge the user is requesting NEW work, call `start_spec` FIRST:
 
 **CRITICAL: See `agent/how-to/git-workflow.md` for complete rules.**
 
-| Operation | Tool to Use | Why |
-|-----------|-------------|-----|
-| Commit | `smart_commit()` | Authorization protocol |
-| Git status/diff/log | `run_task("git", [...])` | Safe MCP execution |
-| Git add | `run_task("git", ["add", ...])` | Safe staging |
+| Operation           | Tool to Use                     | Why                    |
+| ------------------- | ------------------------------- | ---------------------- |
+| Commit              | `smart_commit()`                | Authorization protocol |
+| Git status/diff/log | `run_task("git", [...])`        | Safe MCP execution     |
+| Git add             | `run_task("git", ["add", ...])` | Safe staging           |
 
 **NEVER use Bash for git operations.**
 

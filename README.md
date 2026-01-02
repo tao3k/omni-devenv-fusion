@@ -22,12 +22,12 @@ The gap is State, Memory, Policy, Orchestration. omni-dev-fusion fills this gap.
 
 ## Quick Links
 
-| Topic        | Location                                                        |
-| ------------ | --------------------------------------------------------------- |
+| Topic        | Location                                                                          |
+| ------------ | --------------------------------------------------------------------------------- |
 | Architecture | `docs/reference/mcp-orchestrator.md`, `docs/explanation/dual-mcp-architecture.md` |
-| MCP Tools    | `src/agent/main.py` (orchestrator), `src/mcp_server/`           |
-| Workflows    | `agent/how-to/*.md`                                             |
-| Standards    | `agent/standards/*.md`                                          |
+| MCP Tools    | `src/agent/main.py` (orchestrator), `src/mcp_server/`                             |
+| Workflows    | `agent/how-to/*.md`                                                               |
+| Standards    | `agent/standards/*.md`                                                            |
 
 ## Core Philosophy
 
