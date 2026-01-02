@@ -147,7 +147,7 @@ Most competitors use simple solutions:
 
 ### 3. Environment as Code
 
-This is the key differentiator. In `omni-devenv-fusion`, we treat `devenv.nix` as the **Ground Truth**.
+This is the key differentiator. In `omni-dev-fusion`, we treat `devenv.nix` as the **Ground Truth**.
 
 **The Old Way (Guessing):**
 

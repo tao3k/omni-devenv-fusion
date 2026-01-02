@@ -59,27 +59,18 @@
 
     orchestrator = {
       type = "stdio";
-      command = "python"; # Use python from devenv environment
-      args = [ "./mcp-server/orchestrator.py" ];
-      env = {
-        # Pass your Minimax Key to the python script
-        ANTHROPIC_API_KEY = config.secretspec.secrets.MINIMAX_API_KEY;
-        ANTHROPIC_BASE_URL = "https://api.minimax.io/anthropic";
-        PYTHONPATH = "${config.devenv.root}/mcp-server";
-      };
+      command = "uv";
+      args = [ "run" "python" "-m" "agent.main" ];
     };
     executor = {
       type = "stdio";
-      command = "python";
-      args = [ "./mcp-server/executor.py" ];
+      command = "uv";
+      args = [ "run" "python" "-m" "mcp_server.executor.main" ];
     };
     coder = {
       type = "stdio";
-      command = "python";
-      args = [ "./mcp-server/coder.py" ];
-      env = {
-        PYTHONPATH = "${config.devenv.root}/mcp-server";
-      };
+      command = "uv";
+      args = [ "run" "python" "-m" "mcp_server.coder.main" ];
     };
   };
 }

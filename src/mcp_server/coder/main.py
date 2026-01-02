@@ -1,11 +1,27 @@
-# mcp-server/coder.py
+# src/mcp_server/coder/main.py
 """
-Coding Expert MCP Server - The "Hands"
+Coding Expert MCP Server - The "Pen"
 
 Focus: High-quality code implementation, AST-based refactoring, Performance, Security.
-Role: Precise execution of coding tasks defined by the Orchestrator.
+Role: Precise execution of file operations defined by the Orchestrator.
 
 Key Characteristic: "Micro" view. Uses ast-grep/tree-sitter for surgical precision.
+
+Tri-MCP Architecture:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│   Claude Desktop                                               │
+│        │                                                       │
+│        ├── 🧠 orchestrator (The Brain)                         │
+│        │      └── Planning, Routing, Reviewing                 │
+│        │                                                         │
+│        ├── 🛠️ executor (The Hands)                             │
+│        │      └── Git, Testing, Shell                          │
+│        │                                                         │
+│        └── 📝 coder (HERE - The Pen)                           │
+│               └── File I/O, Code Search, AST Refactoring       │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
 
 Tools:
 - read_file: Single file reading (micro-level)
@@ -14,7 +30,7 @@ Tools:
 - ast_search: Query code structure using ast-grep patterns
 - ast_rewrite: Apply structural patches based on AST patterns
 
-This server uses mcp_core shared library for:
+This server uses common/mcp_core for:
 - utils: Logging, path checking, file operations
 """
 import os
@@ -23,10 +39,16 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+# Ensure project root is in path for imports (DDD structure)
+# This allows: from common.mcp_core import ... where common is at src/common/
+_project_root = Path(__file__).parent.parent.parent.resolve()  # src/mcp_server/coder/ -> src/
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
 from mcp.server.fastmcp import FastMCP
 
-# Import shared modules from mcp_core
-from mcp_core import (
+# Import shared modules from common/mcp_core
+from common.mcp_core import (
     setup_logging,
     log_decision,
     is_safe_path,

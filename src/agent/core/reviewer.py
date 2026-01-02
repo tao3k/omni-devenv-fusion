@@ -13,7 +13,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, List
 
-from mcp_core import log_decision, InferenceClient, setup_logging
+from common.mcp_core import log_decision, InferenceClient, setup_logging
 
 logger = setup_logging(server_name="reviewer")
 

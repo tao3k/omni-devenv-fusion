@@ -12,10 +12,50 @@
 | Non-interactive commit (agent) | `just agent-commit <type> <scope> "<message>"` |
 | Focus on a Spec                | `just agent-focus <spec_path>`                 |
 | Check commit messages          | `just log`                                     |
-| View status                    | `just status`                                  |
+| View status                    | `just agent-test-status`                       |
 
 > **⚠️ Important**: Agents MUST use `just agent-commit`, NOT `git commit`.
 > The `agent-commit` command runs pre-commit hooks (prettier, formatting) and stages all modified files before committing.
+
+---
+
+## ⚠️ CRITICAL: Never Use Bash for Git Operations
+
+**This is the #1 rule violation that keeps happening:**
+
+| What I Did Wrong | Why It's Wrong |
+|------------------|----------------|
+| `git status` (Bash) | Bypasses MCP `run_task` security |
+| `git add -A && git commit` (Bash) | Bypasses authorization protocol |
+| `git diff` (Bash) | Should use `run_task("git", ["diff"])` |
+
+### The Correct Workflow After Tests
+
+```
+❌ WRONG (What I keep doing):
+1. just test → Tests pass
+2. git status (Bash) ❌
+3. git add -A && git commit (Bash) ❌
+
+✅ CORRECT:
+1. just agent-test-status (shows test results + git status safely)
+2. Report: "Tests passed, X files modified"
+3. Wait for user to say "run just agent-commit"
+4. Use smart_commit() workflow
+```
+
+### Bash Git Commands are Blocked
+
+The `run_task` MCP tool blocks these commands:
+
+| Blocked Command | Replacement |
+|----------------|-------------|
+| `git commit` | `smart_commit()` via MCP |
+| `git add` | `run_task("git", ["add", ...])` |
+| `git status` | `run_task("git", ["status"])` |
+| `git diff` | `run_task("git", ["diff"])` |
+
+**If you catch yourself typing `git ...` in Bash → STOP and use MCP tools instead.**
 
 ---
 

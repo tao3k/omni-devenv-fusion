@@ -4,8 +4,11 @@ requires-python = ">=3.12"
 
 [manifest]
 members = [
-    "omni-devenv-fusion",
-    "omni-orchestrator",
+    "omni-dev-fusion",
+    "omni-dev-fusion-agent",
+    "omni-dev-fusion-coder",
+    "omni-dev-fusion-common",
+    "omni-dev-fusion-executor",
 ]
 
 [[package]]
@@ -404,13 +407,12 @@ wheels = [
 ]
 
 [[package]]
-name = "omni-devenv-fusion"
+name = "omni-dev-fusion"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "anthropic" },
     { name = "mcp" },
-    { name = "omni-orchestrator" },
     { name = "structlog" },
 ]
 
@@ -430,8 +432,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "anthropic", specifier = ">=0.75.0" },
-    { name = "mcp", specifier = ">=1.25.0" },
-    { name = "omni-orchestrator", editable = "mcp-server" },
+    { name = "mcp", specifier = ">=1.1.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0" },
@@ -446,30 +447,52 @@ dev = [
 ]
 
 [[package]]
-name = "omni-orchestrator"
+name = "omni-dev-fusion-agent"
 version = "0.1.0"
-source = { editable = "mcp-server" }
+source = { editable = "src/agent" }
 dependencies = [
-    { name = "anthropic" },
     { name = "mcp" },
-    { name = "structlog" },
 ]
 
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
+[package.metadata]
+requires-dist = [{ name = "mcp", specifier = ">=1.1.0" }]
+
+[[package]]
+name = "omni-dev-fusion-coder"
+version = "0.1.0"
+source = { editable = "src/mcp_server/coder" }
+dependencies = [
+    { name = "mcp" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "mcp", specifier = ">=1.1.0" }]
+
+[[package]]
+name = "omni-dev-fusion-common"
+version = "0.1.0"
+source = { editable = "src/common" }
+dependencies = [
+    { name = "anthropic" },
+    { name = "structlog" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "anthropic", specifier = ">=0.75.0" },
-    { name = "mcp", specifier = ">=1.25.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24.0" },
     { name = "structlog", specifier = ">=24.0.0" },
 ]
-provides-extras = ["dev"]
+
+[[package]]
+name = "omni-dev-fusion-executor"
+version = "0.1.0"
+source = { editable = "src/mcp_server/executor" }
+dependencies = [
+    { name = "mcp" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "mcp", specifier = ">=1.1.0" }]
 
 [[package]]
 name = "packaging"

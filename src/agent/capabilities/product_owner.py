@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 # Import project_memory for spec_path auto-detection
-from mcp_core.memory import ProjectMemory
+from common.mcp_core.memory import ProjectMemory
 
 # =============================================================================
 # Singleton Cache - Design docs loaded once per MCP session
@@ -316,7 +316,7 @@ def register_product_owner_tools(mcp: Any) -> None:
         # Check for API key availability
         api_key = None
         try:
-            from mcp_core import InferenceClient
+            from common.mcp_core import InferenceClient
             api_key = InferenceClient(api_key="", base_url="").api_key
         except Exception:
             pass
@@ -324,7 +324,7 @@ def register_product_owner_tools(mcp: Any) -> None:
         # Try LLM analysis if API key available
         if api_key or feature_description:
             try:
-                from mcp_core import InferenceClient
+                from common.mcp_core import InferenceClient
 
                 inference = InferenceClient(
                     api_key=api_key or "",
@@ -599,7 +599,7 @@ Return JSON with:
 
         # Check for InferenceClient availability
         try:
-            from mcp_core import InferenceClient
+            from common.mcp_core import InferenceClient
         except ImportError:
             return json.dumps({
                 "status": "error",
@@ -770,7 +770,7 @@ Return ONLY the Markdown content of the new spec (or the Rejection message)."""
 
         # Check for InferenceClient availability
         try:
-            from mcp_core import InferenceClient
+            from common.mcp_core import InferenceClient
         except ImportError:
             return json.dumps({
                 "status": "error",
@@ -883,7 +883,7 @@ Return ONLY the Markdown content of the new Spec. Do not include markdown code b
         content = src.read_text(encoding="utf-8")
 
         try:
-            from mcp_core import InferenceClient
+            from common.mcp_core import InferenceClient
             client = InferenceClient()
         except ImportError:
             return json.dumps({

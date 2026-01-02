@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 # Import project context framework
-from mcp_core.project_context import (
+from common.mcp_core.project_context import (
     get_project_context,
     has_project_context,
     list_project_languages,

@@ -605,7 +605,7 @@ def register_git_ops_tools(mcp: Any) -> None:
 
         # 4. Call LLM
         try:
-            from mcp_core import InferenceClient
+            from common.mcp_core import InferenceClient
 
             client = InferenceClient()
         except ImportError:
@@ -687,7 +687,7 @@ Next: Run `smart_commit` with these values."""
         # 3. Generate commit message using AI
         if spec_content:
             try:
-                from mcp_core import InferenceClient
+                from common.mcp_core import InferenceClient
 
                 inference = InferenceClient()
             except ImportError:

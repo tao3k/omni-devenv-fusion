@@ -1,4 +1,4 @@
-# omni-devenv-fusion
+# omni-dev-fusion
 
 > From Copilot to Autopilot: Building the OS for the post-IDE era.
 
@@ -8,7 +8,7 @@
 
 **Autopilot** (tomorrow): AI drives, you architect.
 
-The gap is State, Memory, Policy, Orchestration. omni-devenv-fusion fills this gap.
+The gap is State, Memory, Policy, Orchestration. omni-dev-fusion fills this gap.
 
 ## Key Differentiators
 
@@ -24,8 +24,8 @@ The gap is State, Memory, Policy, Orchestration. omni-devenv-fusion fills this g
 
 | Topic        | Location                                                        |
 | ------------ | --------------------------------------------------------------- |
-| Architecture | `mcp-server/README.md`, `mcp-server/architecture-philosophy.md` |
-| MCP Tools    | `mcp-server/orchestrator.py`                                    |
+| Architecture | `docs/reference/mcp-orchestrator.md`, `docs/explanation/dual-mcp-architecture.md` |
+| MCP Tools    | `src/agent/main.py` (orchestrator), `src/mcp_server/`           |
 | Workflows    | `agent/how-to/*.md`                                             |
 | Standards    | `agent/standards/*.md`                                          |
 
@@ -51,8 +51,8 @@ User Request -> Orchestrator (Plan) -> Expert Personas (Consult) -> Coder (Imple
 
 ```bash
 # Clone and enter
-git clone https://github.com/tao3k/omni-devenv-fusion.git
-cd omni-devenv-fusion
+git clone https://github.com/tao3k/omni-dev-fusion.git
+cd omni-dev-fusion
 
 # Setup (checks secrets first, then activates direnv)
 just setup
@@ -185,10 +185,10 @@ Available checks:
 - **Semantic Versioning**: Auto-bump based on commits
 - **Git Hooks**: lefthook + omnibus framework
 
-## Architecture
+## Architecture (DDD)
 
 ```
-omni-devenv-fusion/
+omni-dev-fusion/
 ├── devenv.nix              # Main devenv configuration
 ├── devenv.yaml             # Flake inputs
 ├── justfile                # Task runner (40+ commands)
@@ -199,8 +199,16 @@ omni-devenv-fusion/
 │   ├── python.nix          # Python environment
 │   └── flake-parts/
 │       └── omnibus.nix     # Omnibus framework
-└── mcp-server/
-    └── orchestrator.py     # Expert consultation server
+└── src/
+    ├── agent/              # The Brain (orchestrator, pure business logic)
+    │   ├── main.py         # Orchestrator MCP server
+    │   ├── capabilities/   # Product owner, lang expert
+    │   └── core/           # Router, reviewer
+    ├── mcp_server/         # Infrastructure (MCP drivers)
+    │   ├── executor/       # Git, testing, docs, writing
+    │   └── coder/          # File I/O, AST search/rewrite
+    └── common/             # Shared kernel
+        └── mcp_core/       # Logging, memory, inference, utils
 ```
 
 ## Available Commands
@@ -372,7 +380,7 @@ secretspec:
 
 ```toml
 [project]
-name = "omni-devenv-fusion"
+name = "omni-dev-fusion"
 revision = "1.0"
 
 [profiles.default]

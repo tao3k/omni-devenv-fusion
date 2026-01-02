@@ -18,8 +18,8 @@ All auto-generated/temporary files MUST follow [numtide/prj-spec](https://github
 
 - Temporary files go in `.cache/<project-name>/` or subdirectories
 - `.gitignore` must exclude prj-spec directories
-- **SCRATCHPAD.md** → `.cache/omni-devenv-fusion/.memory/active_context/SCRATCHPAD.md`
-- **Session logs** → `.cache/omni-devenv-fusion/.memory/sessions/`
+- **SCRATCHPAD.md** → `.cache/omni-dev-fusion/.memory/active_context/SCRATCHPAD.md`
+- **Session logs** → `.cache/omni-dev-fusion/.memory/sessions/`
 
 ## 2. Environment Isolation
 

@@ -1,14 +1,15 @@
 [project]
-name = "omni-devenv-fusion"
+name = "omni-dev-fusion"
 version = "0.1.0"
-description = "Add your description here"
+description = "Tri-MCP Agentic OS: orchestrator + executor + coder"
 readme = "README.md"
 requires-python = ">=3.12"
+
 dependencies = [
+    # Core dependencies shared across all packages
+    "mcp>=1.1.0",
     "anthropic>=0.75.0",
-    "mcp>=1.25.0",
     "structlog>=24.0.0",
-    "omni-orchestrator",
 ]
 
 [project.optional-dependencies]
@@ -29,7 +30,7 @@ indent-style = "space"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-testpaths = ["mcp-server/tests"]
+testpaths = ["src/common/mcp_server/tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -40,8 +41,11 @@ dev = [
     "pytest-asyncio>=0.24.0",
 ]
 
+# Workspace configuration
 [tool.uv.workspace]
-members = ["mcp-server"]
-
-[tool.uv.sources]
-omni-orchestrator = { workspace = true }
+members = [
+    "src/agent",
+    "src/mcp_server/executor",
+    "src/mcp_server/coder",
+    "src/common",
+]

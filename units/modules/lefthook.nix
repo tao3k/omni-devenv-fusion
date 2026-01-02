@@ -100,7 +100,7 @@ let
                 path = "CHANGELOG.md";
                 template = "remote";
                 remote = "github.com";
-                repository = "omni-devenv-fusion";
+                repository = "omni-dev-fusion";
                 owner = "tao3k";
                 authors = [
                   {

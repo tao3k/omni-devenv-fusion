@@ -19,7 +19,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
+# Project root - go up from src/common/mcp_server/tests/ to project root (4 levels)
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
 CONFIG_CANDIDATES = [
     PROJECT_ROOT / ".mcp.json",
     PROJECT_ROOT / ".claude" / "settings.json",
@@ -91,6 +92,8 @@ def test_manage_context():
 
     cmd = server_conf.get("command")
     args = server_conf.get("args", [])
+    # For 'uv' command, use it directly (args should include 'run', 'python', etc.)
+    # For 'python' or 'python3', use the current executable
     executable = sys.executable if cmd in ["python", "python3"] else cmd
 
     print(f"Starting MCP server: {executable} {' '.join(args)}")
@@ -214,6 +217,8 @@ def test_start_spec_enforcement():
 
     cmd = server_conf.get("command")
     args = server_conf.get("args", [])
+    # For 'uv' command, use it directly (args should include 'run', 'python', etc.)
+    # For 'python' or 'python3', use the current executable
     executable = sys.executable if cmd in ["python", "python3"] else cmd
 
     print(f"Starting MCP server: {executable} {' '.join(args)}")

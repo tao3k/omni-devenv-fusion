@@ -1,7 +1,7 @@
 {
   "output": {
     "style": "xml",
-    "headerText": "Project: omni-devenv-fusion context"
+    "headerText": "Project: omni-dev-fusion context"
   },
   "ignore": {
     "useGitignore": true,

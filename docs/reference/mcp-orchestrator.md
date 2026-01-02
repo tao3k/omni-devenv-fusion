@@ -57,6 +57,36 @@ Expected output:
 
 ---
 
+## Architecture: Tri-MCP
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│   Claude Desktop                                               │
+│        │                                                       │
+│        ├── 🧠 orchestrator (The Brain - HERE)                  │
+│        │      └── Planning, Routing, Reviewing, Specifying    │
+│        │                                                         │
+│        ├── 🛠️ executor (The Hands)                             │
+│        │      └── Git operations, Testing, Documentation       │
+│        │                                                         │
+│        └── 📝 coder (File Operations)                          │
+│               └── Read/Write/Search files                      │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+The Orchestrator (`orchestrator.py`) is the **Brain** of the system:
+
+- **Planning**: `start_spec`, `draft_feature_spec`, `verify_spec_completeness`
+- **Routing**: `consult_router` (decides which MCP to use)
+- **Reviewing**: `review_staged_changes` (quality gate)
+- **Context**: `manage_context`, `memory_garden`
+
+It **never** accesses files or runs git commands directly. Those are handled by `coder` and `executor`.
+
+---
+
 ## Configuration
 
 Control client and runtime behavior via environment variables:

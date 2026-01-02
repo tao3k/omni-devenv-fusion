@@ -28,9 +28,23 @@
       "Bash(timeout:*)",
       "mcp__orchestrator__spec_aware_commit",
       "mcp__orchestrator__git_diff",
-      "mcp__orchestrator__git_diff_staged"
+      "mcp__orchestrator__git_diff_staged",
+      "Bash(ls:*)",
+      "Bash(xargs:*)",
+      "Bash(uv sync:*)",
+      "Bash(uv pip index versions anthropic:*)",
+      "Bash(pip index versions:*)",
+      "Bash(pip show:*)",
+      "Bash(uv pip list:*)",
+      "Bash(uv pip show:*)",
+      "Bash(uv pip uninstall:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": ["MiniMax", "devenv", "nixos", "orchestrator"]
+  "enabledMcpjsonServers": [
+    "MiniMax",
+    "devenv",
+    "nixos",
+    "orchestrator"
+  ]
 }

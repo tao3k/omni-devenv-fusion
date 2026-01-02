@@ -2,7 +2,7 @@
 
 > **Philosophy**: Separation of Concerns. "Macro" orchestration vs. "Micro" surgical coding.
 
-This document outlines the architectural vision for `omni-devenv-fusion`. We move from a single monolithic MCP server to a specialized dual-server setup. This design acts as a **Bridge** between generic LLM capabilities and the strict requirements of our Nix-based project environment.
+This document outlines the architectural vision for `omni-dev-fusion`. We move from a single monolithic MCP server to a specialized dual-server setup. This design acts as a **Bridge** between generic LLM capabilities and the strict requirements of our Nix-based project environment.
 
 ---
 

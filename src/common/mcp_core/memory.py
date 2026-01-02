@@ -11,7 +11,7 @@ Features:
 - Context snapshots
 
 Follows numtide/prj-spec with .cache/<namespace>/.memory structure:
-    .cache/omni-devenv-fusion/.memory/
+    .cache/omni-dev-fusion/.memory/
         decisions/      - ADRs
         tasks/          - Task tracking
         context/        - Project snapshots
@@ -28,7 +28,7 @@ log = structlog.get_logger("mcp-core.memory")
 
 # Default memory directory (per prj-spec: .cache/<namespace>/.memory)
 # Using project identifier as namespace for isolation
-MEMORY_DIR = Path(".cache/omni-devenv-fusion/.memory")
+MEMORY_DIR = Path(".cache/omni-dev-fusion/.memory")
 
 
 # =============================================================================

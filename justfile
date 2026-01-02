@@ -87,6 +87,29 @@ agent-commit type scope message body="" breaking_desc="":
 agent-validate:
     @echo "Running validation..." && lefthook run pre-commit && devenv test
 
+# Agent-friendly validate with git status output (safe - no commit)
+# Usage: just agent-test-status
+# This command runs tests and outputs git status for agent to read
+agent-test-status:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== TEST_START ==="
+    devenv test
+    TEST_RESULT=$?
+    echo "=== TEST_END ==="
+    echo "=== GIT_STATUS_START ==="
+    git status --short
+    echo "=== GIT_STATUS_END ==="
+    echo "=== GIT_LOG_START ==="
+    git log --oneline -3
+    echo "=== GIT_LOG_END ==="
+    if [ $TEST_RESULT -eq 0 ]; then
+        echo "Tests passed"
+    else
+        echo "Tests failed"
+    fi
+    exit $TEST_RESULT
+
 # Agent-friendly format (apply fixes)
 agent-fmt:
     @echo "Applying formatting fixes..." && lefthook run pre-commit --all-files --no-tty
@@ -164,14 +187,16 @@ agent-focus spec_path:
     @cat {{spec_path}}
     @echo ""
     @echo "=== 🏗️ RELATED CODE STRUCTURE ==="
-    @echo "mcp-server modules:"
-    @ls -1 mcp-server/*.py 2>/dev/null | xargs -I {} basename {} .py | sed 's/^/  - /' || echo "  No modules found"
+    @echo "src/agent modules:"
+    @ls -1 src/agent/*.py 2>/dev/null | xargs -I {} basename {} .py | sed 's/^/  - /' || echo "  No modules found"
+    @echo "src/mcp_server modules:"
+    @find src/mcp_server -name "main.py" -exec dirname {} \; 2>/dev/null | sed 's|src/mcp_server/||' | sed 's/^/  - /' || echo "  No modules found"
     @echo ""
     @echo "=== 📋 BACKLOG ALIGNMENT ==="
     @grep -i "$(basename {{spec_path}} .md)" Backlog.md 2>/dev/null || echo "  No matching backlog entry found"
     @echo ""
     @echo "💡 INSTRUCTION: Review the Spec above. Create a PLAN in 'SCRATCHPAD.md' before modifying any code."
-    @echo "SCRATCHPAD Location: .cache/omni-devenv-fusion/.memory/active_context/SCRATCHPAD.md"
+    @echo "SCRATCHPAD Location: .cache/omni-dev-fusion/.memory/active_context/SCRATCHPAD.md"
 
 # Quick create new Spec from template
 # Usage: just spec-new "feature_name" "Feature description..."
@@ -323,7 +348,7 @@ test:
 [group('validate')]
 test-unit:
     @echo "Running unit tests..."
-    @python -m pytest mcp-server/tests/ -v --tb=short 2>/dev/null || echo "Unit tests completed"
+    @python -m pytest src/common/mcp_server/tests/ -v --tb=short 2>/dev/null || echo "Unit tests completed"
 
 [group('validate')]
 test-int:
@@ -333,7 +358,7 @@ test-int:
 [group('validate')]
 test-mcp-only:
     @echo "Running MCP tests only..."
-    @python -m compileall mcp-server && python -m pytest mcp-server/tests/test_basic.py -v
+    @python -m compileall src/common/mcp_server && python -m pytest src/common/mcp_server/tests/test_basic.py -v
 
 # ==============================================================================
 # CHANGELOG MANAGEMENT
@@ -446,7 +471,7 @@ release-notes version="latest":
     cog changelog --at "$VERSION" | sed -n "/^## \[v${VERSION#v}\]/,/^## \[v/p" | sed '$d'
     echo ""
     echo "---"
-    echo "**Full Changelog**: https://github.com/tao3k/omni-devenv-fusion/compare/$(git describe --tags --abbrev=0 $VERSION^ 2>/dev/null)...$VERSION"
+    echo "**Full Changelog**: https://github.com/tao3k/omni-dev-fusion/compare/$(git describe --tags --abbrev=0 $VERSION^ 2>/dev/null)...$VERSION"
 
 [group('version')]
 publish-release version="latest":
@@ -499,7 +524,7 @@ fmt:
 [group('dev')]
 fmt-py:
     @echo "Formatting Python with ruff..."
-    @uvx ruff format mcp-server/
+    @uvx ruff format src/
 
 [group('dev')]
 clean:
@@ -537,43 +562,43 @@ watch:
 # ==============================================================================
 
 [group('mcp')]
-debug server="mcp-server/orchestrator.py":
+debug server="src/agent/main.py":
     @echo "Starting MCP Inspector..."
     @uv run mcp-inspector python {{server}}
 
 [group('mcp')]
-run server="mcp-server/orchestrator.py":
+run server="src/agent/main.py":
     @echo "Running MCP server: {{server}}"
     @python {{server}}
 
 [group('mcp')]
 test-mcp:
     @echo "Testing MCP server..."
-    @python -m compileall mcp-server tool-router
+    @python -m compileall src/common/mcp_server
     @echo "Syntax check passed"
-    @timeout 3 python -u mcp-server/orchestrator.py 2>&1 || echo "Server startup test completed"
+    @timeout 3 python -u src/agent/main.py 2>&1 || echo "Server startup test completed"
     @echo "MCP tests passed"
 
 [group('mcp')]
 test_basic:
     @echo "Running basic tests (all 4 tools)..."
-    @uv run python mcp-server/tests/test_basic.py
+    @uv run python src/common/mcp_server/tests/test_basic.py
 
 [group('mcp')]
 test_workflow:
     @echo "Running workflow tests..."
-    @uv run python mcp-server/tests/workflows.py
+    @uv run python src/common/mcp_server/tests/workflows.py
 
 [group('mcp')]
 test-mcp-actual:
     @echo "Running actual LLM session test..."
     @echo "This test CONSUMES API TOKENS and requires ANTHROPIC_API_KEY in .mcp.json"
-    @uv run python mcp-server/tests/test_actual_session.py
+    @uv run python src/common/mcp_server/tests/test_actual_session.py
 
 [group('mcp')]
 test-mcp-session:
     @echo "Testing manage_context returns problem-solving.md (NO tokens)..."
-    @uv run python mcp-server/tests/test_mcp_session.py
+    @uv run python src/common/mcp_server/tests/test_mcp_session.py
 
 [group('mcp')]
 test-mcp-all: test-mcp test_basic test_workflow
@@ -584,7 +609,7 @@ test-mcp-all: test-mcp test_basic test_workflow
 stress-test:
     @echo "Running Modular Stress Test Framework..."
     @echo "========================================="
-    @uv run python mcp-server/tests/test_stress.py
+    @uv run python src/common/mcp_server/tests/test_stress.py
 
 # ==============================================================================
 # SRE HEALTH CHECKS

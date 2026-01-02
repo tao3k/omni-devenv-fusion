@@ -1,4 +1,4 @@
-# mcp-core - Shared library for omni-devenv-fusion MCP servers
+# mcp-core - Shared library for omni-dev-fusion MCP servers
 """
 Shared library providing common functionality for orchestrator.py and coder.py.
 

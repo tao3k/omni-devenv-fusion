@@ -1,4 +1,4 @@
-# Why omni-devenv-fusion?
+# Why omni-dev-fusion?
 
 > Addressing the real problems in AI-assisted software development.
 
@@ -6,7 +6,7 @@
 
 ## The Community Pain Points
 
-We built omni-devenv-fusion because we faced these problems every day.
+We built omni-dev-fusion because we faced these problems every day.
 
 ### 1. AI is Context-Blind
 

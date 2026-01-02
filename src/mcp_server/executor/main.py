@@ -1,12 +1,11 @@
-# mcp-server/executor.py
+# src/mcp_server/executor/main.py
 """
 Executor MCP Server - The "Hands"
 
 Role: Atomic execution engine. Executes specific tasks without planning logic.
-Philosophy: Dual-MCP Architecture - Separation of "Brain" (Orchestrator) and "Hands" (Executor).
+Philosophy: Tri-MCP Architecture - Separation of "Brain" (Orchestrator), "Hands" (Executor), and "Pen" (Coder).
 
 Responsibilities:
-- File operations (writing, reading)
 - Git operations (commit, status, log, diff)
 - Testing (smart test runner)
 - Documentation execution
@@ -18,10 +17,11 @@ or run as a standalone server.
 import sys
 from pathlib import Path
 
-# Ensure mcp-server is in path for imports
-_mcp_server_path = Path(__file__).parent.resolve()
-if str(_mcp_server_path) not in sys.path:
-    sys.path.insert(0, str(_mcp_server_path))
+# Ensure project root is in path for imports (DDD structure)
+# This allows: from common.mcp_core import ... and mcp_server.executor.* imports
+_project_root = Path(__file__).parent.parent.parent.resolve()  # src/mcp_server/executor/ -> src/
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 
 from mcp.server.fastmcp import FastMCP
 
@@ -43,19 +43,16 @@ def _register_tools(module_name: str, register_func):
         return False
 
 # Writer tools (Writing style enforcement)
-_register_tools("Writer", __import__('writer', fromlist=['register_writer_tools']).register_writer_tools)
+_register_tools("Writer", __import__('mcp_server.executor.writer', fromlist=['register_writer_tools']).register_writer_tools)
 
 # GitOps tools (Version control)
-_register_tools("GitOps", __import__('git_ops', fromlist=['register_git_ops_tools']).register_git_ops_tools)
+_register_tools("GitOps", __import__('mcp_server.executor.git_ops', fromlist=['register_git_ops_tools']).register_git_ops_tools)
 
 # Tester tools (Smart test runner)
-_register_tools("Tester", __import__('tester', fromlist=['register_tester_tools']).register_tester_tools)
+_register_tools("Tester", __import__('mcp_server.executor.tester', fromlist=['register_tester_tools']).register_tester_tools)
 
 # Docs tools (Documentation execution)
-_register_tools("Docs", __import__('docs', fromlist=['register_docs_tools']).register_docs_tools)
-
-# Advanced Search tools (Code search)
-_register_tools("AdvancedSearch", __import__('advanced_search', fromlist=['register_advanced_search_tools']).register_advanced_search_tools)
+_register_tools("Docs", __import__('mcp_server.executor.docs', fromlist=['register_docs_tools']).register_docs_tools)
 
 
 # =============================================================================
@@ -68,17 +65,17 @@ async def executor_status() -> str:
     return f"""🛠️ Omni Executor Status
 
 Role: The "Hands" - Atomic Execution Engine
-Architecture: Dual-MCP (Orchestrator + Executor)
+Architecture: Tri-MCP (Orchestrator + Executor + Coder)
 
 Available Categories:
 - Writer: Writing style enforcement
 - GitOps: Version control operations
 - Tester: Smart test runner
 - Docs: Documentation execution
-- Search: Code search (ripgrep, ast-grep)
 
 Note: This server handles EXECUTION only.
       Planning and routing are handled by the Orchestrator.
+      File operations are handled by the Coder.
 """
 
 

@@ -1,4 +1,9 @@
-# mcp-server/orchestrator.py
+# Orchestrator MCP Server - The Brain
+#
+# Tri-MCP Architecture:
+# - orchestrator (The Brain): Planning, routing, reviewing
+# - executor (The Hands): Git, testing, shell operations
+# - coder (The Pen): File I/O, AST-based code operations
 """
 Orchestrator MCP Server - The "Brain" (Pure Brain Mode)
 
@@ -44,7 +49,7 @@ Tools:
 - Personas: consult_specialist (Architect, Platform Expert, DevOps, SRE)
 - Context: get_codebase_context, list_directory_structure
 
-This server uses mcp_core shared library for:
+This server uses common/mcp_core for:
 - memory: ProjectMemory for persistence
 - inference: InferenceClient and personas
 - utils: Logging and path checking
@@ -56,10 +61,16 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+# Ensure project root is in path for imports (DDD structure)
+# This allows: from common.mcp_core import ... where common is at src/common/
+_project_root = Path(__file__).parent.parent.resolve()  # src/agent/ -> src/ -> project_root
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
 from mcp.server.fastmcp import FastMCP
 
-# Import shared modules from mcp_core
-from mcp_core import (
+# Import shared modules from common/mcp_core
+from common.mcp_core import (
     setup_logging,
     log_decision,
     is_safe_path,
@@ -71,34 +82,22 @@ from mcp_core import (
 )
 
 # Import instructions loader (agent/instructions/ - lazy loaded on first access)
-from mcp_core.instructions import (
+from common.mcp_core.instructions import (
     get_all_instructions_merged,
     list_instruction_names,
 )
 
 # Import Product Owner tools (agent/standards/feature-lifecycle.md enforcement)
-try:
-    from .product_owner import register_product_owner_tools
-except ImportError:
-    from product_owner import register_product_owner_tools
+from agent.capabilities.product_owner import register_product_owner_tools
 
 # Import Language Expert tools (agent/standards/lang-*.md + tool-router examples)
-try:
-    from .lang_expert import register_lang_expert_tools
-except ImportError:
-    from lang_expert import register_lang_expert_tools
+from agent.capabilities.lang_expert import register_lang_expert_tools
 
 # Import Tool Router (The Cortex - Semantic Tool Routing)
-try:
-    from .router import get_router
-except ImportError:
-    from router import get_router
+from agent.core.router import get_router
 
 # Import Reviewer tools (The Immune System)
-try:
-    from .reviewer import register_reviewer_tools
-except ImportError:
-    from reviewer import register_reviewer_tools
+from agent.core.reviewer import register_reviewer_tools
 
 # =============================================================================
 # Configuration
@@ -141,31 +140,9 @@ async def _get_coder_node() -> None:
     """
     return None
 
-# =============================================================================
-# Preload Protocol Caches (loaded once per session)
-# =============================================================================
-# This ensures all rules are cached before any tool execution,
-# avoiding repeated file reads and token waste.
-
-# Preload GitWorkflowCache (from agent/how-to/git-workflow.md)
-try:
-    from .git_ops import GitWorkflowCache, _git_workflow_cache
-    _ = _git_workflow_cache  # Eager load to cache git workflow protocol
-    log_decision("git_ops_cache.preloaded", {"protocol": _git_workflow_cache.get_protocol()}, logger)
-except ImportError:
-    pass
-
-# Preload WritingStyleCache (from agent/writing-style/*.md)
-try:
-    from .writer import WritingStyleCache, _writing_style_cache
-    _ = _writing_style_cache  # Eager load to cache writing style guidelines
-    log_decision("writer_cache.preloaded", {}, logger)
-except ImportError:
-    pass
-
-# NOTE: Instructions are now pure lazy loaded (no eager loading)
-# This avoids fork deadlock issues with threading.Lock.
-# First call to get_instruction_names() will trigger loading.
+# NOTE: Protocol caches (git-workflow, writing-style) are now lazy-loaded
+# by their respective modules via common/mcp_core/lazy_cache.py.
+# No eager loading needed - first access triggers automatic loading.
 
 # =============================================================================
 # Brain Tools (Orchestration - The Cortex)
@@ -368,7 +345,7 @@ async def get_project_instructions(name: str = "") -> str:
     Returns:
         Project instruction(s) content.
     """
-    from mcp_core.instructions import get_instruction, get_all_instructions_merged, list_instruction_names
+    from common.mcp_core.instructions import get_instruction, get_all_instructions_merged, list_instruction_names
 
     if name:
         content = get_instruction(name)
@@ -926,7 +903,7 @@ async def manage_context(action: str, phase: str = None, focus: str = None, note
     """
     if action == "read":
         # 1. Load project instructions (CLAUDE.md + project-conventions)
-        from mcp_core.instructions import get_all_instructions_merged
+        from common.mcp_core.instructions import get_all_instructions_merged
         project_instructions = get_all_instructions_merged()
 
         # 2. Read macro status

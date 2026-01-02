@@ -1,6 +1,22 @@
-# CLAUDE.md - Orchestrator Edition
+# CLAUDE.md - Omni-DevEnv Fusion
 
-> **Quick Reference Only**. Detailed docs: `agent/instructions/*.md`, `mcp-server/README.md`, `agent/how-to/*.md`, `agent/standards/*.md`
+> **Quick Reference Only**. Detailed docs: `agent/instructions/*.md`, `docs/reference/mcp-orchestrator.md`, `agent/how-to/*.md`, `agent/standards/*.md`
+
+## 🏗️ Tri-MCP Architecture Protocol (CRITICAL)
+
+The system is strictly divided into three specialized MCP servers. You MUST route your requests to the correct server based on the task type.
+
+| Role | Server | Responsibilities | Key Tools |
+| :--- | :--- | :--- | :--- |
+| **🧠 The Brain** | `orchestrator` | Planning, Routing, Context, Policy | `consult_router`, `start_spec`, `manage_context`, `consult_specialist` |
+| **📝 The Pen** | `coder` | File I/O, Code Search | `read_file`, `save_file`, `search_files`, `ast_search` |
+| **🛠️ The Hands** | `executor` | Git, Testing, Shell, Docs | `git_status`, `smart_commit`, `run_tests`, `run_task` |
+
+**Routing Rules:**
+1. **Never** ask `orchestrator` to read/write files or run git commands. It has no access.
+2. **Always** consult `orchestrator` first for new features or complex tasks (`start_spec`).
+3. **Use** `executor` for all terminal-like operations (tests, git).
+4. **Use** `coder` for all file editing operations.
 
 ## Core Principle: Actions Over Apologies
 
@@ -72,25 +88,24 @@ When you judge the user is requesting NEW work, call `start_spec` FIRST:
 
 ## 🔒 Git Operations Security
 
-**CRITICAL: Use MCP tools for ALL git operations, NEVER use Bash directly.**
+**CRITICAL: See `agent/how-to/git-workflow.md` for complete rules.**
 
 | Operation | Tool to Use | Why |
 |-----------|-------------|-----|
-| Commit | `run_task("git", ["commit", ...])` OR `smart_commit()` | Authorization enforcement |
-| Git status | `run_task("git", ["status"])` | Safe read-only |
+| Commit | `smart_commit()` | Authorization protocol |
+| Git status/diff/log | `run_task("git", [...])` | Safe MCP execution |
 | Git add | `run_task("git", ["add", ...])` | Safe staging |
-| Direct bash git | ❌ NEVER | Bypasses security checks |
 
-**If you catch yourself typing `git commit` or `git add` in bash → STOP and use `run_task` instead.**
+**NEVER use Bash for git operations.**
 
 ## 📚 Documentation Classification
 
-| Directory | Audience | Purpose |
-|-----------|----------|---------|
-| `docs/explanation/` | Users | Why we chose X (design decisions, philosophy) |
-| `docs/reference/` | Users | API docs, configuration reference |
-| `docs/tutorials/` | Users | Step-by-step guides |
-| `agent/` | LLM | How-to guides, standards, specs |
+| Directory           | Audience | Purpose                                       |
+| ------------------- | -------- | --------------------------------------------- |
+| `docs/explanation/` | Users    | Why we chose X (design decisions, philosophy) |
+| `docs/reference/`   | Users    | API docs, configuration reference             |
+| `docs/tutorials/`   | Users    | Step-by-step guides                           |
+| `agent/`            | LLM      | How-to guides, standards, specs               |
 
 ## 🔧 Nix
 
@@ -99,7 +114,8 @@ Edit `.nix` → `consult_language_expert` → Review standards → Apply edits �
 ## 📁 Directories
 
 - `agent/` - LLM context (how-to, standards, specs)
-- `mcp-server/` - MCP server code & docs
+- `src/mcp_server/` - MCP server code
+- `docs/` - User documentation (explanation, reference, tutorials)
 - `tool-router/data/examples/` - Few-shot examples
 
 ## 📚 Documentation Classification
@@ -110,14 +126,14 @@ Understand audience before reading/writing docs:
 | ----------------- | ---------------- | --------------------------------------------------------- |
 | `agent/`          | LLM (Claude)     | How-to guides, standards, specs - context for AI behavior |
 | `docs/`           | Users            | Human-readable manuals, tutorials, explanations           |
-| `mcp-server/*.md` | Developers       | Technical implementation docs, architecture decisions     |
+| `src/mcp_server/` | Developers       | MCP server code (Python)                                  |
 | `agent/specs/`    | LLM + Developers | Feature specifications, implementation contracts          |
 
 ### When to Write Documentation
 
 - **New workflow/process** → `agent/how-to/` (for LLM to follow)
 - **User-facing guide** → `docs/` (for humans)
-- **Implementation details** → `mcp-server/` (for contributors)
+- **Implementation details** → `src/mcp_server/` (for contributors)
 - **Feature spec** → `agent/specs/` (contract between需求 and 实现)
 
 ## 🔌 MCP Dev

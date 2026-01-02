@@ -16,7 +16,7 @@ Domains:
 """
 import json
 from typing import List, Dict, Any
-from mcp_core import InferenceClient, log_decision
+from common.mcp_core import InferenceClient, log_decision
 
 # =============================================================================
 # Domain Definitions (The Knowledge Graph)
