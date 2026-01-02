@@ -79,6 +79,7 @@ from common.mcp_core import (
     InferenceClient,
     PERSONAS,
     build_persona_prompt,
+    _load_api_key_from_config,
 )
 
 # Import instructions loader (agent/instructions/ - lazy loaded on first access)
@@ -106,9 +107,9 @@ from agent.core.reviewer import register_reviewer_tools
 LOG_LEVEL = os.environ.get("ORCHESTRATOR_LOG_LEVEL", "INFO").upper()
 logger = setup_logging(level=LOG_LEVEL, server_name="orchestrator")
 
-API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+API_KEY = os.environ.get("ANTHROPIC_API_KEY") or _load_api_key_from_config()
 BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
-REQUEST_TIMEOUT = float(os.environ.get("ORCHESTRATOR_TIMEOUT", "30"))
+REQUEST_TIMEOUT = float(os.environ.get("ORCHESTRATOR_TIMEOUT", "120"))
 
 mcp = FastMCP("orchestrator-tools")
 

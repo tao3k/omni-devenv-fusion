@@ -1184,3 +1184,47 @@ if __name__ == "__main__":
         # Default: test orchestrator (backward compatibility)
         success = test_all_tools()
     sys.exit(0 if success else 1)
+
+
+def test_load_api_key_from_config():
+    """Test that API key is loaded from .claude/settings.json correctly.
+
+    This test verifies the fix for the issue where consult_specialist
+    failed because API_KEY was not loaded from .claude/settings.json.
+    """
+    print("\n" + "=" * 60)
+    print("🔐 Testing API Key Configuration Loading")
+    print("=" * 60)
+
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+
+    from common.mcp_core.inference import _load_api_key_from_config, _get_git_toplevel
+
+    # Test 1: Git toplevel detection
+    git_root = _get_git_toplevel()
+    print(f"\n1️⃣  Git toplevel: {git_root}")
+    assert git_root is not None, "Should detect git toplevel"
+    assert (git_root / ".claude/settings.json").exists(), ".claude/settings.json should exist"
+    print("   ✅ Git toplevel detection working")
+
+    # Test 2: Load API key from .claude/settings.json (env object format)
+    api_key = _load_api_key_from_config()
+    print(f"\n2️⃣  API key loaded from .claude/settings.json: {api_key[:20]}..." if api_key else "   ❌ API key not loaded")
+    assert api_key is not None, "Should load API key from .claude/settings.json"
+    assert api_key.startswith("sk-"), "API key should start with 'sk-'"
+    print("   ✅ API key loading from .claude/settings.json working")
+
+    print("\n✅ API Key Configuration Test PASSED")
+    return True
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--test-config", action="store_true", help="Test API key config loading")
+    args = parser.parse_args()
+
+    if args.test_config:
+        success = test_load_api_key_from_config()
+        sys.exit(0 if success else 1)

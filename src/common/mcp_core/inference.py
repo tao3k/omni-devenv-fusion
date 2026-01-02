@@ -31,8 +31,30 @@ log = structlog.get_logger("mcp-core.inference")
 # Default configuration
 DEFAULT_MODEL = "MiniMax-M2.1"
 DEFAULT_BASE_URL = "https://api.minimax.io/anthropic"
-DEFAULT_TIMEOUT = 30
+DEFAULT_TIMEOUT = 120
 DEFAULT_MAX_TOKENS = 4096
+
+
+def _get_git_toplevel() -> Optional[Path]:
+    """
+    Get git toplevel directory using GitOps approach.
+
+    Returns:
+        Path to git repository root or None
+    """
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return Path(result.stdout.strip())
+    except Exception:
+        pass
+    return None
 
 
 def _load_api_key_from_config() -> Optional[str]:
@@ -40,19 +62,21 @@ def _load_api_key_from_config() -> Optional[str]:
     Load API key from project config files.
 
     Checks in order:
-    1. Project root/.mcp.json (Claude Desktop format: mcpServers.orchestrator.env.ANTHROPIC_API_KEY)
-    2. Project root/.mcp.json (Simple format: {"api_key": "..."})
-    3. Project root/.claude/settings.json ({"ANTHROPIC_API_KEY": "..."})
+    1. Git toplevel/.mcp.json (Claude Desktop format: mcpServers.orchestrator.env.ANTHROPIC_API_KEY)
+    2. Git toplevel/.mcp.json (Simple format: {"api_key": "..."})
+    3. Git toplevel/.claude/settings.json ({"ANTHROPIC_API_KEY": "..."} or {"env": {...}})
     4. Environment variables
 
     Returns:
         API key string or None
     """
-    # Determine project root (handles mcp-server/ subdirectory)
-    # inference.py is at mcp-server/mcp_core/inference.py
-    # We need: mcp-server/mcp_core/ -> mcp-server/ -> project_root/
-    module_dir = Path(__file__).parent.resolve()
-    project_root = module_dir.parent.parent.resolve()
+    # Determine project root using GitOps approach
+    project_root = _get_git_toplevel()
+
+    if not project_root:
+        # Fallback to module-based detection
+        module_dir = Path(__file__).parent.resolve()
+        project_root = module_dir.parent.parent.resolve()
 
     config_files = [
         project_root / ".mcp.json",
@@ -70,14 +94,23 @@ def _load_api_key_from_config() -> Optional[str]:
                     orchestrator_env = data.get("mcpServers", {}).get("orchestrator", {}).get("env", {})
                     if "ANTHROPIC_API_KEY" in orchestrator_env:
                         return orchestrator_env["ANTHROPIC_API_KEY"]
+                    if "ANTHROPIC_AUTH_TOKEN" in orchestrator_env:
+                        return orchestrator_env["ANTHROPIC_AUTH_TOKEN"]
 
                 # Try simple .mcp.json format
                 if "api_key" in data:
                     return data["api_key"]
 
-                # Try .claude/settings.json format
+                # Try .claude/settings.json format (top-level key)
                 if "ANTHROPIC_API_KEY" in data:
                     return data["ANTHROPIC_API_KEY"]
+
+                # Try .claude/settings.json env object format
+                if "env" in data and isinstance(data["env"], dict):
+                    if "ANTHROPIC_API_KEY" in data["env"]:
+                        return data["env"]["ANTHROPIC_API_KEY"]
+                    if "ANTHROPIC_AUTH_TOKEN" in data["env"]:
+                        return data["env"]["ANTHROPIC_AUTH_TOKEN"]
             except (json.JSONDecodeError, IOError) as e:
                 log.debug(f"inference.config_read_failed", path=str(config_path), error=str(e))
 

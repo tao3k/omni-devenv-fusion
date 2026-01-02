@@ -96,7 +96,7 @@ Control client and runtime behavior via environment variables:
 | `ANTHROPIC_API_KEY`             | _required_                         | API key for the orchestrator.                                  |
 | `ANTHROPIC_BASE_URL`            | `https://api.minimax.io/anthropic` | Anthropic-compatible endpoint.                                 |
 | `ORCHESTRATOR_MODEL`            | `MiniMax-M2.1`                     | Model name. Falls back to `ANTHROPIC_MODEL`.                   |
-| `ORCHESTRATOR_TIMEOUT`          | `30`                               | Request timeout in seconds.                                    |
+| `ORCHESTRATOR_TIMEOUT`          | `120`                              | Request timeout in seconds.                                    |
 | `ORCHESTRATOR_MAX_TOKENS`       | `4096`                             | Max response tokens.                                           |
 | `ORCHESTRATOR_ENABLE_STREAMING` | `false`                            | Set to `true` for streaming responses.                         |
 | `ORCHESTRATOR_LOG_LEVEL`        | `INFO`                             | Logging level for JSON output.                                 |

@@ -28,7 +28,7 @@ __version__ = "1.2.0"
 
 from .execution import SafeExecutor
 from .memory import ProjectMemory
-from .inference import InferenceClient, PERSONAS, build_persona_prompt
+from .inference import InferenceClient, PERSONAS, build_persona_prompt, _load_api_key_from_config
 from .utils import setup_logging, is_safe_path, log_decision
 from .lazy_cache import LazyCache, FileCache, MarkdownCache, ConfigCache, CompositeCache
 from .project_context import (

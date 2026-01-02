@@ -83,7 +83,7 @@ in
 
   dotenv.enable = true;
 
-  dotenv.filename = [ ".env.development" ];
+  dotenv.filename = [ ".env" ];
   # https://devenv.sh/languages/
   # languages.rust.enable = true;
 
