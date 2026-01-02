@@ -1014,6 +1014,82 @@ async def manage_context(action: str, phase: str = None, focus: str = None, note
     return "Error: Unknown action. Use read, update_status, or add_note."
 
 
+# =============================================================================
+# Legislation Gate: Spec Enforcement
+# =============================================================================
+
+@mcp.tool()
+async def start_spec(name: str) -> str:
+    """
+    Gatekeeper: Enforces Legislation phase before any new work.
+
+    When you are about to work on something NEW (feature, refactor, fix),
+    you MUST call this tool FIRST. It checks if a spec exists.
+
+    Flow:
+    1. Call this tool with the feature name (e.g., "Hive Architecture")
+    2. If spec exists: Proceed to execution
+    3. If spec missing: REQUIRED to create spec via draft_feature_spec first
+
+    Args:
+        name: What you're about to work on (e.g., "The Hive", "Auth Fix", "New Feature")
+
+    Returns:
+        Error with spec creation instructions OR success to proceed
+    """
+    # Validate input
+    if not name or len(name.strip()) < 2:
+        return json.dumps({
+            "status": "error",
+            "message": "Invalid name. Provide a descriptive name for the work."
+        })
+
+    # Check if spec file exists (search both patterns)
+    spec_dir = Path(__file__).parent.parent / "agent" / "specs"
+
+    # Try: feature_name.md, feature-name.md, or *_feature_name*.md
+    safe_name = name.lower().replace(" ", "_").replace("-", "_")
+    possible_patterns = [
+        f"{safe_name}.md",
+        f"*_{safe_name}.md",
+        f"{safe_name}_*.md",
+    ]
+
+    spec_file = None
+    for pattern in possible_patterns:
+        import glob
+        matches = list(spec_dir.glob(pattern))
+        if matches:
+            spec_file = matches[0]
+            break
+
+    if not spec_file:
+        # Spec missing - REQUIRE creation
+        return json.dumps({
+            "status": "blocked",
+            "reason": "Legislation is MANDATORY for new work",
+            "work_name": name,
+            "spec_required": True,
+            "spec_patterns": possible_patterns,
+            "next_action": "draft_feature_spec",
+            "next_action_params": {
+                "title": name,
+                "description": f"Implementation plan for: {name}"
+            },
+            "enforcement": "No code can be written until spec is created and verified"
+        }, indent=2)
+
+    # Spec exists - allow proceed
+    return json.dumps({
+        "status": "allowed",
+        "work_name": name,
+        "spec_required": False,
+        "spec_path": str(spec_file),
+        "message": f"Legislation complete for '{name}'. Ready for execution.",
+        "next_action": "manage_context(update_status, phase=Coding, focus=...)"
+    }, indent=2)
+
+
 @mcp.tool()
 async def analyze_last_error() -> str:
     """

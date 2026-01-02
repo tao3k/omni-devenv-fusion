@@ -216,9 +216,161 @@ def test_manage_context():
         process.wait()
 
 
+def test_start_spec_enforcement():
+    """Test that start_spec enforces Legislation (spec requirement)."""
+    config_path = find_config()
+
+    if not config_path:
+        print("Error: No config file found (.mcp.json or .claude/settings.json)")
+        return False
+
+    print(f"Using config: {config_path}")
+
+    try:
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+    except Exception as e:
+        print(f"Failed to parse config: {e}")
+        return False
+
+    servers = config.get("mcpServers", {})
+    if "orchestrator" not in servers:
+        print("Error: No 'orchestrator' in config")
+        return False
+
+    server_conf = servers["orchestrator"]
+    env_vars = server_conf.get("env", {})
+
+    run_env = os.environ.copy()
+    run_env.update(env_vars)
+
+    cmd = server_conf.get("command")
+    args = server_conf.get("args", [])
+    executable = sys.executable if cmd in ["python", "python3"] else cmd
+
+    print(f"Starting MCP server: {executable} {' '.join(args)}")
+
+    process = subprocess.Popen(
+        [executable] + args,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=run_env,
+        text=True,
+        bufsize=1
+    )
+
+    try:
+        print("\n" + "=" * 60)
+        print("TESTING: start_spec enforces Legislation (spec requirement)")
+        print("=" * 60)
+
+        # Initialize
+        init_msg = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "test-script", "version": "1.0"}
+            }
+        }
+        process.stdin.write(json.dumps(init_msg) + "\n")
+        process.stdin.flush()
+
+        response = read_json_rpc(process)
+        if not response or "result" not in response:
+            print(f"Init failed: {response}")
+            return False
+
+        print("Server initialized")
+
+        # Send initialized notification
+        process.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
+        process.stdin.flush()
+
+        # Test 1: start_spec with existing "Hive Architecture" (should allow)
+        print("\n[Step 1] Testing start_spec('Hive Architecture') - existing spec...")
+        success, text = send_tool(process, "start_spec", {"name": "Hive Architecture"}, 3)
+
+        if not success:
+            print(f"Failed: {text}")
+            return False
+
+        result = json.loads(text)
+        print(f"Response: {result.get('status')} - {result.get('message', '')}")
+
+        if result.get("status") != "allowed":
+            print("ERROR: Hive Architecture spec exists but start_spec blocked!")
+            return False
+
+        print("[OK] Hive Architecture: Allowed (spec exists)")
+
+        # Test 2: start_spec with new feature (should block)
+        print("\n[Step 2] Testing start_spec('New Feature X') - missing spec...")
+        success, text = send_tool(process, "start_spec", {"name": "New Feature X"}, 3)
+
+        if not success:
+            print(f"Failed: {text}")
+            return False
+
+        result = json.loads(text)
+        print(f"Response: {result.get('status')} - {result.get('reason', '')}")
+
+        if result.get("status") != "blocked":
+            print("ERROR: New Feature X missing spec but start_spec allowed!")
+            return False
+
+        if not result.get("spec_required"):
+            print("ERROR: start_spec should indicate spec_required=true")
+            return False
+
+        if result.get("next_action") != "draft_feature_spec":
+            print("ERROR: start_spec should require draft_feature_spec")
+            return False
+
+        print("[OK] New Feature X: Blocked (spec required)")
+
+        # Test 3: Empty name (should error)
+        print("\n[Step 3] Testing start_spec('') - empty name...")
+        success, text = send_tool(process, "start_spec", {"name": ""}, 3)
+
+        if not success:
+            print(f"Failed: {text}")
+            return False
+
+        if "Invalid name" not in text:
+            print("ERROR: Empty name should return error")
+            return False
+
+        print("[OK] Empty name: Rejected")
+
+        print("\n" + "=" * 60)
+        print("ALL CHECKS PASSED!")
+        print("start_spec correctly enforces Legislation for any new work")
+        print("=" * 60)
+        return True
+
+    finally:
+        process.terminate()
+        try:
+            stderr = process.stderr.read()
+            if stderr:
+                print(f"Server logs: {stderr[:500]}")
+        except:
+            pass
+        process.wait()
+
+
 if __name__ == "__main__":
     print("\nTesting MCP tool: manage_context returns problem-solving.md")
     print("This verifies the file is auto-loaded in new sessions.\n")
 
     result = test_manage_context()
+    if result:
+        print("\n" + "=" * 60)
+        print("Running start_spec test...")
+        print("=" * 60)
+        result = test_start_spec_enforcement()
     sys.exit(0 if result else 1)
