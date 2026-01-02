@@ -335,6 +335,54 @@ smart_commit() → user says "run just agent-commit" → execute_authorized_comm
 
 **ANY other path is a protocol violation.**
 
+---
+
+## 📜 LEGAL: Binding Protocol Rules
+
+**These rules are NOT suggestions. They are binding protocol enforced by code.**
+
+### Zero-Tolerance Policy
+
+| Violation                       | Consequence                         |
+| ------------------------------- | ----------------------------------- |
+| Direct `git commit`             | Session termination warning         |
+| Bypass via bash/shell           | Immediate block + warning logged    |
+| Auto-commit without permission  | Protocol violation, may end session |
+| Ignore "authorization_required" | Session termination                 |
+
+### Authorization is EXPLICIT Only
+
+**Only these phrases grant authorization:**
+
+| Phrase                                     | Effect                                    |
+| ------------------------------------------ | ----------------------------------------- |
+| `"run just agent-commit"`                  | ✅ Authorized - execute with staged files |
+| `"just agent-commit <type> <scope> <msg>"` | ✅ Full authorization                     |
+
+**These do NOT grant authorization:**
+
+- `"ok"` / `"yes"` / `"hao"` / `"go ahead"`
+- `"please commit"`
+- `"that looks good"`
+- Any variation not matching exactly
+
+### Agent Obligations
+
+1. **STOP** after completing work
+2. **ASK** for permission with exact phrase requirement
+3. **WAIT** for `"run just agent-commit"`
+4. **EXECUTE** `just agent-commit` with appropriate args
+5. **NEVER** assume authorization from context
+
+### Emergency Protocol
+
+If you accidentally bypassed authorization:
+
+1. **IMMEDIATELY STOP** all operations
+2. **Report** the violation to user
+3. **Wait** for user to decide next action
+4. **Do NOT** attempt to recover or fix yourself
+
 ### Never Auto-Commit Without Authorization
 
 **This is NOT allowed:**
