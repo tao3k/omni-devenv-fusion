@@ -1,26 +1,20 @@
-# FileSystem Skill Guide
+# Skill: Filesystem Operations
 
-This skill provides file operations including reading, writing, searching, and glob patterns.
+## Overview
 
-## When to Use This Skill
+Provides safe access to the project's file system. Use this skill to read code, write configuration, and explore the directory structure.
 
-Use this skill when:
+## Capabilities
 
-- Reading existing files
-- Creating or modifying files
-- Searching for patterns in code
-- Finding files by name patterns
+- **Read**: `read_file`, `read_multiple_files`
+- **Write**: `write_file`, `edit_file` (replace block)
+- **Explore**: `list_directory`, `search_files`
+- **Analyze**: `get_file_info` (size, type)
 
-## Best Practices
+## Safety Rules
 
-1. **Always read before editing** - Use `read_file` to get current content
-2. **Use glob patterns** for finding files by name
-3. **Use search_files** for finding patterns in code
-4. **Backup before overwrite** - Create backups when saving files
-
-## File Operations
-
-- `read_file`: Read file contents with optional line range
-- `save_file`: Write content with automatic backup
-- `search_files`: Search for text patterns in files
-- `glob_files`: Find files matching patterns
+1. **Read Before Write**: Always read a file's content before attempting to edit it to ensure you have the latest context.
+2. **Atomic Writes**: `write_file` overwrites the ENTIRE file. Ensure you have the full content ready.
+3. **Validation**: Check if a file exists (`list_directory` or `get_file_info`) before accessing it blindly.
+4. **Scope**: You are confined to the project root. Do not attempt to access system files (e.g., `/etc/passwd`).
+5. **Encoding**: All files are handled as UTF-8.

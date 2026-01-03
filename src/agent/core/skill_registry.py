@@ -1,18 +1,14 @@
 """
 src/agent/core/skill_registry.py
 The Kernel of the Skill-Centric OS.
-
-Responsible for:
-1. Discovery: Scanning agent/skills/ for capabilities.
-2. Loading: Importing tool modules and registering them with MCP.
-3. Context: Providing the procedural knowledge (guides) to the Brain.
+V2: Uses Spec-based loading for precise, pollution-free plugin management.
 """
-import os
 import json
-import importlib
+import importlib.util
 import sys
+import types
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Optional, List, Tuple
 import structlog
 from mcp.server.fastmcp import FastMCP
 
@@ -38,9 +34,9 @@ class SkillRegistry:
         self.project_root = get_project_root()
         self.skills_dir = self.project_root / "agent" / "skills"
         self.loaded_skills: Dict[str, SkillManifest] = {}
+        self.module_cache: Dict[str, types.ModuleType] = {}
         self._initialized = True
 
-        # Ensure skills dir exists
         self.skills_dir.mkdir(parents=True, exist_ok=True)
 
     def list_available_skills(self) -> List[str]:
@@ -67,76 +63,105 @@ class SkillRegistry:
             logger.error(f"Failed to parse manifest for {skill_name}", error=str(e))
             return None
 
+    def _load_module_from_path(self, module_name: str, file_path: Path) -> types.ModuleType:
+        """
+        Load a python module directly from a file path without polluting sys.path.
+        Enables hot reloading by re-executing the module code.
+        """
+        # Clear any existing module from sys.modules to ensure hot reload works
+        if module_name in sys.modules:
+            del sys.modules[module_name]
+
+        # Create the Spec (The Blueprint)
+        spec = importlib.util.spec_from_file_location(module_name, file_path)
+        if not spec or not spec.loader:
+            raise ImportError(f"Could not create spec for {file_path}")
+
+        # Create the Module (The Instance)
+        module = importlib.util.module_from_spec(spec)
+
+        # Register in sys.modules for relative imports inside the skill
+        sys.modules[module_name] = module
+
+        # Execute the code (The Activation)
+        try:
+            spec.loader.exec_module(module)
+        except Exception as e:
+            if module_name in sys.modules:
+                del sys.modules[module_name]
+            raise e
+
+        return module
+
     def load_skill(self, skill_name: str, mcp: FastMCP) -> Tuple[bool, str]:
         """
-        Dynamically load a skill into the MCP server.
-
-        Returns:
-            (success, message)
+        Dynamically load a skill into the MCP server using spec-based loading.
+        Supports HOT RELOAD.
         """
-        if skill_name in self.loaded_skills:
-            return True, f"Skill '{skill_name}' is already loaded."
-
         manifest = self.get_skill_manifest(skill_name)
         if not manifest:
             return False, f"Skill '{skill_name}' not found or invalid."
 
-        # 1. Check dependencies
+        # 1. Resolve Dependencies
         for dep in manifest.dependencies:
             if dep not in self.loaded_skills:
-                # Recursively load dependency
                 success, msg = self.load_skill(dep, mcp)
                 if not success:
-                    return False, f"Failed to load dependency '{dep}': {msg}"
+                    return False, f"Dependency '{dep}' failed: {msg}"
 
-        # 2. Import and register tools
+        # 2. Locate the Tools File
+        # tools_module="agent.skills.git.tools" -> agent/skills/git/tools.py
+        relative_path = manifest.tools_module.replace(".", "/") + ".py"
+        source_path = self.project_root / relative_path
+
+        if not source_path.exists():
+            return False, f"Source file not found: {source_path}"
+
+        # 3. Load/Reload Logic
         try:
-            # Add project root to path if needed so we can import 'agent.skills...'
-            if str(self.project_root) not in sys.path:
-                sys.path.insert(0, str(self.project_root))
+            module_name = manifest.tools_module
 
-            module = importlib.import_module(manifest.tools_module)
+            # Explicitly load from file (bypasses cache because we re-exec)
+            module = self._load_module_from_path(module_name, source_path)
 
-            # Expect a 'register' function
+            # 4. Registration
             if hasattr(module, "register"):
                 module.register(mcp)
             else:
-                return False, f"Module {manifest.tools_module} has no 'register(mcp)' function."
+                return False, f"Module {source_path.name} has no 'register(mcp)' function."
 
+            # Update State
             self.loaded_skills[skill_name] = manifest
-            logger.info(f"Skill loaded: {skill_name}")
-            return True, f"Skill '{skill_name}' loaded successfully."
+            self.module_cache[skill_name] = module
+
+            logger.info(f"Skill loaded via Spec: {skill_name}")
+            return True, f"Skill '{skill_name}' loaded via Direct Spec (Hot Reload)."
 
         except Exception as e:
             logger.error(f"Failed to load skill {skill_name}", error=str(e))
-            return False, str(e)
+            return False, f"Load Error: {str(e)}"
 
     def get_skill_context(self, skill_name: str) -> str:
-        """
-        Retrieve the 'Procedural Knowledge' (guide.md) for a skill.
-        This is what we inject into the LLM context.
-        """
+        """Retrieve the 'Procedural Knowledge' (guide.md) for a skill."""
         manifest = self.loaded_skills.get(skill_name) or self.get_skill_manifest(skill_name)
         if not manifest:
             return ""
 
-        guide_path = self.skills_dir / skill_name / manifest.guide_file
         content = ""
-
+        guide_path = self.skills_dir / skill_name / manifest.guide_file
         if guide_path.exists():
-            content += f"--- {skill_name.upper()} GUIDE ---\n"
+            content += f"\n--- {skill_name.upper()} GUIDE ---\n"
             content += guide_path.read_text(encoding="utf-8") + "\n"
 
         if manifest.prompts_file:
             prompts_path = self.skills_dir / skill_name / manifest.prompts_file
             if prompts_path.exists():
-                content += f"\n--- {skill_name.upper()} PROMPTS ---\n"
+                content += f"\n--- {skill_name.upper()} SYSTEM PROMPTS ---\n"
                 content += prompts_path.read_text(encoding="utf-8") + "\n"
 
         return content
 
 
-# Singleton Accessor
 _registry = None
 
 

@@ -15,13 +15,11 @@ def register_skill_tools(mcp: FastMCP):
     async def list_available_skills() -> str:
         """
         [Skill System] List all discoverable skills in the library.
-        Use this to find capabilities like 'git', 'python', 'docker', etc.
         """
         skills = registry.list_available_skills()
         if not skills:
             return "No skills found in agent/skills/."
 
-        # Get descriptions from manifests
         descriptions = []
         for skill in skills:
             manifest = registry.get_skill_manifest(skill)
@@ -36,33 +34,22 @@ def register_skill_tools(mcp: FastMCP):
     async def load_skill(skill_name: str) -> str:
         """
         [Skill System] Dynamically load a skill's tools and knowledge.
-
-        Call this when you need specific capabilities to perform a task.
-        Example: load_skill('git') when user asks to commit changes.
-
-        Returns:
-            The 'Procedural Knowledge' (Guide) for the skill, strictly instructing
-            how to use the newly loaded tools.
         """
-        # 1. Load the tools into MCP
         success, message = registry.load_skill(skill_name, mcp)
 
         if not success:
-            return f"❌ Failed to load '{skill_name}': {message}"
+            return f"Failed to load '{skill_name}': {message}"
 
-        # 2. Fetch the Guide (Context)
-        # This is critical: inject knowledge while loading tools
         context = registry.get_skill_context(skill_name)
 
         return f"""
-✅ Skill '{skill_name}' loaded successfully!
+Skill '{skill_name}' loaded successfully!
 
 {message}
 
-=== 📖 PROCEDURAL KNOWLEDGE ({skill_name.upper()}) ===
+=== PROCEDURAL KNOWLEDGE ({skill_name.upper()}) ===
 {context}
 ==================================================
-You may now use the tools listed above following these rules.
 """
 
     @mcp.tool()
@@ -72,3 +59,90 @@ You may now use the tools listed above following these rules.
         if not loaded:
             return "No skills currently loaded."
         return f"Active Skills: {', '.join(loaded)}"
+
+    @mcp.tool()
+    async def skill(skill: str, call: str) -> str:
+        """
+        [Auto-Load] Execute a skill operation with automatic skill loading.
+
+        Usage:
+        - skill("filesystem", 'list_directory(path=".")')
+        - skill("filesystem", 'read_file(path="README.md")')
+        - skill("filesystem", 'write_file(path="test.txt", content="hello")')
+        - skill("filesystem", 'search_files(pattern="*.py")')
+        - skill("git", 'git_status()')
+        - skill("git", 'smart_commit(message="feat: add new feature")')
+
+        Args:
+            skill: The skill to use (filesystem, git, python, etc.)
+            call: Function call string like 'operation(arg1="value1", arg2="value2")'
+        """
+        # Parse the call string
+        import ast
+
+        try:
+            # Parse function call syntax
+            node = ast.parse(call, mode='eval')
+            call_node = node.body
+
+            if not isinstance(call_node, ast.Call):
+                return f"Invalid call syntax: {call}"
+
+            operation = call_node.func.id if isinstance(call_node.func, ast.Name) else None
+            if not operation:
+                return f"Could not parse operation from: {call}"
+
+            # Parse arguments
+            kwargs = {}
+            for kw in call_node.keywords:
+                if isinstance(kw.value, ast.Constant):
+                    kwargs[kw.arg] = kw.value.value
+                elif isinstance(kw.value, ast.Dict):
+                    # Handle dict literals
+                    kwargs[kw.arg] = {}
+                    for k, v in zip(kw.value.keys, kw.value.values):
+                        if isinstance(k, ast.Constant) and isinstance(v, ast.Constant):
+                            kwargs[kw.arg][k.value] = v.value
+
+        except SyntaxError as e:
+            return f"Invalid call syntax: {call}\nError: {e}"
+
+        # Auto-load skill if not already loaded
+        if skill not in registry.loaded_skills:
+            success, msg = registry.load_skill(skill, mcp)
+            if not success:
+                return f"Failed to load skill '{skill}': {msg}"
+            context = registry.get_skill_context(skill)
+            return f"""
+Skill '{skill}' auto-loaded!
+
+{msg}
+
+=== PROCEDURAL KNOWLEDGE ===
+{context}
+==================================================
+
+Now call: skill('{skill}', '{operation}({kwargs})')"""
+
+        # Get the loaded module
+        module = registry.module_cache.get(skill)
+        if not module:
+            return f"Skill '{skill}' not found in module cache."
+
+        # Execute operation
+        if hasattr(module, operation):
+            func = getattr(module, operation)
+            if callable(func):
+                try:
+                    import inspect
+                    if inspect.iscoroutinefunction(func):
+                        result = await func(**kwargs)
+                    else:
+                        result = func(**kwargs)
+                    return result
+                except Exception as e:
+                    return f"Error executing {operation}: {e}"
+            else:
+                return f"'{operation}' is not callable."
+        else:
+            return f"Operation '{operation}' not found in skill '{skill}'."

@@ -1,12 +1,9 @@
 {
   "name": "filesystem",
   "version": "1.0.0",
-  "description": "File operations including read, write, search, and glob patterns",
-  "category": "development",
+  "description": "Safe file operations (read, write, list, search) with codebase awareness.",
   "dependencies": [],
-  "tools": ["read_file", "save_file", "search_files", "glob_files"],
-  "context_files": [],
-  "prompts": [
-    "Use file operations efficiently. Always read files before editing them."
-  ]
+  "tools_module": "agent.skills.filesystem.tools",
+  "guide_file": "guide.md",
+  "prompts_file": "prompts.md"
 }
