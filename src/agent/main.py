@@ -72,7 +72,6 @@ from agent.core.reviewer import register_reviewer_tools
 from agent.capabilities.librarian import register_librarian_tools
 from agent.capabilities.harvester import register_harvester_tools  # Phase 12
 from agent.capabilities.skill_manager import register_skill_tools  # Phase 13: Dynamic Skills
-from agent.capabilities.output import register_output_tools  # Phase 13.x: Output Formatting
 
 # Import tool modules (structured tools)
 from agent.tools.context import register_context_tools
@@ -141,9 +140,6 @@ _register_tool_module("harvester", register_harvester_tools)
 
 # 11. Skill Manager (Phase 13: Dynamic Skills)
 _register_tool_module("skill_manager", register_skill_tools)
-
-# 12. Output Formatting (Phase 13.x: Output Beautification)
-_register_tool_module("output", register_output_tools)
 
 
 # =============================================================================

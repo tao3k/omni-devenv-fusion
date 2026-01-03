@@ -2066,10 +2066,14 @@ version = "0.1.0"
 source = { editable = "src/mcp_server/coder" }
 dependencies = [
     { name = "mcp" },
+    { name = "omni-dev-fusion-common" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "mcp", specifier = ">=1.1.0" }]
+requires-dist = [
+    { name = "mcp", specifier = ">=1.1.0" },
+    { name = "omni-dev-fusion-common", editable = "src/common" },
+]
 
 [[package]]
 name = "omni-dev-fusion-common"
@@ -2092,10 +2096,14 @@ version = "0.1.0"
 source = { editable = "src/mcp_server/executor" }
 dependencies = [
     { name = "mcp" },
+    { name = "omni-dev-fusion-common" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "mcp", specifier = ">=1.1.0" }]
+requires-dist = [
+    { name = "mcp", specifier = ">=1.1.0" },
+    { name = "omni-dev-fusion-common", editable = "src/common" },
+]
 
 [[package]]
 name = "onnxruntime"
