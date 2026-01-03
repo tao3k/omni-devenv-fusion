@@ -141,7 +141,15 @@ TEMPLATE:
 
 Fill in all sections with appropriate detail. Return ONLY the filled template content."""
 
-            spec_content = await client.complete(prompt=prompt, max_tokens=4000)
+            result = await client.complete(
+                system_prompt="You are an expert software architect.",
+                user_query=prompt,
+                max_tokens=4000
+            )
+            if result["success"]:
+                spec_content = result["content"]
+            else:
+                raise Exception(f"LLM Error: {result.get('error', 'Unknown error')}")
 
             # Clean up spec content
             # Remove template markers if present

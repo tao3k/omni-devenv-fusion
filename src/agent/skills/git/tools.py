@@ -1,20 +1,21 @@
 """
-Git Skill Tools (Smart Analysis & Token Auth)
-
-Restoring the classic 'Token Challenge' workflow.
+src/agent/skills/git/tools.py
+Git Skill Tools (Smart Commit with Session-based Authorization)
 """
 import subprocess
 import secrets
-import structlog
-from typing import Dict
+import json
+from datetime import datetime
+from typing import Dict, Any, Optional
 from mcp.server.fastmcp import FastMCP
 from common.mcp_core.gitops import run_git_cmd, get_git_status, get_git_diff, get_git_log
+import structlog
 
 logger = structlog.get_logger(__name__)
 
-# In-Memory Token Store
-# Stores { "pending_token": "a1b2", "message": "feat: ..." }
-_auth_context: Dict[str, str] = {}
+# Session-based Workflow State
+# Stores { "session_id": { "status": "pending", "context": "...", "message": "..." } }
+_commit_sessions: Dict[str, Dict[str, Any]] = {}
 
 
 async def get_git_status() -> str:
@@ -118,7 +119,7 @@ async def get_git_log(n: int = 5) -> str:
 
 
 def register(mcp: FastMCP):
-    """Register Git tools with Smart Analysis."""
+    """Register Git tools with Smart Commit V2 Engine."""
 
     @mcp.tool()
     async def git_status() -> str:
@@ -152,56 +153,68 @@ def register(mcp: FastMCP):
     @mcp.tool()
     async def smart_commit(message: str, auth_token: str = "") -> str:
         """
-        Commit staged changes with Smart Analysis & Token Authorization.
+        Commit staged changes with Smart Analysis & Session Authorization.
 
         Workflow:
-        1. Agent calls `smart_commit(message="...")` (no token).
-        2. Tool returns "Smart Analysis" + "Auth Token: [abcd]".
-        3. Agent/User reviews analysis.
-        4. Agent calls `smart_commit(message="...", auth_token="abcd")`.
-        5. Tool executes commit.
+        1. Agent calls `smart_commit(message="...")`.
+        2. System generates a Session ID and returns analysis.
+        3. User/Agent reviews.
+        4. Agent calls `smart_commit(message="...", auth_token="SESSION_ID")` to execute.
 
         Args:
             message: The commit message.
-            auth_token: Authorization token. Leave empty for analysis.
+            auth_token: The Session ID provided in the analysis step.
         """
-        global _auth_context
+        global _commit_sessions
 
         # Clean input
         if ":" not in message:
             return "❌ Error: Commit message must follow 'type(scope): subject' format."
 
-        # Check if this is a Confirmation Call
-        stored_token = _auth_context.get("pending_token")
+        # 1️⃣ EXECUTE PHASE (If token provided)
+        if auth_token:
+            session = _commit_sessions.get(auth_token)
 
-        if auth_token and stored_token:
-            # Verify token
-            if auth_token.strip().lower() == stored_token.lower():
-                # Execute commit
-                try:
-                    output = await run_git_cmd(["commit", "-m", message])
-                    _auth_context.clear()
-                    logger.info("smart_commit.success", message=message[:50])
-                    return f"✅ Commit Successful:\n{output}"
-                except Exception as e:
-                    return f"❌ Commit Failed: {str(e)}"
-            else:
-                return f"⛔️ Invalid Token. Expected: [{stored_token}], Got: [{auth_token}]"
+            # Validation
+            if not session:
+                return f"⛔️ Invalid or Expired Session Token: {auth_token}. Please start over."
 
-        # No token provided (or new request) - Generate Smart Analysis
-        new_token = secrets.token_hex(2)
-        _auth_context["pending_token"] = new_token
-        _auth_context["message"] = message
+            if session["message"] != message:
+                return f"⚠️ Message Mismatch. Session expects: '{session['message']}'"
 
-        # Run Smart Analysis (Diff Stat)
+            # Execute
+            try:
+                output = await run_git_cmd(["commit", "-m", message])
+                # Cleanup session on success
+                _commit_sessions.pop(auth_token, None)
+                logger.info("smart_commit.success", message=message[:50])
+                return f"✅ Commit Successful (Session {auth_token[:6]}):\n{output}"
+            except Exception as e:
+                return f"❌ Commit Failed: {str(e)}"
+
+        # 2️⃣ ANALYSIS PHASE (Start New Session)
+
+        # Generate Session ID (Acts as the Token)
+        session_id = secrets.token_hex(4)  # e.g. "8f2a9c1d"
+        timestamp = datetime.now().isoformat()
+
+        # Create Session State
+        _commit_sessions[session_id] = {
+            "status": "pending_auth",
+            "message": message,
+            "timestamp": timestamp
+        }
+
+        # Generate Analysis
         try:
             stats = await run_git_cmd(["diff", "--cached", "--stat"])
             if not stats.strip():
-                _auth_context.clear()
+                _commit_sessions.pop(session_id, None)
                 return "⚠️ No staged changes to commit. Did you run `git_add`?"
         except:
             stats = "(Unable to generate stats)"
 
+        # Return Analysis with Session Authorization
         return f"""
 📊 **SMART ANALYSIS**
 --------------------------------------------------
@@ -210,12 +223,12 @@ def register(mcp: FastMCP):
 📝 **Proposed Message**: "{message}"
 
 🔐 **AUTHORIZATION REQUIRED**
+Session ID: `{session_id}`
 
-To confirm this commit, please call this tool again with:
+To confirm, call this tool again with:
+`auth_token="{session_id}"`
 
-`auth_token="{new_token}"`
-
-(Agent: Ask the user to confirm this action.)
+(Agent: Ask the user to confirm using this token.)
 """
 
-    logger.info("Git skill tools registered (Smart Analysis + Token Auth)")
+    logger.info("Git skill tools registered (Smart Commit with Session Authorization)")

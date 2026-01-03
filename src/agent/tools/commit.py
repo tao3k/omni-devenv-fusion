@@ -147,8 +147,15 @@ Allowed scopes: {scopes_str}
 Provide ONLY the commit message line, no markdown, no explanation."""
 
         try:
-            commit_msg = await client.complete(prompt=prompt, max_tokens=100)
-            commit_msg = commit_msg.strip()
+            result = await client.complete(
+                system_prompt="You are an expert technical writer.",
+                user_query=prompt,
+                max_tokens=100
+            )
+            if result["success"]:
+                commit_msg = result["content"].strip()
+            else:
+                raise Exception(f"LLM Error: {result.get('error', 'Unknown error')}")
 
             log_decision("spec_aware_commit.generated", {
                 "spec_path": spec_path,
