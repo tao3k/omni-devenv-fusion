@@ -19,6 +19,6 @@ Brief description of what this skill does.
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
+| Command     | Description         |
+| ----------- | ------------------- |
 | `tool_name` | What this tool does |

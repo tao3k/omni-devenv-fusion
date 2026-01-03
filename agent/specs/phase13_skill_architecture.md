@@ -54,6 +54,7 @@ Update `src/agent/main.py` to support dynamic tool registration.
 **Current**: Static `register_git_ops_tools(mcp)`
 
 **New**:
+
 ```python
 @mcp.tool()
 async def load_skill(skill_name: str):
