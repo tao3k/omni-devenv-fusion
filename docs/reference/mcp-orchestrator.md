@@ -121,13 +121,13 @@ Operations (git, terminal, testing, etc.) are accessed via the `skill()` tool:
 
 **Available Skills:**
 
-| Skill | Tools |
-|-------|-------|
-| `git` | git_status, git_log, git_add, smart_commit |
-| `terminal` | execute_command, inspect_environment |
-| `testing_protocol` | smart_test_runner, run_test_command |
-| `writer` | lint_writing_style, polish_text, load_writing_memory |
-| `filesystem` | list_directory, read_file, write_file, search_files |
+| Skill              | Tools                                                |
+| ------------------ | ---------------------------------------------------- |
+| `git`              | git_status, git_log, git_add, smart_commit           |
+| `terminal`         | execute_command, inspect_environment                 |
+| `testing_protocol` | smart_test_runner, run_test_command                  |
+| `writer`           | lint_writing_style, polish_text, load_writing_memory |
+| `filesystem`       | list_directory, read_file, write_file, search_files  |
 
 ---
 

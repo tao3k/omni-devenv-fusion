@@ -1,13 +1,32 @@
 """
 Terminal Skill Tools
+
+Unified shell execution with safety audit.
 """
 import asyncio
+from pathlib import Path
+from typing import Optional
 from mcp.server.fastmcp import FastMCP
-from common.mcp_core.execution import SafeExecutor, check_dangerous_patterns
+from common.mcp_core import log_decision, SafeExecutor, check_dangerous_patterns, ProjectMemory
+from common.mcp_core.gitops import get_project_root
 import structlog
 
 logger = structlog.get_logger(__name__)
 
+# Initialize project memory for flight recorder
+_project_memory = None
+
+def _get_project_memory():
+    """Lazy initialization of project memory."""
+    global _project_memory
+    if _project_memory is None:
+        _project_memory = ProjectMemory()
+    return _project_memory
+
+
+# =============================================================================
+# Module-Level Functions (for skill() tool compatibility)
+# =============================================================================
 
 async def execute_command(command: str, timeout: int = 60) -> str:
     """
@@ -18,13 +37,12 @@ async def execute_command(command: str, timeout: int = 60) -> str:
         timeout: Maximum execution time in seconds (default: 60).
     """
     # Protocol Enforcement: Block direct git commit
-    # Forces agent to use smart_commit in git skill
     cmd_lower = command.lower()
     if "git commit" in cmd_lower:
         return (
-            "⛔️ PROHIBITED: Direct 'git commit' is disabled in Terminal.\n"
-            "👉 You MUST use the 'smart_commit' tool in the 'git' skill.\n"
-            "   Reason: Requires 'run just agent-commit' authorization flow."
+            "PROHIBITED: Direct 'git commit' is disabled in Terminal.\n"
+            "Use the 'smart_commit' tool in the 'git' skill.\n"
+            "Reason: Requires 'run just agent-commit' authorization flow."
         )
 
     # Parse command and args for security checks
@@ -42,29 +60,187 @@ async def execute_command(command: str, timeout: int = 60) -> str:
 
     # Execute using SafeExecutor (whitelist-based)
     result = await SafeExecutor.run(cmd, args, timeout=timeout)
+
+    # Flight Recorder - auto-log execution
+    cmd_str = f"{cmd} {' '.join(args)}" if args else cmd
+    status_icon = "OK" if result.get("exit_code", -1) == 0 else "FAIL"
+
+    log_content = f"[{status_icon}] {cmd_str}"
+    if result.get("stdout"):
+        preview = result["stdout"][:200].strip()
+        if preview:
+            log_content += f"\n  Out: {preview}"
+    if result.get("stderr"):
+        preview = result["stderr"][:200].strip()
+        if preview:
+            log_content += f"\n  Err: {preview}"
+
+    try:
+        pm = _get_project_memory()
+        pm.log_scratchpad(log_content, source="Terminal")
+    except Exception:
+        pass  # Best effort logging
+
     return SafeExecutor.format_result(result, cmd, args)
+
+
+async def run_task(command: str, args: Optional[list[str]] = None) -> str:
+    """
+    Run safe development tasks (just, nix, git) with FLIGHT RECORDER.
+
+    All executions are automatically logged to .memory/active_context/SCRATCHPAD.md.
+
+    Allowed commands:
+    - just: validate, build, test, lint, fmt, test-basic, test-mcp, agent-commit
+    - nix: fmt, build, shell, flake-check
+    - git: status, diff, log, add, checkout, branch
+
+    SECURITY: Git commit operations are BLOCKED. Use smart_commit in git skill.
+    """
+    if args is None:
+        args = []
+
+    # GIT COMMIT BLOCKLIST - Prevents bypass of authorization protocol
+    if command == "git" and args and "commit" in args:
+        blocked_msg = """GIT COMMIT BLOCKED
+
+This command was blocked because git commit operations MUST go through the authorization protocol.
+
+**Correct workflow:**
+1. skill("git", "smart_commit(message='feat(scope): description')")
+2. System returns: {analysis, session_id: "xxx..."}
+3. User confirms by saying: "run just agent-commit"
+4. skill("git", "smart_commit(message='...', auth_token='xxx')")
+
+**Allowed git operations (non-committing):**
+- git status, git diff, git log, git add, git checkout, git branch
+"""
+        log_decision("run_task.blocked", {"command": command, "args": args, "reason": "git_commit_blocked"}, logger)
+        return blocked_msg
+
+    # Check bash command containing "git commit"
+    if command == "bash" and args:
+        full_cmd = " ".join(args) if isinstance(args, list) else str(args)
+        if "git commit" in full_cmd:
+            blocked_msg = """GIT COMMIT BLOCKED (via bash)
+
+Running `git commit` through bash is FORBIDDEN.
+
+Use smart_commit in git skill instead.
+"""
+            log_decision("run_task.blocked", {"command": command, "reason": "bash_git_commit_blocked"}, logger)
+            return blocked_msg
+
+    # Execute command
+    log_decision("run_task.request", {"command": command, "args": args}, logger)
+    result = await SafeExecutor.run(command=command, args=args)
+    formatted_output = SafeExecutor.format_result(result, command, args)
+
+    # Flight Recorder
+    cmd_str = f"{command} {' '.join(args)}"
+    status_icon = "OK" if result.get("exit_code", -1) == 0 else "FAIL"
+
+    log_content = f"[{status_icon}] {cmd_str}"
+    if result.get("stdout"):
+        preview = result["stdout"][:300].strip()
+        if preview:
+            log_content += f"\n  Out: {preview}"
+    if result.get("stderr"):
+        preview = result["stderr"][:300].strip()
+        if preview:
+            log_content += f"\n  Err: {preview}"
+
+    try:
+        pm = _get_project_memory()
+        pm.log_scratchpad(log_content, source="run_task")
+    except Exception:
+        pass
+
+    return formatted_output
+
+
+async def analyze_last_error() -> str:
+    """
+    [Debug Tool] Deeply analyzes the LAST failed command in the Flight Recorder.
+
+    Use this when the error log in manage_context("read") is truncated or unclear.
+    It retrieves the full stderr/stdout and asks the AI to pinpoint the root cause.
+    """
+    try:
+        pm = _get_project_memory()
+        scratchpad_path = pm.active_dir / "SCRATCHPAD.md"
+        if not scratchpad_path.exists():
+            return "No crash logs found."
+
+        content = scratchpad_path.read_text(encoding="utf-8")
+        lines = content.split("\n")
+
+        # Take last 50 lines for crash analysis
+        recent_log = "\n".join(lines[-50:])
+
+        return f"""--- Crash Analysis Context ---
+
+The following is the raw log of the recent crash.
+Please analyze it to find:
+1. The specific error message.
+2. The file and line number causing it.
+3. A suggested fix.
+
+--- LOG START ---
+{recent_log}
+--- LOG END ---
+"""
+    except Exception as e:
+        return f"Error reading crash logs: {e}"
 
 
 async def inspect_environment() -> str:
     """Check the current execution environment."""
-    import os, platform
+    import os
+    import platform
     return f"OS: {platform.system()}, CWD: {os.getcwd()}"
 
+
+# =============================================================================
+# Registration
+# =============================================================================
 
 def register(mcp: FastMCP):
     """Register Terminal tools."""
 
     @mcp.tool()
+    async def execute_command(command: str, timeout: int = 60) -> str:
+        """
+        Execute a shell command with whitelist validation.
+
+        Security is provided by check_dangerous_patterns().
+        """
+        return await execute_command(command, timeout)
+
+    @mcp.tool()
+    async def run_task(command: str, args: Optional[list[str]] = None) -> str:
+        """
+        Run safe development tasks (just, nix, git) with FLIGHT RECORDER.
+
+        Allowed commands:
+        - just: validate, build, test, lint, fmt, test-basic, test-mcp, agent-commit
+        - nix: fmt, build, shell, flake-check
+        - git: status, diff, log, add, checkout, branch
+
+        Git commit is BLOCKED. Use smart_commit in git skill.
+        """
+        return await run_task(command, args)
+
+    @mcp.tool()
+    async def analyze_last_error() -> str:
+        """
+        [Debug Tool] Analyze the last failed command in Flight Recorder.
+        """
+        return await analyze_last_error()
+
+    @mcp.tool()
     async def inspect_environment() -> str:
         """Check the current execution environment (read-only, safe)."""
         return await inspect_environment()
-
-    @mcp.tool()
-    async def execute_command(command: str, timeout: int = 60) -> str:
-        """
-        Execute a shell command.
-        Security is provided by your MCP client's confirmation dialog.
-        """
-        return await execute_command(command, timeout)
 
     logger.info("Terminal skill tools registered")

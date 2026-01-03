@@ -28,18 +28,18 @@ The Bridge Pattern solves this by routing through personas that understand your 
 
 The system divides into two distinct MCP servers, each serving a specific abstraction level.
 
-| Server           | Focus                                | Role                                          |
-| ---------------- | ------------------------------------ | --------------------------------------------- |
-| **Orchestrator** | SDLC, DevOps, SRE, Architecture      | High-level decision making, context, skills   |
-| **Coder**        | Code implementation, AST refactoring | Precise execution, surgical precision         |
+| Server           | Focus                                | Role                                        |
+| ---------------- | ------------------------------------ | ------------------------------------------- |
+| **Orchestrator** | SDLC, DevOps, SRE, Architecture      | High-level decision making, context, skills |
+| **Coder**        | Code implementation, AST refactoring | Precise execution, surgical precision       |
 
 **Key Difference from Tri-MCP:**
 
-| Aspect     | Tri-MCP (Old)              | Bi-MCP (Current)                          |
-| ---------- | -------------------------- | ----------------------------------------- |
-| Servers    | orchestrator + executor + coder | orchestrator + coder                 |
-| Operations | Direct tools in executor   | Skills via `skill()` in orchestrator      |
-| Git        | executor: git_status       | orchestrator: skill("git", "git_status()")|
+| Aspect     | Tri-MCP (Old)                   | Bi-MCP (Current)                           |
+| ---------- | ------------------------------- | ------------------------------------------ |
+| Servers    | orchestrator + executor + coder | orchestrator + coder                       |
+| Operations | Direct tools in executor        | Skills via `skill()` in orchestrator       |
+| Git        | executor: git_status            | orchestrator: skill("git", "git_status()") |
 
 ### Server A: The Orchestrator (The "Brain")
 
@@ -212,13 +212,13 @@ Operations are accessed via the `skill()` tool instead of direct tool calls:
 
 **Available Core Skills:**
 
-| Skill | Purpose | Tools |
-|-------|---------|-------|
-| `git` | Version control | git_status, git_log, git_add, smart_commit |
-| `terminal` | Command execution | execute_command, inspect_environment |
-| `testing_protocol` | Test runner | smart_test_runner, run_test_command |
-| `writer` | Writing quality | lint_writing_style, polish_text, load_writing_memory |
-| `filesystem` | File operations | list_directory, read_file, write_file |
+| Skill              | Purpose           | Tools                                                |
+| ------------------ | ----------------- | ---------------------------------------------------- |
+| `git`              | Version control   | git_status, git_log, git_add, smart_commit           |
+| `terminal`         | Command execution | execute_command, inspect_environment                 |
+| `testing_protocol` | Test runner       | smart_test_runner, run_test_command                  |
+| `writer`           | Writing quality   | lint_writing_style, polish_text, load_writing_memory |
+| `filesystem`       | File operations   | list_directory, read_file, write_file                |
 
 ### What is a Skill?
 
@@ -271,17 +271,17 @@ agent/skills/{skill_name}/
 
 ### Orchestrator Tools
 
-| Tool                   | Status   | Purpose                                              |
-| ---------------------- | -------- | ---------------------------------------------------- |
-| `consult_specialist`   | Existing | Multi-persona routing                                |
-| `consult_router`       | Existing | Semantic tool routing (Cortex)                       |
-| `manage_context`       | Existing | Project context management                           |
-| `lang_expert`          | Existing | Router-Augmented Coding (L1 Standards + L2 Examples) |
-| `skill`                | New      | Execute skill operations                             |
-| `list_available_skills`| Existing | Discover available skills                            |
-| `load_skill`           | Existing | Load skill context (guide + tools + prompts)         |
-| `orchestrator_status`  | New      | System status introspection (Phase 13.9)             |
-| `review_staged_changes`| Existing | AI-powered code review (Immune System)               |
+| Tool                    | Status   | Purpose                                              |
+| ----------------------- | -------- | ---------------------------------------------------- |
+| `consult_specialist`    | Existing | Multi-persona routing                                |
+| `consult_router`        | Existing | Semantic tool routing (Cortex)                       |
+| `manage_context`        | Existing | Project context management                           |
+| `lang_expert`           | Existing | Router-Augmented Coding (L1 Standards + L2 Examples) |
+| `skill`                 | New      | Execute skill operations                             |
+| `list_available_skills` | Existing | Discover available skills                            |
+| `load_skill`            | Existing | Load skill context (guide + tools + prompts)         |
+| `orchestrator_status`   | New      | System status introspection (Phase 13.9)             |
+| `review_staged_changes` | Existing | AI-powered code review (Immune System)               |
 
 ### Coder Tools
 

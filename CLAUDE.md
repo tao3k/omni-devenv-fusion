@@ -6,9 +6,9 @@
 
 **This is the #1 rule violation that keeps happening:**
 
-| What I Did Wrong                 | Why It's Wrong                               |
-| -------------------------------- | -------------------------------------------- |
-| `git commit -m "..."` (Bash)     | ❌ BYPASSES authorization protocol           |
+| What I Did Wrong                  | Why It's Wrong                               |
+| --------------------------------- | -------------------------------------------- |
+| `git commit -m "..."` (Bash)      | ❌ BYPASSES authorization protocol           |
 | `git add -A && git commit` (Bash) | ❌ BYPASSES pre-commit hooks + authorization |
 
 **The ONLY correct way to commit:**
@@ -60,10 +60,10 @@
 
 The system is strictly divided into two specialized MCP servers. You MUST route your requests to the correct server based on the task type.
 
-| Role             | Server         | Responsibilities                   | Key Tools                                                              |
-| :--------------- | :------------- | :--------------------------------- | :--------------------------------------------------------------------- |
-| **🧠 The Brain** | `orchestrator` | Planning, Routing, Context, Policy | `consult_router`, `start_spec`, `manage_context`, `skill()`           |
-| **📝 The Pen**   | `coder`        | File I/O, Code Search              | `read_file`, `save_file`, `search_files`, `ast_search`                 |
+| Role             | Server         | Responsibilities                   | Key Tools                                                   |
+| :--------------- | :------------- | :--------------------------------- | :---------------------------------------------------------- |
+| **🧠 The Brain** | `orchestrator` | Planning, Routing, Context, Policy | `consult_router`, `start_spec`, `manage_context`, `skill()` |
+| **📝 The Pen**   | `coder`        | File I/O, Code Search              | `read_file`, `save_file`, `search_files`, `ast_search`      |
 
 **Routing Rules:**
 
@@ -125,7 +125,7 @@ When you judge the user is requesting NEW work, call `start_spec` FIRST:
 
 | Category | Tools                                                                                              |
 | -------- | -------------------------------------------------------------------------------------------------- |
-| Git      | `skill("git", "git_status()")`, `skill("git", "smart_commit(message='...')")`                     |
+| Git      | `skill("git", "git_status()")`, `skill("git", "smart_commit(message='...')")`                      |
 | Spec     | `start_spec` (gatekeeper), `draft_feature_spec`, `verify_spec_completeness`, `archive_spec_to_doc` |
 | Search   | `search_project_code` (ripgrep), `ast_search`, `ast_rewrite` (ast-grep)                            |
 | Test     | `skill("testing_protocol", "smart_test_runner()")`                                                 |
@@ -144,12 +144,12 @@ When you judge the user is requesting NEW work, call `start_spec` FIRST:
 
 **CRITICAL: See `agent/how-to/git-workflow.md` for complete rules.**
 
-| Operation           | Tool to Use                                                         | Why                    |
-| ------------------- | ------------------------------------------------------------------- | ---------------------- |
-| Commit (analysis)   | `skill("git", "smart_commit(message='feat(scope): description')")`  | Creates session, shows diff |
-| Commit (execute)    | `skill("git", "smart_commit(message='...', auth_token='xxx')")`     | Authorization protocol |
-| Git status/diff/log | `skill("git", "git_status()")`, `skill("git", "git_log()")`        | Safe MCP execution     |
-| Git add             | `skill("git", "git_add(files=[...])")`                              | Safe staging           |
+| Operation           | Tool to Use                                                        | Why                         |
+| ------------------- | ------------------------------------------------------------------ | --------------------------- |
+| Commit (analysis)   | `skill("git", "smart_commit(message='feat(scope): description')")` | Creates session, shows diff |
+| Commit (execute)    | `skill("git", "smart_commit(message='...', auth_token='xxx')")`    | Authorization protocol      |
+| Git status/diff/log | `skill("git", "git_status()")`, `skill("git", "git_log()")`        | Safe MCP execution          |
+| Git add             | `skill("git", "git_add(files=[...])")`                             | Safe staging                |
 
 **NEVER use Bash for git operations.**
 
@@ -218,7 +218,7 @@ Skills are dynamically-loaded modules in `agent/skills/` that provide specialize
 
 ### Available Skills
 
-| Skill              | Purpose             | Tools (accessed via skill() tool)                     |
+| Skill              | Purpose             | Tools (accessed via skill() tool)                      |
 | ------------------ | ------------------- | ------------------------------------------------------ |
 | `git`              | Git operations      | git_status, git_log, git_add, smart_commit             |
 | `terminal`         | Command execution   | execute_command, inspect_environment                   |

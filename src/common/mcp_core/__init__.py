@@ -26,7 +26,7 @@ Usage:
 
 __version__ = "1.2.0"
 
-from .execution import SafeExecutor
+from .execution import SafeExecutor, check_dangerous_patterns
 from .memory import ProjectMemory
 from .inference import InferenceClient, PERSONAS, build_persona_prompt, _load_api_key_from_config
 from .gitops import get_project_root
@@ -61,6 +61,7 @@ from .writing import (
 
 __all__ = [
     "SafeExecutor",
+    "check_dangerous_patterns",
     "ProjectMemory",
     "InferenceClient",
     "PERSONAS",

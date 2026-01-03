@@ -107,13 +107,38 @@ Skill '{skill_name}' loaded successfully!
         except SyntaxError as e:
             return f"Invalid call syntax: {call}\nError: {e}"
 
-        # Auto-load skill if not already loaded
-        if skill not in registry.loaded_skills:
-            success, msg = registry.load_skill(skill, mcp)
-            if not success:
-                return f"Failed to load skill '{skill}': {msg}"
-            context = registry.get_skill_context(skill)
-            return f"""
+        return await _execute_skill_operation(skill, operation, kwargs, mcp, registry)
+
+    @mcp.tool()
+    async def invoke_skill(skill: str, tool: str, args: dict) -> str:
+        """
+        [Structured] Execute a skill operation with structured arguments.
+
+        This is a safer alternative to skill() that avoids AST parsing issues
+        with special characters (quotes, newlines, etc.).
+
+        Usage:
+        - invoke_skill("filesystem", "list_directory", {"path": "."})
+        - invoke_skill("git", "git_status", {})
+        - invoke_skill("git", "smart_commit", {"message": "feat: add feature"})
+
+        Args:
+            skill: The skill name (e.g., "filesystem", "git", "terminal")
+            tool: The function name to call (e.g., "list_directory", "git_status")
+            args: Arguments as a JSON object/dict
+        """
+        return await _execute_skill_operation(skill, tool, args, mcp, registry)
+
+
+async def _execute_skill_operation(skill: str, operation: str, kwargs: dict, mcp: FastMCP, registry) -> str:
+    """Common execution logic for skill() and invoke_skill()."""
+    # Auto-load skill if not already loaded
+    if skill not in registry.loaded_skills:
+        success, msg = registry.load_skill(skill, mcp)
+        if not success:
+            return f"Failed to load skill '{skill}': {msg}"
+        context = registry.get_skill_context(skill)
+        return f"""
 Skill '{skill}' auto-loaded!
 
 {msg}
@@ -122,27 +147,27 @@ Skill '{skill}' auto-loaded!
 {context}
 ==================================================
 
-Now call: skill('{skill}', '{operation}({kwargs})')"""
+Now call: invoke_skill('{skill}', '{operation}', {kwargs})"""
 
-        # Get the loaded module
-        module = registry.module_cache.get(skill)
-        if not module:
-            return f"Skill '{skill}' not found in module cache."
+    # Get the loaded module
+    module = registry.module_cache.get(skill)
+    if not module:
+        return f"Skill '{skill}' not found in module cache."
 
-        # Execute operation (functions are now at module level)
-        if hasattr(module, operation):
-            func = getattr(module, operation)
-            if callable(func):
-                try:
-                    import inspect
-                    if inspect.iscoroutinefunction(func):
-                        result = await func(**kwargs)
-                    else:
-                        result = func(**kwargs)
-                    return result
-                except Exception as e:
-                    return f"Error executing {operation}: {e}"
-            else:
-                return f"'{operation}' is not callable."
+    # Execute operation (functions are now at module level)
+    if hasattr(module, operation):
+        func = getattr(module, operation)
+        if callable(func):
+            try:
+                import inspect
+                if inspect.iscoroutinefunction(func):
+                    result = await func(**kwargs)
+                else:
+                    result = func(**kwargs)
+                return result
+            except Exception as e:
+                return f"Error executing {operation}: {e}"
         else:
-            return f"Operation '{operation}' not found in skill '{skill}'."
+            return f"'{operation}' is not callable."
+    else:
+        return f"Operation '{operation}' not found in skill '{skill}'."

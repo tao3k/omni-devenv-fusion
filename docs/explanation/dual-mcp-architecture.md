@@ -32,10 +32,10 @@
 
 **Two Specialized MCP Servers:**
 
-| Server | Role | Responsibilities |
-|--------|------|------------------|
+| Server         | Role      | Responsibilities                           |
+| -------------- | --------- | ------------------------------------------ |
 | `orchestrator` | The Brain | Planning, Routing, Context, Skills, Policy |
-| `coder` | The Pen | File I/O, Code Search, AST Operations |
+| `coder`        | The Pen   | File I/O, Code Search, AST Operations      |
 
 **Tool Routing:**
 
@@ -96,6 +96,7 @@ agent/skills/
 ```
 
 **Core Skills (Auto-loaded on Boot):**
+
 - `filesystem` - File operations
 - `git` - Version control
 - `terminal` - Command execution
@@ -346,24 +347,24 @@ mcp-server/tests/stress/
 
 ### The 5-Bucket Model
 
-| Directory          | Content Type                       | Queryable By          |
-| ------------------ | ---------------------------------- | --------------------- |
+| Directory          | Content Type                                             | Queryable By          |
+| ------------------ | -------------------------------------------------------- | --------------------- |
 | `agent/standards/` | **Public Standards** - Language/Framework agnostic specs | `consult_*` loads all |
-| `agent/knowledge/` | **Problem Solutions** - Symptom→Cause→Fix  | `consult_*` searches  |
-| `agent/specs/`     | **Feature Specs** - What to build       | `draft_feature_spec`  |
-| `agent/how-to/`    | **How-to Guides** - How to do X         | `execute_doc_action`  |
-| `design/`          | **Design Decisions** - Why we chose X      | Human reference       |
+| `agent/knowledge/` | **Problem Solutions** - Symptom→Cause→Fix                | `consult_*` searches  |
+| `agent/specs/`     | **Feature Specs** - What to build                        | `draft_feature_spec`  |
+| `agent/how-to/`    | **How-to Guides** - How to do X                          | `execute_doc_action`  |
+| `design/`          | **Design Decisions** - Why we chose X                    | Human reference       |
 
 ## problem-solving.md Philosophy
 
 **Purpose**: Thinking Method, NOT specific problem solutions
 
-| ✅ Should Contain        | ❌ Should NOT Contain      |
-| ------------------------ | -------------------------- |
-| Debugging Protocol (Rule of Three) | Python-specific threading issues |
-| Problem Diagnosis Process | UV workspace configuration details |
-| Error Correction Training | Language-specific import conflicts |
-| Tool Usage Mental Model | Specific error message solutions |
+| ✅ Should Contain                  | ❌ Should NOT Contain              |
+| ---------------------------------- | ---------------------------------- |
+| Debugging Protocol (Rule of Three) | Python-specific threading issues   |
+| Problem Diagnosis Process          | UV workspace configuration details |
+| Error Correction Training          | Language-specific import conflicts |
+| Tool Usage Mental Model            | Specific error message solutions   |
 
 ## knowledge/ Philosophy
 

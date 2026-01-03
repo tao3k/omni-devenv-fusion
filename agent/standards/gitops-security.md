@@ -35,14 +35,14 @@ from common.mcp_core.gitops import (
 )
 ```
 
-| Purpose              | Function                |
-| -------------------- | ----------------------- |
-| Project root         | `get_project_root()`    |
-| Specs directory      | `get_spec_dir()`        |
-| Instructions         | `get_instructions_dir()`|
-| Documentation        | `get_docs_dir()`        |
-| Agent source         | `get_agent_dir()`       |
-| Source code          | `get_src_dir()`         |
+| Purpose         | Function                 |
+| --------------- | ------------------------ |
+| Project root    | `get_project_root()`     |
+| Specs directory | `get_spec_dir()`         |
+| Instructions    | `get_instructions_dir()` |
+| Documentation   | `get_docs_dir()`         |
+| Agent source    | `get_agent_dir()`        |
+| Source code     | `get_src_dir()`          |
 
 ---
 

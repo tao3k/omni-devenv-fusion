@@ -27,7 +27,6 @@ from agent.core.reviewer import register_reviewer_tools
 from agent.tools.context import register_context_tools
 from agent.tools.spec import register_spec_tools
 from agent.tools.router import register_router_tools
-from agent.tools.execution import register_execution_tools
 from agent.tools.status import register_status_tool
 
 # --- Initialization ---
@@ -56,7 +55,6 @@ def _register(module_name: str, register_func):
 _register("context", register_context_tools)
 _register("spec", register_spec_tools)
 _register("router", register_router_tools)
-_register("execution", register_execution_tools)
 _register("status", register_status_tool)
 
 # Governance & Domain
