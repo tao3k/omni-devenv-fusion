@@ -257,26 +257,27 @@ class TestProductOwnerHelpers:
 # Integration Tests (Mocked)
 # =============================================================================
 
-class TestSmartCommitV2Integration:
-    """Integration tests for smart_commit_v2 (mocked)."""
+class TestSmartCommitIntegration:
+    """Integration tests for smart_commit (mocked)."""
 
     @pytest.mark.asyncio
-    async def test_smart_commit_v2_no_staged_changes(self):
+    async def test_smart_commit_no_staged_changes(self):
         """Verify error when no staged changes exist."""
-        from main import smart_commit_v2
+        from agent.tools.commit import smart_commit, _commit_workflow_sessions
 
-        # Mock git to return empty diff
-        with patch('main._get_git_diff', return_value=""):
-            result = await smart_commit_v2(context="Test")
-            result_dict = json.loads(result)
+        # Clear any existing sessions
+        _commit_workflow_sessions.clear()
 
-            assert result_dict["status"] == "error"
-            assert "No staged changes" in result_dict["message"]
+        result = await smart_commit(context="Test")
+        result_dict = json.loads(result)
+
+        assert result_dict["status"] == "authorization_required"
+        assert result_dict["context"] == "Test"
 
     @pytest.mark.asyncio
     async def test_confirm_commit_invalid_session(self):
         """Verify error for invalid session ID."""
-        from main import confirm_commit
+        from agent.tools.commit import confirm_commit
 
         result = await confirm_commit(
             session_id="nonexistent_session",
@@ -290,7 +291,7 @@ class TestSmartCommitV2Integration:
     @pytest.mark.asyncio
     async def test_confirm_commit_invalid_decision(self):
         """Verify error for invalid decision."""
-        from main import confirm_commit, _commit_workflow_sessions
+        from agent.tools.commit import confirm_commit, _commit_workflow_sessions
 
         # Create a mock session
         _commit_workflow_sessions["test_session"] = {"status": "pending"}

@@ -72,3 +72,10 @@ commit:
 logging:
   format: "json"
   level: "info"
+
+# =============================================================================
+# Phase 13.8: Configuration-Driven Context
+# =============================================================================
+prompts:
+  core_path: "agent/prompts/system_core.md"
+  user_custom_path: ".cache/user_custom.md"

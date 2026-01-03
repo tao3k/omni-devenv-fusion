@@ -15,9 +15,11 @@ This skill handles the lifecycle of project documentation. It enforces the "Know
 1.  **Location**: All knowledge goes into `agent/knowledge/` or `agent/knowledge/harvested/`.
 2.  **Naming**: `YYYYMMDD-category-title.md` (e.g., `20260102-debugging-nested-locks.md`).
 3.  **Frontmatter**:
+
     ```markdown
     # Title
 
     > **Category**: ... | **Date**: ...
     ```
+
 4.  **Categories**: `architecture`, `debugging`, `pattern`, `workflow`, `domain`.

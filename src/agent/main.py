@@ -59,6 +59,9 @@ from common.mcp_core import (
     build_persona_prompt,
 )
 
+# Phase 13.8: Configuration-Driven Context
+from agent.core.context_loader import load_system_context
+
 # GitOps - Project root detection (single source of truth)
 from common.mcp_core.gitops import get_project_root
 
@@ -84,8 +87,14 @@ from agent.tools.execution import register_execution_tools
 setup_logging()
 logger = structlog.get_logger(__name__)
 
-# Initialize MCP Server
-mcp = FastMCP("omni-orchestrator")
+# Phase 13.8: Load system context from configuration files
+system_prompt = load_system_context()
+
+# Initialize MCP Server with dynamic system prompt
+mcp = FastMCP(
+    "omni-orchestrator",
+    instructions=system_prompt
+)
 
 # Initialize project memory
 project_memory = ProjectMemory()
@@ -196,7 +205,7 @@ Available Tool Categories:
 - Context: manage_context, get_project_instructions
 - Spec: start_spec, draft_feature_spec, verify_spec_completeness, archive_spec_to_doc
 - Router: consult_router, swarm_status, community_proxy
-- Commit: smart_commit_v2, confirm_commit, spec_aware_commit
+- Commit: spec_aware_commit (generates message, client confirms)
 - Execution: run_task, analyze_last_error
 - Product Owner: start_spec enforcement, complexity assessment
 - Language Expert: consult_language_expert, get_language_standards

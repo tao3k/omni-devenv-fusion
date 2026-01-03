@@ -24,12 +24,12 @@ The original system lacked:
 
 ### 2.1 File Changes
 
-| File                                      | Action   | Purpose                                         |
-| ----------------------------------------- | -------- | ----------------------------------------------- |
-| `src/agent/core/schema.py`                | Created  | Pydantic models for type-safe outputs           |
-| `src/agent/core/workflows/commit_flow.py` | Created  | LangGraph workflow for Smart Commit V2          |
-| `src/agent/capabilities/product_owner.py` | Modified | Added `start_spec` tool with Pydantic patterns  |
-| `src/agent/main.py`                       | Modified | Added `smart_commit_v2`, `confirm_commit` tools |
+| File                                      | Action   | Purpose                                        |
+| ----------------------------------------- | -------- | ---------------------------------------------- |
+| `src/agent/core/schema.py`                | Created  | Pydantic models for type-safe outputs          |
+| `src/agent/core/workflows/commit_flow.py` | Created  | LangGraph workflow for Smart Commit V2         |
+| `src/agent/capabilities/product_owner.py` | Modified | Added `start_spec` tool with Pydantic patterns |
+| `src/agent/main.py`                       | Modified | Added `smart_commit`, `confirm_commit` tools   |
 
 ### 2.2 Data Structures / Schema
 
@@ -68,7 +68,7 @@ class CommitState(TypedDict):
 ```python
 # Phase 11 Smart Commit V2
 
-async def smart_commit_v2(context: str = "") -> dict:
+async def smart_commit(context: str = "") -> dict:
     """
     Start LangGraph workflow for human-in-the-loop commit.
 
@@ -106,7 +106,7 @@ async def confirm_commit(session_id: str, decision: str, final_msg: str = "") ->
    - [x] Created `src/agent/core/workflows/commit_flow.py`
    - [x] Implemented `analyze` -> `human_gate` -> `execute` flow
    - [x] Added `interrupt_before=["execute"]` for human approval
-   - [x] Integrated `smart_commit_v2`, `confirm_commit` tools in `main.py`
+   - [x] Integrated `smart_commit`, `confirm_commit` tools in `main.py`
 
 3. [ ] **Step 3: Vector Memory (Future)**
    - [ ] Add ChromaDB integration for RAG
@@ -133,9 +133,9 @@ def test_commit_workflow_graph():
     workflow = create_commit_workflow()
     assert workflow is not None
 
-def test_smart_commit_v2_no_staged():
+def test_smart_commit_no_staged():
     """Verify error when no staged changes."""
-    result = await smart_commit_v2()
+    result = await smart_commit()
     assert result["status"] == "error"
 ```
 
@@ -145,7 +145,7 @@ def test_smart_commit_v2_no_staged():
 def test_full_commit_flow():
     """Test complete Analyze -> Wait -> Execute flow."""
     # 1. Start workflow
-    result = await smart_commit_v2(context="Test commit")
+    result = await smart_commit(context="Test commit")
     assert result["status"] == "authorization_required"
     session_id = result["session_id"]
 
