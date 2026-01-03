@@ -67,19 +67,15 @@ class SwarmNode:
 
         print(f"🔌 [Swarm] Connecting to {self.name}...", file=sys.stderr)
 
-        # 2. Environment injection (Critical fix)
+        # 2. Environment setup - uv run handles environment, just add unbuffered
         worker_env = os.environ.copy()
         worker_env.update(self.env)
         worker_env["PYTHONUNBUFFERED"] = "1"
 
-        # Inject PYTHONPATH
-        server_root = Path(__file__).parent.parent.resolve()
-        current_path = worker_env.get("PYTHONPATH", "")
-        worker_env["PYTHONPATH"] = f"{server_root}:{current_path}"
-
+        # Use uv run to properly activate workspace environment
         server_params = StdioServerParameters(
-            command=sys.executable,
-            args=[str(self.script_path)],
+            command="uv",
+            args=["run", "python", str(self.script_path)],
             env=worker_env
         )
 

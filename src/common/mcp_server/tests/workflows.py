@@ -7,7 +7,7 @@ Tests the complete workflow:
 2. Consult specialist (requires API key)
 
 Usage:
-    uv run python src/common/mcp_server/tests/workflows.py
+    uv run pytest src/common/mcp_server/tests/workflows.py -v
 """
 import json
 import os
@@ -15,8 +15,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Project root - go up from src/common/mcp_server/tests/ to project root (5 levels up)
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
+from common.mcp_core.gitops import get_project_root
+
+PROJECT_ROOT = get_project_root()
 CONFIG_CANDIDATES = [
     PROJECT_ROOT / ".mcp.json",
     PROJECT_ROOT / ".claude" / "settings.json",

@@ -34,15 +34,8 @@ This server uses common/mcp_core for:
 - utils: Logging, path checking, file operations
 """
 import os
-import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-
-# Ensure project root is in path for imports (DDD structure)
-# This allows: from common.mcp_core import ... where common is at src/common/
-_project_root = Path(__file__).parent.parent.parent.resolve()  # src/mcp_server/coder/ -> src/
-if str(_project_root) not in sys.path:
-    sys.path.insert(0, str(_project_root))
 
 from mcp.server.fastmcp import FastMCP
 
@@ -58,6 +51,7 @@ from common.mcp_core import (
     log_decision,
     is_safe_path,
     run_subprocess,
+    polish_text,
 )
 
 # =============================================================================
@@ -259,7 +253,8 @@ async def save_file(
     path: str,
     content: str,
     create_backup: bool = True,
-    validate_syntax: bool = True
+    validate_syntax: bool = True,
+    auto_check_writing: bool = True
 ) -> str:
     """
     Write content to a file within the project directory.
@@ -267,6 +262,7 @@ async def save_file(
     Features:
     - Auto-creates .bak backup before overwriting (safe rollback)
     - Syntax validation for Python and Nix files
+    - Auto-writing-check for .md files (check style + structure)
     - Security checks for path safety
     """
     is_safe, error_msg = is_safe_path(
@@ -305,11 +301,47 @@ async def save_file(
             log_decision("save_file.syntax_error", {"path": path, "error": error_msg}, logger)
             return f"Error: Syntax validation failed\n{error_msg}"
 
+    # Auto-writing-check for markdown files
+    import json
+    writing_warnings = []
+    if auto_check_writing and path.endswith(".md"):
+        try:
+            # Run polish_text which combines lint + structure checks
+            polish_result = await polish_text(content)
+            polish_data = json.loads(polish_result)
+            violations = polish_data.get("violations", [])
+
+            if violations:
+                log_decision("save_file.writing_issues", {"path": path, "count": len(violations)}, logger)
+                writing_warnings = violations
+            else:
+                log_decision("save_file.writing_clean", {"path": path}, logger)
+        except Exception as e:
+            log_decision("save_file.writing_check_failed", {"path": path, "error": str(e)}, logger)
+
     try:
         with open(full_path, "w", encoding="utf-8") as f:
             f.write(content)
         log_decision("save_file.success", {"path": path, "size": len(content)}, logger)
-        return f"Successfully wrote {len(content)} bytes to '{path}'{backup_info}"
+
+        # Build response with writing warnings if any
+        response_parts = [f"Successfully wrote {len(content)} bytes to '{path}'{backup_info}"]
+
+        if writing_warnings:
+            response_parts.append("\nWriting Style Warnings (auto-checked):")
+            # Group by type and show summary
+            type_counts = {}
+            for v in writing_warnings:
+                t = v.get("type", "unknown")
+                type_counts[t] = type_counts.get(t, 0) + 1
+            for vtype, count in type_counts.items():
+                response_parts.append(f"  - {vtype}: {count} issue(s)")
+            response_parts.append("  Run @omni-executor polish_text for details.")
+
+            # Set file dirty to indicate it needs review
+            log_decision("save_file.needs_review", {"path": path}, logger)
+
+        return "\n".join(response_parts)
     except Exception as e:
         log_decision("save_file.error", {"path": path, "error": str(e)}, logger)
         return f"Error writing file: {e}"

@@ -44,10 +44,10 @@ def _ensure_loaded():
 
 ```python
 import threading
-from pathlib import Path
+from common.mcp_core.gitops import get_project_root
 
-_PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
-instructions_dir = _PROJECT_ROOT / "agent" / "instructions"
+PROJECT_ROOT = get_project_root()
+instructions_dir = PROJECT_ROOT / "agent" / "instructions"
 
 _data: dict[str, str] = {}
 _loaded: bool = False

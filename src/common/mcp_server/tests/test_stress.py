@@ -13,13 +13,9 @@ Phase 10 includes:
 
 Run: just stress-test
 """
-import sys
 import shutil
 import time
 from pathlib import Path
-
-# Add framework to path
-sys.path.insert(0, str(Path(__file__).parent))
 
 from stress import (
     TestRunner, Phase9Suite, StressConfig,

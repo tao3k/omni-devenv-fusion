@@ -72,19 +72,7 @@ def get_project_root() -> Path:
     except Exception:
         pass
 
-    # Method 2: Module-based fallback (for testing/non-git environments)
-    # Assume this file is at: src/common/mcp_core/gitops.py
-    # Project root is 3 levels up: gitops -> mcp_core -> common -> src -> project_root
-    try:
-        module_path = Path(__file__).resolve()
-        fallback_root = module_path.parent.parent.parent.parent
-        if (fallback_root / ".git").exists() or (fallback_root / "justfile").exists():
-            _project_root = fallback_root
-            return _project_root
-    except Exception:
-        pass
-
-    # Method 3: Current working directory as last resort
+    # Method 2: Current working directory as fallback
     cwd = Path.cwd()
     if (cwd / ".git").exists() or (cwd / "justfile").exists():
         _project_root = cwd

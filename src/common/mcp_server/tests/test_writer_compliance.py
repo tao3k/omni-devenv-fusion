@@ -9,14 +9,10 @@ Tests:
 Run: uv run python mcp-server/tests/test_writer_compliance.py
 """
 import json
-import sys
 import unittest
 from pathlib import Path
 
-# Add mcp-server to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from writer import WritingStyleCache, _polish_text_impl, _load_writing_memory_impl
+from mcp_server.executor.writer import WritingStyleCache, _polish_text_impl, _load_writing_memory_impl
 
 
 class TestWritingStyleCache(unittest.TestCase):

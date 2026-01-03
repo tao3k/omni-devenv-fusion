@@ -13,13 +13,6 @@ Run: uv run python src/common/mcp_server/tests/test_librarian.py
 import asyncio
 import json
 import os
-import sys
-from pathlib import Path
-
-# Ensure project root is in path
-_project_root = Path(__file__).parent.parent.parent.parent.resolve()
-if str(_project_root) not in sys.path:
-    sys.path.insert(0, str(_project_root))
 
 from agent.core.vector_store import get_vector_memory
 

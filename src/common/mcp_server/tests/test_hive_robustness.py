@@ -5,16 +5,12 @@ Tests for Auto-Healing, Circuit Breaker, and Health Checks.
 """
 import pytest
 import asyncio
-import sys
-import os
 from pathlib import Path
 
-# Add mcp-server to path
-sys.path.append(str(Path(__file__).parent.parent))
+from common.mcp_core.gitops import get_project_root
+from common.services.swarm import SwarmNode
 
-from services.swarm import SwarmNode
-
-WORKER_SCRIPT = Path(__file__).parent.parent / "services" / "coder_service.py"
+WORKER_SCRIPT = get_project_root() / "src" / "common" / "services" / "coder_service.py"
 
 
 @pytest.mark.asyncio

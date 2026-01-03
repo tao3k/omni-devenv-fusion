@@ -9,7 +9,7 @@ Tests comprehensive smart_commit authorization flows:
 5. Force execute mode - No authorization needed with force_execute=True
 6. Invalid token rejection - Malformed tokens are rejected
 
-Run: uv run pytest mcp-server/tests/test_smart_commit_scenarios.py -v
+Run: uv run pytest src/common/mcp_server/tests/test_smart_commit_scenarios.py -v
 """
 import asyncio
 import json
@@ -20,8 +20,9 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-# Add executor to path for imports
-PROJECT_ROOT = Path(__file__).resolve().parents[3]  # /src/common/mcp_server/tests -> /src/common -> /src
+from common.mcp_core.gitops import get_project_root
+
+PROJECT_ROOT = get_project_root()
 sys.path.insert(0, str(PROJECT_ROOT / "mcp_server" / "executor"))
 
 # Import git_ops module

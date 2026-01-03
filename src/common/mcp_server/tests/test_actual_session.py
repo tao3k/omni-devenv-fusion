@@ -32,9 +32,7 @@ When problems occur, what should I do according to project rules?
 
 ### Programmatic (this test):
 ```bash
-uv run python mcp-server/tests/test_actual_session.py
-uv run python mcp-server/tests/test_actual_session.py --smart-commit
-uv run python mcp-server/tests/test_actual_session.py --smart-commit --mock
+uv run pytest src/common/mcp_server/tests/test_actual_session.py -v
 ```
 
 ## How It Works
@@ -55,8 +53,9 @@ import os
 import sys
 from pathlib import Path
 
-# MCP Server tests directory - go up from src/common/mcp_server/tests/ to project root (4 levels)
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
+from common.mcp_core.gitops import get_project_root
+
+PROJECT_ROOT = get_project_root()
 CLAUDE_MD_PATH = PROJECT_ROOT / "CLAUDE.md"
 
 # Import unified configuration paths manager
@@ -1323,7 +1322,7 @@ def test_git_commit_detection_mock():
     from pathlib import Path
 
     # Add src to path
-    src_path = Path(__file__).resolve().parents[2] / "src"
+    src_path = get_project_root() / "src"
     sys.path.insert(0, str(src_path))
 
     from common.mcp_server.tests.test_actual_session import run_mock_tests
@@ -1336,7 +1335,7 @@ def test_smart_commit_mock():
     from pathlib import Path
 
     # Add src to path
-    src_path = Path(__file__).resolve().parents[2] / "src"
+    src_path = get_project_root() / "src"
     sys.path.insert(0, str(src_path))
 
     from common.mcp_server.tests.test_actual_session import test_smart_commit_authorization_flow
@@ -1350,7 +1349,7 @@ def test_instructions_lazy_load():
     from pathlib import Path
 
     # Add src to path
-    src_path = Path(__file__).resolve().parents[2] / "src"
+    src_path = get_project_root() / "src"
     sys.path.insert(0, str(src_path))
 
     # Verify documentation-standards is in the instructions list

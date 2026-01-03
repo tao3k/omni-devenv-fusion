@@ -25,6 +25,7 @@ from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
 from enum import Enum
 
+from common.mcp_core.gitops import get_project_root
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -97,7 +98,7 @@ class SkillRegistry:
     parses their manifests, and provides access to skill metadata.
     """
 
-    SKILLS_DIR = Path(__file__).parent.parent.parent.parent / "agent" / "skills"
+    SKILLS_DIR = get_project_root() / "agent" / "skills"
 
     def __init__(self, skills_dir: Optional[Path] = None):
         """Initialize the registry with an optional custom skills directory."""

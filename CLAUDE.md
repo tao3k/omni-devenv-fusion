@@ -6,11 +6,11 @@
 
 **This is the #1 rule violation that keeps happening:**
 
-| What I Did Wrong                  | Why It's Wrong                               |
-| --------------------------------- | -------------------------------------------- |
-| `git commit -m "..."` (Bash)      | ❌ BYPASSES authorization protocol           |
-| `git add -A && git commit` (Bash) | ❌ BYPASSES pre-commit hooks + authorization |
-| `just agent-commit` (Bash)        | ❌ MUST use smart_commit() workflow first    |
+| What I Did Wrong                 | Why It's Wrong                               |
+| -------------------------------- | -------------------------------------------- |
+| `git commit -m "..."` (Bash)     | ❌ BYPASSES authorization protocol           |
+| `git add -A && gitcommit` (Bash) | ❌ BYPASSES pre-commit hooks + authorization |
+| `just agent-commit` (Bash)       | ❌ MUST use smart_commit() workflow first    |
 
 **The ONLY correct way to commit:**
 
@@ -26,6 +26,35 @@
 ```
 
 **If you catch yourself typing `git ...` in Bash → STOP and use MCP tools instead.**
+
+---
+
+## 📝 WRITING WORKFLOW - MANDATORY 🚨
+
+**This is the #2 rule violation that keeps happening:**
+
+| What I Did Wrong                         | Why It's Wrong                     |
+| ---------------------------------------- | ---------------------------------- |
+| Writing docs without load_writing_memory | BYPASSES project writing standards |
+| Skipping run_vale_check before commit    | BYPASSES writing quality gate      |
+
+**The ONLY correct way to write/edit docs:**
+
+```
+1. @omni-executor load_writing_memory()  # ALWAYS first step for ANY writing task
+   → Loads: agent/writing-style/*.md into context
+
+2. Write/Edit the document
+
+3. @omni-executor run_vale_check(file_path="path/to/doc.md")
+   → Fix any violations
+
+4. @omni-executor polish_text(text="...")  # Optional: auto-fix style issues
+
+5. Then commit with smart_commit workflow
+```
+
+**If you catch yourself writing docs → STOP → load_writing_memory → continue.**
 
 ---
 

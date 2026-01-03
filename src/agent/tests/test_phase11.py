@@ -10,8 +10,7 @@ Tests for:
 Reference: agent/specs/phase11_neural_matrix.md
 
 Run from project root:
-    cd /path/to/project
-    python -m pytest src/agent/tests/test_phase11.py -v
+    uv run pytest src/agent/tests/test_phase11.py -v
 """
 import pytest
 import json
@@ -20,9 +19,10 @@ import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-# Ensure src/agent is in path for imports
-_agent_dir = Path(__file__).parent.parent
-_project_root = _agent_dir.parent.parent
+from common.mcp_core.gitops import get_project_root
+
+_project_root = get_project_root()
+_agent_dir = _project_root / "src" / "agent"
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 if str(_agent_dir) not in sys.path:

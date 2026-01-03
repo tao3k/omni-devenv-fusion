@@ -1,17 +1,13 @@
 # mcp-server/tests/test_hive_architecture.py
 import pytest
 import asyncio
-import sys
-import os
 from pathlib import Path
 
-# Add mcp-server to path to import services
-sys.path.append(str(Path(__file__).parent.parent))
+from common.mcp_core.gitops import get_project_root
+from common.services.swarm import SwarmNode
 
-from services.swarm import SwarmNode
-
-# 指向我们刚才创建的 worker
-WORKER_SCRIPT = Path(__file__).parent.parent / "services" / "coder_service.py"
+# Use project root to locate worker script
+WORKER_SCRIPT = get_project_root() / "src" / "common" / "services" / "coder_service.py"
 
 @pytest.mark.asyncio
 async def test_swarm_connection_lifecycle():

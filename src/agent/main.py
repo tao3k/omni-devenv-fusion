@@ -47,14 +47,6 @@ This server uses common/mcp_core for:
 - utils: Logging and path checking
 """
 import asyncio
-import sys
-from pathlib import Path
-
-# Ensure project root is in path for imports (DDD structure)
-_project_root = Path(__file__).parent.parent.resolve()  # src/agent/ -> src/ -> project_root
-if str(_project_root) not in sys.path:
-    sys.path.insert(0, str(_project_root))
-
 from mcp.server.fastmcp import FastMCP
 import structlog
 

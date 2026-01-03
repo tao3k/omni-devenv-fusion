@@ -51,6 +51,13 @@ from .instructions import (
     list_instruction_names,
     reload_instructions,
 )
+from .writing import (
+    WritingStyleCache,
+    CLUTTER_WORDS,
+    lint_writing_style,
+    check_markdown_structure,
+    polish_text,
+)
 
 __all__ = [
     "SafeExecutor",
@@ -84,4 +91,10 @@ __all__ = [
     "get_all_instructions_merged",
     "list_instruction_names",
     "reload_instructions",
+    # Writing Quality
+    "WritingStyleCache",
+    "CLUTTER_WORDS",
+    "lint_writing_style",
+    "check_markdown_structure",
+    "polish_text",
 ]

@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
 
-from mcp_core.instructions import (
+from common.mcp_core.instructions import (
     get_instructions,
     get_instruction,
     get_all_instructions_merged,

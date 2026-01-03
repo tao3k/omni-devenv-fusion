@@ -14,15 +14,6 @@ Responsibilities:
 This module is designed to be imported by an MCP client (e.g., Claude Desktop)
 or run as a standalone server.
 """
-import sys
-from pathlib import Path
-
-# Ensure project root is in path for imports (DDD structure)
-# This allows: from common.mcp_core import ... and mcp_server.executor.* imports
-_project_root = Path(__file__).parent.parent.parent.resolve()  # src/mcp_server/executor/ -> src/
-if str(_project_root) not in sys.path:
-    sys.path.insert(0, str(_project_root))
-
 from mcp.server.fastmcp import FastMCP
 
 # Rich utilities for beautiful terminal output

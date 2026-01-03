@@ -1166,9 +1166,6 @@ def test_load_api_key_from_config():
     print("🔐 Testing API Key Configuration Loading")
     print("=" * 60)
 
-    import sys
-    sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
-
     from common.mcp_core.inference import _load_api_key_from_config, _get_git_toplevel
 
     # Test 1: Git toplevel detection

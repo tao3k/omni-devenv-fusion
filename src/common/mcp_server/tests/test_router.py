@@ -2,7 +2,7 @@
 import pytest
 import asyncio
 
-from router import get_router, TOOL_DOMAINS
+from agent.core.router import get_router, TOOL_DOMAINS
 
 
 class TestRouterBasics:

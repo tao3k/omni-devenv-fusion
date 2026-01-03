@@ -9,14 +9,7 @@ Tools:
 - analyze_last_error: Debug tool for error analysis
 """
 import json
-import sys
-from pathlib import Path
 from typing import Any, Dict, List, Optional
-
-# Ensure project root is in path
-_project_root = Path(__file__).parent.parent.parent.resolve()
-if str(_project_root) not in sys.path:
-    sys.path.insert(0, str(_project_root))
 
 from mcp.server.fastmcp import FastMCP
 from common.mcp_core import (

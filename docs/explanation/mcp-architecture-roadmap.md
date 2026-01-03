@@ -45,6 +45,7 @@ The system divides into two distinct MCP servers, each serving a specific abstra
 | **Context Aggregation**   | Fetch holistic project views via `get_codebase_context`      |
 | **Specialist Delegation** | Route queries to personas (Architect, Platform, DevOps, SRE) |
 | **Execution Management**  | Safely trigger `just` commands to verify changes             |
+| **Skill Orchestration**   | Dynamic loading/unloading of Skills based on user intent     |
 
 **The Bridge Role:**
 
@@ -52,6 +53,7 @@ The system divides into two distinct MCP servers, each serving a specific abstra
 | ------------------------- | ----------------------------------------------------------------- |
 | **Contextual Adaptation** | Translate "Deploy to K8s" → "Configure devenv.nix + helm modules" |
 | **Policy Enforcement**    | Reject commits that violate `CLAUDE.md` rules                     |
+| **Skill Loading**         | Load `skills/git_operations` when user says "commit"              |
 
 ### Server B: The Coder (The "Hands")
 
@@ -79,7 +81,7 @@ The system divides into two distinct MCP servers, each serving a specific abstra
 
 The Orchestrator plans, the Coder executes, and both validate.
 
-### Router-Augmented Coding (New)
+### Router-Augmented Coding (Phase 4+)
 
 The `lang_expert` tool implements a three-layer knowledge system for language-specific code:
 
@@ -132,60 +134,82 @@ sequenceDiagram
     Orch-->>User: "Refactoring complete and verified."
 ```
 
-### Few-Shot Example: Refactoring Workflow
+---
 
-**Input (User → Orchestrator):**
+## Phase 13+: The Skill-First Reformation
 
-```
-> Refactor all try/except blocks in mcp-server/orchestrator.py to use structured error handling
-```
+> **Philosophy**: "Don't Build Agents, Build Skills." - Anthropic
 
-**Orchestrator → Architect Persona:**
+### The Problem: Agent-Centric Limitations
 
-```
-> Review the current error handling patterns in the codebase. What ADR defines our error handling strategy?
-```
+As we scale, the "Persona-based Agent" metaphor hits a wall:
 
-**Architect → Orchestrator:**
+| Problem           | Symptom                                                      |
+| ----------------- | ------------------------------------------------------------ |
+| **Context Bloat** | All tools loaded simultaneously degrades reasoning           |
+| **Rigidity**      | "Engineer Agent" is too broad - knows everything and nothing |
+| **Duplication**   | QA and Dev agents both need file reading capabilities        |
 
-```
-> See ADR-007: Structured Error Handling. Use the `Result[T, E]` pattern from the `result` crate.
-```
+### The Solution: Skill-Centric Architecture
 
-**Orchestrator → Coder:**
+We evolve from **"Building Agents"** to **"Building Skills"**:
 
 ```
-> Task: refactor
-> Pattern: try_stmt
-> Language: python
-> Details: Rewrite all try/except blocks to use Result[T, E] pattern
+Runtime (No fixed personality)
+     ↓
+Dynamic Skill Loading (load only what's needed)
+     ↓
+Skills: git_operations, python_engineering, debugging, ...
+     ↓
+Constant context cost regardless of skill count
 ```
 
-**Coder → Repo:**
+### What is a Skill?
 
-```bash
-# ast-grep finds and rewrites the code
-ast-grep run -p 'try: $body except $handler: $recovery' -l py --update-all
-```
-
-**Coder → Orchestrator:**
+A Skill is a self-contained package of capability:
 
 ```
-> Refactored 12 try/except blocks.
-> Files modified: mcp-server/orchestrator.py
+agent/skills/{skill_name}/
+├── manifest.json              # Metadata: name, version, tools, dependencies
+├── README.md                  # Procedural knowledge (LLM's "manual")
+├── tools.py                   # Executable tools ("hands")
+├── prompts/
+│   ├── system.md              # Context injection when active
+│   └── examples.md            # Few-shot examples
+└── tests/                     # Self-contained tests
 ```
 
-**Orchestrator → SRE Persona:**
+### Phase 13 Roadmap: The Foundation (Skill Kernel)
 
-```
-> Validate the changes. Run `just validate` and report results.
-```
+| Milestone      | Status      | Description                                             |
+| -------------- | ----------- | ------------------------------------------------------- |
+| Skill Registry | Completed   | Auto-discover skills in `agent/skills/`                 |
+| Core Skills    | Completed   | git_operations, python_engineering, filesystem          |
+| Skill Tools    | Completed   | `list_skills()`, `load_skill()`, `get_skill_manifest()` |
+| Dynamic Loader | Pending     | Orchestrator dynamically loads/unloads skills           |
+| Tool Migration | In Progress | Port existing tools to Skill format                     |
 
-**SRE → Orchestrator:**
+**Acceptance Criteria:**
 
-```
-> All checks pass. Ready to commit.
-```
+- `agent/skills/` contains at least 3 core skills
+- `list_skills()` and `load_skill()` tools available
+- Orchestrator demonstrates dynamic skill loading
+
+### Phase 14 Roadmap: The Skill Explosion
+
+| Milestone           | Description                                                                |
+| ------------------- | -------------------------------------------------------------------------- |
+| **Language Skills** | Migrate `agent/standards/lang-*.md` to `skills/rust/`, `skills/nix/`, etc. |
+| **Workflow Skills** | Create `skills/documentation/`, `skills/testing/`, `skills/release/`       |
+| **Harvester V2**    | Auto-update skill `README.md` based on execution results                   |
+
+### Phase 15 Roadmap: Autonomy
+
+| Milestone                 | Description                                      |
+| ------------------------- | ------------------------------------------------ |
+| **Task Weaver**           | Project management skill with SQLite persistence |
+| **Recursive Delegation**  | Weaver can load other skills for subtasks        |
+| **Self-Improving Skills** | Skills that evolve based on experience           |
 
 ---
 
@@ -198,7 +222,9 @@ ast-grep run -p 'try: $body except $handler: $recovery' -l py --update-all
 | `consult_specialist`   | Existing | Multi-persona routing                                |
 | `get_codebase_context` | Existing | Holistic project view (Repomix)                      |
 | `run_task`             | Existing | Safe execution of `just` commands                    |
-| `lang_expert`          | New      | Router-Augmented Coding (L1 Standards + L2 Examples) |
+| `lang_expert`          | Existing | Router-Augmented Coding (L1 Standards + L2 Examples) |
+| `list_skills`          | New      | Discover available skills                            |
+| `load_skill`           | New      | Load skill context (guide + tools + prompts)         |
 | `read_backlog`         | Future   | Integration with task tracking                       |
 
 ### Coder Tools
@@ -221,13 +247,24 @@ ast-grep run -p 'try: $body except $handler: $recovery' -l py --update-all
 | **Role confusion**   | Same tools for planning and coding | Specialized personas for each domain                |
 | **Latency**          | N+1 tool calls for complex tasks   | Parallel context fetching via Repomix               |
 | **Quality**          | Generic code generation            | AST-based refactoring ensures syntactic correctness |
+| **Scalability**      | All tools always loaded            | Dynamic skill loading keeps context constant        |
 
 ---
 
 ## Next Steps
 
-1. **Phase 4**: Complete the "closed-loop" execution (Orchestrator → Coder → Validate → Commit)
-2. **Phase 5**: Add memory persistence (`.memory/` ADRs)
-3. **Phase 6**: Integrate community MCPs (Kubernetes, PostgreSQL) via community proxy
+1. **Phase 13**: Complete the Skill Foundation
+   - Implement dynamic skill loader in Orchestrator
+   - Migrate remaining tools to Skill format
+   - Create language skills (Rust, Nix, Julia)
+
+2. **Phase 14**: Skill Explosion
+   - Create workflow skills (Documentation, Testing, Release)
+   - Implement Harvester V2 for self-improving skills
+
+3. **Phase 15**: Autonomy
+   - Build Task Weaver skill
+   - Enable recursive skill delegation
 
 See [`why-custom-mcp-architecture.md`](./why-custom-mcp-architecture.md) for the rationale behind this design.
+See [`design-philosophy.md`](./design-philosophy.md) for the three interaction patterns.

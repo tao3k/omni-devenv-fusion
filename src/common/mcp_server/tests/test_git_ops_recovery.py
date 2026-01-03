@@ -8,7 +8,7 @@ Tests cover:
 4. Successful commit returns success status
 5. Validation logic for type, scope, and message format
 
-Run: uv run pytest mcp-server/tests/test_git_ops_recovery.py -v
+Run: uv run pytest src/common/mcp_server/tests/test_git_ops_recovery.py -v
 """
 
 import asyncio
@@ -19,9 +19,9 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-# Add mcp-server/executor to path for imports
-# git_ops.py is at src/mcp_server/executor/git_ops.py
-PROJECT_ROOT = Path(__file__).resolve().parents[3]  # /src/common/mcp_server/tests -> /src/common -> /src
+from common.mcp_core.gitops import get_project_root
+
+PROJECT_ROOT = get_project_root()
 sys.path.insert(0, str(PROJECT_ROOT / "mcp_server" / "executor"))
 
 # Import git_ops module functions

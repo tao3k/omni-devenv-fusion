@@ -7,7 +7,7 @@ This test verifies that:
 3. The content includes "Actions Over Apologies" principle
 
 Usage:
-    uv run python mcp-server/tests/test_mcp_session.py
+    uv run pytest src/common/mcp_server/tests/test_mcp_session.py -v
 
 This is a unit test that tests the MCP server directly via JSON-RPC,
 not a real LLM session test.
@@ -19,8 +19,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Project root - go up from src/common/mcp_server/tests/ to project root (4 levels)
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
+from common.mcp_core.gitops import get_project_root
+
+PROJECT_ROOT = get_project_root()
 CONFIG_CANDIDATES = [
     PROJECT_ROOT / ".mcp.json",
     PROJECT_ROOT / ".claude" / "settings.json",

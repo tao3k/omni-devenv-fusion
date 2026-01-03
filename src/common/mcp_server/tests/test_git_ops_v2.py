@@ -7,7 +7,7 @@ Tests:
 3. Scope validation against real config
 4. GitWorkflowCache auto-load on git tools
 
-Run: uv run python mcp-server/tests/test_git_ops_v2.py
+Run: uv run pytest src/common/mcp_server/tests/test_git_ops_v2.py -v
 """
 import inspect
 import json
@@ -16,9 +16,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch, MagicMock, mock_open
 
-# Add mcp-server/executor to path for imports
-# git_ops.py is at src/mcp_server/executor/git_ops.py
-PROJECT_ROOT = Path(__file__).resolve().parents[3]  # /src/common/mcp_server/tests -> /src/common -> /src
+from common.mcp_core.gitops import get_project_root
+
+PROJECT_ROOT = get_project_root()
 sys.path.insert(0, str(PROJECT_ROOT / "mcp_server" / "executor"))
 
 # Import git_ops module directly (not as package)

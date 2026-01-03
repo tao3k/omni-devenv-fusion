@@ -257,12 +257,13 @@ async def ingest_git_workflow_knowledge() -> dict:
     results = []
 
     # Ingest gitops.md
-    gitops_path = Path(__file__).parent.parent.parent.resolve() / "agent/how-to/gitops.md"
+    project_root = get_project_root()
+    gitops_path = project_root / "agent/how-to/gitops.md"
     if gitops_path.exists():
         results.append(await ingest_file(gitops_path, domain="git"))
 
     # Ingest gitops-cache.md
-    gitops_cache = Path(__file__).parent.parent.parent.resolve() / "agent/knowledge/gitops-cache.md"
+    gitops_cache = project_root / "agent/knowledge/gitops-cache.md"
     if gitops_cache.exists():
         results.append(await ingest_file(gitops_cache, domain="git"))
 
