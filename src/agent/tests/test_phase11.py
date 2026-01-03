@@ -553,6 +553,272 @@ class TestTokenFileFormat:
 
 
 # =============================================================================
+# Phase 13.9: Git Skill Hot Reload Tests
+# =============================================================================
+
+class TestGitSkillHotReload:
+    """Tests for Git Skill Hot Reload functionality."""
+
+    def test_git_skill_module_exists(self):
+        """Verify git skill module exists and can be imported."""
+        from agent.skills.git.tools import register, _commit_sessions
+        assert register is not None
+        assert isinstance(_commit_sessions, dict)
+
+    def test_git_skill_tools_defined(self):
+        """Verify all git skill tools are defined in the module using AST."""
+        import ast
+        from pathlib import Path
+
+        git_tools_py = Path(__file__).parent.parent / "skills" / "git" / "tools.py"
+        assert git_tools_py.exists(), f"Git skill not found at {git_tools_py}"
+
+        content = git_tools_py.read_text()
+        tree = ast.parse(content)
+
+        # Find all @mcp.tool() decorated async functions
+        tool_names = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.AsyncFunctionDef):
+                for decorator in node.decorator_list:
+                    # Check for @mcp.tool() decorator pattern
+                    # Pattern 1: @mcp.tool()
+                    if isinstance(decorator, ast.Call):
+                        if isinstance(decorator.func, ast.Attribute):
+                            if decorator.func.attr == 'tool':
+                                tool_names.append(node.name)
+                    # Pattern 2: @mcp.tool (without parens, rare)
+                    elif isinstance(decorator, ast.Name):
+                        if decorator.id == 'tool':
+                            tool_names.append(node.name)
+
+        # Verify expected tools exist
+        expected_tools = ["git_status", "git_diff_staged", "git_diff_unstaged",
+                          "git_log", "git_add", "spec_aware_commit", "smart_commit"]
+
+        for tool in expected_tools:
+            assert tool in tool_names, \
+                f"Expected tool '{tool}' not found in git skill. Found: {tool_names}"
+
+    def test_spec_aware_commit_uses_inference_client(self):
+        """Verify spec_aware_commit is defined with correct InferenceClient API usage."""
+        import ast
+        from pathlib import Path
+
+        git_tools_py = Path(__file__).parent.parent / "skills" / "git" / "tools.py"
+        content = git_tools_py.read_text()
+        tree = ast.parse(content)
+
+        # Find spec_aware_commit function
+        spec_aware_func = None
+        for node in ast.walk(tree):
+            if isinstance(node, ast.AsyncFunctionDef) and node.name == "spec_aware_commit":
+                spec_aware_func = node
+                break
+
+        assert spec_aware_func is not None, "spec_aware_commit not found"
+
+        # Verify function signature
+        args = [arg.arg for arg in spec_aware_func.args.args]
+        assert "context" in args, "spec_aware_commit should have 'context' parameter"
+
+        # Verify function body contains InferenceClient usage
+        body_text = ast.get_source_segment(content, spec_aware_func)
+        assert "InferenceClient" in body_text, "spec_aware_commit should use InferenceClient"
+        assert "system_prompt" in body_text, "spec_aware_commit should use system_prompt"
+        assert "user_query" in body_text, "spec_aware_commit should use user_query"
+
+    def test_smart_commit_v2_implementation(self):
+        """Verify smart_commit V2 (session-based) is properly implemented."""
+        import ast
+        from pathlib import Path
+
+        git_tools_py = Path(__file__).parent.parent / "skills" / "git" / "tools.py"
+        content = git_tools_py.read_text()
+        tree = ast.parse(content)
+
+        # Find smart_commit function
+        smart_commit_func = None
+        for node in ast.walk(tree):
+            if isinstance(node, ast.AsyncFunctionDef) and node.name == "smart_commit":
+                smart_commit_func = node
+                break
+
+        assert smart_commit_func is not None, "smart_commit not found"
+
+        # Verify function signature
+        args = [arg.arg for arg in smart_commit_func.args.args]
+        assert "message" in args, "smart_commit should have 'message' parameter"
+        assert "auth_token" in args, "smart_commit should have 'auth_token' parameter"
+
+        # Verify function body
+        body_text = ast.get_source_segment(content, smart_commit_func)
+
+        # Verify session-based storage
+        assert "_commit_sessions" in body_text, "smart_commit should use _commit_sessions"
+
+        # Verify session_id generation
+        assert "secrets.token_hex" in body_text, "smart_commit should generate session_id"
+
+        # Verify two-phase workflow (auth_token check)
+        assert 'if auth_token:' in body_text or 'if auth_token :' in body_text, \
+            "smart_commit should have execute phase when auth_token is provided"
+
+        # Verify session creation in analysis phase
+        assert "_commit_sessions[session_id]" in body_text, \
+            "smart_commit should create session in analysis phase"
+
+    def test_git_skill_uses_dynamic_paths(self):
+        """Verify git skill uses dynamic project root detection via gitops."""
+        import ast
+        from pathlib import Path
+
+        git_tools_py = Path(__file__).parent.parent / "skills" / "git" / "tools.py"
+        content = git_tools_py.read_text()
+        tree = ast.parse(content)
+
+        # Check imports from gitops
+        imports = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                if node.module and "gitops" in node.module:
+                    for alias in node.names:
+                        imports.append(alias.asname or alias.name)
+
+        # Should import git command functions
+        required_imports = ["run_git_cmd", "get_git_status", "get_git_diff", "get_git_log"]
+        for imp in required_imports:
+            assert imp in imports, f"git skill should import '{imp}' from gitops"
+
+    def test_git_skill_supports_hot_reload(self):
+        """Verify git skill structure supports hot reload (no caching decorators)."""
+        import ast
+        from pathlib import Path
+
+        git_tools_py = Path(__file__).parent.parent / "skills" / "git" / "tools.py"
+        content = git_tools_py.read_text()
+        tree = ast.parse(content)
+
+        # Find register function
+        register_func = None
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "register":
+                register_func = node
+                break
+
+        assert register_func is not None, "register function not found"
+
+        # Check register function decorators
+        for decorator in register_func.decorator_list:
+            # Check for caching decorators that would prevent hot reload
+            decorator_name = None
+            if isinstance(decorator, ast.Name):
+                decorator_name = decorator.id
+            elif isinstance(decorator, ast.Attribute):
+                decorator_name = decorator.attr
+
+            if decorator_name in ["lru_cache", "cache", "cached"]:
+                raise AssertionError(f"register should not have '{decorator_name}' decorator")
+
+        # Verify register defines tools
+        body_text = ast.get_source_segment(content, register_func)
+        assert "@mcp.tool()" in body_text, "register should define MCP tools"
+
+    def test_smart_commit_session_workflow(self):
+        """Test the session-based commit workflow logic."""
+        from agent.skills.git.tools import _commit_sessions
+
+        # Verify session storage is dict
+        assert isinstance(_commit_sessions, dict)
+
+        # Test session creation
+        session_id = "test1234"
+        _commit_sessions[session_id] = {
+            "status": "pending_auth",
+            "message": "feat(test): test commit",
+            "timestamp": "2026-01-03T12:00:00"
+        }
+
+        # Verify session is stored
+        assert session_id in _commit_sessions
+        assert _commit_sessions[session_id]["status"] == "pending_auth"
+        assert _commit_sessions[session_id]["message"] == "feat(test): test commit"
+
+        # Test session cleanup
+        _commit_sessions.pop(session_id, None)
+        assert session_id not in _commit_sessions, "Session should be cleaned up"
+
+    def test_gitops_has_required_functions(self):
+        """Verify gitops module has all required git command functions."""
+        from common.mcp_core import gitops
+
+        # Verify all required functions exist and are callable
+        required = ["run_git_cmd", "get_git_status", "get_git_diff", "get_git_log"]
+        for name in required:
+            assert hasattr(gitops, name), f"gitops should have '{name}'"
+            func = getattr(gitops, name)
+            assert callable(func), f"gitops.{name} should be callable"
+
+    def test_git_skill_tool_count(self):
+        """Verify git skill has exactly the expected number of tools."""
+        import ast
+        from pathlib import Path
+
+        git_tools_py = Path(__file__).parent.parent / "skills" / "git" / "tools.py"
+        content = git_tools_py.read_text()
+        tree = ast.parse(content)
+
+        # Count @mcp.tool() decorated functions
+        tool_count = 0
+        for node in ast.walk(tree):
+            if isinstance(node, ast.AsyncFunctionDef):
+                for decorator in node.decorator_list:
+                    if isinstance(decorator, ast.Call):
+                        if isinstance(decorator.func, ast.Attribute):
+                            if decorator.func.attr == 'tool':
+                                tool_count += 1
+
+        # Expected: 7 tools
+        assert tool_count == 7, f"Expected 7 tools, found {tool_count}"
+
+    def test_smart_commit_token_file_writing(self):
+        """Verify smart_commit writes token file for just agent-commit compatibility."""
+        import ast
+        from pathlib import Path
+
+        git_tools_py = Path(__file__).parent.parent / "skills" / "git" / "tools.py"
+        content = git_tools_py.read_text()
+        tree = ast.parse(content)
+
+        # Find smart_commit function
+        smart_commit_func = None
+        for node in ast.walk(tree):
+            if isinstance(node, ast.AsyncFunctionDef) and node.name == "smart_commit":
+                smart_commit_func = node
+                break
+
+        assert smart_commit_func is not None, "smart_commit not found"
+
+        # Verify function body contains token file writing
+        body_text = ast.get_source_segment(content, smart_commit_func)
+
+        # Verify TOKEN_FILE constant is used
+        assert "TOKEN_FILE" in body_text, "smart_commit should use TOKEN_FILE constant"
+
+        # Verify write_text is called
+        assert 'write_text' in body_text, "smart_commit should write to token file"
+
+        # Verify file format: session_id:token:timestamp:message
+        assert 'f"{session_id}:{session_id}:' in body_text or 'session_id:session_id:' in body_text, \
+            "smart_commit should write token in format session_id:token:timestamp:message"
+
+        # Verify token file path constant exists
+        from agent.skills.git.tools import TOKEN_FILE
+        assert str(TOKEN_FILE) == "/tmp/.omni_commit_token", \
+            f"TOKEN_FILE should be /tmp/.omni_commit_token, got {TOKEN_FILE}"
+
+
+# =============================================================================
 # Run Tests
 # =============================================================================
 

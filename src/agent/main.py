@@ -80,7 +80,6 @@ from agent.capabilities.skill_manager import register_skill_tools  # Phase 13: D
 from agent.tools.context import register_context_tools
 from agent.tools.spec import register_spec_tools
 from agent.tools.router import register_router_tools
-from agent.tools.commit import register_commit_tools
 from agent.tools.execution import register_execution_tools
 
 # Initialize logging
@@ -126,10 +125,7 @@ _register_tool_module("spec", register_spec_tools)
 # 3. Router Tools
 _register_tool_module("router", register_router_tools)
 
-# 4. Commit Workflow Tools
-_register_tool_module("commit", register_commit_tools)
-
-# 5. Execution Tools
+# 4. Execution Tools
 _register_tool_module("execution", register_execution_tools)
 
 # 6. Product Owner (Standards Enforcement)

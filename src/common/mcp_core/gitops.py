@@ -210,5 +210,79 @@ __all__ = [
     "reset_project_root",
     "is_project_root",
     "is_git_repo",
-    "get_git_toplevel",  # Legacy compatibility
+    "get_git_toplevel",
+    # Git command utilities
+    "run_git_cmd",
+    "get_git_status",
+    "get_git_diff",
+    "get_git_log",
 ]
+
+
+# =============================================================================
+# Git Command Utilities
+# =============================================================================
+
+import subprocess
+from typing import List
+
+
+async def run_git_cmd(args: List[str]) -> str:
+    """
+    Run a git command and return the output.
+
+    Args:
+        args: Git command arguments (e.g., ["status", "-s"])
+
+    Returns:
+        Command output string
+
+    Raises:
+        Exception: If git command fails
+    """
+    result = subprocess.run(
+        ["git"] + args,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if result.returncode != 0:
+        raise Exception(f"Git command failed: {result.stderr}")
+    return result.stdout
+
+
+async def get_git_status() -> str:
+    """Get git status in porcelain format."""
+    result = subprocess.run(
+        ["git", "status", "--porcelain"],
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout
+
+
+async def get_git_diff(staged: bool = True) -> str:
+    """Get git diff for staged or unstaged changes."""
+    if staged:
+        result = subprocess.run(
+            ["git", "diff", "--cached"],
+            capture_output=True,
+            text=True,
+        )
+    else:
+        result = subprocess.run(
+            ["git", "diff"],
+            capture_output=True,
+            text=True,
+        )
+    return result.stdout
+
+
+async def get_git_log(n: int = 5) -> str:
+    """Get recent git commits."""
+    result = subprocess.run(
+        ["git", "log", "--oneline", "-n", str(n)],
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout
