@@ -7,11 +7,13 @@ Enables: "When Agent needs X → Read docs/X.md → Execute according to rules"
 
 Philosophy:
 - docs/* as the source of truth
+- agent/skills/* as skill-specific documentation
 - MCP tools as the executor of doc rules
 - Zero Hallucination: Code doesn't misinterpret rules
 
 Usage:
     @omni-orchestrator read_docs doc="how-to/git-workflow" action="commit" params={...}
+    @omni-orchestrator execute_doc_action doc="skills/git_operations" action="commit" ...
 """
 import json
 import re
@@ -27,10 +29,11 @@ from typing import Dict, Any, Optional
 # - directory: Where the actual .md files are located
 
 # Documentation sources queryable via read_docs (for answering user questions)
-# agent/ is loaded via load_*_memory tools (for LLM to follow rules when acting)
+# agent/skills/ is loaded via load_*_memory tools (for LLM to follow rules when acting)
 DOC_SOURCES = [
-    ("docs", "docs"),              # User-facing documentation (for answering questions)
-    ("mcp-server", "mcp-server"),  # MCP server implementation docs
+    ("docs", "docs"),                      # User-facing documentation (for answering questions)
+    ("mcp-server", "mcp-server"),          # MCP server implementation docs
+    ("skills", "agent/skills"),            # Skill-specific documentation (for execute_doc_action)
 ]
 
 # =============================================================================
@@ -43,8 +46,16 @@ def load_doc(doc_path: str) -> Optional[str]:
     Load documentation content from configured sources.
 
     Searches through DOC_SOURCES in order and returns the first match.
+    For skills, also looks for guide.md in the skill directory.
     """
     for prefix, directory in DOC_SOURCES:
+        # Handle skills directory specially - look for guide.md
+        if prefix == "skills" and "/" in doc_path:
+            skill_name = doc_path.split("/", 1)[1]
+            skill_guide_path = Path(directory) / skill_name / "guide.md"
+            if skill_guide_path.exists():
+                return skill_guide_path.read_text()
+
         # Try matching the full doc_path
         full_path = Path(directory) / f"{doc_path}.md"
         if full_path.exists():
@@ -141,11 +152,11 @@ def register_docs_tools(mcp: Any) -> None:
         """
         Read user documentation to answer questions.
 
-        This tool reads from docs/ directory - content written FOR USERS.
+        This tool reads from docs/ directory or agent/skills/{doc}/guide.md.
         LLM uses this to answer user questions about the project.
 
         Args:
-            doc: Documentation file (e.g., "how-to/git-workflow")
+            doc: Documentation file (e.g., "how-to/git-workflow" or "skills/git_operations")
             action: Action to perform (e.g., "commit", "validate")
             params: Parameters for the action
 
@@ -182,7 +193,7 @@ def register_docs_tools(mcp: Any) -> None:
         Get the protocol summary from a documentation file.
 
         Args:
-            doc: Documentation file (e.g., "how-to/git-workflow")
+            doc: Documentation file (e.g., "how-to/git-workflow" or "skills/git_operations")
 
         Returns:
             JSON summary of the protocol
@@ -228,12 +239,13 @@ def register_docs_tools(mcp: Any) -> None:
         """
         Execute an action according to documentation rules.
 
-        This tool reads docs/{doc}.md and applies its rules to the action.
+        This tool reads docs/{doc}.md or agent/skills/{doc}/guide.md and applies its rules.
         Currently supports:
         - doc="how-to/git-workflow", action="commit": Validates and prepares commit
+        - doc="skills/git_operations", action="commit": Git Operations skill workflow
 
         Args:
-            doc: Documentation file
+            doc: Documentation file (e.g., "how-to/git-workflow" or "skills/git_operations")
             action: Action to perform
             type: commit type (for git-workflow)
             scope: commit scope (for git-workflow)
@@ -247,14 +259,14 @@ def register_docs_tools(mcp: Any) -> None:
         if not content:
             return json.dumps({
                 "status": "error",
-                "message": f"docs/{doc}.md not found"
+                "message": f"docs/{doc}.md or agent/skills/{doc}/guide.md not found"
             }, indent=2)
 
-        # Git workflow handler
-        if doc == "how-to/git-workflow" and action == "commit":
+        # Git workflow handler - supports both old how-to and new skills paths
+        if doc in ("how-to/git-workflow", "skills/git_operations") and action == "commit":
             from .git_ops import (
                 _validate_type, _validate_scope, _validate_message,
-                PROJECT_SCOPES, VALID_TYPES
+                _git_rules_cache
             )
 
             violations = []
@@ -277,19 +289,19 @@ def register_docs_tools(mcp: Any) -> None:
                 return json.dumps({
                     "status": "validation_error",
                     "violations": violations,
-                    "allowed_types": VALID_TYPES,
-                    "allowed_scopes": PROJECT_SCOPES,
-                    "reference": "agent/how-to/gitops.md"
+                    "allowed_types": _git_rules_cache.get_types(),
+                    "allowed_scopes": _git_rules_cache.get_scopes(),
+                    "reference": "agent/skills/git_operations/guide.md"
                 }, indent=2)
 
             # Return ready state (Stop and Ask protocol)
             return json.dumps({
                 "status": "ready",
-                "message": "Validated according to agent/how-to/gitops.md",
+                "message": "Validated according to agent/skills/git_operations/guide.md",
                 "command": f"just agent-commit {type} {scope} \"{message}\"",
                 "protocol": "stop_and_ask",
                 "authorization_required": True,
-                "reference": "agent/how-to/gitops.md"
+                "reference": "agent/skills/git_operations/guide.md"
             }, indent=2)
 
         # Fallback to generic
@@ -299,7 +311,7 @@ def register_docs_tools(mcp: Any) -> None:
             "doc": doc,
             "action": action,
             "rules": rules if rules else "No specific rules found",
-            "reference": f"docs/{doc}.md"
+            "reference": f"docs/{doc}.md or agent/skills/{doc}/guide.md"
         }, indent=2)
 
 

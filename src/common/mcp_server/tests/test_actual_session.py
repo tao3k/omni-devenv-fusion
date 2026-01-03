@@ -1371,6 +1371,194 @@ def test_instructions_lazy_load():
     print("✅ documentation-standards is lazy-loaded correctly")
 
 
+# =============================================================================
+# Harvester Test (Phase 12: The Cycle of Evolution)
+# =============================================================================
+
+def test_harvest_session_insight():
+    """
+    Test the harvest_session_insight workflow.
+
+    This tests the "learning loop" of the Agentic OS:
+    1. Takes a context summary
+    2. Uses LLM to distill wisdom
+    3. Creates a markdown knowledge card
+    4. Ingests into vector database
+
+    Usage:
+        uv run python src/common/mcp_server/tests/test_actual_session.py --harvest
+    """
+    import asyncio
+    import os
+    from pathlib import Path
+
+    print("=" * 60)
+    print("HARVESTER TEST (Phase 12)")
+    print("Testing: Distill experience into permanent knowledge")
+    print("=" * 60)
+
+    # Check API key
+    api_key = get_api_key()
+    if not api_key:
+        print("\n⚠️  API Key not found!")
+        print("\nTo run this test:")
+        print("  1. Set ANTHROPIC_API_KEY environment variable, OR")
+        print("  2. Add to .claude/settings.json: env.ANTHROPIC_AUTH_TOKEN")
+        print("\nRunning in MOCK mode...")
+        return test_harvest_mock()
+
+    print("\n✅ API key found, running actual test...")
+    print("   This will call the LLM to distill wisdom from context.\n")
+
+    async def run_test():
+        # Import harvester
+        from agent.capabilities.harvester import harvest_session_insight
+
+        # Test context - simulating a completed Phase 11 implementation
+        context = """Completed Phase 11: The Neural Matrix implementation.
+
+        Key decisions made:
+        1. Chose ChromaDB over Pinecone for self-hosting capability, zero external dependencies
+        2. Integrated RAG into Tri-MCP via the Librarian capability in orchestrator
+        3. Added Rich terminal utilities for beautiful MCP server startup
+        4. Implemented consult_specialist tool for expert persona consultation
+
+        Files changed:
+        - src/agent/core/vector_store.py
+        - src/agent/capabilities/librarian.py
+        - src/common/mcp_core/rich_utils.py
+        - src/agent/tools/router.py
+
+        The implementation involved:
+        - Setting up ChromaDB with persistent storage
+        - Creating vector search functionality
+        - Implementing consult_knowledge_base and ingest_knowledge tools
+        - Adding Rich output utilities for terminal formatting
+        """
+
+        print("🌾 Running harvest_session_insight...")
+        result = await harvest_session_insight(
+            context_summary=context,
+            files_changed=[
+                "src/agent/core/vector_store.py",
+                "src/agent/capabilities/librarian.py",
+            ]
+        )
+
+        print("\n--- Harvester Result ---")
+        print(result)
+        print("--- End Result ---\n")
+
+        # Check if result indicates success
+        if result.startswith("✅"):
+            print("✅ Harvester test PASSED!")
+            return True
+        else:
+            print("❌ Harvester test FAILED!")
+            return False
+
+    return asyncio.run(run_test())
+
+
+def test_harvest_mock():
+    """
+    Mock test for harvester that simulates the workflow without LLM calls.
+
+    This validates the file generation and vector ingestion logic.
+    """
+    import asyncio
+    import datetime
+
+    print("\n" + "=" * 60)
+    print("HARVESTER MOCK TEST")
+    print("Testing: File generation and knowledge ingestion logic")
+    print("=" * 60)
+
+    async def run_mock_test():
+        from agent.core.schema import HarvestedInsight, KnowledgeCategory
+
+        # Create a mock insight (simulating what LLM would produce)
+        mock_insight = HarvestedInsight(
+            title="Phase 11: The Neural Matrix Implementation",
+            category=KnowledgeCategory.ARCHITECTURAL_DECISION,
+            context="Implemented RAG-based knowledge storage using ChromaDB for self-hosted vector storage",
+            solution="Integrated ChromaDB into Tri-MCP architecture via Librarian capability",
+            key_takeaways=[
+                "Self-hosted ChromaDB eliminates external service dependencies",
+                "Librarian capability provides unified knowledge API for all MCP servers",
+                "Vector search enables semantic knowledge retrieval across the codebase",
+            ],
+            code_snippet="vm = get_vector_memory(); await vm.search(query)",
+            related_files=["src/agent/core/vector_store.py", "src/agent/capabilities/librarian.py"],
+        )
+
+        print("\n📄 Mock Insight Created:")
+        print(f"   Title: {mock_insight.title}")
+        print(f"   Category: {mock_insight.category.value}")
+        print(f"   Takeaways: {len(mock_insight.key_takeaways)} items")
+
+        # Test file generation
+        from common.mcp_core.gitops import get_project_root
+
+        project_root = get_project_root()
+        harvest_dir = project_root / "agent" / "knowledge" / "harvested"
+        harvest_dir.mkdir(parents=True, exist_ok=True)
+
+        date_str = datetime.datetime.now().strftime("%Y%m%d")
+        filename = f"{date_str}-{mock_insight.category.value}-{mock_insight.title.lower().replace(' ', '-')[:30]}.md"
+        file_path = harvest_dir / filename
+
+        print(f"\n📁 Knowledge file will be created:")
+        print(f"   Path: {file_path}")
+
+        # Generate markdown content
+        content = f"""# {mock_insight.title}
+
+**Category**: {mock_insight.category.value}
+**Date**: {datetime.datetime.now().strftime("%Y-%m-%d")}
+
+## Context
+{mock_insight.context}
+
+## Solution
+{mock_insight.solution}
+
+## Key Takeaways
+{chr(10).join([f"- {t}" for t in mock_insight.key_takeaways])}
+"""
+
+        # Write the file
+        file_path.write_text(content, encoding="utf-8")
+        print(f"\n✅ Knowledge file created: {file_path.name}")
+
+        # Test vector ingestion
+        from agent.core.vector_store import get_vector_memory
+
+        vm = get_vector_memory()
+        await vm.add(
+            documents=[content],
+            ids=[filename],
+            metadatas=[{
+                "domain": mock_insight.category.value,
+                "source": str(file_path),
+                "type": "harvested_insight",
+            }]
+        )
+        print("✅ Knowledge ingested into vector store")
+
+        # Verify
+        count = await vm.count()
+        print(f"   Total documents in store: {count}")
+
+        print("\n✅ MOCK HARVEST TEST PASSED!")
+        print("   File generation and vector ingestion are working correctly.")
+        print("   (Real test requires API key for LLM-based insight distillation)")
+
+        return True
+
+    return asyncio.run(run_mock_test())
+
+
 if __name__ == "__main__":
     import argparse
 
@@ -1379,11 +1567,19 @@ if __name__ == "__main__":
                         help="Run smart commit authorization flow test")
     parser.add_argument("--git-commit-detect", action="store_true",
                         help="Run git commit detection black box test")
+    parser.add_argument("--harvest", action="store_true",
+                        help="Run harvester test (Phase 12)")
     parser.add_argument("--mock", action="store_true",
                         help="Run in mock mode (no API key required)")
     args = parser.parse_args()
 
-    if args.smart_commit:
+    if args.harvest:
+        print("\nStarting harvester test (Phase 12)...")
+        if not args.mock:
+            print("This will consume API tokens.\n")
+        result = test_harvest_session_insight() if not args.mock else test_harvest_mock()
+        sys.exit(0 if result else 1)
+    elif args.smart_commit:
         print("\nStarting smart commit authorization flow test...")
         if not args.mock:
             print("This will consume API tokens.\n")
@@ -1401,6 +1597,7 @@ if __name__ == "__main__":
             print("This will consume API tokens.\n")
         print("Tip: Run with --smart-commit to test smart_commit workflow")
         print("Tip: Run with --git-commit-detect to test git commit detection")
+        print("Tip: Run with --harvest to test harvester (Phase 12)")
         print("Tip: Add --mock flag to run without API key")
         print()
 

@@ -54,54 +54,14 @@ def _load_api_key_from_config() -> Optional[str]:
     Load API key from project config files.
 
     Checks in order:
-    1. Git toplevel/.mcp.json (Claude Desktop format: mcpServers.orchestrator.env.ANTHROPIC_API_KEY)
-    2. Git toplevel/.mcp.json (Simple format: {"api_key": "..."})
-    3. Git toplevel/.claude/settings.json ({"ANTHROPIC_API_KEY": "..."} or {"env": {...}})
-    4. Environment variables
+    1. Environment variable ANTHROPIC_API_KEY
+    2. .claude/settings.json (via agent/settings.yaml path)
+    3. .mcp.json (Claude Desktop format)
 
-    Uses GitOps via common.mcp_core.gitops for project root detection.
+    Delegates to common.mcp_core.api_key.get_anthropic_api_key() for unified loading.
     """
-    # Determine project root using GitOps (via gitops module)
-    from common.mcp_core.gitops import get_project_root
-    project_root = get_project_root()
-
-    config_files = [
-        project_root / ".mcp.json",
-        project_root / ".claude" / "settings.json",
-    ]
-
-    for config_path in config_files:
-        if config_path.exists():
-            try:
-                content = config_path.read_text(encoding="utf-8")
-                data = json.loads(content)
-
-                # Try Claude Desktop .mcp.json format
-                if "mcpServers" in data:
-                    orchestrator_env = data.get("mcpServers", {}).get("orchestrator", {}).get("env", {})
-                    if "ANTHROPIC_API_KEY" in orchestrator_env:
-                        return orchestrator_env["ANTHROPIC_API_KEY"]
-                    if "ANTHROPIC_AUTH_TOKEN" in orchestrator_env:
-                        return orchestrator_env["ANTHROPIC_AUTH_TOKEN"]
-
-                # Try simple .mcp.json format
-                if "api_key" in data:
-                    return data["api_key"]
-
-                # Try .claude/settings.json format (top-level key)
-                if "ANTHROPIC_API_KEY" in data:
-                    return data["ANTHROPIC_API_KEY"]
-
-                # Try .claude/settings.json env object format
-                if "env" in data and isinstance(data["env"], dict):
-                    if "ANTHROPIC_API_KEY" in data["env"]:
-                        return data["env"]["ANTHROPIC_API_KEY"]
-                    if "ANTHROPIC_AUTH_TOKEN" in data["env"]:
-                        return data["env"]["ANTHROPIC_AUTH_TOKEN"]
-            except (json.JSONDecodeError, IOError) as e:
-                log.debug(f"inference.config_read_failed", path=str(config_path), error=str(e))
-
-    return None
+    from common.mcp_core.api_key import get_anthropic_api_key
+    return get_anthropic_api_key()
 
 
 # =============================================================================

@@ -54,13 +54,13 @@ language_standards:
 # GitOps Protocol References
 # =============================================================================
 git_protocol:
-  doc: "agent/how-to/gitops.md"
+  doc: "agent/skills/git_operations/guide.md"
   cache: "GitWorkflowCache"
   rules_cache: "GitRulesCache"
   description: "Git commit workflow protocol and authorization rules"
   rules:
     - "stop_and_ask" # Default: require user authorization
-    - "auto_commit" # Override: allow automatic commits
+    - "auto_commit" # Override: allow automatic commits (user says "run just agent-commit")
 
 # =============================================================================
 # Feature Lifecycle References
@@ -103,10 +103,10 @@ cache_patterns:
 knowledge_caches:
   git_protocol:
     class: "GitWorkflowCache"
-    source: "agent/knowledge/gitops-cache.md"
+    source: "agent/skills/git_operations/guide.md"
   git_rules:
     class: "GitRulesCache"
-    source: "agent/how-to/gitops.md"
+    source: "agent/skills/git_operations/guide.md"
   writing_style:
     class: "WritingStyleCache"
     source: "agent/writing-style/"

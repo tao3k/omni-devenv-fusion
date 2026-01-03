@@ -1,0 +1,12 @@
+{
+  "name": "filesystem",
+  "version": "1.0.0",
+  "description": "File operations including read, write, search, and glob patterns",
+  "category": "development",
+  "dependencies": [],
+  "tools": ["read_file", "save_file", "search_files", "glob_files"],
+  "context_files": [],
+  "prompts": [
+    "Use file operations efficiently. Always read files before editing them."
+  ]
+}

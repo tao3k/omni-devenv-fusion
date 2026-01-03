@@ -15,7 +15,7 @@ References configured in agent/knowledge/references.yaml.
 Configuration Source of Truth:
 1. cog.toml (Primary for scopes)
 2. .conform.yaml (Primary for types, if available)
-3. agent/how-to/gitops.md (Fallback)
+3. agent/skills/git_operations/guide.md (Protocol documentation)
 """
 
 import asyncio
@@ -145,10 +145,10 @@ _git_rules_cache = GitRulesCache()
 
 class GitWorkflowCache:
     """
-    Singleton cache that reads agent/how-to/gitops.md to determine
+    Singleton cache that reads agent/skills/git_operations/guide.md to determine
     the commit protocol ("stop_and_ask" or "auto_commit") and other rules.
 
-    This ensures the Agent respects the protocol defined in documentation,
+    This ensures the Agent respects the protocol defined in the Git Operations skill,
     rather than hardcoded values.
     """
 
@@ -416,7 +416,7 @@ _auth_guard = AuthorizationGuard()
 def register_git_ops_tools(mcp: Any) -> None:
     """Register all git operations tools.
 
-    Automatically loads gitops.md memory on first call.
+    Automatically loads Git Operations skill guide on first call.
     """
     # Trigger workflow memory load - any git action will now have protocol context
     _ = _git_workflow_cache.get_protocol()
@@ -482,7 +482,7 @@ def register_git_ops_tools(mcp: Any) -> None:
                     "authorization_required": True,
                     "auth_token": auth_token,  # Token for execute_authorized_commit
                     "user_prompt_hint": "Run: execute_authorized_commit with the auth_token above",
-                    "rules_source": "agent/how-to/gitops.md",
+                    "rules_source": "agent/skills/git_operations/guide.md",
                 },
                 indent=2,
             )
@@ -845,7 +845,7 @@ Return JSON only."""
         """
         Load git workflow rules into LLM context.
 
-        This tool reads from agent/how-to/ - content written FOR LLM.
+        This tool reads from agent/skills/git_operations/guide.md - the Git Operations skill.
         Use this when you need to perform git operations (commit, push, etc.)
 
         Path resolved dynamically from references.yaml.

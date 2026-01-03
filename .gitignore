@@ -4,7 +4,7 @@ devenv.local.nix
 
 # direnv
 .direnv
-
+*.bak
 # pre-commit
 .pre-commit-config.yaml
 

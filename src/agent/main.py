@@ -78,6 +78,7 @@ from agent.capabilities.product_owner import register_product_owner_tools
 from agent.capabilities.lang_expert import register_lang_expert_tools
 from agent.core.reviewer import register_reviewer_tools
 from agent.capabilities.librarian import register_librarian_tools
+from agent.capabilities.harvester import register_harvester_tools  # Phase 12
 
 # Import tool modules (structured tools)
 from agent.tools.context import register_context_tools
@@ -140,6 +141,9 @@ _register_tool_module("reviewer", register_reviewer_tools)
 
 # 9. Librarian (Knowledge Base / RAG)
 _register_tool_module("librarian", register_librarian_tools)
+
+# 10. Harvester (Phase 12: The Cycle of Evolution)
+_register_tool_module("harvester", register_harvester_tools)
 
 
 # =============================================================================
