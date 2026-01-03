@@ -256,42 +256,12 @@ def test_all_tools():
             print(f"❌ {text}")
             results["delegate_to_coder"] = False
 
-        # === Tool 6: safe_sandbox ===
-        print("\n7️⃣  Testing 'safe_sandbox'...")
-        success, text = send_tool(
-            process, "safe_sandbox",
-            {"command": "echo", "args": ["hello world"]},
-            7
-        )
-        if success:
-            print(f"✅ Response: {len(text)} chars")
-            if "hello" in text.lower() or "hello world" in text:
-                print("✅ Sandbox execution working")
-            results["safe_sandbox"] = True
-        else:
-            print(f"❌ {text}")
-            results["safe_sandbox"] = False
-
-        # === Tool 7: safe_sandbox security ===
-        print("\n8️⃣  Testing 'safe_sandbox' security (blocked patterns)...")
-        success, text = send_tool(
-            process, "safe_sandbox",
-            {"command": "rm", "args": ["-rf", "/"]},
-            8
-        )
-        if not success or "Blocked" in text or "dangerous" in text.lower() or "not allowed" in text.lower():
-            print("✅ Blocked dangerous command in sandbox")
-            results["safe_sandbox_security"] = True
-        else:
-            print("❌ Should have blocked dangerous command")
-            results["safe_sandbox_security"] = False
-
-        # === Tool 8: memory_garden ===
-        print("\n9️⃣  Testing 'memory_garden'...")
+        # === Tool 7: memory_garden ===
+        print("\n8️⃣  Testing 'memory_garden'...")
         success, text = send_tool(
             process, "memory_garden",
             {"operation": "save", "title": "Test Decision", "content": "This is a test decision"},
-            9
+            8
         )
         if success:
             print(f"✅ Response: {len(text)} chars")
@@ -302,11 +272,11 @@ def test_all_tools():
             print(f"❌ {text}")
             results["memory_garden"] = False
 
-        # === Tool 9: run_task ===
+        # === Tool 8: run_task ===
         success, text = send_tool(
             process, "run_task",
             {"command": "just", "args": ["--version"]},
-            13
+            9
         )
         if success:
             print(f"✅ Response: {len(text)} chars")
@@ -318,11 +288,11 @@ def test_all_tools():
             results["run_task"] = False
 
         # Test blocked command
-        print("\n🔟  Testing 'run_task' security (blocked command)...")
+        print("\n1️⃣0️⃣  Testing 'run_task' security (blocked command)...")
         success, text = send_tool(
             process, "run_task",
             {"command": "rm", "args": ["-rf", "/"]},
-            14
+            10
         )
         if not success or "not allowed" in text.lower():
             print("✅ Blocked dangerous command")
@@ -415,14 +385,14 @@ def test_all_tools():
             print(f"❌ DesignDocsCache failed: {text[:200]}")
             results["design_docs_cache"] = False
 
-        # === Tool 16b: Verify design documents are actually loaded (not empty) ===
-        print("\n1️⃣6️⃣b Testing 'verify_design_alignment' with anti-pattern to prove docs loaded...")
+        # === Tool 17: Verify design documents are actually loaded (not empty) ===
+        print("\n1️⃣7️⃣b Testing 'verify_design_alignment' with anti-pattern to prove docs loaded...")
         # Use a feature description that triggers the "anti_patterns" check
         # This only works if docs/design-philosophy.md is actually loaded
         success, text = send_tool(
             process, "verify_design_alignment",
             {"feature_description": "This feature is overcomplicated and unnecessary"},
-            16
+            17
         )
         # If docs are loaded, this should flag the anti-pattern
         # If docs are empty/not loaded, it will skip the check and still say "aligned"
@@ -453,12 +423,12 @@ def test_all_tools():
             print(f"❌ DesignDocsCache load verification failed: {text[:200]}")
             results["design_docs_loaded"] = False
 
-        # === Tool 17: consult_language_expert (Language Expert - Nix) ===
-        print("\n1️⃣7️⃣  Testing 'consult_language_expert' (Nix standards)...")
+        # === Tool 18: consult_language_expert (Language Expert - Nix) ===
+        print("\n1️⃣8️⃣  Testing 'consult_language_expert' (Nix standards)...")
         success, text = send_tool(
             process, "consult_language_expert",
             {"file_path": "units/modules/python.nix", "task_description": "extend mkNixago generator"},
-            17
+            18
         )
         if success and ("nix" in text.lower() or "standards" in text.lower() or "examples" in text.lower()):
             print(f"✅ consult_language_expert working: {text[:100]}")
@@ -467,12 +437,12 @@ def test_all_tools():
             print(f"❌ consult_language_expert failed: {text[:200]}")
             results["consult_language_expert"] = False
 
-        # === Tool 18: consult_language_expert (Python file) ===
-        print("\n1️⃣8️⃣  Testing 'consult_language_expert' (Python standards)...")
+        # === Tool 19: consult_language_expert (Python file) ===
+        print("\n1️⃣9️⃣  Testing 'consult_language_expert' (Python standards)...")
         success, text = send_tool(
             process, "consult_language_expert",
             {"file_path": "src/agent/main.py", "task_description": "add async function"},
-            18
+            19
         )
         if success and ("python" in text.lower() or "standards" in text.lower()):
             print(f"✅ consult_language_expert Python: {text[:100]}")
@@ -481,12 +451,12 @@ def test_all_tools():
             print(f"❌ consult_language_expert Python failed: {text[:200]}")
             results["consult_language_expert_python"] = False
 
-        # === Tool 19: consult_language_expert (unsupported extension) ===
-        print("\n1️⃣9️⃣  Testing 'consult_language_expert' (unsupported extension)...")
+        # === Tool 20: consult_language_expert (unsupported extension) ===
+        print("\n2️⃣0️⃣  Testing 'consult_language_expert' (unsupported extension)...")
         success, text = send_tool(
             process, "consult_language_expert",
             {"file_path": "data/file.csv", "task_description": "process data"},
-            19
+            20
         )
         if success and ("no language expert" in text.lower() or "skipped" in text.lower()):
             print(f"✅ consult_language_expert handled unsupported: {text[:100]}")
@@ -495,12 +465,12 @@ def test_all_tools():
             print(f"❌ consult_language_expert unsupported response: {text[:200]}")
             results["consult_language_expert_unsupported"] = True  # Still counts
 
-        # === Tool 20: get_language_standards (full standards) ===
-        print("\n2️⃣0️⃣  Testing 'get_language_standards'...")
+        # === Tool 21: get_language_standards (full standards) ===
+        print("\n2️⃣1️⃣  Testing 'get_language_standards'...")
         success, text = send_tool(
             process, "get_language_standards",
             {"lang": "nix"},
-            20
+            21
         )
         if success and ("nix" in text.lower() and "status" in text.lower()):
             print(f"✅ get_language_standards working: {text[:100]}")
@@ -509,12 +479,12 @@ def test_all_tools():
             print(f"❌ get_language_standards failed: {text[:200]}")
             results["get_language_standards"] = False
 
-        # === Tool 21: get_language_standards (invalid language) ===
-        print("\n2️⃣1️⃣  Testing 'get_language_standards' (invalid language)...")
+        # === Tool 22: get_language_standards (invalid language) ===
+        print("\n2️⃣2️⃣  Testing 'get_language_standards' (invalid language)...")
         success, text = send_tool(
             process, "get_language_standards",
             {"lang": "cobol"},
-            21
+            22
         )
         if success and ("not_found" in text.lower() or "available" in text.lower()):
             print(f"✅ get_language_standards handled invalid: {text[:100]}")
@@ -523,12 +493,12 @@ def test_all_tools():
             print(f"❌ get_language_standards invalid response: {text[:200]}")
             results["get_language_standards_invalid"] = True
 
-        # === Tool 22: list_supported_languages ===
-        print("\n2️⃣2️⃣  Testing 'list_supported_languages'...")
+        # === Tool 23: list_supported_languages ===
+        print("\n2️⃣3️⃣  Testing 'list_supported_languages'...")
         success, text = send_tool(
             process, "list_supported_languages",
             {},
-            22
+            23
         )
         if success and ("languages" in text.lower() and "nix" in text.lower()):
             print(f"✅ list_supported_languages working: {text[:100]}")

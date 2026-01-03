@@ -1344,6 +1344,33 @@ def test_smart_commit_mock():
     assert result is True or result is None  # None means skipped, not failed
 
 
+def test_instructions_lazy_load():
+    """Test that documentation-standards is lazy-loaded via instructions system."""
+    import sys
+    from pathlib import Path
+
+    # Add src to path
+    src_path = Path(__file__).resolve().parents[2] / "src"
+    sys.path.insert(0, str(src_path))
+
+    # Verify documentation-standards is in the instructions list
+    from common.mcp_core.instructions import list_instruction_names, get_instruction
+
+    names = list_instruction_names()
+    assert "documentation-standards" in names, f"documentation-standards not in instructions: {names}"
+
+    # Verify it can be retrieved (lazy load)
+    content = get_instruction("documentation-standards")
+    assert content is not None, "Failed to load documentation-standards"
+    assert len(content) > 0, "documentation-standards is empty"
+
+    # Verify it contains expected content
+    assert "Document Classification" in content or "Documentation" in content, \
+        "documentation-standards does not contain expected content"
+
+    print("✅ documentation-standards is lazy-loaded correctly")
+
+
 if __name__ == "__main__":
     import argparse
 
