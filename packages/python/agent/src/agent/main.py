@@ -68,7 +68,8 @@ _register("harvester", register_harvester_tools)
 _register("skill_manager", register_skill_tools)
 
 # --- Boot Sequence ---
-if __name__ == "__main__":
+def main():
+    """Entry point for the orchestrator."""
     from rich.console import Console
     console = Console(stderr=True)
     console.print(banner("Orchestrator", "The Modular Brain", "🧠"))
@@ -83,3 +84,7 @@ if __name__ == "__main__":
     # 3. Run Server
     section("System Online")
     mcp.run()
+
+
+if __name__ == "__main__":
+    main()

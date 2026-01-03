@@ -61,6 +61,8 @@
       type = "stdio";
       command = "uv";
       args = [
+        "--directory"
+        "packages/python/agent"
         "run"
         "python"
         "-m"

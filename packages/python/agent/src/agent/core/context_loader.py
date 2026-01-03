@@ -11,6 +11,7 @@ import structlog
 
 # Reuse existing Settings class from mcp_core
 from common.mcp_core.settings import get_setting
+from common.mcp_core.gitops import get_project_root
 
 logger = structlog.get_logger(__name__)
 
@@ -19,7 +20,7 @@ class ContextLoader:
     """Load and combine system prompts from config files."""
 
     def __init__(self):
-        self.root = Path(__file__).parent.parent.parent.parent  # Project root
+        self.root = get_project_root()
 
     def _read_file_safe(self, rel_path: str) -> str:
         """Safely read a text file relative to project root."""

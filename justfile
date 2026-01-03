@@ -207,8 +207,8 @@ agent-focus spec_path:
     @cat {{spec_path}}
     @echo ""
     @echo "=== 🏗️ RELATED CODE STRUCTURE ==="
-    @echo "src/agent modules:"
-    @ls -1 src/agent/*.py 2>/dev/null | xargs -I {} basename {} .py | sed 's/^/  - /' || echo "  No modules found"
+    @echo "packages/python/agent modules:"
+    @ls -1 packages/python/agent/src/agent/*.py 2>/dev/null | xargs -I {} basename {} .py | sed 's/^/  - /' || echo "  No modules found"
     @echo "agent/skills modules:"
     @ls -1 agent/skills/ 2>/dev/null | grep -v "^_" | sed 's/^/  - /' || echo "  No skills found"
     @echo ""
@@ -368,7 +368,7 @@ test:
 [group('validate')]
 test-unit:
     @echo "Running unit tests..."
-    @uv run pytest src/agent/tests/ -v --tb=short 2>/dev/null || echo "Unit tests completed"
+    @uv run pytest packages/python/agent/src/agent/tests/ -v --tb=short 2>/dev/null || echo "Unit tests completed"
 
 [group('validate')]
 test-int:
@@ -378,7 +378,7 @@ test-int:
 [group('validate')]
 test-mcp-only:
     @echo "Running MCP/Skill tests only..."
-    @uv run pytest src/agent/tests/test_phase13_skills.py src/agent/tests/test_mcp_dependencies.py -v
+    @uv run pytest packages/python/agent/src/agent/tests/test_phase13_skills.py packages/python/agent/src/agent/tests/test_mcp_dependencies.py -v
 
 # ==============================================================================
 # CHANGELOG MANAGEMENT
@@ -544,7 +544,7 @@ fmt:
 [group('dev')]
 fmt-py:
     @echo "Formatting Python with ruff..."
-    @uvx ruff format src/
+    @uvx ruff format packages/python/
 
 [group('dev')]
 clean:
@@ -582,40 +582,40 @@ watch:
 # ==============================================================================
 
 [group('mcp')]
-debug server="src/agent/main.py":
+debug server="packages/python/agent/src/agent/main.py":
     @echo "Starting MCP Inspector..."
     @uv run mcp-inspector python {{server}}
 
 [group('mcp')]
-run server="src/agent/main.py":
+run server="packages/python/agent/src/agent/main.py":
     @echo "Running MCP server: {{server}}"
     @python {{server}}
 
 [group('mcp')]
 test-mcp:
     @echo "Testing MCP server..."
-    @python -m compileall src/agent
+    @python -m compileall packages/python/agent/src/agent
     @echo "Syntax check passed"
-    @timeout 3 python -u src/agent/main.py 2>&1 || echo "Server startup test completed"
+    @timeout 3 python -u packages/python/agent/src/agent/main.py 2>&1 || echo "Server startup test completed"
     @echo "MCP/Skill tests:"
-    @uv run pytest src/agent/tests/test_phase13_skills.py src/agent/tests/test_mcp_dependencies.py -v
+    @uv run pytest packages/python/agent/src/agent/tests/test_phase13_skills.py packages/python/agent/src/agent/tests/test_mcp_dependencies.py -v
 
 [group('mcp')]
 test-git-security:
     @echo "Running git security tests..."
     @echo "This verifies git operations use skill() pattern, NOT run_task()."
     @echo "Prevents client interception prompts and commit failures."
-    @uv run pytest src/agent/tests/test_git_security.py -v
+    @uv run pytest packages/python/agent/src/agent/tests/test_git_security.py -v
 
 [group('mcp')]
 test_basic:
     @echo "Running skill tests..."
-    @uv run pytest src/agent/tests/test_phase13_skills.py -v
+    @uv run pytest packages/python/agent/src/agent/tests/test_phase13_skills.py -v
 
 [group('mcp')]
 test_workflow:
     @echo "Running Phase 13 skill workflow tests..."
-    @uv run pytest src/agent/tests/test_phase13_skills.py::TestSkillManager -v
+    @uv run pytest packages/python/agent/src/agent/tests/test_phase13_skills.py::TestSkillManager -v
 
 [group('mcp')]
 test-mcp-all: test-mcp test_basic test-git-security

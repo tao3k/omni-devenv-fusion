@@ -5,10 +5,12 @@ description = "Orchestrator MCP server - The Brain for omni-dev-fusion"
 requires-python = ">=3.12"
 
 dependencies = [
+    "chromadb>=1.4.0",
     "langgraph>=1.0.5",
     "langsmith>=0.6.0",
     "mcp>=1.1.0",
     "pydantic-ai>=1.39.0",
+    "omni-dev-fusion-common",
 ]
 
 [project.scripts]
