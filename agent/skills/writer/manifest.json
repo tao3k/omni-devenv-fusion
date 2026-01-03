@@ -1,0 +1,9 @@
+{
+  "name": "writer",
+  "version": "1.0.0",
+  "description": "Writing quality tools for enforcing project writing standards.",
+  "dependencies": [],
+  "tools_module": "agent.skills.writer.tools",
+  "guide_file": "guide.md",
+  "prompts_file": "prompts.md"
+}

@@ -10,9 +10,7 @@ resolution-markers = [
 members = [
     "omni-dev-fusion",
     "omni-dev-fusion-agent",
-    "omni-dev-fusion-coder",
     "omni-dev-fusion-common",
-    "omni-dev-fusion-executor",
 ]
 
 [[package]]
@@ -2061,21 +2059,6 @@ requires-dist = [
 ]
 
 [[package]]
-name = "omni-dev-fusion-coder"
-version = "0.1.0"
-source = { editable = "src/mcp_server/coder" }
-dependencies = [
-    { name = "mcp" },
-    { name = "omni-dev-fusion-common" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "mcp", specifier = ">=1.1.0" },
-    { name = "omni-dev-fusion-common", editable = "src/common" },
-]
-
-[[package]]
 name = "omni-dev-fusion-common"
 version = "0.1.0"
 source = { editable = "src/common" }
@@ -2088,21 +2071,6 @@ dependencies = [
 requires-dist = [
     { name = "anthropic", specifier = ">=0.75.0" },
     { name = "structlog", specifier = ">=24.0.0" },
-]
-
-[[package]]
-name = "omni-dev-fusion-executor"
-version = "0.1.0"
-source = { editable = "src/mcp_server/executor" }
-dependencies = [
-    { name = "mcp" },
-    { name = "omni-dev-fusion-common" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "mcp", specifier = ">=1.1.0" },
-    { name = "omni-dev-fusion-common", editable = "src/common" },
 ]
 
 [[package]]

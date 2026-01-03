@@ -1,0 +1,9 @@
+{
+  "name": "software_engineering",
+  "version": "1.0.0",
+  "description": "The foundation of engineering mindset. Focuses on architecture, system patterns, and universal code navigation.",
+  "dependencies": ["filesystem"],
+  "tools_module": "agent.skills.software_engineering.tools",
+  "guide_file": "guide.md",
+  "prompts_file": "prompts.md"
+}

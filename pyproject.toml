@@ -34,7 +34,7 @@ indent-style = "space"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-testpaths = ["src/common/mcp_server/tests"]
+testpaths = ["src/agent/tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -52,7 +52,5 @@ dev = [
 [tool.uv.workspace]
 members = [
     "src/agent",
-    "src/mcp_server/executor",
-    "src/mcp_server/coder",
     "src/common",
 ]

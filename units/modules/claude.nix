@@ -67,25 +67,5 @@
         "agent.main"
       ];
     };
-    executor = {
-      type = "stdio";
-      command = "uv";
-      args = [
-        "run"
-        "python"
-        "-m"
-        "mcp_server.executor.main"
-      ];
-    };
-    coder = {
-      type = "stdio";
-      command = "uv";
-      args = [
-        "run"
-        "python"
-        "-m"
-        "mcp_server.coder.main"
-      ];
-    };
   };
 }

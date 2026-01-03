@@ -441,9 +441,9 @@ def load_personas_from_file(filepath: str = None) -> Dict[str, Any]:
     import json
 
     if filepath is None:
-        filepath = os.environ.get("ORCHESTRATOR_PERSONAS_FILE") or "mcp-server/personas.json"
+        filepath = os.environ.get("ORCHESTRATOR_PERSONAS_FILE")
 
-    if not os.path.exists(filepath):
+    if filepath is None or not os.path.exists(filepath):
         return {}
 
     try:

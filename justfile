@@ -189,8 +189,8 @@ agent-focus spec_path:
     @echo "=== 🏗️ RELATED CODE STRUCTURE ==="
     @echo "src/agent modules:"
     @ls -1 src/agent/*.py 2>/dev/null | xargs -I {} basename {} .py | sed 's/^/  - /' || echo "  No modules found"
-    @echo "src/mcp_server modules:"
-    @find src/mcp_server -name "main.py" -exec dirname {} \; 2>/dev/null | sed 's|src/mcp_server/||' | sed 's/^/  - /' || echo "  No modules found"
+    @echo "agent/skills modules:"
+    @ls -1 agent/skills/ 2>/dev/null | grep -v "^_" | sed 's/^/  - /' || echo "  No skills found"
     @echo ""
     @echo "=== 📋 BACKLOG ALIGNMENT ==="
     @grep -i "$(basename {{spec_path}} .md)" Backlog.md 2>/dev/null || echo "  No matching backlog entry found"
@@ -348,7 +348,7 @@ test:
 [group('validate')]
 test-unit:
     @echo "Running unit tests..."
-    @python -m pytest src/common/mcp_server/tests/ -v --tb=short 2>/dev/null || echo "Unit tests completed"
+    @uv run pytest src/agent/tests/ -v --tb=short 2>/dev/null || echo "Unit tests completed"
 
 [group('validate')]
 test-int:
@@ -357,8 +357,8 @@ test-int:
 
 [group('validate')]
 test-mcp-only:
-    @echo "Running MCP tests only..."
-    @python -m compileall src/common/mcp_server && python -m pytest src/common/mcp_server/tests/test_basic.py -v
+    @echo "Running MCP/Skill tests only..."
+    @uv run pytest src/agent/tests/test_phase13_skills.py src/agent/tests/test_mcp_dependencies.py -v
 
 # ==============================================================================
 # CHANGELOG MANAGEMENT
@@ -574,42 +574,25 @@ run server="src/agent/main.py":
 [group('mcp')]
 test-mcp:
     @echo "Testing MCP server..."
-    @python -m compileall src/common/mcp_server
+    @python -m compileall src/agent
     @echo "Syntax check passed"
     @timeout 3 python -u src/agent/main.py 2>&1 || echo "Server startup test completed"
-    @echo "MCP tests passed"
+    @echo "MCP/Skill tests:"
+    @uv run pytest src/agent/tests/test_phase13_skills.py src/agent/tests/test_mcp_dependencies.py -v
 
 [group('mcp')]
 test_basic:
-    @echo "Running basic tests (all 4 tools)..."
-    @uv run python src/common/mcp_server/tests/test_basic.py
+    @echo "Running skill tests..."
+    @uv run pytest src/agent/tests/test_phase13_skills.py -v
 
 [group('mcp')]
 test_workflow:
-    @echo "Running workflow tests..."
-    @uv run python src/common/mcp_server/tests/workflows.py
+    @echo "Running Phase 13 skill workflow tests..."
+    @uv run pytest src/agent/tests/test_phase13_skills.py::TestSkillManager -v
 
 [group('mcp')]
-test-mcp-actual:
-    @echo "Running actual LLM session test..."
-    @echo "This test CONSUMES API TOKENS and requires ANTHROPIC_API_KEY in .mcp.json"
-    @uv run python src/common/mcp_server/tests/test_actual_session.py
-
-[group('mcp')]
-test-mcp-session:
-    @echo "Testing manage_context returns problem-solving.md (NO tokens)..."
-    @uv run python src/common/mcp_server/tests/test_mcp_session.py
-
-[group('mcp')]
-test-mcp-all: test-mcp test_basic test_workflow
-    @echo "All MCP tests passed!"
-
-# Stress Test Framework - All Suites
-[group('mcp')]
-stress-test:
-    @echo "Running Modular Stress Test Framework..."
-    @echo "========================================="
-    @uv run python src/common/mcp_server/tests/test_stress.py
+test-mcp-all: test-mcp test_basic
+    @echo "All MCP/Skill tests passed!"
 
 # ==============================================================================
 # SRE HEALTH CHECKS
@@ -816,37 +799,13 @@ examples:
 spec-list:
     @echo "Available Specs"
     @echo "================"
-    @ls -1 agent/specs/*.md 2>/dev/null | sed 's|^agent/specs/||' | sed 's/\.md$$//' | sed 's/^/  - /' || echo "  No specs found"
+    @ls -1 agent/specs/*.md 2>/dev/null | sed 's|^agent/specs/||' | sed 's/\.md$//' | sed 's/^/  - /' || echo "  No specs found"
 
 [group('spec')]
 spec-template:
     @echo "Spec Template"
     @echo "============="
     @cat agent/specs/TEMPLATE.md
-
-[group('spec')]
-migrate doc_path:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -z "{{doc_path}}" ]; then
-        echo "Usage: just migrate <path-to-doc>"
-        echo "Example: just migrate docs/explanation/template.md"
-        exit 1
-    fi
-    if [ ! -f "{{doc_path}}" ]; then
-        echo "Error: File '{{doc_path}}' not found"
-        exit 1
-    fi
-    echo "============================================"
-    echo "📦 Migrating legacy doc to Spec format..."
-    echo "============================================"
-    echo "Source: {{doc_path}}"
-    echo ""
-    echo "Ask the Agent to perform migration:"
-    echo ""
-    echo "  @omni-orchestrator ingest_legacy_doc doc_path=\"{{doc_path}}\""
-    echo ""
-    echo "============================================"
 
 [group('spec')]
 archive spec_path target_category="explanation":

@@ -1,10 +1,11 @@
 """
 src/agent/tests/test_mcp_dependencies.py
-Tests to verify MCP server dependencies are properly configured.
+Tests to verify skill architecture dependencies are properly configured.
 
 These tests catch issues like:
-- Missing workspace dependencies in MCP server pyproject.toml
-- Import failures when running as MCP server
+- Skill modules failing to import
+- Skill registry not discovering skills
+- Skills not loading correctly
 """
 import pytest
 import subprocess
@@ -12,54 +13,11 @@ import sys
 from pathlib import Path
 
 
-class TestMcpServerDependencies:
-    """Test that MCP servers can import their required dependencies."""
+class TestSkillArchitecture:
+    """Test that the skill architecture is properly configured."""
 
-    def test_orchestrator_can_import_common_mcp_core(self):
-        """Orchestrator should be able to import common.mcp_core modules."""
-        # This simulates what happens when orchestrator MCP server starts
-        result = subprocess.run(
-            ["uv", "run", "python", "-c",
-             "from common.mcp_core.gitops import get_project_root; print('OK')"],
-            capture_output=True,
-            text=True,
-            cwd=Path(__file__).parent.parent.parent.parent
-        )
-        assert result.returncode == 0, (
-            f"Orchestrator failed to import common.mcp_core:\n{result.stderr}"
-        )
-        assert "OK" in result.stdout
-
-    def test_executor_can_import_common_mcp_core(self):
-        """Executor MCP server should be able to import common.mcp_core."""
-        result = subprocess.run(
-            ["uv", "run", "python", "-c",
-             "from common.mcp_core.gitops import get_project_root; print('OK')"],
-            capture_output=True,
-            text=True,
-            cwd=Path(__file__).parent.parent.parent.parent
-        )
-        assert result.returncode == 0, (
-            f"Executor failed to import common.mcp_core:\n{result.stderr}"
-        )
-        assert "OK" in result.stdout
-
-    def test_coder_can_import_common_mcp_core(self):
-        """Coder MCP server should be able to import common.mcp_core."""
-        result = subprocess.run(
-            ["uv", "run", "python", "-c",
-             "from common.mcp_core.gitops import get_project_root; print('OK')"],
-            capture_output=True,
-            text=True,
-            cwd=Path(__file__).parent.parent.parent.parent
-        )
-        assert result.returncode == 0, (
-            f"Coder failed to import common.mcp_core:\n{result.stderr}"
-        )
-        assert "OK" in result.stdout
-
-    def test_agent_skill_registry_imports(self):
-        """agent.core.skill_registry should import successfully."""
+    def test_agent_core_imports(self):
+        """agent.core modules should import successfully."""
         result = subprocess.run(
             ["uv", "run", "python", "-c",
              "from agent.core.skill_registry import SkillRegistry; print('OK')"],
@@ -72,116 +30,97 @@ class TestMcpServerDependencies:
         )
         assert "OK" in result.stdout
 
-    def test_executor_git_ops_module_imports(self):
-        """executor's git_ops module should import successfully (without MCP decorator issues)."""
+    def test_common_mcp_core_imports(self):
+        """common.mcp_core modules should import successfully."""
         result = subprocess.run(
             ["uv", "run", "python", "-c",
-             "import mcp_server.executor.git_ops as g; print('OK')"],
+             "from common.mcp_core.gitops import get_project_root; print('OK')"],
             capture_output=True,
             text=True,
             cwd=Path(__file__).parent.parent.parent.parent
         )
         assert result.returncode == 0, (
-            f"mcp_server.executor.git_ops module import failed:\n{result.stderr}"
+            f"common.mcp_core.gitops import failed:\n{result.stderr}"
         )
         assert "OK" in result.stdout
 
+    def test_skills_directory_exists(self):
+        """agent/skills/ directory should exist with skill modules."""
+        skills_path = Path(__file__).parent.parent.parent.parent / "agent/skills"
+        assert skills_path.exists(), "agent/skills/ directory should exist"
 
-class TestPyprojectDependencies:
-    """Test that pyproject.toml files have correct dependency declarations."""
+        # Check for at least core skills
+        core_skills = ["filesystem", "git", "terminal", "testing"]
+        for skill in core_skills:
+            skill_path = skills_path / skill
+            assert skill_path.exists(), f"Skill {skill} should exist at {skill_path}"
 
-    def test_executor_has_common_dependency(self):
-        """executor pyproject.toml should include omni-dev-fusion-common."""
-        pyproject_path = (
-            Path(__file__).parent.parent.parent.parent /
-            "src/mcp_server/executor/pyproject.toml"
+    def test_skill_manifests_valid(self):
+        """All skill manifest.json files should be valid JSON."""
+        import json
+
+        skills_path = Path(__file__).parent.parent.parent.parent / "agent/skills"
+        for skill_dir in skills_path.iterdir():
+            if skill_dir.is_dir() and not skill_dir.name.startswith("_"):
+                manifest_path = skill_dir / "manifest.json"
+                if manifest_path.exists():
+                    with open(manifest_path) as f:
+                        data = json.load(f)
+                    assert "name" in data, f"{skill_dir.name} manifest missing 'name'"
+                    # New format uses tools_module, legacy format uses tools
+                    has_tools = "tools_module" in data or "tools" in data
+                    assert has_tools, f"{skill_dir.name} manifest missing 'tools_module' or 'tools'"
+
+
+class TestSkillRegistry:
+    """Test that skill registry can discover and load skills."""
+
+    def test_skill_registry_discovers_skills(self):
+        """SkillRegistry should discover all skills in agent/skills/."""
+        result = subprocess.run(
+            ["uv", "run", "python", "-c", """
+import sys
+sys.path.insert(0, 'src')
+from agent.core.skill_registry import get_skill_registry
+registry = get_skill_registry()
+skills = registry.list_available_skills()
+required = ['filesystem', 'git', 'terminal', 'testing']
+for s in required:
+    assert s in skills, f'Missing skill: {s}'
+print('OK')
+"""],
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).parent.parent.parent.parent
         )
-        content = pyproject_path.read_text()
-        assert "omni-dev-fusion-common" in content, (
-            "executor/pyproject.toml should include omni-dev-fusion-common in dependencies"
+        assert result.returncode == 0, (
+            f"Skill registry discovery failed:\n{result.stderr}"
         )
+        assert "OK" in result.stdout
 
-    def test_coder_has_common_dependency(self):
-        """coder pyproject.toml should include omni-dev-fusion-common."""
-        pyproject_path = (
-            Path(__file__).parent.parent.parent.parent /
-            "src/mcp_server/coder/pyproject.toml"
+    def test_skill_loading_works(self):
+        """Skills should load successfully via spec-based loading."""
+        result = subprocess.run(
+            ["uv", "run", "python", "-c", """
+import sys
+sys.path.insert(0, 'src')
+from mcp.server.fastmcp import FastMCP
+from agent.core.skill_registry import get_skill_registry
+
+mcp = FastMCP('test')
+registry = get_skill_registry()
+success, msg = registry.load_skill('filesystem', mcp)
+assert success, f'Failed to load filesystem: {msg}'
+print('OK')
+"""],
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).parent.parent.parent.parent
         )
-        content = pyproject_path.read_text()
-        assert "omni-dev-fusion-common" in content, (
-            "coder/pyproject.toml should include omni-dev-fusion-common in dependencies"
+        assert result.returncode == 0, (
+            f"Skill loading failed:\n{result.stderr}"
         )
-
-    def test_executor_sources_matches_dependencies(self):
-        """executor [tool.uv.sources] should have corresponding entries in [dependencies]."""
-        pyproject_path = (
-            Path(__file__).parent.parent.parent.parent /
-            "src/mcp_server/executor/pyproject.toml"
-        )
-        content = pyproject_path.read_text()
-
-        # Check if sources declares workspace deps
-        if "[tool.uv.sources]" in content:
-            # Extract source dependencies
-            sources_section = content.split("[tool.uv.sources]")[1]
-            # Find the next section
-            for marker in ["[project]", "[build-system]", "[tool.", "["]:
-                if marker in sources_section:
-                    sources_section = sources_section.split(marker)[0]
-                    break
-
-            source_deps = []
-            for line in sources_section.split("\n"):
-                if "= { workspace = true }" in line:
-                    # Extract package name from line
-                    pkg = line.strip().split("=")[0].strip()
-                    source_deps.append(pkg)
-
-            # Check each source dep is also in dependencies
-            if "[dependencies]" in content:
-                deps_section = content.split("[dependencies]")[1]
-                for marker in ["[project]", "[build-system]", "[tool.", "["]:
-                    if marker in deps_section:
-                        deps_section = deps_section.split(marker)[0]
-                        break
-
-                for dep in source_deps:
-                    assert dep in deps_section, (
-                        f"executor: '{dep}' is in [tool.uv.sources] but not in [dependencies]"
-                    )
-
-    def test_coder_sources_matches_dependencies(self):
-        """coder [tool.uv.sources] should have corresponding entries in [dependencies]."""
-        pyproject_path = (
-            Path(__file__).parent.parent.parent.parent /
-            "src/mcp_server/coder/pyproject.toml"
-        )
-        content = pyproject_path.read_text()
-
-        if "[tool.uv.sources]" in content:
-            sources_section = content.split("[tool.uv.sources]")[1]
-            for marker in ["[project]", "[build-system]", "[tool.", "["]:
-                if marker in sources_section:
-                    sources_section = sources_section.split(marker)[0]
-                    break
-
-            source_deps = []
-            for line in sources_section.split("\n"):
-                if "= { workspace = true }" in line:
-                    pkg = line.strip().split("=")[0].strip()
-                    source_deps.append(pkg)
-
-            if "[dependencies]" in content:
-                deps_section = content.split("[dependencies]")[1]
-                for marker in ["[project]", "[build-system]", "[tool.", "["]:
-                    if marker in deps_section:
-                        deps_section = deps_section.split(marker)[0]
-                        break
-
-                for dep in source_deps:
-                    assert dep in deps_section, (
-                        f"coder: '{dep}' is in [tool.uv.sources] but not in [dependencies]"
-                    )
+        assert "OK" in result.stdout
 
 
 if __name__ == "__main__":

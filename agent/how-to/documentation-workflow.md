@@ -1,16 +1,16 @@
 # Documentation Workflow
 
-> **TL;DR**: When code changes, docs MUST be updated. Use `check_doc_sync()` to verify, then update relevant docs before committing.
+> **TL;DR**: When code changes, docs MUST be updated. Use the Documentation Skill to manage knowledge entries.
 
 ---
 
 ## Quick Reference
 
-| Task                | Tool/Command                               |
-| ------------------- | ------------------------------------------ |
-| Check docs sync     | `@omni-orchestrator check_doc_sync()`      |
-| List available docs | `@omni-orchestrator list_available_docs()` |
-| Read doc for action | `@omni-orchestrator read_docs()`           |
+| Task                    | Tool/Command                                 |
+| ----------------------- | -------------------------------------------- |
+| Create knowledge entry  | `@omni-orchestrator create_knowledge_entry`  |
+| Rebuild knowledge index | `@omni-orchestrator rebuild_knowledge_index` |
+| Search knowledge base   | `@omni-orchestrator search_knowledge_base`   |
 
 ---
 
@@ -20,7 +20,7 @@
 
 | If you modify...       | You must update...                                         |
 | ---------------------- | ---------------------------------------------------------- |
-| `mcp-server/*.py`      | `mcp-server/README.md`, `agent/how-to/*.md`                |
+| `agent/skills/*.py`    | Skill documentation in `agent/skills/*/guide.md`           |
 | `agent/specs/*.md`     | `agent/standards/feature-lifecycle.md` (workflow diagrams) |
 | `agent/standards/*.md` | Update the standard itself                                 |
 | `docs/*.md`            | User-facing guides (if breaking changes)                   |
@@ -29,7 +29,7 @@
 
 ---
 
-## 2. The Documentation Sync Workflow
+## 2. The Documentation Workflow
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -37,20 +37,20 @@
 └─────────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  Step 1: Detect what docs need updating                         │
-│  @omni-orchestrator check_doc_sync(changed_files=[...])        │
+│  Step 1: Determine doc type                                     │
+│  - New knowledge → Documentation Skill (create_knowledge_entry)│
+│  - Code changes → Update relevant docs in docs/                │
 └─────────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  Step 2: Update each required doc                               │
-│  - mcp-server/*.md → mcp-server/README.md                      │
-│  - agent/specs/*.md → agent/standards/feature-lifecycle.md     │
-│  - justfile → docs/ or CLI help                                 │
+│  Step 2: Create or update documentation                         │
+│  - Use create_knowledge_entry for new insights                 │
+│  - Update existing docs in docs/                               │
 └─────────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  Step 3: Verify all docs are in sync                            │
-│  @omni-orchestrator check_doc_sync()                            │
+│  Step 3: Rebuild knowledge index (if creating new entry)       │
+│  @omni-orchestrator rebuild_knowledge_index()                  │
 └─────────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -61,34 +61,71 @@
 
 ---
 
-## 3. Using check_doc_sync
+## 3. Using the Documentation Skill
 
-Call this tool before committing to verify docs are updated:
+### Create a Knowledge Entry
 
 ```python
-@omni-orchestrator check_doc_sync(changed_files=["mcp-server/new_tool.py"])
+@omni-orchestrator create_knowledge_entry(
+    title="Fixing Deadlocks",
+    category="debugging",
+    content="## Problem\n... \n## Solution\n..."
+)
 ```
 
 **Response:**
 
-```json
-{
-  "status": "out_of_sync",
-  "changed_files": ["mcp-server/new_tool.py"],
-  "required_docs": [
-    {
-      "file": "mcp-server/README.md",
-      "reason": "New MCP tool added",
-      "action": "Add tool to Tools table"
-    }
-  ],
-  "recommendation": "Update mcp-server/README.md before committing"
-}
+```
+Created knowledge entry: 20260103-debugging-fixing-deadlocks.md
+```
+
+### Rebuild Knowledge Index
+
+Call this after adding or deleting knowledge entries:
+
+```python
+@omni-orchestrator rebuild_knowledge_index()
+```
+
+### Search Knowledge Base
+
+```python
+@omni-orchestrator search_knowledge_base(query="deadlock")
 ```
 
 ---
 
-## 4. Document Classification
+## 4. Knowledge Entry Standards
+
+### Location
+
+- All knowledge goes into `agent/knowledge/harvested/`
+
+### Naming Convention
+
+`YYYYMMDD-category-title.md` (e.g., `20260102-debugging-nested-locks.md`)
+
+### Frontmatter Format
+
+```markdown
+# Title
+
+> **Category**: CATEGORY | **Date**: YYYY-MM-DD
+
+Content...
+```
+
+### Categories
+
+- `architecture` - Design decisions
+- `debugging` - Problem solutions
+- `pattern` - Reusable patterns
+- `workflow` - Process documentation
+- `domain` - Domain-specific knowledge
+
+---
+
+## 5. Document Classification
 
 Understand where to write documentation:
 
@@ -96,43 +133,45 @@ Understand where to write documentation:
 | ----------------- | ------------ | -------------------------------------------------- |
 | `agent/`          | LLM (Claude) | How-to guides, standards - context for AI behavior |
 | `docs/`           | Users        | Human-readable manuals, tutorials                  |
-| `mcp-server/*.md` | Developers   | Technical implementation docs                      |
+| `agent/skills/*/` | LLM + Devs   | Skill documentation (guide.md, prompts.md)         |
 | `agent/specs/`    | LLM + Devs   | Feature specifications                             |
 
 ---
 
-## 5. When to Write Documentation
+## 6. When to Write Documentation
 
 | Scenario               | Write To                                                          |
 | ---------------------- | ----------------------------------------------------------------- |
-| New MCP tool           | `mcp-server/README.md` (tool table), `agent/how-to/*.md`          |
+| New skill              | `agent/skills/{skill}/guide.md`                                   |
 | New workflow/process   | `agent/how-to/` (for LLM to follow)                               |
 | User-facing guide      | `docs/` (for humans)                                              |
-| Implementation details | `mcp-server/` (for contributors)                                  |
+| Implementation details | `agent/skills/*/` (for contributors)                              |
 | Feature spec           | `agent/specs/` (contract between requirements and implementation) |
 | Project convention     | `CLAUDE.md` (quick reference)                                     |
+| Captured insight       | `agent/knowledge/harvested/` (Documentation Skill)                |
 
 ---
 
-## 6. Anti-Patterns
+## 7. Anti-Patterns
 
-| Wrong                               | Correct                                 |
-| ----------------------------------- | --------------------------------------- |
-| Commit code without updating README | Check `check_doc_sync()` first          |
-| Update docs in a separate commit    | Update docs in the SAME commit as code  |
-| Write user docs in `agent/`         | Write user docs in `docs/`              |
-| Forget to update CLAUDE.md          | Update CLAUDE.md for new tools/commands |
+| Wrong                               | Correct                                                        |
+| ----------------------------------- | -------------------------------------------------------------- |
+| Commit code without updating README | Check relevant docs first                                      |
+| Update docs in a separate commit    | Update docs in the SAME commit as code                         |
+| Write user docs in `agent/`         | Write user docs in `docs/`                                     |
+| Forget to update CLAUDE.md          | Update CLAUDE.md for new tools/commands                        |
+| Store insights without index update | Always call `rebuild_knowledge_index()` after creating entries |
 
 ---
 
-## 7. Related Documentation
+## 8. Related Documentation
 
 | Document                               | Purpose                          |
 | -------------------------------------- | -------------------------------- |
 | `agent/standards/feature-lifecycle.md` | Spec-driven development workflow |
 | `agent/how-to/git-workflow.md`         | Commit conventions               |
 | `agent/how-to/testing-workflows.md`    | Test requirements                |
-| `mcp-server/README.md`                 | MCP tools reference              |
+| `agent/skills/documentation/guide.md`  | Documentation Skill guide        |
 
 ---
 

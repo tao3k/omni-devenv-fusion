@@ -1,0 +1,9 @@
+{
+  "name": "terminal",
+  "version": "1.0.0",
+  "description": "Execute system commands and shell scripts. Use with extreme caution.",
+  "dependencies": [],
+  "tools_module": "agent.skills.terminal.tools",
+  "guide_file": "guide.md",
+  "prompts_file": "prompts.md"
+}

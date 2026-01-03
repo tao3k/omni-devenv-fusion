@@ -311,22 +311,28 @@ except ValueError as e:
 ```"""
 
     def _load_architecture(self) -> str:
-        return """## 🏗️ Architecture (Dual-MCP)
+        return """## 🏗️ Architecture (Skill-Centric OS)
 
-### Server Separation
-- **orchestrator.py**: "The Brain" - SDLC, DevOps, architecture decisions
-- **coder.py**: "The Hands" - Surgical coding, AST refactoring
+### Core Components
+- **src/agent/main.py**: MCP server entry point
+- **agent/skills/**: Dynamic skill modules (Software Engineering, Documentation, etc.)
 
-### MCP Tool Pattern
+### Skill System
+Skills are self-contained units with:
+- `manifest.json` - Skill metadata and dependencies
+- `tools.py` - MCP tool implementations
+- `guide.md` - LLM guidance for the skill
+- `prompts.md` - Persona and behavior prompts
+
+### Skill Discovery
 ```python
-from mcp.server.fastmcp import FastMCP
+from agent.skills import SkillRegistry
 
-mcp = FastMCP("server-name")
+# List all available skills
+skills = SkillRegistry.list_skills()
 
-@mcp.tool()
-async def my_tool(param: str) -> str:
-    # Tool description
-    return f"Result: {param}"
+# Load a skill
+skill = SkillRegistry.load_skill("software_engineering")
 ```
 
 ### Shared Library (mcp_core)
@@ -335,34 +341,39 @@ async def my_tool(param: str) -> str:
 - `mcp_core/inference.py` - LLM inference client
 - `mcp_core/lazy_cache.py` - Lazy-loading singleton caches
 - `mcp_core/project_context.py` - Project-specific contexts (this!)
+- `mcp_core/gitops.py` - Git workflow integration
 
 ### Project Structure
 ```
-mcp-server/
-├── orchestrator.py    # Main MCP server
-├── coder.py           # Coder MCP server
-├── mcp_core/          # Shared library
-│   ├── __init__.py
-│   ├── lazy_cache.py  # ← Singleton cache framework
-│   ├── project_context.py  # ← Project context framework
-│   ├── memory.py
-│   ├── inference.py
-│   └── utils.py
-├── tests/             # MCP tool tests
-├── git_ops.py         # Git workflow tools
-├── writer.py          # Writing tools
-├── lang_expert.py     # Language expert tools
-└── product_owner.py   # Feature lifecycle tools
+agent/
+├── skills/                    # Skill modules
+│   ├── software_engineering/  # The Architect skill (root)
+│   ├── documentation/         # Scribe skill
+│   └── ...
+├── main.py                    # MCP server entry point
+src/
+├── mcp_server/                # MCP server implementation
+└── common/
+    └── mcp_core/              # Shared library
 ```"""
 
     def _load_conventions(self) -> str:
         return """## 📏 Project Conventions
 
 ### File Naming
-- **MCP servers**: `orchestrator.py`, `coder.py`
+- **Skills**: `agent/skills/<skill_name>/` directory
 - **Shared library**: `mcp_core/*.py`
 - **Tests**: `tests/test_*.py`
 - **MCP tools**: One tool per function with `@mcp.tool()` decorator
+
+### Skill Structure
+```
+agent/skills/<skill_name>/
+├── manifest.json   # Skill metadata
+├── tools.py        # MCP tool implementations
+├── guide.md        # LLM guidance
+└── prompts.md      # Persona prompts
+```
 
 ### Docstrings (Google-style)
 ```python

@@ -31,10 +31,10 @@ TOOL_DOMAINS = {
         ]
     },
     "ProductOwner": {
-        "description": "Feature specs, requirements, migration, and archiving.",
+        "description": "Feature specs, requirements, and archiving.",
         "tools": [
             "draft_feature_spec", "verify_spec_completeness",
-            "ingest_legacy_doc", "archive_spec_to_doc",
+            "archive_spec_to_doc",
             "assess_feature_complexity", "verify_design_alignment"
         ]
     },

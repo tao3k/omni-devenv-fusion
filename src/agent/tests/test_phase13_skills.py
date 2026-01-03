@@ -113,6 +113,26 @@ class TestSkillDiscovery:
         skills = registry.list_available_skills()
         assert "filesystem" in skills
 
+    def test_discovery_finds_terminal_skill(self, registry):
+        """Registry should find 'terminal' skill."""
+        skills = registry.list_available_skills()
+        assert "terminal" in skills, f"Expected 'terminal' in skills, got: {skills}"
+
+    def test_discovery_finds_testing_skill(self, registry):
+        """Registry should find 'testing' skill."""
+        skills = registry.list_available_skills()
+        assert "testing" in skills, f"Expected 'testing' in skills, got: {skills}"
+
+    def test_discovery_finds_documentation_skill(self, registry):
+        """Registry should find 'documentation' skill."""
+        skills = registry.list_available_skills()
+        assert "documentation" in skills, f"Expected 'documentation' in skills, got: {skills}"
+
+    def test_discovery_finds_software_engineering_skill(self, registry):
+        """Registry should find 'software_engineering' skill (The Architect)."""
+        skills = registry.list_available_skills()
+        assert "software_engineering" in skills, f"Expected 'software_engineering' in skills, got: {skills}"
+
     def test_discovery_finds_template_directory(self, registry):
         """Registry should discover _template directory (for copying)."""
         skills = registry.list_available_skills()
@@ -335,6 +355,166 @@ class TestFilesystemSkill:
 
         result = asyncio.run(module.get_file_info(path="agent/skills/filesystem/manifest.json"))
         assert "Size:" in result or "bytes" in result
+
+
+class TestTerminalSkill:
+    """Test terminal skill operations."""
+
+    def test_load_terminal_skill(self, registry, real_mcp):
+        """Should successfully load terminal skill using spec-based loading."""
+        success, message = registry.load_skill("terminal", real_mcp)
+
+        assert success is True, f"Expected success, got: {message}"
+        assert "terminal" in registry.loaded_skills
+        assert "terminal" in registry.module_cache
+
+    def test_terminal_has_execute_command(self, registry, real_mcp):
+        """Loaded terminal module should have execute_command function."""
+        registry.load_skill("terminal", real_mcp)
+
+        module = registry.module_cache["terminal"]
+        assert hasattr(module, "execute_command")
+        assert hasattr(module, "inspect_environment")
+
+    def test_terminal_manifest_parsing(self, registry):
+        """Registry should correctly parse terminal/manifest.json."""
+        manifest = registry.get_skill_manifest("terminal")
+        assert manifest is not None
+        assert manifest.name == "terminal"
+        assert manifest.version == "1.0.0"
+        assert manifest.tools_module == "agent.skills.terminal.tools"
+        assert manifest.guide_file == "guide.md"
+
+    @pytest.mark.asyncio
+    async def test_execute_command_echo(self, registry, real_mcp):
+        """Test execute_command with safe echo command."""
+        import asyncio
+
+        registry.load_skill("terminal", real_mcp)
+        module = registry.module_cache["terminal"]
+
+        result = await module.execute_command("echo hello_terminal_test")
+        assert "hello_terminal_test" in result or "hello" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_execute_command_blocked_dangerous(self, registry, real_mcp):
+        """Test execute_command blocks dangerous patterns."""
+        import asyncio
+
+        registry.load_skill("terminal", real_mcp)
+        module = registry.module_cache["terminal"]
+
+        # Test blocked pattern
+        result = await module.execute_command("rm -rf /tmp/test")
+        assert "Blocked" in result or "dangerous" in result.lower()
+
+
+class TestTestingSkill:
+    """Test testing skill operations."""
+
+    def test_load_testing_skill(self, registry, real_mcp):
+        """Should successfully load testing skill."""
+        success, message = registry.load_skill("testing", real_mcp)
+
+        assert success is True, f"Expected success, got: {message}"
+        assert "testing" in registry.loaded_skills
+        assert "testing" in registry.module_cache
+
+    def test_testing_has_run_tests(self, registry, real_mcp):
+        """Loaded testing module should have run_tests function."""
+        registry.load_skill("testing", real_mcp)
+
+        module = registry.module_cache["testing"]
+        assert hasattr(module, "run_tests")
+        assert hasattr(module, "list_tests")
+
+    def test_testing_manifest_parsing(self, registry):
+        """Registry should correctly parse testing/manifest.json."""
+        manifest = registry.get_skill_manifest("testing")
+        assert manifest is not None
+        assert manifest.name == "testing"
+        assert manifest.version == "1.0.0"
+        assert manifest.tools_module == "agent.skills.testing.tools"
+        assert manifest.guide_file == "guide.md"
+
+    def test_testing_has_filesystem_dependency(self, registry):
+        """Testing skill should depend on filesystem."""
+        manifest = registry.get_skill_manifest("testing")
+        assert "filesystem" in manifest.dependencies
+
+
+class TestSoftwareEngineeringSkill:
+    """Test software_engineering skill operations (The Architect)."""
+
+    def test_load_software_engineering_skill(self, registry, real_mcp):
+        """Should successfully load software_engineering skill."""
+        success, message = registry.load_skill("software_engineering", real_mcp)
+
+        assert success is True, f"Expected success, got: {message}"
+        assert "software_engineering" in registry.loaded_skills
+        assert "software_engineering" in registry.module_cache
+
+    def test_software_engineering_has_analyze_structure(self, registry, real_mcp):
+        """Loaded software_engineering module should have analyze_project_structure."""
+        registry.load_skill("software_engineering", real_mcp)
+
+        module = registry.module_cache["software_engineering"]
+        assert hasattr(module, "analyze_project_structure")
+
+    def test_software_engineering_has_grep_codebase(self, registry, real_mcp):
+        """Loaded software_engineering module should have grep_codebase."""
+        registry.load_skill("software_engineering", real_mcp)
+
+        module = registry.module_cache["software_engineering"]
+        assert hasattr(module, "grep_codebase")
+
+    def test_software_engineering_has_detect_tech_stack(self, registry, real_mcp):
+        """Loaded software_engineering module should have detect_tech_stack."""
+        registry.load_skill("software_engineering", real_mcp)
+
+        module = registry.module_cache["software_engineering"]
+        assert hasattr(module, "detect_tech_stack")
+
+    def test_software_engineering_manifest_parsing(self, registry):
+        """Registry should correctly parse software_engineering/manifest.json."""
+        manifest = registry.get_skill_manifest("software_engineering")
+        assert manifest is not None
+        assert manifest.name == "software_engineering"
+        assert manifest.version == "1.0.0"
+        assert manifest.tools_module == "agent.skills.software_engineering.tools"
+        assert manifest.guide_file == "guide.md"
+
+    def test_software_engineering_has_filesystem_dependency(self, registry):
+        """Software engineering skill should depend on filesystem."""
+        manifest = registry.get_skill_manifest("software_engineering")
+        assert "filesystem" in manifest.dependencies
+
+    def test_software_engineering_guide_contains_architecture(self, registry):
+        """Guide should emphasize architecture thinking."""
+        context = registry.get_skill_context("software_engineering")
+        assert "architecture" in context.lower() or "architect" in context.lower()
+
+    @pytest.mark.asyncio
+    async def test_analyze_project_structure(self, registry, real_mcp):
+        """Test analyze_project_structure function."""
+        import asyncio
+
+        registry.load_skill("software_engineering", real_mcp)
+        module = registry.module_cache["software_engineering"]
+
+        result = await module.analyze_project_structure(depth=1)
+        assert "Project Root" in result or "agent" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_detect_tech_stack(self, registry, real_mcp):
+        """Test detect_tech_stack function."""
+        import asyncio
+
+        registry.load_skill("software_engineering", real_mcp)
+        module = registry.module_cache["software_engineering"]
+
+        result = await module.detect_tech_stack()
+        assert "Tech Stack" in result or "Python" in result
 
 
 class TestSkillManager:

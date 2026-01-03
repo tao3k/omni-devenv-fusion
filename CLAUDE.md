@@ -171,7 +171,7 @@ Edit `.nix` → `consult_language_expert` → Review standards → Apply edits �
 ## 📁 Directories
 
 - `agent/` - LLM context (how-to, standards, specs)
-- `src/mcp_server/` - MCP server code
+- `agent/skills/` - Skill modules (filesystem, git, terminal, testing, etc.)
 - `docs/` - User documentation (explanation, reference, tutorials)
 - `tool-router/data/examples/` - Few-shot examples
 
@@ -179,19 +179,19 @@ Edit `.nix` → `consult_language_expert` → Review standards → Apply edits �
 
 Understand audience before reading/writing docs:
 
-| Directory         | Audience         | Purpose                                                   |
-| ----------------- | ---------------- | --------------------------------------------------------- |
-| `agent/`          | LLM (Claude)     | How-to guides, standards, specs - context for AI behavior |
-| `docs/`           | Users            | Human-readable manuals, tutorials, explanations           |
-| `src/mcp_server/` | Developers       | MCP server code (Python)                                  |
-| `agent/specs/`    | LLM + Developers | Feature specifications, implementation contracts          |
+| Directory       | Audience         | Purpose                                                   |
+| --------------- | ---------------- | --------------------------------------------------------- |
+| `agent/`        | LLM (Claude)     | How-to guides, standards, specs - context for AI behavior |
+| `docs/`         | Users            | Human-readable manuals, tutorials, explanations           |
+| `agent/skills/` | LLM + Developers | Skill modules with tools, guides, and manifests           |
+| `agent/specs/`  | LLM + Developers | Feature specifications, implementation contracts          |
 
 ### When to Write Documentation
 
 - **New workflow/process** → `agent/how-to/` (for LLM to follow)
 - **User-facing guide** → `docs/` (for humans)
-- **Implementation details** → `src/mcp_server/` (for contributors)
-- **Feature spec** → `agent/specs/` (contract between需求 and 实现)
+- **New skill module** → `agent/skills/{skill_name}/` (guide.md + tools.py)
+- **Feature spec** → `agent/specs/` (contract between requirements and implementation)
 
 ## 🔌 MCP Dev
 
@@ -206,13 +206,56 @@ Claude Desktop
        │      └── router, reviewer, product_owner, lang_expert, memory...
        │
        ├── 🛠️ executor (The Hands)
-       │      └── git_ops, tester, docs, advanced_search, writer...
+       │      └── git_ops, testing_protocol, skill_manager...
        │
        └── 📝 coder (File Operations)
               └── save_file, read_file, search_files, ast_search, ast_rewrite
 
 Tool Routing Rules:
 1. **Planning/Routing/Review** → orchestrator (router, start_spec, review_staged_changes)
-2. **Execution/Testing/Docs** → executor (git_ops, smart_test_runner, lint_writing_style)
+2. **Execution/Testing/Docs** → executor (git_ops, testing_protocol, skill_manager)
 3. **File Operations** → coder (save_file, read_file, search_files)
 ```
+
+## 🎯 Skill System (Phase 13)
+
+Skills are dynamically-loaded modules in `agent/skills/` that provide specialized capabilities.
+
+### Available Skills
+
+| Skill              | Purpose             | Tools                                                  |
+| ------------------ | ------------------- | ------------------------------------------------------ |
+| `filesystem`       | File I/O operations | list_directory, read_file, write_file, search_files    |
+| `git`              | Git operations      | git_status, smart_commit, validate_commit_message      |
+| `terminal`         | Command execution   | execute_command, inspect_environment                   |
+| `testing`          | Pytest integration  | run_tests, list_tests                                  |
+| `testing_protocol` | Smart test runner   | smart_test_runner, run_test_command, get_test_protocol |
+| `writer`           | Writing quality     | lint_writing_style, polish_text, load_writing_memory   |
+| `advanced_search`  | ripgrep search      | search_project_code                                    |
+| `file_ops`         | File operations     | read_file, save_file, ast_search, ast_rewrite          |
+
+### Using Skills
+
+```python
+# List available skills
+@omni-orchestrator list_available_skills()
+
+# Load a skill
+@omni-orchestrator load_skill(skill_name="filesystem")
+
+# Execute skill operation (auto-loads if needed)
+@omni-orchestrator skill(skill="filesystem", call='list_directory(path="src/")')
+
+# Check active skills
+@omni-orchestrator get_active_skills()
+```
+
+### Creating New Skills
+
+1. Create directory: `agent/skills/{skill_name}/`
+2. Add files:
+   - `manifest.json` - Skill metadata
+   - `tools.py` - Tool implementations with `register(mcp)` function
+   - `guide.md` - Procedural knowledge for LLM
+   - `prompts.md` - System prompts
+3. Skills auto-discover on server restart
