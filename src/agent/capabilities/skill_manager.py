@@ -129,7 +129,7 @@ Now call: skill('{skill}', '{operation}({kwargs})')"""
         if not module:
             return f"Skill '{skill}' not found in module cache."
 
-        # Execute operation
+        # Execute operation (functions are now at module level)
         if hasattr(module, operation):
             func = getattr(module, operation)
             if callable(func):

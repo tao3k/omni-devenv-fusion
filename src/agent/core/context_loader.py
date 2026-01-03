@@ -4,7 +4,7 @@ src/agent/core/context_loader.py
 Phase 13.8: Configuration-Driven Context
 
 Responsible for hydrating the Agent's context from configuration and local overrides.
-遵循配置与代码分离 (Configuration vs Code) 原则.
+Follows the Configuration vs Code separation principle.
 """
 from pathlib import Path
 import structlog

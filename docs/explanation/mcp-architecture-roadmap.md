@@ -1,6 +1,7 @@
-# Design & Roadmap: Dual-MCP Server Architecture
+# Design & Roadmap: Bi-MCP Architecture
 
 > **Philosophy**: Separation of Concerns. "Macro" orchestration vs. "Micro" surgical coding.
+> **Status**: Phase 13.9 (Modular Entrypoint)
 
 This document outlines the architectural vision for `omni-dev-fusion`. We move from a single monolithic MCP server to a specialized dual-server setup. This design acts as a **Bridge** between generic LLM capabilities and the strict requirements of our Nix-based project environment.
 
@@ -23,14 +24,22 @@ The Bridge Pattern solves this by routing through personas that understand your 
 
 ---
 
-## Architectural Overview
+## Bi-MCP Architecture
 
 The system divides into two distinct MCP servers, each serving a specific abstraction level.
 
 | Server           | Focus                                | Role                                          |
 | ---------------- | ------------------------------------ | --------------------------------------------- |
-| **Orchestrator** | SDLC, DevOps, SRE, Architecture      | High-level decision making, context gathering |
+| **Orchestrator** | SDLC, DevOps, SRE, Architecture      | High-level decision making, context, skills   |
 | **Coder**        | Code implementation, AST refactoring | Precise execution, surgical precision         |
+
+**Key Difference from Tri-MCP:**
+
+| Aspect     | Tri-MCP (Old)              | Bi-MCP (Current)                          |
+| ---------- | -------------------------- | ----------------------------------------- |
+| Servers    | orchestrator + executor + coder | orchestrator + coder                 |
+| Operations | Direct tools in executor   | Skills via `skill()` in orchestrator      |
+| Git        | executor: git_status       | orchestrator: skill("git", "git_status()")|
 
 ### Server A: The Orchestrator (The "Brain")
 
@@ -139,6 +148,7 @@ sequenceDiagram
 ## Phase 13+: The Skill-First Reformation
 
 > **Philosophy**: "Don't Build Agents, Build Skills." - Anthropic
+> **Status**: Phase 13.9 Complete
 
 ### The Problem: Agent-Centric Limitations
 
@@ -164,6 +174,52 @@ Skills: git_operations, python_engineering, debugging, ...
 Constant context cost regardless of skill count
 ```
 
+### Phase 13.9: Modular Entrypoint (COMPLETED)
+
+The Orchestrator is now a **pure Composition Root**:
+
+```
+main.py (87 lines)
+    │
+    ├── 1. Core Infrastructure
+    │   ├── bootstrap.py → boot_core_skills(), start_background_tasks()
+    │   └── context_loader.py → load_system_context()
+    │
+    ├── 2. Capabilities (Domain Logic)
+    │   ├── product_owner, lang_expert, librarian
+    │   ├── harvester, skill_manager, reviewer
+    │
+    ├── 3. Core Tools (Operational)
+    │   ├── context, spec, router, execution, status
+    │
+    └── 4. Skills (Dynamic)
+            └── filesystem, git, terminal, testing_protocol (auto-boot)
+```
+
+### The skill() Tool
+
+Operations are accessed via the `skill()` tool instead of direct tool calls:
+
+```json
+{
+  "tool": "skill",
+  "arguments": {
+    "skill": "git",
+    "call": "smart_commit(message='feat(scope): description')"
+  }
+}
+```
+
+**Available Core Skills:**
+
+| Skill | Purpose | Tools |
+|-------|---------|-------|
+| `git` | Version control | git_status, git_log, git_add, smart_commit |
+| `terminal` | Command execution | execute_command, inspect_environment |
+| `testing_protocol` | Test runner | smart_test_runner, run_test_command |
+| `writer` | Writing quality | lint_writing_style, polish_text, load_writing_memory |
+| `filesystem` | File operations | list_directory, read_file, write_file |
+
 ### What is a Skill?
 
 A Skill is a self-contained package of capability:
@@ -171,11 +227,9 @@ A Skill is a self-contained package of capability:
 ```
 agent/skills/{skill_name}/
 ├── manifest.json              # Metadata: name, version, tools, dependencies
-├── README.md                  # Procedural knowledge (LLM's "manual")
+├── guide.md                   # Procedural knowledge (LLM's "manual")
 ├── tools.py                   # Executable tools ("hands")
-├── prompts/
-│   ├── system.md              # Context injection when active
-│   └── examples.md            # Few-shot examples
+├── prompts.md                 # Context injection when active
 └── tests/                     # Self-contained tests
 ```
 
@@ -220,12 +274,14 @@ agent/skills/{skill_name}/
 | Tool                   | Status   | Purpose                                              |
 | ---------------------- | -------- | ---------------------------------------------------- |
 | `consult_specialist`   | Existing | Multi-persona routing                                |
-| `get_codebase_context` | Existing | Holistic project view (Repomix)                      |
-| `run_task`             | Existing | Safe execution of `just` commands                    |
+| `consult_router`       | Existing | Semantic tool routing (Cortex)                       |
+| `manage_context`       | Existing | Project context management                           |
 | `lang_expert`          | Existing | Router-Augmented Coding (L1 Standards + L2 Examples) |
-| `list_skills`          | New      | Discover available skills                            |
-| `load_skill`           | New      | Load skill context (guide + tools + prompts)         |
-| `read_backlog`         | Future   | Integration with task tracking                       |
+| `skill`                | New      | Execute skill operations                             |
+| `list_available_skills`| Existing | Discover available skills                            |
+| `load_skill`           | Existing | Load skill context (guide + tools + prompts)         |
+| `orchestrator_status`  | New      | System status introspection (Phase 13.9)             |
+| `review_staged_changes`| Existing | AI-powered code review (Immune System)               |
 
 ### Coder Tools
 
@@ -239,12 +295,12 @@ agent/skills/{skill_name}/
 
 ---
 
-## Why Dual-MCP?
+## Why Bi-MCP?
 
-| Challenge            | Single Server                      | Dual-MCP Solution                                   |
+| Challenge            | Single Server                      | Bi-MCP Solution                                     |
 | -------------------- | ---------------------------------- | --------------------------------------------------- |
 | **Context overload** | One server handles all tools       | Orchestrator aggregates; Coder executes surgically  |
-| **Role confusion**   | Same tools for planning and coding | Specialized personas for each domain                |
+| **Role confusion**   | Same tools for planning and coding | Specialized servers for each domain                 |
 | **Latency**          | N+1 tool calls for complex tasks   | Parallel context fetching via Repomix               |
 | **Quality**          | Generic code generation            | AST-based refactoring ensures syntactic correctness |
 | **Scalability**      | All tools always loaded            | Dynamic skill loading keeps context constant        |

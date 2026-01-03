@@ -615,6 +615,182 @@ class TestSkillManager:
         assert "filesystem" in result
 
 
+class TestSkillToolExecution:
+    """
+    CRITICAL: Tests for skill() tool execution.
+
+    This class specifically tests skills where tools are defined INSIDE the register()
+    function (like git skill). This is the pattern that caused the bug where
+    hasattr(module, operation) failed because functions inside register() are not
+    module attributes.
+
+    This test class would have caught the spec_aware_commit bug.
+    """
+
+    def _get_tool_func(self, mcp, tool_name):
+        """Helper to get tool function from FastMCP."""
+        tools = list(mcp._tool_manager._tools.values())
+        tool = [t for t in tools if t.name == tool_name][0]
+        return tool.fn
+
+    @pytest.mark.asyncio
+    async def test_skill_tool_calls_git_status(self, registry, real_mcp):
+        """
+        Test skill() tool can call git_status from git skill.
+
+        git skill defines functions INSIDE register(), so hasattr(module, 'git_status')
+        returns False. This test catches the bug where skill() couldn't call git tools.
+        """
+        from agent.capabilities.skill_manager import register_skill_tools
+        register_skill_tools(real_mcp)
+        skill_func = self._get_tool_func(real_mcp, "skill")
+
+        result = await skill_func(
+            skill="git",
+            call='git_status()'
+        )
+
+        # Should return git status, not "Operation not found"
+        assert "Operation 'git_status' not found" not in result
+        assert "git_status" in result or "M " in result or "A " in result or "✅" in result
+
+    @pytest.mark.asyncio
+    async def test_skill_tool_calls_git_diff_staged(self, registry, real_mcp):
+        """Test skill() tool can call git_diff_staged from git skill."""
+        from agent.capabilities.skill_manager import register_skill_tools
+        register_skill_tools(real_mcp)
+        skill_func = self._get_tool_func(real_mcp, "skill")
+
+        result = await skill_func(
+            skill="git",
+            call='git_diff_staged()'
+        )
+
+        # Should return diff output, not "Operation not found"
+        assert "Operation 'git_diff_staged' not found" not in result
+
+    @pytest.mark.asyncio
+    async def test_skill_tool_calls_git_log(self, registry, real_mcp):
+        """Test skill() tool can call git_log from git skill."""
+        from agent.capabilities.skill_manager import register_skill_tools
+        register_skill_tools(real_mcp)
+        skill_func = self._get_tool_func(real_mcp, "skill")
+
+        result = await skill_func(
+            skill="git",
+            call='git_log(n=3)'
+        )
+
+        # Should return commit log, not "Operation not found"
+        assert "Operation 'git_log' not found" not in result
+        assert "git_log" in result or "commit" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_skill_tool_calls_smart_commit(self, registry, real_mcp):
+        """Test skill() tool can call smart_commit from git skill.
+
+        smart_commit is defined inside register() and has a complex signature.
+        This tests that skill() can handle tools with default arguments.
+        """
+        from agent.capabilities.skill_manager import register_skill_tools
+        register_skill_tools(real_mcp)
+        skill_func = self._get_tool_func(real_mcp, "skill")
+
+        # smart_commit will fail without staged changes, but that's OK
+        # The key is that it finds the function (doesn't return "Operation not found")
+        result = await skill_func(
+            skill="git",
+            call='smart_commit(message="test: validation check")'
+        )
+
+        # Should either:
+        # 1. Return analysis with session token (if no staged changes)
+        # 2. Return success (if staged changes exist)
+        # Should NOT return "Operation 'smart_commit' not found"
+        assert "Operation 'smart_commit' not found" not in result
+
+    @pytest.mark.asyncio
+    async def test_skill_tool_calls_spec_aware_commit(self, registry, real_mcp):
+        """
+        Test skill() tool can call spec_aware_commit from git skill.
+
+        This is THE critical test that would have caught the original bug.
+        spec_aware_commit is defined inside register() and uses InferenceClient.
+        """
+        from agent.capabilities.skill_manager import register_skill_tools
+        register_skill_tools(real_mcp)
+        skill_func = self._get_tool_func(real_mcp, "skill")
+
+        result = await skill_func(
+            skill="git",
+            call='spec_aware_commit(context="test commit generation")'
+        )
+
+        # Should not return "Operation not found"
+        # May return success or error from InferenceClient, but function should be found
+        assert "Operation 'spec_aware_commit' not found" not in result
+
+    @pytest.mark.asyncio
+    async def test_skill_tool_parse_kwargs_correctly(self, registry, real_mcp):
+        """Test skill() tool correctly parses keyword arguments."""
+        from agent.capabilities.skill_manager import register_skill_tools
+        register_skill_tools(real_mcp)
+        skill_func = self._get_tool_func(real_mcp, "skill")
+
+        # Call git_log with explicit n parameter
+        result = await skill_func(
+            skill="git",
+            call='git_log(n=1)'
+        )
+
+        # Should execute without error (parsing kwargs works)
+        assert "Invalid call syntax" not in result
+
+
+class TestSkillManagerConsistency:
+    """
+    Test that skill() tool behavior is consistent across different skills.
+
+    Ensures that skills with module-level functions (filesystem) and
+    skills with register()-level functions (git) both work correctly.
+    """
+
+    def _get_tool_func(self, mcp, tool_name):
+        """Helper to get tool function from FastMCP."""
+        tools = list(mcp._tool_manager._tools.values())
+        tool = [t for t in tools if t.name == tool_name][0]
+        return tool.fn
+
+    @pytest.mark.asyncio
+    async def test_filesystem_and_git_both_work(self, registry, real_mcp):
+        """
+        Verify both filesystem (module-level) and git (register-level) skills work.
+
+        This is a regression test ensuring both patterns work.
+        """
+        from agent.capabilities.skill_manager import register_skill_tools
+        register_skill_tools(real_mcp)
+        skill_func = self._get_tool_func(real_mcp, "skill")
+
+        # Test filesystem skill (module-level functions)
+        fs_result = await skill_func(
+            skill="filesystem",
+            call='list_directory(path="agent/skills")'
+        )
+        assert "Operation 'list_directory' not found" not in fs_result
+
+        # Test git skill (register-level functions)
+        git_result = await skill_func(
+            skill="git",
+            call='git_status()'
+        )
+        assert "Operation 'git_status' not found" not in git_result
+
+        # Both should succeed (neither returns "Operation not found")
+        assert "not found" not in fs_result.lower()
+        assert "not found" not in git_result.lower()
+
+
 class TestSkillEdgeCases:
     """Edge case and error handling tests."""
 

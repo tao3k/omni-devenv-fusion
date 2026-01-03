@@ -57,7 +57,7 @@ Expected output:
 
 ---
 
-## Architecture: Tri-MCP
+## Architecture: Bi-MCP
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -65,10 +65,7 @@ Expected output:
 │   Claude Desktop                                               │
 │        │                                                       │
 │        ├── 🧠 orchestrator (The Brain - HERE)                  │
-│        │      └── Planning, Routing, Reviewing, Specifying    │
-│        │                                                         │
-│        ├── 🛠️ executor (The Hands)                             │
-│        │      └── Git operations, Testing, Documentation       │
+│        │      └── Planning, Routing, Skills, Reviewing         │
 │        │                                                         │
 │        └── 📝 coder (File Operations)                          │
 │               └── Read/Write/Search files                      │
@@ -76,14 +73,61 @@ Expected output:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-The Orchestrator (`orchestrator.py`) is the **Brain** of the system:
+The Orchestrator (`main.py`) is the **Brain** of the system:
 
 - **Planning**: `start_spec`, `draft_feature_spec`, `verify_spec_completeness`
-- **Routing**: `consult_router` (decides which MCP to use)
+- **Routing**: `consult_router` (decides which tool to use)
+- **Skills**: `skill()` (access git, terminal, testing, etc.)
 - **Reviewing**: `review_staged_changes` (quality gate)
-- **Context**: `manage_context`, `memory_garden`
+- **Context**: `manage_context`
 
-It **never** accesses files or runs git commands directly. Those are handled by `coder` and `executor`.
+It **never** accesses files directly. Those are handled by `coder`.
+
+### Phase 13.9: Modular Entrypoint
+
+The Orchestrator follows the **Composition Root** pattern:
+
+```
+main.py (87 lines)
+    │
+    ├── 1. Core Infrastructure
+    │   ├── bootstrap.py → boot_core_skills(), start_background_tasks()
+    │   └── context_loader.py → load_system_context()
+    │
+    ├── 2. Capabilities (Domain Logic)
+    │   ├── product_owner, lang_expert, librarian
+    │   ├── harvester, skill_manager, reviewer
+    │
+    ├── 3. Core Tools (Operational)
+    │   ├── context, spec, router, execution, status
+    │
+    └── 4. Skills (Dynamic)
+            └── filesystem, git, terminal, testing_protocol (auto-boot)
+```
+
+### Skill System
+
+Operations (git, terminal, testing, etc.) are accessed via the `skill()` tool:
+
+```json
+{
+  "tool": "skill",
+  "arguments": {
+    "skill": "git",
+    "call": "git_status()"
+  }
+}
+```
+
+**Available Skills:**
+
+| Skill | Tools |
+|-------|-------|
+| `git` | git_status, git_log, git_add, smart_commit |
+| `terminal` | execute_command, inspect_environment |
+| `testing_protocol` | smart_test_runner, run_test_command |
+| `writer` | lint_writing_style, polish_text, load_writing_memory |
+| `filesystem` | list_directory, read_file, write_file, search_files |
 
 ---
 
@@ -121,13 +165,13 @@ The Orchestrator includes **The Cortex** - a semantic tool routing system that m
 
 | Domain         | Description              | Example Tools                                            |
 | -------------- | ------------------------ | -------------------------------------------------------- |
-| `GitOps`       | Version control, commits | smart_commit, git_status, git_log                        |
+| `GitOps`       | Version control, commits | skill("git", "smart_commit(...)")                        |
 | `ProductOwner` | Specs, requirements      | start_spec, draft_feature_spec, verify_spec_completeness |
-| `Coder`        | Code exploration         | get_codebase_context, delegate_to_coder                  |
-| `QA`           | Quality assurance        | review_staged_changes, run_tests, analyze_test_results   |
-| `Memory`       | Context, tasks           | manage_context, memory_garden                            |
-| `DevOps`       | Nix, infra               | community_proxy, consult_specialist, run_task            |
-| `Search`       | Code search              | search_project_code                                      |
+| `Coder`        | Code exploration         | read_file, save_file, search_files                       |
+| `QA`           | Quality assurance        | review_staged_changes, skill("testing_protocol", ...)    |
+| `Memory`       | Context, tasks           | manage_context, consult_knowledge_base                   |
+| `DevOps`       | Nix, infra               | community_proxy, consult_specialist, skill("terminal")   |
+| `Search`       | Code search              | ast_search, search_project_code                          |
 
 ### Consult the Router
 
@@ -270,8 +314,8 @@ Reasoning: Reviewing staged changes for commit is a quality assurance task.
 
 🛠️ Suggested Tools:
 - review_staged_changes: AI-powered code review before commit
-- run_tests: Execute test suite
-- smart_commit: Commit with validated message
+- skill("testing_protocol", "smart_test_runner()"): Execute test suite
+- skill("git", "smart_commit(message='...')"): Commit with validated message
 
 Tip: Use review_staged_changes first to ensure code quality.
 ```
@@ -341,11 +385,10 @@ Once approved:
 
 ```json
 {
-  "tool": "smart_commit",
+  "tool": "skill",
   "arguments": {
-    "type": "feat",
-    "scope": "mcp",
-    "message": "add new feature for user authentication"
+    "skill": "git",
+    "call": "smart_commit(message='feat(mcp): add user authentication feature')"
   }
 }
 ```
@@ -475,7 +518,7 @@ The Orchestrator includes **Code Intelligence** capabilities using `ast-grep` fo
 
 ## Stress Test Framework
 
-A modular, system化 stress testing framework for Phase 9+.
+A modular, systematic stress testing framework for Phase 9+.
 
 ### Directory Structure
 

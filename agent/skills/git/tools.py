@@ -1,203 +1,161 @@
 """
-Git Skill Tools
-Refactored from src/mcp_server/executor/git_ops.py
+agent/skills/git/tools.py
+Git Skill: The Unified Version Control System
+Combines Low-level Ops (Git), Safety (Smart Commit V2), and Intelligence (Spec-Aware).
 """
-import subprocess
-from typing import Dict, List
+import secrets
+import json
+from datetime import datetime
+from typing import Dict, Any
 from mcp.server.fastmcp import FastMCP
+from common.mcp_core.gitops import run_git_cmd, get_git_status, get_git_diff, get_git_log
 import structlog
 
 logger = structlog.get_logger(__name__)
 
+# Session Storage for Smart Commit V2
+_commit_sessions: Dict[str, Dict[str, Any]] = {}
 
-async def run_git_cmd(args: List[str]) -> str:
-    """Run a git command and return output."""
+# =============================================================================
+# Module-Level Tool Definitions (Accessible via 'skill' proxy & 'getattr')
+# =============================================================================
+
+async def git_status() -> str:
+    return await get_git_status()
+
+async def git_diff_staged() -> str:
+    """
+    Get diff of staged changes. Returns summary if too large.
+    MCP tool response limit is ~100KB, so we truncate proactively.
+    """
+    diff = await get_git_diff(staged=True)
+    # Return summary if too large (avoid MCP client file save)
+    if len(diff) > 20000:
+        stats = await run_git_cmd(["diff", "--cached", "--stat"])
+        return f"--- Diff too large (truncated) ---\n{stats}\n\nTotal changes: {len(diff)} bytes\nUse terminal to view full diff: git diff --cached"
+    return diff
+
+async def git_diff_unstaged() -> str:
+    """
+    Get diff of unstaged changes. Returns summary if too large.
+    """
+    diff = await get_git_diff(staged=False)
+    # Return summary if too large
+    if len(diff) > 20000:
+        stats = await run_git_cmd(["diff", "--stat"])
+        return f"--- Diff too large (truncated) ---\n{stats}\n\nTotal changes: {len(diff)} bytes\nUse terminal to view full diff: git diff"
+    return diff
+
+async def git_log(n: int = 5) -> str:
+    return await get_git_log(n)
+
+async def git_add(files: list[str]) -> str:
     try:
-        result = subprocess.run(
-            ["git"] + args,
-            capture_output=True,
-            text=True,
-            timeout=30
+        await run_git_cmd(["add"] + files)
+        return f"Staged {len(files)} files."
+    except Exception as e:
+        return f"Failed to stage files: {str(e)}"
+
+async def spec_aware_commit(context: str) -> str:
+    """
+    Generate a Conventional Commit message using AI.
+    """
+    try:
+        from common.mcp_core.inference import InferenceClient
+        client = InferenceClient()
+
+        prompt = f"""Generate a Conventional Commit message for:
+
+{context}
+
+Format: <type>(<scope>): <description>
+Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
+Scope: mcp, router, cli, docs, nix, deps
+
+Return ONLY the commit message, no explanation."""
+
+        result = await client.complete(
+            system_prompt="You are an expert technical writer.",
+            user_query=prompt,
+            max_tokens=100
         )
-        if result.returncode != 0:
-            return f"Error: {result.stderr}"
-        return result.stdout or "OK"
-    except subprocess.TimeoutExpired:
-        return "Error: Command timed out"
+
+        if result["success"]:
+            msg = result["content"].strip()
+            return json.dumps({
+                "status": "success", 
+                "commit_message": msg,
+                "message": f"Generated: {msg}\n\nNext: Call `smart_commit` to execute."
+            }, indent=2)
+        else:
+            return f"Generation Failed: {result.get('error')}"
+
     except Exception as e:
         return f"Error: {str(e)}"
 
+async def smart_commit(message: str, auth_token: str = "") -> str:
+    """
+    Commit staged changes using Smart Workflow V2 (Session-based).
+    """
+    global _commit_sessions
 
-async def get_git_status() -> str:
-    """Get the current git status."""
+    # EXECUTE PHASE
+    if auth_token:
+        session = _commit_sessions.get(auth_token)
+        if not session:
+            return f"Invalid or Expired Session Token: {auth_token}"
+        if session["message"] != message:
+            return f"Message Mismatch. Session expects: '{session['message']}'"
+
+        try:
+            output = await run_git_cmd(["commit", "-m", message])
+            _commit_sessions.pop(auth_token, None)
+            return f"Commit Successful (Session {auth_token[:6]}):\n{output}"
+        except Exception as e:
+            return f"Commit Failed: {str(e)}"
+
+    # ANALYSIS PHASE
+    if ":" not in message:
+        return "Error: Commit message must follow 'type(scope): subject' format."
+
+    session_id = secrets.token_hex(4)
+    timestamp = datetime.now().isoformat()
+    _commit_sessions[session_id] = {
+        "status": "pending_auth", "message": message, "timestamp": timestamp
+    }
+    
     try:
-        result = subprocess.run(
-            ["git", "status", "--porcelain"],
-            capture_output=True,
-            text=True
-        )
-        if result.returncode != 0:
-            return f"Error: {result.stderr}"
+        stats = await run_git_cmd(["diff", "--cached", "--stat"])
+        if not stats.strip():
+            _commit_sessions.pop(session_id, None)
+            return "No staged changes. Did you run `git_add`?"
+    except:
+        stats = "(Unable to generate stats)"
 
-        lines = result.stdout.strip().split('\n') if result.stdout.strip() else []
-        if not lines or lines == ['']:
-            return "✅ Working tree is clean"
+    return f"""
+SMART COMMIT ANALYSIS
+--------------------------------------------------
+{stats.strip()}
 
-        # Categorize
-        staged = []
-        unstaged = []
-        untracked = []
+Proposed Message: "{message}"
 
-        for line in lines:
-            if not line.strip():
-                continue
-            status = line[:2]
-            filename = line[3:]
-            if status.startswith('A') or status.startswith('M') and line[2] == ' ':
-                staged.append(filename)
-            elif status.startswith(' M'):
-                unstaged.append(filename)
-            elif status == '??':
-                untracked.append(filename)
-            else:
-                unstaged.append(filename)
+AUTHORIZATION REQUIRED
+Session ID: `{session_id}`
 
-        output = "📍 Git Status\n"
-        if staged:
-            output += f"\n✅ Staged ({len(staged)}):\n" + '\n'.join(f"  {f}" for f in staged)
-        if unstaged:
-            output += f"\n📝 Unstaged ({len(unstaged)}):\n" + '\n'.join(f"  {f}" for f in unstaged)
-        if untracked:
-            output += f"\n❓ Untracked ({len(untracked)}):\n" + '\n'.join(f"  {f}" for f in untracked)
-        return output
-    except Exception as e:
-        return f"Error getting status: {str(e)}"
+To authorize, call this tool again with:
+`auth_token="{session_id}"`
+"""
 
-
-async def get_git_diff(staged: bool = True) -> str:
-    """Get the diff of staged or unstaged changes."""
-    try:
-        if staged:
-            result = subprocess.run(
-                ["git", "diff", "--cached"],
-                capture_output=True,
-                text=True
-            )
-            title = "Staged Changes (to be committed)"
-        else:
-            result = subprocess.run(
-                ["git", "diff"],
-                capture_output=True,
-                text=True
-            )
-            title = "Unstaged Changes (work in progress)"
-
-        if result.returncode != 0:
-            return f"Error: {result.stderr}"
-
-        if not result.stdout.strip():
-            return f"✅ No {title.lower()}"
-
-        output = f"--- {title} ---\n\n{result.stdout}"
-        return output
-    except Exception as e:
-        return f"Error getting diff: {str(e)}"
-
-
-async def get_git_log(n: int = 5) -> str:
-    """Show recent commit history."""
-    try:
-        result = subprocess.run(
-            ["git", "log", f"--oneline", "-n", str(n)],
-            capture_output=True,
-            text=True
-        )
-        if result.returncode != 0:
-            return f"Error: {result.stderr}"
-
-        commits = result.stdout.strip().split('\n')
-        output = f"📜 Recent Commits (last {n}):\n\n"
-        for commit in commits:
-            output += f"  {commit}\n"
-        return output
-    except Exception as e:
-        return f"Error getting log: {str(e)}"
-
+# =============================================================================
+# Registration
+# =============================================================================
 
 def register(mcp: FastMCP):
-    """Register Git tools with the MCP server."""
-
-    @mcp.tool()
-    async def git_status() -> str:
-        """
-        Get the current git status (staged, unstaged, and untracked files).
-        Use this to check what files have been changed.
-        """
-        return await get_git_status()
-
-    @mcp.tool()
-    async def git_diff_staged() -> str:
-        """
-        Get the diff of staged changes (what will be committed).
-        ALWAYS call this before smart_commit to verify your work.
-        """
-        return await get_git_diff(staged=True)
-
-    @mcp.tool()
-    async def git_diff_unstaged() -> str:
-        """
-        Get the diff of unstaged changes (work in progress).
-        """
-        return await get_git_diff(staged=False)
-
-    @mcp.tool()
-    async def git_log(n: int = 5) -> str:
-        """
-        Show the recent commit history.
-        Args:
-            n: Number of commits to show (default: 5)
-        """
-        return await get_git_log(n)
-
-    @mcp.tool()
-    async def smart_commit(message: str) -> str:
-        """
-        [Protocol Enforced] Commit staged changes with a conventional message.
-
-        This tool will:
-        1. Validates the commit message format.
-        2. Runs pre-commit checks (if configured).
-        3. Executes the commit.
-
-        Args:
-            message: The conventional commit message (e.g., 'feat(auth): add login').
-        """
-        # Simple validation
-        if ":" not in message:
-            return "❌ Error: Commit message must follow 'type(scope): subject' format."
-
-        try:
-            result = subprocess.run(
-                ["git", "commit", "-m", message],
-                capture_output=True,
-                text=True
-            )
-            if result.returncode != 0:
-                return f"❌ Commit Failed: {result.stderr}"
-            return f"✅ Commit Successful:\n{result.stdout or 'Committed successfully'}"
-        except Exception as e:
-            logger.error("Smart commit failed", error=str(e))
-            return f"❌ Commit Failed: {str(e)}"
-
-    @mcp.tool()
-    async def git_add(files: list[str]) -> str:
-        """
-        Stage files for commit.
-        Args:
-            files: List of file paths to add (or ["."] for all).
-        """
-        try:
-            await run_git_cmd(["add"] + files)
-            return f"✅ Staged {len(files)} files."
-        except Exception as e:
-            return f"❌ Failed to stage files: {str(e)}"
+    """Register All Git Tools from Module Scope."""
+    mcp.tool()(git_status)
+    mcp.tool()(git_diff_staged)
+    mcp.tool()(git_diff_unstaged)
+    mcp.tool()(git_log)
+    mcp.tool()(git_add)
+    mcp.tool()(spec_aware_commit)
+    mcp.tool()(smart_commit)

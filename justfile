@@ -601,6 +601,13 @@ test-mcp:
     @uv run pytest src/agent/tests/test_phase13_skills.py src/agent/tests/test_mcp_dependencies.py -v
 
 [group('mcp')]
+test-git-security:
+    @echo "Running git security tests..."
+    @echo "This verifies git operations use skill() pattern, NOT run_task()."
+    @echo "Prevents client interception prompts and commit failures."
+    @uv run pytest src/agent/tests/test_git_security.py -v
+
+[group('mcp')]
 test_basic:
     @echo "Running skill tests..."
     @uv run pytest src/agent/tests/test_phase13_skills.py -v
@@ -611,7 +618,7 @@ test_workflow:
     @uv run pytest src/agent/tests/test_phase13_skills.py::TestSkillManager -v
 
 [group('mcp')]
-test-mcp-all: test-mcp test_basic
+test-mcp-all: test-mcp test_basic test-git-security
     @echo "All MCP/Skill tests passed!"
 
 # ==============================================================================

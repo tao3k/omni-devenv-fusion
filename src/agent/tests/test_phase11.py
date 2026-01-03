@@ -782,7 +782,7 @@ class TestGitSkillHotReload:
         assert tool_count == 7, f"Expected 7 tools, found {tool_count}"
 
     def test_smart_commit_token_file_writing(self):
-        """Verify smart_commit writes token file for just agent-commit compatibility."""
+        """Verify smart_commit does NOT use token file (session-based, not file-based)."""
         import ast
         from pathlib import Path
 
@@ -799,23 +799,23 @@ class TestGitSkillHotReload:
 
         assert smart_commit_func is not None, "smart_commit not found"
 
-        # Verify function body contains token file writing
+        # Verify function body uses session-based workflow (not token file)
         body_text = ast.get_source_segment(content, smart_commit_func)
 
-        # Verify TOKEN_FILE constant is used
-        assert "TOKEN_FILE" in body_text, "smart_commit should use TOKEN_FILE constant"
+        # Verify session-based storage
+        assert "_commit_sessions" in body_text, "smart_commit should use _commit_sessions"
 
-        # Verify write_text is called
-        assert 'write_text' in body_text, "smart_commit should write to token file"
+        # Verify auth_token parameter is used for execution phase
+        assert 'if auth_token:' in body_text, "smart_commit should have execute phase"
 
-        # Verify file format: session_id:token:timestamp:message
-        assert 'f"{session_id}:{session_id}:' in body_text or 'session_id:session_id:' in body_text, \
-            "smart_commit should write token in format session_id:token:timestamp:message"
+        # Verify NO TOKEN_FILE usage
+        assert "TOKEN_FILE" not in body_text, "smart_commit should NOT use TOKEN_FILE"
+        assert 'write_text' not in body_text, "smart_commit should NOT write token file"
 
-        # Verify token file path constant exists
-        from agent.skills.git.tools import TOKEN_FILE
-        assert str(TOKEN_FILE) == "/tmp/.omni_commit_token", \
-            f"TOKEN_FILE should be /tmp/.omni_commit_token, got {TOKEN_FILE}"
+        # Verify the format is session_id:token:timestamp:message is NOT used
+        # (we use simple session_id in _commit_sessions dict, not a file format)
+        assert 'f"{session_id}:{session_id}:' not in body_text, \
+            "smart_commit should NOT format token like file-based system"
 
 
 # =============================================================================

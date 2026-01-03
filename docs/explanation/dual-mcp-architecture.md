@@ -2,7 +2,7 @@
 
 > Date: 2024-12-31
 > Author: Claude (Human: tao3k)
-> Status: Implemented
+> Status: Implemented (Updated: Phase 13.9)
 
 ## Core Philosophy
 
@@ -14,7 +14,7 @@
 │  • SDLC Coordination                                    │
 │  • Architecture Decisions                               │
 │  • SRE/Platform Expertise                               │
-│  • Delegates to specialists                             │
+│  • Delegates to specialists via skill()                 │
 └─────────────────────────────────────────────────────────┘
                           │
                           │ Delegates
@@ -28,9 +28,78 @@
 └─────────────────────────────────────────────────────────┘
 ```
 
-## Dual-MCP Pattern
+## Bi-MCP Architecture (Phase 13)
 
-See `mcp-server/dual-mode-context.md` for detailed implementation.
+**Two Specialized MCP Servers:**
+
+| Server | Role | Responsibilities |
+|--------|------|------------------|
+| `orchestrator` | The Brain | Planning, Routing, Context, Skills, Policy |
+| `coder` | The Pen | File I/O, Code Search, AST Operations |
+
+**Tool Routing:**
+
+```
+Claude Desktop
+       │
+       ├── 🧠 orchestrator (skill() for operations)
+       │      └── git, terminal, testing, writer, filesystem...
+       │
+       └── 📝 coder (direct file tools)
+              └── read_file, save_file, search_files, ast_search
+```
+
+### Phase 13.9: Modular Entrypoint
+
+**Composition Root Pattern** - `main.py` is now a pure assembler:
+
+```
+main.py (87 lines)
+    │
+    ├── 1. Core Infrastructure
+    │   ├── bootstrap.py → boot_core_skills(), start_background_tasks()
+    │   └── context_loader.py → load_system_context()
+    │
+    ├── 2. Capabilities (Domain Logic)
+    │   ├── product_owner, lang_expert, librarian
+    │   ├── harvester, skill_manager, reviewer
+    │
+    ├── 3. Core Tools (Operational)
+    │   ├── context, spec, router, execution, status
+    │
+    └── 4. Skills (Dynamic)
+            └── filesystem, git, terminal, testing_protocol (auto-boot)
+```
+
+**Key Benefits:**
+
+- **Testability**: Each module can be tested in isolation
+- **Maintainability**: Clear separation of concerns
+- **Extensibility**: Add new capabilities without modifying main.py
+- **Hot Reload**: Skills load dynamically via `skill()` tool
+
+### Skill System (Phase 13)
+
+Skills are dynamically-loaded modules in `agent/skills/`:
+
+```
+agent/skills/
+├── git/
+│   ├── manifest.json      # Skill metadata
+│   ├── tools.py           # Tool implementations
+│   ├── guide.md           # Procedural knowledge
+│   └── prompts.md         # System prompts
+├── filesystem/
+├── terminal/
+├── testing_protocol/
+└── writer/
+```
+
+**Core Skills (Auto-loaded on Boot):**
+- `filesystem` - File operations
+- `git` - Version control
+- `terminal` - Command execution
+- `testing_protocol` - Test runner
 
 ## The Cortex (Phase 6: Tool Router)
 
@@ -279,26 +348,26 @@ mcp-server/tests/stress/
 
 | Directory          | Content Type                       | Queryable By          |
 | ------------------ | ---------------------------------- | --------------------- |
-| `agent/standards/` | **公共标准** - 语言/框架无关的规范 | `consult_*` loads all |
-| `agent/knowledge/` | **问题解决方案** - 症状→原因→修复  | `consult_*` searches  |
-| `agent/specs/`     | **功能规格** - What to build       | `draft_feature_spec`  |
-| `agent/how-to/`    | **操作指南** - How to do X         | `execute_doc_action`  |
-| `design/`          | **设计决策** - Why we chose X      | Human reference       |
+| `agent/standards/` | **Public Standards** - Language/Framework agnostic specs | `consult_*` loads all |
+| `agent/knowledge/` | **Problem Solutions** - Symptom→Cause→Fix  | `consult_*` searches  |
+| `agent/specs/`     | **Feature Specs** - What to build       | `draft_feature_spec`  |
+| `agent/how-to/`    | **How-to Guides** - How to do X         | `execute_doc_action`  |
+| `design/`          | **Design Decisions** - Why we chose X      | Human reference       |
 
 ## problem-solving.md Philosophy
 
-**定位**: 思维方式 (Thinking Method)，不是具体问题的解决方案
+**Purpose**: Thinking Method, NOT specific problem solutions
 
 | ✅ Should Contain        | ❌ Should NOT Contain      |
 | ------------------------ | -------------------------- |
-| 调试协议 (Rule of Three) | Python 特定 threading 问题 |
-| 问题诊断流程             | UV workspace 配置细节      |
-| 纠错能力培养             | 特定语言的 import 冲突     |
-| 工具使用心智模型         | 具体错误消息的解决方案     |
+| Debugging Protocol (Rule of Three) | Python-specific threading issues |
+| Problem Diagnosis Process | UV workspace configuration details |
+| Error Correction Training | Language-specific import conflicts |
+| Tool Usage Mental Model | Specific error message solutions |
 
 ## knowledge/ Philosophy
 
-**定位**: 可搜索的问题-解决方案知识库，MCP 工具可以查询
+**Purpose**: Searchable problem-solution knowledge base, queryable by MCP tools
 
 ```markdown
 # Title of the Problem

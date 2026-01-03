@@ -165,7 +165,7 @@ def register_router_tools(mcp: FastMCP) -> None:
             "filesystem": {
                 "status": "built-in",
                 "description": "Use coder.py tools for file operations",
-                "替代方案": "save_file, read_file, search_files from coder.py"
+                "alternative": "save_file, read_file, search_files from coder.py"
             }
         }
 
@@ -196,7 +196,7 @@ def register_router_tools(mcp: FastMCP) -> None:
                 "mcp_name": mcp_name,
                 "status": "built-in",
                 "description": mcp_config["description"],
-                "替代方案": mcp_config["替代方案"],
+                "alternative": mcp_config["alternative"],
                 "message": "Use coder.py MCP server for file operations"
             }, indent=2)
 

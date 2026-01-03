@@ -35,6 +35,7 @@ class SkillRegistry:
         self.skills_dir = self.project_root / "agent" / "skills"
         self.loaded_skills: Dict[str, SkillManifest] = {}
         self.module_cache: Dict[str, types.ModuleType] = {}
+        self.skill_tools: Dict[str, list[str]] = {}  # Track tool names per skill
         self._initialized = True
 
         self.skills_dir.mkdir(parents=True, exist_ok=True)

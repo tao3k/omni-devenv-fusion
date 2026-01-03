@@ -9,23 +9,21 @@
 | What I Did Wrong                 | Why It's Wrong                               |
 | -------------------------------- | -------------------------------------------- |
 | `git commit -m "..."` (Bash)     | ❌ BYPASSES authorization protocol           |
-| `git add -A && gitcommit` (Bash) | ❌ BYPASSES pre-commit hooks + authorization |
-| `just agent-commit` (Bash)       | ❌ MUST use smart_commit() workflow first    |
+| `git add -A && git commit` (Bash) | ❌ BYPASSES pre-commit hooks + authorization |
 
 **The ONLY correct way to commit:**
 
 ```
-1. @omni-orchestrator smart_commit(type="chore", scope="git-ops", message="...")
-   → Returns: {authorization_required: true, auth_token: "xxx..."}
+1. @omni-orchestrator skill(skill="git", call='smart_commit(message="feat(scope): description")')
+   → Returns: {analysis, session_id: "xxx..."}
 
-2. Display to user: "Authorization Required. Please say: run just agent-commit"
+2. User confirms by saying: "run just agent-commit"
 
-3. Wait for user to say exactly: "run just agent-commit"
-
-4. @omni-orchestrator execute_authorized_commit(auth_token="xxx")
+3. @omni-orchestrator skill(skill="git", call='smart_commit(message="...", auth_token="xxx")')
+   → Executes the commit
 ```
 
-**If you catch yourself typing `git ...` in Bash → STOP and use MCP tools instead.**
+**If you catch yourself typing `git ...` in Bash → STOP and use skill() tool instead.**
 
 ---
 
@@ -41,15 +39,15 @@
 **The ONLY correct way to write/edit docs:**
 
 ```
-1. @omni-executor load_writing_memory()  # ALWAYS first step for ANY writing task
+1. @omni-orchestrator skill(skill="writer", call='load_writing_memory()')  # ALWAYS first step
    → Loads: agent/writing-style/*.md into context
 
 2. Write/Edit the document
 
-3. @omni-executor run_vale_check(file_path="path/to/doc.md")
+3. @omni-orchestrator skill(skill="writer", call='run_vale_check(file_path="path/to/doc.md")')
    → Fix any violations
 
-4. @omni-executor polish_text(text="...")  # Optional: auto-fix style issues
+4. @omni-orchestrator skill(skill="writer", call='polish_text(text="...")')  # Optional
 
 5. Then commit with smart_commit workflow
 ```
@@ -58,21 +56,20 @@
 
 ---
 
-## 🏗️ Tri-MCP Architecture Protocol (CRITICAL)
+## 🏗️ Bi-MCP Architecture Protocol (CRITICAL)
 
-The system is strictly divided into three specialized MCP servers. You MUST route your requests to the correct server based on the task type.
+The system is strictly divided into two specialized MCP servers. You MUST route your requests to the correct server based on the task type.
 
 | Role             | Server         | Responsibilities                   | Key Tools                                                              |
 | :--------------- | :------------- | :--------------------------------- | :--------------------------------------------------------------------- |
-| **🧠 The Brain** | `orchestrator` | Planning, Routing, Context, Policy | `consult_router`, `start_spec`, `manage_context`, `consult_specialist` |
+| **🧠 The Brain** | `orchestrator` | Planning, Routing, Context, Policy | `consult_router`, `start_spec`, `manage_context`, `skill()`           |
 | **📝 The Pen**   | `coder`        | File I/O, Code Search              | `read_file`, `save_file`, `search_files`, `ast_search`                 |
-| **🛠️ The Hands** | `executor`     | Git, Testing, Shell, Docs          | `git_status`, `smart_commit`, `run_tests`, `run_task`                  |
 
 **Routing Rules:**
 
-1. **Never** ask `orchestrator` to read/write files or run git commands. It has no access.
+1. **Never** ask `orchestrator` to read/write files directly. Use `coder` tools.
 2. **Always** consult `orchestrator` first for new features or complex tasks (`start_spec`).
-3. **Use** `executor` for all terminal-like operations (tests, git).
+3. **Use** `skill()` to access git, terminal, testing, and other operations via `orchestrator`.
 4. **Use** `coder` for all file editing operations.
 
 ## Core Principle: Actions Over Apologies
@@ -103,8 +100,8 @@ Lead Architect & Orchestrator - Manage SDLC by delegating to expert tools.
 1. **Awakening**: `@omni-orchestrator manage_context(action="read")`
 2. **Legislation**: `start_spec("Feature Name")` → `draft_feature_spec` → `verify_spec_completeness`
 3. **Execution**: `manage_context(update_status, phase="Coding")` → `delegate_to_coder`
-4. **Verification**: `smart_test_runner` → `review_staged_changes`
-5. **Delivery**: `git add .` → `suggest_commit_message` → `smart_commit`
+4. **Verification**: `skill("testing_protocol", "smart_test_runner()")` → `review_staged_changes`
+5. **Delivery**: `skill("git", "git_add(files=['.'])")` → `skill("git", "smart_commit(message='...')")`
 
 ### Legislation Phase (CRITICAL)
 
@@ -128,10 +125,10 @@ When you judge the user is requesting NEW work, call `start_spec` FIRST:
 
 | Category | Tools                                                                                              |
 | -------- | -------------------------------------------------------------------------------------------------- |
-| Git      | `smart_commit`, `suggest_commit_message`, `validate_commit_message`, `check_commit_scope`          |
+| Git      | `skill("git", "git_status()")`, `skill("git", "smart_commit(message='...')")`                     |
 | Spec     | `start_spec` (gatekeeper), `draft_feature_spec`, `verify_spec_completeness`, `archive_spec_to_doc` |
 | Search   | `search_project_code` (ripgrep), `ast_search`, `ast_rewrite` (ast-grep)                            |
-| Test     | `smart_test_runner`, `run_tests`, `get_test_protocol`                                              |
+| Test     | `skill("testing_protocol", "smart_test_runner()")`                                                 |
 | Review   | `review_staged_changes` (Immune System)                                                            |
 | Code     | `ast_search`, `ast_rewrite`, `save_file`, `read_file`                                              |
 | Lang     | `consult_language_expert`, `get_language_standards`                                                |
@@ -147,11 +144,12 @@ When you judge the user is requesting NEW work, call `start_spec` FIRST:
 
 **CRITICAL: See `agent/how-to/git-workflow.md` for complete rules.**
 
-| Operation           | Tool to Use                     | Why                    |
-| ------------------- | ------------------------------- | ---------------------- |
-| Commit              | `smart_commit()`                | Authorization protocol |
-| Git status/diff/log | `run_task("git", [...])`        | Safe MCP execution     |
-| Git add             | `run_task("git", ["add", ...])` | Safe staging           |
+| Operation           | Tool to Use                                                         | Why                    |
+| ------------------- | ------------------------------------------------------------------- | ---------------------- |
+| Commit (analysis)   | `skill("git", "smart_commit(message='feat(scope): description')")`  | Creates session, shows diff |
+| Commit (execute)    | `skill("git", "smart_commit(message='...', auth_token='xxx')")`     | Authorization protocol |
+| Git status/diff/log | `skill("git", "git_status()")`, `skill("git", "git_log()")`        | Safe MCP execution     |
+| Git add             | `skill("git", "git_add(files=[...])")`                              | Safe staging           |
 
 **NEVER use Bash for git operations.**
 
@@ -197,23 +195,20 @@ Understand audience before reading/writing docs:
 
 Add `@mcp.tool()` → Add security check → Add test → `just test-mcp`
 
-## 🧠 Tri-MCP Architecture
+## 🧠 Bi-MCP Architecture
 
 ```
 Claude Desktop
        │
        ├── 🧠 orchestrator (The Brain)
-       │      └── router, reviewer, product_owner, lang_expert, memory...
-       │
-       ├── 🛠️ executor (The Hands)
-       │      └── git_ops, testing_protocol, skill_manager...
+       │      └── router, reviewer, skill management, git operations...
        │
        └── 📝 coder (File Operations)
               └── save_file, read_file, search_files, ast_search, ast_rewrite
 
 Tool Routing Rules:
 1. **Planning/Routing/Review** → orchestrator (router, start_spec, review_staged_changes)
-2. **Execution/Testing/Docs** → executor (git_ops, testing_protocol, skill_manager)
+2. **Skills (Git, Terminal, Testing, etc.)** → orchestrator (skill() tool)
 3. **File Operations** → coder (save_file, read_file, search_files)
 ```
 
@@ -223,16 +218,14 @@ Skills are dynamically-loaded modules in `agent/skills/` that provide specialize
 
 ### Available Skills
 
-| Skill              | Purpose             | Tools                                                  |
+| Skill              | Purpose             | Tools (accessed via skill() tool)                     |
 | ------------------ | ------------------- | ------------------------------------------------------ |
-| `filesystem`       | File I/O operations | list_directory, read_file, write_file, search_files    |
-| `git`              | Git operations      | git_status, smart_commit, validate_commit_message      |
+| `git`              | Git operations      | git_status, git_log, git_add, smart_commit             |
 | `terminal`         | Command execution   | execute_command, inspect_environment                   |
-| `testing`          | Pytest integration  | run_tests, list_tests                                  |
 | `testing_protocol` | Smart test runner   | smart_test_runner, run_test_command, get_test_protocol |
 | `writer`           | Writing quality     | lint_writing_style, polish_text, load_writing_memory   |
+| `filesystem`       | File I/O operations | list_directory, read_file, write_file, search_files    |
 | `advanced_search`  | ripgrep search      | search_project_code                                    |
-| `file_ops`         | File operations     | read_file, save_file, ast_search, ast_rewrite          |
 
 ### Using Skills
 
@@ -240,11 +233,8 @@ Skills are dynamically-loaded modules in `agent/skills/` that provide specialize
 # List available skills
 @omni-orchestrator list_available_skills()
 
-# Load a skill
-@omni-orchestrator load_skill(skill_name="filesystem")
-
 # Execute skill operation (auto-loads if needed)
-@omni-orchestrator skill(skill="filesystem", call='list_directory(path="src/")')
+@omni-orchestrator skill(skill="git", call='git_status()')
 
 # Check active skills
 @omni-orchestrator get_active_skills()
