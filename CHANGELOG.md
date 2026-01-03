@@ -2,6 +2,21 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v2.1.0](https://github.com/tao3k/omni-dev-fusion/compare/519ca61209ba79baff7840a95beabfaaaf928c1e..v2.1.0) - 2026-01-03
+#### Features
+- (**mcp-core**) add rich terminal output utilities for beautiful MCP server startup - ([055ecb5](https://github.com/tao3k/omni-dev-fusion/commit/055ecb5b1f5bf985656cc4e3217b55fa9206a5d3)) - guangtao
+- (**mcp-server**) add test scenario loading from MD files for smart_commit - ([223bc64](https://github.com/tao3k/omni-dev-fusion/commit/223bc64cac5cb38b460dec5c4e251d12a215bed0)) - guangtao
+- (**orchestrator**) increase timeout and add API key config fallback - ([a022d29](https://github.com/tao3k/omni-dev-fusion/commit/a022d29808b27c409a9538122fd5cbd7f0805183)) - guangtao
+#### Documentation
+- (**docs**) add rag usage guide and documentation standards - ([8b9ae1d](https://github.com/tao3k/omni-dev-fusion/commit/8b9ae1dcc301557345612a05a2e2c4d2ba2b4ee9)) - guangtao
+- (**docs**) docs: rewrite README with Tri-MCP architecture and SDLC workflow - ([49daf7c](https://github.com/tao3k/omni-dev-fusion/commit/49daf7c13e0ee3305782cf85ac18bfb456f23470)) - guangtao
+#### Miscellaneous Chores
+- (**git-ops**) add git commit rule warning to claude.md - ([19e9cf3](https://github.com/tao3k/omni-dev-fusion/commit/19e9cf3dbe797f961e439ca14ab728ec59f613ac)) - guangtao
+- migrate to GitOps + Phase 11 Authorization Flow - ([3cb339c](https://github.com/tao3k/omni-dev-fusion/commit/3cb339c7de6f9708ba0a44302afef8316afb159d)) - guangtao
+- sync with release - ([519ca61](https://github.com/tao3k/omni-dev-fusion/commit/519ca61209ba79baff7840a95beabfaaaf928c1e)) - guangtao
+
+- - -
+
 ## [v2.0.0](https://github.com/tao3k/omni-dev-fusion/compare/e5782f7f9e3fc3dd11615b87d7432a83295735d0..v2.0.0) - 2026-01-02
 #### Features
 - (**docs**) add documentation workflow with check_doc_sync enhancement - ([938ce63](https://github.com/tao3k/omni-dev-fusion/commit/938ce633b4b8e94b0e3f2d76df926fa4ec1de8ef)) - guangtao
