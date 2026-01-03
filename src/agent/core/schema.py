@@ -376,6 +376,33 @@ class HarvestedInsight(BaseModel):
 
 
 # =============================================================================
+# Phase 13: Skill Architecture
+# =============================================================================
+
+class SkillManifest(BaseModel):
+    """Metadata for a dynamically loadable skill."""
+    name: str = Field(..., description="Unique skill identifier (e.g., 'git')")
+    version: str = Field(..., description="Semantic version")
+    description: str = Field(..., description="What this skill does")
+    dependencies: List[str] = Field(
+        default_factory=list,
+        description="List of other skills this skill requires"
+    )
+    tools_module: str = Field(
+        ...,
+        description="Python module path containing the tool registration logic"
+    )
+    guide_file: str = Field(
+        default="guide.md",
+        description="Path to the markdown guide file (relative to skill dir)"
+    )
+    prompts_file: Optional[str] = Field(
+        None,
+        description="Path to system prompts file (relative to skill dir)"
+    )
+
+
+# =============================================================================
 # Export
 # =============================================================================
 
@@ -406,4 +433,6 @@ __all__ = [
     # Phase 12: Harvester
     "KnowledgeCategory",
     "HarvestedInsight",
+    # Phase 13: Skill
+    "SkillManifest",
 ]

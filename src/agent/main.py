@@ -71,6 +71,8 @@ from agent.capabilities.lang_expert import register_lang_expert_tools
 from agent.core.reviewer import register_reviewer_tools
 from agent.capabilities.librarian import register_librarian_tools
 from agent.capabilities.harvester import register_harvester_tools  # Phase 12
+from agent.capabilities.skill_manager import register_skill_tools  # Phase 13: Dynamic Skills
+from agent.capabilities.output import register_output_tools  # Phase 13.x: Output Formatting
 
 # Import tool modules (structured tools)
 from agent.tools.context import register_context_tools
@@ -137,6 +139,12 @@ _register_tool_module("librarian", register_librarian_tools)
 # 10. Harvester (Phase 12: The Cycle of Evolution)
 _register_tool_module("harvester", register_harvester_tools)
 
+# 11. Skill Manager (Phase 13: Dynamic Skills)
+_register_tool_module("skill_manager", register_skill_tools)
+
+# 12. Output Formatting (Phase 13.x: Output Beautification)
+_register_tool_module("output", register_output_tools)
+
 
 # =============================================================================
 # Knowledge Base Auto-Bootstrap (Background)
@@ -198,6 +206,7 @@ Available Tool Categories:
 - Language Expert: consult_language_expert, get_language_standards
 - Reviewer: review_staged_changes
 - Librarian: consult_knowledge_base, ingest_knowledge, bootstrap_knowledge
+- Skills: list_available_skills, load_skill, get_active_skills
 
 Note: This server handles PLANNING and ROUTING only.
       Execution is handled by the Executor.

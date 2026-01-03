@@ -6,7 +6,7 @@ Tests all three MCP servers:
 - executor (The Hands): Git operations, testing, documentation, docs-as-code
 - coder (The Pen): File I/O, AST-based search/rewrite
 
-Run: uv run python src/common/mcp_server/tests/test_basic.py
+Run: uv run pytest src/common/mcp_server/tests/test_basic.py -v
 Run Orchestrator: uv run python src/common/mcp_server/tests/test_basic.py --orchestrator
 Run Executor: uv run python src/common/mcp_server/tests/test_basic.py --executor
 Run Coder: uv run python src/common/mcp_server/tests/test_basic.py --coder
@@ -17,10 +17,24 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from rich.console import Console
+from rich.theme import Theme
+from rich import print as rprint
+
+# Rich theme for beautiful output
+custom_theme = Theme({
+    "info": "cyan",
+    "success": "green",
+    "error": "red",
+    "warning": "yellow",
+    "title": "magenta",
+    "tool": "blue",
+})
+console = Console(theme=custom_theme)
 
 # === Debug: Print current environment info ===
-print(f"📂 Current Working Directory (CWD): {os.getcwd()}")
-print(f"👤 Current User: {os.environ.get('USER')}")
+console.print(f"📂 [info]Current Working Directory (CWD):[/] {os.getcwd()}")
+console.print(f"👤 [info]Current User:[/] {os.environ.get('USER')}")
 
 CONFIG_CANDIDATES = [
     Path(".mcp.json").absolute(),
@@ -28,12 +42,12 @@ CONFIG_CANDIDATES = [
 ]
 
 def find_config():
-    print("\n🔎 Searching for config files...")
+    console.print("\n🔎 [info]Searching for config files...[/]")
     found = None
     for path in CONFIG_CANDIDATES:
         exists = path.exists()
-        status = "✅ Exists" if exists else "❌ Not found"
-        print(f"   Check: {path} -> {status}")
+        status = "[success]✅ Exists[/]" if exists else "[error]❌ Not found[/]"
+        console.print(f"   Check: {path} -> {status}")
         if exists and found is None:
             found = path
     return found
@@ -84,21 +98,21 @@ def test_all_tools():
     config_path = find_config()
 
     if not config_path:
-        print("\n🚫 Fatal Error: No config file found!")
+        console.print("\n🚫 [error]Fatal Error: No config file found![/]")
         return False
 
-    print(f"\n🚀 Using config file: {config_path}")
+    console.print(f"\n🚀 [info]Using config file:[/] {config_path}")
 
     try:
         with open(config_path, 'r') as f:
             config = json.load(f)
     except Exception as e:
-        print(f"❌ Failed to parse JSON: {e}")
+        console.print(f"❌ [error]Failed to parse JSON: {e}[/]")
         return False
 
     servers = config.get("mcpServers", {})
     if "orchestrator" not in servers:
-        print("❌ No 'orchestrator' field in config file.")
+        console.print("❌ [error]No 'orchestrator' field in config file.[/]")
         return False
 
     server_conf = servers["orchestrator"]
@@ -115,7 +129,7 @@ def test_all_tools():
     args = server_conf.get("args", [])
     executable = sys.executable if cmd in ["python", "python3"] else cmd
 
-    print(f"▶️  Starting Server: {executable} {' '.join(args)}")
+    console.print(f"▶️  [info]Starting Server:[/] {executable} {' '.join(args)}")
 
     process = subprocess.Popen(
         [executable] + args,
@@ -131,11 +145,11 @@ def test_all_tools():
 
     try:
         # === Step 1: Initialize ===
-        print("\n" + "=" * 60)
-        print("🧪 MCP Tools Test Suite")
-        print("=" * 60)
+        console.print("\n" + "=" * 60)
+        console.print("🧪 [title]MCP Tools Test Suite[/]")
+        console.print("=" * 60)
 
-        print("\n1️⃣  Initialize Server...")
+        console.print("\n1️⃣  [info]Initialize Server...[/]")
         init_msg = {
             "jsonrpc": "2.0",
             "id": 1,
@@ -152,11 +166,11 @@ def test_all_tools():
         response = read_json_rpc(process)
         if response and "result" in response:
             server_name = response['result']['serverInfo']['name']
-            print(f"✅ Server Initialized: {server_name}")
+            console.print(f"✅ [success]Server Initialized:[/] {server_name}")
             results["initialize"] = True
         else:
-            print(f"❌ Initialization Failed: {response}")
-            print(f"Stderr: {process.stderr.read()}")
+            console.print(f"❌ [error]Initialization Failed:[/] {response}")
+            console.print(f"Stderr: {process.stderr.read()}")
             return False
 
         # Send initialized notification
@@ -167,109 +181,109 @@ def test_all_tools():
         process.stdin.flush()
 
         # === Tool 1: get_codebase_context ===
-        print("\n2️⃣  Testing 'get_codebase_context'...")
+        console.print("\n2️⃣  [tool]Testing 'get_codebase_context'[/]...")
         success, text = send_tool(
             process, "get_codebase_context",
             {"target_dir": "modules", "ignore_files": "**/.git/**"},
             2
         )
         if success:
-            print(f"✅ Response: {len(text)} chars")
+            console.print(f"✅ [success]Response: {len(text)} chars[/]")
             if "<file path=" in text or "<?xml" in text:
-                print("✅ XML structure detected")
+                console.print("✅ [success]XML structure detected[/]")
             else:
-                print("⚠️  Warning: No XML structure found")
+                console.print("⚠️  [warning]Warning: No XML structure found[/]")
             results["get_codebase_context"] = True
         else:
-            print(f"❌ {text}")
+            console.print(f"❌ [error]{text}[/]")
             results["get_codebase_context"] = False
 
         # === Tool 2: list_directory_structure ===
-        print("\n3️⃣  Testing 'list_directory_structure'...")
+        console.print("\n3️⃣  [tool]Testing 'list_directory_structure'[/]...")
         success, text = send_tool(
             process, "list_directory_structure",
             {"root_dir": "."},
             3
         )
         if success:
-            print(f"✅ Response: {len(text)} chars")
+            console.print(f"✅ [success]Response: {len(text)} chars[/]")
             if "├── " in text or "└── " in text:
-                print("✅ Directory tree structure detected")
+                console.print("✅ [success]Directory tree structure detected[/]")
             if len(text) < 10000:
-                print("✅ Token optimization: Lightweight response")
+                console.print("✅ [success]Token optimization: Lightweight response[/]")
             results["list_directory_structure"] = True
         else:
-            print(f"❌ {text}")
+            console.print(f"❌ [error]{text}[/]")
             results["list_directory_structure"] = False
 
         # === Tool 3: list_personas ===
-        print("\n4️⃣  Testing 'list_personas'...")
+        console.print("\n4️⃣  [tool]Testing 'list_personas'[/]...")
         success, text = send_tool(process, "list_personas", {}, 4)
         if success:
-            print(f"✅ Response: {len(text)} chars")
+            console.print(f"✅ [success]Response: {len(text)} chars[/]")
             try:
                 personas = json.loads(text)
                 available = ", ".join(p.get("id", "unknown") for p in personas)
-                print(f"✅ Personas: [{available}]")
+                console.print(f"✅ [success]Personas: [{available}][/]")
                 results["list_personas"] = True
             except json.JSONDecodeError:
-                print("⚠️  Warning: Invalid JSON in personas response")
+                console.print("⚠️  [warning]Warning: Invalid JSON in personas response[/]")
                 results["list_personas"] = True  # Still counts as success
         else:
-            print(f"❌ {text}")
+            console.print(f"❌ [error]{text}[/]")
             results["list_personas"] = False
 
         # === Tool 4: consult_specialist ===
-        print("\n5️⃣  Testing 'consult_specialist'...")
+        console.print("\n5️⃣  [tool]Testing 'consult_specialist'[/]...")
         success, text = send_tool(
             process, "consult_specialist",
             {"role": "architect", "query": "What is the project structure?"},
             5
         )
         if success:
-            print(f"✅ Response: {len(text)} chars")
+            console.print(f"✅ [success]Response: {len(text)} chars[/]")
             if "ANTHROPIC_API_KEY is missing" in text:
-                print("⚠️  Expected: API key missing (expected without key)")
+                console.print("⚠️  [warning]Expected: API key missing (expected without key)[/]")
             elif "Expert Opinion" in text or "architect" in text.lower():
-                print("✅ Expert consultation working")
+                console.print("✅ [success]Expert consultation working[/]")
             results["consult_specialist"] = True
         else:
-            print(f"❌ {text}")
+            console.print(f"❌ [error]{text}[/]")
             results["consult_specialist"] = False
 
         # === Tool 5: delegate_to_coder (The Bridge) ===
-        print("\n6️⃣  Testing 'delegate_to_coder'...")
+        console.print("\n6️⃣  [tool]Testing 'delegate_to_coder'[/]...")
         success, text = send_tool(
             process, "delegate_to_coder",
             {"task_type": "refactor", "details": "Rename function foo to bar"},
             6
         )
         if success:
-            print(f"✅ Response: {len(text)} chars")
+            console.print(f"✅ [success]Response: {len(text)} chars[/]")
             # New Hive architecture: returns actual tool call result OR delegation instructions
             if "Delegation" in text or "Coder" in text or "refactor" in text.lower():
-                print("✅ Bridge delegation working (fallback mode)")
+                console.print("✅ [success]Bridge delegation working (fallback mode)[/]")
             else:
-                print("✅ Bridge delegation working (direct execution)")
+                console.print("✅ [success]Bridge delegation working (direct execution)[/]")
             results["delegate_to_coder"] = True
         else:
-            print(f"❌ {text}")
+            console.print(f"❌ [error]{text}[/]")
             results["delegate_to_coder"] = False
 
         # === Tool 7: memory_garden ===
-        print("\n8️⃣  Testing 'memory_garden'...")
+        console.print("\n8️⃣  [tool]Testing 'memory_garden'[/]...")
         success, text = send_tool(
             process, "memory_garden",
             {"operation": "save", "title": "Test Decision", "content": "This is a test decision"},
             8
         )
         if success:
-            print(f"✅ Response: {len(text)} chars")
+            console.print(f"✅ [success]Response: {len(text)} chars[/]")
             if "saved" in text.lower() or "memory" in text.lower() or ".memory" in text:
-                print("✅ Memory garden working")
+                console.print("✅ [success]Memory garden working[/]")
             results["memory_garden"] = True
         else:
-            print(f"❌ {text}")
+            console.print(f"❌ [error]{text}[/]")
             results["memory_garden"] = False
 
         # === Tool 8: run_task ===
@@ -279,114 +293,114 @@ def test_all_tools():
             9
         )
         if success:
-            print(f"✅ Response: {len(text)} chars")
+            console.print(f"✅ [success]Response: {len(text)} chars[/]")
             if "just" in text.lower() or "Exit code" in text:
-                print("✅ Task execution working")
+                console.print("✅ [success]Task execution working[/]")
             results["run_task"] = True
         else:
-            print(f"❌ {text}")
+            console.print(f"❌ [error]{text}[/]")
             results["run_task"] = False
 
         # Test blocked command
-        print("\n1️⃣0️⃣  Testing 'run_task' security (blocked command)...")
+        console.print("\n1️⃣0️⃣  [tool]Testing 'run_task' security (blocked command)[/]...")
         success, text = send_tool(
             process, "run_task",
             {"command": "rm", "args": ["-rf", "/"]},
             10
         )
         if not success or "not allowed" in text.lower():
-            print("✅ Blocked dangerous command")
+            console.print("✅ [success]Blocked dangerous command[/]")
             results["run_task_security"] = True
         else:
-            print("❌ Should have blocked dangerous command")
+            console.print("❌ [error]Should have blocked dangerous command[/]")
             results["run_task_security"] = False
 
         # === Tool 11: assess_feature_complexity (Product Owner) ===
-        print("\n1️⃣1️⃣  Testing 'assess_feature_complexity'...")
+        console.print("\n1️⃣1️⃣  [tool]Testing 'assess_feature_complexity'[/]...")
         success, text = send_tool(
             process, "assess_feature_complexity",
             {"feature_description": "Add a Redis caching module", "files_changed": ["units/modules/redis.nix"]},
             11
         )
         if success and ("level" in text.lower() or "L2" in text or "L3" in text):
-            print(f"✅ assess_feature_complexity working: {text[:100]}")
+            console.print(f"✅ [success]assess_feature_complexity working: {text[:100]}[/]")
             results["assess_feature_complexity"] = True
         else:
-            print(f"❌ assess_feature_complexity failed: {text[:200]}")
+            console.print(f"❌ [error]assess_feature_complexity failed: {text[:200]}[/]")
             results["assess_feature_complexity"] = False
 
         # === Tool 12: assess_feature_complexity (trivial - doc only) ===
-        print("\n1️⃣2️⃣  Testing 'assess_feature_complexity' (L1 - docs only)...")
+        console.print("\n1️⃣2️⃣  [tool]Testing 'assess_feature_complexity' (L1 - docs only)[/]...")
         success, text = send_tool(
             process, "assess_feature_complexity",
             {"feature_description": "Fix typo in README", "files_changed": ["docs/README.md"]},
             12
         )
         if success and ("L1" in text or "trivial" in text.lower()):
-            print(f"✅ assess_feature_complexity L1 detection: {text[:100]}")
+            console.print(f"✅ [success]assess_feature_complexity L1 detection: {text[:100]}[/]")
             results["assess_feature_complexity_l1"] = True
         else:
-            print(f"⚠️  assess_feature_complexity L1 response: {text[:200]}")
+            console.print(f"⚠️  [warning]assess_feature_complexity L1 response: {text[:200]}[/]")
             results["assess_feature_complexity_l1"] = True
 
         # === Tool 13: verify_design_alignment (Product Owner) ===
-        print("\n1️⃣3️⃣  Testing 'verify_design_alignment'...")
+        console.print("\n1️⃣3️⃣  [tool]Testing 'verify_design_alignment'[/]...")
         success, text = send_tool(
             process, "verify_design_alignment",
             {"feature_description": "Add a new MCP tool for file validation"},
             13
         )
         if success and ("aligned" in text.lower() or "philosophy" in text.lower()):
-            print(f"✅ verify_design_alignment working: {text[:100]}")
+            console.print(f"✅ [success]verify_design_alignment working: {text[:100]}[/]")
             results["verify_design_alignment"] = True
         else:
-            print(f"❌ verify_design_alignment failed: {text[:200]}")
+            console.print(f"❌ [error]verify_design_alignment failed: {text[:200]}[/]")
             results["verify_design_alignment"] = False
 
         # === Tool 14: get_feature_requirements (Product Owner) ===
-        print("\n1️⃣4️⃣  Testing 'get_feature_requirements'...")
+        console.print("\n1️⃣4️⃣  [tool]Testing 'get_feature_requirements'[/]...")
         success, text = send_tool(
             process, "get_feature_requirements",
             {"complexity_level": "L3"},
             14
         )
         if success and ("L3" in text or "test" in text.lower()):
-            print(f"✅ get_feature_requirements working: {text[:100]}")
+            console.print(f"✅ [success]get_feature_requirements working: {text[:100]}[/]")
             results["get_feature_requirements"] = True
         else:
-            print(f"❌ get_feature_requirements failed: {text[:200]}")
+            console.print(f"❌ [error]get_feature_requirements failed: {text[:200]}[/]")
             results["get_feature_requirements"] = False
 
         # === Tool 15: check_doc_sync (Product Owner) ===
-        print("\n1️⃣5️⃣  Testing 'check_doc_sync'...")
+        console.print("\n1️⃣5️⃣  [tool]Testing 'check_doc_sync'[/]...")
         success, text = send_tool(
             process, "check_doc_sync",
             {"changed_files": ["src/agent/main.py", "agent/how-to/new-feature.md"]},
             15
         )
         if success and ("status" in text.lower() or "sync" in text.lower()):
-            print(f"✅ check_doc_sync working: {text[:100]}")
+            console.print(f"✅ [success]check_doc_sync working: {text[:100]}[/]")
             results["check_doc_sync"] = True
         else:
-            print(f"❌ check_doc_sync failed: {text[:200]}")
+            console.print(f"❌ [error]check_doc_sync failed: {text[:200]}[/]")
             results["check_doc_sync"] = False
 
         # === Tool 16: verify DesignDocsCache via verify_design_alignment ===
-        print("\n1️⃣6️⃣  Testing 'verify_design_alignment' (uses DesignDocsCache)...")
+        console.print("\n1️⃣6️⃣  [tool]Testing 'verify_design_alignment' (uses DesignDocsCache)[/]...")
         success, text = send_tool(
             process, "verify_design_alignment",
             {"feature_description": "Add a simple utility function"},
             16
         )
         if success and ("aligned" in text.lower() or "philosophy" in text.lower()):
-            print(f"✅ DesignDocsCache working: {text[:100]}")
+            console.print(f"✅ [success]DesignDocsCache working: {text[:100]}[/]")
             results["design_docs_cache"] = True
         else:
-            print(f"❌ DesignDocsCache failed: {text[:200]}")
+            console.print(f"❌ [error]DesignDocsCache failed: {text[:200]}[/]")
             results["design_docs_cache"] = False
 
         # === Tool 17: Verify design documents are actually loaded (not empty) ===
-        print("\n1️⃣7️⃣b Testing 'verify_design_alignment' with anti-pattern to prove docs loaded...")
+        console.print("\n1️⃣7️⃣b [tool]Testing 'verify_design_alignment' with anti-pattern to prove docs loaded[/]...")
         # Use a feature description that triggers the "anti_patterns" check
         # This only works if docs/design-philosophy.md is actually loaded
         success, text = send_tool(
@@ -401,144 +415,200 @@ def test_all_tools():
                 result = json.loads(text)
                 # Check if philosophy check actually ran (should not be aligned for anti-patterns)
                 if not result.get("philosophy", {}).get("aligned", True):
-                    print(f"✅ DesignDocsCache PROOF OF LOAD: Anti-pattern detected (docs working!)")
+                    console.print("✅ [success]DesignDocsCache PROOF OF LOAD: Anti-pattern detected (docs working!)[/]")
                     results["design_docs_loaded"] = True
                 elif result.get("aligned"):
-                    print(f"❌ DesignDocsCache PROOF OF LOAD FAILED: Anti-pattern NOT detected (docs empty?)")
-                    print(f"    Expected: philosophy['aligned'] = false for 'overcomplicated' feature")
-                    print(f"    Got: aligned = true (docs may not be loaded)")
+                    console.print("❌ [error]DesignDocsCache PROOF OF LOAD FAILED: Anti-pattern NOT detected (docs empty?)[/]")
+                    console.print(f"    Expected: philosophy['aligned'] = false for 'overcomplicated' feature")
+                    console.print(f"    Got: aligned = true (docs may not be loaded)")
                     results["design_docs_loaded"] = False
                 else:
-                    print(f"✅ DesignDocsCache working (philosophy check executed)")
+                    console.print(f"✅ [success]DesignDocsCache working (philosophy check executed)[/]")
                     results["design_docs_loaded"] = True
             except json.JSONDecodeError:
                 # Fallback: check for expected patterns in response
                 if "simplify" in text.lower() or "anti" in text.lower():
-                    print(f"✅ DesignDocsCache working: {text[:100]}")
+                    console.print(f"✅ [success]DesignDocsCache working: {text[:100]}[/]")
                     results["design_docs_loaded"] = True
                 else:
-                    print(f"⚠️  Could not verify design doc loading (non-JSON response)")
+                    console.print(f"⚠️  [warning]Could not verify design doc loading (non-JSON response)[/]")
                     results["design_docs_loaded"] = None
         else:
-            print(f"❌ DesignDocsCache load verification failed: {text[:200]}")
+            console.print(f"❌ [error]DesignDocsCache load verification failed: {text[:200]}[/]")
             results["design_docs_loaded"] = False
 
         # === Tool 18: consult_language_expert (Language Expert - Nix) ===
-        print("\n1️⃣8️⃣  Testing 'consult_language_expert' (Nix standards)...")
+        console.print("\n1️⃣8️⃣  [tool]Testing 'consult_language_expert' (Nix standards)[/]...")
         success, text = send_tool(
             process, "consult_language_expert",
             {"file_path": "units/modules/python.nix", "task_description": "extend mkNixago generator"},
             18
         )
         if success and ("nix" in text.lower() or "standards" in text.lower() or "examples" in text.lower()):
-            print(f"✅ consult_language_expert working: {text[:100]}")
+            console.print(f"✅ [success]consult_language_expert working: {text[:100]}[/]")
             results["consult_language_expert"] = True
         else:
-            print(f"❌ consult_language_expert failed: {text[:200]}")
+            console.print(f"❌ [error]consult_language_expert failed: {text[:200]}[/]")
             results["consult_language_expert"] = False
 
         # === Tool 19: consult_language_expert (Python file) ===
-        print("\n1️⃣9️⃣  Testing 'consult_language_expert' (Python standards)...")
+        console.print("\n1️⃣9️⃣  [tool]Testing 'consult_language_expert' (Python standards)[/]...")
         success, text = send_tool(
             process, "consult_language_expert",
             {"file_path": "src/agent/main.py", "task_description": "add async function"},
             19
         )
         if success and ("python" in text.lower() or "standards" in text.lower()):
-            print(f"✅ consult_language_expert Python: {text[:100]}")
+            console.print(f"✅ [success]consult_language_expert Python: {text[:100]}[/]")
             results["consult_language_expert_python"] = True
         else:
-            print(f"❌ consult_language_expert Python failed: {text[:200]}")
+            console.print(f"❌ [error]consult_language_expert Python failed: {text[:200]}[/]")
             results["consult_language_expert_python"] = False
 
         # === Tool 20: consult_language_expert (unsupported extension) ===
-        print("\n2️⃣0️⃣  Testing 'consult_language_expert' (unsupported extension)...")
+        console.print("\n2️⃣0️⃣  [tool]Testing 'consult_language_expert' (unsupported extension)[/]...")
         success, text = send_tool(
             process, "consult_language_expert",
             {"file_path": "data/file.csv", "task_description": "process data"},
             20
         )
         if success and ("no language expert" in text.lower() or "skipped" in text.lower()):
-            print(f"✅ consult_language_expert handled unsupported: {text[:100]}")
+            console.print(f"✅ [success]consult_language_expert handled unsupported: {text[:100]}[/]")
             results["consult_language_expert_unsupported"] = True
         else:
-            print(f"❌ consult_language_expert unsupported response: {text[:200]}")
+            console.print(f"❌ [error]consult_language_expert unsupported response: {text[:200]}[/]")
             results["consult_language_expert_unsupported"] = True  # Still counts
 
         # === Tool 21: get_language_standards (full standards) ===
-        print("\n2️⃣1️⃣  Testing 'get_language_standards'...")
+        console.print("\n2️⃣1️⃣  [tool]Testing 'get_language_standards'[/]...")
         success, text = send_tool(
             process, "get_language_standards",
             {"lang": "nix"},
             21
         )
         if success and ("nix" in text.lower() and "status" in text.lower()):
-            print(f"✅ get_language_standards working: {text[:100]}")
+            console.print(f"✅ [success]get_language_standards working: {text[:100]}[/]")
             results["get_language_standards"] = True
         else:
-            print(f"❌ get_language_standards failed: {text[:200]}")
+            console.print(f"❌ [error]get_language_standards failed: {text[:200]}[/]")
             results["get_language_standards"] = False
 
         # === Tool 22: get_language_standards (invalid language) ===
-        print("\n2️⃣2️⃣  Testing 'get_language_standards' (invalid language)...")
+        console.print("\n2️⃣2️⃣  [tool]Testing 'get_language_standards' (invalid language)[/]...")
         success, text = send_tool(
             process, "get_language_standards",
             {"lang": "cobol"},
             22
         )
         if success and ("not_found" in text.lower() or "available" in text.lower()):
-            print(f"✅ get_language_standards handled invalid: {text[:100]}")
+            console.print(f"✅ [success]get_language_standards handled invalid: {text[:100]}[/]")
             results["get_language_standards_invalid"] = True
         else:
-            print(f"❌ get_language_standards invalid response: {text[:200]}")
+            console.print(f"❌ [error]get_language_standards invalid response: {text[:200]}[/]")
             results["get_language_standards_invalid"] = True
 
         # === Tool 23: list_supported_languages ===
-        print("\n2️⃣3️⃣  Testing 'list_supported_languages'...")
+        console.print("\n2️⃣3️⃣  [tool]Testing 'list_supported_languages'[/]...")
         success, text = send_tool(
             process, "list_supported_languages",
             {},
             23
         )
         if success and ("languages" in text.lower() and "nix" in text.lower()):
-            print(f"✅ list_supported_languages working: {text[:100]}")
+            console.print(f"✅ [success]list_supported_languages working: {text[:100]}[/]")
             results["list_supported_languages"] = True
         else:
-            print(f"❌ list_supported_languages failed: {text[:200]}")
+            console.print(f"❌ [error]list_supported_languages failed: {text[:200]}[/]")
             results["list_supported_languages"] = False
 
+        # === Tool 24: list_available_skills (Phase 13 Skill System) ===
+        console.print("\n2️⃣4️⃣  [tool]Testing 'list_available_skills'[/]...")
+        success, text = send_tool(
+            process, "list_available_skills",
+            {},
+            24
+        )
+        if success and ("git" in text.lower() or "Available Skills" in text):
+            console.print(f"✅ [success]list_available_skills working: {text[:150]}[/]")
+            results["list_available_skills"] = True
+        else:
+            console.print(f"❌ [error]list_available_skills failed: {text[:200]}[/]")
+            results["list_available_skills"] = False
+
+        # === Tool 25: load_skill (Phase 13 Skill System) ===
+        console.print("\n2️⃣5️⃣  [tool]Testing 'load_skill' (Git)[/]...")
+        success, text = send_tool(
+            process, "load_skill",
+            {"skill_name": "git"},
+            25
+        )
+        if success and ("loaded successfully" in text.lower() or "PROCEDURAL KNOWLEDGE" in text or "Git Operations" in text):
+            console.print(f"✅ [success]load_skill('git') working: {text[:200]}[/]")
+            results["load_skill"] = True
+        else:
+            console.print(f"❌ [error]load_skill failed: {text[:200]}[/]")
+            results["load_skill"] = False
+
+        # === Tool 26: get_active_skills (Phase 13 Skill System) ===
+        console.print("\n2️⃣6️⃣  [tool]Testing 'get_active_skills'[/]...")
+        success, text = send_tool(
+            process, "get_active_skills",
+            {},
+            26
+        )
+        if success and ("Active Skills" in text and "git" in text):
+            console.print(f"✅ [success]get_active_skills working: {text[:100]}[/]")
+            results["get_active_skills"] = True
+        else:
+            console.print(f"❌ [error]get_active_skills failed: {text[:200]}[/]")
+            results["get_active_skills"] = False
+
+        # === Tool 27: git_status (after loading git skill) ===
+        console.print("\n2️⃣7️⃣  [tool]Testing 'git_status' (loaded via skill)[/]...")
+        success, text = send_tool(
+            process, "git_status",
+            {},
+            27
+        )
+        if success and ("Git Status" in text or "Staged" in text or "Unstaged" in text or "clean" in text.lower()):
+            console.print(f"✅ [success]git_status (via skill) working: {text[:100]}[/]")
+            results["git_status_skill"] = True
+        else:
+            console.print(f"❌ [error]git_status (via skill) failed: {text[:200]}[/]")
+            results["git_status_skill"] = False
+
         # === Summary ===
-        print("\n" + "=" * 60)
-        print("📊 Test Results Summary")
-        print("=" * 60)
+        console.print("\n" + "=" * 60)
+        console.print("📊 [title]Test Results Summary[/]")
+        console.print("=" * 60)
 
         all_passed = True
         for tool, passed in results.items():
-            status = "✅ PASS" if passed else "❌ FAIL"
-            print(f"   {tool}: {status}")
+            status = "[success]✅ PASS[/]" if passed else "[error]❌ FAIL[/]"
+            console.print(f"   {tool}: {status}")
             if not passed:
                 all_passed = False
 
-        print("=" * 60)
+        console.print("=" * 60)
         if all_passed:
-            print("🎉 All MCP tools are working correctly!")
+            console.print("🎉 [success]All MCP tools are working correctly![/]")
         else:
-            print("⚠️  Some tools failed. Please review the output above.")
-        print("=" * 60)
+            console.print("⚠️  [warning]Some tools failed. Please review the output above.[/]")
+        console.print("=" * 60)
 
         return all_passed
 
     except Exception as e:
-        print(f"❌ Exception during test: {e}")
+        console.print(f"❌ [error]Exception during test: {e}[/]")
         return False
 
     finally:
-        print("\n🧹 Cleaning up...")
+        console.print("\n🧹 [info]Cleaning up...[/]")
         process.terminate()
         try:
             stderr_output = process.stderr.read()
             if stderr_output:
-                print(f"📋 Server Logs (Stderr):\n{stderr_output}")
+                console.print(f"📋 [info]Server Logs (Stderr):\n{stderr_output}[/]")
         except:
             pass
         process.wait()

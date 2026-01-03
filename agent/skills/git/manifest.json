@@ -1,0 +1,9 @@
+{
+  "name": "git",
+  "version": "1.0.0",
+  "description": "Essential Git operations tailored for the Omni-DevEnv workflow (Smart Commit, Status, Diff).",
+  "dependencies": [],
+  "tools_module": "agent.skills.git.tools",
+  "guide_file": "guide.md",
+  "prompts_file": "prompts.md"
+}

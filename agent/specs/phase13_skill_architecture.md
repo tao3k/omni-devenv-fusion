@@ -1,174 +1,119 @@
-# Phase 13: The Skill-First Reformation
+# Phase 13: Skill-Centric Architecture Reformation
 
 **Status**: Draft
-**Created**: 2026-01-02
-**Author**: Claude Code
+**Type**: Architecture Refactor
+**Owner**: Orchestrator (The Brain)
+**Vision**: `docs/explanation/vision-skill-centric-os.md`
 
-## 1. Vision
+## 1. Problem Statement
 
-Transform Omni-DevEnv from a tool-centric architecture to a **Skill-centric architecture**.
+Current Tri-MCP architecture loads ALL tools into the Orchestrator's context at startup:
 
-Instead of monolithic "Agents" with 20+ scattered tools, we build composable **Skills** that include:
+1. **Token Waste**: The "Git" tools are loaded even when we are just doing "Python" work.
+2. **Cognitive Load**: The LLM gets confused by having too many unrelated tools available.
+3. **Rigidity**: Adding a new domain (e.g., Kubernetes) requires modifying the core `orchestrator.py`.
 
-- Procedural knowledge (How-to guides)
-- Specific tools (MCP tool definitions)
-- Validation rules (Best practices)
+## 2. The Solution: Dynamic Skills
 
-This follows Anthropic's "Don't Build Agents, Build Skills"理念.
-
-## 2. The "Skill" Anatomy (Standardized Structure)
+Refactor the system to treat capabilities as **"Skills"** that are dynamically loaded/unloaded by the Orchestrator Runtime.
 
 ```
+Skill = Manifest + Tools + Knowledge
+```
+
+## 3. Architecture Specification
+
+### 3.1 Directory Structure (`agent/skills/`)
+
+Move away from `mcp-server/*.py` monoliths:
+
+```text
 agent/skills/
-├── git_operations/
-│   ├── manifest.json              # Metadata: name, version, description
-│   ├── guide.md                   # Procedural Knowledge (How-to)
-│   ├── tools.py                   # MCP Tools (Execution Logic)
-│   └── prompts.md                 # Skill-specific system prompts
-├── python_engineering/
-│   ├── manifest.json
-│   ├── guide.md
-│   └── tools.py
-└── task_management/               # The new Task Weaver
-    ├── manifest.json
-    ├── guide.md
-    ├── tools.py
-    └── prompts.md
+├── _template/              # Template for new skills
+├── git/                    # The "Git" Skill (Refactored from git_ops.py)
+│   ├── manifest.json       # Metadata (name, description, tool_definitions)
+│   ├── tools.py            # The executable MCP tools
+│   ├── guide.md            # "How to use" (Procedural Knowledge)
+│   └── prompts.md          # System prompt injection
+├── filesystem/             # The "Coder" Skill (Refactored from coder.py)
+└── ...
 ```
 
-### 2.1 manifest.json Schema
+### 3.2 The Skill Registry (`src/agent/core/skill_registry.py`)
+
+A new core module responsible for:
+
+- Scanning `agent/skills/` for valid manifests.
+- Providing `list_skills()` and `get_skill_context(name)`.
+- Managing the lifecycle of skills.
+
+### 3.3 The Dynamic Loader (Orchestrator Update)
+
+Update `src/agent/main.py` to support dynamic tool registration.
+
+**Current**: Static `register_git_ops_tools(mcp)`
+
+**New**:
+```python
+@mcp.tool()
+async def load_skill(skill_name: str):
+    """Dynamically loads a skill's tools and context."""
+    registry.load(skill_name, mcp_server)
+```
+
+## 4. Migration Plan
+
+### Step 1: Infrastructure (The Foundation)
+
+- Create `src/agent/core/skill_registry.py`.
+- Define `SkillManifest` schema in `src/agent/core/schema.py`.
+
+### Step 2: The Pilot (Refactor GitOps)
+
+- Create `agent/skills/git/`.
+- Move logic from `mcp-server/git_ops.py` to `agent/skills/git/tools.py`.
+- Move knowledge from `agent/how-to/git-workflow.md` to `agent/skills/git/guide.md`.
+
+### Step 3: The Brain Transplant
+
+- Update `orchestrator.py` to use the Registry.
+- Remove hardcoded `git_ops` registration.
+
+## 5. Success Criteria
+
+1. **Zero Initial Load**: Orchestrator starts with no skills loaded (only `load_skill` tool)
+2. **Dynamic Loading**: `load_skill("git")` makes git tools available
+3. **Context Injection**: Skill guide.md content is injected into LLM context
+4. **Git Ops Preserved**: All git operations work exactly as before
+
+## 6. Skill Template
+
+### 6.1 manifest.json Schema
 
 ```json
 {
-  "name": "git_operations",
+  "name": "git",
   "version": "1.0.0",
   "description": "Version control operations using Git",
   "category": "development",
   "dependencies": [],
   "tools": ["git_status", "git_diff", "smart_commit"],
-  "context_files": ["agent/how-to/git-workflow.md"]
+  "context_files": ["agent/skills/git/guide.md"]
 }
 ```
 
-### 2.2 guide.md
-
-Procedural knowledge - step-by-step instructions for the skill.
-
-### 2.3 tools.py
-
-MCP tool implementations specific to this skill.
-
-### 2.4 prompts.md
-
-Skill-specific system prompts for LLM context.
-
-## 3. Core Components to Build
-
-### 3.1 The Skill Registry (New Capability)
-
-**Location**: `src/agent/capabilities/skill_registry.py`
-
-```python
-class SkillManifest(BaseModel):
-    name: str
-    version: str
-    description: str
-    category: str
-    tools: List[str]
-    context_files: List[str] = []
-    dependencies: List[str] = []
-
-class SkillRegistry:
-    """Discover and manage available skills."""
-    def list_skills() -> List[SkillManifest]
-    def get_skill_manifest(name: str) -> SkillManifest
-    def load_skill(name: str) -> SkillContext
-    def unload_skill(name: str) -> None
-```
-
-### 3.2 The Dynamic Loader (Orchestrator Upgrade)
-
-**Problem**: Loading ALL tools into context consumes too many tokens.
-
-**Solution**: Orchestrator dynamically loads/unloads skills based on user intent.
-
-- User: "Fix this bug." → Load `debugging_skill` + `git_skill`
-- User: "Design system." → Load `architecture_skill`
-
-### 3.3 Skill Context
-
-When a skill is loaded, it provides:
-
-1. MCP tools defined in `tools.py`
-2. Procedural knowledge from `guide.md`
-3. System prompts from `prompts.md`
-
-## 4. Migration Plan
-
-The migration will proceed in 5 phases:
-
-### Phase 1: Base Structure
-
-The project must first establish the `agent/skills/` directory structure and the `SkillRegistry` capability in `src/agent/capabilities/skill_registry.py`. This foundational work defines the `SkillManifest` and `SkillContext` models that all skills will follow.
-
-### Phase 2: Git Operations Skill
-
-The first skill to port will be Git Operations, consisting of `agent/skills/git_operations/manifest.json` for metadata, `agent/skills/git_operations/guide.md` containing git workflow procedures, `agent/skills/git_operations/tools.py` with MCP tool implementations, and `agent/skills/git_operations/prompts.md` providing git-specific system prompts.
-
-### Phase 3: Python Engineering Skill
-
-The second skill will be Python Engineering, including `agent/skills/python_engineering/manifest.json`, `agent/skills/python_engineering/guide.md` with PEP8 and Pydantic standards, and `agent/skills/python_engineering/tools.py` for linting and testing utilities.
-
-### Phase 4: FileSystem Skill
-
-The third skill will be FileSystem operations, mirroring the Coder capabilities in `agent/skills/filesystem/manifest.json`, `agent/skills/filesystem/guide.md`, and `agent/skills/filesystem/tools.py`.
-
-### Phase 5: Dynamic Loading Implementation
-
-Finally, the Orchestrator will be updated to use the Skill Registry for dynamic loading and unloading of skills based on user intent, with new `load_skill` and `unload_skill` tools added.
-
-## 5. First New Skill: The Task Weaver
-
-Instead of a separate "Phase", the **Task Weaver** becomes the first complex **Skill** we build:
+### 6.2 File Structure
 
 ```
-agent/skills/task_management/
-├── manifest.json
-├── guide.md          # Planning methodology
-├── tools.py          # Task CRUD, sqlite persistence
-└── prompts.md        # Planner prompts
+agent/skills/{skill_name}/
+├── manifest.json              # Metadata
+├── guide.md                   # Procedural Knowledge
+├── tools.py                   # MCP Tools
+└── prompts.md                 # System prompts
 ```
 
-## 6. Success Criteria
+## 7. Related Documentation
 
-### Technical Requirements Met
-
-The project succeeds when `agent/skills/` directory contains at least 3 core skills (Git, Python, FileSystem). The `SkillRegistry` capability must be fully implemented with `list_skills()` and `get_skill_manifest()` functions operational. The Orchestrator must demonstrate the ability to dynamically load a skill's tools into context while keeping unloaded skills invisible to the LLM, and inject skill-specific prompts from `prompts.md` files.
-
-### Quality Requirements Met
-
-Each skill must have a complete manifest containing name, version, and description fields. Every skill must include `guide.md` with actionable procedures and `tools.py` with properly decorated MCP tools. The Harvester capability must be able to suggest improvements to specific Skills.
-
-### Migration Requirements Met
-
-All existing functionality must be preserved during the migration with no breaking changes to MCP tool interfaces. The system must maintain backward compatibility with existing `consult_*` tools throughout the transition.
-
-## 7. Implementation Order
-
-1. Create `agent/skills/` and base manifest schema
-2. Build `SkillRegistry` capability
-3. Port Git Operations as first skill
-4. Implement dynamic loading in Orchestrator
-5. Port remaining skills (Python, FileSystem)
-6. Create Task Management skill
-
-## 8. Anticipated Challenges
-
-1. **Token Optimization**: Ensure dynamic loading actually reduces context size
-2. **Dependency Resolution**: Skills may depend on other skills
-3. **Migration Path**: Gradually move existing capabilities without breaking
-
-## 9. Related Documentation
-
-- `agent/how-to/git-workflow.md` - To be ported to git_operations/guide.md
-- `agent/standards/lang-python.md` - To be ported to python_engineering/guide.md
+- `docs/explanation/vision-skill-centric-os.md` - The vision
+- `agent/how-to/git-workflow.md` - To be ported to git/guide.md
+- `src/agent/capabilities/skill_registry.py` - The registry implementation

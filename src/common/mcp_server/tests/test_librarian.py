@@ -8,11 +8,26 @@ Tests for:
 - list_knowledge_domains: List collections
 - search_project_rules: Search project rules
 
-Run: uv run python src/common/mcp_server/tests/test_librarian.py
+Run: uv run pytest src/common/mcp_server/tests/test_librarian.py -v
 """
 import asyncio
 import json
 import os
+import sys
+from rich.console import Console
+from rich.theme import Theme
+from rich import print as rprint
+
+# Rich theme
+custom_theme = Theme({
+    "info": "cyan",
+    "success": "green",
+    "error": "red",
+    "warning": "yellow",
+    "title": "magenta",
+    "tool": "blue",
+})
+console = Console(theme=custom_theme)
 
 from agent.core.vector_store import get_vector_memory
 
@@ -32,7 +47,7 @@ def cleanup_test_data():
 
 def test_vector_store_import():
     """Test that vector_store module imports correctly."""
-    print("\n=== Test: Vector Store Import ===")
+    console.print("\n=== [title]Test: Vector Store Import[/] ===")
     try:
         from agent.core.vector_store import (
             VectorMemory,
@@ -41,28 +56,28 @@ def test_vector_store_import():
             ingest_knowledge,
             SearchResult,
         )
-        print("✅ All imports successful")
+        console.print("✅ [success]All imports successful[/]")
         return True
     except ImportError as e:
-        print(f"❌ Import failed: {e}")
+        console.print(f"❌ [error]Import failed: {e}[/]")
         return False
 
 
 def test_librarian_import():
     """Test that librarian module imports correctly."""
-    print("\n=== Test: Librarian Import ===")
+    console.print("\n=== [title]Test: Librarian Import[/] ===")
     try:
         from agent.capabilities.librarian import register_librarian_tools
-        print("✅ Librarian imports successful")
+        console.print("✅ [success]Librarian imports successful[/]")
         return True
     except ImportError as e:
-        print(f"❌ Import failed: {e}")
+        console.print(f"❌ [error]Import failed: {e}[/]")
         return False
 
 
 def test_librarian_tools_registration():
     """Test that librarian tools are properly registered."""
-    print("\n=== Test: Librarian Tools Registration ===")
+    console.print("\n=== [title]Test: Librarian Tools Registration[/] ===")
     try:
         from mcp.server.fastmcp import FastMCP
         from agent.capabilities.librarian import register_librarian_tools
@@ -82,19 +97,19 @@ def test_librarian_tools_registration():
 
         missing = [t for t in expected_tools if t not in registered]
         if missing:
-            print(f"❌ Missing tools: {missing}")
+            console.print(f"❌ [error]Missing tools: {missing}[/]")
             return False
 
-        print(f"✅ All {len(expected_tools)} tools registered: {registered}")
+        console.print(f"✅ [success]All {len(expected_tools)} tools registered: {registered}[/]")
         return True
     except Exception as e:
-        print(f"❌ Registration failed: {e}")
+        console.print(f"❌ [error]Registration failed: {e}[/]")
         return False
 
 
 async def test_ingest_and_search():
     """Test ingesting and searching knowledge."""
-    print("\n=== Test: Ingest and Search ===")
+    console.print("\n=== [title]Test: Ingest and Search[/] ===")
 
     vm = get_vector_memory()
 
@@ -123,10 +138,10 @@ async def test_ingest_and_search():
     )
 
     if not success:
-        print("❌ Failed to ingest test data")
+        console.print("❌ [error]Failed to ingest test data[/]")
         return False
 
-    print("✅ Test data ingested")
+    console.print("✅ [success]Test data ingested[/]")
 
     # Search in the same collection
     results = await vm.search("how to commit changes", n_results=3, collection=collection_name)
@@ -134,23 +149,23 @@ async def test_ingest_and_search():
     if len(results) == 0:
         # Debug: search without collection filter
         all_results = await vm.search("git", n_results=5)
-        print(f"❌ Search returned no results (debug: found {len(all_results)} in default collection)")
+        console.print(f"❌ [error]Search returned no results (debug: found {len(all_results)} in default collection)[/]")
         return False
 
-    print(f"✅ Search returned {len(results)} results")
+    console.print(f"✅ [success]Search returned {len(results)} results[/]")
     for r in results:
-        print(f"   - [{r.id}] relevance: {1.0 - r.distance:.2f}")
+        console.print(f"   - [info][{r.id}][/] relevance: {1.0 - r.distance:.2f}")
 
     # Cleanup
     await vm.delete(ids=test_ids, collection=collection_name)
-    print("✅ Test data cleaned up")
+    console.print("✅ [success]Test data cleaned up[/]")
 
     return True
 
 
 async def test_search_result_format():
     """Test SearchResult dataclass format."""
-    print("\n=== Test: Search Result Format ===")
+    console.print("\n=== [title]Test: Search Result Format[/] ===")
 
     vm = get_vector_memory()
 
@@ -165,7 +180,7 @@ async def test_search_result_format():
     results = await vm.search("test document format", n_results=1)
 
     if not results:
-        print("❌ No results returned")
+        console.print("❌ [error]No results returned[/]")
         return False
 
     r = results[0]
@@ -174,14 +189,14 @@ async def test_search_result_format():
     required_attrs = ["content", "metadata", "distance", "id"]
     missing = [a for a in required_attrs if not hasattr(r, a)]
     if missing:
-        print(f"❌ Missing attributes: {missing}")
+        console.print(f"❌ [error]Missing attributes: {missing}[/]")
         return False
 
-    print(f"✅ SearchResult format correct:")
-    print(f"   - id: {r.id}")
-    print(f"   - content length: {len(r.content)}")
-    print(f"   - metadata: {r.metadata}")
-    print(f"   - distance: {r.distance}")
+    console.print(f"✅ [success]SearchResult format correct:[/]")
+    console.print(f"   - [info]id:[/] {r.id}")
+    console.print(f"   - [info]content length:[/] {len(r.content)}")
+    console.print(f"   - [info]metadata:[/] {r.metadata}")
+    console.print(f"   - [info]distance:[/] {r.distance}")
 
     # Cleanup
     await vm.delete(ids=["test-format-001"])
@@ -191,7 +206,7 @@ async def test_search_result_format():
 
 async def test_domain_filtering():
     """Test domain-based filtering."""
-    print("\n=== Test: Domain Filtering ===")
+    console.print("\n=== [title]Test: Domain Filtering[/] ===")
 
     vm = get_vector_memory()
 
@@ -219,17 +234,17 @@ async def test_domain_filtering():
     git_results = await vm.search("rule", n_results=10, collection="test_domain", where_filter={"domain": "git"})
 
     if len(git_results) == 1 and "domain-test-001" in git_results[0].id:
-        print("✅ Domain filter works - only git results returned")
+        console.print("✅ [success]Domain filter works - only git results returned[/]")
     else:
-        print(f"❌ Domain filter failed - got {len(git_results)} results")
+        console.print(f"❌ [error]Domain filter failed - got {len(git_results)} results[/]")
         return False
 
     # Search without filter (should get all)
     all_results = await vm.search("rule OR architecture OR python", n_results=10, collection="test_domain")
     if len(all_results) >= 3:
-        print("✅ Unfiltered search returns all domains")
+        console.print("✅ [success]Unfiltered search returns all domains[/]")
     else:
-        print(f"❌ Unfiltered search failed - expected 3+ results, got {len(all_results)}")
+        console.print(f"❌ [error]Unfiltered search failed - expected 3+ results, got {len(all_results)}[/]")
         return False
 
     # Cleanup
@@ -240,7 +255,7 @@ async def test_domain_filtering():
 
 async def test_multiple_collections():
     """Test multiple collections support."""
-    print("\n=== Test: Multiple Collections ===")
+    console.print("\n=== [title]Test: Multiple Collections[/] ===")
 
     vm = get_vector_memory()
 
@@ -262,15 +277,15 @@ async def test_multiple_collections():
 
     # Verify results are from correct collections
     if git_results and "col-test-001" in git_results[0].id:
-        print("✅ Git collection search works")
+        console.print("✅ [success]Git collection search works[/]")
     else:
-        print("❌ Git collection search failed")
+        console.print("❌ [error]Git collection search failed[/]")
         return False
 
     if arch_results and "col-test-002" in arch_results[0].id:
-        print("✅ Architecture collection search works")
+        console.print("✅ [success]Architecture collection search works[/]")
     else:
-        print("❌ Architecture collection search failed")
+        console.print("❌ [error]Architecture collection search failed[/]")
         return False
 
     # Cleanup
@@ -295,7 +310,7 @@ async def run_async_tests():
             result = await test_fn()
             results.append((name, result))
         except Exception as e:
-            print(f"❌ {name} failed with exception: {e}")
+            console.print(f"❌ [error]{name} failed with exception: {e}[/]")
             import traceback
             traceback.print_exc()
             results.append((name, False))
@@ -305,9 +320,9 @@ async def run_async_tests():
 
 def main():
     """Run all tests."""
-    print("=" * 60)
-    print("🧪 Librarian (Vector Memory / RAG) Test Suite")
-    print("=" * 60)
+    console.print("=" * 60)
+    console.print("🧪 [title]Librarian (Vector Memory / RAG) Test Suite[/]")
+    console.print("=" * 60)
 
     # Sync tests
     sync_tests = [
@@ -323,27 +338,27 @@ def main():
             result = test_fn()
             results.append((name, result))
         except Exception as e:
-            print(f"❌ {name} failed with exception: {e}")
+            console.print(f"❌ [error]{name} failed with exception: {e}[/]")
             results.append((name, False))
 
     # Async tests
-    print("\n--- Async Tests ---")
+    console.print("\n--- [info]Async Tests[/] ---")
     async_results = asyncio.run(run_async_tests())
     results.extend(async_results)
 
     # Summary
-    print("\n" + "=" * 60)
-    print("📊 Test Results Summary")
-    print("=" * 60)
+    console.print("\n" + "=" * 60)
+    console.print("📊 [title]Test Results Summary[/]")
+    console.print("=" * 60)
 
     passed = sum(1 for _, r in results if r)
     total = len(results)
 
     for name, result in results:
-        status = "✅ PASS" if result else "❌ FAIL"
-        print(f"  {status}: {name}")
+        status = "[success]✅ PASS[/]" if result else "[error]❌ FAIL[/]"
+        console.print(f"  {status}: {name}")
 
-    print(f"\nTotal: {passed}/{total} tests passed")
+    console.print(f"\n[info]Total:[/] {passed}/{total} tests passed")
 
     return passed == total
 

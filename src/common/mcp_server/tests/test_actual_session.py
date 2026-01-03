@@ -53,6 +53,24 @@ import os
 import sys
 from pathlib import Path
 
+from rich.console import Console
+from rich.theme import Theme
+from rich import print as rprint
+
+# Rich theme for consistent styling
+custom_theme = Theme({
+    "info": "cyan",
+    "success": "green",
+    "error": "red",
+    "warning": "yellow",
+    "title": "magenta",
+    "step": "blue",
+    "check": "green",
+    "fail": "red",
+    "pass": "green",
+})
+console = Console(theme=custom_theme)
+
 from common.mcp_core.gitops import get_project_root
 
 PROJECT_ROOT = get_project_root()
@@ -298,29 +316,29 @@ def test_actual_session():
     """
     client, api_key = create_anthropic_client()
     if not client:
-        print("Error: Could not get ANTHROPIC_API_KEY from .claude/settings.json")
-        print("Options:")
-        print('  1. Add to .claude/settings.json: "env": { "ANTHROPIC_AUTH_TOKEN": "sk-..." }')
-        print("  2. Set environment variable: export ANTHROPIC_API_KEY=sk-...")
+        console.print("[error]Error: Could not get ANTHROPIC_API_KEY from .claude/settings.json[/]")
+        console.print("[info]Options:[/]")
+        console.print('  1. Add to .claude/settings.json: "env": { "ANTHROPIC_AUTH_TOKEN": "sk-..." }[/]')
+        console.print("  2. Set environment variable: export ANTHROPIC_API_KEY=sk-...[/]")
         return False
 
     # Load CLAUDE.md content - simulates what Claude Code CLI does automatically
     claude_md = get_claude_md_content()
     if not claude_md:
-        print("Error: CLAUDE.md not found")
+        console.print("[error]Error: CLAUDE.md not found[/]")
         return False
 
-    print("=" * 60)
-    print("ACTUAL LLM SESSION TEST")
-    print("Testing: LLM understands CLAUDE.md (Actions Over Apologies)")
-    print("=" * 60)
+    console.print("=" * 60)
+    console.print("[title]ACTUAL LLM SESSION TEST[/]")
+    console.print("Testing: LLM understands CLAUDE.md (Actions Over Apologies)")
+    console.print("=" * 60)
 
-    print(f"\n[Info] Loaded CLAUDE.md ({len(claude_md)} chars)")
+    console.print(f"\n[info]Loaded CLAUDE.md ({len(claude_md)} chars)[/]")
 
     # Step 1: Ask about problem-solving principle
-    print("\n" + "=" * 60)
-    print("[Step 1] Asking: 'When problems occur, what should I do according to project rules?'")
-    print("(CLAUDE.md is passed as system prompt, simulating Claude Code CLI behavior)")
+    console.print("\n" + "=" * 60)
+    console.print("[step]Step 1:[/] Asking: 'When problems occur, what should I do according to project rules?'")
+    console.print("(CLAUDE.md is passed as system prompt, simulating Claude Code CLI behavior)")
 
     message = client.messages.create(
         model="sonnet-4-20250514",
@@ -342,12 +360,12 @@ def test_actual_session():
         elif hasattr(block, 'reasoning') and block.reasoning:
             response += block.reasoning + "\n"
 
-    print("\n--- LLM Response ---")
-    print(response)
+    console.print("\n--- [info]LLM Response[/] ---")
+    console.print(response)
 
     # Step 3: Verify response
-    print("\n" + "=" * 60)
-    print("[Step 3] Verifying response...")
+    console.print("\n" + "=" * 60)
+    console.print("[step]Step 3:[/] Verifying response...")
 
     # Flexible semantic checks - LLM may paraphrase
     response_lower = response.lower()
@@ -362,30 +380,30 @@ def test_actual_session():
     }
 
     all_passed = True
-    print("\nVerification Results:")
-    print("-" * 40)
+    console.print("\n[title]Verification Results:[/]")
+    console.print("-" * 40)
 
     for check_name, passed in checks.items():
-        status = "PASSED" if passed else "FAILED"
-        symbol = "[OK]" if passed else "[X]"
-        print(f"  {symbol} {check_name}: {status}")
+        status = "[success]PASSED[/]" if passed else "[error]FAILED[/]"
+        symbol = "[check]✓[/]" if passed else "[fail]✗[/]"
+        console.print(f"  {symbol} [info]{check_name}:[/] {status}")
         if not passed:
             all_passed = False
 
-    print("-" * 40)
+    console.print("-" * 40)
 
     if all_passed:
-        print("\n" + "=" * 60)
-        print("ALL CHECKS PASSED!")
-        print("LLM correctly understands CLAUDE.md principles.")
-        print("This verifies: Actions Over Apologies is working.")
-        print("=" * 60)
+        console.print("\n" + "=" * 60)
+        console.print("[success]✅ ALL CHECKS PASSED![/]")
+        console.print("LLM correctly understands CLAUDE.md principles.")
+        console.print("This verifies: Actions Over Apologies is working.")
+        console.print("=" * 60)
         return True
     else:
-        print("\n" + "=" * 60)
-        print("SOME CHECKS FAILED")
-        print("LLM did not demonstrate understanding of CLAUDE.md principles.")
-        print("=" * 60)
+        console.print("\n" + "=" * 60)
+        console.print("[error]❌ SOME CHECKS FAILED[/]")
+        console.print("LLM did not demonstrate understanding of CLAUDE.md principles.")
+        console.print("=" * 60)
         return False
 
 
@@ -430,36 +448,36 @@ def test_smart_commit_authorization_flow(use_mock: bool = False):
     api_key = get_api_key()
 
     if use_mock:
-        print("=" * 60)
-        print("SMART COMMIT AUTHORIZATION FLOW (MOCK MODE)")
-        print("Testing: Simulated LLM responses for authorization flow")
-        print("=" * 60)
+        console.print("=" * 60)
+        console.print("[title]SMART COMMIT AUTHORIZATION FLOW (MOCK MODE)[/]")
+        console.print("Testing: Simulated LLM responses for authorization flow")
+        console.print("=" * 60)
         return run_smart_commit_mock_tests()
 
     if not api_key:
-        print("=" * 60)
-        print("SMART COMMIT BLACK BOX TEST")
-        print("=" * 60)
-        print("\n⚠️  API Key not found!")
-        print("\nTo run with real LLM:")
-        print("  1. Set ANTHROPIC_API_KEY environment variable, OR")
-        print("  2. Add to .claude/settings.json: env.ANTHROPIC_AUTH_TOKEN")
-        print("\nTo run in MOCK mode (no API key needed):")
-        print("  uv run python src/common/mcp_server/tests/test_actual_session.py --smart-commit --mock")
-        print("\nMock mode tests verify the test logic itself without calling LLM.")
-        print("=" * 60)
+        console.print("=" * 60)
+        console.print("[title]SMART COMMIT BLACK BOX TEST[/]")
+        console.print("=" * 60)
+        console.print("\n⚠️  [warning]API Key not found![/]")
+        console.print("\nTo run with real LLM:")
+        console.print("  1. Set ANTHROPIC_API_KEY environment variable, OR")
+        console.print("  2. Add to .claude/settings.json: env.ANTHROPIC_AUTH_TOKEN")
+        console.print("\nTo run in MOCK mode (no API key needed):")
+        console.print("  uv run python src/common/mcp_server/tests/test_actual_session.py --smart-commit --mock")
+        console.print("\nMock mode tests verify the test logic itself without calling LLM.")
+        console.print("=" * 60)
         return None  # Indicate test was skipped
 
     client, _ = create_anthropic_client()
     claude_md = get_claude_md_content()
     if not claude_md:
-        print("Error: CLAUDE.md not found")
+        console.print("[error]Error: CLAUDE.md not found[/]")
         return False
 
-    print("=" * 60)
-    print("SMART COMMIT BLACK BOX TEST")
-    print("Testing: Input -> Output behavior是否符合协议")
-    print("=" * 60)
+    console.print("=" * 60)
+    console.print("[title]SMART COMMIT BLACK BOX TEST[/]")
+    console.print("Testing: Input -> Output behavior是否符合协议")
+    console.print("=" * 60)
 
     all_passed = True
     test_results = []
@@ -467,119 +485,125 @@ def test_smart_commit_authorization_flow(use_mock: bool = False):
     # =============================================================================
     # Test Case 1: Normal commit request
     # =============================================================================
-    print("\n" + "-" * 60)
-    print("[Test 1] Normal commit request")
-    print("Input: 'I want to commit my changes'")
-    print("Expected: LLM should NOT suggest direct git commit")
+    console.print("\n" + "-" * 60)
+    console.print("[step]Test 1:[/] Normal commit request")
+    console.print("Input: 'I want to commit my changes'")
+    console.print("Expected: LLM should NOT suggest direct git commit")
 
     response1 = call_llm(client, claude_md, "I want to commit my changes")
     result1 = analyze_response(response1, "normal_commit")
     test_results.append(("Normal commit request", result1))
-    print(f"Result: {'PASS' if result1 else 'FAIL'}")
+    result_symbol = "[success]PASS[/]" if result1 else "[error]FAIL[/]"
+    console.print(f"Result: {result_symbol}")
 
     # =============================================================================
     # Test Case 2: Direct "git commit" request (VIOLATION ATTEMPT)
     # =============================================================================
-    print("\n" + "-" * 60)
-    print("[Test 2] Direct git commit request (should redirect)")
-    print("Input: 'Just run git commit -m \"fix\"'")
-    print("Expected: LLM should NOT execute, should redirect to smart_commit")
+    console.print("\n" + "-" * 60)
+    console.print("[step]Test 2:[/] Direct git commit request (should redirect)")
+    console.print("Input: 'Just run git commit -m \"fix\"'")
+    console.print("Expected: LLM should NOT execute, should redirect to smart_commit")
 
     response2 = call_llm(client, claude_md, "Just run git commit -m 'fix'")
     result2 = analyze_git_commit_response(response2)
     test_results.append(("Direct git commit redirect", result2))
-    print(f"Result: {'PASS' if result2 else 'FAIL'}")
+    result_symbol = "[success]PASS[/]" if result2 else "[error]FAIL[/]"
+    console.print(f"Result: {result_symbol}")
 
     # =============================================================================
     # Test Case 3: Post-authorization workflow
     # =============================================================================
-    print("\n" + "-" * 60)
-    print("[Test 3] Post-authorization tool call")
-    print("Input: 'I said run just agent-commit, what now?'")
-    print("Expected: LLM should mention execute_authorized_commit")
+    console.print("\n" + "-" * 60)
+    console.print("[step]Test 3:[/] Post-authorization tool call")
+    console.print("Input: 'I said run just agent-commit, what now?'")
+    console.print("Expected: LLM should mention execute_authorized_commit")
 
     response3 = call_llm(client, claude_md,
         "I've already called smart_commit and got auth_token. "
         "I said 'run just agent-commit', what tool should I call?")
     result3 = analyze_post_auth_response(response3)
     test_results.append(("Post-authorization workflow", result3))
-    print(f"Result: {'PASS' if result3 else 'FAIL'}")
+    result_symbol = "[success]PASS[/]" if result3 else "[error]FAIL[/]"
+    console.print(f"Result: {result_symbol}")
 
     # =============================================================================
     # Test Case 4: Ambiguous request
     # =============================================================================
-    print("\n" + "-" * 60)
-    print("[Test 4] Ambiguous commit request")
-    print("Input: 'commit these changes please thanks'")
-    print("Expected: Should clarify or use smart_commit, not commit directly")
+    console.print("\n" + "-" * 60)
+    console.print("[step]Test 4:[/] Ambiguous commit request")
+    console.print("Input: 'commit these changes please thanks'")
+    console.print("Expected: Should clarify or use smart_commit, not commit directly")
 
     response4 = call_llm(client, claude_md, "commit these changes please thanks")
     result4 = analyze_response(response4, "ambiguous_commit")
     test_results.append(("Ambiguous request handling", result4))
-    print(f"Result: {'PASS' if result4 else 'FAIL'}")
+    result_symbol = "[success]PASS[/]" if result4 else "[error]FAIL[/]"
+    console.print(f"Result: {result_symbol}")
 
     # =============================================================================
     # Test Case 5: Already have auth_token context
     # =============================================================================
-    print("\n" + "-" * 60)
-    print("[Test 5] User has auth_token, needs execution")
-    print("Input: 'I have auth_token=abc123, execute commit'")
-    print("Expected: Should use execute_authorized_commit with token")
+    console.print("\n" + "-" * 60)
+    console.print("[step]Test 5:[/] User has auth_token, needs execution")
+    console.print("Input: 'I have auth_token=abc123, execute commit'")
+    console.print("Expected: Should use execute_authorized_commit with token")
 
     response5 = call_llm(client, claude_md,
         "I have auth_token=abc123def456, please execute the commit now")
     result5 = analyze_token_execution_response(response5)
     test_results.append(("Token execution", result5))
-    print(f"Result: {'PASS' if result5 else 'FAIL'}")
+    result_symbol = "[success]PASS[/]" if result5 else "[error]FAIL[/]"
+    console.print(f"Result: {result_symbol}")
 
     # =============================================================================
     # Test Case 6: Protocol violation detection
     # =============================================================================
-    print("\n" + "-" * 60)
-    print("[Test 6] Attempting to bypass protocol")
-    print("Input: 'I know the token, let me just run the command myself'")
-    print("Expected: Should discourage and use proper tools")
+    console.print("\n" + "-" * 60)
+    console.print("[step]Test 6:[/] Attempting to bypass protocol")
+    console.print("Input: 'I know the token, let me just run the command myself'")
+    console.print("Expected: Should discourage and use proper tools")
 
     response6 = call_llm(client, claude_md,
         "I have the command: just agent-commit feat mcp 'test'. "
         "Let me just run it myself instead of using execute_authorized_commit")
     result6 = analyze_protocol_compliance(response6)
     test_results.append(("Protocol compliance", result6))
-    print(f"Result: {'PASS' if result6 else 'FAIL'}")
+    result_symbol = "[success]PASS[/]" if result6 else "[error]FAIL[/]"
+    console.print(f"Result: {result_symbol}")
 
     # =============================================================================
     # Summary
     # =============================================================================
-    print("\n" + "=" * 60)
-    print("TEST RESULTS SUMMARY")
-    print("=" * 60)
+    console.print("\n" + "=" * 60)
+    console.print("[title]TEST RESULTS SUMMARY[/]")
+    console.print("=" * 60)
 
     passed = 0
     failed = 0
     for name, result in test_results:
-        status = "PASSED" if result else "FAILED"
-        symbol = "[OK]" if result else "[X]"
-        print(f"  {symbol} {name}")
+        status = "[success]PASSED[/]" if result else "[error]FAILED[/]"
+        symbol = "[check]✓[/]" if result else "[fail]✗[/]"
+        console.print(f"  {symbol} [info]{name}:[/] {status}")
         if result:
             passed += 1
         else:
             failed += 1
             all_passed = False
 
-    print("-" * 60)
-    print(f"Total: {passed} passed, {failed} failed")
+    console.print("-" * 60)
+    console.print(f"[info]Total:[/] {passed} passed, {failed} failed")
 
     if all_passed:
-        print("\n" + "=" * 60)
-        print("ALL BLACK BOX TESTS PASSED!")
-        print("System correctly handles commit authorization flow.")
-        print("=" * 60)
+        console.print("\n" + "=" * 60)
+        console.print("[success]✅ ALL BLACK BOX TESTS PASSED![/]")
+        console.print("System correctly handles commit authorization flow.")
+        console.print("=" * 60)
         return True
     else:
-        print("\n" + "=" * 60)
-        print("SOME TESTS FAILED")
-        print("System may have protocol violations.")
-        print("=" * 60)
+        console.print("\n" + "=" * 60)
+        console.print("[error]❌ SOME TESTS FAILED[/]")
+        console.print("System may have protocol violations.")
+        console.print("=" * 60)
         return False
 
 
@@ -892,10 +916,10 @@ def run_smart_commit_mock_tests():
     3. Post-auth workflow -> Should suggest execute_authorized_commit
     4. Protocol violation -> Should discourage bypass
     """
-    print("\n" + "=" * 60)
-    print("SMART COMMIT AUTHORIZATION FLOW MOCK TESTS")
-    print("Testing: Simulated LLM responses for authorization flow")
-    print("=" * 60)
+    console.print("\n" + "=" * 60)
+    console.print("[title]SMART COMMIT AUTHORIZATION FLOW MOCK TESTS[/]")
+    console.print("Testing: Simulated LLM responses for authorization flow")
+    console.print("=" * 60)
 
     # Simulated LLM responses for various scenarios
     # These represent how an ideal LLM should respond
@@ -959,13 +983,13 @@ def run_smart_commit_mock_tests():
 
         results.append((tc["name"], passed))
 
-        status = "PASS" if passed else "FAIL"
-        symbol = "[OK]" if passed else "[X]"
-        print(f"\n[{i}] {tc['name']}: {status}")
-        print(f"    User: \"{tc['user_msg']}\"")
-        print(f"    Response: \"{tc['mock_response'][:50]}...\"" if len(tc['mock_response']) > 50 else f"    Response: \"{tc['mock_response']}\"")
-        print(f"    {symbol} {tc['description']}")
-        print(f"    Git commit detected: {detected_git}, Expected violation: {not tc['should_pass']}")
+        status = "[success]PASS[/]" if passed else "[error]FAIL[/]"
+        symbol = "[check]✓[/]" if passed else "[fail]✗[/]"
+        console.print(f"\n[{i}] [info]{tc['name']}:[/] {status}")
+        console.print(f"    User: \"{tc['user_msg']}\"")
+        console.print(f"    Response: \"{tc['mock_response'][:50]}...\"" if len(tc['mock_response']) > 50 else f"    Response: \"{tc['mock_response']}\"")
+        console.print(f"    {symbol} {tc['description']}")
+        console.print(f"    Git commit detected: {detected_git}, Expected violation: {not tc['should_pass']}")
 
         if not passed:
             all_passed = False
@@ -973,31 +997,31 @@ def run_smart_commit_mock_tests():
     # =============================================================================
     # Summary
     # =============================================================================
-    print("\n" + "=" * 60)
-    print("SMART COMMIT MOCK TEST RESULTS SUMMARY")
-    print("=" * 60)
+    console.print("\n" + "=" * 60)
+    console.print("[title]SMART COMMIT MOCK TEST RESULTS SUMMARY[/]")
+    console.print("=" * 60)
 
     passed = sum(1 for _, r in results if r)
     failed = sum(1 for _, r in results if not r)
 
     for name, result in results:
-        symbol = "[OK]" if result else "[X]"
-        print(f"  {symbol} {name}")
+        symbol = "[check]✓[/]" if result else "[fail]✗[/]"
+        console.print(f"  {symbol} {name}")
 
-    print("-" * 60)
-    print(f"Total: {passed} passed, {failed} failed")
+    console.print("-" * 60)
+    console.print(f"[info]Total:[/] {passed} passed, {failed} failed")
 
     if all_passed:
-        print("\n" + "=" * 60)
-        print("ALL SMART COMMIT MOCK TESTS PASSED!")
-        print("Authorization flow detection logic is working correctly.")
-        print("=" * 60)
+        console.print("\n" + "=" * 60)
+        console.print("[success]✅ ALL SMART COMMIT MOCK TESTS PASSED![/]")
+        console.print("Authorization flow detection logic is working correctly.")
+        console.print("=" * 60)
         return True
     else:
-        print("\n" + "=" * 60)
-        print("SOME MOCK TESTS FAILED")
-        print("Authorization flow detection needs improvement.")
-        print("=" * 60)
+        console.print("\n" + "=" * 60)
+        console.print("[error]❌ SOME MOCK TESTS FAILED[/]")
+        console.print("Authorization flow detection needs improvement.")
+        console.print("=" * 60)
         return False
 
 
@@ -1011,10 +1035,10 @@ def run_mock_tests():
 
     This validates the test logic without requiring API calls.
     """
-    print("\n" + "=" * 60)
-    print("GIT COMMIT DETECTION MOCK TESTS")
-    print("Testing: Mock LLM responses for git commit detection")
-    print("=" * 60)
+    console.print("\n" + "=" * 60)
+    console.print("[title]GIT COMMIT DETECTION MOCK TESTS[/]")
+    console.print("Testing: Mock LLM responses for git commit detection")
+    console.print("=" * 60)
 
     test_cases = [
         # Test Case 1: Direct git commit suggestion (SHOULD DETECT)
@@ -1100,12 +1124,12 @@ def run_mock_tests():
         passed = detected == expected
         results.append((tc["name"], passed))
 
-        status = "PASS" if passed else "FAIL"
-        symbol = "[OK]" if passed else "[X]"
-        print(f"\n[{i}] {tc['name']}: {status}")
-        print(f"    Input: \"{tc['response'][:50]}...\"" if len(tc['response']) > 50 else f"    Input: \"{tc['response']}\"")
-        print(f"    Expected detect: {expected}, Got: {detected}")
-        print(f"    {symbol} {tc['description']}")
+        status = "[success]PASS[/]" if passed else "[error]FAIL[/]"
+        symbol = "[check]✓[/]" if passed else "[fail]✗[/]"
+        console.print(f"\n[{i}] [info]{tc['name']}:[/] {status}")
+        console.print(f"    Input: \"{tc['response'][:50]}...\"" if len(tc['response']) > 50 else f"    Input: \"{tc['response']}\"")
+        console.print(f"    Expected detect: {expected}, Got: {detected}")
+        console.print(f"    {symbol} {tc['description']}")
 
         if not passed:
             all_passed = False
@@ -1113,31 +1137,31 @@ def run_mock_tests():
     # =============================================================================
     # Summary
     # =============================================================================
-    print("\n" + "=" * 60)
-    print("MOCK TEST RESULTS SUMMARY")
-    print("=" * 60)
+    console.print("\n" + "=" * 60)
+    console.print("[title]MOCK TEST RESULTS SUMMARY[/]")
+    console.print("=" * 60)
 
     passed = sum(1 for _, r in results if r)
     failed = sum(1 for _, r in results if not r)
 
     for name, result in results:
-        symbol = "[OK]" if result else "[X]"
-        print(f"  {symbol} {name}")
+        symbol = "[check]✓[/]" if result else "[fail]✗[/]"
+        console.print(f"  {symbol} {name}")
 
-    print("-" * 60)
-    print(f"Total: {passed} passed, {failed} failed")
+    console.print("-" * 60)
+    console.print(f"[info]Total:[/] {passed} passed, {failed} failed")
 
     if all_passed:
-        print("\n" + "=" * 60)
-        print("ALL MOCK TESTS PASSED!")
-        print("Git commit detection logic is working correctly.")
-        print("=" * 60)
+        console.print("\n" + "=" * 60)
+        console.print("[success]✅ ALL MOCK TESTS PASSED![/]")
+        console.print("Git commit detection logic is working correctly.")
+        console.print("=" * 60)
         return True
     else:
-        print("\n" + "=" * 60)
-        print("SOME MOCK TESTS FAILED")
-        print("Git commit detection needs improvement.")
-        print("=" * 60)
+        console.print("\n" + "=" * 60)
+        console.print("[error]❌ SOME MOCK TESTS FAILED[/]")
+        console.print("Git commit detection needs improvement.")
+        console.print("=" * 60)
         return False
 
 
@@ -1161,31 +1185,31 @@ def test_git_commit_detection_blackbox(use_mock: bool = False):
     api_key = get_api_key()
 
     if use_mock:
-        print("=" * 60)
-        print("GIT COMMIT DETECTION BLACK BOX TEST (MOCK MODE)")
-        print("=" * 60)
+        console.print("=" * 60)
+        console.print("[title]GIT COMMIT DETECTION BLACK BOX TEST (MOCK MODE)[/]")
+        console.print("=" * 60)
         return run_mock_tests()
 
     if not api_key:
-        print("=" * 60)
-        print("GIT COMMIT DETECTION BLACK BOX TEST")
-        print("=" * 60)
-        print("\n⚠️  API Key not found!")
-        print("\nTo run with real LLM:")
-        print("  1. Set ANTHROPIC_API_KEY environment variable")
-        print("  2. Add API key to .claude/settings.json")
-        print("\nTo run in MOCK mode (no API key needed):")
-        print("  uv run python src/common/mcp_server/tests/test_actual_session.py --git-commit-detect --mock")
-        print("=" * 60)
+        console.print("=" * 60)
+        console.print("[title]GIT COMMIT DETECTION BLACK BOX TEST[/]")
+        console.print("=" * 60)
+        console.print("\n⚠️  [warning]API Key not found![/]")
+        console.print("\nTo run with real LLM:")
+        console.print("  1. Set ANTHROPIC_API_KEY environment variable")
+        console.print("  2. Add API key to .claude/settings.json")
+        console.print("\nTo run in MOCK mode (no API key needed):")
+        console.print("  uv run python src/common/mcp_server/tests/test_actual_session.py --git-commit-detect --mock")
+        console.print("=" * 60)
         return None
 
     client, _ = create_anthropic_client()
     claude_md = get_claude_md_content()
 
-    print("=" * 60)
-    print("GIT COMMIT DETECTION BLACK BOX TEST")
-    print("Testing: Does LLM suggest git commit directly?")
-    print("=" * 60)
+    console.print("=" * 60)
+    console.print("[title]GIT COMMIT DETECTION BLACK BOX TEST[/]")
+    console.print("Testing: Does LLM suggest git commit directly?")
+    console.print("=" * 60)
 
     # Extended test scenarios for git commit detection
     test_scenarios = [
@@ -1255,9 +1279,9 @@ def test_git_commit_detection_blackbox(use_mock: bool = False):
     all_passed = True
 
     for i, scenario in enumerate(test_scenarios, 1):
-        print(f"\n[{i}] {scenario['name']}")
-        print(f"    Input: \"{scenario['user_msg']}\"")
-        print(f"    Expected git commit suggestion: {scenario['should_detect_git_commit']}")
+        console.print(f"\n[{i}] [info]{scenario['name']}[/]")
+        console.print(f"    Input: \"{scenario['user_msg']}\"")
+        console.print(f"    Expected git commit suggestion: {scenario['should_detect_git_commit']}")
 
         response = call_llm(client, claude_md, scenario['user_msg'])
 
@@ -1272,43 +1296,43 @@ def test_git_commit_detection_blackbox(use_mock: bool = False):
         passed = detected == expected
         results.append((scenario['name'], passed))
 
-        status = "PASS" if passed else "FAIL"
-        symbol = "[OK]" if passed else "[X]"
-        print(f"    {symbol} {scenario['description']}")
-        print(f"    Detected: {detected}, Expected: {expected}")
+        status = "[success]PASS[/]" if passed else "[error]FAIL[/]"
+        symbol = "[check]✓[/]" if passed else "[fail]✗[/]"
+        console.print(f"    {symbol} {scenario['description']}")
+        console.print(f"    Detected: {detected}, Expected: {expected}")
 
         if not passed:
             all_passed = False
-            print(f"    [X] LLM response contained git commit suggestion!")
+            console.print(f"    [fail]✗ LLM response contained git commit suggestion![/]")
 
     # =============================================================================
     # Summary
     # =============================================================================
-    print("\n" + "=" * 60)
-    print("GIT COMMIT DETECTION TEST RESULTS")
-    print("=" * 60)
+    console.print("\n" + "=" * 60)
+    console.print("[title]GIT COMMIT DETECTION TEST RESULTS[/]")
+    console.print("=" * 60)
 
     passed = sum(1 for _, r in results if r)
     failed = sum(1 for _, r in results if not r)
 
     for name, result in results:
-        symbol = "[OK]" if result else "[X]"
-        print(f"  {symbol} {name}")
+        symbol = "[check]✓[/]" if result else "[fail]✗[/]"
+        console.print(f"  {symbol} {name}")
 
-    print("-" * 60)
-    print(f"Total: {passed} passed, {failed} failed")
+    console.print("-" * 60)
+    console.print(f"[info]Total:[/] {passed} passed, {failed} failed")
 
     if all_passed:
-        print("\n" + "=" * 60)
-        print("ALL GIT COMMIT DETECTION TESTS PASSED!")
-        print("LLM correctly handles commit requests.")
-        print("=" * 60)
+        console.print("\n" + "=" * 60)
+        console.print("[success]✅ ALL GIT COMMIT DETECTION TESTS PASSED![/]")
+        console.print("LLM correctly handles commit requests.")
+        console.print("=" * 60)
         return True
     else:
-        print("\n" + "=" * 60)
-        print("SOME TESTS FAILED")
-        print("LLM may be suggesting git commit commands.")
-        print("=" * 60)
+        console.print("\n" + "=" * 60)
+        console.print("[error]❌ SOME TESTS FAILED[/]")
+        console.print("LLM may be suggesting git commit commands.")
+        console.print("=" * 60)
         return False
 
 
@@ -1367,7 +1391,7 @@ def test_instructions_lazy_load():
     assert "Document Classification" in content or "Documentation" in content, \
         "documentation-standards does not contain expected content"
 
-    print("✅ documentation-standards is lazy-loaded correctly")
+    console.print("[success]✅ documentation-standards is lazy-loaded correctly[/]")
 
 
 # =============================================================================
@@ -1391,23 +1415,23 @@ def test_harvest_session_insight():
     import os
     from pathlib import Path
 
-    print("=" * 60)
-    print("HARVESTER TEST (Phase 12)")
-    print("Testing: Distill experience into permanent knowledge")
-    print("=" * 60)
+    console.print("=" * 60)
+    console.print("[title]HARVESTER TEST (Phase 12)[/]")
+    console.print("Testing: Distill experience into permanent knowledge")
+    console.print("=" * 60)
 
     # Check API key
     api_key = get_api_key()
     if not api_key:
-        print("\n⚠️  API Key not found!")
-        print("\nTo run this test:")
-        print("  1. Set ANTHROPIC_API_KEY environment variable, OR")
-        print("  2. Add to .claude/settings.json: env.ANTHROPIC_AUTH_TOKEN")
-        print("\nRunning in MOCK mode...")
+        console.print("\n⚠️  [warning]API Key not found![/]")
+        console.print("\nTo run this test:")
+        console.print("  1. Set ANTHROPIC_API_KEY environment variable, OR")
+        console.print("  2. Add to .claude/settings.json: env.ANTHROPIC_AUTH_TOKEN")
+        console.print("\nRunning in MOCK mode...")
         return test_harvest_mock()
 
-    print("\n✅ API key found, running actual test...")
-    print("   This will call the LLM to distill wisdom from context.\n")
+    console.print("\n[success]✅ API key found, running actual test...[/]")
+    console.print("   This will call the LLM to distill wisdom from context.\n")
 
     async def run_test():
         # Import harvester
@@ -1435,7 +1459,7 @@ def test_harvest_session_insight():
         - Adding Rich output utilities for terminal formatting
         """
 
-        print("🌾 Running harvest_session_insight...")
+        console.print("🌾 Running harvest_session_insight...")
         result = await harvest_session_insight(
             context_summary=context,
             files_changed=[
@@ -1444,16 +1468,16 @@ def test_harvest_session_insight():
             ]
         )
 
-        print("\n--- Harvester Result ---")
-        print(result)
-        print("--- End Result ---\n")
+        console.print("\n--- [info]Harvester Result[/] ---")
+        console.print(result)
+        console.print("--- End Result ---\n")
 
         # Check if result indicates success
         if result.startswith("✅"):
-            print("✅ Harvester test PASSED!")
+            console.print("[success]✅ Harvester test PASSED![/]")
             return True
         else:
-            print("❌ Harvester test FAILED!")
+            console.print("[error]❌ Harvester test FAILED![/]")
             return False
 
     return asyncio.run(run_test())
@@ -1468,10 +1492,10 @@ def test_harvest_mock():
     import asyncio
     import datetime
 
-    print("\n" + "=" * 60)
-    print("HARVESTER MOCK TEST")
-    print("Testing: File generation and knowledge ingestion logic")
-    print("=" * 60)
+    console.print("\n" + "=" * 60)
+    console.print("[title]HARVESTER MOCK TEST[/]")
+    console.print("Testing: File generation and knowledge ingestion logic")
+    console.print("=" * 60)
 
     async def run_mock_test():
         from agent.core.schema import HarvestedInsight, KnowledgeCategory
@@ -1491,10 +1515,10 @@ def test_harvest_mock():
             related_files=["src/agent/core/vector_store.py", "src/agent/capabilities/librarian.py"],
         )
 
-        print("\n📄 Mock Insight Created:")
-        print(f"   Title: {mock_insight.title}")
-        print(f"   Category: {mock_insight.category.value}")
-        print(f"   Takeaways: {len(mock_insight.key_takeaways)} items")
+        console.print("\n📄 [info]Mock Insight Created:[/]")
+        console.print(f"   Title: {mock_insight.title}")
+        console.print(f"   Category: {mock_insight.category.value}")
+        console.print(f"   Takeaways: {len(mock_insight.key_takeaways)} items")
 
         # Test file generation
         from common.mcp_core.gitops import get_project_root
@@ -1507,8 +1531,8 @@ def test_harvest_mock():
         filename = f"{date_str}-{mock_insight.category.value}-{mock_insight.title.lower().replace(' ', '-')[:30]}.md"
         file_path = harvest_dir / filename
 
-        print(f"\n📁 Knowledge file will be created:")
-        print(f"   Path: {file_path}")
+        console.print(f"\n📁 [info]Knowledge file will be created:[/]")
+        console.print(f"   Path: {file_path}")
 
         # Generate markdown content
         content = f"""# {mock_insight.title}
@@ -1528,7 +1552,7 @@ def test_harvest_mock():
 
         # Write the file
         file_path.write_text(content, encoding="utf-8")
-        print(f"\n✅ Knowledge file created: {file_path.name}")
+        console.print(f"\n[success]✅ Knowledge file created: {file_path.name}[/]")
 
         # Test vector ingestion
         from agent.core.vector_store import get_vector_memory
@@ -1543,15 +1567,15 @@ def test_harvest_mock():
                 "type": "harvested_insight",
             }]
         )
-        print("✅ Knowledge ingested into vector store")
+        console.print("[success]✅ Knowledge ingested into vector store[/]")
 
         # Verify
         count = await vm.count()
-        print(f"   Total documents in store: {count}")
+        console.print(f"   Total documents in store: {count}")
 
-        print("\n✅ MOCK HARVEST TEST PASSED!")
-        print("   File generation and vector ingestion are working correctly.")
-        print("   (Real test requires API key for LLM-based insight distillation)")
+        console.print("\n[success]✅ MOCK HARVEST TEST PASSED![/]")
+        console.print("   File generation and vector ingestion are working correctly.")
+        console.print("   (Real test requires API key for LLM-based insight distillation)")
 
         return True
 
@@ -1573,32 +1597,32 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.harvest:
-        print("\nStarting harvester test (Phase 12)...")
+        console.print("\nStarting harvester test (Phase 12)...")
         if not args.mock:
-            print("This will consume API tokens.\n")
+            console.print("[warning]This will consume API tokens.[/]\n")
         result = test_harvest_session_insight() if not args.mock else test_harvest_mock()
         sys.exit(0 if result else 1)
     elif args.smart_commit:
-        print("\nStarting smart commit authorization flow test...")
+        console.print("\nStarting smart commit authorization flow test...")
         if not args.mock:
-            print("This will consume API tokens.\n")
+            console.print("[warning]This will consume API tokens.[/]\n")
         result = test_smart_commit_authorization_flow(use_mock=args.mock)
         sys.exit(0 if result else 1)
     elif args.git_commit_detect:
-        print("\nStarting git commit detection test...")
+        console.print("\nStarting git commit detection test...")
         if not args.mock:
-            print("This will consume API tokens.\n")
+            console.print("[warning]This will consume API tokens.[/]\n")
         result = test_git_commit_detection_blackbox(use_mock=args.mock)
         sys.exit(0 if result else 1)
     else:
-        print("\nStarting actual LLM session test...")
+        console.print("\nStarting actual LLM session test...")
         if not args.mock:
-            print("This will consume API tokens.\n")
-        print("Tip: Run with --smart-commit to test smart_commit workflow")
-        print("Tip: Run with --git-commit-detect to test git commit detection")
-        print("Tip: Run with --harvest to test harvester (Phase 12)")
-        print("Tip: Add --mock flag to run without API key")
-        print()
+            console.print("[warning]This will consume API tokens.[/]\n")
+        console.print("Tip: Run with --smart-commit to test smart_commit workflow")
+        console.print("Tip: Run with --git-commit-detect to test git commit detection")
+        console.print("Tip: Run with --harvest to test harvester (Phase 12)")
+        console.print("Tip: Add --mock flag to run without API key")
+        console.print()
 
         result = test_actual_session()
         sys.exit(0 if result else 1)
