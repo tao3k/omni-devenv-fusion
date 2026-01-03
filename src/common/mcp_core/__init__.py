@@ -29,7 +29,8 @@ __version__ = "1.2.0"
 from .execution import SafeExecutor
 from .memory import ProjectMemory
 from .inference import InferenceClient, PERSONAS, build_persona_prompt, _load_api_key_from_config
-from .utils import setup_logging, is_safe_path, log_decision
+from .gitops import get_project_root
+from .utils import setup_logging, is_safe_path, log_decision, run_subprocess
 from .lazy_cache import LazyCache, FileCache, MarkdownCache, ConfigCache, CompositeCache
 from .project_context import (
     ProjectContext,
@@ -57,9 +58,11 @@ __all__ = [
     "InferenceClient",
     "PERSONAS",
     "build_persona_prompt",
+    "get_project_root",
     "setup_logging",
     "is_safe_path",
     "log_decision",
+    "run_subprocess",
     "LazyCache",
     "FileCache",
     "MarkdownCache",

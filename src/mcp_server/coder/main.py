@@ -34,7 +34,6 @@ This server uses common/mcp_core for:
 - utils: Logging, path checking, file operations
 """
 import os
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -47,11 +46,18 @@ if str(_project_root) not in sys.path:
 
 from mcp.server.fastmcp import FastMCP
 
+# Rich utilities for beautiful terminal output
+from common.mcp_core.rich_utils import banner, section, install_traceback_handler
+
+# Install Rich traceback handler for beautiful exceptions
+install_traceback_handler()
+
 # Import shared modules from common/mcp_core
 from common.mcp_core import (
     setup_logging,
     log_decision,
     is_safe_path,
+    run_subprocess,
 )
 
 # =============================================================================
@@ -63,18 +69,18 @@ logger = setup_logging(level=LOG_LEVEL, server_name="coder")
 
 mcp = FastMCP("coder-tools")
 
-sys.stderr.write(f"🔧 Coder Server (AST + Surgical Coding) starting... PID: {os.getpid()}\n")
+# Print Rich-styled startup banner
+from rich.console import Console
+console = Console(stderr=True)
+console.print(banner(
+    "Coder MCP Server",
+    "The Pen - AST + Surgical Coding",
+    "📝"
+))
 
 # =============================================================================
 # Path Safety Configuration
 # =============================================================================
-
-# Files that should never be overwritten
-_BLOCKED_PATHS = {
-    "/etc/", "/usr/", "/bin/", "/sbin/", "/boot/", "/lib/", "/lib64/",
-    ".bashrc", ".bash_profile", ".zshrc", ".profile",
-    "known_hosts", "authorized_keys",
-}
 
 # Safe hidden files that are allowed
 _ALLOWED_HIDDEN_FILES = {
@@ -86,31 +92,6 @@ _ALLOWED_HIDDEN_FILES = {
 # =============================================================================
 # File Safety Functions (using mcp_core.utils)
 # =============================================================================
-
-def _is_safe_write_path(path: str) -> tuple[bool, str]:
-    """Check if the path is safe to write within the project directory."""
-    # Check for absolute paths
-    if path.startswith("/"):
-        return False, "Absolute paths are not allowed."
-
-    # Check for path traversal
-    if ".." in path:
-        return False, "Parent directory traversal is not allowed."
-
-    # Check hidden files
-    filename = Path(path).name
-    if filename.startswith("."):
-        if filename not in _ALLOWED_HIDDEN_FILES:
-            return False, f"Hidden file '{filename}' is not allowed."
-
-    # Check blocked paths
-    for blocked in _BLOCKED_PATHS:
-        if path.startswith(blocked):
-            return False, f"Blocked path: {blocked}"
-
-    return True, ""
-
-
 def _validate_syntax(content: str, filepath: str) -> tuple[bool, str]:
     """Validate syntax for Python and Nix files."""
     if filepath.endswith(".py"):
@@ -288,7 +269,11 @@ async def save_file(
     - Syntax validation for Python and Nix files
     - Security checks for path safety
     """
-    is_safe, error_msg = _is_safe_write_path(path)
+    is_safe, error_msg = is_safe_path(
+        path,
+        allow_hidden=False,
+        allowed_hidden_files=_ALLOWED_HIDDEN_FILES,
+    )
     if not is_safe:
         log_decision("save_file.security_block", {"path": path, "reason": error_msg}, logger)
         return f"Error: {error_msg}"
@@ -334,72 +319,52 @@ async def save_file(
 # AST-Based Tools (ast-grep)
 # =============================================================================
 
-def _run_ast_grep(pattern: str, lang: str = "py", search_path: str = ".") -> str:
-    """Run ast-grep query and returns matches."""
-    try:
-        process = subprocess.run(
-            ["ast-grep", "run", "-p", pattern, "-l", lang, search_path],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
+async def _run_ast_grep(pattern: str, lang: str = "py", search_path: str = ".") -> str:
+    """Run ast-grep query and returns matches (async)."""
+    returncode, stdout, stderr = await run_subprocess(
+        "ast-grep",
+        ["run", "-p", pattern, "-l", lang, search_path],
+        timeout=30
+    )
 
-        output = process.stdout
-        stderr = process.stderr
+    if returncode != 0 and "no matches" not in stderr.lower():
+        return f"Error: ast-grep failed\nstderr: {stderr}"
 
-        if process.returncode != 0 and "no matches" not in stderr.lower():
-            return f"Error: ast-grep failed\nstderr: {stderr}"
+    log_decision("ast_grep.success", {"pattern": pattern, "lang": lang}, logger)
 
-        log_decision("ast_grep.success", {"pattern": pattern, "lang": lang}, logger)
+    if not stdout.strip():
+        return f"No matches found for pattern: {pattern}"
 
-        if not output.strip():
-            return f"No matches found for pattern: {pattern}"
-
-        return f"--- ast-grep Results: {pattern} ---\n{output}"
-
-    except FileNotFoundError:
-        return "Error: 'ast-grep' command not found. Install with: nix-env -iA nixpkgs.ast-grep"
-    except subprocess.TimeoutExpired:
-        return "Error: ast-grep timed out"
-    except Exception as e:
-        return f"Error running ast-grep: {e}"
+    return f"--- ast-grep Results: {pattern} ---\n{stdout}"
 
 
-def _run_ast_rewrite(pattern: str, replacement: str, lang: str = "py", search_path: str = ".") -> str:
+async def _run_ast_rewrite(
+    pattern: str,
+    replacement: str,
+    lang: str = "py",
+    search_path: str = "."
+) -> str:
     """
-    Apply AST-based rewrite using ast-grep.
+    Apply AST-based rewrite using ast-grep (async).
 
     This performs structural replacement, not text substitution.
     """
-    try:
-        # First, do a dry run to show what would change
-        process = subprocess.run(
-            ["ast-grep", "run", "-p", pattern, "-r", replacement, "-l", lang, search_path, "--update-all"],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
+    returncode, stdout, stderr = await run_subprocess(
+        "ast-grep",
+        ["run", "-p", pattern, "-r", replacement, "-l", lang, search_path, "--update-all"],
+        timeout=30
+    )
 
-        output = process.stdout
-        stderr = process.stderr
+    log_decision("ast_rewrite.success", {"pattern": "[hidden]", "lang": lang}, logger)
 
-        log_decision("ast_rewrite.success", {"pattern": "[hidden]", "lang": lang}, logger)
+    # ast-grep returns exit code 1 when no matches found (not an error)
+    if returncode == 1 and not stdout.strip() and not stderr.strip():
+        return f"No matches found for pattern: {pattern}"
 
-        # ast-grep returns exit code 1 when no matches found (not an error)
-        if process.returncode == 1 and not output.strip() and not stderr.strip():
-            return f"No matches found for pattern: {pattern}"
+    if returncode != 0:
+        return f"Error: ast-rewrite failed\nstderr: {stderr}"
 
-        if process.returncode != 0:
-            return f"Error: ast-rewrite failed\nstderr: {stderr}"
-
-        return f"--- ast-rewrite Applied ---\n{output}"
-
-    except FileNotFoundError:
-        return "Error: 'ast-grep' not found. Install with: nix-env -iA nixpkgs.ast-grep"
-    except subprocess.TimeoutExpired:
-        return "Error: ast-rewrite timed out"
-    except Exception as e:
-        return f"Error running ast-rewrite: {e}"
+    return f"--- ast-rewrite Applied ---\n{stdout}"
 
 
 @mcp.tool()
@@ -427,7 +392,7 @@ async def ast_search(pattern: str, lang: str = "py", path: str = ".") -> str:
         log_decision("ast_search.security_block", {"path": path}, logger)
         return f"Error: {error_msg}"
 
-    return _run_ast_grep(pattern, lang, path)
+    return await _run_ast_grep(pattern, lang, path)
 
 
 @mcp.tool()
@@ -457,7 +422,7 @@ async def ast_rewrite(pattern: str, replacement: str, lang: str = "py", path: st
 
     log_decision("ast_rewrite.request", {"pattern": "[hidden]", "lang": lang, "path": path}, logger)
 
-    return _run_ast_rewrite(pattern, replacement, lang, path)
+    return await _run_ast_rewrite(pattern, replacement, lang, path)
 
 
 if __name__ == "__main__":

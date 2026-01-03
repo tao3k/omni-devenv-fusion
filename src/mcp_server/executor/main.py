@@ -25,6 +25,9 @@ if str(_project_root) not in sys.path:
 
 from mcp.server.fastmcp import FastMCP
 
+# Rich utilities for beautiful terminal output
+from common.mcp_core.rich_utils import banner, section, tool_registered, tool_failed
+
 # Initialize Executor Server
 mcp = FastMCP("omni-executor")
 
@@ -36,10 +39,10 @@ def _register_tools(module_name: str, register_func):
     """Helper to register tools with error handling."""
     try:
         register_func(mcp)
-        print(f"✅ {module_name} tools registered", file=sys.stderr)
+        tool_registered(module_name, 0)
         return True
     except Exception as e:
-        print(f"⚠️ {module_name} tools import failed: {e}", file=sys.stderr)
+        tool_failed(module_name, str(e))
         return False
 
 # Writer tools (Writing style enforcement)
@@ -80,9 +83,13 @@ Note: This server handles EXECUTION only.
 
 
 if __name__ == "__main__":
-    print("=" * 60, file=sys.stderr)
-    print("🛠️  Executor MCP Server Starting...", file=sys.stderr)
-    print("=" * 60, file=sys.stderr)
-    print("Role: The Hands - Atomic execution without planning", file=sys.stderr)
-    print("-" * 60, file=sys.stderr)
+    # Print Rich-styled startup banner
+    from rich.console import Console
+    console = Console(stderr=True)
+    console.print(banner(
+        "Executor MCP Server",
+        "The Hands - Atomic execution without planning",
+        "🛠️"
+    ))
+    section("Initializing Tools...")
     mcp.run()

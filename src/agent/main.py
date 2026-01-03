@@ -70,6 +70,9 @@ from common.mcp_core import (
 # GitOps - Project root detection (single source of truth)
 from common.mcp_core.gitops import get_project_root
 
+# Rich utilities for beautiful terminal output
+from common.mcp_core.rich_utils import banner, section, tool_registered, tool_failed
+
 # Import capabilities (tool registration modules)
 from agent.capabilities.product_owner import register_product_owner_tools
 from agent.capabilities.lang_expert import register_lang_expert_tools
@@ -99,9 +102,11 @@ def _register_tool_module(module_name: str, register_func):
     try:
         register_func(mcp)
         log_decision(f"{module_name}.registered", {}, logger)
+        tool_registered(module_name, 0)  # Count would require introspection
         return True
     except Exception as e:
         log_decision(f"{module_name}.registration_failed", {"error": str(e)}, logger)
+        tool_failed(module_name, str(e))
         return False
 
 
@@ -205,9 +210,13 @@ Note: This server handles PLANNING and ROUTING only.
 
 
 if __name__ == "__main__":
-    print("=" * 60, file=sys.stderr)
-    print("🧠  Orchestrator MCP Server Starting...", file=sys.stderr)
-    print("=" * 60, file=sys.stderr)
-    print("Role: The Brain - Planning without execution", file=sys.stderr)
-    print("-" * 60, file=sys.stderr)
+    # Print Rich-styled startup banner
+    from rich.console import Console
+    console = Console(stderr=True)
+    console.print(banner(
+        "Orchestrator MCP Server",
+        "The Brain - Planning without execution",
+        "🧠"
+    ))
+    section("Initializing Tools...")
     mcp.run()

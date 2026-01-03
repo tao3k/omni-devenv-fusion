@@ -216,4 +216,185 @@ def register_router_tools(mcp: FastMCP) -> None:
             "query": query
         }, indent=2)
 
+    @mcp.tool()
+    async def consult_specialist(role: str, query: str, stream: bool = False) -> str:
+        """
+        Consult an expert persona for domain-specific advice.
+
+        Roles:
+        - architect: High-level design, refactoring strategies
+        - platform_expert: Nix/OS, infrastructure, containers
+        - devops_mlops: CI/CD, pipelines, reproducibility
+        - sre: Reliability, security, performance
+
+        Args:
+            role: Persona role to consult
+            query: The question to ask the expert
+            stream: Whether to stream the response (not yet implemented)
+
+        Returns:
+            Expert advice based on the persona's expertise
+
+        Examples:
+            @omni-orchestrator consult_specialist(role="architect", query="How should I structure this feature?")
+            @omni-orchestrator consult_specialist(role="sre", query="How to make this more reliable?")
+        """
+        from common.mcp_core import PERSONAS, build_persona_prompt, get_project_root
+
+        # Check if persona exists
+        if role not in PERSONAS:
+            available = list(PERSONAS.keys())
+            return json.dumps({
+                "success": False,
+                "error": f"Unknown persona: {role}",
+                "available_personas": available,
+                "message": f"Persona '{role}' is not defined. Choose from: {', '.join(available)}"
+            }, indent=2)
+
+        persona = PERSONAS[role]
+        persona_name = persona.get("name", role)
+        persona_description = persona.get("description", "")
+
+        # Build context from project files based on persona domain
+        context_files = persona.get("context_files", [])
+        project_context = ""
+
+        if context_files:
+            project_root = get_project_root()
+            for cf in context_files:
+                fpath = project_root / cf
+                if fpath.exists():
+                    try:
+                        with open(fpath, "r", encoding="utf-8") as f:
+                            project_context += f"\n\n=== {cf} ===\n{f.read()}"
+                    except Exception:
+                        pass
+
+        # Build the expert response based on persona
+        expert_response = (
+            f"**Expert Opinion from {persona_name}**\n"
+            f"_{persona_description}_\n\n"
+        )
+
+        # Add project context if available
+        if project_context:
+            expert_response += f"**Project Context:**\n{project_context}\n\n"
+
+        # Add role-specific guidance based on query keywords
+        query_lower = query.lower()
+
+        if role == "architect":
+            if "structure" in query_lower or "organize" in query_lower:
+                expert_response += (
+                    "**Architecture Guidance:**\n"
+                    "- Consider domain-driven design (DDD) structure\n"
+                    "- Keep related functionality together\n"
+                    "- Use dependency injection for flexibility\n"
+                    "- Follow existing patterns in the codebase\n"
+                )
+            elif "refactor" in query_lower:
+                expert_response += (
+                    "**Refactoring Guidance:**\n"
+                    "- Use ast-grep for surgical precision\n"
+                    "- Make small, incremental changes\n"
+                    "- Ensure tests pass after each change\n"
+                    "- Document breaking changes clearly\n"
+                )
+            else:
+                expert_response += (
+                    "**Design Principles:**\n"
+                    "- Separation of concerns\n"
+                    "- Composition over inheritance\n"
+                    "- Keep modules focused and small\n"
+                    "- Make dependencies explicit\n"
+                )
+
+        elif role == "platform_expert":
+            if "nix" in query_lower:
+                expert_response += (
+                    "**Nix Guidance:**\n"
+                    "- Use devenv.nix for development environment\n"
+                    "- Follow patterns in existing flake outputs\n"
+                    "- Use mkShell for development shells\n"
+                )
+            elif "docker" in query_lower or "container" in query_lower:
+                expert_response += (
+                    "**Container Guidance:**\n"
+                    "- Use multi-stage builds\n"
+                    "- Minimize layer size\n"
+                    "- Don't run as root\n"
+                )
+            else:
+                expert_response += (
+                    "**Platform Guidance:**\n"
+                    "- Use nix for reproducibility\n"
+                    "- Keep configuration in code\n"
+                    "- Automate environment setup\n"
+                )
+
+        elif role == "devops_mlops":
+            if "test" in query_lower:
+                expert_response += (
+                    "**Testing Guidance:**\n"
+                    "- Write tests for new functionality\n"
+                    "- Use pytest for Python\n"
+                    "- Follow the Modified-Code Protocol\n"
+                )
+            elif "ci" in query_lower or "pipeline" in query_lower:
+                expert_response += (
+                    "**CI/CD Guidance:**\n"
+                    "- Use lefthook for pre-commit\n"
+                    "- Run tests before merge\n"
+                    "- Use semantic versioning\n"
+                )
+            else:
+                expert_response += (
+                    "**DevOps Guidance:**\n"
+                    "- Automate everything\n"
+                    "- Use CI/CD pipelines\n"
+                    "- Monitor deployments\n"
+                )
+
+        elif role == "sre":
+            if "reliable" in query_lower or "resilient" in query_lower:
+                expert_response += (
+                    "**Reliability Guidance:**\n"
+                    "- Add proper error handling\n"
+                    "- Use circuit breakers for external services\n"
+                    "- Implement retries with backoff\n"
+                    "- Add health checks\n"
+                )
+            elif "security" in query_lower:
+                expert_response += (
+                    "**Security Guidance:**\n"
+                    "- Never commit secrets\n"
+                    "- Validate all inputs\n"
+                    "- Use parameterized queries\n"
+                    "- Follow principle of least privilege\n"
+                )
+            else:
+                expert_response += (
+                    "**SRE Guidance:**\n"
+                    "- Design for failure\n"
+                    "- Measure reliability\n"
+                    "- Reduce mean time to recovery\n"
+                )
+
+        expert_response += (
+            f"\n---\n"
+            f"**Original Question:** {query}\n"
+            f"_This advice is based on {persona_name} persona. "
+            f"For more details, consult the relevant documentation._"
+        )
+
+        log_decision("specialist.consult", {"role": role, "query_length": len(query)}, logger)
+
+        return json.dumps({
+            "success": True,
+            "role": role,
+            "persona": persona_name,
+            "query": query,
+            "response": expert_response
+        }, indent=2, ensure_ascii=False)
+
     log_decision("router_tools.registered", {}, logger)

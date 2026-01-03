@@ -115,7 +115,13 @@ def log_decision(event: str, payload: Dict[str, Any], logger: structlog.BoundLog
 # Path Safety Utilities
 # =============================================================================
 
-def is_safe_path(path: str, project_root: Path = None, blocked_dirs: set = None) -> tuple[bool, str]:
+def is_safe_path(
+    path: str,
+    project_root: Path = None,
+    blocked_dirs: set = None,
+    allow_hidden: bool = True,
+    allowed_hidden_files: set = None,
+) -> tuple[bool, str]:
     """
     Check if a path is safe to access within the project.
 
@@ -123,6 +129,8 @@ def is_safe_path(path: str, project_root: Path = None, blocked_dirs: set = None)
         path: Path to check
         project_root: Project root directory (defaults to cwd)
         blocked_dirs: Set of blocked directory prefixes
+        allow_hidden: Whether to allow hidden files
+        allowed_hidden_files: Set of allowed hidden filenames (e.g., {".gitignore"})
 
     Returns:
         Tuple of (is_safe, error_message)
@@ -133,13 +141,23 @@ def is_safe_path(path: str, project_root: Path = None, blocked_dirs: set = None)
     if blocked_dirs is None:
         blocked_dirs = {"/etc/", "/usr/", "/bin/", "/sbin/", "/boot/", "/lib/", "/lib64/"}
 
+    if allowed_hidden_files is None:
+        allowed_hidden_files = set()
+
     # Check for absolute paths
     if path.startswith("/"):
-        return False, "Absolute paths are not allowed"
+        return False, "Absolute paths are not allowed."
 
     # Check for path traversal
     if ".." in path:
-        return False, "Path traversal is not allowed"
+        return False, "Parent directory traversal is not allowed."
+
+    # Check hidden files
+    filename = Path(path).name
+    if filename.startswith("."):
+        if not allow_hidden:
+            if filename not in allowed_hidden_files:
+                return False, f"Hidden file '{filename}' is not allowed."
 
     # Check for blocked directories
     for blocked in blocked_dirs:

@@ -563,6 +563,8 @@ print(f"Duration: {result.duration}s")
 
 ### Consult a Specialist
 
+Consult expert personas for domain-specific advice. Each persona provides role-specific guidance based on query keywords.
+
 **Input:**
 
 ```json
@@ -570,26 +572,34 @@ print(f"Duration: {result.duration}s")
   "tool": "consult_specialist",
   "arguments": {
     "role": "architect",
-    "query": "Help design a multitenant control plane for internal platform APIs.",
-    "stream": true
+    "query": "How should I structure this feature?",
+    "stream": false
   }
 }
 ```
+
+**Available Roles:**
+
+| Role              | Description                               | Best For                              |
+| ----------------- | ----------------------------------------- | ------------------------------------- |
+| `architect`       | High-level design, refactoring strategies | Structure, patterns, design decisions |
+| `platform_expert` | Nix/OS, infrastructure, containers        | Dev environment, nix, docker          |
+| `devops_mlops`    | CI/CD, pipelines, reproducibility         | Testing, CI, deployment               |
+| `sre`             | Reliability, security, performance        | Error handling, security, monitoring  |
 
 **Output:**
 
 ```json
 {
-  "content": [
-    {
-      "type": "text",
-      "text": "For a multitenant control plane, consider..."
-    }
-  ]
+  "success": true,
+  "role": "architect",
+  "persona": "System Architect",
+  "query": "How should I structure this feature?",
+  "response": "**Expert Opinion from System Architect**\n_Expert in software design..._\n\n**Architecture Guidance:**\n- Consider domain-driven design (DDD) structure\n- Keep related functionality together\n..."
 }
 ```
 
-The response includes persona context hints. Set `stream: true` for streaming token delivery.
+The response includes persona context and role-specific guidance based on query keywords. Set `stream: false` (only supported value).
 
 ---
 
