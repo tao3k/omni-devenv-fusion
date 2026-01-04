@@ -154,11 +154,10 @@ class TestContextLoader:
     def test_context_loader_handles_missing_user_custom(self):
         """Verify graceful handling when user_custom.md doesn't exist."""
         from agent.core.context_loader import ContextLoader
-        from common.mcp_core.settings import get_setting
 
         loader = ContextLoader()
-        user_path = get_setting("prompts.user_custom_path", "nonexistent/path.md")
-        content = loader._read_file_safe(user_path)
+        # Use a path that definitely doesn't exist
+        content = loader._read_file_safe("/tmp/this-file-definitely-does-not-exist-12345.md")
 
         # Should return empty string, not raise exception
         assert content == ""
@@ -467,11 +466,13 @@ class TestKnowledgeSkill:
             if isinstance(node, ast.AsyncFunctionDef):
                 tool_names.append(node.name)
 
+        # Note: get_writing_memory moved to writer skill
         expected_tools = [
             "get_development_context",
             "consult_architecture_doc",
-            "get_writing_memory",
-            "get_language_standards"
+            "consult_language_expert",
+            "get_language_standards",
+            "list_supported_languages"
         ]
 
         for tool in expected_tools:
@@ -503,6 +504,59 @@ class TestKnowledgeSkill:
         # Knowledge tools should NOT call subprocess
         assert "subprocess" not in content, "Knowledge tools should not execute commands"
         assert "os.system" not in content, "Knowledge tools should not execute commands"
+
+
+# =============================================================================
+# Phase 13.10: Writer Skill Tests
+# =============================================================================
+
+class TestWriterSkill:
+    """Tests for Writer Skill (Writing Quality)."""
+
+    def test_writer_skill_module_exists(self):
+        """Verify writer skill module exists."""
+        writer_tools = _SKILLS_ROOT / "writer" / "tools.py"
+        assert writer_tools.exists(), f"Writer skill not found at {writer_tools}"
+
+    def test_writer_tools_defined(self):
+        """Verify writer tools are defined."""
+        import ast
+
+        writer_tools_py = _SKILLS_ROOT / "writer" / "tools.py"
+        content = writer_tools_py.read_text()
+        tree = ast.parse(content)
+
+        tool_names = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.AsyncFunctionDef):
+                tool_names.append(node.name)
+
+        expected_tools = [
+            "lint_writing_style",
+            "check_markdown_structure",
+            "polish_text",
+            "load_writing_memory",
+            "run_vale_check"
+        ]
+
+        for tool in expected_tools:
+            assert tool in tool_names, f"Expected tool '{tool}' not found. Found: {tool_names}"
+
+    def test_writer_skill_has_register(self):
+        """Verify writer skill has register function."""
+        import ast
+
+        writer_tools_py = _SKILLS_ROOT / "writer" / "tools.py"
+        content = writer_tools_py.read_text()
+        tree = ast.parse(content)
+
+        has_register = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "register":
+                has_register = True
+                break
+
+        assert has_register, "Writer skill should have 'register' function"
 
 
 # =============================================================================

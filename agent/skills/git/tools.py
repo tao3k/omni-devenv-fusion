@@ -19,7 +19,7 @@ from common.mcp_core.gitops import run_git_cmd
 # Critical Git Tools (Require explicit confirmation)
 # =============================================================================
 
-async def git_commit(message: str) -> str:
+async def git_commit(message: str, skip_hooks: bool = False) -> str:
     """
     Execute git commit directly.
 
@@ -33,6 +33,7 @@ async def git_commit(message: str) -> str:
 
     Args:
         message: Conventional commit message (e.g., "feat(core): add feature")
+        skip_hooks: If True, skip pre-commit and commit-msg hooks (--no-verify)
     """
     if ":" not in message:
         return "Error: Message must follow 'type(scope): subject' format."
@@ -45,10 +46,16 @@ async def git_commit(message: str) -> str:
     except Exception as e:
         return f"Error checking staged changes: {e}"
 
+    # Build commit command
+    cmd = ["commit", "-m", message]
+    if skip_hooks:
+        cmd.insert(1, "--no-verify")  # Add --no-verify flag
+
     # Execute commit
     try:
-        output = await run_git_cmd(["commit", "-m", message])
-        return f"Commit Successful:\n{output}"
+        output = await run_git_cmd(cmd)
+        hook_note = " (hooks skipped)" if skip_hooks else ""
+        return f"Commit Successful{hook_note}:\n{output}"
     except Exception as e:
         return f"Commit Failed: {e}"
 

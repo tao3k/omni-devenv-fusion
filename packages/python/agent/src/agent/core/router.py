@@ -47,9 +47,8 @@ TOOL_DOMAINS = {
         ]
     },
     "QA": {
-        "description": "Quality assurance, code review, and testing.",
+        "description": "Quality assurance and testing.",
         "tools": [
-            "review_staged_changes",  # The Immune System
             "run_tests", "analyze_test_results", "list_test_files",
             "analyze_last_error"
         ]
@@ -96,7 +95,7 @@ AVAILABLE DOMAINS:
 
 DECISION RULES:
 1. **Commit/Version Control** → GitOps (smart_commit, validate_commit_message, git_status, git_log, git_diff)
-2. **Code Review** → QA (review_staged_changes, run_tests, analyze_test_results)
+2. **Testing** → QA (run_tests, analyze_test_results)
 3. **Feature Specs** → ProductOwner (draft_feature_spec, verify_spec_completeness)
 4. **Code Implementation** → Coder (delegate_to_coder, ast_search, ast_rewrite)
 5. **Context/Memory** → Memory (manage_context, memory_garden)
@@ -106,7 +105,6 @@ EXAMPLES:
 - "Validate this commit message" → GitOps (uses validate_commit_message)
 - "Verify if the latest commit follows our guidelines" → GitOps (commit validation)
 - "Run tests and check results" → QA (testing workflow)
-- "Review staged changes" → QA (code review)
 
 Return JSON ONLY: {{ "domain": "Name", "confidence": 0.0-1.0, "reasoning": "..." }}
 """

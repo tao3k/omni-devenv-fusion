@@ -17,11 +17,9 @@ from agent.core.bootstrap import boot_core_skills, start_background_tasks
 
 # 2. Capabilities (Domain Logic)
 from agent.capabilities.product_owner import register_product_owner_tools
-from agent.capabilities.lang_expert import register_lang_expert_tools
 from agent.capabilities.librarian import register_librarian_tools
 from agent.capabilities.harvester import register_harvester_tools
 from agent.capabilities.skill_manager import register_skill_tools
-from agent.core.reviewer import register_reviewer_tools
 
 # 3. Core Tools (Operational Logic)
 from agent.tools.context import register_context_tools
@@ -59,8 +57,6 @@ _register("status", register_status_tool)
 
 # Governance & Domain
 _register("product_owner", register_product_owner_tools)
-_register("reviewer", register_reviewer_tools)
-_register("lang_expert", register_lang_expert_tools)
 _register("librarian", register_librarian_tools)
 
 # Evolution

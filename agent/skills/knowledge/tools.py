@@ -1,5 +1,5 @@
 """
-knowledge Skill - The Project Cortex
+Knowledge Skill - The Project Cortex
 
 Role:
   Does NOT execute commands.
@@ -12,10 +12,11 @@ Philosophy:
 Rules (from prompts.md):
   - Call get_development_context() BEFORE writing code or committing
   - Call consult_architecture_doc() when you need to understand a topic
+  - Call consult_language_expert() for language-specific coding standards
   - Return structured data, never execute operations
 """
 import json
-import os
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -24,6 +25,120 @@ try:
 except ImportError:
     import tomli as tomllib
 
+
+# =============================================================================
+# Language Expert System (Migrated from lang_expert.py)
+# =============================================================================
+
+# File extension to language mapping
+EXT_TO_LANG = {
+    ".nix": "nix",
+    ".py": "python",
+    ".rs": "rust",
+    ".jl": "julia",
+    ".toml": "toml",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+}
+
+# Language display names
+LANG_NAMES = {
+    "nix": "Nix",
+    "python": "Python",
+    "rust": "Rust",
+    "julia": "Julia",
+    "toml": "TOML",
+    "yaml": "YAML",
+}
+
+
+class StandardsCache:
+    """Singleton cache for language standards loaded from skills/knowledge/standards/."""
+    _instance: Optional["StandardsCache"] = None
+    _loaded: bool = False
+    _standards: Dict[str, str] = {}
+
+    def __new__(cls) -> "StandardsCache":
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self) -> None:
+        if not StandardsCache._loaded:
+            self._load_standards()
+            StandardsCache._loaded = True
+
+    def _load_standards(self) -> None:
+        """Load all language standards from skills/knowledge/standards/."""
+        skill_dir = Path(__file__).parent
+        standards_dir = skill_dir / "standards"
+
+        if not standards_dir.exists():
+            return
+
+        for std_file in standards_dir.glob("lang-*.md"):
+            lang = std_file.stem.replace("lang-", "")
+            try:
+                self._standards[lang] = std_file.read_text()
+            except Exception:
+                pass
+
+    def get_standard(self, lang: str) -> str:
+        """Get standards for a language."""
+        return self._standards.get(lang, "")
+
+    def get_all_standards(self) -> Dict[str, str]:
+        """Get all loaded standards."""
+        return self._standards.copy()
+
+
+# Global cache instance
+_standards_cache = StandardsCache()
+
+
+def _get_language_from_path(file_path: str) -> Optional[str]:
+    """Detect language from file extension."""
+    path = Path(file_path)
+    ext = path.suffix.lower()
+    return EXT_TO_LANG.get(ext)
+
+
+def _extract_relevant_standards(standard: str, task: str) -> Optional[str]:
+    """Extract standards sections relevant to the task."""
+    task_words = set(re.findall(r"\w+", task.lower()))
+    common_words = {"the", "a", "an", "to", "for", "in", "add", "file", "use", "code"}
+
+    lines = standard.split("\n")
+    relevant_lines = []
+
+    for line in lines:
+        if line.startswith("##"):
+            if relevant_lines and len(relevant_lines) > 2:
+                section_text = " ".join(relevant_lines).lower()
+                overlap = task_words & set(re.findall(r"\w+", section_text)) - common_words
+                if overlap:
+                    relevant_lines.append(line)
+                elif any(kw in section_text for kw in ["forbidden", "anti-pattern", "correct", "wrong"]):
+                    relevant_lines.append(line)
+                else:
+                    relevant_lines = [line]
+            else:
+                relevant_lines = [line]
+        elif relevant_lines:
+            relevant_lines.append(line)
+
+    if relevant_lines:
+        section_text = " ".join(relevant_lines).lower()
+        overlap = task_words & set(re.findall(r"\w+", section_text)) - common_words
+        if not overlap and len(relevant_lines) < 5:
+            return None
+
+    return "\n".join(relevant_lines[:30]) if relevant_lines else None
+
+
+# =============================================================================
+# Knowledge Tools
+# =============================================================================
 
 def register(mcp: Any) -> None:
     """Register all knowledge tools."""
@@ -73,29 +188,50 @@ def register(mcp: Any) -> None:
         return _search_docs(topic)
 
     @mcp.tool()
-    async def get_writing_memory() -> str:
+    async def consult_language_expert(file_path: str, task_description: str) -> str:
         """
-        [Memory] Loads the project's writing style guide.
+        [Language Expert] Consult language-specific standards and code examples.
 
-        Call this BEFORE:
-        - Writing documentation
-        - Editing markdown files
-        - Creating commit messages
+        This is the primary tool for Router-Augmented Coding:
+        1. Reads L1a: Language standards (skills/knowledge/standards/lang-*.md)
+        2. Queries L2: Case law (tool-router/data/examples/*.jsonl)
 
-        Returns structured writing rules from agent/writing-style/
+        Usage:
+        - consult_language_expert(file_path="units/modules/python.nix", task="extend generator")
+
+        Args:
+            file_path: Path to the file being edited
+            task_description: Description of the coding task
+
+        Returns:
+            JSON with language standards and matching examples
         """
-        rules = {
-            "commit_messages": _read_file_content("agent/writing-style/02_mechanics.md"),
-            "writing_principles": _read_file_content("agent/writing-style/01_principles.md"),
-            "style_checklist": [
-                "Use English only for commits and docs",
-                "Prefer active voice",
-                "Keep sentences under 25 words",
-                "Use lists sparingly (4 items max)",
-                "Code is mechanism, prompt is policy"
-            ]
+        lang = _get_language_from_path(file_path)
+
+        if not lang:
+            return json.dumps({
+                "status": "skipped",
+                "reason": f"No language expert for extension: {Path(file_path).suffix}",
+                "supported_extensions": list(EXT_TO_LANG.keys()),
+            }, indent=2)
+
+        result = {
+            "language": LANG_NAMES.get(lang, lang),
+            "file": file_path,
+            "task": task_description,
         }
-        return json.dumps(rules, indent=2)
+
+        # Load Standards
+        standard = _standards_cache.get_standard(lang)
+        if standard:
+            relevant_std = _extract_relevant_standards(standard, task_description)
+            result["standards"] = relevant_std or standard[:500]
+            result["standards_source"] = f"skills/knowledge/standards/lang-{lang}.md"
+        else:
+            result["standards"] = None
+            result["standards_warning"] = f"No standards found for {lang}"
+
+        return json.dumps(result, indent=2)
 
     @mcp.tool()
     async def get_language_standards(lang: str) -> str:
@@ -105,18 +241,60 @@ def register(mcp: Any) -> None:
         Usage:
         - get_language_standards("nix") -> Nix formatting rules
         - get_language_standards("python") -> Python style guide
-        - get_language_standards("markdown") -> Doc formatting rules
+
+        Returns:
+            JSON with full standards document from skills/knowledge/standards/lang-{lang}.md
         """
-        lang_file = f"agent/standards/lang-{lang}.md"
-        content = _read_file_content(lang_file)
-        if content:
-            return content
-        return f"No specific standards found for '{lang}'. Check agent/standards/ for available languages."
+        lang = lang.lower()
+        lang_name = LANG_NAMES.get(lang, lang.title())
+
+        standard = _standards_cache.get_standard(lang)
+
+        if not standard:
+            return json.dumps({
+                "status": "not_found",
+                "language": lang_name,
+                "available_languages": list(LANG_NAMES.keys()),
+            }, indent=2)
+
+        return json.dumps({
+            "status": "success",
+            "language": lang_name,
+            "source": f"skills/knowledge/standards/lang-{lang}.md",
+            "content": standard,
+        }, indent=2)
+
+    @mcp.tool()
+    async def list_supported_languages() -> str:
+        """
+        List all supported languages with their standards.
+
+        Returns:
+            JSON list of supported languages
+        """
+        languages = []
+        skill_dir = Path(__file__).parent
+        standards_dir = skill_dir / "standards"
+
+        for lang_id, lang_name in LANG_NAMES.items():
+            std_path = standards_dir / f"lang-{lang_id}.md"
+            languages.append({
+                "id": lang_id,
+                "name": lang_name,
+                "standards_exists": std_path.exists(),
+                "file_extensions": [k for k, v in EXT_TO_LANG.items() if v == lang_id],
+            })
+
+        return json.dumps({
+            "status": "success",
+            "languages": languages,
+            "total": len(languages)
+        }, indent=2)
 
 
-# ============================================================================
+# =============================================================================
 # Internal Helpers (Pure Execution - No Business Logic)
-# ============================================================================
+# =============================================================================
 
 def _get_project_name() -> str:
     """Extract project name from pyproject.toml."""
@@ -140,7 +318,7 @@ def _load_scopes() -> List[str]:
                 return data.get("scopes", [])
     except Exception:
         pass
-    return ["core"]  # Fallback
+    return ["core"]
 
 
 def _analyze_lefthook() -> List[Dict[str, str]]:
@@ -203,11 +381,9 @@ def _search_docs(topic: str) -> str:
         if topic_lower in md_file.name.lower():
             content = _read_file_content(str(md_file))
             if content:
-                # Extract first 1000 chars for relevance check
                 matches.append(f"=== {md_file.relative_to(Path.cwd())} ===\n{content[:1000]}...")
 
     if not matches:
-        # Try searching in agent/ directory
         agent_dir = Path.cwd() / "agent"
         for md_file in agent_dir.rglob("*.md"):
             if topic_lower in md_file.name.lower() or topic_lower in md_file.read_text().lower()[:2000]:
@@ -216,7 +392,7 @@ def _search_docs(topic: str) -> str:
                     matches.append(f"=== {md_file.relative_to(Path.cwd())} ===\n{content[:1000]}...")
 
     if matches:
-        return f"\n\n---\n\n".join(matches[:3])  # Limit to 3 results
+        return f"\n\n---\n\n".join(matches[:3])
 
     return f"No documentation found for '{topic}'. Try: 'git', 'nix', 'writing', 'architecture'"
 

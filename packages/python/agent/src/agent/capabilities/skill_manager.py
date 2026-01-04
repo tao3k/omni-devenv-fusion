@@ -31,23 +31,29 @@ def register_skill_tools(mcp: FastMCP):
         return "Available Skills:\n" + "\n".join(descriptions)
 
     @mcp.tool()
-    async def load_skill(skill_name: str) -> str:
+    async def load_skill(skill_name: str, use_diff: bool = True) -> str:
         """
         [Skill System] Dynamically load a skill's tools and knowledge.
+
+        Args:
+            skill_name: The skill to load
+            use_diff: If True (default), show only changes via git diff (token-efficient)
+                      If False, show full content (use for first-time loading)
         """
         success, message = registry.load_skill(skill_name, mcp)
 
         if not success:
             return f"Failed to load '{skill_name}': {message}"
 
-        context = registry.get_skill_context(skill_name)
+        context = registry.get_skill_context(skill_name, use_diff=use_diff)
 
+        mode_note = "(CHANGES ONLY)" if use_diff else "(FULL CONTENT)"
         return f"""
 Skill '{skill_name}' loaded successfully!
 
 {message}
 
-=== PROCEDURAL KNOWLEDGE ({skill_name.upper()}) ===
+=== PROCEDURAL KNOWLEDGE {mode_note} ({skill_name.upper()}) ===
 {context}
 ==================================================
 """
@@ -171,13 +177,14 @@ async def _execute_skill_operation(skill: str, operation: str, kwargs: dict, mcp
         success, msg = registry.load_skill(skill, mcp)
         if not success:
             return f"Failed to load skill '{skill}': {msg}"
-        context = registry.get_skill_context(skill)
+        # Use diff mode for token efficiency on auto-load
+        context = registry.get_skill_context(skill, use_diff=True)
         return f"""
 Skill '{skill}' auto-loaded!
 
 {msg}
 
-=== PROCEDURAL KNOWLEDGE ===
+=== PROCEDURAL KNOWLEDGE (CHANGES ONLY) ===
 {context}
 ==================================================
 

@@ -2,6 +2,16 @@
 
 > **Code is Mechanism, Prompt is Policy**
 
+## Skill Structure (Role Clarity)
+
+| File | Role | When to Read |
+|------|------|--------------|
+| `prompts.md` | **Rules & Router Logic** | When skill loads (LLM context) |
+| `guide.md` | Procedural Knowledge | Implementation reference |
+| `tools.py` | Atomic Execution | Blind operation |
+
+---
+
 ## Philosophy: MCP as Guard, Claude-native as Explorer
 
 | Layer                             | Purpose                            | Operations                                     |
@@ -57,6 +67,7 @@ Claude: (analyzing...)
     Scope: git
     Message: simplify to executor mode
 
+    *Authorization Required*
     Please say: "yes" or "confirm", or "skip"
 
 User: yes
@@ -70,6 +81,23 @@ Claude: git_commit(message="feat(git): simplify to executor mode")
 2. **Wait for "yes" or "confirm"** - User's response is the authorization
 3. **Only then call git_commit** - Execute after confirmation
 4. **If "skip"** - Do nothing, wait for corrected instructions
+
+### Skipping Hooks
+
+If user wants to skip pre-commit hooks (lefthook, commit-msg), use:
+
+```
+git_commit(message="...", skip_hooks=true)
+```
+
+**When to skip:**
+- Fixing hook-related issues (hook itself is broken)
+- Rapid documentation fixes
+- Emergency hotfixes where hooks are blocking
+
+**When NOT to skip:**
+- Normal commits (hooks exist for quality)
+- User didn't explicitly request it
 
 ---
 

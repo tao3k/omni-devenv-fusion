@@ -384,4 +384,192 @@ When migrating a skill to Agent Native:
 
 ---
 
+## Lessons Learned: From Traditional to Agent Native
+
+This section captures key insights from migrating from **Traditional Engineering** (Python-controlled workflows) to **Agent Native** (LLM-controlled, Prompt-driven architecture).
+
+### The Transformation
+
+We migrated from `commit_flow.py` (old pattern) to `skill_registry.py` + `prompts.md` (new pattern):
+
+| Aspect | Old Pattern (`commit_flow.py`) | New Pattern (Skill System) |
+|--------|-------------------------------|---------------------------|
+| **Control** | Python scripts call LLM | LLM is the runtime master |
+| **Business Logic** | Hardcoded in Python | Defined in Markdown prompts |
+| **Flexibility** | Restart required for changes | LLM learns immediately |
+| **Complexity** | LangGraph state machines | Atomic tools + dynamic routing |
+
+### Key Lessons
+
+#### 1. Mechanism vs Policy Separation
+
+**The Problem (Old):**
+```python
+# commit_flow.py - Business logic in Python
+def analyze_commit():
+    risk_level = calculate_risk()
+    suggested_msg = generate_message()
+    if risk_level > threshold:
+        raise ValueError("High risk commit")
+```
+
+**Why It Fails:**
+- Every rule change requires code modification
+- Python cannot "understand" context like an LLM
+- Business logic becomes rigid and brittle
+
+**The Solution (New):**
+```markdown
+# prompts.md - Policy in Markdown
+
+## Commit Authorization Protocol
+
+1. Always show analysis first
+2. Wait for "yes" or "confirm"
+3. Only then call git_commit
+```
+
+**Benefits:**
+- Rules are instantly updateable
+- LLM understands context and intent
+- Policy evolves independently of code
+
+#### 2. Avoid Over-Orchestration
+
+**The Anti-Pattern (Old):**
+```python
+# LangGraph state machine - overkill for simple operations
+state_graph = StateGraph(CommitState)
+state_graph.add_node("analyze", node_analyze)
+state_graph.add_node("confirm", node_confirm)
+state_graph.add_node("execute", node_execute)
+state_graph.set_entry_point("analyze")
+```
+
+**Why It's Overkill:**
+- Simple operations don't need complex state machines
+- User flexibility is lost to predetermined paths
+- Cognitive overhead for maintenance
+
+**The Agent Native Way:**
+```markdown
+# prompts.md - LLM makes routing decisions
+
+## Router Logic
+
+User says "commit":
+1. Read git_status (bash)
+2. Generate message
+3. Show analysis
+4. Wait for confirmation
+5. Call git_commit (MCP)
+```
+
+**Benefits:**
+- LLM adapts to context
+- No rigid workflow enforcement
+- Simpler architecture
+
+#### 3. Control Inversion
+
+**Old Pattern:**
+```
+Python Script → Calls LLM → Returns Output
+```
+
+**New Pattern:**
+```
+LLM (Master) ← Python Runtime (Servant)
+               - Presents skills
+               - Executes commands
+               - Returns results
+```
+
+**The `skill_registry.py` Philosophy:**
+```python
+class SkillRegistry:
+    """Not a workflow engine - a capability presenter."""
+
+    def load_skill(self, name: str):
+        """Present skills to LLM, don't execute workflows."""
+        manifest = self._load_manifest(name)
+        tools = self._load_tools(name)
+        return SkillPackage(manifest, tools)
+```
+
+**Key Insight:** Registry doesn't know what "git" is - it only knows protocols.
+
+#### 4. Dynamic & Hot-Swappable Architecture
+
+**The `importlib` Approach:**
+```python
+def _load_module_from_path(self, name: str, path: str):
+    """Load module from file path - enables hot reload."""
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    # No sys.modules pollution (controlled)
+    spec.loader.exec_module(module)
+    return module
+```
+
+**Benefits:**
+- **Hot Reload:** Update skills without restarting Agent
+- **Isolation:** No global namespace pollution
+- **Extensibility:** Add Rust/Node skills via same protocol
+
+### Architecture Comparison
+
+| Dimension | Traditional | Agent Native |
+|-----------|-------------|--------------|
+| **Code Size** | Large (all logic in Python) | Small (atomic execution only) |
+| **Prompt Size** | Minimal | Large (rules, examples, workflows) |
+| **Change Frequency** | High (code changes) | Low (only prompt updates) |
+| **LLM Role** | Tool for scripts | Runtime master |
+| **Flexibility** | Rigid | Dynamic |
+
+### The Result: Lightweight Core + Heavy Skills
+
+```
+packages/python/agent/src/agent/core/
+├── skill_registry.py   # 50 lines - pure loading logic
+├── settings.py         # Configuration driven
+└── mcp_core/           # I/O mechanisms only
+
+agent/skills/{skill}/
+├── manifest.json       # Protocol definition
+├── tools.py            # Atomic execution
+├── prompts.md          # Router logic (the "brain")
+└── guide.md            # Procedural knowledge
+```
+
+### What to Delete, Not Keep
+
+**Delete immediately:**
+- Workflow files with hardcoded business logic
+- State machines for simple operations
+- Python files that "guide" the LLM
+
+**Keep and nurture:**
+- `prompts.md` with clear router logic
+- `tools.py` with atomic operations
+- `skill_registry.py` for dynamic loading
+
+### Anti-Patterns to Avoid
+
+| Anti-Pattern | Why It's Wrong | Correct Approach |
+|--------------|----------------|------------------|
+| `if/else` routing in Python | LLM should decide | Route in prompts.md |
+| Complex state graphs | Over-engineering | Atomic tools + LLM |
+| Business logic in tools.py | Couples code to policy | Move rules to prompts.md |
+| Hardcoded validation | LLM can't adapt | Trust LLM + system guardrails |
+
+### References
+
+- `packages/python/agent/src/agent/core/skill_registry.py` - Dynamic loading implementation
+- `agent/skills/git/prompts.md` - Router logic example
+- `agent/skills/git/tools.py` - Atomic execution example
+- `agent/how-to/gitops.md` - Git workflow documentation
+
+---
+
 > **Remember: Python is the muscle, Prompt is the brain.**

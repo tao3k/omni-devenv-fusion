@@ -178,23 +178,51 @@ class SkillRegistry:
             logger.error(f"Failed to load skill {skill_name}", error=str(e))
             return False, f"Load Error: {str(e)}"
 
-    def get_skill_context(self, skill_name: str) -> str:
-        """Retrieve the 'Procedural Knowledge' (guide.md) for a skill."""
+    def get_skill_context(self, skill_name: str, use_diff: bool = False) -> str:
+        """
+        Retrieve the 'Procedural Knowledge' (guide.md) for a skill.
+
+        Args:
+            skill_name: Name of the skill
+            use_diff: If True, show only changes via git diff (token-efficient)
+        """
         manifest = self.loaded_skills.get(skill_name) or self.get_skill_manifest(skill_name)
         if not manifest:
             return ""
 
         content = ""
-        guide_path = self.skills_dir / skill_name / manifest.guide_file
-        if guide_path.exists():
-            content += f"\n--- {skill_name.upper()} GUIDE ---\n"
-            content += guide_path.read_text(encoding="utf-8") + "\n"
 
+        # Helper to get file content or diff
+        def get_file_content_or_diff(file_path: Path, file_label: str) -> str:
+            if not file_path.exists():
+                return ""
+            if use_diff:
+                # Use git diff for token-efficient updates
+                import subprocess
+                try:
+                    diff = subprocess.run(
+                        ["git", "diff", str(file_path)],
+                        cwd=self.project_root,
+                        capture_output=True,
+                        text=True
+                    )
+                    if diff.returncode == 0 and diff.stdout.strip():
+                        return f"\n--- {skill_name.upper()} {file_label} (CHANGED) ---\n{diff.stdout}"
+                    else:
+                        return f"\n--- {skill_name.upper()} {file_label} ---\n[Unchanged - not showing]"
+                except Exception:
+                    # Fallback to full content if git fails
+                    pass
+            return f"\n--- {skill_name.upper()} {file_label} ---\n{file_path.read_text(encoding='utf-8')}\n"
+
+        # Get guide content
+        guide_path = self.skills_dir / skill_name / manifest.guide_file
+        content += get_file_content_or_diff(guide_path, "GUIDE")
+
+        # Get prompts content
         if manifest.prompts_file:
             prompts_path = self.skills_dir / skill_name / manifest.prompts_file
-            if prompts_path.exists():
-                content += f"\n--- {skill_name.upper()} SYSTEM PROMPTS ---\n"
-                content += prompts_path.read_text(encoding="utf-8") + "\n"
+            content += get_file_content_or_diff(prompts_path, "SYSTEM PROMPTS")
 
         return content
 
