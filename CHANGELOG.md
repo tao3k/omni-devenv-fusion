@@ -2,6 +2,34 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v2.2.0](https://github.com/tao3k/omni-dev-fusion/compare/3144cdf78c17c872a33161a5ff848709b8e5b522..v2.2.0) - 2026-01-04
+#### Features
+- (**git-ops**) add security guidelines for path safety - ([630b989](https://github.com/tao3k/omni-dev-fusion/commit/630b989502d18c07518d07f89d337ba49f419d3b)) - guangtao
+- (**mcp**) add knowledge skill for structural knowledge injection - ([a069e7a](https://github.com/tao3k/omni-dev-fusion/commit/a069e7a1a07a76aed7608cc040518b8b9326ed69)) - guangtao
+- (**mcp**) implement Phase 12 Harvester and Phase 13 Skill-First Reformation - ([7994b8d](https://github.com/tao3k/omni-dev-fusion/commit/7994b8de3fcbca492f5afcc8e7a467aad9a238b0)) - guangtao
+#### Bug Fixes
+- (**git-ops**) fix: ensure hot reload works by clearing sys.modules before reload - ([6cb7099](https://github.com/tao3k/omni-dev-fusion/commit/6cb70997caa6121b3f6b0470e30022d66ad1b2a3)) - guangtao
+#### Refactoring
+- (**cli**) use settings.yaml for config paths instead of hardcoded - ([2a36bbb](https://github.com/tao3k/omni-dev-fusion/commit/2a36bbbec31b07ded8e09704aee19f0e992f4161)) - guangtao
+- (**git-ops**) clean up guide.md, remove duplicate authorization template - ([1c5506b](https://github.com/tao3k/omni-dev-fusion/commit/1c5506ba42088f07f12d938682ceba5c1776a40f)) - guangtao
+- (**git-ops**) consolidate to git_commit only - ([0b26ea7](https://github.com/tao3k/omni-dev-fusion/commit/0b26ea7a2b973f6b24df5b5caf7b67502113eabf)) - guangtao
+- (**git-ops**) lift functions to module level for better testability - ([5f298c5](https://github.com/tao3k/omni-dev-fusion/commit/5f298c544cc50f7662e4d5e4ebd49a52c2e97b77)) - guangtao
+- (**git-workflow**) simplify to critical operations only - ([66f4f27](https://github.com/tao3k/omni-dev-fusion/commit/66f4f279a0500db9a6eddec0498df32ca5514843)) - guangtao
+- (**mcp**) consolidate skills - move writer/knowledge logic to skill modules - ([69d7177](https://github.com/tao3k/omni-dev-fusion/commit/69d71773276d3b2e1af7792025c659d21c8ace1d)) - guangtao
+- (**mcp**) unify shell execution in terminal skill - ([20d0573](https://github.com/tao3k/omni-dev-fusion/commit/20d0573086455fe7024db810eb187837b6cbdd6d)) - guangtao
+- migrate src/ to packages/python/ architecture - ([16868f4](https://github.com/tao3k/omni-dev-fusion/commit/16868f4841458a46c1c284b98bacc3fce22fff50)) - guangtao
+#### Miscellaneous Chores
+- (**git-ops**) refactor output.py to English-only documentation - ([5853132](https://github.com/tao3k/omni-dev-fusion/commit/58531321e576010999024b9bda7733f4b1d8e5f1)) - guangtao
+- (**git-ops**) clean up output.py registration - ([a8357b3](https://github.com/tao3k/omni-dev-fusion/commit/a8357b3646fd571db6e31963aad89405a6546740)) - guangtao
+- (**git-ops**) clean up parent.parent.parent patterns - ([57c3b19](https://github.com/tao3k/omni-dev-fusion/commit/57c3b1924b734c0b0efe075ce8afc732a8c510df)) - guangtao
+- (**mcp**) upgrade to Session-based Authorization - ([eff0f1a](https://github.com/tao3k/omni-dev-fusion/commit/eff0f1a85a5d21cdbef06becbe70de716bc5581e)) - guangtao
+- (**mcp**) implement Phase 13.8 Configuration-Driven Context - ([c907dde](https://github.com/tao3k/omni-dev-fusion/commit/c907ddefefc361ba9caf70aaf91da4ff0f123aef)) - guangtao
+- (**mcp**) migrate to skill-centric architecture - ([0181543](https://github.com/tao3k/omni-dev-fusion/commit/018154308406a9d7be5a3704a5d3ce85c9854fa8)) - guangtao
+- (**mcp**) chore: remove unused output.py and add MCP dependency tests - ([cb2d551](https://github.com/tao3k/omni-dev-fusion/commit/cb2d55197579f87da61a609fa61760444b5d9b79)) - guangtao
+- sync with release - ([3144cdf](https://github.com/tao3k/omni-dev-fusion/commit/3144cdf78c17c872a33161a5ff848709b8e5b522)) - guangtao
+
+- - -
+
 ## [v2.1.0](https://github.com/tao3k/omni-dev-fusion/compare/519ca61209ba79baff7840a95beabfaaaf928c1e..v2.1.0) - 2026-01-03
 #### Features
 - (**mcp-core**) add rich terminal output utilities for beautiful MCP server startup - ([055ecb5](https://github.com/tao3k/omni-dev-fusion/commit/055ecb5b1f5bf985656cc4e3217b55fa9206a5d3)) - guangtao
