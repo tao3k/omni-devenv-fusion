@@ -38,7 +38,7 @@ Follow these rules to generate **production-grade** code:
 
 If the code is safe to import, always prefer Python's built-in `inspect` module over `ast` parsing.
 
-- **Why**: `inspect` gives you the *truth* of the interpreter, handling inheritance and dynamic resolution automatically.
+- **Why**: `inspect` gives you the _truth_ of the interpreter, handling inheritance and dynamic resolution automatically.
 - **Example**: Use `inspect.getmembers(module, inspect.isfunction)` instead of parsing source text.
 
 ### 2. Defensive AST Handling
@@ -57,7 +57,7 @@ When you MUST use AST (for static analysis of unsafe code), you must:
 ### 4. Type Hinting & Docstrings
 
 - Every function must have full type hints.
-- Every public function must have a docstring explaining *why* it exists, not just what it does.
+- Every public function must have a docstring explaining _why_ it exists, not just what it does.
 
 ---
 

@@ -346,6 +346,7 @@ Worker (Main LLM): (Wakes up, sees tools) "Hello, what do you want?
 ```
 
 **The Waste:**
+
 - Router spent 2 seconds understanding: "IndexError in src/main.py, need read_file + write_file + git_commit"
 - Worker receives: `["file_ops", "git"]` (a tool list only)
 - Worker re-analyzes: "User wants me to fix a bug... What bug? IndexError? Which file?"
@@ -576,20 +577,20 @@ python scripts/test_router.py --interactive
 
 **Test Results:**
 
-| Test | Status |
-|------|--------|
-| Routing (23 cases) | ✅ 23/23 |
-| Cache Hit | ✅ 0ms |
+| Test                  | Status            |
+| --------------------- | ----------------- |
+| Routing (23 cases)    | ✅ 23/23          |
+| Cache Hit             | ✅ 0ms            |
 | Mission Brief Quality | ✅ All actionable |
 
 ---
 
 ### When to Use
 
-| Scenario | Use Mission Brief? |
-|----------|-------------------|
-| Simple file read | ❌ Not needed |
-| Commit with analysis | ✅ Essential |
-| Complex bug fix | ✅ Essential |
-| Testing workflow | ✅ Essential |
-| General conversation | ❌ Overkill |
+| Scenario             | Use Mission Brief? |
+| -------------------- | ------------------ |
+| Simple file read     | ❌ Not needed      |
+| Commit with analysis | ✅ Essential       |
+| Complex bug fix      | ✅ Essential       |
+| Testing workflow     | ✅ Essential       |
+| General conversation | ❌ Overkill        |

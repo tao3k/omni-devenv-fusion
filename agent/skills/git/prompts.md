@@ -32,8 +32,8 @@
 
 ### Staging (Use MCP Tool)
 
-| Operation | Tool | Why |
-| --------- | ---- | ---- |
+| Operation | Tool              | Why                                       |
+| --------- | ----------------- | ----------------------------------------- |
 | Stage all | `git_stage_all()` | **LLM security scan** for sensitive files |
 
 **When user says "commit": System automatically runs:**
@@ -64,6 +64,7 @@ When user says "commit":
 3. **Then call `git_commit(message="...")`**
 
 ### Authorization Template
+
 ```
 📋 Commit Analysis:
 

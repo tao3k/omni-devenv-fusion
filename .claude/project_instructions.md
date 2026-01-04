@@ -43,16 +43,19 @@ When you receive a complex user request:
 **CRITICAL**: You MUST use MCP tools for all git operations. You are FORBIDDEN from using Claude Desktop's native bash to run any git command.
 
 **Allowed (MCP Tools):**
+
 - `@omni-orchestrator git_commit` - Commit changes (shows analysis, waits for confirmation)
 - `@omni-orchestrator git_push` - Push to remote
 
 **Forbidden (Native Bash):**
+
 - ❌ `git add` via bash
 - ❌ `git commit` via bash
 - ❌ `git push` via bash
 - ❌ Any git command through Claude Desktop's terminal
 
 **Correct workflow for commit:**
+
 1. User says "commit"
 2. You show Commit Analysis (type, scope, message)
 3. Wait for "yes" or user confirmation

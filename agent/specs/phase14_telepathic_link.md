@@ -19,6 +19,7 @@ Worker (Main LLM): (Wakes up, sees tools) "Hello, what do you want?
 ```
 
 **What's Wasted:**
+
 - Router spends 2 seconds understanding: "IndexError in src/main.py, need read_file + write_file + git_commit"
 - Worker receives: `["file_ops", "git"]` (tool list only)
 - Worker must re-analyze: "User wants me to fix a bug... What bug? Which file?"
@@ -101,25 +102,35 @@ def build_mission_injection(routing_result: RoutingResult) -> str:
 
 ### 4.1 New Files
 
-| File | Purpose |
-|------|---------|
-| `packages/python/agent/src/agent/core/context_builder.py` | Mission injection utilities |
-| `scripts/test_router.py` | Routing test suite (23 test cases) |
+| File                                                      | Purpose                            |
+| --------------------------------------------------------- | ---------------------------------- |
+| `packages/python/agent/src/agent/core/context_builder.py` | Mission injection utilities        |
+| `scripts/test_router.py`                                  | Routing test suite (23 test cases) |
 
 ### 4.2 Modified Files
 
-| File | Change |
-|------|--------|
+| File                                             | Change                                                     |
+| ------------------------------------------------ | ---------------------------------------------------------- |
 | `packages/python/agent/src/agent/core/router.py` | Add RoutingResult, HiveMindCache, mission_brief generation |
-| `packages/python/agent/src/agent/core/schema.py` | Add `routing_keywords` field to SkillManifest |
-| `agent/skills/*/manifest.json` | Add `routing_keywords` array |
+| `packages/python/agent/src/agent/core/schema.py` | Add `routing_keywords` field to SkillManifest              |
+| `agent/skills/*/manifest.json`                   | Add `routing_keywords` array                               |
 
 ### 4.3 Manifest Enhancement
 
 ```json
 {
   "name": "git",
-  "routing_keywords": ["git", "commit", "push", "pull", "branch", "merge", "version control", "repo", "history"],
+  "routing_keywords": [
+    "git",
+    "commit",
+    "push",
+    "pull",
+    "branch",
+    "merge",
+    "version control",
+    "repo",
+    "history"
+  ],
   "description": "Git integration with Ops, Smart Commit V2..."
 }
 ```
@@ -127,20 +138,24 @@ def build_mission_injection(routing_result: RoutingResult) -> str:
 ## 5. Implementation Plan
 
 ### Step 1: Data Foundation
+
 - [x] Add `routing_keywords` to SkillManifest schema
 - [x] Update all skill manifests with routing keywords
 
 ### Step 2: Router Enhancement
+
 - [x] Create RoutingResult dataclass
 - [x] Implement HiveMindCache (LRU, TTL)
 - [x] Update SemanticRouter.route() to generate mission_brief
 
 ### Step 3: Context Injection
+
 - [x] Create context_builder.py
 - [x] Implement build_mission_injection()
 - [x] Implement route_and_build_context()
 
 ### Step 4: Testing
+
 - [x] Create test_router.py with 23 test cases
 - [x] Test cache behavior (0ms hits)
 - [x] Test mission brief quality
@@ -174,21 +189,21 @@ Worker: "Clear! Show analysis, wait for confirmation, commit."
 
 ## 8. When to Use Mission Brief
 
-| Scenario | Use Mission Brief? |
-|----------|-------------------|
-| Simple file read | ❌ Not needed |
-| Commit with confirmation | ✅ Essential |
-| Complex bug fix | ✅ Essential |
-| Testing workflow | ✅ Essential |
-| General conversation | ❌ Overkill |
+| Scenario                 | Use Mission Brief? |
+| ------------------------ | ------------------ |
+| Simple file read         | ❌ Not needed      |
+| Commit with confirmation | ✅ Essential       |
+| Complex bug fix          | ✅ Essential       |
+| Testing workflow         | ✅ Essential       |
+| General conversation     | ❌ Overkill        |
 
 ## 9. Performance Impact
 
-| Metric | Before | After |
-|--------|--------|-------|
-| First "run tests" | ~2s (LLM call) | ~2s (LLM call) |
-| Second "run tests" | ~2s (LLM call) | ~0ms (cache) |
-| Worker re-analysis | Required | Eliminated |
+| Metric             | Before         | After          |
+| ------------------ | -------------- | -------------- |
+| First "run tests"  | ~2s (LLM call) | ~2s (LLM call) |
+| Second "run tests" | ~2s (LLM call) | ~0ms (cache)   |
+| Worker re-analysis | Required       | Eliminated     |
 
 ## 10. Related Documentation
 
