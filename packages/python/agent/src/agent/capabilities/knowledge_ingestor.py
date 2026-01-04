@@ -5,6 +5,10 @@ Phase 16: Neural Bridge
 - Configuration-driven knowledge directories (from settings.yaml)
 - Rich-powered terminal output
 
+Phase 17: Repomix Integration
+- Parse repomix-generated XML for standardized knowledge ingestion
+- Output path: .data/project_knowledge.xml
+
 Usage:
     from agent.capabilities.knowledge_ingestor import ingest_all_knowledge
 
@@ -13,11 +17,15 @@ Usage:
 
     # Ingest specific directory
     await ingest_directory("agent/knowledge", domain="knowledge")
+
+    # Phase 17: Ingest from repomix XML
+    await ingest_from_repomix_xml()
 """
 from __future__ import annotations
 
 import asyncio
 import re
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +33,9 @@ from common.mcp_core.gitops import get_project_root
 from common.mcp_core.rich_utils import console, panel, success, error, warning, info, section
 
 from agent.core.vector_store import get_vector_memory
+
+# Phase 17: Repomix XML path (relative to project root)
+REPOMIX_XML_PATH = ".data/project_knowledge.xml"
 
 # Default knowledge directories (fallback when settings.yaml not configured)
 DEFAULT_KNOWLEDGE_DIRS = [
@@ -245,9 +256,133 @@ async def ingest_git_workflow_knowledge() -> dict[str, Any]:
     }
 
 
+async def ingest_from_repomix_xml(xml_path: str | None = None) -> dict[str, Any]:
+    """
+    Phase 17: Ingest knowledge from repomix-generated XML.
+
+    Repomix creates a standardized XML file from markdown documents.
+    This function parses the XML and ingests each file into VectorStore.
+
+    Usage:
+        await ingest_from_repomix_xml()  # Uses default .data/project_knowledge.xml
+        await ingest_from_repomix_xml("/path/to/custom.xml")
+
+    Repomix XML format:
+        <files>
+          <file path="path/to/file.md">content</file>
+        </files>
+    """
+    if xml_path is None:
+        xml_path = REPOMIX_XML_PATH
+
+    project_root = get_project_root()
+    full_path = project_root / xml_path
+
+    if not full_path.exists():
+        return {
+            "success": False,
+            "error": f"Repomix XML not found: {xml_path}",
+            "hint": "Run 'repomix' in agent/knowledge to generate the XML"
+        }
+
+    info(f"📚 Parsing repomix XML: {xml_path}")
+
+    try:
+        # Parse XML
+        tree = ET.parse(full_path)
+        root = tree.getroot()
+
+        # Find all file nodes
+        file_nodes = root.findall(".//file")
+
+        if not file_nodes:
+            return {"success": False, "error": "No file nodes found in XML"}
+
+        results = []
+        for file_node in file_nodes:
+            file_path = file_node.get("path")
+            content = file_node.text or ""
+
+            if not content.strip():
+                continue
+
+            # Extract title from first H1 (find first non-empty line starting with #)
+            title = ""
+            for line in content.split('\n'):
+                line = line.strip()
+                if line.startswith('#'):
+                    title = line.lstrip('# ').strip()
+                    break
+
+            # Generate unique ID
+            file_id = Path(file_path).stem.lower().replace('-', '_').replace(' ', '_')
+
+            # Extract domain from path
+            domain = "knowledge"  # Default
+            if "standards" in file_path:
+                domain = "standards"
+            elif "how-to" in file_path or "how-to" in file_path:
+                domain = "workflow"
+            elif "docs" in file_path:
+                domain = "architecture"
+
+            # Ingest into vector store
+            vm = get_vector_memory()
+            success_flag = await vm.add(
+                documents=[content],
+                ids=[f"{domain}-{file_id}"],
+                collection="project_knowledge",
+                metadatas=[{
+                    "domain": domain,
+                    "title": title,
+                    "source_file": file_path,
+                    "keywords": ", ".join(extract_keywords(content)),
+                }]
+            )
+
+            results.append({
+                "success": success_flag,
+                "file": file_path,
+                "id": f"{domain}-{file_id}",
+                "title": title,
+            })
+
+        successful = sum(1 for r in results if r.get("success"))
+        failed = len(results) - successful
+
+        return {
+            "success": failed == 0,
+            "total": len(results),
+            "ingested": successful,
+            "failed": failed,
+            "xml_path": str(full_path),
+            "details": [r for r in results if not r.get("success")][:3],
+        }
+
+    except ET.ParseError as e:
+        return {"success": False, "error": f"XML parse error: {e}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 # CLI entry point
 def main():
     """Run knowledge ingestion from command line."""
+    import sys
+
+    # Check for Phase 17 repomix mode
+    if len(sys.argv) > 1 and sys.argv[1] == "--repomix":
+        info("Starting knowledge ingestion from repomix XML...")
+        results = asyncio.run(ingest_from_repomix_xml())
+        console.print(panel(
+            f"XML: {results.get('xml_path', 'N/A')}\n"
+            f"Indexed: {results.get('total_ingested', 0)}\n"
+            f"Failed: {results.get('total_failed', 0)}",
+            title="📊 Repomix Ingestion Summary",
+            style="cyan"
+        ))
+        return
+
     info("Starting knowledge ingestion...")
     results = asyncio.run(ingest_all_knowledge())
 

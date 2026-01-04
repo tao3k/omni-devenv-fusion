@@ -93,12 +93,12 @@ class ReviewerAgent(BaseAgent):
 
 ### 3.3 Audit Criteria
 
-| Criterion | Description |
-| --------- | ----------- |
-| **Completeness** | Does it solve the user's request? |
-| **Correctness** | Is the solution logically sound? |
-| **Safety** | Are there obvious bugs or security issues? |
-| **Quality** | Is the code idiomatic and well-structured? |
+| Criterion        | Description                                |
+| ---------------- | ------------------------------------------ |
+| **Completeness** | Does it solve the user's request?          |
+| **Correctness**  | Is the solution logically sound?           |
+| **Safety**       | Are there obvious bugs or security issues? |
+| **Quality**      | Is the code idiomatic and well-structured? |
 
 ### 3.4 Narrow Context for Reviewer
 
@@ -115,6 +115,7 @@ default_skills = [
 ```
 
 **Reviewer does NOT have:**
+
 - File modification skills (use CoderAgent)
 - Broad read access (limited scope)
 
@@ -122,17 +123,17 @@ default_skills = [
 
 ### 4.1 New Files
 
-| File | Purpose |
-| ---- | ------- |
-| `packages/python/agent/src/agent/core/agents/reviewer.py` | ReviewerAgent with audit() |
-| `packages/python/agent/src/agent/tests/test_phase15_reflexion_loop.py` | Reflexion loop tests |
+| File                                                                   | Purpose                    |
+| ---------------------------------------------------------------------- | -------------------------- |
+| `packages/python/agent/src/agent/core/agents/reviewer.py`              | ReviewerAgent with audit() |
+| `packages/python/agent/src/agent/tests/test_phase15_reflexion_loop.py` | Reflexion loop tests       |
 
 ### 4.2 Modified Files
 
-| File | Change |
-| ---- | ------ |
-| `packages/python/agent/src/agent/core/agents/base.py` | Add AuditResult, update AgentResult |
-| `packages/python/agent/src/agent/core/agents/coder.py` | Integrate with feedback loop |
+| File                                                   | Change                              |
+| ------------------------------------------------------ | ----------------------------------- |
+| `packages/python/agent/src/agent/core/agents/base.py`  | Add AuditResult, update AgentResult |
+| `packages/python/agent/src/agent/core/agents/coder.py` | Integrate with feedback loop        |
 
 ## 5. Implementation Plan
 
@@ -203,11 +204,11 @@ class ReviewerAgent(BaseAgent):
 
 ## 9. Performance Impact
 
-| Metric | Before | After |
-| ------ | ------ | ----- |
-| User sees output | Immediate | +100-500ms (audit) |
-| Bug detection | User finds | Automated |
-| Code quality | Variable | Enforced |
+| Metric           | Before     | After              |
+| ---------------- | ---------- | ------------------ |
+| User sees output | Immediate  | +100-500ms (audit) |
+| Bug detection    | User finds | Automated          |
+| Code quality     | Variable   | Enforced           |
 
 ## 10. Related Documentation
 

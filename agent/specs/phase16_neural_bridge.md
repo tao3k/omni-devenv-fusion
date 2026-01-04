@@ -129,10 +129,10 @@ class AgentContext(BaseModel):
 
 ### 3.4 RAG Control per Agent Type
 
-| Agent | RAG Enabled | Rationale |
-| ----- | ----------- | --------- |
-| **CoderAgent** | Yes (default) | Needs patterns, standards, existing code |
-| **ReviewerAgent** | No (explicit) | Uses own quality tools, not patterns |
+| Agent             | RAG Enabled   | Rationale                                |
+| ----------------- | ------------- | ---------------------------------------- |
+| **CoderAgent**    | Yes (default) | Needs patterns, standards, existing code |
+| **ReviewerAgent** | No (explicit) | Uses own quality tools, not patterns     |
 
 ```python
 class ReviewerAgent(BaseAgent):
@@ -155,28 +155,28 @@ class ReviewerAgent(BaseAgent):
 
 ### 4.1 New Files
 
-| File | Purpose |
-| ---- | ------- |
+| File                                                                  | Purpose                   |
+| --------------------------------------------------------------------- | ------------------------- |
 | `packages/python/agent/src/agent/tests/test_phase16_neural_bridge.py` | RAG tests (10 test cases) |
 
 ### 4.2 Modified Files
 
-| File | Change |
-| ---- | ------ |
-| `packages/python/agent/src/agent/capabilities/knowledge_ingestor.py` | Add settings.yaml support, Rich output |
-| `packages/python/agent/src/agent/core/agents/base.py` | Add RAG method, knowledge_context field |
-| `packages/python/agent/src/agent/core/agents/reviewer.py` | Disable RAG in prepare_context |
+| File                                                                 | Change                                  |
+| -------------------------------------------------------------------- | --------------------------------------- |
+| `packages/python/agent/src/agent/capabilities/knowledge_ingestor.py` | Add settings.yaml support, Rich output  |
+| `packages/python/agent/src/agent/core/agents/base.py`                | Add RAG method, knowledge_context field |
+| `packages/python/agent/src/agent/core/agents/reviewer.py`            | Disable RAG in prepare_context          |
 
 ## 5. Knowledge Directories
 
 ### Default Directories
 
-| Path | Domain | Description |
-| ---- | ------ | ----------- |
-| `agent/knowledge` | knowledge | Project knowledge base |
-| `agent/how-to` | workflow | How-to guides |
-| `docs/explanation` | architecture | Architecture docs |
-| `agent/skills/knowledge/standards` | standards | Coding standards |
+| Path                               | Domain       | Description            |
+| ---------------------------------- | ------------ | ---------------------- |
+| `agent/knowledge`                  | knowledge    | Project knowledge base |
+| `agent/how-to`                     | workflow     | How-to guides          |
+| `docs/explanation`                 | architecture | Architecture docs      |
+| `agent/skills/knowledge/standards` | standards    | Coding standards       |
 
 ### Knowledge Ingestion
 
@@ -243,11 +243,11 @@ Agent: (Automatically retrieves relevant knowledge)
 
 ## 9. Performance Impact
 
-| Metric | Before | After |
-| ------ | ------ | ----- |
-| First execution | Baseline | +10-50ms (RAG search) |
-| Tool calls saved | 0 | 2-5 per task |
-| Context awareness | None | Full project knowledge |
+| Metric            | Before   | After                  |
+| ----------------- | -------- | ---------------------- |
+| First execution   | Baseline | +10-50ms (RAG search)  |
+| Tool calls saved  | 0        | 2-5 per task           |
+| Context awareness | None     | Full project knowledge |
 
 ## 10. Example Output
 

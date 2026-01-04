@@ -1,0 +1,13 @@
+{
+  "output": {
+    "filePath": "project_knowledge.xml",
+    "style": "xml",
+    "headerText": "Project Knowledge Base for Omni-DevEnv"
+  },
+  "include": ["**/*.md"],
+  "includeFiles": ["**/*.md"],
+  "ignore": {
+    "useGitignore": true,
+    "additionalPatterns": ["test", "template", "draft", "README.md"]
+  }
+}

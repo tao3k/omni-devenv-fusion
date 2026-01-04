@@ -45,8 +45,7 @@ let
     {
       name = "lefthook";
       gen =
-        (config.omnibus.ops.mkNixago initConfigs.nixago-lefthook)
-          initConfigs.lefthook.nix
+        (config.omnibus.ops.mkNixago initConfigs.nixago-lefthook) initConfigs.lefthook.nix
           initConfigs.lefthook.shell
           initConfigs.lefthook.prettier
           {
@@ -77,44 +76,46 @@ let
                 glob = "*.md";
                 run = "vale {staged_files}";
               };
+              # Phase 17: Update knowledge XML with repomix
+              "update-knowledge-xml" = {
+                glob = "agent/knowledge/**/*.md";
+                run = ''
+                  cd agent/knowledge && repomix --config repomix.json --output "$PRJ_ROOT/.data/project_knowledge.xml"
+                '';
+              };
             };
           };
     }
     {
       name = "conform";
-      gen =
-        (config.omnibus.ops.mkNixago initConfigs.nixago-conform)
-          initConfigs.conform.default
-          {
-            data.commit = {
-              conventional = {
-                scopes = append project-scopes;
-              };
-            };
+      gen = (config.omnibus.ops.mkNixago initConfigs.nixago-conform) initConfigs.conform.default {
+        data.commit = {
+          conventional = {
+            scopes = append project-scopes;
           };
+        };
+      };
     }
     {
       name = "cog";
-      gen =
-        (config.omnibus.ops.mkNixago initConfigs.nixago-cog) initConfigs.cog.default
-          {
-            data = {
-              scopes = project-scopes;
-              changelog = {
-                path = "CHANGELOG.md";
-                template = "remote";
-                remote = "github.com";
-                repository = "omni-dev-fusion";
-                owner = "tao3k";
-                authors = [
-                  {
-                    username = "gtrunsec";
-                    signature = "Guangtao";
-                  }
-                ];
-              };
-            };
+      gen = (config.omnibus.ops.mkNixago initConfigs.nixago-cog) initConfigs.cog.default {
+        data = {
+          scopes = project-scopes;
+          changelog = {
+            path = "CHANGELOG.md";
+            template = "remote";
+            remote = "github.com";
+            repository = "omni-dev-fusion";
+            owner = "tao3k";
+            authors = [
+              {
+                username = "gtrunsec";
+                signature = "Guangtao";
+              }
+            ];
           };
+        };
+      };
     }
   ];
 

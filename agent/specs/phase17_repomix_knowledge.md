@@ -10,6 +10,7 @@
 **The Pain: Custom File Parsing Logic**
 
 Current `KnowledgeIngestor`:
+
 - Recursively traverses directories
 - Parses markdown files manually
 - Handles keyword extraction
@@ -131,14 +132,14 @@ class KnowledgeIngestor:
 
 ## 4. Benefits
 
-| Aspect | Before (Custom) | After (Repomix) |
-| ------ | --------------- | --------------- |
-| File traversal | Manual recursion | Built-in |
-| XML format | Custom | Standardized |
-| Token counting | Manual | Built-in |
-| .gitignore | Manual | Auto-respected |
-| Code complexity | ~150 lines | ~50 lines |
-| Maintainability | Low | High |
+| Aspect          | Before (Custom)  | After (Repomix) |
+| --------------- | ---------------- | --------------- |
+| File traversal  | Manual recursion | Built-in        |
+| XML format      | Custom           | Standardized    |
+| Token counting  | Manual           | Built-in        |
+| .gitignore      | Manual           | Auto-respected  |
+| Code complexity | ~150 lines       | ~50 lines       |
+| Maintainability | Low              | High            |
 
 ## 5. Implementation Plan
 
