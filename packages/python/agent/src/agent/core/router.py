@@ -75,6 +75,26 @@ TOOL_DOMAINS = {
 
 
 class ToolRouter:
+    # Preloaded skill rules (embedded in router for zero-latency access)
+    PRELOADED_SKILL_RULES = {
+        "GitOps": """
+**Git Commit Authorization Protocol (MEMORIZE):**
+1. Show Commit Analysis: Type, Scope, Message
+2. Wait for "yes" or "confirm" from user
+3. Only then execute git_commit
+
+**NEVER execute git_commit without showing analysis first.**
+**Direct git commit is PROHIBITED - use git_commit tool.**
+""",
+        "Coder": """
+**Code Implementation Rules:**
+1. Read existing code before modifying
+2. Make small, focused changes
+3. Run tests after modifications
+4. Follow project coding standards
+""",
+    }
+
     def __init__(self, client: InferenceClient = None):
         self.client = client or InferenceClient()
 
@@ -101,12 +121,21 @@ DECISION RULES:
 5. **Context/Memory** → Memory (manage_context, memory_garden)
 6. **Infrastructure** → DevOps (run_task, consult_specialist)
 
-EXAMPLES:
-- "Commit my changes" → GitOps (uses git_commit)
-- "Validate this commit message" → GitOps (use Claude-native bash for git log/status)
-- "Run tests and check results" → QA (testing workflow)
+CRITICAL - GitOps Rules (MEMORIZE):
+- When user wants to commit, you MUST follow Authorization Protocol:
+  1. Show Commit Analysis (Type, Scope, Message)
+  2. Wait for "yes" or "confirm"
+  3. Then execute git_commit
+- NEVER skip showing analysis - this is required for user confirmation
+- Direct 'git commit' is PROHIBITED - use git_commit tool
 
-Return JSON ONLY: {{ "domain": "Name", "confidence": 0.0-1.0, "reasoning": "..." }}
+EXAMPLES:
+- "Commit my changes" → GitOps
+- "Validate this commit message" → GitOps
+- "Run tests and check results" → QA
+
+Return JSON ONLY: {{ "domain": "Name", "confidence": 0.0-1.0, "reasoning": "...", "rules": "..." }}
+Include 'rules' field with relevant protocol rules from above (empty string if none).
 """
 
         user_query = f"User Request: {query}"
@@ -137,9 +166,23 @@ Return JSON ONLY: {{ "domain": "Name", "confidence": 0.0-1.0, "reasoning": "..."
             else:
                 routing_data["suggested_tools"] = []
 
+            # Add embedded rules if available and not provided by LLM
+            if domain in self.PRELOADED_SKILL_RULES and not routing_data.get("rules"):
+                routing_data["rules"] = self.PRELOADED_SKILL_RULES[domain]
+
             return routing_data
 
         except json.JSONDecodeError:
+            # Fallback: return GitOps with rules on commit intent
+            query_lower = query.lower()
+            if "commit" in query_lower or "save" in query_lower:
+                return {
+                    "domain": "GitOps",
+                    "confidence": 0.9,
+                    "reasoning": "Detected commit intent, routing to GitOps",
+                    "suggested_tools": TOOL_DOMAINS["GitOps"]["tools"],
+                    "rules": self.PRELOADED_SKILL_RULES["GitOps"],
+                }
             return {
                 "domain": "Unknown",
                 "confidence": 0.0,

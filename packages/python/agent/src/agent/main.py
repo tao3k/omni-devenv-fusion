@@ -74,10 +74,24 @@ def main():
     section("Booting Kernel...")
     boot_core_skills(mcp)
 
-    # 2. Start Background Tasks
+    # 2. Register Dynamic Context Resource
+    # This exposes all loaded skill prompts.md as an MCP Resource
+    section("Registering Dynamic Context...")
+    from agent.core.skill_registry import get_skill_registry
+
+    @mcp.resource("omni://system/active_context")
+    def get_active_context() -> str:
+        """
+        Returns the dynamic system prompts and routing rules for all active skills.
+        READ THIS at the start of the session to understand your capabilities.
+        """
+        registry = get_skill_registry()
+        return registry.get_combined_context()
+
+    # 3. Start Background Tasks
     start_background_tasks()
 
-    # 3. Run Server
+    # 4. Run Server
     section("System Online")
     mcp.run()
 

@@ -68,9 +68,10 @@ def register_router_tools(mcp: FastMCP) -> None:
                 return json.dumps({
                     "success": True,
                     "query": query,
-                    "recommended_tools": result.get("tools", []),
+                    "recommended_tools": result.get("suggested_tools", result.get("tools", [])),
                     "reasoning": result.get("reasoning", ""),
-                    "domain": result.get("domain", "unknown")
+                    "domain": result.get("domain", "unknown"),
+                    "rules": result.get("rules", "")
                 }, indent=2)
             else:
                 return json.dumps({

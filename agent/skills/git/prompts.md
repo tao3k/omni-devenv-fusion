@@ -12,15 +12,6 @@
 
 ---
 
-## Philosophy: MCP as Guard, Claude-native as Explorer
-
-| Layer                             | Purpose                            | Operations                                     |
-| --------------------------------- | ---------------------------------- | ---------------------------------------------- |
-| **MCP (Guard)**                   | Dangerous ops needing confirmation | `git_commit`, `git_push`                       |
-| **Claude-native bash (Explorer)** | Safe read operations               | `git status`, `git diff`, `git log`, `git add` |
-
----
-
 ## Router Logic
 
 ### Critical Operations (Use MCP Tools)
@@ -42,76 +33,40 @@
 
 ---
 
-## Workflow: Commit
+## Authorization Protocol
 
+When user says "commit":
+
+1. **Show Commit Analysis** (required):
+   ```
+   Type: feat/fix/docs/style/refactor/test/chore
+   Scope: component area
+   Message: brief description
+   ```
+2. **Wait for "yes" or "confirm"**
+3. **Then call `git_commit(message="...")`**
+
+### Authorization Template
 ```
-User: commit
+📋 Commit Analysis:
 
-Claude:
-  1. (Claude-native) git status → See what changed
-  2. (Claude-native) git diff --cached → Review staged
-  3. Generate commit message following format
-  4. Show analysis to user
-  5. User says "yes"
-  6. (MCP) git_commit(message="...") → Execute commit
+   Type: feat
+   Scope: git
+   Message: simplify to executor mode
+
+🔒 *Authorization Required*
+   Please say: "yes" ✅ or "confirm" ✅, or "skip" ⏭️
 ```
-
-### Example
-
-```
-Claude: (analyzing...)
-
-    Commit Analysis:
-
-    Type: feat
-    Scope: git
-    Message: simplify to executor mode
-
-    *Authorization Required*
-    Please say: "yes" or "confirm", or "skip"
-
-User: yes
-
-Claude: git_commit(message="feat(git): simplify to executor mode")
-```
-
-### Authorization Protocol
-
-1. **Always show analysis first** - User must see what will be committed
-2. **Wait for "yes" or "confirm"** - User's response is the authorization
-3. **Only then call git_commit** - Execute after confirmation
-4. **If "skip"** - Do nothing, wait for corrected instructions
-
-### Skipping Hooks
-
-If user wants to skip pre-commit hooks (lefthook, commit-msg), use:
-
-```
-git_commit(message="...", skip_hooks=true)
-```
-
-**When to skip:**
-
-- Fixing hook-related issues (hook itself is broken)
-- Rapid documentation fixes
-- Emergency hotfixes where hooks are blocking
-
-**When NOT to skip:**
-
-- Normal commits (hooks exist for quality)
-- User didn't explicitly request it
 
 ---
 
-## Workflow: Push
+## Commit Message Format
 
 ```
-User: push
-
-Claude:
-  1. (Claude-native) git status → Verify commit succeeded
-  2. (MCP) git_push() → Push to remote
+<type>(<scope>): <subject>
 ```
+
+**Types:** feat, fix, docs, style, refactor, perf, test, build, ci, chore
 
 ---
 
@@ -123,19 +78,6 @@ Claude:
 | Use MCP for `git add`                      | Use Claude-native bash              |
 | Call `git_commit` without showing analysis | Always show analysis first          |
 | Use `smart_commit` (doesn't exist)         | Use `git_commit` after confirmation |
-
----
-
-## Commit Message Format
-
-```
-<type>(<scope>): <subject>
-
-Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
-Scope: Component or area (e.g., git, mcp, cli, docs)
-
-Example: feat(git): simplify to executor mode
-```
 
 ---
 

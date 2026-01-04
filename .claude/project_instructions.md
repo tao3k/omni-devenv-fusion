@@ -38,7 +38,27 @@ When you receive a complex user request:
 
 ## 🛡️ Git Interaction Protocol (Strict)
 
-### 1. Default Mode: MANUALLY ASK
+### 1. Use MCP Tools Only - NO Native Bash for Git
+
+**CRITICAL**: You MUST use MCP tools for all git operations. You are FORBIDDEN from using Claude Desktop's native bash to run any git command.
+
+**Allowed (MCP Tools):**
+- `@omni-orchestrator git_commit` - Commit changes (shows analysis, waits for confirmation)
+- `@omni-orchestrator git_push` - Push to remote
+
+**Forbidden (Native Bash):**
+- ❌ `git add` via bash
+- ❌ `git commit` via bash
+- ❌ `git push` via bash
+- ❌ Any git command through Claude Desktop's terminal
+
+**Correct workflow for commit:**
+1. User says "commit"
+2. You show Commit Analysis (type, scope, message)
+3. Wait for "yes" or user confirmation
+4. Call `@omni-orchestrator git_commit message="..."`
+
+### 2. Default Mode: MANUALLY ASK
 
 Unless explicitly instructed otherwise, you have **NO PERMISSION** to commit code to the repository.
 
@@ -47,32 +67,12 @@ Unless explicitly instructed otherwise, you have **NO PERMISSION** to commit cod
 1. Make changes.
 2. Run `devenv test`.
 3. **STOP**.
-4. Ask the user: _"Tests passed. Ready to commit?"_ or wait for the user to run the git commands.
-
-### 2. Override Mode: `just agent-commit`
-
-**ONLY** if the user's prompt explicitly says **"run just agent-commit"** (or similar explicit intent to auto-commit), you may execute the commit command.
-
-**Command:** `just agent-commit <type> <scope> "<message>"`
-
-**Example:**
-
-- User: "Fix the typo in README and run just agent-commit."
-- You: `just agent-commit docs root "fix typo in readme"`
+4. Ask the user: _"Tests passed. Ready to commit?"_
 
 ### 3. Commit Message Rules
 
 - Always follow `<type>(<scope>): <message>`
 - If `just agent-commit` fails (e.g. tests fail), **STOP** and report the error. Do not force it.
-
-### 4. Summary
-
-| User Prompt                                 | Your Action                                    |
-| ------------------------------------------- | ---------------------------------------------- |
-| "Fix the bug"                               | Fix code → Run Tests → **ASK USER** to commit  |
-| "Fix the bug and **run just agent-commit**" | Fix code → `just agent-commit fix x "fix bug"` |
-
-See also: [Git Workflow Guide](../../agent/how-to/git-workflow.md)
 
 ---
 

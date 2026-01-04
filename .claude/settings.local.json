@@ -1,7 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Bash(just commit)",
       "mcp__orchestrator__consult_specialist",
       "Bash(op account:*)",
       "Bash(git checkout:*)",
@@ -14,7 +13,6 @@
       "Bash(ast-grep run:*)",
       "Bash(cat:*)",
       "Bash(echo:*)",
-      "Bash(git commit:*)",
       "Bash(cog bump:*)",
       "Bash(cg bump:*)",
       "Bash(direnv allow:*)",

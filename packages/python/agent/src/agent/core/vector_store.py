@@ -312,6 +312,7 @@ async def bootstrap_knowledge_base() -> None:
     - Git workflow rules
     - Coding standards
     - Architecture decisions
+    - Preloaded skill prompts.md (git, knowledge, writer, etc.)
     """
     from common.mcp_core.gitops import get_project_root
 
@@ -323,10 +324,10 @@ async def bootstrap_knowledge_base() -> None:
             "id": "git-workflow-001",
             "content": """
             Git Workflow Protocol:
-            - All commits MUST use smart_commit tool
+            - All commits MUST use git_commit tool
             - Direct git commit is PROHIBITED
             - Commit message must follow conventional commits format
-            - Authorization token is required for each commit
+            - Authorization Protocol: Show analysis → Wait "yes" → Execute
             """,
             "metadata": {"domain": "git", "priority": "high"}
         },
@@ -364,7 +365,70 @@ async def bootstrap_knowledge_base() -> None:
             metadatas=[doc["metadata"]]
         )
 
+    # Also ingest preloaded skill prompts.md files
+    await ingest_preloaded_skill_prompts()
+
     logger.info("Knowledge base bootstrapped", docs=len(bootstrap_docs))
+
+
+async def ingest_preloaded_skill_prompts() -> None:
+    """
+    Ingest prompts.md from all preloaded skills into the knowledge base.
+
+    This ensures that when Claude processes user requests, it has access to
+    the skill rules even if not explicitly loading the skill.
+
+    The following skills are preloaded and their prompts.md will be ingested:
+    - git: Commit authorization protocol
+    - knowledge: Project rules and scopes
+    - writer: Writing quality standards
+    - filesystem: Safe file operations
+    - terminal: Command execution rules
+    - testing_protocol: Testing workflow
+    """
+    from agent.core.skill_registry import get_skill_registry
+
+    project_root = get_project_root()
+    registry = get_skill_registry()
+    preload_skills = registry.get_preload_skills()
+
+    if not preload_skills:
+        logger.info("No preload skills configured")
+        return
+
+    vm = get_vector_memory()
+    skills_ingested = 0
+
+    for skill_name in preload_skills:
+        prompts_path = project_root / "agent" / "skills" / skill_name / "prompts.md"
+
+        if not prompts_path.exists():
+            logger.debug(f"Skill {skill_name} has no prompts.md")
+            continue
+
+        try:
+            content = prompts_path.read_text(encoding="utf-8")
+
+            # Ingest with skill name as domain for filtering
+            success = await vm.add(
+                documents=[content],
+                ids=[f"skill-{skill_name}-prompts"],
+                metadatas=[{
+                    "domain": "skill",
+                    "skill": skill_name,
+                    "priority": "high",
+                    "source_file": str(prompts_path)
+                }]
+            )
+
+            if success:
+                skills_ingested += 1
+                logger.info(f"Ingested prompts.md for skill: {skill_name}")
+
+        except Exception as e:
+            logger.error(f"Failed to ingest prompts.md for skill {skill_name}: {e}")
+
+    logger.info(f"Preloaded skill prompts ingested: {skills_ingested}/{len(preload_skills)}")
 
 
 __all__ = [
@@ -374,4 +438,5 @@ __all__ = [
     "search_knowledge",
     "ingest_knowledge",
     "bootstrap_knowledge_base",
+    "ingest_preloaded_skill_prompts",
 ]

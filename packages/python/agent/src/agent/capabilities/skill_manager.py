@@ -59,6 +59,16 @@ Skill '{skill_name}' loaded successfully!
 """
 
     @mcp.tool()
+    async def read_loaded_skills() -> str:
+        """
+        [Knowledge] Read loaded skills and inject their knowledge into LLM context.
+
+        Returns the combined prompts.md content from all loaded skills.
+        Use this to make LLM remember skill rules and capabilities.
+        """
+        return registry.get_combined_context()
+
+    @mcp.tool()
     async def get_active_skills() -> str:
         """
         [Skill System] Check which skills are currently loaded in memory.

@@ -23,13 +23,16 @@ async def git_commit(message: str, skip_hooks: bool = False) -> str:
     """
     Execute git commit directly.
 
-    Workflow (handled by prompts, not code):
-    1. User says "commit"
-    2. Claude sees {{git_status}} in context (from context injection)
-    3. Claude generates conventional commit message
-    4. Claude calls this tool
-    5. User approves via Claude Desktop
-    6. Tool executes
+    ⚠️ AUTHORIZATION PROTOCOL (MUST FOLLOW):
+    1. BEFORE calling this tool: Show Commit Analysis to user
+       - Type: feat/fix/docs/style/refactor/test/chore
+       - Scope: git-ops/cli/docs/mcp/router/...
+       - Message: describe change
+    2. Wait for user to say "yes" or "confirm"
+    3. ONLY then call this tool
+
+    ❌ NEVER call this tool without showing analysis first
+    ❌ Direct 'git commit' is PROHIBITED - use this tool
 
     Args:
         message: Conventional commit message (e.g., "feat(core): add feature")
