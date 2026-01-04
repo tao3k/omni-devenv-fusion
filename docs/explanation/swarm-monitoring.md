@@ -57,6 +57,7 @@ else:
 ```
 
 **Output**:
+
 ```
 ✅ All systems operational
 ```
@@ -150,6 +151,7 @@ result = asyncio.run(async_monitor())
 Synchronous health check. Creates a new event loop if needed.
 
 **Returns:**
+
 ```python
 {
     "healthy": bool,
@@ -177,11 +179,11 @@ Fast synchronous check without async overhead. Returns basic status.
 
 ## Server Status Values
 
-| Status | Meaning |
-|--------|---------|
-| `running` | Server is operational |
+| Status    | Meaning                            |
+| --------- | ---------------------------------- |
+| `running` | Server is operational              |
 | `unknown` | Server status cannot be determined |
-| `error` | Server encountered an error |
+| `error`   | Server encountered an error        |
 
 ## Troubleshooting
 
@@ -190,6 +192,7 @@ Fast synchronous check without async overhead. Returns basic status.
 **Cause**: The `agent/core/swarm.py` module is missing.
 
 **Solution**: Ensure the swarm module is installed:
+
 ```bash
 uv pip install -e packages/python/agent/
 ```
@@ -202,8 +205,8 @@ uv pip install -e packages/python/agent/
 
 ## Performance
 
-| Method | Latency |
-|--------|---------|
-| `get_simple_swarm_health()` | < 1ms |
-| `get_swarm_health()` | < 10ms |
-| `get_async_swarm_health()` | < 50ms |
+| Method                      | Latency |
+| --------------------------- | ------- |
+| `get_simple_swarm_health()` | < 1ms   |
+| `get_swarm_health()`        | < 10ms  |
+| `get_async_swarm_health()`  | < 50ms  |
