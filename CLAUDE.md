@@ -8,11 +8,11 @@
 
 **Code is Mechanism, Prompt is Policy**
 
-| Layer | Purpose | Files |
-|-------|---------|-------|
-| **Brain** | Rules, routing | `prompts.md` (LLM reads when skill loads) |
-| **Muscle** | Execution | `tools.py` (blind, stateless) |
-| **Guardrails** | Validation | Lefthook, Cog, Pre-commit |
+| Layer          | Purpose        | Files                                     |
+| -------------- | -------------- | ----------------------------------------- |
+| **Brain**      | Rules, routing | `prompts.md` (LLM reads when skill loads) |
+| **Muscle**     | Execution      | `tools.py` (blind, stateless)             |
+| **Guardrails** | Validation     | Lefthook, Cog, Pre-commit                 |
 
 ---
 
@@ -27,35 +27,38 @@
 
 ### Always Load First
 
-| Skill | Purpose | Command |
-|-------|---------|---------|
+| Skill       | Purpose                           | Command                                           |
+| ----------- | --------------------------------- | ------------------------------------------------- |
 | `knowledge` | Project rules, scopes, guardrails | `skill("knowledge", "get_development_context()")` |
-| `writer` | Writing quality | `skill("writer", "load_writing_memory()")` |
+| `writer`    | Writing quality                   | `skill("writer", "load_writing_memory()")`        |
 
 ### Execution Skills
 
-| Skill | Purpose | Command |
-|-------|---------|---------|
-| `git` | Commit, Push | `skill("git", "git_commit(message='...')")` |
-| `terminal` | Commands | `skill("terminal", "execute_command(command='...')")` |
-| `filesystem` | File I/O | `skill("filesystem", "read_file(path='...')")` |
-| `testing_protocol` | Tests | `skill("testing_protocol", "smart_test_runner()")` |
+| Skill              | Purpose      | Command                                               |
+| ------------------ | ------------ | ----------------------------------------------------- |
+| `git`              | Commit, Push | `skill("git", "git_commit(message='...')")`           |
+| `terminal`         | Commands     | `skill("terminal", "execute_command(command='...')")` |
+| `filesystem`       | File I/O     | `skill("filesystem", "read_file(path='...')")`        |
+| `testing_protocol` | Tests        | `skill("testing_protocol", "smart_test_runner()")`    |
 
 ---
 
 ## Workflow
 
 ### Before Any Work
+
 ```python
 skill("knowledge", "get_development_context()")
 ```
 
 ### When Writing Docs
+
 ```python
 skill("writer", "load_writing_memory()")
 ```
 
 ### New Feature
+
 ```python
 start_spec("Feature Name")
 ```
@@ -64,12 +67,12 @@ start_spec("Feature Name")
 
 ## Directory Structure
 
-| Path | Purpose |
-|------|---------|
+| Path                              | Purpose                                           |
+| --------------------------------- | ------------------------------------------------- |
 | `agent/skills/{skill}/prompts.md` | Rules & router logic (READ THIS when skill loads) |
-| `agent/skills/{skill}/tools.py` | Atomic execution |
-| `agent/skills/{skill}/guide.md` | Procedural reference |
-| `docs/` | User-facing documentation |
+| `agent/skills/{skill}/tools.py`   | Atomic execution                                  |
+| `agent/skills/{skill}/guide.md`   | Procedural reference                              |
+| `docs/`                           | User-facing documentation                         |
 
 ---
 

@@ -4,11 +4,11 @@
 
 ## Skill Structure (Role Clarity)
 
-| File | Role | When to Read |
-|------|------|--------------|
+| File         | Role                     | When to Read                   |
+| ------------ | ------------------------ | ------------------------------ |
 | `prompts.md` | **Rules & Router Logic** | When skill loads (LLM context) |
-| `guide.md` | Procedural Knowledge | Implementation reference |
-| `tools.py` | Atomic Execution | Blind operation |
+| `guide.md`   | Procedural Knowledge     | Implementation reference       |
+| `tools.py`   | Atomic Execution         | Blind operation                |
 
 ---
 
@@ -91,11 +91,13 @@ git_commit(message="...", skip_hooks=true)
 ```
 
 **When to skip:**
+
 - Fixing hook-related issues (hook itself is broken)
 - Rapid documentation fixes
 - Emergency hotfixes where hooks are blocking
 
 **When NOT to skip:**
+
 - Normal commits (hooks exist for quality)
 - User didn't explicitly request it
 

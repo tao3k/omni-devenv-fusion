@@ -41,8 +41,8 @@ async def execute_command(command: str, timeout: int = 60) -> str:
     if "git commit" in cmd_lower:
         return (
             "PROHIBITED: Direct 'git commit' is disabled in Terminal.\n"
-            "Use the 'smart_commit' tool in the 'git' skill.\n"
-            "Reason: Requires 'run just agent-commit' authorization flow."
+            "Use the 'git_commit' tool in the 'git' skill.\n"
+            "Reason: Requires user confirmation via Claude Desktop."
         )
 
     # Parse command and args for security checks
@@ -95,7 +95,7 @@ async def run_task(command: str, args: Optional[list[str]] = None) -> str:
     - nix: fmt, build, shell, flake-check
     - git: status, diff, log, add, checkout, branch
 
-    SECURITY: Git commit operations are BLOCKED. Use smart_commit in git skill.
+    SECURITY: Git commit operations are BLOCKED. Use git_commit in git skill.
     """
     if args is None:
         args = []
@@ -104,13 +104,13 @@ async def run_task(command: str, args: Optional[list[str]] = None) -> str:
     if command == "git" and args and "commit" in args:
         blocked_msg = """GIT COMMIT BLOCKED
 
-This command was blocked because git commit operations MUST go through the authorization protocol.
+This command was blocked because git commit operations MUST go through the git skill.
 
 **Correct workflow:**
-1. skill("git", "smart_commit(message='feat(scope): description')")
-2. System returns: {analysis, session_id: "xxx..."}
-3. User confirms by saying: "run just agent-commit"
-4. skill("git", "smart_commit(message='...', auth_token='xxx')")
+1. skill("git", "git_commit(message='feat(scope): description')")
+2. System shows analysis
+3. User confirms via Claude Desktop
+4. Commit is executed
 
 **Allowed git operations (non-committing):**
 - git status, git diff, git log, git add, git checkout, git branch
@@ -126,7 +126,7 @@ This command was blocked because git commit operations MUST go through the autho
 
 Running `git commit` through bash is FORBIDDEN.
 
-Use smart_commit in git skill instead.
+Use git_commit in git skill instead.
 """
             log_decision("run_task.blocked", {"command": command, "reason": "bash_git_commit_blocked"}, logger)
             return blocked_msg
@@ -227,7 +227,7 @@ def register(mcp: FastMCP):
         - nix: fmt, build, shell, flake-check
         - git: status, diff, log, add, checkout, branch
 
-        Git commit is BLOCKED. Use smart_commit in git skill.
+        Git commit is BLOCKED. Use git_commit in git skill.
         """
         return await run_task(command, args)
 

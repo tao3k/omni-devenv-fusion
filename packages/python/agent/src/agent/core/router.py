@@ -26,8 +26,8 @@ TOOL_DOMAINS = {
     "GitOps": {
         "description": "Version control, commit management, and history.",
         "tools": [
-            "smart_commit", "suggest_commit_message", "validate_commit_message",
-            "git_status", "git_log", "git_diff", "check_commit_scope"
+            "git_commit", "git_push"
+            # Note: git_status, git_log, git_diff are Claude-native bash (read-only)
         ]
     },
     "ProductOwner": {
@@ -94,7 +94,7 @@ AVAILABLE DOMAINS:
 {domains_desc}
 
 DECISION RULES:
-1. **Commit/Version Control** → GitOps (smart_commit, validate_commit_message, git_status, git_log, git_diff)
+1. **Commit/Version Control** → GitOps (git_commit, git_push)
 2. **Testing** → QA (run_tests, analyze_test_results)
 3. **Feature Specs** → ProductOwner (draft_feature_spec, verify_spec_completeness)
 4. **Code Implementation** → Coder (delegate_to_coder, ast_search, ast_rewrite)
@@ -102,8 +102,8 @@ DECISION RULES:
 6. **Infrastructure** → DevOps (run_task, consult_specialist)
 
 EXAMPLES:
-- "Validate this commit message" → GitOps (uses validate_commit_message)
-- "Verify if the latest commit follows our guidelines" → GitOps (commit validation)
+- "Commit my changes" → GitOps (uses git_commit)
+- "Validate this commit message" → GitOps (use Claude-native bash for git log/status)
 - "Run tests and check results" → QA (testing workflow)
 
 Return JSON ONLY: {{ "domain": "Name", "confidence": 0.0-1.0, "reasoning": "..." }}

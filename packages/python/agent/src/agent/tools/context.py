@@ -106,7 +106,8 @@ def register_context_tools(mcp: FastMCP) -> None:
 
 === 📝 Quick Reference ===
 
-- Commit: Use @omni-orchestrator smart_commit (NOT git commit)
+- Commit: Use @omni-orchestrator git_commit (NOT git commit via bash)
+- Push: Use @omni-orchestrator git_push
 - Test: Use @omni-orchestrator smart_test_runner
 - Route: Use @omni-orchestrator consult_router
 - Plan: Use @omni-orchestrator start_spec

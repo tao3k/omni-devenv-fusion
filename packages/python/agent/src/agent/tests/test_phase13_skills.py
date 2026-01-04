@@ -686,49 +686,28 @@ class TestSkillToolExecution:
         assert "git_log" in result or "commit" in result.lower()
 
     @pytest.mark.asyncio
-    async def test_skill_tool_calls_smart_commit(self, registry, real_mcp):
-        """Test skill() tool can call smart_commit from git skill.
+    async def test_skill_tool_calls_git_commit(self, registry, real_mcp):
+        """Test skill() tool can call git_commit from git skill.
 
-        smart_commit is defined inside register() and has a complex signature.
-        This tests that skill() can handle tools with default arguments.
+        git_commit is the primary commit tool in the git skill.
+        This tests that skill() can handle the commit operation.
         """
         from agent.capabilities.skill_manager import register_skill_tools
         register_skill_tools(real_mcp)
         skill_func = self._get_tool_func(real_mcp, "skill")
 
-        # smart_commit will fail without staged changes, but that's OK
+        # git_commit will fail without staged changes, but that's OK
         # The key is that it finds the function (doesn't return "Operation not found")
         result = await skill_func(
             skill="git",
-            call='smart_commit(message="test: validation check")'
+            call='git_commit(message="test: validation check")'
         )
 
         # Should either:
-        # 1. Return analysis with session token (if no staged changes)
+        # 1. Return error about no staged changes
         # 2. Return success (if staged changes exist)
-        # Should NOT return "Operation 'smart_commit' not found"
-        assert "Operation 'smart_commit' not found" not in result
-
-    @pytest.mark.asyncio
-    async def test_skill_tool_calls_spec_aware_commit(self, registry, real_mcp):
-        """
-        Test skill() tool can call spec_aware_commit from git skill.
-
-        This is THE critical test that would have caught the original bug.
-        spec_aware_commit is defined inside register() and uses InferenceClient.
-        """
-        from agent.capabilities.skill_manager import register_skill_tools
-        register_skill_tools(real_mcp)
-        skill_func = self._get_tool_func(real_mcp, "skill")
-
-        result = await skill_func(
-            skill="git",
-            call='spec_aware_commit(context="test commit generation")'
-        )
-
-        # Should not return "Operation not found"
-        # May return success or error from InferenceClient, but function should be found
-        assert "Operation 'spec_aware_commit' not found" not in result
+        # Should NOT return "Operation 'git_commit' not found"
+        assert "Operation 'git_commit' not found" not in result
 
     @pytest.mark.asyncio
     async def test_skill_tool_parse_kwargs_correctly(self, registry, real_mcp):
