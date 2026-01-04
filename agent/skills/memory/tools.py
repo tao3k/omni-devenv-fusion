@@ -52,22 +52,17 @@ def _get_memory_path() -> Path:
     Configurable via settings.yaml: memory.path
     Falls back to: {git_toplevel}/.cache/{project}/.memory/
     """
-    # Try to load from settings.yaml
-    try:
-        import yaml
-        settings_path = Path.cwd() / "agent" / "settings.yaml"
-        if settings_path.exists():
-            with open(settings_path) as f:
-                settings = yaml.safe_load(f)
-            custom_path = settings.get("memory", {}).get("path")
-            if custom_path:
-                return Path(custom_path)
-    except Exception:
-        pass
+    # Use get_setting for configuration
+    from common.mcp_core.settings import get_setting
+    from common.mcp_core.gitops import get_project_root
+
+    custom_path = get_setting("memory.path", "")
+    if custom_path:
+        return Path(custom_path)
 
     # Fallback to prj-spec structure
-    project = "omni-dev-fusion"  # Could also be loaded from pyproject.toml
-    git_root = _get_git_toplevel()
+    project = "omni-dev-fusion"
+    git_root = get_project_root()
     return git_root / ".cache" / project / "memory"
 
 

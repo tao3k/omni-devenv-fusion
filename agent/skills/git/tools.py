@@ -210,6 +210,7 @@ async def git_commit(message: str, skip_hooks: bool = False) -> str:
         message: Conventional commit message (e.g., "feat(core): add feature")
         skip_hooks: If True, skip pre-commit and commit-msg hooks (--no-verify)
     """
+    # Basic format check - cog will validate fully
     if ":" not in message:
         return "Error: Message must follow 'type(scope): subject' format."
 
@@ -222,15 +223,43 @@ async def git_commit(message: str, skip_hooks: bool = False) -> str:
         return f"Error checking staged changes: {e}"
 
     # Build commit command
-    cmd = ["commit", "-m", message]
-    if skip_hooks:
-        cmd.insert(1, "--no-verify")  # Add --no-verify flag
+    # Try cog commit first (if cog.toml exists), otherwise use git directly
+    import subprocess
+    from pathlib import Path
+    from common.mcp_core.gitops import get_project_root
+    from common.mcp_core.settings import get_setting
+
+    project_root = get_project_root()
+    cog_toml_path = get_setting("config.cog_toml", "cog.toml")
+    cog_toml = project_root / cog_toml_path
+
+    use_cog = cog_toml.exists()
+
+    if use_cog:
+        # Use cog commit - it handles message validation
+        cmd = ["cog", "commit", "-m", message]
+    else:
+        cmd = ["commit", "-m", message]
+        if skip_hooks:
+            cmd.insert(1, "--no-verify")
 
     # Execute commit
     try:
-        output = await run_git_cmd(cmd)
-        hook_note = " (hooks skipped)" if skip_hooks else ""
-        return f"Commit Successful{hook_note}:\n{output}"
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=str(project_root)
+        )
+        if result.returncode != 0:
+            # If cog fails, show helpful error
+            if use_cog:
+                return f"Commit Failed (cog):\n{result.stderr}"
+            return f"Commit Failed: {result.stderr}"
+
+        hook_note = " (hooks skipped)" if skip_hooks and not use_cog else ""
+        return f"Commit Successful{hook_note}:\n{result.stdout}"
     except Exception as e:
         return f"Commit Failed: {e}"
 
