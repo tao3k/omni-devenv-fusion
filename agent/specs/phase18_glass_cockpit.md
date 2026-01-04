@@ -18,6 +18,7 @@ When agents execute tasks, users see nothing until completion:
 ```
 
 No visibility into:
+
 - Which agent was selected and why
 - What knowledge was retrieved
 - Execution progress
@@ -188,15 +189,15 @@ class AgentResult(BaseModel):
 
 ### 4.1 Color Scheme
 
-| State | Color | Usage |
-|-------|-------|-------|
-| Routing | Cyan | HiveRouter analysis |
-| Execution | Yellow | Agent working |
-| Review | Magenta | Reviewer auditing |
-| Correction | Yellow | Self-correction loop |
-| Success | Green | Task completed |
-| Error | Red | Task failed |
-| Cache Hit | Yellow | Cached routing |
+| State      | Color   | Usage                |
+| ---------- | ------- | -------------------- |
+| Routing    | Cyan    | HiveRouter analysis  |
+| Execution  | Yellow  | Agent working        |
+| Review     | Magenta | Reviewer auditing    |
+| Correction | Yellow  | Self-correction loop |
+| Success    | Green   | Task completed       |
+| Error      | Red     | Task failed          |
+| Cache Hit  | Yellow  | Cached routing       |
 
 ### 4.2 Panel Layout
 
@@ -222,23 +223,23 @@ class AgentResult(BaseModel):
 
 ## 5. Implementation Files
 
-| File | Change |
-|------|--------|
-| `packages/python/agent/src/agent/core/ux.py` | NEW: UXManager class |
-| `packages/python/agent/src/agent/core/orchestrator.py` | MODIFIED: Integrate UXManager |
-| `packages/python/agent/src/agent/core/agents/base.py` | MODIFIED: Add rag_sources |
+| File                                                    | Change                                 |
+| ------------------------------------------------------- | -------------------------------------- |
+| `packages/python/agent/src/agent/core/ux.py`            | NEW: UXManager class                   |
+| `packages/python/agent/src/agent/core/orchestrator.py`  | MODIFIED: Integrate UXManager          |
+| `packages/python/agent/src/agent/core/agents/base.py`   | MODIFIED: Add rag_sources              |
 | `packages/python/agent/src/agent/core/router/models.py` | MODIFIED: Add from_cache to AgentRoute |
-| `packages/python/agent/src/agent/core/router/hive.py` | MODIFIED: Set from_cache flag |
+| `packages/python/agent/src/agent/core/router/hive.py`   | MODIFIED: Set from_cache flag          |
 
 ## 6. Benefits
 
-| Aspect | Before | After |
-|--------|--------|-------|
-| Visibility | Silent execution | Real-time progress |
-| Debugging | Post-mortem logs | Live state tracking |
-| User Trust | Black box | Transparent workflow |
-| Cache Awareness | Hidden | Explicit (cached) indicator |
-| RAG Feedback | None | Shows retrieved knowledge |
+| Aspect          | Before           | After                       |
+| --------------- | ---------------- | --------------------------- |
+| Visibility      | Silent execution | Real-time progress          |
+| Debugging       | Post-mortem logs | Live state tracking         |
+| User Trust      | Black box        | Transparent workflow        |
+| Cache Awareness | Hidden           | Explicit (cached) indicator |
+| RAG Feedback    | None             | Shows retrieved knowledge   |
 
 ## 7. Future Enhancements
 

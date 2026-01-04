@@ -59,31 +59,24 @@ let
                     # "agent/**"
                   ];
                 };
+                # Phase 17: Update knowledge XML with repomix
+                "update-knowledge-xml" = {
+                  glob = "agent/knowledge/**/*.md";
+                  run = ''cd agent/knowledge && repomix --config repomix.json --output "$PRJ_ROOT"/.data/project_knowledge.xml '';
+                };
+                # Add ruff for Python formatting
+                "format-python" = {
+                  glob = "*.py";
+                  run = "ruff format {staged_files}";
+                };
               };
               commit-msg = lefthook.default.data.commit-msg;
               # Remove unnecessary commands from default pre-commit
               commands = builtins.removeAttrs lefthook.default.data.pre-commit.commands [
                 "treefmt" # We use nixfmt instead
-                "hunspell" # Vale handles documentation
-                "typos" # Vale handles spelling
+                # "hunspell" # Not needed for LLM-generated content
+                # "typos" # Not needed for LLM-generated content
               ];
-              # Add ruff for Python formatting
-              "format-python" = {
-                glob = "*.py";
-                run = "ruff format {staged_files}";
-              };
-              # Add Vale for documentation linting
-              "check-docs" = {
-                glob = "*.md";
-                run = "vale {staged_files}";
-              };
-              # Phase 17: Update knowledge XML with repomix
-              "update-knowledge-xml" = {
-                glob = "agent/knowledge/**/*.md";
-                run = ''
-                  cd agent/knowledge && repomix --config repomix.json --output "$PRJ_ROOT/.data/project_knowledge.xml"
-                '';
-              };
             };
           };
     }
