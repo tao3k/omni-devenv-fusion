@@ -7,10 +7,15 @@ Phase 14: The Telepathic Link (Mission Brief Protocol)
 - Hive Mind Cache: Instant routing for high-frequency queries
 - Worker: Receives contextual mission briefing
 
+Phase 14.5: The Semantic Cortex (Semantic Memory)
+- VectorStore-based semantic caching for fuzzy matching
+- "Fix the bug" and "Fix bug" now treated as SAME request
+- Learning: Stores successful routing decisions in vector DB
+
 Key Features:
 - Prompt-based routing (Prompt is Policy)
 - Mission Brief Protocol for context distillation
-- LRU Cache for zero-latency routing on repeated queries
+- Semantic cache with similarity threshold (0.85)
 - Returns RoutingResult with skills, brief, and reasoning
 """
 import json
@@ -20,6 +25,7 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 from common.mcp_core.inference import InferenceClient
 from agent.core.skill_registry import get_skill_registry
+from agent.core.vector_store import VectorMemory, get_vector_memory
 
 
 # =============================================================================
@@ -114,6 +120,235 @@ class HiveMindCache:
 
 
 # =============================================================================
+# Phase 14.5: Semantic Cortex (Vector-Based Semantic Cache)
+# =============================================================================
+
+class SemanticCortex:
+    """
+    Vector-based semantic memory for routing decisions.
+
+    Features:
+    - Stores routing decisions as semantic embeddings
+    - Fuzzy matching: "Fix bug" ≈ "Fix the bug"
+    - Similarity threshold: Only return cached result if similarity > threshold
+    - TTL support: Routing decisions expire after 7 days
+    - Persistent storage across sessions
+
+    Usage:
+    1. Query: "Fix the bug in main.py"
+    2. Search: Find similar historical queries
+    3. If similarity > threshold: Return cached routing result
+    4. If new: Store decision after LLM routing
+    """
+
+    COLLECTION_NAME = "routing_experience"
+
+    # Similarity threshold: Lower = more fuzzy matching
+    # 0.75 balances precision with practical fuzzy matching
+    # 0.85+ = strict (may miss semantically similar queries)
+    # 0.70+ = aggressive (may give irrelevant results)
+    DEFAULT_SIMILARITY_THRESHOLD = 0.75
+
+    # TTL for routing decisions (7 days in seconds)
+    DEFAULT_TTL_SECONDS = 7 * 24 * 60 * 60
+
+    def __init__(
+        self,
+        similarity_threshold: float = None,
+        ttl_seconds: int = None,
+    ):
+        """
+        Initialize Semantic Cortex.
+
+        Args:
+            similarity_threshold: Min similarity to return cached result (0.0-1.0)
+            ttl_seconds: Time-to-live for routing decisions
+        """
+        self.similarity_threshold = similarity_threshold or self.DEFAULT_SIMILARITY_THRESHOLD
+        self.ttl_seconds = ttl_seconds or self.DEFAULT_TTL_SECONDS
+        self.vector_store: Optional[VectorMemory] = None
+        self._init_vector_store()
+
+    def _init_vector_store(self):
+        """Initialize vector store connection."""
+        try:
+            self.vector_store = get_vector_memory()
+        except Exception as e:
+            print(f"Warning: Could not initialize vector store: {e}")
+            self.vector_store = None
+
+    def _similarity_to_score(self, distance: float) -> float:
+        """Convert ChromaDB distance (0-1, lower is better) to similarity score (0-1, higher is better)."""
+        return 1.0 - distance
+
+    def _is_expired(self, timestamp_str: str) -> bool:
+        """Check if a routing decision has expired based on its timestamp."""
+        try:
+            timestamp = float(timestamp_str)
+            return (time.time() - timestamp) > self.ttl_seconds
+        except (ValueError, TypeError):
+            return False
+
+    async def recall(self, query: str) -> Optional[RoutingResult]:
+        """
+        Recall similar routing decisions from semantic memory.
+
+        Args:
+            query: User query to search for
+
+        Returns:
+            RoutingResult if similar query found, None otherwise
+        """
+        if not self.vector_store:
+            return None
+
+        try:
+            # Search for 1 most similar result
+            results = await self.vector_store.search(
+                query=query,
+                n_results=1,
+                collection=self.COLLECTION_NAME
+            )
+
+            if not results:
+                return None
+
+            best = results[0]
+            similarity = self._similarity_to_score(best.distance)
+
+            # Check if entry is expired
+            metadata = best.metadata
+            if "timestamp" in metadata and self._is_expired(metadata["timestamp"]):
+                # Entry expired, skip it
+                return None
+
+            if similarity >= self.similarity_threshold:
+                # Found a match! Return cached routing result
+                if "routing_result_json" in metadata:
+                    import json
+                    data = json.loads(metadata["routing_result_json"])
+                    return RoutingResult(
+                        selected_skills=data.get("skills", []),
+                        mission_brief=data.get("mission_brief", ""),
+                        reasoning=data.get("reasoning", ""),
+                        confidence=data.get("confidence", 0.5),
+                        from_cache=True,
+                        timestamp=data.get("timestamp", time.time()),
+                    )
+
+            return None
+
+        except Exception as e:
+            print(f"Warning: Semantic recall failed: {e}")
+            return None
+
+    async def learn(self, query: str, result: RoutingResult):
+        """
+        Store a routing decision in semantic memory.
+
+        Args:
+            query: The original user query
+            result: The routing result to cache
+        """
+        if not self.vector_store:
+            return
+
+        try:
+            import uuid
+            doc_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, query))
+
+            # ChromaDB metadata doesn't support dict, so serialize to JSON string
+            import json
+
+            await self.vector_store.add(
+                documents=[query],
+                ids=[doc_id],
+                collection=self.COLLECTION_NAME,
+                metadatas=[{
+                    "routing_result_json": json.dumps(result.to_dict()),
+                    "timestamp": str(result.timestamp),
+                }]
+            )
+        except Exception as e:
+            print(f"Warning: Semantic learning failed: {e}")
+
+    async def cleanup_expired(self) -> int:
+        """
+        Remove expired routing decisions from the store.
+
+        Returns:
+            Number of expired entries removed
+        """
+        if not self.vector_store:
+            return 0
+
+        try:
+            from chromadb.errors import NotFoundError
+
+            # Get all entries (this is expensive, so limit to reasonable batch)
+            results = await self.vector_store.search(
+                query="",  # Empty query to get all
+                n_results=100,  # Limit batch size
+                collection=self.COLLECTION_NAME
+            )
+
+            removed = 0
+            for entry in results:
+                metadata = entry.metadata
+                if "timestamp" in metadata and self._is_expired(metadata["timestamp"]):
+                    try:
+                        await self.vector_store.delete(
+                            ids=[entry.id],
+                            collection=self.COLLECTION_NAME
+                        )
+                        removed += 1
+                    except NotFoundError:
+                        pass  # Already deleted
+
+            return removed
+        except Exception as e:
+            print(f"Warning: Semantic cleanup failed: {e}")
+            return 0
+
+    async def get_stats(self) -> Dict[str, Any]:
+        """
+        Get statistics about the semantic cortex.
+
+        Returns:
+            Dict with entry_count, avg_similarity, threshold settings
+        """
+        if not self.vector_store:
+            return {"error": "Vector store not available"}
+
+        try:
+            # Get collection count
+            collections = await self.vector_store.list_collections()
+            if self.COLLECTION_NAME not in collections:
+                return {"entry_count": 0}
+
+            # Get a sample to estimate stats
+            results = await self.vector_store.search(
+                query="",
+                n_results=10,
+                collection=self.COLLECTION_NAME
+            )
+
+            valid_entries = []
+            for entry in results:
+                if hasattr(entry, 'metadata') and "timestamp" in entry.metadata:
+                    if not self._is_expired(entry.metadata["timestamp"]):
+                        valid_entries.append(entry)
+
+            return {
+                "entry_count": len(valid_entries),
+                "similarity_threshold": self.similarity_threshold,
+                "ttl_seconds": self.ttl_seconds,
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+
+# =============================================================================
 # Semantic Router with Mission Brief Protocol
 # =============================================================================
 
@@ -125,6 +360,11 @@ class SemanticRouter:
     - Now generates mission_brief for context distillation
     - Hive Mind Cache for instant routing on repeated queries
     - Returns RoutingResult instead of raw dict
+
+    Phase 14.5 Enhancement:
+    - Semantic Cortex: Vector-based fuzzy matching cache
+    - "Fix bug" ≈ "Fix the bug" (same routing result)
+    - Learns from past routing decisions
     """
 
     def __init__(
@@ -132,10 +372,14 @@ class SemanticRouter:
         inference_client: InferenceClient = None,
         cache_size: int = 1000,
         cache_ttl: int = 3600,
+        use_semantic_cache: bool = True,
     ):
         self.registry = get_skill_registry()
         self.inference = inference_client or InferenceClient()
         self.cache = HiveMindCache(max_size=cache_size, ttl_seconds=cache_ttl)
+
+        # Phase 14.5: Semantic Cortex for fuzzy matching
+        self.semantic_cortex = SemanticCortex() if use_semantic_cache else None
 
     def _build_routing_menu(self) -> str:
         """Build routing menu from Skill Registry manifests (Data-Driven)."""
@@ -171,6 +415,11 @@ class SemanticRouter:
         Analyze user query and return a complete RoutingResult.
 
         Phase 14 Enhancement: Now includes mission_brief for Worker.
+        Phase 14.5 Enhancement: Semantic Cortex for fuzzy matching.
+
+        Cache Lookup Order:
+        1. Semantic Cortex (fuzzy match): "Fix bug" ≈ "Fix the bug"
+        2. Exact Match Cache (fast): "run tests" (exact string match)
 
         Args:
             user_query: The user's request
@@ -180,7 +429,14 @@ class SemanticRouter:
         Returns:
             RoutingResult with skills, mission_brief, reasoning, and metadata
         """
-        # 🐝 Hive Mind Check: Instant routing for cached queries
+        # 🧠 Phase 14.5: Semantic Cortex Check (Fuzzy Matching)
+        # Check first because it handles fuzzy semantics
+        if use_cache and self.semantic_cortex:
+            recalled = await self.semantic_cortex.recall(user_query)
+            if recalled is not None:
+                return recalled
+
+        # 🐝 Phase 14: Exact Match Cache (Fast, but rigid)
         if use_cache:
             cached = self.cache.get(user_query)
             if cached is not None:
@@ -218,17 +474,26 @@ ROUTING RULES:
 9. If the request is about terminal/shell commands, use 'terminal'
 10. If the request is about general conversation, use 'writer' or 'knowledge'
 
-MISSION BRIEF GUIDELINES:
-- Be SPECIFIC and ACTIONABLE (not generic)
-- Tell the Worker WHAT to do and WHY
-- Include specific file paths or parameters if mentioned
-- Example: "Fix the IndexError in src/main.py line 42. Use grep to locate, read_file to inspect, then write the fix."
-- Example: "Commit the staged changes with message 'feat(api): add user auth'. First show analysis for confirmation."
+MISSION BRIEF GUIDELINES (Commander's Intent - NOT Step-by-Step):
+- Write COMMANDER'S INTENT: Tell the Worker WHAT goal to achieve and WHAT constraints to follow
+- AVOID step-by-step procedures: Let the Worker decide tool order based on context
+- Be GENERAL and PATH-INDEPENDENT: This brief will be CACHED for future similar requests
+- If user mentioned a file, note it but don't hardcode paths (file may move)
+- Focus on OUTCOME (e.g., "Fix indentation issues in router.py") not PROCESS (e.g., "Use grep to find, then read_file, then write")
+
+GOOD Examples (Commander's Intent):
+- "Fix the IndexError in router.py. Validate the fix with tests before committing."
+- "Commit staged changes with message 'feat(api): add auth'. Show analysis first for confirmation."
+- "Run the test suite and report results. If tests fail, identify the failing tests."
+
+BAD Examples (Over-specified Steps):
+- "First use filesystem to locate router.py, then use grep to find IndexError, then fix..."
+- "Run pytest in tests/ directory, then if passed commit with message..."
 
 OUTPUT FORMAT (JSON):
 {{
     "skills": ["skill1", "skill2"],
-    "mission_brief": "Actionable directive for the Worker...",
+    "mission_brief": "Commander's intent for the Worker...",
     "confidence": 0.85,
     "reasoning": "Why these skills were chosen..."
 }}
@@ -280,8 +545,13 @@ Route this request and provide a mission brief."""
                 confidence=routing_data.get("confidence", 0.5),
             )
 
-            # 🐝 Store in Hive Mind Cache
+            # 🐝 Store in Hive Mind Cache (Exact Match)
             self.cache.set(user_query, routing_result)
+
+            # 🧠 Phase 14.5: Store in Semantic Cortex (Fuzzy Matching)
+            # Learn this routing decision for future semantic recall
+            if self.semantic_cortex:
+                await self.semantic_cortex.learn(user_query, routing_result)
 
             return routing_result
 
