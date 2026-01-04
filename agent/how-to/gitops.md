@@ -142,15 +142,11 @@ Claude: ✅ Commit Successful
 
 ---
 
-## 5. Phase 13.10: Executor Mode (Current)
+## 5. Executor Mode (Current)
 
 ### Core Philosophy: Less Code, More Intelligence
 
-| Old (Over-Engineered)           | New (Executor Mode)                      |
-| ------------------------------- | ---------------------------------------- |
-| `smart_commit` (session dance)  | `git_commit` (direct execution)          |
-| `spec_aware_commit` (AI middle) | Claude generates message, calls directly |
-| `commit_flow.py` (LangGraph)    | Prompt handles workflow, not Python      |
+The current approach is simple: Claude generates the commit message and calls `git_commit` directly.
 
 ### The Result
 

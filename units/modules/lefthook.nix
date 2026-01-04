@@ -45,7 +45,8 @@ let
     {
       name = "lefthook";
       gen =
-        (config.omnibus.ops.mkNixago initConfigs.nixago-lefthook) initConfigs.lefthook.nix
+        (config.omnibus.ops.mkNixago initConfigs.nixago-lefthook)
+          initConfigs.lefthook.nix
           initConfigs.lefthook.shell
           initConfigs.lefthook.prettier
           {
@@ -88,34 +89,39 @@ let
     }
     {
       name = "conform";
-      gen = (config.omnibus.ops.mkNixago initConfigs.nixago-conform) initConfigs.conform.default {
-        data.commit = {
-          conventional = {
-            scopes = append project-scopes;
+      gen =
+        (config.omnibus.ops.mkNixago initConfigs.nixago-conform)
+          initConfigs.conform.default
+          {
+            data.commit = {
+              conventional = {
+                scopes = append project-scopes;
+              };
+            };
           };
-        };
-      };
     }
     {
       name = "cog";
-      gen = (config.omnibus.ops.mkNixago initConfigs.nixago-cog) initConfigs.cog.default {
-        data = {
-          scopes = project-scopes;
-          changelog = {
-            path = "CHANGELOG.md";
-            template = "remote";
-            remote = "github.com";
-            repository = "omni-dev-fusion";
-            owner = "tao3k";
-            authors = [
-              {
-                username = "gtrunsec";
-                signature = "Guangtao";
-              }
-            ];
+      gen =
+        (config.omnibus.ops.mkNixago initConfigs.nixago-cog) initConfigs.cog.default
+          {
+            data = {
+              scopes = project-scopes;
+              changelog = {
+                path = "CHANGELOG.md";
+                template = "remote";
+                remote = "github.com";
+                repository = "omni-dev-fusion";
+                owner = "tao3k";
+                authors = [
+                  {
+                    username = "gtrunsec";
+                    signature = "Guangtao";
+                  }
+                ];
+              };
+            };
           };
-        };
-      };
     }
   ];
 

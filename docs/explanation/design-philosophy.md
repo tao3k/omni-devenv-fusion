@@ -1,5 +1,62 @@
 # Design Philosophy
 
+## Core Design Principles
+
+### 1. User Interface Design First
+
+**Think about the user interface before implementing any feature.**
+
+Every feature should be designed from the user's perspective:
+
+- What does the user need to see?
+- What actions can the user take?
+- How does the user understand what's happening?
+- What's the simplest way to achieve their goal?
+
+> "A beautiful interface to a bad workflow is still bad. But a good interface to a good workflow is magic."
+
+**Design before you code:**
+
+1. Sketch the user flow
+2. Define the API/interface
+3. Consider edge cases
+4. Then implement
+
+### 2. Don't Reinvent the Wheel (CCC Principle)
+
+**Use existing tools when they fit. Build only when necessary.**
+
+The "Clean Code Concepts" (CCC) philosophy teaches us:
+
+| Instead of...                 | Consider...                        |
+| ----------------------------- | ---------------------------------- |
+| Writing custom file parsers   | Using `repomix`                    |
+| Building your own linter      | Using `ruff`, `prettier`, `vale`   |
+| Creating custom config format | Using YAML/JSON/TOML               |
+| Implementing own caching      | Using built-in LRU/frequency-based |
+| Manual directory traversal    | Using `pathlib` or `repomix`       |
+
+**The Trade-off:**
+
+- **Use existing tools**: Faster development, standard format, community support
+- **Build custom**: Full control, exact fit, no dependencies
+
+**Our decision framework:**
+
+1. Does an existing tool solve >80% of the problem?
+2. Is it actively maintained?
+3. Does it integrate with our stack (Nix, Python, etc.)?
+4. If yes → Use it. If no → Build.
+
+**Examples in this project:**
+
+- `repomix` → Standardized knowledge XML packing
+- `ruff` → Python formatting and linting
+- `prettier` → Markdown/JSON formatting
+- `vale` → Documentation linting
+
+---
+
 ## Three Interaction Patterns
 
 This project defines three clear patterns for how AI agents interact with project knowledge:

@@ -79,7 +79,10 @@ class HiveRouter:
         # 1. Check cache
         cache_key = f"{query}:{context[:100]}" if context else query
         if use_cache and cache_key in self._cache:
-            return self._cache[cache_key]
+            cached_route = self._cache[cache_key]
+            # Phase 18: Mark as from cache for UX display
+            cached_route.from_cache = True
+            return cached_route
 
         # 2. Keyword Heuristics (Fast Path)
         route = self._route_by_keywords(query)
@@ -91,6 +94,7 @@ class HiveRouter:
                 route = semantic_route
 
         # 4. Cache and return
+        route.from_cache = False
         self._cache[cache_key] = route
         return route
 

@@ -103,6 +103,7 @@ class AgentRoute(BaseModel):
     - task_brief: Commander's Intent for the agent (Phase 14)
     - constraints: List of constraints for the task
     - relevant_files: Files relevant to the task
+    - from_cache: Whether this was a cache hit (Phase 18)
     """
     target_agent: str  # "coder", "reviewer", "orchestrator"
     confidence: float = 0.5
@@ -110,6 +111,7 @@ class AgentRoute(BaseModel):
     task_brief: str = ""
     constraints: List[str] = []
     relevant_files: List[str] = []
+    from_cache: bool = False  # Phase 18: Cache hit indicator
 
 
 # =============================================================================

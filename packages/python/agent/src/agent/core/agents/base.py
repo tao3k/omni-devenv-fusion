@@ -30,6 +30,7 @@ class AgentContext(BaseModel):
     constraints: List[str] = []
     relevant_files: List[str] = []
     knowledge_context: str = ""  # Phase 16: RAG knowledge injection
+    rag_sources: List[Dict[str, Any]] = []  # Phase 18: RAG sources for UX
 
 
 class AgentResult(BaseModel):
@@ -42,6 +43,8 @@ class AgentResult(BaseModel):
     # Phase 15: Feedback Loop fields
     audit_result: Optional[Dict[str, Any]] = None
     needs_review: bool = False
+    # Phase 16: RAG sources (for UX visualization)
+    rag_sources: List[Dict[str, Any]] = []
 
 
 class AuditResult(BaseModel):
@@ -88,6 +91,7 @@ class BaseAgent(ABC):
         """
         ⚡️ Core: Convert TaskBrief to System Prompt (Phase 14 Physical Implementation).
         Phase 16: Injects relevant project knowledge from VectorStore.
+        Phase 18: Returns RAG sources for UX visualization.
 
         Args:
             mission_brief: The Commander's Intent from HiveRouter
@@ -106,8 +110,9 @@ class BaseAgent(ABC):
 
         # 3. Phase 16: Retrieve relevant knowledge from VectorStore
         knowledge_context = ""
+        rag_sources = []  # Phase 18: For UX display
         if enable_rag:
-            knowledge_context = await self._retrieve_relevant_knowledge(mission_brief)
+            knowledge_context, rag_sources = await self._retrieve_relevant_knowledge(mission_brief)
 
         # 4. Build Telepathic System Prompt with knowledge injection
         system_prompt = self._build_system_prompt(
@@ -124,7 +129,8 @@ class BaseAgent(ABC):
             mission_brief=mission_brief,
             constraints=constraints or [],
             relevant_files=relevant_files or [],
-            knowledge_context=knowledge_context
+            knowledge_context=knowledge_context,
+            rag_sources=rag_sources  # Phase 18: For UX display
         )
 
     def _get_skill_tools(self) -> List[Dict[str, Any]]:
@@ -167,7 +173,7 @@ class BaseAgent(ABC):
         self,
         query: str,
         n_results: int = 3
-    ) -> str:
+    ) -> tuple[str, list[dict]]:
         """
         Phase 16: Retrieve relevant project knowledge from VectorStore.
 
@@ -179,38 +185,46 @@ class BaseAgent(ABC):
             n_results: Maximum number of results to retrieve
 
         Returns:
-            Formatted knowledge string for system prompt injection, or empty string
+            Tuple of (formatted knowledge string, sources list for UX)
         """
         try:
             vm = get_vector_memory()
             results: list[SearchResult] = await vm.search(query, n_results=n_results)
 
             if not results:
-                return ""
+                return "", []
 
             # Filter by similarity (distance < 0.3 means high similarity)
             # ChromaDB distance: 0.0 = identical, smaller = more similar
             filtered = [r for r in results if r.distance < 0.3]
 
             if not filtered:
-                return ""
+                return "", []
 
             # Format as markdown sections
             sections = []
+            sources = []
             for r in filtered:
                 source = r.metadata.get("source_file", r.metadata.get("title", "Knowledge"))
                 # Truncate to prevent context explosion (800 chars per doc)
                 content = r.content[:800] + ("..." if len(r.content) > 800 else "")
                 sections.append(f"- **{source}**:\n  {content}")
 
-            return "\n## 🧠 RELEVANT PROJECT KNOWLEDGE\n" + "\n".join(sections)
+                # Build source dict for UX display
+                sources.append({
+                    "source_file": source,
+                    "distance": r.distance,
+                    "title": r.metadata.get("title", ""),
+                })
+
+            return "\n## 🧠 RELEVANT PROJECT KNOWLEDGE\n" + "\n".join(sections), sources
 
         except Exception as e:
             # RAG failure should not block execution
             import structlog
             logger = structlog.get_logger(__name__)
             logger.warning("RAG retrieval failed", error=str(e))
-            return ""
+            return "", []
 
     def _build_system_prompt(
         self,
@@ -294,7 +308,7 @@ class BaseAgent(ABC):
             chat_history: Conversation history
 
         Returns:
-            AgentResult with decision and supporting data
+            AgentResult with decision and supporting data, including rag_sources
         """
         # Prepare context with Mission Brief
         ctx = await self.prepare_context(
@@ -313,6 +327,9 @@ class BaseAgent(ABC):
             context=ctx,
             history=chat_history or []
         )
+
+        # Phase 18: Include RAG sources for UX display
+        result.rag_sources = ctx.rag_sources
 
         print(f"[{self.name}] ✅ Complete: confidence={result.confidence}")
 

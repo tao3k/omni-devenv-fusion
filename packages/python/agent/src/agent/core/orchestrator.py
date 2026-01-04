@@ -10,6 +10,10 @@ Phase 15 Enhancement:
 - Feedback Loop: Coder executes → Reviewer audits → Self-correction if needed
 - Virtuous Cycle ensures quality output before returning to user
 
+Phase 18 Enhancement:
+- Glass Cockpit: UXManager for real-time TUI visualization
+- Shows routing, RAG knowledge, and audit results beautifully
+
 Usage:
     from agent.core.orchestrator import Orchestrator
 
@@ -23,6 +27,7 @@ from agent.core.router import get_hive_router, AgentRoute
 from agent.core.agents.base import BaseAgent, AgentResult, AuditResult
 from agent.core.agents.coder import CoderAgent
 from agent.core.agents.reviewer import ReviewerAgent
+from agent.core.ux import get_ux_manager  # Phase 18: Glass Cockpit
 
 logger = structlog.get_logger()
 
@@ -42,6 +47,10 @@ class Orchestrator:
     3. Audit: Reviewer checks output (for Coder tasks)
     4. Self-Correct: Retry with feedback if audit fails
     5. Return: Quality-assured result to user
+
+    Phase 18: Glass Cockpit Integration:
+    - Uses UXManager for beautiful terminal visualization
+    - Shows routing, RAG knowledge, and audit results in real-time
     """
 
     def __init__(self, inference_engine=None, feedback_enabled: bool = DEFAULT_FEEDBACK_ENABLED, max_retries: int = DEFAULT_MAX_RETRIES):
@@ -57,6 +66,7 @@ class Orchestrator:
         self.router = get_hive_router()
         self.feedback_enabled = feedback_enabled
         self.max_retries = max_retries
+        self.ux = get_ux_manager()  # Phase 18: Glass Cockpit
 
         # Agent Registry - Maps target_agent names to Agent classes
         self.agent_map: Dict[str, type] = {
@@ -72,7 +82,7 @@ class Orchestrator:
         context: Dict[str, Any] = None
     ) -> str:
         """
-        Main Dispatch Loop with Phase 15 Feedback Loop.
+        Main Dispatch Loop with Phase 15 Feedback Loop and Phase 18 UX.
 
         Phase 15 Flow:
         1. Route request to appropriate agent
@@ -80,6 +90,13 @@ class Orchestrator:
         3. If Coder: Reviewer audits output
         4. If audit fails: Retry with correction brief
         5. Return quality-assured result
+
+        Phase 18: Glass Cockpit shows:
+        - User query in a panel
+        - Routing decision with mission brief
+        - RAG knowledge hits
+        - Execution progress
+        - Audit results
 
         Args:
             user_query: The user's request
@@ -89,13 +106,26 @@ class Orchestrator:
         Returns:
             Agent's response content
         """
+        # Phase 18: Start task visualization
+        self.ux.start_task(user_query)
+
         logger.info("🎹 Orchestrator processing request", query=user_query[:80])
 
         # === Phase 1: Hive Routing ===
+        self.ux.start_routing()
         route = await self.router.route_to_agent(
             query=user_query,
             context=str(history) if history else "",
             use_cache=True
+        )
+        self.ux.stop_routing()
+
+        # Phase 18: Show routing result
+        self.ux.show_routing_result(
+            agent_name=route.target_agent,
+            mission_brief=route.task_brief or user_query,
+            confidence=route.confidence,
+            from_cache=route.from_cache
         )
 
         logger.info(
@@ -138,6 +168,7 @@ class Orchestrator:
 
         # Standard execution (non-feedback path)
         try:
+            self.ux.start_execution(target_agent_class.name)
             result: AgentResult = await worker.run(
                 task=user_query,
                 mission_brief=task_brief,
@@ -145,6 +176,14 @@ class Orchestrator:
                 relevant_files=route.relevant_files or [],
                 chat_history=history or []
             )
+            self.ux.stop_execution()
+
+            # Phase 18: Show RAG sources
+            if result.rag_sources:
+                self.ux.show_rag_hits(result.rag_sources)
+
+            # Phase 18: Show agent response
+            self.ux.print_agent_response(result.content, f"{target_agent_class.name.upper()} Output")
 
             logger.info(
                 f"✅ {target_agent_class.name.upper()} complete",
@@ -152,10 +191,13 @@ class Orchestrator:
                 confidence=result.confidence
             )
 
+            self.ux.end_task(success=result.success)
             return result.content
 
         except Exception as e:
+            self.ux.show_error("Agent execution failed", str(e))
             logger.error("❌ Agent execution failed", error=str(e))
+            self.ux.end_task(success=False)
             return f"System Error during execution: {str(e)}"
 
     async def _execute_with_feedback_loop(
@@ -168,13 +210,15 @@ class Orchestrator:
         history: List[Dict[str, Any]]
     ) -> str:
         """
-        Execute with Phase 15 Feedback Loop.
+        Execute with Phase 15 Feedback Loop and Phase 18 UX.
 
         The Virtuous Cycle:
         1. Execute CoderAgent
         2. Reviewer audits output
         3. If rejected: Retry with correction brief
         4. Repeat until approved or max retries
+
+        Phase 18: Visualizes each step with UXManager.
 
         Args:
             user_query: Original user request
@@ -191,10 +235,13 @@ class Orchestrator:
         audit_history = []
 
         for attempt in range(1, self.max_retries + 1):
+            # Phase 18: Show correction loop entry
+            self.ux.show_correction_loop(attempt, self.max_retries)
             logger.info(f"🔄 Execution attempt {attempt}/{self.max_retries}")
 
             # Step 1: Execute worker (Coder)
             try:
+                self.ux.start_execution(worker.name)
                 result: AgentResult = await worker.run(
                     task=user_query,
                     mission_brief=task_brief,
@@ -202,11 +249,23 @@ class Orchestrator:
                     relevant_files=relevant_files,
                     chat_history=history
                 )
+                self.ux.stop_execution()
+
+                # Phase 18: Show RAG sources
+                if result.rag_sources:
+                    self.ux.show_rag_hits(result.rag_sources)
+
+                # Phase 18: Show agent response
+                self.ux.print_agent_response(result.content, f"{worker.name.upper()} Output (Attempt {attempt})")
+
             except Exception as e:
+                self.ux.show_error("Worker execution failed", str(e))
                 logger.error("❌ Worker execution failed", error=str(e))
+                self.ux.end_task(success=False)
                 return f"System Error during execution: {str(e)}"
 
             # Step 2: Reviewer audits output
+            self.ux.start_review()
             logger.info("🕵️ Reviewer auditing output...")
             audit_result: AuditResult = await reviewer.audit(
                 task=user_query,
@@ -216,6 +275,14 @@ class Orchestrator:
                     "relevant_files": relevant_files,
                     "attempt": attempt
                 }
+            )
+
+            # Phase 18: Show audit result
+            self.ux.show_audit_result(
+                approved=audit_result.approved,
+                feedback=audit_result.feedback,
+                issues=audit_result.issues_found,
+                suggestions=audit_result.suggestions
             )
 
             audit_entry = {
@@ -238,6 +305,7 @@ class Orchestrator:
                 # Log full audit history for transparency
                 logger.debug("Audit history", audits=audit_history)
 
+                self.ux.end_task(success=True)
                 return result.content
 
             # Step 4: Self-correction loop
@@ -268,12 +336,17 @@ class Orchestrator:
 
         # Max retries exceeded
         logger.error("❌ Max retries exceeded, returning last result with warnings")
+        self.ux.show_error(
+            f"Quality review failed after {self.max_retries} attempts",
+            f"Audit issues: {', '.join(audit_history[-1]['issues'])}"
+        )
 
         # Include audit history in final response for transparency
         warning_header = f"⚠️ Quality review failed after {self.max_retries} attempts.\n"
         audit_summary = f"Audit issues: {', '.join(audit_history[-1]['issues'])}\n"
         last_feedback = audit_history[-1]['feedback']
 
+        self.ux.end_task(success=False)
         return f"{warning_header}{audit_summary}\nReviewer said: {last_feedback}\n\n{result.content}"
 
     async def dispatch_with_hive_context(
