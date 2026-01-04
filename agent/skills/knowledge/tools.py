@@ -311,9 +311,16 @@ def _get_project_name() -> str:
 
 def _load_scopes() -> List[str]:
     """Load valid git scopes from cog.toml."""
+    from common.mcp_core.gitops import get_project_root
+    from common.mcp_core.settings import get_setting
+
     try:
-        if (Path.cwd() / "cog.toml").exists():
-            with open("cog.toml", "rb") as f:
+        project_root = get_project_root()
+        cog_toml_path = get_setting("config.cog_toml", "cog.toml")
+        cog_toml = project_root / cog_toml_path
+
+        if cog_toml.exists():
+            with open(cog_toml, "rb") as f:
                 data = tomllib.load(f)
                 return data.get("scopes", [])
     except Exception:
