@@ -28,3 +28,4 @@ devenv.local.nix
 /.conform.yaml
 /lefthook.yml
 
+.claude/settings.local.json
