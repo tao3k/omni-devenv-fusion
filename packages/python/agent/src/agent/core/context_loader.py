@@ -4,8 +4,10 @@ src/agent/core/context_loader.py
 Phase 13.8: Configuration-Driven Context
 
 Responsible for hydrating the Agent's context from configuration and local overrides.
+Phase 13.9: Context Injection - Auto-inject Git status for zero-click awareness.
 Follows the Configuration vs Code separation principle.
 """
+import subprocess
 from pathlib import Path
 import structlog
 
@@ -40,9 +42,49 @@ class ContextLoader:
                 logger.warning(f"Prompt file not found: {full_path}")
             return ""
 
+    def _get_git_status_summary(self) -> str:
+        """
+        [Context Injection] Auto-inject Git status for zero-click awareness.
+        Read-only, fast, no MCP tool call needed.
+        """
+        try:
+            # 1. Get current branch
+            branch = subprocess.check_output(
+                ["git", "branch", "--show-current"],
+                cwd=self.root,
+                text=True,
+                stderr=subprocess.DEVNULL
+            ).strip()
+
+            # 2. Get short status
+            status = subprocess.check_output(
+                ["git", "status", "--short"],
+                cwd=self.root,
+                text=True,
+                stderr=subprocess.DEVNULL
+            ).strip()
+
+            if not status:
+                return f"🟢 Git Branch: `{branch}` (Clean)"
+
+            # Limit output to prevent context explosion
+            lines = status.split('\n')
+            if len(lines) > 15:
+                display = "\n".join(lines[:15]) + f"\n... ({len(lines) - 15} more files)"
+            else:
+                return f"🔶 Git Branch: `{branch}`\n{status}"
+
+            return f"🔶 Git Branch: `{branch}`\n{display}"
+
+        except subprocess.CalledProcessError:
+            return "⚪ Git Status: Not a git repository"
+        except Exception as e:
+            return f"⚪ Git Status: Error - {str(e)}"
+
     def get_combined_system_prompt(self) -> str:
         """
         Combine System Core Prompt + User Custom Prompt.
+        Phase 13.9: Auto-inject Git status for zero-click awareness.
 
         Returns:
             Combined prompt string ready for MCP server initialization.
@@ -55,8 +97,12 @@ class ContextLoader:
         user_path = get_setting("prompts.user_custom_path", "agent/.cache/user_custom.md")
         user_content = self._read_file_safe(user_path)
 
-        # 3. Combine
-        combined = f"{core_content}\n\n"
+        # 3. [Phase 13.9] Inject Git Status (Context Injection)
+        git_status = self._get_git_status_summary()
+
+        # 4. Combine with placeholders
+        combined = core_content.replace("{{git_status}}", git_status)
+        combined += "\n\n"
         if user_content:
             combined += f"---\n{user_content}"
 

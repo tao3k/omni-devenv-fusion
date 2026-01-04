@@ -1,6 +1,7 @@
 """
 src/agent/core/bootstrap.py
 System boot sequence and background task initialization.
+Phase 13.10: Config-driven skill preloading.
 """
 import sys
 import asyncio
@@ -12,27 +13,37 @@ from common.mcp_core import log_decision
 
 logger = structlog.get_logger(__name__)
 
-# Core skills that must be loaded for the agent to be functional
-CORE_SKILLS = ["filesystem", "git", "terminal", "testing_protocol"]
-
 
 def boot_core_skills(mcp: FastMCP):
     """
-    [Kernel Boot] Auto-load essential skills to ensure Agent is capable immediately.
-    Fixes the 'Lobotomized Agent' issue by ensuring tools like 'smart_commit' are ready.
+    [Kernel Boot] Auto-load skills from settings.yaml.
+    Fixes the 'Lobotomized Agent' issue by ensuring tools are ready.
+
+    Loading mode is controlled by settings.yaml:
+    - skills.preload: Skills loaded at startup
+    - skills.on_demand: Skills available but not loaded until requested
     """
     registry = get_skill_registry()
 
     print("🚀 Booting Omni-DevEnv Kernel...", file=sys.stderr)
 
-    for skill in CORE_SKILLS:
+    # Use config-driven preloading
+    preload_skills = registry.get_preload_skills()
+
+    if not preload_skills:
+        print("  ⚠️  No preload skills configured in settings.yaml", file=sys.stderr)
+        return
+
+    loaded_count = 0
+    for skill in preload_skills:
         try:
             # Check if skill exists before trying to load
             if registry.get_skill_manifest(skill):
                 success, msg = registry.load_skill(skill, mcp)
                 if success:
-                    print(f"  ✅ Auto-loaded: {skill}", file=sys.stderr)
-                    log_decision(f"boot.skill_loaded", {"skill": skill}, logger)
+                    print(f"  ✅ Preloaded: {skill}", file=sys.stderr)
+                    log_decision(f"boot.skill_preloaded", {"skill": skill}, logger)
+                    loaded_count += 1
                 else:
                     print(f"  ⚠️  Skipped: {skill} -> {msg}", file=sys.stderr)
                     log_decision(f"boot.skill_skipped", {"skill": skill, "reason": msg}, logger)
@@ -41,6 +52,8 @@ def boot_core_skills(mcp: FastMCP):
         except Exception as e:
             # Don't crash main process if a skill is malformed
             logger.warning(f"Skill boot error ({skill}): {e}")
+
+    print(f"  📦 Preloaded {loaded_count}/{len(preload_skills)} skills", file=sys.stderr)
 
 
 def start_background_tasks():

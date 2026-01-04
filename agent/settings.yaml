@@ -79,3 +79,24 @@ logging:
 prompts:
   core_path: "agent/prompts/system_core.md"
   user_custom_path: ".cache/user_custom.md"
+
+# =============================================================================
+# Phase 13.10: Dynamic Skill Loading
+# =============================================================================
+skills:
+  # Skills to preload at server startup (loaded into context immediately)
+  preload:
+    - knowledge
+    - git
+    - filesystem
+    - writer
+    - terminal
+    - testing_protocol
+    - code_insight
+
+  # Reload behavior
+  reload:
+    # Allow LLM to reload skills via load_skill
+    enabled: true
+    # Default to false - require explicit confirmation
+    auto_confirm: false

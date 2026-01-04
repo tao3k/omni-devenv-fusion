@@ -54,11 +54,45 @@ Skill '{skill_name}' loaded successfully!
 
     @mcp.tool()
     async def get_active_skills() -> str:
-        """Check which skills are currently loaded in memory."""
-        loaded = list(registry.loaded_skills.keys())
+        """
+        [Skill System] Check which skills are currently loaded in memory.
+        Use this to see what's currently active.
+        """
+        loaded = registry.list_loaded_skills()
         if not loaded:
             return "No skills currently loaded."
-        return f"Active Skills: {', '.join(loaded)}"
+
+        preload = registry.get_preload_skills()
+
+        lines = ["Active Skills:"]
+        for skill in loaded:
+            status = "[Preloaded]" if skill in preload else "[On-Demand]"
+            lines.append(f"- {skill} {status}")
+
+        return "\n".join(lines)
+
+    @mcp.tool()
+    async def list_skill_modes() -> str:
+        """
+        [Skill System] List skills by loading mode (Preload vs On-Demand).
+        Use this to understand what's available at startup vs what needs explicit loading.
+        """
+        preload = registry.get_preload_skills()
+        all_skills = registry.list_available_skills()
+
+        lines = ["## Skill Loading Modes (from settings.yaml)", ""]
+        lines.append(f"### Preload ({len(preload)}) - Loaded at startup")
+        for skill in preload:
+            status = "✓" if skill in registry.list_loaded_skills() else "○"
+            lines.append(f"  {status} {skill}")
+
+        lines.append(f"\n### Available On-Demand ({len([s for s in all_skills if s not in preload])}) - Load when needed")
+        for skill in sorted(all_skills):
+            if skill not in preload:
+                status = "✓" if skill in registry.list_loaded_skills() else "○"
+                lines.append(f"  {status} {skill}")
+
+        return "\n".join(lines)
 
     @mcp.tool()
     async def skill(skill: str, call: str) -> str:

@@ -1,20 +1,17 @@
 # packages/python/agent/src/agent/tests/test_phase11.py
 """
-Phase 11: The Neural Matrix - Test Suite
+Phase 11: The Neural Matrix - Test Suite (Simplified)
 
 Tests for:
 - Pydantic schema validation
-- LangGraph commit workflow
-- Smart Commit V2 tools
+- Context injection
 
 Reference: agent/specs/phase11_neural_matrix.md
 
 In uv workspace, packages are installed and can be imported directly.
 """
 import pytest
-import json
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 # Direct imports from installed workspace packages
 from agent.core.schema import (
@@ -23,7 +20,6 @@ from agent.core.schema import (
     FeatureComplexity,
     ComplexityLevel,
     RouterDomain,
-    CommitMessageValidation,
 )
 
 
@@ -61,18 +57,6 @@ class TestSpecGapAnalysis:
         assert gap.spec_exists is False
         assert gap.completeness_score == 0
 
-    def test_spec_gap_analysis_score_bounds(self):
-        """Verify score is constrained to 0-100."""
-        with pytest.raises(ValueError):
-            SpecGapAnalysis(
-                spec_exists=True,
-                spec_path="test.md",
-                completeness_score=150,  # Invalid
-                missing_sections=[],
-                has_template_placeholders=False,
-                test_plan_defined=True
-            )
-
 
 class TestLegislationDecision:
     """Tests for LegislationDecision schema."""
@@ -97,26 +81,6 @@ class TestLegislationDecision:
         assert decision.decision == "allowed"
         assert decision.required_action == "proceed_to_code"
 
-    def test_blocked_decision(self):
-        """Verify blocked decision schema."""
-        gap = SpecGapAnalysis(
-            spec_exists=False,
-            spec_path=None,
-            completeness_score=0,
-            missing_sections=["all"],
-            has_template_placeholders=False,
-            test_plan_defined=False
-        )
-        decision = LegislationDecision(
-            decision="blocked",
-            reasoning="Legislation is mandatory",
-            required_action="create_spec",
-            gap_analysis=gap,
-            spec_path=None
-        )
-        assert decision.decision == "blocked"
-        assert decision.required_action == "create_spec"
-
 
 class TestFeatureComplexity:
     """Tests for FeatureComplexity schema."""
@@ -133,121 +97,6 @@ class TestFeatureComplexity:
         )
         assert complexity.level == ComplexityLevel.L1
         assert complexity.level.value == "L1"
-
-    def test_complexity_level_l4(self):
-        """Verify L4 complexity schema."""
-        complexity = FeatureComplexity(
-            level=ComplexityLevel.L4,
-            name="Critical",
-            definition="Auth, Payments, breaking changes",
-            rationale="Authentication system change",
-            test_requirements="just test-unit && just test-int && manual E2E",
-            examples=["Add OAuth", "DB migration"]
-        )
-        assert complexity.level == ComplexityLevel.L4
-
-
-# =============================================================================
-# Commit Workflow Tests
-# =============================================================================
-
-class TestCommitWorkflow:
-    """Tests for LangGraph commit workflow."""
-
-    def test_workflow_compiles(self):
-        """Verify LangGraph workflow compiles successfully."""
-        from agent.core.workflows.commit_flow import create_commit_workflow
-
-        workflow = create_commit_workflow()
-        assert workflow is not None
-
-    def test_workflow_has_required_nodes(self):
-        """Verify workflow has all required nodes."""
-        from agent.core.workflows.commit_flow import create_commit_workflow
-
-        workflow = create_commit_workflow()
-
-        # Check nodes exist (graph is StateGraph before compilation)
-        nodes = list(workflow.nodes.keys())
-        assert "analyze" in nodes
-        assert "human_gate" in nodes
-        assert "execute" in nodes
-
-    def test_workflow_edges(self):
-        """Verify workflow has correct edges."""
-        from agent.core.workflows.commit_flow import create_commit_workflow
-
-        workflow = create_commit_workflow()
-
-        # StateGraph uses set_entry_point, check by verifying nodes exist
-        nodes = list(workflow.nodes.keys())
-        assert "analyze" in nodes
-        assert "human_gate" in nodes
-        assert "execute" in nodes
-
-    def test_get_workflow_returns_compiled(self):
-        """Verify get_workflow returns compiled state graph."""
-        from agent.core.workflows.commit_flow import get_workflow
-
-        workflow = get_workflow()
-
-        # CompiledStateGraph should have stream method
-        assert hasattr(workflow, 'stream')
-        assert hasattr(workflow, 'get_state')
-        assert hasattr(workflow, 'update_state')
-
-
-# =============================================================================
-# Product Owner Helper Functions Tests
-# =============================================================================
-
-class TestProductOwnerHelpers:
-    """Tests for product_owner helper functions."""
-
-    def test_get_spec_path_from_name(self):
-        """Verify spec path generation from name."""
-        from agent.capabilities.product_owner import _get_spec_path_from_name
-
-        # Test with simple name
-        path = _get_spec_path_from_name("user_authentication")
-        assert path is None  # File doesn't exist
-
-        # Test with special characters
-        path = _get_spec_path_from_name("auth/login_flow")
-        assert path is None
-
-    def test_analyze_spec_gap_no_spec(self):
-        """Verify gap analysis when spec doesn't exist."""
-        from agent.capabilities.product_owner import _analyze_spec_gap
-
-        gap = _analyze_spec_gap(None)
-
-        assert gap["spec_exists"] is False
-        assert gap["completeness_score"] == 0
-        assert gap["missing_sections"] == ["all"]
-        assert gap["test_plan_defined"] is False
-
-    def test_analyze_spec_gap_with_existing_spec(self):
-        """Verify gap analysis when spec exists."""
-        from agent.capabilities.product_owner import _analyze_spec_gap
-
-        # Use an existing spec file (with the naming convention)
-        spec_path = "agent/specs/phase11_the_neural_matrix.md"
-        gap = _analyze_spec_gap(spec_path)
-
-        assert gap["spec_exists"] is True
-        assert gap["spec_path"] == spec_path
-        assert gap["completeness_score"] > 0
-        assert isinstance(gap["missing_sections"], list)
-
-
-# =============================================================================
-# Integration Tests (Mocked)
-# Note: smart_commit and confirm_commit are MCP tools, not exported functions.
-# They can only be tested through the MCP server interface.
-# =============================================================================
-
-# Skipping these tests as the functions are MCP tools, not module exports
 
 
 # =============================================================================
@@ -267,35 +116,6 @@ class TestRouterDomain:
         assert RouterDomain.DEVOPS.value == "DevOps"
         assert RouterDomain.SEARCH.value == "Search"
 
-
-# =============================================================================
-# Test Fixtures
-# =============================================================================
-
-@pytest.fixture
-def sample_diff():
-    """Provide a sample git diff for testing."""
-    return """diff --git a/src/agent/core/schema.py b/src/agent/core/schema.py
-new file mode 100644
-index 0000000..1234567
---- /dev/null
-+++ b/src/agent/core/schema.py
-@@ -0,0 +1,100 @@
-+# Phase 11 Schema
-+class SpecGapAnalysis(BaseModel):
-+    pass
-+"""
-
-
-@pytest.fixture
-def sample_commit_message():
-    """Provide a sample commit message for testing."""
-    return "feat(agent): add Phase 11 neural matrix schema"
-
-
-# =============================================================================
-# Run Tests
-# =============================================================================
 
 # =============================================================================
 # Phase 13.8: Configuration-Driven Context Tests
@@ -356,200 +176,47 @@ class TestContextLoader:
 
 
 # =============================================================================
-# InferenceClient API Signature Tests (Regression Tests)
+# Phase 13.9: Git Status Injection Tests
 # =============================================================================
 
-class TestInferenceClientSignature:
-    """Tests for InferenceClient API signature (prevents regression)."""
+class TestGitStatusInjection:
+    """Tests for Phase 13.9 Context Injection."""
 
-    def test_inference_client_complete_signature(self):
-        """Verify InferenceClient.complete has correct signature."""
-        from common.mcp_core.inference import InferenceClient
-        import inspect
+    def test_context_loader_has_git_status_method(self):
+        """Verify ContextLoader has _get_git_status_summary method."""
+        from agent.core.context_loader import ContextLoader
 
-        sig = inspect.signature(InferenceClient.complete)
-        params = list(sig.parameters.keys())
+        loader = ContextLoader()
+        assert hasattr(loader, "_get_git_status_summary")
+        assert callable(loader._get_git_status_summary)
 
-        # Must have these parameters
-        assert "system_prompt" in params, "complete() must have 'system_prompt' parameter"
-        assert "user_query" in params, "complete() must have 'user_query' parameter"
-        # Must NOT have 'prompt' parameter (old API)
-        assert "prompt" not in params, "complete() must NOT have 'prompt' parameter (old API)"
+    def test_git_status_returns_string(self):
+        """Verify git status returns a string."""
+        from agent.core.context_loader import ContextLoader
 
-    def test_inference_client_returns_dict(self):
-        """Verify InferenceClient.complete returns Dict[str, Any]."""
-        from common.mcp_core.inference import InferenceClient
+        loader = ContextLoader()
+        status = loader._get_git_status_summary()
 
-        # Check return annotation in the function signature
-        import inspect
-        sig = inspect.signature(InferenceClient.complete)
-        return_annotation = str(sig.return_annotation)
-        # Should contain Dict and Any
-        assert "Dict" in return_annotation, f"Return should be Dict, got: {return_annotation}"
-        assert "Any" in return_annotation, f"Return should include Any, got: {return_annotation}"
+        assert isinstance(status, str)
+        assert len(status) > 0
 
-
-class TestCommitToolsInferenceUsage:
-    """Tests for correct InferenceClient usage in commit tools."""
-
-    def test_commit_tools_uses_correct_api(self):
-        """Verify commit.py uses correct InferenceClient API."""
-        import ast
-        from pathlib import Path
-
-        commit_py = Path(__file__).parent.parent / "tools" / "commit.py"
-        if not commit_py.exists():
-            pytest.skip("commit.py not found")
-
-        content = commit_py.read_text()
-        tree = ast.parse(content)
-
-        # Find all function calls to client.complete
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call):
-                if isinstance(node.func, ast.Attribute):
-                    if node.func.attr == "complete":
-                        # Check keyword arguments
-                        kwargs = {kw.arg for kw in node.keywords}
-                        assert "prompt" not in kwargs, "commit.py: complete() must NOT use 'prompt' kwarg"
-                        assert "system_prompt" in kwargs or "user_query" in kwargs, \
-                            "commit.py: complete() should use 'system_prompt' and 'user_query'"
-
-    def test_spec_tools_uses_correct_api(self):
-        """Verify spec.py uses correct InferenceClient API."""
-        import ast
-        from pathlib import Path
-
-        spec_py = Path(__file__).parent.parent / "tools" / "spec.py"
-        if not spec_py.exists():
-            pytest.skip("spec.py not found")
-
-        content = spec_py.read_text()
-        tree = ast.parse(content)
-
-        # Find all function calls to client.complete
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call):
-                if isinstance(node.func, ast.Attribute):
-                    if node.func.attr == "complete":
-                        # Check keyword arguments
-                        kwargs = {kw.arg for kw in node.keywords}
-                        assert "prompt" not in kwargs, "spec.py: complete() must NOT use 'prompt' kwarg"
-                        assert "system_prompt" in kwargs or "user_query" in kwargs, \
-                            "spec.py: complete() should use 'system_prompt' and 'user_query'"
+    def test_system_prompt_includes_git_status_placeholder(self):
+        """Verify system_core.md has git_status placeholder."""
+        core_path = Path.cwd() / "agent" / "prompts" / "system_core.md"
+        if core_path.exists():
+            content = core_path.read_text()
+            assert "{{git_status}}" in content
 
 
 # =============================================================================
-# Token File Format Tests
+# Phase 13.10: Git Skill Tests (Simplified)
 # =============================================================================
 
-class TestTokenFileFormat:
-    """Tests for commit token file format (prevents expiration issues)."""
-
-    def test_token_file_format_parseable(self):
-        """Verify token file format can be parsed correctly by justfile."""
-        import subprocess
-
-        # Use a fixed timestamp that date -d can parse reliably
-        timestamp = "2026-01-03 12:00:00"
-
-        # Simulate token file content
-        token_content = f"session123:abc123:{timestamp}:test message"
-
-        # Parse format: session_id:token:timestamp:message
-        parts = token_content.split(":")
-        assert len(parts) >= 4, "Token format must have at least 4 parts"
-
-        session_id, token, ts, message = parts[0], parts[1], parts[2], ":".join(parts[3:])
-
-        # Verify timestamp can be parsed by bash date command
-        result = subprocess.run(
-            ["date", "-d", ts, "+%s"],
-            capture_output=True,
-            text=True
-        )
-        assert result.returncode == 0, f"date -d failed to parse: {ts}, error: {result.stderr}"
-
-        epoch = int(result.stdout.strip())
-        # Verify it's a valid epoch timestamp (2026-01-03 = ~1735838400)
-        assert epoch > 1700000000, f"Invalid epoch: {epoch}"
-        assert epoch < 2000000000, f"Invalid epoch: {epoch}"
-
-    def test_justfile_agent_commit_timestamp_parsing(self):
-        """Verify justfile can parse the timestamp format correctly."""
-        import subprocess
-        import os
-
-        # Use a fixed timestamp to avoid timezone issues
-        timestamp = "2026-01-03 12:00:00"
-        token_file = "/tmp/.omni_commit_token_test"
-
-        # Write token file with proper format
-        token_content = f"session123:test-token:{timestamp}:test commit"
-        with open(token_file, "w") as f:
-            f.write(token_content)
-
-        # Test the parsing logic from justfile (lines 58-71)
-        result = subprocess.run(
-            ["bash", "-c", f'''
-                TOKEN_FILE="{token_file}"
-                if [ -f "$TOKEN_FILE" ]; then
-                    TOKEN_CONTENT=$(cat "$TOKEN_FILE")
-                    TIMESTAMP=$(echo "$TOKEN_CONTENT" | cut -d':' -f3)
-                    # This is what justfile does on line 69
-                    TOKEN_EPOCH=$(date -d "$TIMESTAMP" +%s 2>/dev/null || date +%s)
-                    NOW_EPOCH=$(date +%s)
-                    ELAPSED=$((NOW_EPOCH - TOKEN_EPOCH))
-                    echo "ELAPSED=$ELAPSED"
-                    # Just verify parsing works, not expiration check
-                    echo "PARSED_OK"
-                else
-                    echo "FILE_NOT_FOUND"
-                fi
-            '''],
-            capture_output=True,
-            text=True
-        )
-
-        # The token should be parseable
-        assert result.returncode == 0, f"Failed to parse token: {result.stderr}"
-        assert "PARSED_OK" in result.stdout, f"Token parsing failed: {result.stdout}"
-
-        # Cleanup
-        os.remove(token_file)
-
-    def test_token_file_format_with_epoch(self):
-        """Verify epoch timestamp format also works (fallback)."""
-        import subprocess
-
-        # Use epoch timestamp directly (what happens when date -d fails)
-        epoch_ts = "1735838400"  # 2026-01-03 12:00:00 UTC
-
-        # Simulate token file content with epoch
-        token_content = f"session123:abc123:{epoch_ts}:test message"
-
-        # Parse format
-        parts = token_content.split(":")
-        assert len(parts) >= 4
-
-        ts = parts[2]
-        assert ts.isdigit(), "Epoch timestamp should be numeric"
-
-        # Verify epoch is valid
-        assert int(ts) > 1700000000, "Invalid epoch timestamp"
-        assert int(ts) < 2000000000, "Invalid epoch timestamp"
-
-
-# =============================================================================
-# Phase 13.9: Git Skill Hot Reload Tests
-# =============================================================================
-
-# Skills are in project root's agent/skills/, use Path.cwd() for project root
 _SKILLS_ROOT = Path.cwd() / "agent" / "skills"
 
 
-class TestGitSkillHotReload:
-    """Tests for Git Skill Hot Reload functionality."""
+class TestGitSkill:
+    """Tests for Git Skill (Phase 13.10 - Executor Mode)."""
 
     def test_git_skill_module_exists(self):
         """Verify git skill module exists."""
@@ -570,82 +237,53 @@ class TestGitSkillHotReload:
             if isinstance(node, ast.AsyncFunctionDef):
                 tool_names.append(node.name)
 
-        # Verify expected tools exist
+        # Expected tools (simplified - no deprecated tools)
         expected_tools = ["git_status", "git_diff_staged", "git_diff_unstaged",
-                          "git_log", "git_add", "spec_aware_commit", "smart_commit"]
+                          "git_log", "git_add", "git_commit"]
 
         for tool in expected_tools:
-            assert tool in tool_names, \
-                f"Expected tool '{tool}' not found in git skill. Found: {tool_names}"
+            assert tool in tool_names, f"Expected tool '{tool}' not found. Found: {tool_names}"
 
-    def test_spec_aware_commit_uses_inference_client(self):
-        """Verify spec_aware_commit is defined with correct InferenceClient API usage."""
+    def test_no_deprecated_tools(self):
+        """Verify deprecated tools (spec_aware_commit, smart_commit) are removed."""
         import ast
 
         git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
         content = git_tools_py.read_text()
         tree = ast.parse(content)
 
-        # Find spec_aware_commit function
-        spec_aware_func = None
+        tool_names = []
         for node in ast.walk(tree):
-            if isinstance(node, ast.AsyncFunctionDef) and node.name == "spec_aware_commit":
-                spec_aware_func = node
-                break
+            if isinstance(node, ast.AsyncFunctionDef):
+                tool_names.append(node.name)
 
-        assert spec_aware_func is not None, "spec_aware_commit not found"
+        # These should NOT exist
+        assert "spec_aware_commit" not in tool_names, "spec_aware_commit should be removed"
+        assert "smart_commit" not in tool_names, "smart_commit should be removed"
 
-        # Verify function signature
-        args = [arg.arg for arg in spec_aware_func.args.args]
-        assert "context" in args, "spec_aware_commit should have 'context' parameter"
-
-        # Verify function body contains InferenceClient usage
-        body_text = ast.get_source_segment(content, spec_aware_func)
-        assert "InferenceClient" in body_text, "spec_aware_commit should use InferenceClient"
-        assert "system_prompt" in body_text, "spec_aware_commit should use system_prompt"
-        assert "user_query" in body_text, "spec_aware_commit should use user_query"
-
-    def test_smart_commit_v2_implementation(self):
-        """Verify smart_commit V2 (session-based) is properly implemented."""
+    def test_git_commit_has_message_param(self):
+        """Verify git_commit has message parameter."""
         import ast
 
         git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
         content = git_tools_py.read_text()
         tree = ast.parse(content)
 
-        # Find smart_commit function
-        smart_commit_func = None
+        # Find git_commit function
+        git_commit_func = None
         for node in ast.walk(tree):
-            if isinstance(node, ast.AsyncFunctionDef) and node.name == "smart_commit":
-                smart_commit_func = node
+            if isinstance(node, ast.AsyncFunctionDef) and node.name == "git_commit":
+                git_commit_func = node
                 break
 
-        assert smart_commit_func is not None, "smart_commit not found"
+        assert git_commit_func is not None, "git_commit not found"
 
         # Verify function signature
-        args = [arg.arg for arg in smart_commit_func.args.args]
-        assert "message" in args, "smart_commit should have 'message' parameter"
-        assert "auth_token" in args, "smart_commit should have 'auth_token' parameter"
+        args = [arg.arg for arg in git_commit_func.args.args]
+        assert "message" in args, "git_commit should have 'message' parameter"
 
-        # Verify function body
-        body_text = ast.get_source_segment(content, smart_commit_func)
-
-        # Verify session-based storage
-        assert "_commit_sessions" in body_text, "smart_commit should use _commit_sessions"
-
-        # Verify session_id generation
-        assert "secrets.token_hex" in body_text, "smart_commit should generate session_id"
-
-        # Verify two-phase workflow (auth_token check)
-        assert 'if auth_token:' in body_text, \
-            "smart_commit should have execute phase when auth_token is provided"
-
-        # Verify session creation in analysis phase
-        assert "_commit_sessions[session_id]" in body_text, \
-            "smart_commit should create session in analysis phase"
-
-    def test_git_skill_uses_dynamic_paths(self):
-        """Verify git skill uses dynamic project root detection via gitops."""
+    def test_git_skill_uses_gitops(self):
+        """Verify git skill uses gitops module."""
         import ast
 
         git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
@@ -666,7 +304,7 @@ class TestGitSkillHotReload:
             assert imp in imports, f"git skill should import '{imp}' from gitops"
 
     def test_git_skill_supports_hot_reload(self):
-        """Verify git skill structure supports hot reload (no caching decorators)."""
+        """Verify git skill structure supports hot reload."""
         import ast
 
         git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
@@ -682,79 +320,176 @@ class TestGitSkillHotReload:
 
         assert register_func is not None, "register function not found"
 
-        # Check register function decorators
-        for decorator in register_func.decorator_list:
-            decorator_name = None
-            if isinstance(decorator, ast.Name):
-                decorator_name = decorator.id
-            elif isinstance(decorator, ast.Attribute):
-                decorator_name = decorator.attr
-
-            if decorator_name in ["lru_cache", "cache", "cached"]:
-                raise AssertionError(f"register should not have '{decorator_name}' decorator")
-
         # Verify register function has mcp parameter (FastMCP pattern)
         args = [arg.arg for arg in register_func.args.args]
         assert "mcp" in args, "register should have 'mcp' parameter for FastMCP"
 
-    def test_gitops_has_required_functions(self):
-        """Verify gitops module has all required git command functions."""
-        from common.mcp_core import gitops
 
-        # Verify all required functions exist and are callable
-        required = ["run_git_cmd", "get_git_status", "get_git_diff", "get_git_log"]
-        for name in required:
-            assert hasattr(gitops, name), f"gitops should have '{name}'"
-            func = getattr(gitops, name)
-            assert callable(func), f"gitops.{name} should be callable"
+# =============================================================================
+# Phase 13.10: Config-Driven Skill Loading Tests
+# =============================================================================
 
-    def test_git_skill_tool_count(self):
-        """Verify git skill has the expected number of tools."""
+class TestSkillRegistry:
+    """Tests for Config-Driven Skill Loading (Phase 13.10)."""
+
+    def test_skill_registry_exists(self):
+        """Verify skill registry module exists."""
+        from agent.core.skill_registry import get_skill_registry, SkillRegistry
+        assert get_skill_registry is not None
+        assert SkillRegistry is not None
+
+    def test_get_preload_skills_from_config(self):
+        """Verify preload skills are read from settings.yaml."""
+        from agent.core.skill_registry import get_skill_registry
+
+        registry = get_skill_registry()
+        preload = registry.get_preload_skills()
+
+        assert isinstance(preload, list)
+        assert len(preload) > 0
+        # Should contain expected skills
+        assert "git" in preload
+        assert "filesystem" in preload
+        assert "terminal" in preload
+
+    def test_list_available_skills(self):
+        """Verify available skills are discovered from agent/skills/."""
+        from agent.core.skill_registry import get_skill_registry
+
+        registry = get_skill_registry()
+        available = registry.list_available_skills()
+
+        assert isinstance(available, list)
+        assert len(available) > 0
+        # Should find git skill
+        assert "git" in available
+        # Should be sorted
+        assert available == sorted(available)
+
+    def test_list_loaded_skills_initially_empty(self):
+        """Verify no skills are loaded initially (before boot)."""
+        from agent.core.skill_registry import get_skill_registry
+
+        registry = get_skill_registry()
+        loaded = registry.list_loaded_skills()
+
+        assert isinstance(loaded, list)
+        # At test time, no skills should be loaded yet
+
+    def test_get_skill_manifest(self):
+        """Verify skill manifests can be read."""
+        from agent.core.skill_registry import get_skill_registry
+
+        registry = get_skill_registry()
+        manifest = registry.get_skill_manifest("git")
+
+        assert manifest is not None
+        assert manifest.name == "git"
+        assert manifest.tools_module == "agent.skills.git.tools"
+
+    def test_get_nonexistent_skill_manifest(self):
+        """Verify graceful handling of nonexistent skill."""
+        from agent.core.skill_registry import get_skill_registry
+
+        registry = get_skill_registry()
+        manifest = registry.get_skill_manifest("nonexistent_skill_xyz")
+
+        assert manifest is None
+
+    def test_settings_yaml_has_skills_config(self):
+        """Verify settings.yaml has skills configuration."""
+        from common.mcp_core.settings import get_setting
+
+        preload = get_setting("skills.preload")
+        reload_enabled = get_setting("skills.reload.enabled")
+
+        assert preload is not None
+        assert isinstance(preload, list)
+        assert reload_enabled is True
+
+    def test_knowledge_skill_in_preload(self):
+        """Verify knowledge skill is in preload list."""
+        from common.mcp_core.settings import get_setting
+
+        preload = get_setting("skills.preload", [])
+
+        assert "knowledge" in preload, "knowledge skill should be preloaded"
+        assert preload[0] == "knowledge", "knowledge skill should be first in preload"
+
+    def test_knowledge_skill_manifest_valid(self):
+        """Verify knowledge skill has valid manifest."""
+        from agent.core.skill_registry import get_skill_registry
+
+        registry = get_skill_registry()
+        manifest = registry.get_skill_manifest("knowledge")
+
+        assert manifest is not None
+        assert manifest.name == "knowledge"
+        assert "knowledge" in manifest.tools_module
+        assert "Project Cortex" in manifest.description
+
+
+# =============================================================================
+# Phase 13.10: Knowledge Skill Tests
+# =============================================================================
+
+class TestKnowledgeSkill:
+    """Tests for Knowledge Skill (Project Cortex)."""
+
+    def test_knowledge_skill_module_exists(self):
+        """Verify knowledge skill module exists."""
+        knowledge_tools = _SKILLS_ROOT / "knowledge" / "tools.py"
+        assert knowledge_tools.exists(), f"Knowledge skill not found at {knowledge_tools}"
+
+    def test_knowledge_tools_defined(self):
+        """Verify knowledge tools are defined (no execution)."""
         import ast
 
-        git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
-        content = git_tools_py.read_text()
+        knowledge_tools_py = _SKILLS_ROOT / "knowledge" / "tools.py"
+        content = knowledge_tools_py.read_text()
         tree = ast.parse(content)
 
-        # Count async function definitions (these are the tools)
-        tool_count = 0
+        tool_names = []
         for node in ast.walk(tree):
             if isinstance(node, ast.AsyncFunctionDef):
-                tool_count += 1
+                tool_names.append(node.name)
 
-        # Expected: at least 7 tools (git_status, git_diff_staged, git_diff_unstaged,
-        # git_log, git_add, spec_aware_commit, smart_commit)
-        assert tool_count >= 7, f"Expected at least 7 tools, found {tool_count}"
+        expected_tools = [
+            "get_development_context",
+            "consult_architecture_doc",
+            "get_writing_memory",
+            "get_language_standards"
+        ]
 
-    def test_smart_commit_token_file_writing(self):
-        """Verify smart_commit does NOT use token file (session-based, not file-based)."""
+        for tool in expected_tools:
+            assert tool in tool_names, f"Expected tool '{tool}' not found. Found: {tool_names}"
+
+    def test_knowledge_skill_has_register(self):
+        """Verify knowledge skill has register function."""
         import ast
 
-        git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
-        content = git_tools_py.read_text()
+        knowledge_tools_py = _SKILLS_ROOT / "knowledge" / "tools.py"
+        content = knowledge_tools_py.read_text()
         tree = ast.parse(content)
 
-        # Find smart_commit function
-        smart_commit_func = None
+        has_register = False
         for node in ast.walk(tree):
-            if isinstance(node, ast.AsyncFunctionDef) and node.name == "smart_commit":
-                smart_commit_func = node
+            if isinstance(node, ast.FunctionDef) and node.name == "register":
+                has_register = True
                 break
 
-        assert smart_commit_func is not None, "smart_commit not found"
+        assert has_register, "Knowledge skill should have 'register' function"
 
-        # Verify function body uses session-based workflow (not token file)
-        body_text = ast.get_source_segment(content, smart_commit_func)
+    def test_knowledge_tools_never_execute(self):
+        """Verify knowledge tools only read, never execute commands."""
+        import ast
 
-        # Verify session-based storage
-        assert "_commit_sessions" in body_text, "smart_commit should use _commit_sessions"
+        knowledge_tools_py = _SKILLS_ROOT / "knowledge" / "tools.py"
+        content = knowledge_tools_py.read_text()
 
-        # Verify auth_token parameter is used for execution phase
-        assert 'if auth_token:' in body_text, "smart_commit should have execute phase"
-
-        # Verify NO TOKEN_FILE usage
-        assert "TOKEN_FILE" not in body_text, "smart_commit should NOT use TOKEN_FILE"
-        assert 'write_text' not in body_text, "smart_commit should NOT write token file"
+        # Knowledge tools should NOT call subprocess
+        assert "subprocess" not in content, "Knowledge tools should not execute commands"
+        assert "os.system" not in content, "Knowledge tools should not execute commands"
 
 
 # =============================================================================

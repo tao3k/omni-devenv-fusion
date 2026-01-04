@@ -1,33 +1,16 @@
 # Git Workflow Guide
 
-> **TL;DR**: In LLM context, `git commit` means `just agent-commit`. Never use raw `git commit`.
+> **TL;DR**: Use `git_commit` tool directly. Git status is auto-injected via Context Injection.
 
 ---
 
 ## Quick Reference
 
-| Task                           | Command                                        |
-| ------------------------------ | ---------------------------------------------- |
-| Interactive commit             | `just commit`                                  |
-| Non-interactive commit (agent) | `just agent-commit <type> <scope> "<message>"` |
-| Focus on a Spec                | `just agent-focus <spec_path>`                 |
-| Check commit messages          | `just log`                                     |
-| View status                    | `just agent-test-status`                       |
-
-> **⚠️ Important**: Agents MUST use `just agent-commit`, NOT `git commit`.
-> The `agent-commit` command runs pre-commit hooks (prettier, formatting) and stages all modified files before committing.
-
-### Git Commit ≡ just agent-commit
-
-**In LLM context, these are equivalent:**
-
-| Written in Prompt    | LLM Should Execute                               |
-| -------------------- | ------------------------------------------------ |
-| `git commit`         | `just agent-commit <type> "<scope>" "<message>"` |
-| `run git commit`     | `just agent-commit ...`                          |
-| `commit the changes` | `just agent-commit ...`                          |
-
-**Rule:** When you see any commit-related instruction, translate it to `just agent-commit` with appropriate type/scope/message.
+| Task         | Tool / Command                                 |
+| ------------ | --------------------------------------------- |
+| View status  | Auto-injected in System Prompt ({{git_status}}) |
+| Stage files  | `git_add(files=[...])`                        |
+| Commit       | `git_commit(message="type(scope): desc")`     |
 
 ---
 
@@ -35,562 +18,164 @@
 
 **This is the #1 rule violation that keeps happening:**
 
-| What I Did Wrong                  | Why It's Wrong                         |
-| --------------------------------- | -------------------------------------- |
-| `git status` (Bash)               | Bypasses MCP `run_task` security       |
-| `git add -A && git commit` (Bash) | Bypasses authorization protocol        |
-| `git diff` (Bash)                 | Should use `run_task("git", ["diff"])` |
+| What I Did Wrong          | Why It's Wrong                              |
+| ------------------------- | ------------------------------------------ |
+| `git status` (Bash)       | Status is auto-injected, no tool call      |
+| `git commit` (Bash)       | Bypasses authorization protocol            |
+| `git diff` (Bash)         | Should use `git_diff_staged()`              |
 
-### The Correct Workflow After Tests
+### The Correct Workflow (Executor Mode)
 
 ```
-❌ WRONG (What I keep doing):
-1. just test → Tests pass
-2. git status (Bash) ❌
-3. git add -A && git commit (Bash) ❌
+User: commit
 
-✅ CORRECT:
-1. just agent-test-status (shows test results + git status safely)
-2. Report: "Tests passed, X files modified"
-3. Wait for user to say "run just agent-commit"
-4. Use smart_commit() workflow
+Claude: (analyzes changes)
+
+    Commit Analysis:
+
+    Type: feat
+    Scope: git
+    Message: simplify to executor mode
+
+    Please say: "yes" or "confirm", or "skip"
+
+User: yes
+
+Claude: git_commit(message="feat(git): simplify to executor mode")
+
+User: [Claude Desktop approves]
+
+Claude: ✅ Commit Successful
 ```
+
+**Steps:**
+1. User says "commit"
+2. Claude reads `{{git_status}}` from context
+3. Claude generates message and shows analysis
+4. User confirms with "yes" or "confirm"
+5. Claude calls `git_commit`
+6. User approves via Claude Desktop popup
 
 ### Bash Git Commands are Blocked
 
-The `run_task` MCP tool blocks these commands:
+Use MCP tools instead:
 
-| Blocked Command | Replacement                     |
-| --------------- | ------------------------------- |
-| `git commit`    | `smart_commit()` via MCP        |
-| `git add`       | `run_task("git", ["add", ...])` |
-| `git status`    | `run_task("git", ["status"])`   |
-| `git diff`      | `run_task("git", ["diff"])`     |
-
-**If you catch yourself typing `git ...` in Bash → STOP and use MCP tools instead.**
+| Instead of       | Use This Tool                    |
+| ---------------- | ------------------------------- |
+| `git commit`     | `git_commit(message="...")`     |
+| `git add .`      | `git_add(files=["."])`          |
+| `git status`     | Auto-injected (no tool)         |
+| `git diff`       | `git_diff_staged()`             |
 
 ---
 
 ## 1. Commit Message Standard
 
-All commits follow the **Conventional Commits** specification:
+All commits follow **Conventional Commits**:
 
 ```
 <type>(<scope>): <description>
 ```
 
-### Type Meanings
+### Types
 
 | Type       | Description                                   |
 | ---------- | --------------------------------------------- |
-| `feat`     | New feature or capability                     |
+| `feat`     | New feature                                   |
 | `fix`      | Bug fix                                       |
 | `docs`     | Documentation changes                         |
-| `style`    | Formatting, whitespace, etc. (no code change) |
-| `refactor` | Code restructure (no behavior change)         |
+| `style`    | Formatting (no code change)                   |
+| `refactor` | Code restructure                              |
 | `perf`     | Performance improvement                       |
 | `test`     | Adding or fixing tests                        |
 | `build`    | Build system or dependencies                  |
 | `ci`       | CI/CD pipeline changes                        |
 | `chore`    | Maintenance tasks                             |
 
-### Suggested Scopes
+---
 
-This project uses **standardized scopes** for better traceability:
+## 2. Agent Workflow
 
-| Scope    | Covers                                                   |
-| -------- | -------------------------------------------------------- |
-| `nix`    | `devenv.nix`, `units/`, `*.nix` files                    |
-| `mcp`    | `mcp-server/` directory                                  |
-| `router` | `tool-router/` directory                                 |
-| `docs`   | `docs/` (user docs), `agent/` (LLM context), `README.md` |
-| `cli`    | `justfile`, `lefthook.yml`                               |
-| `deps`   | `pyproject.toml`, `devenv.lock`, `package.json`          |
-| `ci`     | `.github/`, `.devcontainer/`                             |
+### When user says "commit":
 
-### Scope Sub-categorization (Optional)
+1. **Observe**: Look at `{{git_status}}` in your context
+2. **Think**: Generate a conventional commit message
+3. **Act**: Call `git_commit(message="...")` directly
+4. **User Approves**: Via Claude Desktop popup
 
-For finer granularity, use parentheses after scope:
+### Example
 
-| Scope   | Sub-categories                                  | Examples                                                                      |
-| ------- | ----------------------------------------------- | ----------------------------------------------------------------------------- |
-| `docs`  | `explanation`, `tutorials`, `readme`            | `docs(explanation): add auth concept`, `docs(tutorials): add getting started` |
-| `agent` | `specs`, `how-to`, `standards`, `writing-style` | `agent(specs): add feature spec`, `agent(standards): update python style`     |
-| `cli`   | `just`, `lefthook`, `conform`                   | `cli(just): add new recipe`                                                   |
-
-### Good vs Bad Examples
-
-| Bad                 | Good                                   |
-| ------------------- | -------------------------------------- |
-| `fix: bug`          | `fix(mcp): handle connection timeout`  |
-| `feat: added stuff` | `feat(nix): add redis service`         |
-| `docs: update`      | `docs(readme): add setup instructions` |
-| `chore: misc`       | `chore(cli): bump just version`        |
-
-### Enforcing Standards
-
-This project uses two tools to enforce commit standards:
-
-| Tool        | Role                  | Responsibility                                                          |
-| ----------- | --------------------- | ----------------------------------------------------------------------- |
-| **Conform** | 🛡️ Police (Enforcer)  | Validates commit format at `git commit` time. Rejects invalid messages. |
-| **Cog**     | 📋 Secretary (Helper) | Provides interactive menu for humans, groups changes in CHANGELOG.      |
-
-**Conform** checks:
-
-- Format: `<type>(<scope>): <description>`
-- Scope must be lowercase
-- No illegal characters
-
-**Cog** provides:
-
-- Interactive scope selection menu (for `just commit`)
-
-### Agentic OS Smart Commit
-
-The MCP Server provides a **Smart Commit** tool that generates Conventional Commit messages:
-
-```bash
-# Agent workflow
-1. Stage changes: git add .
-2. Generate message: @omni-orchestrator suggest_commit_message(spec_path="agent/specs/xxx.md")
-3. Review & Execute: smart_commit(type="...", scope="...", message="...")
 ```
+User: commit
 
-**Configuration Source of Truth:**
+Claude: I see the changes. Let me commit them.
+[Tool Request] git_commit(message="feat(git): simplify to executor mode")
 
-| File                           | Generated By                          | Purpose                               |
-| ------------------------------ | ------------------------------------- | ------------------------------------- |
-| `cog.toml`                     | `nix run` via `lefthook.nix` (nixago) | Valid scopes for Conventional Commits |
-| `.conform.yaml`                | `nix run` via `lefthook.nix` (nixago) | Commit message validation rules       |
-| `agent/how-to/git-workflow.md` | Manual / Spec Kit                     | Human-readable documentation          |
+Claude Desktop: Allow git_commit?
+message: "feat(git): simplify to executor mode"
 
-**Key Point:** The MCP tool (`git_ops.py`) dynamically reads `cog.toml` and `.conform.yaml` at runtime, ensuring AI-generated commit messages **always pass CI validation**. These config files are generated by nix, so edits should be made in `units/modules/lefthook.nix` rather than directly.
+User: [Click Allow]
 
-Both tools share the same scope definitions (nix, mcp, router, docs, cli, deps, ci, version, claude) defined in `lefthook.nix` → `project-scopes`.
+Claude: ✅ Commit Successful
+```
 
 ---
 
-## 2. Workflow for Humans
+## 3. Protocol Rules
 
-For manual development, use the interactive commit tool:
-
-```bash
-just commit
-```
-
-This launches an interactive wizard that guides you through:
-
-1. Selecting commit type (feat, fix, docs, etc.)
-2. Optional scope (e.g., "mcp", "cli")
-3. Commit message
-4. Optional body and breaking changes
+| Condition                        | Agent Action                                     |
+| -------------------------------- | ------------------------------------------------ |
+| User says "commit"               | Call `git_commit` directly                       |
+| Tests fail                       | STOP, don't commit                               |
+| User asks to force push          | REFUSE, explain risks                            |
+| Pre-commit hooks fail            | STOP, fix issues first                           |
 
 ---
 
-## 3. Workflow for Agents (LLM)
+## 4. Git Safety Rules
 
-### Default Rule: "Stop and Ask" - ALWAYS
-
-**By default, when an Agent (LLM) finishes a task, it MUST NOT commit code automatically.**
-
-### 🚨 MANDATORY: Use MCP Tools Only
-
-**Agents MUST use MCP tools for ALL git commit operations. Direct shell commands are FORBIDDEN.**
-
-| Allowed (Safe)                                 | Forbidden (Bypass Risk)                  |
-| ---------------------------------------------- | ---------------------------------------- |
-| `@omni-orchestrator smart_commit`              | `run_task("git", ["commit", ...])`       |
-| `@omni-orchestrator execute_authorized_commit` | `run_task("bash", "git commit ...")`     |
-| `@omni-orchestrator spec_aware_commit`         | Any Bash command containing "git commit" |
-
-**Enforcement**: The `run_task` tool blocks all git commit commands. Attempting to bypass via shell will fail.
-
-**Agent/LLM Behavior:**
-
-1. Make changes
-2. Run tests
-3. **STOP**
-4. **Ask user for permission** before committing
-5. **Wait for explicit authorization**
-6. Execute commit ONLY after authorization is granted
-
-**Authorization Principles:**
-
-| Aspect         | Rule                                                                                       |
-| -------------- | ------------------------------------------------------------------------------------------ |
-| **Permission** | User must explicitly grant authorization to commit                                         |
-| **Scope**      | Authorization covers ONE specific commit action only                                       |
-| **Expiration** | Authorization expires immediately after the action completes or when the conversation ends |
-
-**Example:**
-
-```
-User: "Fix the bug in router."
-
-LLM: Fixed the code → Ran tests → "Tests passed.
-Commit message: fix(mcp): handle router timeout
-
-Please review: git diff
-
-Please grant permission to proceed, or provide feedback."
-```
-
-### Authorization Grant
-
-The Agent/LLM is authorized to commit **ONLY IF** the user explicitly grants permission.
-
-**Authorization detection:**
-
-- `smart_commit` returns `authorization_required: true` → **IMMEDIATELY STOP**
-- User must say exactly: "run just agent-commit"
-- **DO NOT assume** "ok", "yes", "go", "hao" = authorization
-- Only the exact phrase grants permission
-
-### 🔒 Authorization Token System (Code-Enforced)
-
-The system uses a token-based authorization to prevent bypass:
-
-1. **Step 1**: Agent calls `smart_commit(type, scope, message)`
-2. **Step 2**: System returns `auth_token` (hex string, expires in 5 minutes)
-3. **Step 3**: Agent asks user: "Please say: run just agent-commit"
-4. **Step 4**: User authorizes with the exact phrase
-5. **Step 5**: Agent calls `execute_authorized_commit(auth_token="xxx")`
-6. **Step 6**: Token is validated AND consumed (one-time use only)
-
-**Why this prevents bypass:**
-
-- Token expires after 5 minutes
-- Token can only be used ONCE
-- Direct `git commit` is blocked by `run_task` guard
-- Only `execute_authorized_commit` can execute commits after authorization
-
-**Correct workflow:**
-
-```bash
-# User prompt (no authorization):
-> "run commit"
-
-# LLM calls smart_commit() → returns authorization_required: true
-# LLM MUST:
-1. Display: "Protocol requires explicit authorization. Please say: run just agent-commit"
-2. WAIT for exact phrase
-
-# User grants authorization:
-> "run just agent-commit"
-
-# Now LLM executes:
-just agent-commit ...
-```
-
-### MCP Tool Integration
-
-LLMs should use MCP tools to enforce this protocol:
-
-| Tool                                    | Purpose                        |
-| --------------------------------------- | ------------------------------ |
-| `@omni-orchestrator smart_commit`       | Validates and executes commits |
-| `@omni-orchestrator execute_doc_action` | Reads protocol from this file  |
-
-When an LLM triggers a commit, it should:
-
-1. Call `execute_doc_action` with `action="commit"`
-2. The tool returns the validated command or "Stop and Ask" status
-3. If "Stop and Ask", the LLM must ask the user before proceeding
-
-### Protocol Rules
-
-| Condition                                             | Agent/LLM Action                                               |
-| ----------------------------------------------------- | -------------------------------------------------------------- |
-| User says: "Fix the bug"                              | Fix code → Run Tests → **ASK USER** for permission             |
-| User says: "submit/commit"                            | **ASK USER** for permission first - do NOT assume!             |
-| User grants permission                                | Execute commit                                                 |
-| User asks LLM to "run git commit"                     | **ASK USER** first before executing                            |
-| User asks to force push                               | **REFUSE** - Explain risks, ask user to confirm explicitly     |
-| Tests fail                                            | **STOP** and report error. Do not commit.                      |
-| Pre-commit hooks fail                                 | **STOP** and report error. Do not commit.                      |
-| `smart_commit` returns `authorization_required: true` | **IMMEDIATELY STOP** → Ask user to say "run just agent-commit" |
-
-### ⚠️ Bypass Detection & Prevention
-
-**Attempting to bypass MCP tools will FAIL. The system enforces this at multiple levels:**
-
-| Bypass Attempt                       | Result                                      |
-| ------------------------------------ | ------------------------------------------- |
-| `run_task("git", ["commit", ...])`   | ❌ Blocked - git commit not in allowed list |
-| `run_task("bash", "git commit ...")` | ❌ Blocked - contains "commit" keyword      |
-| Direct subprocess with `git commit`  | ❌ Blocked - not an allowed command         |
-
-**Violations will be logged and may result in:**
-
-1. Immediate rejection of the command
-2. Warning message about protocol violation
-3. Recurring violations may trigger session termination
-
-**The ONLY authorized commit path is:**
-
-```
-smart_commit() → user says "run just agent-commit" → execute_authorized_commit(token)
-```
-
-**ANY other path is a protocol violation.**
-
----
-
-## 📜 LEGAL: Binding Protocol Rules
-
-**These rules are NOT suggestions. They are binding protocol enforced by code.**
-
-### Zero-Tolerance Policy
-
-| Violation                       | Consequence                         |
-| ------------------------------- | ----------------------------------- |
-| Direct `git commit`             | Session termination warning         |
-| Bypass via bash/shell           | Immediate block + warning logged    |
-| Auto-commit without permission  | Protocol violation, may end session |
-| Ignore "authorization_required" | Session termination                 |
-
-### Authorization is EXPLICIT Only
-
-**Only these phrases grant authorization:**
-
-| Phrase                                     | Effect                                    |
-| ------------------------------------------ | ----------------------------------------- |
-| `"run just agent-commit"`                  | ✅ Authorized - execute with staged files |
-| `"just agent-commit <type> <scope> <msg>"` | ✅ Full authorization                     |
-
-**These do NOT grant authorization:**
-
-- `"ok"` / `"yes"` / `"hao"` / `"go ahead"`
-- `"please commit"`
-- `"that looks good"`
-- Any variation not matching exactly
-
-### Agent Obligations
-
-1. **STOP** after completing work
-2. **ASK** for permission with exact phrase requirement
-3. **WAIT** for `"run just agent-commit"`
-4. **EXECUTE** `just agent-commit` with appropriate args
-5. **NEVER** assume authorization from context
-
-### Emergency Protocol
-
-If you accidentally bypassed authorization:
-
-1. **IMMEDIATELY STOP** all operations
-2. **Report** the violation to user
-3. **Wait** for user to decide next action
-4. **Do NOT** attempt to recover or fix yourself
-
-### Never Auto-Commit Without Authorization
-
-**This is NOT allowed:**
-
-```python
-# Wrong: Automatically committing after user says "Fix the bug"
-if user_message == "Fix the bug":
-    fix_code()
-    run_tests()
-    git_commit(...)  # ❌ FORBIDDEN - Must get explicit permission first!
-```
-
-**This is CORRECT:**
-
-```python
-# Correct: Ask user for authorization
-if user_message == "Fix the bug":
-    fix_code()
-    run_tests()
-    ask_user("Done. Ready to commit. Please grant permission to proceed.")
-    # Only execute commit after user grants authorization
-```
-
-### Git Safety Rules
-
-- **NEVER** use `git push --force` or `git push --force-with-lease`
-- **NEVER** use `git reset --hard` that discards uncommitted changes
+- **NEVER** use `git push --force`
+- **NEVER** use `git reset --hard`
 - **NEVER** use `git commit --amend` on pushed commits
-- For history correction: Use `git revert` or create a new commit
-- If force is required: **ASK USER** for explicit confirmation first
+- For history correction: Use `git revert`
 
 ---
 
-## 4. The Agent-Commit Protocol
+## 5. Phase 13.10: Executor Mode (Current)
 
-### Safety First
+### Core Philosophy: Less Code, More Intelligence
 
-This protocol enforces **"Human-in-the-loop"** by default:
+| Old (Over-Engineered)           | New (Executor Mode)                      |
+| ------------------------------- | ---------------------------------------- |
+| `smart_commit` (session dance)  | `git_commit` (direct execution)          |
+| `spec_aware_commit` (AI middle) | Claude generates message, calls directly |
+| `commit_flow.py` (LangGraph)    | Prompt handles workflow, not Python      |
 
-- ✅ Tests always run before commit
-- ✅ Pre-commit hooks always execute
-- ✅ Default behavior requires user confirmation
-- ✅ Only explicit `"run just agent-commit"` enables auto-commit
-
----
-
-## 5. Smart Error Recovery
-
-When `just agent-commit` fails due to pre-commit hooks, the MCP tool provides intelligent diagnosis and suggested fixes:
-
-| Error Type          | Analysis                    | Suggested Fix                        |
-| ------------------- | --------------------------- | ------------------------------------ |
-| `nixfmt` / `fmt`    | Formatting checks failed    | `just agent-fmt`                     |
-| `vale`              | Writing style checks failed | Use `writer.polish_text` to fix      |
-| `ruff` / `pyflakes` | Python linting failed       | Fix python errors shown in logs      |
-| `secrets`           | Secret detection failed     | Remove secrets from code immediately |
-| `typos`             | Spelling check failed       | Fix typos shown in output            |
-
-**Example Recovery Flow:**
+### The Result
 
 ```
-1. Agent runs: just agent-commit fix mcp "handle timeout"
-2. Pre-commit fails: nixfmt formatting issues
-3. MCP returns: {"analysis": "Formatting checks failed", "suggested_fix": "just agent-fmt"}
-4. Agent executes: just agent-fmt
-5. Retry commit: just agent-commit fix mcp "handle timeout"
-6. Success: Commit completed
+User: commit
+Claude: (sees {{git_status}})
+       → generates message
+       → calls git_commit
+User: [Allow]
+Done. One click, no session dance.
 ```
 
----
+### Key Insight
 
-## 6. Spec-Driven Development (Phase 5)
-
-Before implementing features, Agents should focus on specifications:
-
-### 6.1 Focus Command
-
-```bash
-just agent-focus <spec_path>
-```
-
-Example:
-
-```bash
-just agent-focus agent/specs/auth_module.md
-```
-
-This displays:
-
-- The full Spec content
-- Related code structure (mcp-server modules)
-- Backlog alignment check
-- Instructions to create PLAN in SCRATCHPAD.md
-
-### 6.2 Spec-Aware Commit
-
-The `spec_aware_commit` MCP tool generates commit messages from Spec + Scratchpad:
-
-```bash
-1. Agent stages: git add .
-2. Agent calls: @omni-orchestrator spec_aware_commit(spec_path="agent/specs/xxx.md")
-3. Tool reads: Spec file + SCRATCHPAD.md
-4. Tool generates: Conventional commit message with body
-5. Agent reviews: Generated message
-6. Agent executes: smart_commit(type="...", scope="...", message="...")
-```
-
-### 6.3 Spec Template
-
-Use `agent/specs/template.md` for new features. Required sections:
-
-```markdown
-# [Feature Name] Technical Specification
-
-## 1. Context & Goal
-
-- User Story: As a [role], I want [feature], so that [benefit].
-
-## 2. Architecture & Design
-
-- Components: Which files will be touched?
-- Data Flow: Input -> Process -> Output
-
-## 3. Implementation Plan (Step-by-Step)
-
-1. [ ] Create module_x.py
-2. [ ] Add test_module_x.py
-3. [ ] Integrate into main.py
-
-## 4. Validation Strategy
-
-- [ ] Unit Test: pytest tests/test_x.py
-- [ ] Manual Verify: just run-x
-```
-
-### 6.4 Workflow Summary
-
-```
-1. just agent-context        → See current mission
-2. just agent-focus <spec>   → Focus on specific feature spec
-3. Claude reads spec         → Creates PLAN in SCRATCHPAD.md
-4. Claude implements         → Writes code per spec
-5. just agent-commit         → Smart commit with auto-fix
-```
-
----
-
-## 7. Project Compliance
-
-→ See `agent/instructions/project-conventions.md`
-
----
-
-## 8. Troubleshooting
-
-### "just agent-commit" Fails
-
-| Error        | Solution                                                            |
-| ------------ | ------------------------------------------------------------------- |
-| Invalid type | Use: feat, fix, docs, style, refactor, perf, test, build, ci, chore |
-| Tests failed | Fix failing tests first                                             |
-| Hooks failed | Run `just agent-fmt` to auto-fix formatting                         |
-
-### Reverting a Commit
-
-```bash
-# Find the commit hash
-just log
-
-# Revert (creates a new commit that undoes the change)
-git revert <commit-hash>
-
-# Or reset (dangerous, rewrites history)
-git reset --soft HEAD~1
-```
-
----
-
-## 9. GitHub CLI (gh) Integration
-
-### When to Prefer gh Over git
-
-| Condition                 | Use             | Rationale                         |
-| ------------------------- | --------------- | --------------------------------- |
-| gh installed + auth valid | `gh`            | Handles auth, richer context      |
-| Clone private repo        | `gh repo clone` | No manual URL/credential handling |
-| PR workflow               | `gh pr *`       | Structured PR lifecycle           |
-| Basic git operations      | `git`           | Direct, no abstraction overhead   |
-
-### gh Integration Rules
-
-1. **Check availability first**: If unsure, `gh auth status` to verify
-2. **PR workflow**: Always use `gh pr` for create/status/review/checkout
-3. **Repo cloning**: Prefer `gh repo clone` for authenticated access
-4. **Fallback**: If gh unavailable or unauthenticated, use native git
-
-### Anti-Patterns
-
-- Don't mix gh and git for same workflow (e.g., `gh pr create` + manual `git push`)
-- Don't assume gh exists in CI; keep git fallback ready
+> **Skill = Tool (Hand) + Prompt (Brain)**
+>
+> Python does execution. Markdown tells LLM when to execute.
 
 ---
 
 ## Related Documentation
 
-- [Commit Conventions](../../agent/writing-style/02_mechanics.md) - Writing clear commit messages
-- [Feature Lifecycle](../../agent/standards/feature-lifecycle.md) - Spec-Driven Development, testing requirements
-- [CLAUDE.md](../../CLAUDE.md) - Agent instructions
+- [Commit Conventions](../../agent/writing-style/02_mechanics.md)
+- [Feature Lifecycle](../../agent/standards/feature-lifecycle.md)
+- [Agent Native Development](../../agent/how-to/agent-native-development.md) - Core philosophy
+- [CLAUDE.md](../../CLAUDE.md)
 
 ---
 

@@ -2,28 +2,66 @@
 
 > **Quick Reference Only**. Detailed docs: `agent/instructions/*.md`, `docs/reference/mcp-orchestrator.md`, `agent/how-to/*.md`, `agent/standards/*.md`
 
-## 🚨🚨🚨 GIT COMMIT IS NOT "git commit" - CRITICAL 🚨🚨🚨
+## 🎯 Core Philosophy: Code is Mechanism, Prompt is Policy
 
-**This is the #1 rule violation that keeps happening:**
+**This is the foundation of Omni-DevEnv (Phase 13.10):**
 
-| What I Did Wrong                  | Why It's Wrong                               |
-| --------------------------------- | -------------------------------------------- |
-| `git commit -m "..."` (Bash)      | ❌ BYPASSES authorization protocol           |
-| `git add -A && git commit` (Bash) | ❌ BYPASSES pre-commit hooks + authorization |
+| Layer | Purpose | Technology |
+|-------|---------|------------|
+| **Brain (Prompt)** | Rules, logic, routing | Markdown files (`prompts.md`, `guide.md`) |
+| **Muscle (Code)** | Atomic execution | Python tools (`tools.py`) |
+| **Guardrails** | Hard compliance | Lefthook, Cog, Pre-commit hooks |
 
-**The ONLY correct way to commit:**
+**Key Principle:**
+- **Python = Execution only** (blind, stateless, no business logic)
+- **Markdown = Rules** (LLM learns from docs)
+- **System Tools = Validation** (rejects invalid operations)
+
+**Why this matters:**
+- Change rules without code changes (just edit markdown)
+- No Python hot reload needed
+- LLM learns policies from documentation
+
+---
+
+## 🚀 Git Workflow (Executor Mode)
+
+**New flow (Phase 13.10):**
 
 ```
-1. @omni-orchestrator skill(skill="git", call='smart_commit(message="feat(scope): description")')
-   → Returns: {analysis, session_id: "xxx..."}
+User: "commit"
 
-2. User confirms by saying: "run just agent-commit"
+Claude: (reads {{git_status}} from context)
+       → generates commit message
+       → shows analysis:
 
-3. @omni-orchestrator skill(skill="git", call='smart_commit(message="...", auth_token="xxx")')
-   → Executes the commit
+         Commit Analysis:
+
+         Type: feat
+         Scope: git
+         Message: simplify to executor mode
+
+         Please say: "yes" or "confirm", or "skip"
+
+User: "yes"
+
+Claude: git_commit(message="feat(git): simplify to executor mode")
+
+User: [Claude Desktop approves]
+
+Claude: ✅ Commit Successful
 ```
 
-**If you catch yourself typing `git ...` in Bash → STOP and use skill() tool instead.**
+**Tools:**
+
+| Tool | Purpose |
+|------|---------|
+| `git_commit(message)` | Direct commit execution |
+| `git_add(files)` | Stage files |
+| `git_diff_staged()` | Review changes |
+| `{{git_status}}` | Auto-injected (no tool call) |
+
+**NEVER use:** `smart_commit`, `spec_aware_commit`, `git commit` (Bash)
 
 ---
 
@@ -125,13 +163,16 @@ When you judge the user is requesting NEW work, call `start_spec` FIRST:
 
 | Category | Tools                                                                                              |
 | -------- | -------------------------------------------------------------------------------------------------- |
-| Git      | `skill("git", "git_status()")`, `skill("git", "smart_commit(message='...')")`                      |
+| Knowledge | `skill("knowledge", "get_development_context()")`, `skill("knowledge", "get_writing_memory()")`    |
+| Git      | `skill("git", "git_status()")`, `skill("git", "git_commit(message='...')")`                        |
 | Spec     | `start_spec` (gatekeeper), `draft_feature_spec`, `verify_spec_completeness`, `archive_spec_to_doc` |
 | Search   | `search_project_code` (ripgrep), `ast_search`, `ast_rewrite` (ast-grep)                            |
 | Test     | `skill("testing_protocol", "smart_test_runner()")`                                                 |
 | Review   | `review_staged_changes` (Immune System)                                                            |
 | Code     | `ast_search`, `ast_rewrite`, `save_file`, `read_file`                                              |
 | Lang     | `consult_language_expert`, `get_language_standards`                                                |
+
+**Knowledge-First Rule:** Always call `get_development_context()` before any work.
 
 ## 🚑 Debugging
 
@@ -142,14 +183,13 @@ When you judge the user is requesting NEW work, call `start_spec` FIRST:
 
 ## 🔒 Git Operations Security
 
-**CRITICAL: See `agent/how-to/git-workflow.md` for complete rules.**
+**CRITICAL: See `agent/how-to/gitops.md` for complete rules.**
 
-| Operation           | Tool to Use                                                        | Why                         |
-| ------------------- | ------------------------------------------------------------------ | --------------------------- |
-| Commit (analysis)   | `skill("git", "smart_commit(message='feat(scope): description')")` | Creates session, shows diff |
-| Commit (execute)    | `skill("git", "smart_commit(message='...', auth_token='xxx')")`    | Authorization protocol      |
-| Git status/diff/log | `skill("git", "git_status()")`, `skill("git", "git_log()")`        | Safe MCP execution          |
-| Git add             | `skill("git", "git_add(files=[...])")`                             | Safe staging                |
+| Operation           | Tool to Use                                          | Why                         |
+| ------------------- | ---------------------------------------------------- | --------------------------- |
+| Commit              | `skill("git", "git_commit(message='type(scope): desc')")` | Direct execution (Phase 13.10) |
+| Git status/diff/log | `skill("git", "git_status()")`, `skill("git", "git_log()")` | Safe MCP execution          |
+| Git add             | `skill("git", "git_add(files=[...])")`               | Safe staging                |
 
 **NEVER use Bash for git operations.**
 
@@ -212,40 +252,81 @@ Tool Routing Rules:
 3. **File Operations** → coder (save_file, read_file, search_files)
 ```
 
-## 🎯 Skill System (Phase 13)
+## 🎯 Skill System (Phase 13.10)
 
 Skills are dynamically-loaded modules in `agent/skills/` that provide specialized capabilities.
 
-### Available Skills
+### Skill Categories
 
-| Skill              | Purpose             | Tools (accessed via skill() tool)                      |
-| ------------------ | ------------------- | ------------------------------------------------------ |
-| `git`              | Git operations      | git_status, git_log, git_add, smart_commit             |
-| `terminal`         | Command execution   | execute_command, inspect_environment                   |
-| `testing_protocol` | Smart test runner   | smart_test_runner, run_test_command, get_test_protocol |
-| `writer`           | Writing quality     | lint_writing_style, polish_text, load_writing_memory   |
-| `filesystem`       | File I/O operations | list_directory, read_file, write_file, search_files    |
-| `advanced_search`  | ripgrep search      | search_project_code                                    |
+| Skill | Category | Purpose |
+|-------|----------|---------|
+| `knowledge` | 🧠 Knowledge | Project rules, docs, writing standards |
+| `git` | 💪 Execution | Git operations |
+| `terminal` | 💪 Execution | Command execution |
+| `filesystem` | 💪 Execution | File I/O |
+| `writer` | 💪 Execution | Writing quality |
+| `testing_protocol` | 💪 Execution | Test runner |
+| `code_insight` | 💪 Execution | Static analysis |
 
-### Using Skills
+**Philosophy:**
+- `knowledge` skill = "The Brain" (read-only, structural knowledge)
+- Other skills = "The Muscle" (execution, for Desktop users)
+
+### Skill Loading (Config-Driven)
+
+| Mode | Configuration | How to Use |
+|------|---------------|------------|
+| Preload | `skills.preload` in settings.yaml | Available at startup |
+| On-Demand | Any skill in `agent/skills/` | Call `load_skill('name')` |
+
+### Using Knowledge Skill (ALWAYS call first)
 
 ```python
-# List available skills
+# Get project rules, scopes, guardrails - CALL THIS FIRST
+@omni-orchestrator skill(skill="knowledge", call='get_development_context()')
+
+# Load writing standards before docs
+@omni-orchestrator skill(skill="knowledge", call='get_writing_memory()')
+
+# Search documentation
+@omni-orchestrator skill(skill="knowledge", call='consult_architecture_doc("git workflow")')
+```
+
+### Using Execution Skills
+
+```python
+# List all available skills
 @omni-orchestrator list_available_skills()
 
-# Execute skill operation (auto-loads if needed)
-@omni-orchestrator skill(skill="git", call='git_status()')
-
-# Check active skills
+# Check which skills are loaded
 @omni-orchestrator get_active_skills()
+
+# Load a skill on-demand
+@omni-orchestrator load_skill(skill_name="documentation")
+
+# Execute skill operation
+@omni-orchestrator skill(skill="git", call='git_status()')
 ```
+
+### Skill Architecture (Phase 13.10)
+
+```
+agent/skills/{skill}/
+├── manifest.json   # Skill metadata
+├── tools.py        # Atomic tools (execution only)
+├── prompts.md      # Router logic (policy)
+└── guide.md        # Procedural knowledge
+```
+
+**Design Rule:**
+- `tools.py` = Pure execution (no business logic)
+- `prompts.md` = Rules (LLM learns from docs)
 
 ### Creating New Skills
 
 1. Create directory: `agent/skills/{skill_name}/`
 2. Add files:
    - `manifest.json` - Skill metadata
-   - `tools.py` - Tool implementations with `register(mcp)` function
-   - `guide.md` - Procedural knowledge for LLM
-   - `prompts.md` - System prompts
+   - `tools.py` - Atomic tools (blind execution)
+   - `prompts.md` - Router logic (rules for LLM)
 3. Skills auto-discover on server restart

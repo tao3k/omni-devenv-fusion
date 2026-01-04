@@ -2,6 +2,7 @@
 src/agent/core/skill_registry.py
 The Kernel of the Skill-Centric OS.
 V2: Uses Spec-based loading for precise, pollution-free plugin management.
+Phase 13.10: Config-driven preloading + on-demand loading.
 """
 import json
 import importlib.util
@@ -14,6 +15,7 @@ from mcp.server.fastmcp import FastMCP
 
 from agent.core.schema import SkillManifest
 from common.mcp_core.gitops import get_project_root
+from common.mcp_core.settings import get_setting
 
 logger = structlog.get_logger(__name__)
 
@@ -40,6 +42,36 @@ class SkillRegistry:
 
         self.skills_dir.mkdir(parents=True, exist_ok=True)
 
+    # =========================================================================
+    # Configuration-Driven Loading (Phase 13.10)
+    # =========================================================================
+
+    def get_preload_skills(self) -> List[str]:
+        """Get list of skills to preload from settings.yaml."""
+        return get_setting("skills.preload", [])
+
+    def preload_all(self, mcp: FastMCP) -> Tuple[int, List[str]]:
+        """
+        Load all preload skills from settings.yaml.
+        Returns: (count of loaded, list of skill names)
+        """
+        preload_skills = self.get_preload_skills()
+        loaded = []
+        failed = []
+
+        for skill in preload_skills:
+            if skill in self.loaded_skills:
+                continue  # Already loaded
+            success, msg = self.load_skill(skill, mcp)
+            if success:
+                loaded.append(skill)
+                logger.info(f"Preloaded skill: {skill}")
+            else:
+                failed.append(skill)
+                logger.warning(f"Failed to preload {skill}: {msg}")
+
+        return len(loaded), loaded
+
     def list_available_skills(self) -> List[str]:
         """Scan the skills directory for valid skills."""
         skills = []
@@ -50,6 +82,10 @@ class SkillRegistry:
             if item.is_dir() and (item / "manifest.json").exists():
                 skills.append(item.name)
         return sorted(skills)
+
+    def list_loaded_skills(self) -> List[str]:
+        """List currently loaded skills."""
+        return list(self.loaded_skills.keys())
 
     def get_skill_manifest(self, skill_name: str) -> Optional[SkillManifest]:
         """Read and parse a skill's manifest."""
