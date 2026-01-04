@@ -2,6 +2,7 @@
   "name": "file_ops",
   "version": "1.0.0",
   "description": "File operations including read, write, search, and AST-based refactoring.",
+  "routing_keywords": ["refactor", "rewrite", "ast", "edit file", "modify", "transform", "replace", "move", "rename", "refactoring"],
   "dependencies": ["filesystem"],
   "tools_module": "agent.skills.file_ops.tools",
   "guide_file": "guide.md",

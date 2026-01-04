@@ -324,3 +324,272 @@ agent/skills/{skill_name}/
 
 See [`why-custom-mcp-architecture.md`](./why-custom-mcp-architecture.md) for the rationale behind this design.
 See [`design-philosophy.md`](./design-philosophy.md) for the three interaction patterns.
+
+---
+
+## Phase 14: The Telepathic Link (Mission Brief Protocol)
+
+> **Status**: Phase 14.0 Complete
+> **Philosophy**: "Don't make the Worker re-think what the Router already figured out."
+
+### The Pain: Context Distillation Loss
+
+**The Problem:**
+
+```
+User: "Fix this bug, it's an IndexError."
+
+Router (LLM): (Thinks: Python issue, needs file_ops and git) → Activates Skills.
+
+Worker (Main LLM): (Wakes up, sees tools) "Hello, what do you want?
+                    Oh, fix a bug. Let me re-analyze this IndexError..."
+```
+
+**The Waste:**
+- Router spent 2 seconds understanding: "IndexError in src/main.py, need read_file + write_file + git_commit"
+- Worker receives: `["file_ops", "git"]` (a tool list only)
+- Worker re-analyzes: "User wants me to fix a bug... What bug? IndexError? Which file?"
+
+**The Solution: Mission Brief**
+
+Router not only returns skill list, but generates a one-sentence tactical directive, directly injected into Worker's System Prompt.
+
+---
+
+### Before vs After
+
+#### ❌ Before (Phase 13.9)
+
+```
+User: "commit my changes with message 'feat(api): add auth'"
+
+Router → Worker:
+  skills: ["git"]
+  (Worker must self-analyze: "User wants to commit... need git_commit tool")
+
+Worker's inner monologue:
+  1. "I have git tools... which one specifically? git_status? git_push? git_commit?"
+  2. "User said 'commit my changes'... should be git_commit"
+  3. "Parameter is message='feat(api): add auth'... call directly"
+  4. "Wait, should I show analysis for confirmation first?"
+  5. (Starts reading git skill prompts.md...)
+```
+
+#### ✅ After (Phase 14.0)
+
+```
+User: "commit my changes with message 'feat(api): add auth'"
+
+Router → Worker:
+  skills: ["git"]
+  mission_brief: "Commit the staged changes with message
+                  'feat(api): add auth'. BEFORE committing,
+                  show commit analysis (Type, Scope, Message)
+                  for user confirmation. Then execute git_commit."
+
+Worker's inner monologue:
+  1. Sees mission_brief: "Oh! User wants to commit, and needs analysis first"
+  2. Executes directly: git_status → show analysis → wait confirm → git_commit
+  3. No reading docs, no guessing intent
+```
+
+---
+
+### How It Works
+
+#### 1. Router Generates Mission Brief
+
+```python
+# router.py - SemanticRouter.route()
+system_prompt = """
+...
+MISSION BRIEF GUIDELINES:
+- Be SPECIFIC and ACTIONABLE (not generic)
+- Tell the Worker WHAT to do and WHY
+- Include specific file paths or parameters if mentioned
+- Example: "Fix the IndexError in src/main.py line 42.
+            Use grep to locate, read_file to inspect, then write the fix."
+
+OUTPUT FORMAT:
+{
+    "skills": ["git"],
+    "mission_brief": "Actionable directive...",
+    "confidence": 0.85,
+    "reasoning": "Why these skills were chosen..."
+}
+"""
+```
+
+#### 2. Context Builder Injects Brief
+
+```python
+# context_builder.py - Mission Injection
+def build_mission_injection(routing_result):
+    return f"""
+╔═══════════════════════════════════════════════════════════════╗
+║ 🚀 MISSION BRIEF (from Orchestrator)                          ║
+╠═══════════════════════════════════════════════════════════════╣
+║ 🟢 HIGH CONFIDENCE | Skills: git                              ║
+╠═══════════════════════════════════════════════════════════════╣
+║                                                               ║
+║ 📋 YOUR OBJECTIVE:                                            ║
+║ Commit the staged changes with message 'feat(api): add auth'. ║
+║ BEFORE committing, show commit analysis for confirmation.     ║
+║                                                               ║
+╚═══════════════════════════════════════════════════════════════╝
+"""
+```
+
+---
+
+### The Hive Mind Cache
+
+**Problem:** High-frequency queries (like "run tests", "commit", "check status") don't need LLM inference every time.
+
+**Solution:** LRU Cache for routing decisions.
+
+```python
+# First call "run tests": ~2s (calls LLM)
+# Second call "run tests": ~0ms (cache hit)
+# 5 consecutive calls: 0ms ⚡
+
+router = get_router()
+result = await router.route("run the tests")
+# result.from_cache == True (if second call)
+```
+
+**Usage:**
+
+```bash
+# Test cache behavior
+python scripts/test_router.py --cache
+```
+
+---
+
+### Real Examples from test_router.py
+
+```bash
+# Example 1: Commit with confirmation
+$ python scripts/test_router.py --query "commit my changes with message 'feat(api): add auth'"
+
+🎯 ROUTING RESULT:
+   Skills: ['git']
+   Confidence: 1.00
+   From Cache: No
+
+📋 MISSION BRIEF:
+   Commit the staged changes with message 'feat(api): add auth'.
+   Before committing, show commit analysis (Type: feat, Scope: api,
+   Message: add auth) for user confirmation. Then execute git_commit.
+
+💭 REASONING:
+   User explicitly requested to commit with a specific message.
+
+---
+
+# Example 2: Cache Hit (instant)
+$ python scripts/test_router.py --cache
+
+1️⃣ First call (expect MISS):
+   From Cache: False
+2️⃣ Second call (expect HIT):
+   From Cache: True
+4️⃣ Performance:
+   5 cached calls: 0.0ms (should be near-instant)
+```
+
+---
+
+### API Reference
+
+#### RoutingResult
+
+```python
+@dataclass
+class RoutingResult:
+    selected_skills: List[str]   # Skill list
+    mission_brief: str            # 🚀 Mission brief
+    reasoning: str                # Decision rationale
+    confidence: float             # 0.0-1.0
+    from_cache: bool              # Cache hit flag
+    timestamp: float              # Timestamp
+```
+
+#### Core Functions
+
+```python
+from agent.core.router import get_router, clear_routing_cache
+
+# Basic routing
+router = get_router()
+result = await router.route("fix the IndexError")
+
+# result.selected_skills  → ["file_ops", "git"]
+# result.mission_brief    → "Fix the IndexError in src/main.py..."
+# result.from_cache       → False
+
+# Clear cache
+clear_routing_cache()
+```
+
+#### Context Builder
+
+```python
+from agent.core.context_builder import (
+    build_mission_injection,
+    build_worker_context,
+    route_and_build_context,
+)
+
+# One-shot route + build context
+result = await route_and_build_context(
+    user_query="fix the IndexError",
+    chat_history=history,
+)
+
+# result = {
+#     "routing_result": RoutingResult(...),
+#     "context": "Full context (with Mission Brief)",
+#     "skills": ["file_ops", "git"],
+#     "mission_brief": "Fix the IndexError..."
+# }
+```
+
+---
+
+### Test Suite
+
+```bash
+# Run all routing tests
+python scripts/test_router.py --all
+
+# Test cache behavior
+python scripts/test_router.py --cache
+
+# Test Mission Brief quality
+python scripts/test_router.py --brief
+
+# Interactive mode
+python scripts/test_router.py --interactive
+```
+
+**Test Results:**
+
+| Test | Status |
+|------|--------|
+| Routing (23 cases) | ✅ 23/23 |
+| Cache Hit | ✅ 0ms |
+| Mission Brief Quality | ✅ All actionable |
+
+---
+
+### When to Use
+
+| Scenario | Use Mission Brief? |
+|----------|-------------------|
+| Simple file read | ❌ Not needed |
+| Commit with analysis | ✅ Essential |
+| Complex bug fix | ✅ Essential |
+| Testing workflow | ✅ Essential |
+| General conversation | ❌ Overkill |

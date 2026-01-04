@@ -29,7 +29,24 @@
 | Diff (staged)   | `git diff --cached` | Read-only, safe |
 | Diff (unstaged) | `git diff`          | Read-only, safe |
 | Log             | `git log`           | Read-only, safe |
-| Add             | `git add <files>`   | Safe staging    |
+
+### Staging (Use MCP Tool)
+
+| Operation | Tool | Why |
+| --------- | ---- | ---- |
+| Stage all | `git_stage_all()` | **LLM security scan** for sensitive files |
+
+**When user says "commit": System automatically runs:**
+
+1. `git add -A` → call `git_stage_all()` (NOT bash)
+2. LLM scans for sensitive files (.env, credentials, secrets, tokens)
+3. If sensitive files detected → ⚠️ Alert user:
+   - [c] Continue staging anyway
+   - [s] Skip sensitive files
+   - [a] Abort
+4. If safe → auto-stage files
+5. Then show commit analysis for confirmation
+6. Then execute `git_commit(message="...")`
 
 ---
 
@@ -75,7 +92,7 @@ When user says "commit":
 | Wrong                                      | Correct                             |
 | ------------------------------------------ | ----------------------------------- |
 | Use MCP for `git status`, `git diff`       | Use Claude-native bash              |
-| Use MCP for `git add`                      | Use Claude-native bash              |
+| Use bash for `git add -A`                  | Use `git_stage_all()` for security  |
 | Call `git_commit` without showing analysis | Always show analysis first          |
 | Use `smart_commit` (doesn't exist)         | Use `git_commit` after confirmation |
 

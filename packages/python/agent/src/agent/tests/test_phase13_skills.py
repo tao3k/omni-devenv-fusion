@@ -527,47 +527,6 @@ class TestSkillManager:
         return tool.fn
 
     @pytest.mark.asyncio
-    async def test_skill_tool_auto_loads(self, registry, real_mcp):
-        """Skill tool should auto-load when skill not loaded."""
-        from agent.capabilities.skill_manager import register_skill_tools
-
-        register_skill_tools(real_mcp)
-
-        # Get tool function
-        skill_func = self._get_tool_func(real_mcp, "skill")
-
-        # Execute skill tool with auto-load
-        result = await skill_func(
-            skill="filesystem",
-            call='list_directory(path="agent/skills")'
-        )
-
-        assert "auto-loaded" in result.lower() or "filesystem" in result.lower()
-
-    @pytest.mark.asyncio
-    async def test_skill_tool_executes_operation(self, registry, real_mcp):
-        """Skill tool should execute operation after loading."""
-        from agent.capabilities.skill_manager import register_skill_tools
-
-        register_skill_tools(real_mcp)
-
-        skill_func = self._get_tool_func(real_mcp, "skill")
-
-        # First load
-        await skill_func(
-            skill="filesystem",
-            call='list_directory(path="agent/skills")'
-        )
-
-        # Second call should execute
-        result = await skill_func(
-            skill="filesystem",
-            call='list_directory(path="agent/skills")'
-        )
-
-        assert "Directory Listing" in result or "filesystem" in result
-
-    @pytest.mark.asyncio
     async def test_load_skill_tool(self, registry, real_mcp):
         """Test load_skill tool."""
         from agent.capabilities.skill_manager import register_skill_tools
@@ -614,160 +573,15 @@ class TestSkillManager:
         result = await active_func()
         assert "filesystem" in result
 
-
-class TestSkillToolExecution:
-    """
-    CRITICAL: Tests for skill() tool execution.
-
-    This class specifically tests skills where tools are defined INSIDE the register()
-    function (like git skill). This is the pattern that caused the bug where
-    hasattr(module, operation) failed because functions inside register() are not
-    module attributes.
-
-    This test class would have caught the spec_aware_commit bug.
-    """
-
-    def _get_tool_func(self, mcp, tool_name):
-        """Helper to get tool function from FastMCP."""
-        tools = list(mcp._tool_manager._tools.values())
-        tool = [t for t in tools if t.name == tool_name][0]
-        return tool.fn
-
     @pytest.mark.asyncio
-    async def test_skill_tool_calls_git_status(self, registry, real_mcp):
-        """
-        Test skill() tool can call git_status from git skill.
-
-        git skill defines functions INSIDE register(), so hasattr(module, 'git_status')
-        returns False. This test catches the bug where skill() couldn't call git tools.
-        """
+    async def test_invoke_skill_tool_exists(self, registry, real_mcp):
+        """Test that invoke_skill tool is registered."""
         from agent.capabilities.skill_manager import register_skill_tools
+
         register_skill_tools(real_mcp)
-        skill_func = self._get_tool_func(real_mcp, "skill")
 
-        result = await skill_func(
-            skill="git",
-            call='git_status()'
-        )
-
-        # Should return git status, not "Operation not found"
-        assert "Operation 'git_status' not found" not in result
-        assert "git_status" in result or "M " in result or "A " in result or "✅" in result
-
-    @pytest.mark.asyncio
-    async def test_skill_tool_calls_git_diff_staged(self, registry, real_mcp):
-        """Test skill() tool can call git_diff_staged from git skill."""
-        from agent.capabilities.skill_manager import register_skill_tools
-        register_skill_tools(real_mcp)
-        skill_func = self._get_tool_func(real_mcp, "skill")
-
-        result = await skill_func(
-            skill="git",
-            call='git_diff_staged()'
-        )
-
-        # Should return diff output, not "Operation not found"
-        assert "Operation 'git_diff_staged' not found" not in result
-
-    @pytest.mark.asyncio
-    async def test_skill_tool_calls_git_log(self, registry, real_mcp):
-        """Test skill() tool can call git_log from git skill."""
-        from agent.capabilities.skill_manager import register_skill_tools
-        register_skill_tools(real_mcp)
-        skill_func = self._get_tool_func(real_mcp, "skill")
-
-        result = await skill_func(
-            skill="git",
-            call='git_log(n=3)'
-        )
-
-        # Should return commit log, not "Operation not found"
-        assert "Operation 'git_log' not found" not in result
-        assert "git_log" in result or "commit" in result.lower()
-
-    @pytest.mark.asyncio
-    async def test_skill_tool_calls_git_commit(self, registry, real_mcp):
-        """Test skill() tool can call git_commit from git skill.
-
-        git_commit is the primary commit tool in the git skill.
-        This tests that skill() can handle the commit operation.
-        """
-        from agent.capabilities.skill_manager import register_skill_tools
-        register_skill_tools(real_mcp)
-        skill_func = self._get_tool_func(real_mcp, "skill")
-
-        # git_commit will fail without staged changes, but that's OK
-        # The key is that it finds the function (doesn't return "Operation not found")
-        result = await skill_func(
-            skill="git",
-            call='git_commit(message="test: validation check")'
-        )
-
-        # Should either:
-        # 1. Return error about no staged changes
-        # 2. Return success (if staged changes exist)
-        # Should NOT return "Operation 'git_commit' not found"
-        assert "Operation 'git_commit' not found" not in result
-
-    @pytest.mark.asyncio
-    async def test_skill_tool_parse_kwargs_correctly(self, registry, real_mcp):
-        """Test skill() tool correctly parses keyword arguments."""
-        from agent.capabilities.skill_manager import register_skill_tools
-        register_skill_tools(real_mcp)
-        skill_func = self._get_tool_func(real_mcp, "skill")
-
-        # Call git_log with explicit n parameter
-        result = await skill_func(
-            skill="git",
-            call='git_log(n=1)'
-        )
-
-        # Should execute without error (parsing kwargs works)
-        assert "Invalid call syntax" not in result
-
-
-class TestSkillManagerConsistency:
-    """
-    Test that skill() tool behavior is consistent across different skills.
-
-    Ensures that skills with module-level functions (filesystem) and
-    skills with register()-level functions (git) both work correctly.
-    """
-
-    def _get_tool_func(self, mcp, tool_name):
-        """Helper to get tool function from FastMCP."""
-        tools = list(mcp._tool_manager._tools.values())
-        tool = [t for t in tools if t.name == tool_name][0]
-        return tool.fn
-
-    @pytest.mark.asyncio
-    async def test_filesystem_and_git_both_work(self, registry, real_mcp):
-        """
-        Verify both filesystem (module-level) and git (register-level) skills work.
-
-        This is a regression test ensuring both patterns work.
-        """
-        from agent.capabilities.skill_manager import register_skill_tools
-        register_skill_tools(real_mcp)
-        skill_func = self._get_tool_func(real_mcp, "skill")
-
-        # Test filesystem skill (module-level functions)
-        fs_result = await skill_func(
-            skill="filesystem",
-            call='list_directory(path="agent/skills")'
-        )
-        assert "Operation 'list_directory' not found" not in fs_result
-
-        # Test git skill (register-level functions)
-        git_result = await skill_func(
-            skill="git",
-            call='git_status()'
-        )
-        assert "Operation 'git_status' not found" not in git_result
-
-        # Both should succeed (neither returns "Operation not found")
-        assert "not found" not in fs_result.lower()
-        assert "not found" not in git_result.lower()
+        invoke_func = self._get_tool_func(real_mcp, "invoke_skill")
+        assert invoke_func is not None
 
 
 class TestSkillEdgeCases:
@@ -844,6 +658,185 @@ class TestSkillPerformance:
         # All should succeed
         for success, msg in results:
             assert success is True
+
+
+class TestCodeInsightSkill:
+    """Test code_insight skill operations."""
+
+    def test_code_insight_manifest_parsing(self, registry):
+        """Registry should correctly parse code_insight/manifest.json."""
+        manifest = registry.get_skill_manifest("code_insight")
+        assert manifest is not None
+        assert manifest.name == "code_insight"
+        assert manifest.version == "1.0.0"
+        assert manifest.tools_module == "agent.skills.code_insight.tools"
+
+    def test_load_code_insight_skill(self, registry, real_mcp):
+        """Should successfully load code_insight skill."""
+        success, message = registry.load_skill("code_insight", real_mcp)
+
+        assert success is True, f"Expected success, got: {message}"
+        assert "code_insight" in registry.loaded_skills
+        assert "code_insight" in registry.module_cache
+
+    def test_code_insight_has_find_tools(self, registry, real_mcp):
+        """Loaded code_insight module should have find_tools function."""
+        registry.load_skill("code_insight", real_mcp)
+
+        module = registry.module_cache["code_insight"]
+        assert hasattr(module, "find_tools")
+        assert hasattr(module, "count_lines")
+
+    @pytest.mark.asyncio
+    async def test_find_tools_functionality(self, registry, real_mcp):
+        """find_tools should work without error and return reasonable output."""
+        import asyncio
+
+        registry.load_skill("code_insight", real_mcp)
+        module = registry.module_cache["code_insight"]
+
+        # Test with a file - most skills use register() pattern, so decorators
+        # won't be at function definition level. Test that function works.
+        result = await module.find_tools("agent/skills/code_insight/tools.py")
+        # Should return either tool names or "No tools found"
+        assert "No tools found" in result or "- find_tools" in result or "- count_lines" in result
+
+    @pytest.mark.asyncio
+    async def test_find_tools_returns_empty_for_no_tools(self, registry, real_mcp):
+        """find_tools should return message when no tools found."""
+        import asyncio
+
+        registry.load_skill("code_insight", real_mcp)
+        module = registry.module_cache["code_insight"]
+
+        # Find tools in a file without decorators
+        result = await module.find_tools("agent/skills/code_insight/manifest.json")
+        assert "No tools found" in result
+
+    @pytest.mark.asyncio
+    async def test_find_tools_file_not_found(self, registry, real_mcp):
+        """find_tools should return error for non-existent file."""
+        import asyncio
+
+        registry.load_skill("code_insight", real_mcp)
+        module = registry.module_cache["code_insight"]
+
+        result = await module.find_tools("nonexistent/file.py")
+        assert "Error: File not found" in result
+
+    @pytest.mark.asyncio
+    async def test_count_lines(self, registry, real_mcp):
+        """count_lines should return line count."""
+        import asyncio
+
+        registry.load_skill("code_insight", real_mcp)
+        module = registry.module_cache["code_insight"]
+
+        result = await module.count_lines("agent/skills/code_insight/tools.py")
+        assert "tools.py" in result
+        assert "lines" in result
+        # Should be around 115 lines
+        assert "115" in result or "114" in result or "116" in result
+
+
+class TestInvokeSkillTool:
+    """Test invoke_skill tool (replaces deprecated skill() with AST parsing)."""
+
+    def _get_tool_func(self, mcp, tool_name):
+        """Helper to get tool function from FastMCP."""
+        tools = list(mcp._tool_manager._tools.values())
+        tool = [t for t in tools if t.name == tool_name][0]
+        return tool.fn
+
+    @pytest.mark.asyncio
+    async def test_invoke_skill_auto_loads(self, registry, real_mcp):
+        """invoke_skill should auto-load when skill not loaded."""
+        from agent.capabilities.skill_manager import register_skill_tools
+
+        register_skill_tools(real_mcp)
+
+        invoke_func = self._get_tool_func(real_mcp, "invoke_skill")
+
+        # Execute with auto-load
+        result = await invoke_func(
+            skill="filesystem",
+            tool="list_directory",
+            args={"path": "agent/skills"}
+        )
+
+        assert "auto-loaded" in result.lower() or "filesystem" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_invoke_skill_calls_filesystem(self, registry, real_mcp):
+        """invoke_skill should call filesystem.list_directory."""
+        from agent.capabilities.skill_manager import register_skill_tools
+
+        register_skill_tools(real_mcp)
+
+        invoke_func = self._get_tool_func(real_mcp, "invoke_skill")
+
+        result = await invoke_func(
+            skill="filesystem",
+            tool="list_directory",
+            args={"path": "agent/skills"}
+        )
+
+        assert "filesystem" in result or "_template" in result
+
+    @pytest.mark.asyncio
+    async def test_invoke_skill_calls_git_stage_all(self, registry, real_mcp):
+        """invoke_skill should call git.git_stage_all."""
+        from agent.capabilities.skill_manager import register_skill_tools
+
+        register_skill_tools(real_mcp)
+
+        invoke_func = self._get_tool_func(real_mcp, "invoke_skill")
+
+        result = await invoke_func(
+            skill="git",
+            tool="git_stage_all",
+            args={"scan": False}  # Skip scan for test
+        )
+
+        # Should not return "Operation not found"
+        assert "Operation 'git_stage_all' not found" not in result
+
+    @pytest.mark.asyncio
+    async def test_invoke_skill_handles_empty_args(self, registry, real_mcp):
+        """invoke_skill should handle empty args dict."""
+        from agent.capabilities.skill_manager import register_skill_tools
+
+        register_skill_tools(real_mcp)
+
+        invoke_func = self._get_tool_func(real_mcp, "invoke_skill")
+
+        result = await invoke_func(
+            skill="git",
+            tool="git_stage_all",
+            args={}
+        )
+
+        assert "Invalid" not in result
+
+    @pytest.mark.asyncio
+    async def test_invoke_skill_nonexistent_operation(self, registry, real_mcp):
+        """invoke_skill should return error for nonexistent operation with available ops list."""
+        from agent.capabilities.skill_manager import register_skill_tools
+
+        register_skill_tools(real_mcp)
+
+        invoke_func = self._get_tool_func(real_mcp, "invoke_skill")
+
+        # Call with nonexistent operation
+        result = await invoke_func(
+            skill="filesystem",
+            tool="nonexistent_operation_xyz",
+            args={}
+        )
+        # Should return error with available operations listed
+        assert "not found" in result.lower()
+        # Should list available operations
+        assert "Available:" in result or "list_directory" in result
 
 
 if __name__ == "__main__":

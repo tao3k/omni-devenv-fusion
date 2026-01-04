@@ -111,66 +111,14 @@ Skill '{skill_name}' loaded successfully!
         return "\n".join(lines)
 
     @mcp.tool()
-    async def skill(skill: str, call: str) -> str:
-        """
-        [Auto-Load] Execute a skill operation with automatic skill loading.
-
-        Usage:
-        - skill("filesystem", 'list_directory(path=".")')
-        - skill("filesystem", 'read_file(path="README.md")')
-        - skill("filesystem", 'write_file(path="test.txt", content="hello")')
-        - skill("filesystem", 'search_files(pattern="*.py")')
-        - skill("git", 'git_status()')
-        - skill("git", 'smart_commit(message="feat: add new feature")')
-
-        Args:
-            skill: The skill to use (filesystem, git, python, etc.)
-            call: Function call string like 'operation(arg1="value1", arg2="value2")'
-        """
-        # Parse the call string
-        import ast
-
-        try:
-            # Parse function call syntax
-            node = ast.parse(call, mode='eval')
-            call_node = node.body
-
-            if not isinstance(call_node, ast.Call):
-                return f"Invalid call syntax: {call}"
-
-            operation = call_node.func.id if isinstance(call_node.func, ast.Name) else None
-            if not operation:
-                return f"Could not parse operation from: {call}"
-
-            # Parse arguments
-            kwargs = {}
-            for kw in call_node.keywords:
-                if isinstance(kw.value, ast.Constant):
-                    kwargs[kw.arg] = kw.value.value
-                elif isinstance(kw.value, ast.Dict):
-                    # Handle dict literals
-                    kwargs[kw.arg] = {}
-                    for k, v in zip(kw.value.keys, kw.value.values):
-                        if isinstance(k, ast.Constant) and isinstance(v, ast.Constant):
-                            kwargs[kw.arg][k.value] = v.value
-
-        except SyntaxError as e:
-            return f"Invalid call syntax: {call}\nError: {e}"
-
-        return await _execute_skill_operation(skill, operation, kwargs, mcp, registry)
-
-    @mcp.tool()
     async def invoke_skill(skill: str, tool: str, args: dict) -> str:
         """
         [Structured] Execute a skill operation with structured arguments.
 
-        This is a safer alternative to skill() that avoids AST parsing issues
-        with special characters (quotes, newlines, etc.).
-
         Usage:
         - invoke_skill("filesystem", "list_directory", {"path": "."})
         - invoke_skill("git", "git_status", {})
-        - invoke_skill("git", "smart_commit", {"message": "feat: add feature"})
+        - invoke_skill("git", "git_commit", {"message": "feat: add feature"})
 
         Args:
             skill: The skill name (e.g., "filesystem", "git", "terminal")
@@ -187,18 +135,10 @@ async def _execute_skill_operation(skill: str, operation: str, kwargs: dict, mcp
         success, msg = registry.load_skill(skill, mcp)
         if not success:
             return f"Failed to load skill '{skill}': {msg}"
-        # Use diff mode for token efficiency on auto-load
-        context = registry.get_skill_context(skill, use_diff=True)
-        return f"""
-Skill '{skill}' auto-loaded!
-
-{msg}
-
-=== PROCEDURAL KNOWLEDGE (CHANGES ONLY) ===
-{context}
-==================================================
-
-Now call: invoke_skill('{skill}', '{operation}', {kwargs})"""
+        # Get the loaded module for auto-load case
+        module = registry.module_cache.get(skill)
+        if not module:
+            return f"Skill '{skill}' loaded but not in module cache."
 
     # Get the loaded module
     module = registry.module_cache.get(skill)
@@ -221,4 +161,6 @@ Now call: invoke_skill('{skill}', '{operation}', {kwargs})"""
         else:
             return f"'{operation}' is not callable."
     else:
-        return f"Operation '{operation}' not found in skill '{skill}'."
+        # List available operations in this skill
+        available = [attr for attr in dir(module) if not attr.startswith('_') and callable(getattr(module, attr, None))]
+        return f"Operation '{operation}' not found in skill '{skill}'. Available: {available}"
