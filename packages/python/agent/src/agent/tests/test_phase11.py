@@ -251,8 +251,10 @@ class TestGitSkill:
             if isinstance(node, ast.AsyncFunctionDef):
                 tool_names.append(node.name)
 
-        # Should only have git_commit and git_push
-        assert tool_names == ["git_commit", "git_push"], f"Expected only git_commit and git_push, found: {tool_names}"
+        # Should have: git_stage_all (with security scan), git_commit, git_push
+        # Exclude private functions (starting with _)
+        public_tools = [name for name in tool_names if not name.startswith("_")]
+        assert public_tools == ["git_stage_all", "git_commit", "git_push"], f"Expected git_stage_all, git_commit and git_push, found: {public_tools}"
 
     def test_git_commit_has_message_param(self):
         """Verify git_commit has message parameter."""

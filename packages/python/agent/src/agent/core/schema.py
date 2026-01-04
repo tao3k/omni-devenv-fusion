@@ -381,9 +381,15 @@ class HarvestedInsight(BaseModel):
 
 class SkillManifest(BaseModel):
     """Metadata for a dynamically loadable skill."""
+    model_config = {"extra": "allow"}  # Allow extra fields like routing_keywords
+
     name: str = Field(..., description="Unique skill identifier (e.g., 'git')")
     version: str = Field(..., description="Semantic version")
     description: str = Field(..., description="What this skill does")
+    routing_keywords: List[str] = Field(
+        default_factory=list,
+        description="Keywords for semantic routing (e.g., ['git', 'commit', 'push'])"
+    )
     dependencies: List[str] = Field(
         default_factory=list,
         description="List of other skills this skill requires"

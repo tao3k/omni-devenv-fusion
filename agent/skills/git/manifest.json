@@ -2,6 +2,7 @@
   "name": "git",
   "version": "1.1.0",
   "description": "Git integration with Ops, Smart Commit V2, and Spec-Awareness",
+  "routing_keywords": ["git", "commit", "push", "pull", "branch", "merge", "version control", "repo", "history", "diff", "status", "log", "rebase", "checkout", "stash", "tag"],
   "dependencies": ["filesystem"],
   "tools_module": "agent.skills.git.tools",
   "guide_file": "guide.md",

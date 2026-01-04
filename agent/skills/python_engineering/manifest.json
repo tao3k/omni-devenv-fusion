@@ -2,11 +2,10 @@
   "name": "python_engineering",
   "version": "1.0.0",
   "description": "Python development utilities including linting, testing, and Pydantic standards",
+  "routing_keywords": ["python", "lint", "format", "type check", "pytest", "pep8", "pydantic", "type hints", "typing", "ruff", "black"],
   "category": "development",
-  "dependencies": [],
-  "tools": ["lint_python_style", "run_pytest", "check_types", "format_python"],
-  "context_files": ["agent/standards/lang-python.md"],
-  "prompts": [
-    "Follow PEP 8 style guide and Pydantic patterns when writing Python code."
-  ]
+  "dependencies": ["filesystem"],
+  "tools_module": "agent.skills.python_engineering.tools",
+  "guide_file": "guide.md",
+  "prompts_file": "prompts.md"
 }
