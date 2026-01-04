@@ -37,7 +37,7 @@ let
     "inference" # AI inference engine
     "orchestrator" # Orchestrator module
     "git-ops" # Git operations tools
-    "mcp-server" # Legacy: for old commits (DEPRECATED, use "mcp")
+    "agent" # Agent modules: BaseAgent, CoderAgent, ReviewerAgent, skills
     "core" # Core agent modules: BaseAgent, CoderAgent, ReviewerAgent
   ];
   # Define generator configurations
