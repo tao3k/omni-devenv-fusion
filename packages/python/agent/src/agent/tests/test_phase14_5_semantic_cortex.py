@@ -11,6 +11,7 @@ Tests for:
 Usage:
     python -m pytest packages/python/agent/src/agent/tests/test_phase14_5_semantic_cortex.py -v
 """
+
 import pytest
 import asyncio
 import time
@@ -163,7 +164,9 @@ class TestSemanticRouter:
     def router(self, mock_cortex):
         """Create SemanticRouter with mocked components."""
         with patch("agent.core.router.semantic_router.get_skill_registry") as mock_reg:
-            mock_reg.return_value.list_available_skills = MagicMock(return_value=["git", "filesystem"])
+            mock_reg.return_value.list_available_skills = MagicMock(
+                return_value=["git", "filesystem"]
+            )
             mock_reg.return_value.get_skill_manifest = MagicMock(
                 return_value=MagicMock(
                     description="Test skill",
@@ -235,7 +238,9 @@ class TestGoldenPayload:
     def router(self):
         """Create router for testing mission briefs."""
         with patch("agent.core.router.semantic_router.get_skill_registry") as mock_reg:
-            mock_reg.return_value.list_available_skills = MagicMock(return_value=["git", "filesystem", "testing"])
+            mock_reg.return_value.list_available_skills = MagicMock(
+                return_value=["git", "filesystem", "testing"]
+            )
             mock_reg.return_value.get_skill_manifest = MagicMock(
                 return_value=MagicMock(description="Test skill", routing_keywords=[])
             )
@@ -300,7 +305,9 @@ class TestGoldenPayload:
         # This test verifies the router's mission brief guidelines
         # The router prompt should discourage step-by-step language
         with patch("agent.core.router.semantic_router.get_skill_registry") as mock_reg:
-            mock_reg.return_value.list_available_skills = MagicMock(return_value=["git", "filesystem", "testing"])
+            mock_reg.return_value.list_available_skills = MagicMock(
+                return_value=["git", "filesystem", "testing"]
+            )
             mock_reg.return_value.get_skill_manifest = MagicMock(
                 return_value=MagicMock(description="Test skill", routing_keywords=[])
             )
@@ -316,7 +323,10 @@ MISSION BRIEF GUIDELINES (Commander's Intent - NOT Step-by-Step):
 - AVOID step-by-step procedures"""
 
             # Verify the router has anti-step-by-step guidelines in its design
-            assert "step-by-step" in system_prompt_sample.lower() or "commander" in system_prompt_sample.lower()
+            assert (
+                "step-by-step" in system_prompt_sample.lower()
+                or "commander" in system_prompt_sample.lower()
+            )
 
 
 class TestPerformanceMetrics:
@@ -415,9 +425,7 @@ class TestPersistence:
 
             # Check routing_experience collection exists
             collections = await vs.list_collections()
-            assert "routing_experience" in collections, (
-                "routing_experience collection should exist"
-            )
+            assert "routing_experience" in collections, "routing_experience collection should exist"
         except Exception as e:
             pytest.skip(f"Vector store not available: {e}")
 
@@ -454,6 +462,7 @@ class TestPersistence:
 # Performance Benchmark (can be run separately)
 # =============================================================================
 
+
 async def run_performance_benchmark():
     """
     Run comprehensive performance benchmark for Phase 14.5.
@@ -489,13 +498,15 @@ async def run_performance_benchmark():
         elapsed = (time.perf_counter() - start) * 1000
 
         skills_match = set(result.selected_skills) == set(expected_skills)
-        results.append({
-            "query": query,
-            "skills": result.selected_skills,
-            "from_cache": result.from_cache,
-            "elapsed_ms": elapsed,
-            "skills_match": skills_match,
-        })
+        results.append(
+            {
+                "query": query,
+                "skills": result.selected_skills,
+                "from_cache": result.from_cache,
+                "elapsed_ms": elapsed,
+                "skills_match": skills_match,
+            }
+        )
 
         status = "✅" if skills_match else "❌"
         cache = "⚡" if result.from_cache else "🧠"
@@ -511,9 +522,9 @@ async def run_performance_benchmark():
     print(f"  Total queries:   {len(results)}")
     print(f"  LLM calls:       {llm_calls}")
     print(f"  Cache hits:      {cache_hits}")
-    print(f"  Cache hit rate:  {cache_hits/len(results)*100:.0f}%")
-    print(f"  Skill accuracy:  {skill_matches/len(results)*100:.0f}%")
-    print(f"  Avg latency:     {sum(r['elapsed_ms'] for r in results)/len(results):.0f}ms")
+    print(f"  Cache hit rate:  {cache_hits / len(results) * 100:.0f}%")
+    print(f"  Skill accuracy:  {skill_matches / len(results) * 100:.0f}%")
+    print(f"  Avg latency:     {sum(r['elapsed_ms'] for r in results) / len(results):.0f}ms")
 
     print("\n" + "=" * 60)
 

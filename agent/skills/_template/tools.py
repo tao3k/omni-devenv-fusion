@@ -2,6 +2,7 @@
 agent/skills/_template/tools.py
 MCP tools for the template skill.
 """
+
 from mcp.server.fastmcp import FastMCP
 
 

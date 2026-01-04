@@ -40,6 +40,7 @@ filterwarnings = [
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
+    "ruff>=0.14.10",
 ]
 
 [tool.uv.sources]

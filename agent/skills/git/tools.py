@@ -11,6 +11,7 @@ Philosophy:
 - MCP = "The Guard" - handles operations that need explicit confirmation
 - Claude-native bash = "The Explorer" - safe read operations
 """
+
 import asyncio
 from typing import List, Optional
 from mcp.server.fastmcp import FastMCP
@@ -23,11 +24,22 @@ from common.mcp_core.inference import InferenceClient
 # =============================================================================
 
 SENSITIVE_PATTERNS = [
-    "*.env", ".env*", "*.pem", "*.key", "*.crt",
-    "credentials*", "secrets*", "password*", "api_key*",
-    "*.sqlite3", "*.db", "*.sqlite",
-    "token.json", "service-account*.json",
-    ".npmrc", ".pypirc",  # Package manager auth
+    "*.env",
+    ".env*",
+    "*.pem",
+    "*.key",
+    "*.crt",
+    "credentials*",
+    "secrets*",
+    "password*",
+    "api_key*",
+    "*.sqlite3",
+    "*.db",
+    "*.sqlite",
+    "token.json",
+    "service-account*.json",
+    ".npmrc",
+    ".pypirc",  # Package manager auth
 ]
 
 WARNING_MESSAGE = """
@@ -51,11 +63,12 @@ The following files match known sensitive patterns:
 def _get_staged_files() -> List[str]:
     """Get list of files that would be staged."""
     import subprocess
+
     result = subprocess.run(
         ["git", "add", "-n", "--dry-run"],
         capture_output=True,
         text=True,
-        cwd=run_git_cmd.__self__.cwd if hasattr(run_git_cmd, "__self__") else "."
+        cwd=run_git_cmd.__self__.cwd if hasattr(run_git_cmd, "__self__") else ".",
     )
     files = []
     for line in result.stdout.splitlines():
@@ -106,6 +119,7 @@ If no sensitive files found, return: []"""
 
         if result["success"]:
             import json
+
             try:
                 sensitive = json.loads(result["content"].strip())
                 if isinstance(sensitive, list):
@@ -114,14 +128,35 @@ If no sensitive files found, return: []"""
                     alert_files = []
             except json.JSONDecodeError:
                 # Fallback: simple pattern matching
-                alert_files = [f for f in files if any(p in f.lower() for p in
-                    ["env", "secret", "credential", "token", "key", "password"])]
+                alert_files = [
+                    f
+                    for f in files
+                    if any(
+                        p in f.lower()
+                        for p in ["env", "secret", "credential", "token", "key", "password"]
+                    )
+                ]
         else:
             alert_files = []
     except Exception:
         # Fallback to simple pattern matching on filename
-        alert_files = [f for f in files if any(p in f.lower() for p in
-            ["env", "secret", "credential", "token", "key", "password", ".npmrc", ".pypirc"])]
+        alert_files = [
+            f
+            for f in files
+            if any(
+                p in f.lower()
+                for p in [
+                    "env",
+                    "secret",
+                    "credential",
+                    "token",
+                    "key",
+                    "password",
+                    ".npmrc",
+                    ".pypirc",
+                ]
+            )
+        ]
 
     warning = ""
     if alert_files:
@@ -135,6 +170,7 @@ If no sensitive files found, return: []"""
 # =============================================================================
 # Critical Git Tools (Require explicit confirmation)
 # =============================================================================
+
 
 async def git_stage_all(scan: bool = True) -> str:
     """
@@ -156,11 +192,8 @@ async def git_stage_all(scan: bool = True) -> str:
     """
     # Get files to be staged
     import subprocess
-    result = subprocess.run(
-        ["git", "add", "-n", "--dry-run"],
-        capture_output=True,
-        text=True
-    )
+
+    result = subprocess.run(["git", "add", "-n", "--dry-run"], capture_output=True, text=True)
 
     files_to_stage = []
     for line in result.stdout.splitlines():
@@ -176,20 +209,29 @@ async def git_stage_all(scan: bool = True) -> str:
         alert_files, warning = await _scan_for_sensitive_files(files_to_stage)
 
         if alert_files:
-            return f"{warning}\n\n**Files to stage ({len(files_to_stage)} total):**\n" + \
-                   "\n".join(f"- {f}" for f in files_to_stage[:20]) + \
-                   (f"\n... and {len(files_to_stage) - 20} more" if len(files_to_stage) > 20 else "") + \
-                   "\n\n**Reply with:**\n- [c] Continue staging anyway\n- [s] Skip sensitive files\n- [a] Abort"
+            return (
+                f"{warning}\n\n**Files to stage ({len(files_to_stage)} total):**\n"
+                + "\n".join(f"- {f}" for f in files_to_stage[:20])
+                + (f"\n... and {len(files_to_stage) - 20} more" if len(files_to_stage) > 20 else "")
+                + "\n\n**Reply with:**\n- [c] Continue staging anyway\n- [s] Skip sensitive files\n- [a] Abort"
+            )
 
     # Execute staging
     try:
         output = await run_git_cmd(["add", "-A"])
-        safe_count = len([f for f in files_to_stage if f not in alert_files]) if scan else len(files_to_stage)
-        return f"✅ Staged {safe_count} file(s)\n\n" + \
-               "\n".join(f"- {f}" for f in files_to_stage[:15]) + \
-               (f"\n... and {len(files_to_stage) - 15} more" if len(files_to_stage) > 15 else "")
+        safe_count = (
+            len([f for f in files_to_stage if f not in alert_files])
+            if scan
+            else len(files_to_stage)
+        )
+        return (
+            f"✅ Staged {safe_count} file(s)\n\n"
+            + "\n".join(f"- {f}" for f in files_to_stage[:15])
+            + (f"\n... and {len(files_to_stage) - 15} more" if len(files_to_stage) > 15 else "")
+        )
     except Exception as e:
         return f"Staging failed: {e}"
+
 
 async def git_commit(message: str, skip_hooks: bool = False) -> str:
     """
@@ -239,6 +281,7 @@ async def git_commit(message: str, skip_hooks: bool = False) -> str:
         # Use cog commit - parse conventional commit format
         # Format: "type(scope): subject" -> "cog commit type subject scope"
         import shlex
+
         try:
             # Parse the conventional commit message
             # e.g., "feat(router): add new feature" -> type=feat, subject="add new feature", scope=router
@@ -273,11 +316,7 @@ async def git_commit(message: str, skip_hooks: bool = False) -> str:
     # Execute commit
     try:
         result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=30,
-            cwd=str(project_root)
+            cmd, capture_output=True, text=True, timeout=30, cwd=str(project_root)
         )
         if result.returncode != 0:
             # If cog fails, show helpful error
@@ -309,6 +348,7 @@ async def git_push() -> str:
 # =============================================================================
 # Registration
 # =============================================================================
+
 
 def register(mcp: FastMCP):
     """Register critical Git tools only."""

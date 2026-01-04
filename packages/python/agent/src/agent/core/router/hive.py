@@ -13,6 +13,7 @@ Usage:
     router = get_hive_router()
     result = await router.route_to_agent("Fix the bug in main.py")
 """
+
 from typing import Any, Dict, Optional
 
 from pydantic import BaseModel
@@ -34,19 +35,50 @@ class HiveRouter:
     AGENT_PERSONAS = {
         "coder": {
             "description": "Primary Executor. Writes code, refactors, fixes bugs, implements features.",
-            "keywords": ["write", "create", "implement", "refactor", "fix", "edit", "modify", "add function", "new file"],
-            "skills": ["filesystem", "software_engineering", "terminal", "testing"]
+            "keywords": [
+                "write",
+                "create",
+                "implement",
+                "refactor",
+                "fix",
+                "edit",
+                "modify",
+                "add function",
+                "new file",
+            ],
+            "skills": ["filesystem", "software_engineering", "terminal", "testing"],
         },
         "reviewer": {
             "description": "Quality Gatekeeper. Reviews changes, runs tests, checks git status, commits code.",
-            "keywords": ["review", "check", "test", "verify", "commit", "git", "diff", "status", "run tests", "lint"],
-            "skills": ["git", "testing", "linter"]
+            "keywords": [
+                "review",
+                "check",
+                "test",
+                "verify",
+                "commit",
+                "git",
+                "diff",
+                "status",
+                "run tests",
+                "lint",
+            ],
+            "skills": ["git", "testing", "linter"],
         },
         "orchestrator": {
             "description": "The Manager. Plans tasks, explains concepts, manages context, handles ambiguity.",
-            "keywords": ["plan", "explain", "how to", "what is", "analyze", "breakdown", "help", "understand", "context"],
-            "skills": ["context", "spec", "router", "knowledge"]
-        }
+            "keywords": [
+                "plan",
+                "explain",
+                "how to",
+                "what is",
+                "analyze",
+                "breakdown",
+                "help",
+                "understand",
+                "context",
+            ],
+            "skills": ["context", "spec", "router", "knowledge"],
+        },
     }
 
     def __init__(self, semantic_cortex=None):
@@ -60,10 +92,7 @@ class HiveRouter:
         self._cache: Dict[str, AgentRoute] = {}
 
     async def route_to_agent(
-        self,
-        query: str,
-        context: str = "",
-        use_cache: bool = True
+        self, query: str, context: str = "", use_cache: bool = True
     ) -> AgentRoute:
         """
         Decide which agent should handle the user request.
@@ -117,7 +146,7 @@ class HiveRouter:
                 target_agent="reviewer",
                 confidence=0.75,
                 reasoning=f"Keyword match: QA/Git operations detected in '{query}'",
-                task_brief=query
+                task_brief=query,
             )
 
         # Check coder keywords
@@ -127,7 +156,7 @@ class HiveRouter:
                 target_agent="coder",
                 confidence=0.75,
                 reasoning=f"Keyword match: Coding task detected in '{query}'",
-                task_brief=query
+                task_brief=query,
             )
 
         # Default to orchestrator (planning, clarification, or general tasks)
@@ -135,7 +164,7 @@ class HiveRouter:
             target_agent="orchestrator",
             confidence=0.5,
             reasoning=f"Default: No specific keywords matched. Requires planning or clarification.",
-            task_brief=query
+            task_brief=query,
         )
 
     async def _route_by_semantics(self, query: str) -> AgentRoute:
@@ -158,14 +187,14 @@ class HiveRouter:
                     target_agent="reviewer",
                     confidence=cached_result.confidence,
                     reasoning=f"Semantic match: Similar task was handled by reviewer (skills: {skills})",
-                    task_brief=query
+                    task_brief=query,
                 )
             elif "filesystem" in skills or "software_engineering" in skills:
                 return AgentRoute(
                     target_agent="coder",
                     confidence=cached_result.confidence,
                     reasoning=f"Semantic match: Similar task was handled by coder (skills: {skills})",
-                    task_brief=query
+                    task_brief=query,
                 )
 
         # No semantic match found
@@ -173,14 +202,11 @@ class HiveRouter:
             target_agent="orchestrator",
             confidence=0.4,
             reasoning="No semantic match found in cortex. Defaulting to orchestrator.",
-            task_brief=query
+            task_brief=query,
         )
 
     def create_task_brief(
-        self,
-        query: str,
-        target_agent: str,
-        context: Dict[str, Any] = None
+        self, query: str, target_agent: str, context: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """
         Create a TaskBrief for agent handoff.
@@ -204,7 +230,7 @@ class HiveRouter:
             "success_criteria": ["Complete the task as specified"],
             "target_agent": target_agent,
             "agent_description": persona.get("description", ""),
-            "allowed_skills": skills
+            "allowed_skills": skills,
         }
 
     def clear_cache(self):
@@ -226,8 +252,9 @@ def get_hive_router() -> HiveRouter:
         # Try to get semantic cortex from main router
         try:
             from agent.core.router.semantic_router import get_router
+
             main_router = get_router()
-            cortex = getattr(main_router, 'semantic_cortex', None)
+            cortex = getattr(main_router, "semantic_cortex", None)
         except Exception:
             cortex = None
         _hive_router_instance = HiveRouter(semantic_cortex=cortex)

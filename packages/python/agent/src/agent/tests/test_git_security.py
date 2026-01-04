@@ -7,6 +7,7 @@ which provides a smooth user experience without client-side interception prompts
 
 In uv workspace, modules are imported directly from installed packages.
 """
+
 import ast
 import pytest
 from pathlib import Path
@@ -81,7 +82,6 @@ class TestGitSecurityPatterns:
                     if isinstance(node.func, ast.Name) and node.func.id == "run_task":
                         violations_found.append(f"{name}: run_task() call")
 
-        assert not violations_found, (
-            f"Core modules should not use run_task():\n"
-            + "\n".join(f"  - {v}" for v in violations_found)
+        assert not violations_found, f"Core modules should not use run_task():\n" + "\n".join(
+            f"  - {v}" for v in violations_found
         )

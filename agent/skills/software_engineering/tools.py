@@ -2,6 +2,7 @@
 Software Engineering Skill Tools
 Universal tools for architecture analysis and code navigation.
 """
+
 import os
 import re
 from pathlib import Path
@@ -15,6 +16,7 @@ logger = structlog.get_logger(__name__)
 # =============================================================================
 # Module-level functions (accessible for direct testing)
 # =============================================================================
+
 
 async def analyze_project_structure(depth: int = 2) -> str:
     """
@@ -43,7 +45,13 @@ async def analyze_project_structure(depth: int = 2) -> str:
 
         # List key config files specifically at high levels
         for f in filenames:
-            if level < depth and (f.endswith(".toml") or f.endswith(".json") or f.endswith(".yaml") or f.endswith(".md") or f == "Dockerfile"):
+            if level < depth and (
+                f.endswith(".toml")
+                or f.endswith(".json")
+                or f.endswith(".yaml")
+                or f.endswith(".md")
+                or f == "Dockerfile"
+            ):
                 output.append(f"{indent}  📄 {f}")
 
     return "\n".join(output)
@@ -71,7 +79,8 @@ async def grep_codebase(pattern: str, file_extension: str = "", path: str = ".")
         MAX_RESULTS = 50
 
         for r, d, f in os.walk(target_path):
-            if ".git" in r or "node_modules" in r or "__pycache__" in r: continue
+            if ".git" in r or "node_modules" in r or "__pycache__" in r:
+                continue
 
             for file in f:
                 if file_extension and not file.endswith(file_extension):
@@ -80,8 +89,9 @@ async def grep_codebase(pattern: str, file_extension: str = "", path: str = ".")
                 file_path = Path(r) / file
                 try:
                     # Quick check for binary
-                    with open(file_path, 'rb') as check:
-                        if b'\0' in check.read(1024): continue
+                    with open(file_path, "rb") as check:
+                        if b"\0" in check.read(1024):
+                            continue
 
                     # Read text
                     content = file_path.read_text(encoding="utf-8", errors="ignore")
@@ -90,12 +100,14 @@ async def grep_codebase(pattern: str, file_extension: str = "", path: str = ".")
                     for i, line in enumerate(lines):
                         if re.search(pattern, line):
                             rel = file_path.relative_to(root)
-                            results.append(f"{rel}:{i+1}: {line.strip()[:100]}")
+                            results.append(f"{rel}:{i + 1}: {line.strip()[:100]}")
                             count += 1
-                            if count >= MAX_RESULTS: break
+                            if count >= MAX_RESULTS:
+                                break
                 except:
                     continue
-            if count >= MAX_RESULTS: break
+            if count >= MAX_RESULTS:
+                break
 
         if not results:
             return f"No matches found for '{pattern}'."
@@ -115,31 +127,41 @@ async def detect_tech_stack() -> str:
 
     # Simple heuristic based on extensions and config files
     for r, _, f in os.walk(root):
-        if ".git" in r: continue
+        if ".git" in r:
+            continue
         for file in f:
             ext = Path(file).suffix
-            if ext in [".py"]: languages["Python"] = languages.get("Python", 0) + 1
-            elif ext in [".rs"]: languages["Rust"] = languages.get("Rust", 0) + 1
-            elif ext in [".js", ".ts"]: languages["TypeScript/JS"] = languages.get("TS/JS", 0) + 1
-            elif ext in [".go"]: languages["Go"] = languages.get("Go", 0) + 1
+            if ext in [".py"]:
+                languages["Python"] = languages.get("Python", 0) + 1
+            elif ext in [".rs"]:
+                languages["Rust"] = languages.get("Rust", 0) + 1
+            elif ext in [".js", ".ts"]:
+                languages["TypeScript/JS"] = languages.get("TS/JS", 0) + 1
+            elif ext in [".go"]:
+                languages["Go"] = languages.get("Go", 0) + 1
 
-            if file == "pyproject.toml": frameworks.append("Python (Poetry/UV)")
-            if file == "Cargo.toml": frameworks.append("Rust (Cargo)")
-            if file == "package.json": frameworks.append("Node.js")
-            if file == "docker-compose.yml": frameworks.append("Docker Compose")
+            if file == "pyproject.toml":
+                frameworks.append("Python (Poetry/UV)")
+            if file == "Cargo.toml":
+                frameworks.append("Rust (Cargo)")
+            if file == "package.json":
+                frameworks.append("Node.js")
+            if file == "docker-compose.yml":
+                frameworks.append("Docker Compose")
 
     # Sort languages by file count
     sorted_langs = sorted(languages.items(), key=lambda x: x[1], reverse=True)
 
     return f"""Tech Stack Detected:
-Languages: {', '.join([f"{l} ({c} files)" for l, c in sorted_langs])}
-Frameworks/Tools: {', '.join(set(frameworks))}
+Languages: {", ".join([f"{l} ({c} files)" for l, c in sorted_langs])}
+Frameworks/Tools: {", ".join(set(frameworks))}
 """
 
 
 # =============================================================================
 # MCP Registration
 # =============================================================================
+
 
 def register(mcp: FastMCP):
     """Register Software Engineering tools with MCP."""

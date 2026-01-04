@@ -2,6 +2,7 @@
 Documentation Skill Tools
 Manages the knowledge base of the Agentic OS.
 """
+
 import os
 import datetime
 from pathlib import Path
@@ -11,6 +12,7 @@ from common.mcp_core.gitops import get_project_root
 import structlog
 
 logger = structlog.get_logger(__name__)
+
 
 def register(mcp: FastMCP):
     """Register Documentation tools."""
@@ -56,7 +58,12 @@ def register(mcp: FastMCP):
         Call this after adding or deleting files.
         """
         try:
-            index_lines = ["# Knowledge Base Index", "", "| Date | Category | Title | File |", "|---|---|---|---|"]
+            index_lines = [
+                "# Knowledge Base Index",
+                "",
+                "| Date | Category | Title | File |",
+                "|---|---|---|---|",
+            ]
 
             # Scan harvested
             harvest_dir = knowledge_dir / "harvested"
@@ -74,7 +81,7 @@ def register(mcp: FastMCP):
             readme_path = knowledge_dir / "README.md"
             readme_path.write_text("\n".join(index_lines), encoding="utf-8")
 
-            return f"Index rebuilt. Found {len(index_lines)-4} entries."
+            return f"Index rebuilt. Found {len(index_lines) - 4} entries."
         except Exception as e:
             return f"Failed to rebuild index: {e}"
 

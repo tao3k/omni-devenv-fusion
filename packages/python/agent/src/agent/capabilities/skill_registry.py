@@ -19,6 +19,7 @@ Usage:
     skills = registry.list_skills()
     skill = registry.load_skill("git_operations")
 """
+
 import json
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -33,6 +34,7 @@ logger = structlog.get_logger(__name__)
 
 class SkillCategory(str, Enum):
     """Categories for organizing skills."""
+
     DEVELOPMENT = "development"
     ARCHITECTURE = "architecture"
     DEBUGGING = "debugging"
@@ -43,6 +45,7 @@ class SkillCategory(str, Enum):
 @dataclass
 class SkillManifest:
     """Metadata describing a Skill."""
+
     name: str
     version: str
     description: str
@@ -83,6 +86,7 @@ class SkillManifest:
 @dataclass
 class SkillContext:
     """The full context provided by a loaded Skill."""
+
     manifest: SkillManifest
     guide_content: str = ""
     tool_definitions: Dict[str, Any] = field(default_factory=dict)
@@ -297,6 +301,7 @@ def get_skill_manifest(name: str) -> Optional[SkillManifest]:
 # MCP Tool Registration
 # =============================================================================
 
+
 def register_skill_tools(mcp) -> None:
     """Register all skill registry tools with the MCP server."""
 
@@ -322,6 +327,7 @@ def register_skill_tools(mcp) -> None:
     async def get_skill_manifest_tool(name: str) -> str:
         """Get the manifest for a specific skill by name."""
         import json
+
         manifest = get_skill_manifest(name)
         if not manifest:
             return f"❌ Skill '{name}' not found."
@@ -334,13 +340,13 @@ def register_skill_tools(mcp) -> None:
 {manifest.description}
 
 ## Tools Provided
-{', '.join(f'`{t}`' for t in manifest.tools)}
+{", ".join(f"`{t}`" for t in manifest.tools)}
 
 ## Context Files
-{', '.join(f'`{f}`' for f in manifest.context_files) if manifest.context_files else 'None'}
+{", ".join(f"`{f}`" for f in manifest.context_files) if manifest.context_files else "None"}
 
 ## Dependencies
-{', '.join(manifest.dependencies) if manifest.dependencies else 'None'}
+{", ".join(manifest.dependencies) if manifest.dependencies else "None"}
 """
 
     @mcp.tool(name="load_skill")

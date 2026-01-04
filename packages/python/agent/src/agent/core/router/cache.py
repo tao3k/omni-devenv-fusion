@@ -11,6 +11,7 @@ Usage:
     cache.set("run tests", RoutingResult(...))
     result = cache.get("run tests")
 """
+
 import hashlib
 import time
 from typing import Dict, Optional

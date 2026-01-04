@@ -13,17 +13,22 @@ Usage:
         role = "Senior Python Architect"
         default_skills = ["filesystem", "file_ops", "python_engineering"]
 """
+
 from abc import ABC
 from typing import Any, Dict, List, Optional
 
+import structlog
 from pydantic import BaseModel
 
 from agent.core.skill_registry import get_skill_registry
 from agent.core.vector_store import get_vector_memory, SearchResult
 
+logger = structlog.get_logger(__name__)
+
 
 class AgentContext(BaseModel):
     """Context prepared for agent execution."""
+
     system_prompt: str
     tools: List[Dict[str, Any]] = []
     mission_brief: str
@@ -35,6 +40,7 @@ class AgentContext(BaseModel):
 
 class AgentResult(BaseModel):
     """Result from agent execution."""
+
     success: bool
     content: str = ""
     tool_calls: List[Dict[str, Any]] = []
@@ -49,6 +55,7 @@ class AgentResult(BaseModel):
 
 class AuditResult(BaseModel):
     """Result from Reviewer's audit of another agent's output."""
+
     approved: bool
     feedback: str = ""
     confidence: float = 0.5
@@ -86,7 +93,7 @@ class BaseAgent(ABC):
         mission_brief: str,
         constraints: List[str] = None,
         relevant_files: List[str] = None,
-        enable_rag: bool = True  # Phase 16: Control RAG per agent
+        enable_rag: bool = True,  # Phase 16: Control RAG per agent
     ) -> AgentContext:
         """
         ⚡️ Core: Convert TaskBrief to System Prompt (Phase 14 Physical Implementation).
@@ -120,7 +127,7 @@ class BaseAgent(ABC):
             skill_prompts=skill_prompts,
             constraints=constraints or [],
             relevant_files=relevant_files or [],
-            knowledge_context=knowledge_context
+            knowledge_context=knowledge_context,
         )
 
         return AgentContext(
@@ -130,7 +137,7 @@ class BaseAgent(ABC):
             constraints=constraints or [],
             relevant_files=relevant_files or [],
             knowledge_context=knowledge_context,
-            rag_sources=rag_sources  # Phase 18: For UX display
+            rag_sources=rag_sources,  # Phase 18: For UX display
         )
 
     def _get_skill_tools(self) -> List[Dict[str, Any]]:
@@ -143,11 +150,13 @@ class BaseAgent(ABC):
         for skill_name in self.default_skills:
             manifest = self.registry.get_skill_manifest(skill_name)
             if manifest:
-                tools.append({
-                    "skill": skill_name,
-                    "tools_module": manifest.tools_module,
-                    "description": manifest.description or f"Tools for {skill_name}"
-                })
+                tools.append(
+                    {
+                        "skill": skill_name,
+                        "tools_module": manifest.tools_module,
+                        "description": manifest.description or f"Tools for {skill_name}",
+                    }
+                )
         return tools
 
     def _get_skill_capabilities(self) -> str:
@@ -170,9 +179,7 @@ class BaseAgent(ABC):
         return "\n".join(capabilities)
 
     async def _retrieve_relevant_knowledge(
-        self,
-        query: str,
-        n_results: int = 3
+        self, query: str, n_results: int = 3
     ) -> tuple[str, list[dict]]:
         """
         Phase 16: Retrieve relevant project knowledge from VectorStore.
@@ -211,17 +218,20 @@ class BaseAgent(ABC):
                 sections.append(f"- **{source}**:\n  {content}")
 
                 # Build source dict for UX display
-                sources.append({
-                    "source_file": source,
-                    "distance": r.distance,
-                    "title": r.metadata.get("title", ""),
-                })
+                sources.append(
+                    {
+                        "source_file": source,
+                        "distance": r.distance,
+                        "title": r.metadata.get("title", ""),
+                    }
+                )
 
             return "\n## 🧠 RELEVANT PROJECT KNOWLEDGE\n" + "\n".join(sections), sources
 
         except Exception as e:
             # RAG failure should not block execution
             import structlog
+
             logger = structlog.get_logger(__name__)
             logger.warning("RAG retrieval failed", error=str(e))
             return "", []
@@ -232,7 +242,7 @@ class BaseAgent(ABC):
         skill_prompts: str,
         constraints: List[str],
         relevant_files: List[str],
-        knowledge_context: str = ""  # Phase 16: RAG knowledge
+        knowledge_context: str = "",  # Phase 16: RAG knowledge
     ) -> str:
         """
         Build the telepathic system prompt with Mission Brief.
@@ -254,38 +264,31 @@ class BaseAgent(ABC):
 
         # Phase 16: Inject knowledge if available
         if knowledge_context:
-            prompt_parts.extend([
-                knowledge_context,
-                ""
-            ])
+            prompt_parts.extend([knowledge_context, ""])
 
-        prompt_parts.extend([
-            "## 🛠️ YOUR CAPABILITIES",
-            skill_prompts,
-            "",
-        ])
+        prompt_parts.extend(
+            [
+                "## 🛠️ YOUR CAPABILITIES",
+                skill_prompts,
+                "",
+            ]
+        )
 
         if constraints:
-            prompt_parts.extend([
-                "## ⚠️ CONSTRAINTS",
-                *(f"- {c}" for c in constraints),
-                ""
-            ])
+            prompt_parts.extend(["## ⚠️ CONSTRAINTS", *(f"- {c}" for c in constraints), ""])
 
         if relevant_files:
-            prompt_parts.extend([
-                "## 📁 RELEVANT FILES",
-                *(f"- {f}" for f in relevant_files),
-                ""
-            ])
+            prompt_parts.extend(["## 📁 RELEVANT FILES", *(f"- {f}" for f in relevant_files), ""])
 
-        prompt_parts.extend([
-            "## 🎯 EXECUTION RULES",
-            "- Focus ONLY on the mission above",
-            "- Use the provided tools precisely",
-            "- If unclear, ask for clarification",
-            "- Learn from success and failures for future tasks"
-        ])
+        prompt_parts.extend(
+            [
+                "## 🎯 EXECUTION RULES",
+                "- Focus ONLY on the mission above",
+                "- Use the provided tools precisely",
+                "- If unclear, ask for clarification",
+                "- Learn from success and failures for future tasks",
+            ]
+        )
 
         return "\n".join(prompt_parts)
 
@@ -295,7 +298,7 @@ class BaseAgent(ABC):
         mission_brief: str,
         constraints: List[str] = None,
         relevant_files: List[str] = None,
-        chat_history: List[Dict] = None
+        chat_history: List[Dict] = None,
     ) -> AgentResult:
         """
         Execute the agent's main loop.
@@ -312,34 +315,25 @@ class BaseAgent(ABC):
         """
         # Prepare context with Mission Brief
         ctx = await self.prepare_context(
-            mission_brief=mission_brief,
-            constraints=constraints,
-            relevant_files=relevant_files
+            mission_brief=mission_brief, constraints=constraints, relevant_files=relevant_files
         )
 
         # Log execution start
-        print(f"[{self.name}] 🚀 Starting: {task[:80]}...")
-        print(f"[{self.name}] 📋 Brief: {mission_brief[:100]}...")
+        logger.info(f"🚀 [{self.name}] Starting: {task[:80]}...")
+        logger.info(f"📋 [{self.name}] Brief: {mission_brief[:100]}...")
 
         # Execute (placeholder - actual LLM call would go here)
-        result = await self._execute_with_llm(
-            task=task,
-            context=ctx,
-            history=chat_history or []
-        )
+        result = await self._execute_with_llm(task=task, context=ctx, history=chat_history or [])
 
         # Phase 18: Include RAG sources for UX display
         result.rag_sources = ctx.rag_sources
 
-        print(f"[{self.name}] ✅ Complete: confidence={result.confidence}")
+        logger.info(f"✅ [{self.name}] Complete: confidence={result.confidence}")
 
         return result
 
     async def _execute_with_llm(
-        self,
-        task: str,
-        context: AgentContext,
-        history: List[Dict]
+        self, task: str, context: AgentContext, history: List[Dict]
     ) -> AgentResult:
         """
         Execute task with LLM. Override this for actual implementation.
@@ -353,7 +347,7 @@ class BaseAgent(ABC):
             success=True,
             content=f"[{self.name}] Executed: {task}",
             message=f"Agent {self.name} completed the mission",
-            confidence=0.8
+            confidence=0.8,
         )
 
     def get_skill_summary(self) -> Dict[str, Any]:
@@ -368,5 +362,5 @@ class BaseAgent(ABC):
             "role": self.role,
             "description": self.description,
             "skills": self.default_skills,
-            "skill_count": len(self.default_skills)
+            "skill_count": len(self.default_skills),
         }

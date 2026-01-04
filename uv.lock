@@ -2010,6 +2010,7 @@ dev = [
 dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "ruff" },
 ]
 
 [package.metadata]
@@ -2025,6 +2026,7 @@ provides-extras = ["dev"]
 dev = [
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", specifier = ">=0.24.0" },
+    { name = "ruff", specifier = ">=0.14.10" },
 ]
 
 [[package]]

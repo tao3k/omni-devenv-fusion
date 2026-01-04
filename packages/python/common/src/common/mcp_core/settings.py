@@ -20,6 +20,7 @@ Usage:
     # Custom configuration directory
     python script.py --conf /path/to/conf
 """
+
 from __future__ import annotations
 
 import sys
@@ -33,6 +34,7 @@ from common.mcp_core.gitops import get_project_root
 # YAML support (try PyYAML first, fallback to simple parsing)
 try:
     import yaml
+
     YAML_AVAILABLE = True
 except ImportError:
     YAML_AVAILABLE = False
@@ -277,6 +279,7 @@ class Settings:
 # Convenience Functions
 # =============================================================================
 
+
 def get_setting(key: str, default: Any = None) -> Any:
     """
     Get a setting value.
@@ -320,6 +323,7 @@ def get_commit_types() -> list[str]:
     if cog_path.exists():
         try:
             import tomllib
+
             with open(cog_path, "rb") as f:
                 cog_config = tomllib.load(f)
             if "commit" in cog_config and "types" in cog_config["commit"]:
@@ -333,6 +337,7 @@ def get_commit_types() -> list[str]:
         try:
             content = conform_path.read_text()
             import re
+
             types = re.findall(r"-\s*type:\s*([a-zA-Z0-9]+)", content)
             if types:
                 return list(set(types))
@@ -356,6 +361,7 @@ def get_commit_scopes() -> list[str]:
     if cog_path.exists():
         try:
             import tomllib
+
             with open(cog_path, "rb") as f:
                 cog_config = tomllib.load(f)
             if "commit" in cog_config and "scopes" in cog_config["commit"]:

@@ -21,6 +21,7 @@ Usage:
     # Phase 17: Ingest from repomix XML
     await ingest_from_repomix_xml()
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -42,7 +43,11 @@ DEFAULT_KNOWLEDGE_DIRS = [
     {"path": "agent/knowledge", "domain": "knowledge", "description": "Project knowledge base"},
     {"path": "agent/how-to", "domain": "workflow", "description": "How-to guides"},
     {"path": "docs/explanation", "domain": "architecture", "description": "Architecture docs"},
-    {"path": "agent/skills/knowledge/standards", "domain": "standards", "description": "Coding standards"},
+    {
+        "path": "agent/skills/knowledge/standards",
+        "domain": "standards",
+        "description": "Coding standards",
+    },
 ]
 
 
@@ -65,11 +70,13 @@ def get_knowledge_dirs() -> list[dict[str, str]]:
             valid_dirs = []
             for d in settings_dirs:
                 if isinstance(d, dict) and "path" in d and "domain" in d:
-                    valid_dirs.append({
-                        "path": d["path"],
-                        "domain": d["domain"],
-                        "description": d.get("description", d["path"])
-                    })
+                    valid_dirs.append(
+                        {
+                            "path": d["path"],
+                            "domain": d["domain"],
+                            "description": d.get("description", d["path"]),
+                        }
+                    )
             if valid_dirs:
                 return valid_dirs
     except Exception:
@@ -83,17 +90,19 @@ def extract_keywords(content: str) -> list[str]:
     keywords = []
 
     # Extract from Keywords: line
-    if match := re.search(r'(?i)Keywords?:\s*(.+?)(?:\n|$)', content):
-        keywords.extend(k.strip() for k in match.group(1).split(','))
+    if match := re.search(r"(?i)Keywords?:\s*(.+?)(?:\n|$)", content):
+        keywords.extend(k.strip() for k in match.group(1).split(","))
 
     # Extract from title (# ...)
-    if match := re.search(r'^#\s+(.+?)$', content, re.MULTILINE):
+    if match := re.search(r"^#\s+(.+?)$", content, re.MULTILINE):
         keywords.extend(w for w in match.group(1).split() if len(w) > 2)
 
     return keywords
 
 
-async def ingest_file(file_path: Path, domain: str, collection: str | None = None) -> dict[str, Any]:
+async def ingest_file(
+    file_path: Path, domain: str, collection: str | None = None
+) -> dict[str, Any]:
     """Ingest a single markdown file into the vector store."""
     if not file_path.exists():
         return {"success": False, "error": f"File not found: {file_path}"}
@@ -104,10 +113,10 @@ async def ingest_file(file_path: Path, domain: str, collection: str | None = Non
             return {"success": False, "error": "Empty file", "file": str(file_path)}
 
         # Extract title from first H1
-        title = content.split('\n')[0].lstrip('# ').strip()
+        title = content.split("\n")[0].lstrip("# ").strip()
 
         # Generate unique ID
-        file_id = file_path.stem.lower().replace('-', '_').replace(' ', '_')
+        file_id = file_path.stem.lower().replace("-", "_").replace(" ", "_")
 
         # Ingest into vector store
         vm = get_vector_memory()
@@ -115,12 +124,14 @@ async def ingest_file(file_path: Path, domain: str, collection: str | None = Non
             documents=[content],
             ids=[f"{domain}-{file_id}"],
             collection=collection,
-            metadatas=[{
-                "domain": domain,
-                "title": title,
-                "source_file": str(file_path),
-                "keywords": ", ".join(extract_keywords(content)),
-            }]
+            metadatas=[
+                {
+                    "domain": domain,
+                    "title": title,
+                    "source_file": str(file_path),
+                    "keywords": ", ".join(extract_keywords(content)),
+                }
+            ],
         )
 
         return {
@@ -135,10 +146,7 @@ async def ingest_file(file_path: Path, domain: str, collection: str | None = Non
 
 
 async def ingest_directory(
-    dir_path: str,
-    domain: str,
-    collection: str | None = None,
-    recursive: bool = False
+    dir_path: str, domain: str, collection: str | None = None, recursive: bool = False
 ) -> dict[str, Any]:
     """Ingest all markdown files from a directory."""
     project_root = get_project_root()
@@ -149,16 +157,17 @@ async def ingest_directory(
 
     # Find markdown files
     pattern = "**/*.md" if recursive else "*.md"
-    md_files = [f for f in full_path.glob(pattern)
-                if "test" not in f.name.lower() and "template" not in f.name.lower()]
+    md_files = [
+        f
+        for f in full_path.glob(pattern)
+        if "test" not in f.name.lower() and "template" not in f.name.lower()
+    ]
 
     if not md_files:
         return {"success": False, "error": "No markdown files", "directory": dir_path}
 
     # Ingest concurrently
-    results = await asyncio.gather(*(
-        ingest_file(f, domain, collection) for f in sorted(md_files)
-    ))
+    results = await asyncio.gather(*(ingest_file(f, domain, collection) for f in sorted(md_files)))
 
     successful = sum(1 for r in results if r.get("success"))
     failed = len(results) - successful
@@ -187,9 +196,7 @@ async def ingest_all_knowledge() -> dict[str, Any]:
 
     for config in knowledge_dirs:
         result = await ingest_directory(
-            dir_path=config["path"],
-            domain=config["domain"],
-            collection="project_knowledge"
+            dir_path=config["path"], domain=config["domain"], collection="project_knowledge"
         )
         result["description"] = config["description"]
         results.append(result)
@@ -213,17 +220,21 @@ async def ingest_all_knowledge() -> dict[str, Any]:
 
     console.print()
     if total_failed == 0:
-        console.print(panel(
-            f"✅ Successfully indexed {total_ingested} documents",
-            title="Knowledge Base Ready",
-            style="green"
-        ))
+        console.print(
+            panel(
+                f"✅ Successfully indexed {total_ingested} documents",
+                title="Knowledge Base Ready",
+                style="green",
+            )
+        )
     else:
-        console.print(panel(
-            f"⚠️ Indexed {total_ingested} documents, {total_failed} failed",
-            title="Knowledge Base Partial",
-            style="yellow"
-        ))
+        console.print(
+            panel(
+                f"⚠️ Indexed {total_ingested} documents, {total_failed} failed",
+                title="Knowledge Base Partial",
+                style="yellow",
+            )
+        )
 
     return summary
 
@@ -231,9 +242,7 @@ async def ingest_all_knowledge() -> dict[str, Any]:
 async def ingest_thread_specific_knowledge() -> dict[str, Any]:
     """Ingest thread/deadlock-related knowledge."""
     return await ingest_directory(
-        dir_path="agent/knowledge",
-        domain="threading",
-        collection="threading_knowledge"
+        dir_path="agent/knowledge", domain="threading", collection="threading_knowledge"
     )
 
 
@@ -252,7 +261,7 @@ async def ingest_git_workflow_knowledge() -> dict[str, Any]:
         "success": successful == len(results),
         "total": len(results),
         "ingested": successful,
-        "details": results
+        "details": results,
     }
 
 
@@ -282,7 +291,7 @@ async def ingest_from_repomix_xml(xml_path: str | None = None) -> dict[str, Any]
         return {
             "success": False,
             "error": f"Repomix XML not found: {xml_path}",
-            "hint": "Run 'repomix' in agent/knowledge to generate the XML"
+            "hint": "Run 'repomix' in agent/knowledge to generate the XML",
         }
 
     info(f"📚 Parsing repomix XML: {xml_path}")
@@ -308,14 +317,14 @@ async def ingest_from_repomix_xml(xml_path: str | None = None) -> dict[str, Any]
 
             # Extract title from first H1 (find first non-empty line starting with #)
             title = ""
-            for line in content.split('\n'):
+            for line in content.split("\n"):
                 line = line.strip()
-                if line.startswith('#'):
-                    title = line.lstrip('# ').strip()
+                if line.startswith("#"):
+                    title = line.lstrip("# ").strip()
                     break
 
             # Generate unique ID
-            file_id = Path(file_path).stem.lower().replace('-', '_').replace(' ', '_')
+            file_id = Path(file_path).stem.lower().replace("-", "_").replace(" ", "_")
 
             # Extract domain from path
             domain = "knowledge"  # Default
@@ -332,20 +341,24 @@ async def ingest_from_repomix_xml(xml_path: str | None = None) -> dict[str, Any]
                 documents=[content],
                 ids=[f"{domain}-{file_id}"],
                 collection="project_knowledge",
-                metadatas=[{
-                    "domain": domain,
-                    "title": title,
-                    "source_file": file_path,
-                    "keywords": ", ".join(extract_keywords(content)),
-                }]
+                metadatas=[
+                    {
+                        "domain": domain,
+                        "title": title,
+                        "source_file": file_path,
+                        "keywords": ", ".join(extract_keywords(content)),
+                    }
+                ],
             )
 
-            results.append({
-                "success": success_flag,
-                "file": file_path,
-                "id": f"{domain}-{file_id}",
-                "title": title,
-            })
+            results.append(
+                {
+                    "success": success_flag,
+                    "file": file_path,
+                    "id": f"{domain}-{file_id}",
+                    "title": title,
+                }
+            )
 
         successful = sum(1 for r in results if r.get("success"))
         failed = len(results) - successful
@@ -374,25 +387,29 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "--repomix":
         info("Starting knowledge ingestion from repomix XML...")
         results = asyncio.run(ingest_from_repomix_xml())
-        console.print(panel(
-            f"XML: {results.get('xml_path', 'N/A')}\n"
-            f"Indexed: {results.get('total_ingested', 0)}\n"
-            f"Failed: {results.get('total_failed', 0)}",
-            title="📊 Repomix Ingestion Summary",
-            style="cyan"
-        ))
+        console.print(
+            panel(
+                f"XML: {results.get('xml_path', 'N/A')}\n"
+                f"Indexed: {results.get('total_ingested', 0)}\n"
+                f"Failed: {results.get('total_failed', 0)}",
+                title="📊 Repomix Ingestion Summary",
+                style="cyan",
+            )
+        )
         return
 
     info("Starting knowledge ingestion...")
     results = asyncio.run(ingest_all_knowledge())
 
-    console.print(panel(
-        f"Directories: {results.get('total_directories', 0)}\n"
-        f"Indexed: {results.get('total_ingested', 0)}\n"
-        f"Failed: {results.get('total_failed', 0)}",
-        title="📊 Ingestion Summary",
-        style="cyan"
-    ))
+    console.print(
+        panel(
+            f"Directories: {results.get('total_directories', 0)}\n"
+            f"Indexed: {results.get('total_ingested', 0)}\n"
+            f"Failed: {results.get('total_failed', 0)}",
+            title="📊 Ingestion Summary",
+            style="cyan",
+        )
+    )
 
 
 if __name__ == "__main__":

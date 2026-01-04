@@ -10,6 +10,7 @@ Tools:
 - verify_spec_completeness: Review spec quality
 - archive_spec_to_doc: Archive completed spec to docs
 """
+
 import json
 from typing import Any, Dict, Optional
 
@@ -64,28 +65,34 @@ def register_spec_tools(mcp: FastMCP) -> None:
             # Check if spec is complete (has implementation plan)
             if "## 3. Implementation Plan" in spec_content or "## Implementation" in spec_content:
                 log_decision("spec.start.allowed", {"name": name}, logger)
-                return json.dumps({
-                    "status": "allowed",
-                    "message": f"✅ Spec exists and is complete: {spec_path.name}",
-                    "spec_path": str(spec_path),
-                    "guidance": "Proceed to coding phase."
-                })
+                return json.dumps(
+                    {
+                        "status": "allowed",
+                        "message": f"✅ Spec exists and is complete: {spec_path.name}",
+                        "spec_path": str(spec_path),
+                        "guidance": "Proceed to coding phase.",
+                    }
+                )
             else:
                 log_decision("spec.start.incomplete", {"name": name}, logger)
-                return json.dumps({
-                    "status": "blocked",
-                    "message": f"⚠️ Spec exists but is incomplete: {spec_path.name}",
-                    "spec_path": str(spec_path),
-                    "guidance": "Fill in all required sections before proceeding."
-                })
+                return json.dumps(
+                    {
+                        "status": "blocked",
+                        "message": f"⚠️ Spec exists but is incomplete: {spec_path.name}",
+                        "spec_path": str(spec_path),
+                        "guidance": "Fill in all required sections before proceeding.",
+                    }
+                )
         else:
             log_decision("spec.start.missing", {"name": name}, logger)
-            return json.dumps({
-                "status": "blocked",
-                "message": f"❌ No spec found for: {name}",
-                "spec_path": str(spec_path),
-                "guidance": "Create a spec using @omni-orchestrator draft_feature_spec before coding."
-            })
+            return json.dumps(
+                {
+                    "status": "blocked",
+                    "message": f"❌ No spec found for: {name}",
+                    "spec_path": str(spec_path),
+                    "guidance": "Create a spec using @omni-orchestrator draft_feature_spec before coding.",
+                }
+            )
 
     @mcp.tool()
     async def draft_feature_spec(
@@ -113,10 +120,7 @@ def register_spec_tools(mcp: FastMCP) -> None:
         # Load template
         template_path = PROJECT_ROOT / "agent/specs/template.md"
         if not template_path.exists():
-            return json.dumps({
-                "success": False,
-                "error": f"Template not found: {template_path}"
-            })
+            return json.dumps({"success": False, "error": f"Template not found: {template_path}"})
 
         template = template_path.read_text(encoding="utf-8")
 
@@ -144,7 +148,7 @@ Fill in all sections with appropriate detail. Return ONLY the filled template co
             result = await client.complete(
                 system_prompt="You are an expert software architect.",
                 user_query=prompt,
-                max_tokens=4000
+                max_tokens=4000,
             )
             if result["success"]:
                 spec_content = result["content"]
@@ -155,7 +159,7 @@ Fill in all sections with appropriate detail. Return ONLY the filled template co
             # Remove template markers if present
             for marker in ["```markdown", "```", "---"]:
                 if spec_content.startswith(marker):
-                    spec_content = spec_content[len(marker):].strip()
+                    spec_content = spec_content[len(marker) :].strip()
                 if marker in spec_content and spec_content.count(marker) >= 2:
                     # Remove all markdown code block markers
                     spec_content = spec_content.replace(marker, "")
@@ -167,18 +171,17 @@ Fill in all sections with appropriate detail. Return ONLY the filled template co
 
             log_decision("spec.drafted", {"title": title, "path": str(spec_path)}, logger)
 
-            return json.dumps({
-                "success": True,
-                "spec_path": str(spec_path),
-                "message": f"✅ Spec drafted: {spec_path.name}"
-            })
+            return json.dumps(
+                {
+                    "success": True,
+                    "spec_path": str(spec_path),
+                    "message": f"✅ Spec drafted: {spec_path.name}",
+                }
+            )
 
         except Exception as e:
             log_decision("spec.draft_failed", {"error": str(e)}, logger)
-            return json.dumps({
-                "success": False,
-                "error": str(e)
-            })
+            return json.dumps({"success": False, "error": str(e)})
 
     @mcp.tool()
     async def verify_spec_completeness(spec_path: Optional[str] = None) -> str:
@@ -201,18 +204,14 @@ Fill in all sections with appropriate detail. Return ONLY the filled template co
             # Try to find the most recent spec
             specs = sorted(SPECS_DIR.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
             if not specs:
-                return json.dumps({
-                    "success": False,
-                    "error": "No specs found. Use start_spec first."
-                })
+                return json.dumps(
+                    {"success": False, "error": "No specs found. Use start_spec first."}
+                )
             spec_path = str(specs[0])
 
         path = PROJECT_ROOT / spec_path
         if not path.exists():
-            return json.dumps({
-                "success": False,
-                "error": f"Spec not found: {spec_path}"
-            })
+            return json.dumps({"success": False, "error": f"Spec not found: {spec_path}"})
 
         content = path.read_text(encoding="utf-8")
         issues = []
@@ -220,6 +219,7 @@ Fill in all sections with appropriate detail. Return ONLY the filled template co
         # Check for empty sections
         empty_sections = []
         import re
+
         section_pattern = r"^##\s+(.+)$"
         current_section = "Start"
         for line in content.split("\n"):
@@ -253,7 +253,9 @@ Fill in all sections with appropriate detail. Return ONLY the filled template co
             "status": status,
             "spec_path": spec_path,
             "issues": issues,
-            "message": "✅ Spec is complete and ready for implementation" if is_complete else f"⚠️ Spec needs work: {len(issues)} issue(s) found"
+            "message": "✅ Spec is complete and ready for implementation"
+            if is_complete
+            else f"⚠️ Spec needs work: {len(issues)} issue(s) found",
         }
 
         log_decision("spec.verified", {"spec_path": spec_path, "status": status}, logger)
@@ -285,17 +287,16 @@ Fill in all sections with appropriate detail. Return ONLY the filled template co
         # Validate target category
         valid_categories = ["explanation", "reference", "how-to"]
         if target_category not in valid_categories:
-            return json.dumps({
-                "success": False,
-                "error": f"Invalid category: {target_category}. Valid: {valid_categories}"
-            })
+            return json.dumps(
+                {
+                    "success": False,
+                    "error": f"Invalid category: {target_category}. Valid: {valid_categories}",
+                }
+            )
 
         src_path = PROJECT_ROOT / spec_path
         if not src_path.exists():
-            return json.dumps({
-                "success": False,
-                "error": f"Spec not found: {spec_path}"
-            })
+            return json.dumps({"success": False, "error": f"Spec not found: {spec_path}"})
 
         # Create archive directory
         ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
@@ -325,15 +326,14 @@ Fill in all sections with appropriate detail. Return ONLY the filled template co
         # Remove original spec
         src_path.unlink()
 
-        log_decision("spec.archived", {
-            "from": str(src_path),
-            "to": str(docs_path)
-        }, logger)
+        log_decision("spec.archived", {"from": str(src_path), "to": str(docs_path)}, logger)
 
-        return json.dumps({
-            "success": True,
-            "archived_to": str(docs_path),
-            "message": f"✅ Spec archived: {docs_path.name}"
-        })
+        return json.dumps(
+            {
+                "success": True,
+                "archived_to": str(docs_path),
+                "message": f"✅ Spec archived: {docs_path.name}",
+            }
+        )
 
     log_decision("spec_tools.registered", {}, logger)

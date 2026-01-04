@@ -16,6 +16,7 @@ Usage:
     async def check():
         return await get_async_swarm_health()
 """
+
 import asyncio
 import time
 from datetime import datetime
@@ -100,9 +101,7 @@ async def get_async_swarm_health() -> Dict[str, Any]:
     server_health = await _gather_all_health()
 
     # Determine overall health
-    all_healthy = all(
-        s.get("status") == "running" for s in server_health.values()
-    )
+    all_healthy = all(s.get("status") == "running" for s in server_health.values())
 
     # Calculate metrics
     active_servers = sum(1 for s in server_health.values() if s.get("status") == "running")
@@ -154,6 +153,7 @@ def get_swarm_health() -> Dict[str, Any]:
 # =============================================================================
 # Alternative: Simple version that doesn't require async
 # =============================================================================
+
 
 def get_simple_swarm_health() -> Dict[str, Any]:
     """

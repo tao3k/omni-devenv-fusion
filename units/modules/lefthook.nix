@@ -67,7 +67,7 @@ let
                 # Add ruff for Python formatting
                 "format-python" = {
                   glob = "*.py";
-                  run = "ruff format {staged_files}";
+                  run = "uv run ruff format {staged_files}";
                 };
               };
               commit-msg = lefthook.default.data.commit-msg;

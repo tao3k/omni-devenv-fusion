@@ -17,6 +17,7 @@ Usage:
     ux_manager.show_audit_result(True, "All checks passed")
     ux_manager.end_task()
 """
+
 from typing import Optional, List, Dict, Any
 from rich.console import Console
 from rich.panel import Panel
@@ -36,6 +37,7 @@ from enum import Enum
 
 class AgentState(Enum):
     """Agent execution states for TUI display."""
+
     IDLE = "idle"
     ROUTING = "routing"
     EXECUTING = "executing"
@@ -71,24 +73,24 @@ class UXManager:
         self._phase_stack = []
 
         self.console.print()
-        self.console.print(Panel(
-            Text(f"User Query:\n\n[bold white]{user_query}[/]", justify="left"),
-            title="🚀 New Task",
-            border_style="cyan",
-            subtitle=f"Task ID: {self.task_id[:30]}...",
-            subtitle_align="right"
-        ))
+        self.console.print(
+            Panel(
+                Text(f"User Query:\n\n[bold white]{user_query}[/]", justify="left"),
+                title="🚀 New Task",
+                border_style="cyan",
+                subtitle=f"Task ID: {self.task_id[:30]}...",
+                subtitle_align="right",
+            )
+        )
 
     def end_task(self, success: bool = True) -> None:
         """End the current task."""
         style = "green" if success else "red"
         title = "✅ Task Completed" if success else "❌ Task Failed"
 
-        self.console.print(Panel(
-            Text(f"Task: {self.task_id}", justify="left"),
-            title=title,
-            border_style=style
-        ))
+        self.console.print(
+            Panel(Text(f"Task: {self.task_id}", justify="left"), title=title, border_style=style)
+        )
         self.console.print()
 
         self.task_id = None
@@ -100,8 +102,7 @@ class UXManager:
         """Show routing in progress."""
         self.current_state = AgentState.ROUTING
         self._status = self.console.status(
-            "[bold cyan]🧠 HiveRouter is analyzing request...[/]",
-            spinner="dots"
+            "[bold cyan]🧠 HiveRouter is analyzing request...[/]", spinner="dots"
         )
         self._status.start()
 
@@ -112,11 +113,7 @@ class UXManager:
             self._status = None
 
     def show_routing_result(
-        self,
-        agent_name: str,
-        mission_brief: str,
-        confidence: float = 1.0,
-        from_cache: bool = False
+        self, agent_name: str, mission_brief: str, confidence: float = 1.0, from_cache: bool = False
     ) -> None:
         """Display routing result with mission brief."""
         self.stop_routing()
@@ -128,7 +125,7 @@ class UXManager:
             title=f"📋 Mission for [bold green]{agent_name.upper()}[/]{cache_note}",
             border_style="blue",
             subtitle=f"Confidence: {confidence:.0%}" if confidence else None,
-            subtitle_align="right"
+            subtitle_align="right",
         )
         self.console.print(brief_panel)
 
@@ -170,8 +167,7 @@ class UXManager:
         """Show execution in progress."""
         self.current_state = AgentState.EXECUTING
         self._status = self.console.status(
-            f"[bold yellow]🛠️ {agent_name} is working...[/]",
-            spinner="hammer"
+            f"[bold yellow]🛠️ {agent_name} is working...[/]", spinner="hammer"
         )
         self._status.start()
 
@@ -187,8 +183,7 @@ class UXManager:
         """Show review in progress."""
         self.current_state = AgentState.REVIEWING
         self._status = self.console.status(
-            "[bold magenta]🕵️ Reviewer is auditing...[/]",
-            spinner="magnifying_glass_tilted_right"
+            "[bold magenta]🕵️ Reviewer is auditing...[/]", spinner="magnifying_glass_tilted_right"
         )
         self._status.start()
 
@@ -199,11 +194,7 @@ class UXManager:
             self._status = None
 
     def show_audit_result(
-        self,
-        approved: bool,
-        feedback: str,
-        issues: List[str] = None,
-        suggestions: List[str] = None
+        self, approved: bool, feedback: str, issues: List[str] = None, suggestions: List[str] = None
     ) -> None:
         """Display audit result with rich visual feedback."""
         self.stop_review()
@@ -225,12 +216,14 @@ class UXManager:
 
         content = "\n".join(content_parts)
 
-        self.console.print(Panel(
-            Text(content, justify="left"),
-            title=f"{icon} {title}",
-            border_style=color,
-            padding=(1, 2)
-        ))
+        self.console.print(
+            Panel(
+                Text(content, justify="left"),
+                title=f"{icon} {title}",
+                border_style=color,
+                padding=(1, 2),
+            )
+        )
 
     # ==================== Correction Loop Visualization ====================
 
@@ -238,31 +231,31 @@ class UXManager:
         """Show self-correction loop entry."""
         self.current_state = AgentState.CORRECTING
 
-        self.console.print(Panel(
-            Text(f"Attempt {attempt}/{max_attempts} - Refining output based on feedback", justify="center"),
-            title="🔄 Self-Correction Loop",
-            border_style="yellow",
-            padding=(1, 2)
-        ))
+        self.console.print(
+            Panel(
+                Text(
+                    f"Attempt {attempt}/{max_attempts} - Refining output based on feedback",
+                    justify="center",
+                ),
+                title="🔄 Self-Correction Loop",
+                border_style="yellow",
+                padding=(1, 2),
+            )
+        )
 
     # ==================== Agent Response Display ====================
 
     def print_agent_response(self, content: str, title: str = "Agent Output") -> None:
         """Print agent response with Markdown rendering."""
         try:
-            self.console.print(Panel(
-                Markdown(content),
-                title=f"🤖 {title}",
-                border_style="white",
-                padding=(1, 2)
-            ))
+            self.console.print(
+                Panel(Markdown(content), title=f"🤖 {title}", border_style="white", padding=(1, 2))
+            )
         except Exception:
             # Fallback to plain text if Markdown parsing fails
-            self.console.print(Panel(
-                Text(content, justify="left"),
-                title=f"🤖 {title}",
-                border_style="white"
-            ))
+            self.console.print(
+                Panel(Text(content, justify="left"), title=f"🤖 {title}", border_style="white")
+            )
 
     # ==================== Progress & Status ====================
 
@@ -272,7 +265,7 @@ class UXManager:
 
         # Add columns
         for i in range(len(rows[0]) if rows else 2):
-            table.add_column(f"Col {i+1}", style="dim")
+            table.add_column(f"Col {i + 1}", style="dim")
 
         for row in rows:
             table.add_row(*row)
@@ -286,11 +279,9 @@ class UXManager:
         for key, value in status.items():
             lines.append(f"  • {key}: {value}")
 
-        self.console.print(Panel(
-            Text("\n".join(lines), justify="left"),
-            title="📊 Status",
-            border_style="dim"
-        ))
+        self.console.print(
+            Panel(Text("\n".join(lines), justify="left"), title="📊 Status", border_style="dim")
+        )
 
     # ==================== Error Handling ====================
 
@@ -300,20 +291,21 @@ class UXManager:
         if details:
             content += f"\n\n[dim]{details}[/]"
 
-        self.console.print(Panel(
-            Text(content, justify="left"),
-            title="❌ Error",
-            border_style="red",
-            padding=(1, 2)
-        ))
+        self.console.print(
+            Panel(
+                Text(content, justify="left"), title="❌ Error", border_style="red", padding=(1, 2)
+            )
+        )
 
     def show_warning(self, message: str) -> None:
         """Display warning message."""
-        self.console.print(Panel(
-            Text(f"[yellow]⚠️ {message}[/]", justify="left"),
-            title="⚠️ Warning",
-            border_style="yellow"
-        ))
+        self.console.print(
+            Panel(
+                Text(f"[yellow]⚠️ {message}[/]", justify="left"),
+                title="⚠️ Warning",
+                border_style="yellow",
+            )
+        )
 
 
 # Global UX manager instance

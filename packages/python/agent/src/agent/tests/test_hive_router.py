@@ -13,6 +13,7 @@ Tests for:
 Usage:
     python -m pytest packages/python/agent/src/agent/tests/test_hive_router.py -v
 """
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -24,11 +25,7 @@ class TestAgentRoute:
 
     def test_agent_route_creation(self):
         """Test basic AgentRoute creation."""
-        route = AgentRoute(
-            target_agent="coder",
-            confidence=0.85,
-            reasoning="Test reasoning"
-        )
+        route = AgentRoute(target_agent="coder", confidence=0.85, reasoning="Test reasoning")
 
         assert route.target_agent == "coder"
         assert route.confidence == 0.85
@@ -36,25 +33,14 @@ class TestAgentRoute:
 
     def test_agent_route_default_confidence(self):
         """Test AgentRoute with default confidence."""
-        route = AgentRoute(
-            target_agent="reviewer",
-            reasoning="Default confidence"
-        )
+        route = AgentRoute(target_agent="reviewer", reasoning="Default confidence")
 
         assert route.confidence is not None
 
     def test_agent_route_equality(self):
         """Test AgentRoute equality comparison."""
-        route1 = AgentRoute(
-            target_agent="coder",
-            confidence=0.75,
-            reasoning="Test"
-        )
-        route2 = AgentRoute(
-            target_agent="coder",
-            confidence=0.75,
-            reasoning="Test"
-        )
+        route1 = AgentRoute(target_agent="coder", confidence=0.75, reasoning="Test")
+        route2 = AgentRoute(target_agent="coder", confidence=0.75, reasoning="Test")
 
         assert route1.target_agent == route2.target_agent
         assert route1.confidence == route2.confidence
@@ -261,10 +247,7 @@ class TestHiveRouterTaskBrief:
 
     def test_create_task_brief_basic(self, router):
         """Test creating basic task brief."""
-        brief = router.create_task_brief(
-            query="Write a login function",
-            target_agent="coder"
-        )
+        brief = router.create_task_brief(query="Write a login function", target_agent="coder")
 
         assert brief["task_description"] == "Write a login function"
         assert brief["target_agent"] == "coder"
@@ -274,9 +257,7 @@ class TestHiveRouterTaskBrief:
         """Test creating task brief with additional context."""
         context = {"relevant_files": ["auth.py", "login.py"]}
         brief = router.create_task_brief(
-            query="Fix the bug in auth.py",
-            target_agent="coder",
-            context=context
+            query="Fix the bug in auth.py", target_agent="coder", context=context
         )
 
         assert "auth.py" in brief["relevant_files"]
@@ -284,10 +265,7 @@ class TestHiveRouterTaskBrief:
 
     def test_create_task_brief_reviewer(self, router):
         """Test creating task brief for reviewer."""
-        brief = router.create_task_brief(
-            query="Run tests and commit",
-            target_agent="reviewer"
-        )
+        brief = router.create_task_brief(query="Run tests and commit", target_agent="reviewer")
 
         assert brief["target_agent"] == "reviewer"
         assert "git" in brief["allowed_skills"]

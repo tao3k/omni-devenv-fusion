@@ -3,6 +3,7 @@ Terminal Skill Tools
 
 Unified shell execution with safety audit.
 """
+
 import asyncio
 from pathlib import Path
 from typing import Optional
@@ -16,6 +17,7 @@ logger = structlog.get_logger(__name__)
 # Initialize project memory for flight recorder
 _project_memory = None
 
+
 def _get_project_memory():
     """Lazy initialization of project memory."""
     global _project_memory
@@ -27,6 +29,7 @@ def _get_project_memory():
 # =============================================================================
 # Module-Level Functions (for skill() tool compatibility)
 # =============================================================================
+
 
 async def execute_command(command: str, timeout: int = 60) -> str:
     """
@@ -115,7 +118,11 @@ This command was blocked because git commit operations MUST go through the git s
 **Allowed git operations (non-committing):**
 - git status, git diff, git log, git add, git checkout, git branch
 """
-        log_decision("run_task.blocked", {"command": command, "args": args, "reason": "git_commit_blocked"}, logger)
+        log_decision(
+            "run_task.blocked",
+            {"command": command, "args": args, "reason": "git_commit_blocked"},
+            logger,
+        )
         return blocked_msg
 
     # Check bash command containing "git commit"
@@ -128,7 +135,11 @@ Running `git commit` through bash is FORBIDDEN.
 
 Use git_commit in git skill instead.
 """
-            log_decision("run_task.blocked", {"command": command, "reason": "bash_git_commit_blocked"}, logger)
+            log_decision(
+                "run_task.blocked",
+                {"command": command, "reason": "bash_git_commit_blocked"},
+                logger,
+            )
             return blocked_msg
 
     # Execute command
@@ -198,12 +209,14 @@ async def inspect_environment() -> str:
     """Check the current execution environment."""
     import os
     import platform
+
     return f"OS: {platform.system()}, CWD: {os.getcwd()}"
 
 
 # =============================================================================
 # Registration
 # =============================================================================
+
 
 def register(mcp: FastMCP):
     """Register Terminal tools."""

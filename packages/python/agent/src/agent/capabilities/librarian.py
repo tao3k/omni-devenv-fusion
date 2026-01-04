@@ -17,6 +17,7 @@ Usage:
     mcp = FastMCP(...)
     register_librarian_tools(mcp)
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
@@ -91,21 +92,20 @@ def register_librarian_tools(mcp: FastMCP) -> None:
 
         # Search the knowledge base
         results = await vm.search(
-            query=query,
-            n_results=n_results,
-            collection=collection,
-            where_filter=where_filter
+            query=query, n_results=n_results, collection=collection, where_filter=where_filter
         )
 
         # Format results
         formatted_results: List[Dict[str, Any]] = []
         for r in results:
-            formatted_results.append({
-                "id": r.id,
-                "content": r.content,
-                "metadata": r.metadata,
-                "relevance_score": max(0.0, 1.0 - r.distance),  # Ensure non-negative
-            })
+            formatted_results.append(
+                {
+                    "id": r.id,
+                    "content": r.content,
+                    "metadata": r.metadata,
+                    "relevance_score": max(0.0, 1.0 - r.distance),  # Ensure non-negative
+                }
+            )
 
         response: Dict[str, Any] = {
             "success": True,
@@ -115,13 +115,15 @@ def register_librarian_tools(mcp: FastMCP) -> None:
         }
 
         if not results:
-            response["message"] = "No matching knowledge found. Try a different query or ingest relevant knowledge."
+            response["message"] = (
+                "No matching knowledge found. Try a different query or ingest relevant knowledge."
+            )
 
         logger.info(
             "Knowledge base consulted",
             query=query[:50],
             results=len(formatted_results),
-            domain=domain_filter
+            domain=domain_filter,
         )
 
         return response
@@ -174,10 +176,7 @@ def register_librarian_tools(mcp: FastMCP) -> None:
 
         # Ingest into vector store
         success = await _ingest_knowledge(
-            documents=documents,
-            ids=ids,
-            collection=collection,
-            metadatas=metadatas
+            documents=documents, ids=ids, collection=collection, metadatas=metadatas
         )
 
         result: Dict[str, Any] = {
@@ -187,11 +186,7 @@ def register_librarian_tools(mcp: FastMCP) -> None:
         }
 
         if success:
-            logger.info(
-                "Knowledge ingested",
-                count=len(documents),
-                collection=result["collection"]
-            )
+            logger.info("Knowledge ingested", count=len(documents), collection=result["collection"])
         else:
             result["error"] = "Failed to ingest knowledge"
 
@@ -265,10 +260,7 @@ def register_librarian_tools(mcp: FastMCP) -> None:
         all_results = await search_knowledge(query=query, n_results=10)
 
         # Filter for high priority
-        relevant = [
-            r for r in all_results
-            if r.metadata.get("priority") in ["high", "medium"]
-        ]
+        relevant = [r for r in all_results if r.metadata.get("priority") in ["high", "medium"]]
 
         # If no priority results, return top 5
         if not relevant:

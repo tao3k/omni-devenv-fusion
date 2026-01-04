@@ -19,6 +19,7 @@ Usage (as standalone functions):
     from agent.capabilities.harvester import harvest_session_insight
     result = await harvest_session_insight(context_summary="...", files_changed=[...])
 """
+
 import datetime
 import json
 import os
@@ -38,6 +39,7 @@ logger = structlog.get_logger(__name__)
 # =============================================================================
 # Core Harvester Functions (can be used standalone)
 # =============================================================================
+
 
 async def harvest_session_insight(
     context_summary: str,
@@ -116,20 +118,22 @@ async def harvest_session_insight(
         message = client.messages.create(
             model="claude-3-5-sonnet-20241022",
             max_tokens=2048,
-            messages=[{"role": "user", "content": prompt}]
+            messages=[{"role": "user", "content": prompt}],
         )
 
         # Extract text from response
         response_text = ""
         for block in message.content:
-            if hasattr(block, 'text') and block.text:
+            if hasattr(block, "text") and block.text:
                 response_text += block.text
 
         # Parse JSON response
         import re
-        json_match = re.search(r'\{[^{}]*\}', response_text, re.DOTALL)
+
+        json_match = re.search(r"\{[^{}]*\}", response_text, re.DOTALL)
         if json_match:
             import json as json_module
+
             result_data = json_module.loads(json_match.group())
         else:
             # Try to parse the whole response
@@ -146,9 +150,7 @@ async def harvest_session_insight(
         )
 
         logger.info(
-            "AI distillation complete",
-            title=insight.title,
-            category=insight.category.value
+            "AI distillation complete", title=insight.title, category=insight.category.value
         )
 
     except ImportError:
@@ -175,8 +177,7 @@ async def harvest_session_insight(
         # Generate filename: YYYYMMDD-category-title.md
         date_str = datetime.datetime.now().strftime("%Y%m%d")
         safe_title = "".join(
-            c if c.isalnum() or c in "-_ " else "-"
-            for c in insight.title.lower()
+            c if c.isalnum() or c in "-_ " else "-" for c in insight.title.lower()
         )[:30].strip("-")
         filename = f"{date_str}-{insight.category.value}-{safe_title}.md"
         file_path = harvest_dir / filename
@@ -202,19 +203,23 @@ async def harvest_session_insight(
             content_lines.append(f"- {takeaway}")
 
         if insight.code_snippet:
-            content_lines.extend([
-                "",
-                "## Pattern / Snippet",
-                f"```{insight.category.value}",
-                insight.code_snippet,
-                "```",
-            ])
+            content_lines.extend(
+                [
+                    "",
+                    "## Pattern / Snippet",
+                    f"```{insight.category.value}",
+                    insight.code_snippet,
+                    "```",
+                ]
+            )
 
         if insight.related_files:
-            content_lines.extend([
-                "",
-                "## Related Files",
-            ])
+            content_lines.extend(
+                [
+                    "",
+                    "## Related Files",
+                ]
+            )
             for fpath in insight.related_files:
                 content_lines.append(f"- `{fpath}`")
 
@@ -233,12 +238,14 @@ async def harvest_session_insight(
         await vm.add(
             documents=[content],
             ids=[filename],
-            metadatas=[{
-                "domain": insight.category.value,
-                "source": str(file_path),
-                "type": "harvested_insight",
-                "title": insight.title,
-            }]
+            metadatas=[
+                {
+                    "domain": insight.category.value,
+                    "source": str(file_path),
+                    "type": "harvested_insight",
+                    "title": insight.title,
+                }
+            ],
         )
         logger.info(f"🧠 Knowledge ingested into Neural Matrix: {filename}")
 
@@ -291,10 +298,12 @@ def list_harvested_knowledge() -> str:
             else:
                 lines.append(f"- `{fpath.name}`")
 
-        lines.extend([
-            "",
-            f"Total: {len(files)} harvested insights",
-        ])
+        lines.extend(
+            [
+                "",
+                f"Total: {len(files)} harvested insights",
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -330,6 +339,7 @@ def get_scratchpad_summary() -> str:
 # =============================================================================
 # MCP Tool Registration
 # =============================================================================
+
 
 def register_harvester_tools(mcp) -> None:
     """Register all harvester tools with the MCP server."""

@@ -17,6 +17,7 @@ Follows numtide/prj-spec with .cache/<namespace>/.memory structure:
         context/        - Project snapshots
         active_context/ - Active context (The "RAM")
 """
+
 import json
 from datetime import datetime
 from pathlib import Path
@@ -34,6 +35,7 @@ MEMORY_DIR = Path(".cache/omni-dev-fusion/.memory")
 # =============================================================================
 # Directory Management
 # =============================================================================
+
 
 def init_memory_dir(dir_path: Path = None) -> bool:
     """
@@ -63,6 +65,7 @@ def init_memory_dir(dir_path: Path = None) -> bool:
 # =============================================================================
 # Decision Management (ADRs)
 # =============================================================================
+
 
 def format_decision(decision: Dict[str, Any]) -> str:
     """
@@ -126,6 +129,7 @@ def parse_decision(content: str) -> Dict[str, Any]:
 # =============================================================================
 # ProjectMemory Class
 # =============================================================================
+
 
 class ProjectMemory:
     """
@@ -396,7 +400,9 @@ class ProjectMemory:
     # NEW: Active Context Management (Backmark Core)
     # =============================================================================
 
-    def update_status(self, phase: str, focus: str, blockers: str = "None", sentiment: str = "Neutral") -> Dict[str, Any]:
+    def update_status(
+        self, phase: str, focus: str, blockers: str = "None", sentiment: str = "Neutral"
+    ) -> Dict[str, Any]:
         """
         Update the global project status (The 'RAM').
 
@@ -463,7 +469,9 @@ class ProjectMemory:
 
         # Auto-create file if it doesn't exist
         if not scratchpad_file.exists():
-            scratchpad_file.write_text(f"# 📝 Scratchpad (Session Log)\nStarted: {datetime.now()}\n\n", encoding="utf-8")
+            scratchpad_file.write_text(
+                f"# 📝 Scratchpad (Session Log)\nStarted: {datetime.now()}\n\n", encoding="utf-8"
+            )
 
         # Format different types of logs
         if source == "System":
@@ -497,10 +505,7 @@ class ProjectMemory:
             Dict with success status and file path
         """
         spec_file = self.active_dir / "current_spec.json"
-        data = {
-            "spec_path": spec_path,
-            "timestamp": datetime.now().isoformat()
-        }
+        data = {"spec_path": spec_path, "timestamp": datetime.now().isoformat()}
         spec_file.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
         log.info("memory.spec_path_set", spec_path=spec_path)
         return {"success": True, "file": str(spec_file)}

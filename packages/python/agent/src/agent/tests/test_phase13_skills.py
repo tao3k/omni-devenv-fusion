@@ -12,6 +12,7 @@ Covers:
 Note: _template is a skeleton for creating new skills and cannot be loaded
 as a Python module (names starting with underscore have special meaning).
 """
+
 import pytest
 import sys
 import os
@@ -30,6 +31,7 @@ def registry():
     """Fixture to provide a clean registry instance."""
     # Create fresh instance for each test
     import agent.core.skill_registry as sr_module
+
     sr_module._registry = None
     reg = sr_module.get_skill_registry()
     reg.loaded_skills.clear()
@@ -57,7 +59,7 @@ class TestSkillManifest:
             "description": "A test skill",
             "dependencies": ["git"],
             "tools_module": "agent.skills.test.tools",
-            "guide_file": "guide.md"
+            "guide_file": "guide.md",
         }
         manifest = SkillManifest(**data)
         assert manifest.name == "test_skill"
@@ -71,7 +73,7 @@ class TestSkillManifest:
             "name": "minimal_skill",
             "version": "0.1.0",
             "description": "Minimal skill",
-            "tools_module": "agent.skills.minimal.tools"
+            "tools_module": "agent.skills.minimal.tools",
         }
         manifest = SkillManifest(**data)
         assert manifest.name == "minimal_skill"
@@ -84,18 +86,14 @@ class TestSkillManifest:
         data = {
             "version": "1.0.0",
             "description": "A test skill",
-            "tools_module": "agent.skills.test.tools"
+            "tools_module": "agent.skills.test.tools",
         }
         with pytest.raises(ValueError):
             SkillManifest(**data)
 
     def test_invalid_manifest_missing_tools_module(self):
         """Test that missing tools_module raises error."""
-        data = {
-            "name": "test_skill",
-            "version": "1.0.0",
-            "description": "A test skill"
-        }
+        data = {"name": "test_skill", "version": "1.0.0", "description": "A test skill"}
         with pytest.raises(ValueError):
             SkillManifest(**data)
 
@@ -131,7 +129,9 @@ class TestSkillDiscovery:
     def test_discovery_finds_software_engineering_skill(self, registry):
         """Registry should find 'software_engineering' skill (The Architect)."""
         skills = registry.list_available_skills()
-        assert "software_engineering" in skills, f"Expected 'software_engineering' in skills, got: {skills}"
+        assert "software_engineering" in skills, (
+            f"Expected 'software_engineering' in skills, got: {skills}"
+        )
 
     def test_discovery_finds_template_directory(self, registry):
         """Registry should discover _template directory (for copying)."""
@@ -232,8 +232,8 @@ class TestHotReload:
 
         # Add a marker to the function (match the exact line including \n)
         new_content = original_content.replace(
-            'return f"Directory Listing for \'{path}\':\\n"',
-            'return f"[HOT-RELOADED] Directory Listing for \'{path}\':\\n"'
+            "return f\"Directory Listing for '{path}':\\n\"",
+            "return f\"[HOT-RELOADED] Directory Listing for '{path}':\\n\"",
         )
         tools_path.write_text(new_content)
 
@@ -601,7 +601,7 @@ class TestSkillEdgeCases:
                 "name": "test_missing",
                 "version": "1.0.0",
                 "description": "Test skill with missing source",
-                "tools_module": "agent.skills.nonexistent.tools"
+                "tools_module": "agent.skills.nonexistent.tools",
             }
             (skill_dir / "manifest.json").write_text(json.dumps(manifest))
 
@@ -759,9 +759,7 @@ class TestInvokeSkillTool:
 
         # Execute with auto-load
         result = await invoke_func(
-            skill="filesystem",
-            tool="list_directory",
-            args={"path": "agent/skills"}
+            skill="filesystem", tool="list_directory", args={"path": "agent/skills"}
         )
 
         assert "auto-loaded" in result.lower() or "filesystem" in result.lower()
@@ -776,9 +774,7 @@ class TestInvokeSkillTool:
         invoke_func = self._get_tool_func(real_mcp, "invoke_skill")
 
         result = await invoke_func(
-            skill="filesystem",
-            tool="list_directory",
-            args={"path": "agent/skills"}
+            skill="filesystem", tool="list_directory", args={"path": "agent/skills"}
         )
 
         assert "filesystem" in result or "_template" in result
@@ -795,7 +791,7 @@ class TestInvokeSkillTool:
         result = await invoke_func(
             skill="git",
             tool="git_stage_all",
-            args={"scan": False}  # Skip scan for test
+            args={"scan": False},  # Skip scan for test
         )
 
         # Should not return "Operation not found"
@@ -810,11 +806,7 @@ class TestInvokeSkillTool:
 
         invoke_func = self._get_tool_func(real_mcp, "invoke_skill")
 
-        result = await invoke_func(
-            skill="git",
-            tool="git_stage_all",
-            args={}
-        )
+        result = await invoke_func(skill="git", tool="git_stage_all", args={})
 
         assert "Invalid" not in result
 
@@ -828,11 +820,7 @@ class TestInvokeSkillTool:
         invoke_func = self._get_tool_func(real_mcp, "invoke_skill")
 
         # Call with nonexistent operation
-        result = await invoke_func(
-            skill="filesystem",
-            tool="nonexistent_operation_xyz",
-            args={}
-        )
+        result = await invoke_func(skill="filesystem", tool="nonexistent_operation_xyz", args={})
         # Should return error with available operations listed
         assert "not found" in result.lower()
         # Should list available operations
@@ -841,4 +829,5 @@ class TestInvokeSkillTool:
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(pytest.main(["-v", __file__, "--tb=short"]))

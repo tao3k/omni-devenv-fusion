@@ -10,6 +10,7 @@ Tests for the new agents package:
 Usage:
     python -m pytest packages/python/agent/src/agent/tests/test_agent_handoff.py -v
 """
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -26,7 +27,7 @@ class TestAgentContext:
             tools=[{"name": "filesystem.list_directory"}],
             mission_brief="Fix the bug in main.py",
             constraints=["Run tests"],
-            relevant_files=["main.py"]
+            relevant_files=["main.py"],
         )
 
         assert ctx.system_prompt == "You are a coder"
@@ -38,11 +39,7 @@ class TestAgentContext:
         """Test AgentContext default values."""
         from agent.core.agents.base import AgentContext
 
-        ctx = AgentContext(
-            system_prompt="Test",
-            tools=[],
-            mission_brief="Test mission"
-        )
+        ctx = AgentContext(system_prompt="Test", tools=[], mission_brief="Test mission")
 
         assert ctx.constraints == []
         assert ctx.relevant_files == []
@@ -55,11 +52,7 @@ class TestAgentResult:
         """Test AgentResult can be created."""
         from agent.core.agents.base import AgentResult
 
-        result = AgentResult(
-            success=True,
-            content="Task completed",
-            confidence=0.85
-        )
+        result = AgentResult(success=True, content="Task completed", confidence=0.85)
 
         assert result.success is True
         assert result.confidence == 0.85
@@ -91,15 +84,16 @@ class TestBaseAgent:
 
         agent = TestAgent()
         agent.registry = MagicMock()
-        agent.registry.get_skill_manifest = MagicMock(return_value=MagicMock(
-            description="Test skill",
-            tools_module="agent.skills.filesystem.tools"
-        ))
+        agent.registry.get_skill_manifest = MagicMock(
+            return_value=MagicMock(
+                description="Test skill", tools_module="agent.skills.filesystem.tools"
+            )
+        )
 
         ctx = await agent.prepare_context(
             mission_brief="Fix the bug in main.py",
             constraints=["Run tests after fix"],
-            relevant_files=["main.py"]
+            relevant_files=["main.py"],
         )
 
         # Verify context was created
@@ -124,7 +118,7 @@ class TestBaseAgent:
             mission_brief="Test mission",
             skill_prompts="- test_skill: Does things",
             constraints=["constraint1"],
-            relevant_files=["file.py"]
+            relevant_files=["file.py"],
         )
 
         # Verify structure
@@ -166,10 +160,11 @@ class TestBaseAgent:
 
         agent = TestAgent()
         agent.registry = MagicMock()
-        agent.registry.get_skill_manifest = MagicMock(return_value=MagicMock(
-            description="File system operations",
-            tools_module="agent.skills.filesystem.tools"
-        ))
+        agent.registry.get_skill_manifest = MagicMock(
+            return_value=MagicMock(
+                description="File system operations", tools_module="agent.skills.filesystem.tools"
+            )
+        )
 
         tools = agent._get_skill_tools()
 
@@ -240,15 +235,12 @@ class TestCoderAgent:
         from agent.core.agents import CoderAgent
         from agent.core.agents.base import AgentResult
 
-        with patch.object(CoderAgent, '_execute_with_llm', new_callable=AsyncMock) as mock_exec:
+        with patch.object(CoderAgent, "_execute_with_llm", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = AgentResult(success=True, content="Done")
 
             agent = CoderAgent()
 
-            result = await agent.run(
-                task="Fix bug",
-                mission_brief="Fix the bug"
-            )
+            result = await agent.run(task="Fix bug", mission_brief="Fix the bug")
 
             mock_exec.assert_called_once()
             assert result.success is True
@@ -289,15 +281,12 @@ class TestReviewerAgent:
         from agent.core.agents import ReviewerAgent
         from agent.core.agents.base import AgentResult
 
-        with patch.object(ReviewerAgent, '_execute_with_llm', new_callable=AsyncMock) as mock_exec:
+        with patch.object(ReviewerAgent, "_execute_with_llm", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = AgentResult(success=True, content="Done")
 
             agent = ReviewerAgent()
 
-            result = await agent.run(
-                task="Review changes",
-                mission_brief="Review the code changes"
-            )
+            result = await agent.run(task="Review changes", mission_brief="Review the code changes")
 
             mock_exec.assert_called_once()
             assert result.success is True
@@ -387,7 +376,7 @@ class TestMissionBriefProtocol:
         ctx = await agent.prepare_context(
             mission_brief="Complete the feature",
             constraints=["Constraint 1", "Constraint 2"],
-            relevant_files=["file1.py", "file2.py"]
+            relevant_files=["file1.py", "file2.py"],
         )
 
         assert ctx.mission_brief == "Complete the feature"
@@ -408,10 +397,7 @@ class TestMissionBriefProtocol:
         agent = TestAgent()
 
         prompt = agent._build_system_prompt(
-            mission_brief="Test mission",
-            skill_prompts="",
-            constraints=[],
-            relevant_files=[]
+            mission_brief="Test mission", skill_prompts="", constraints=[], relevant_files=[]
         )
 
         # Verify execution rules are present
@@ -430,7 +416,7 @@ class TestAgentsPackage:
             AgentContext,
             AgentResult,
             CoderAgent,
-            ReviewerAgent
+            ReviewerAgent,
         )
 
         assert BaseAgent is not None

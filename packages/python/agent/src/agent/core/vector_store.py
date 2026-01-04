@@ -25,6 +25,7 @@ Usage:
         collection="workflow_rules"
     )
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -44,6 +45,7 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class SearchResult:
     """A single search result from vector store."""
+
     content: str
     metadata: Dict[str, Any]
     distance: float
@@ -87,8 +89,7 @@ class VectorMemory:
 
         try:
             self._client = chromadb.PersistentClient(
-                path=str(cache_path),
-                settings=Settings(anonymized_telemetry=False)
+                path=str(cache_path), settings=Settings(anonymized_telemetry=False)
             )
             logger.info("Vector memory initialized", db_path=str(cache_path))
         except Exception as e:
@@ -103,10 +104,7 @@ class VectorMemory:
         """Get the ChromaDB client."""
         return self._client
 
-    def _get_or_create_collection(
-        self,
-        name: str | None = None
-    ) -> chromadb.Collection | None:
+    def _get_or_create_collection(self, name: str | None = None) -> chromadb.Collection | None:
         """Get or create a collection by name."""
         if not self._client:
             logger.warning("Vector memory not available")
@@ -117,7 +115,7 @@ class VectorMemory:
         try:
             return self._client.get_or_create_collection(
                 name=collection_name,
-                metadata={"description": f"Project knowledge base: {collection_name}"}
+                metadata={"description": f"Project knowledge base: {collection_name}"},
             )
         except Exception as e:
             logger.error("Failed to get collection", collection=collection_name, error=str(e))
@@ -128,7 +126,7 @@ class VectorMemory:
         query: str,
         n_results: int = 5,
         collection: str | None = None,
-        where_filter: Dict[str, str] | None = None
+        where_filter: Dict[str, str] | None = None,
     ) -> list[SearchResult]:
         """
         Search the vector store for similar documents.
@@ -153,9 +151,7 @@ class VectorMemory:
         try:
             # Perform similarity search
             results = chroma_collection.query(
-                query_texts=[query],
-                n_results=n_results,
-                where=where_filter
+                query_texts=[query], n_results=n_results, where=where_filter
             )
 
             if not results or not results.get("documents"):
@@ -169,18 +165,16 @@ class VectorMemory:
             ids = results.get("ids", [[]])[0]
 
             for i, doc in enumerate(documents):
-                search_results.append(SearchResult(
-                    content=doc,
-                    metadata=metadatas[i] if i < len(metadatas) else {},
-                    distance=distances[i] if i < len(distances) else 0.0,
-                    id=ids[i] if i < len(ids) else f"result_{i}"
-                ))
+                search_results.append(
+                    SearchResult(
+                        content=doc,
+                        metadata=metadatas[i] if i < len(metadatas) else {},
+                        distance=distances[i] if i < len(distances) else 0.0,
+                        id=ids[i] if i < len(ids) else f"result_{i}",
+                    )
+                )
 
-            logger.info(
-                "Vector search completed",
-                query=query[:50],
-                results=len(search_results)
-            )
+            logger.info("Vector search completed", query=query[:50], results=len(search_results))
 
             return search_results
 
@@ -193,7 +187,7 @@ class VectorMemory:
         documents: list[str],
         ids: list[str],
         collection: str | None = None,
-        metadatas: list[Dict[str, Any]] | None = None
+        metadatas: list[Dict[str, Any]] | None = None,
     ) -> bool:
         """
         Add documents to the vector store.
@@ -216,16 +210,12 @@ class VectorMemory:
             return False
 
         try:
-            chroma_collection.add(
-                documents=documents,
-                ids=ids,
-                metadatas=metadatas
-            )
+            chroma_collection.add(documents=documents, ids=ids, metadatas=metadatas)
 
             logger.info(
                 "Documents added to vector store",
                 count=len(documents),
-                collection=collection or self._default_collection
+                collection=collection or self._default_collection,
             )
             return True
 
@@ -233,11 +223,7 @@ class VectorMemory:
             logger.error("Failed to add documents", error=str(e))
             return False
 
-    async def delete(
-        self,
-        ids: list[str],
-        collection: str | None = None
-    ) -> bool:
+    async def delete(self, ids: list[str], collection: str | None = None) -> bool:
         """Delete documents by IDs."""
         if not self._client:
             return False
@@ -285,9 +271,7 @@ def get_vector_memory() -> VectorMemory:
 
 # Convenience functions
 async def search_knowledge(
-    query: str,
-    n_results: int = 5,
-    collection: str | None = None
+    query: str, n_results: int = 5, collection: str | None = None
 ) -> list[SearchResult]:
     """Search project knowledge base."""
     return await get_vector_memory().search(query, n_results, collection)
@@ -297,7 +281,7 @@ async def ingest_knowledge(
     documents: list[str],
     ids: list[str],
     collection: str | None = None,
-    metadatas: list[Dict[str, Any]] | None = None
+    metadatas: list[Dict[str, Any]] | None = None,
 ) -> bool:
     """Ingest documents into knowledge base."""
     return await get_vector_memory().add(documents, ids, collection, metadatas)
@@ -329,7 +313,7 @@ async def bootstrap_knowledge_base() -> None:
             - Commit message must follow conventional commits format
             - Authorization Protocol: Show analysis → Wait "yes" → Execute
             """,
-            "metadata": {"domain": "git", "priority": "high"}
+            "metadata": {"domain": "git", "priority": "high"},
         },
         {
             "id": "tri-mcp-001",
@@ -341,7 +325,7 @@ async def bootstrap_knowledge_base() -> None:
 
             Each MCP server has a specific role and tools.
             """,
-            "metadata": {"domain": "architecture", "priority": "high"}
+            "metadata": {"domain": "architecture", "priority": "high"},
         },
         {
             "id": "coding-standards-001",
@@ -352,17 +336,15 @@ async def bootstrap_knowledge_base() -> None:
             - Use structlog for logging
             - Write docstrings for all public functions
             """,
-            "metadata": {"domain": "standards", "priority": "medium"}
-        }
+            "metadata": {"domain": "standards", "priority": "medium"},
+        },
     ]
 
     vm = get_vector_memory()
 
     for doc in bootstrap_docs:
         await vm.add(
-            documents=[doc["content"].strip()],
-            ids=[doc["id"]],
-            metadatas=[doc["metadata"]]
+            documents=[doc["content"].strip()], ids=[doc["id"]], metadatas=[doc["metadata"]]
         )
 
     # Also ingest preloaded skill prompts.md files
@@ -413,12 +395,14 @@ async def ingest_preloaded_skill_prompts() -> None:
             success = await vm.add(
                 documents=[content],
                 ids=[f"skill-{skill_name}-prompts"],
-                metadatas=[{
-                    "domain": "skill",
-                    "skill": skill_name,
-                    "priority": "high",
-                    "source_file": str(prompts_path)
-                }]
+                metadatas=[
+                    {
+                        "domain": "skill",
+                        "skill": skill_name,
+                        "priority": "high",
+                        "source_file": str(prompts_path),
+                    }
+                ],
             )
 
             if success:

@@ -2,6 +2,7 @@
 src/agent/capabilities/skill_manager.py
 The Interface between the Brain and the Skill Kernel.
 """
+
 import json
 from mcp.server.fastmcp import FastMCP
 from agent.core.skill_registry import get_skill_registry
@@ -102,7 +103,9 @@ Skill '{skill_name}' loaded successfully!
             status = "✓" if skill in registry.list_loaded_skills() else "○"
             lines.append(f"  {status} {skill}")
 
-        lines.append(f"\n### Available On-Demand ({len([s for s in all_skills if s not in preload])}) - Load when needed")
+        lines.append(
+            f"\n### Available On-Demand ({len([s for s in all_skills if s not in preload])}) - Load when needed"
+        )
         for skill in sorted(all_skills):
             if skill not in preload:
                 status = "✓" if skill in registry.list_loaded_skills() else "○"
@@ -128,7 +131,9 @@ Skill '{skill_name}' loaded successfully!
         return await _execute_skill_operation(skill, tool, args, mcp, registry)
 
 
-async def _execute_skill_operation(skill: str, operation: str, kwargs: dict, mcp: FastMCP, registry) -> str:
+async def _execute_skill_operation(
+    skill: str, operation: str, kwargs: dict, mcp: FastMCP, registry
+) -> str:
     """Common execution logic for skill() and invoke_skill()."""
     # Auto-load skill if not already loaded
     if skill not in registry.loaded_skills:
@@ -151,6 +156,7 @@ async def _execute_skill_operation(skill: str, operation: str, kwargs: dict, mcp
         if callable(func):
             try:
                 import inspect
+
                 if inspect.iscoroutinefunction(func):
                     result = await func(**kwargs)
                 else:
@@ -162,5 +168,9 @@ async def _execute_skill_operation(skill: str, operation: str, kwargs: dict, mcp
             return f"'{operation}' is not callable."
     else:
         # List available operations in this skill
-        available = [attr for attr in dir(module) if not attr.startswith('_') and callable(getattr(module, attr, None))]
+        available = [
+            attr
+            for attr in dir(module)
+            if not attr.startswith("_") and callable(getattr(module, attr, None))
+        ]
         return f"Operation '{operation}' not found in skill '{skill}'. Available: {available}"

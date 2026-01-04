@@ -4,6 +4,7 @@ Phase 14: Context Builder - Mission Brief Injection
 
 Provides utilities to assemble worker context with mission briefs.
 """
+
 from typing import List, Dict, Any, Optional
 from agent.core.router import RoutingResult, get_router
 from agent.core.skill_registry import get_skill_registry

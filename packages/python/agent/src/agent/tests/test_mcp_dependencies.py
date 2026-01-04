@@ -9,6 +9,7 @@ These tests catch issues like:
 
 In uv workspace, packages are installed and can be imported directly.
 """
+
 import pytest
 import json
 from pathlib import Path
@@ -20,11 +21,13 @@ class TestSkillArchitecture:
     def test_agent_core_imports(self):
         """agent.core modules should import successfully."""
         from agent.core.skill_registry import SkillRegistry
+
         assert SkillRegistry is not None
 
     def test_common_mcp_core_imports(self):
         """common.mcp_core modules should import successfully."""
         from common.mcp_core.gitops import get_project_root
+
         root = get_project_root()
         assert root is not None
         assert root.exists()
@@ -32,6 +35,7 @@ class TestSkillArchitecture:
     def test_skills_directory_exists(self):
         """agent/skills/ directory should exist with skill modules."""
         from agent.core.skill_registry import get_skill_registry
+
         registry = get_skill_registry()
         skills = registry.list_available_skills()
 
@@ -43,6 +47,7 @@ class TestSkillArchitecture:
     def test_skill_manifests_valid(self):
         """All skill manifest.json files should be valid JSON."""
         from agent.core.skill_registry import get_skill_registry
+
         registry = get_skill_registry()
         skills = registry.list_available_skills()
 
@@ -63,9 +68,10 @@ class TestSkillRegistry:
     def test_skill_registry_discovers_skills(self):
         """SkillRegistry should discover all skills in agent/skills/."""
         from agent.core.skill_registry import get_skill_registry
+
         registry = get_skill_registry()
         skills = registry.list_available_skills()
 
-        required = ['filesystem', 'git', 'terminal', 'testing']
+        required = ["filesystem", "git", "terminal", "testing"]
         for s in required:
-            assert s in skills, f'Missing skill: {s}'
+            assert s in skills, f"Missing skill: {s}"

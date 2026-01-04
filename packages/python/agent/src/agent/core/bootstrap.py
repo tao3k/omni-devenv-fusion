@@ -3,6 +3,7 @@ src/agent/core/bootstrap.py
 System boot sequence and background task initialization.
 Phase 13.10: Config-driven skill preloading.
 """
+
 import sys
 import asyncio
 import threading
@@ -25,13 +26,13 @@ def boot_core_skills(mcp: FastMCP):
     """
     registry = get_skill_registry()
 
-    print("🚀 Booting Omni-DevEnv Kernel...", file=sys.stderr)
+    logger.info("Booting Omni-DevEnv Kernel...")
 
     # Use config-driven preloading
     preload_skills = registry.get_preload_skills()
 
     if not preload_skills:
-        print("  ⚠️  No preload skills configured in settings.yaml", file=sys.stderr)
+        logger.warning("No preload skills configured in settings.yaml")
         return
 
     loaded_count = 0
@@ -41,19 +42,19 @@ def boot_core_skills(mcp: FastMCP):
             if registry.get_skill_manifest(skill):
                 success, msg = registry.load_skill(skill, mcp)
                 if success:
-                    print(f"  ✅ Preloaded: {skill}", file=sys.stderr)
+                    logger.info("Preloaded skill", skill=skill)
                     log_decision(f"boot.skill_preloaded", {"skill": skill}, logger)
                     loaded_count += 1
                 else:
-                    print(f"  ⚠️  Skipped: {skill} -> {msg}", file=sys.stderr)
+                    logger.warning("Skipped skill", skill=skill, reason=msg)
                     log_decision(f"boot.skill_skipped", {"skill": skill, "reason": msg}, logger)
             else:
-                print(f"  ⚠️  Not found: {skill}", file=sys.stderr)
+                logger.warning("Skill not found", skill=skill)
         except Exception as e:
             # Don't crash main process if a skill is malformed
             logger.warning(f"Skill boot error ({skill}): {e}")
 
-    print(f"  📦 Preloaded {loaded_count}/{len(preload_skills)} skills", file=sys.stderr)
+    logger.info("Skills preloaded", loaded=loaded_count, total=len(preload_skills))
 
 
 def start_background_tasks():
@@ -61,6 +62,7 @@ def start_background_tasks():
     [Background] Initialize Knowledge Base ingestion in a separate thread.
     Does not block server startup.
     """
+
     def _run_ingest():
         try:
             from agent.capabilities.knowledge_ingestor import ingest_all_knowledge

@@ -6,6 +6,7 @@ Modular Interface: Configuration -> Registration -> Boot -> Run.
 This file is a pure Composition Root - it only assembles modules and triggers boot sequence.
 All business logic is delegated to atomic modules.
 """
+
 from mcp.server.fastmcp import FastMCP
 import structlog
 
@@ -37,6 +38,7 @@ system_prompt = load_system_context()
 # Initialize Server
 mcp = FastMCP("omni-orchestrator", instructions=system_prompt)
 
+
 # --- Helper ---
 def _register(module_name: str, register_func):
     """Standardized registration interface."""
@@ -46,6 +48,7 @@ def _register(module_name: str, register_func):
     except Exception as e:
         tool_failed(module_name, str(e))
         logger.error(f"Failed to register {module_name}", error=str(e))
+
 
 # --- Module Registration (The Interface) ---
 
@@ -63,10 +66,12 @@ _register("librarian", register_librarian_tools)
 _register("harvester", register_harvester_tools)
 _register("skill_manager", register_skill_tools)
 
+
 # --- Boot Sequence ---
 def main():
     """Entry point for the orchestrator."""
     from rich.console import Console
+
     console = Console(stderr=True)
     console.print(banner("Orchestrator", "The Modular Brain", "🧠"))
 

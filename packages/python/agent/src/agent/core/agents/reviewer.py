@@ -29,9 +29,14 @@ Usage:
     # Phase 15: Audit Coder's output
     audit = await agent.audit(task, coder_response)
 """
+
 from typing import Any, Dict, List, Optional
 
+import structlog
+
 from agent.core.agents.base import BaseAgent, AgentResult, AuditResult, AgentContext
+
+logger = structlog.get_logger(__name__)
 
 
 class ReviewerAgent(BaseAgent):
@@ -56,11 +61,11 @@ class ReviewerAgent(BaseAgent):
 
     # ✅ Narrow Context: Only quality/QA-related skills
     default_skills = [
-        "git",              # View diffs, check status, create commits
-        "testing",          # Run pytest and analyze results
-        "documentation",    # Verify docs are updated
-        "linter",           # Run code quality checks
-        "terminal",         # Run verification commands
+        "git",  # View diffs, check status, create commits
+        "testing",  # Run pytest and analyze results
+        "documentation",  # Verify docs are updated
+        "linter",  # Run code quality checks
+        "terminal",  # Run verification commands
     ]
 
     async def run(
@@ -69,7 +74,7 @@ class ReviewerAgent(BaseAgent):
         mission_brief: str,
         constraints: List[str] = None,
         relevant_files: List[str] = None,
-        chat_history: List[dict] = None
+        chat_history: List[dict] = None,
     ) -> dict:
         """
         Execute review task with Mission Brief.
@@ -84,7 +89,7 @@ class ReviewerAgent(BaseAgent):
         review_constraints = [
             "Check code quality and style",
             "Run tests to verify functionality",
-            "Ensure changes are properly documented"
+            "Ensure changes are properly documented",
         ]
         for c in review_constraints:
             if c.lower() not in " ".join(constraints).lower():
@@ -95,14 +100,11 @@ class ReviewerAgent(BaseAgent):
             mission_brief=mission_brief,
             constraints=constraints,
             relevant_files=relevant_files,
-            chat_history=chat_history
+            chat_history=chat_history,
         )
 
     async def prepare_context(
-        self,
-        mission_brief: str,
-        constraints: List[str] = None,
-        relevant_files: List[str] = None
+        self, mission_brief: str, constraints: List[str] = None, relevant_files: List[str] = None
     ) -> AgentContext:
         """
         Phase 16: Reviewer doesn't need RAG - it uses its own quality tools.
@@ -113,15 +115,10 @@ class ReviewerAgent(BaseAgent):
             mission_brief=mission_brief,
             constraints=constraints,
             relevant_files=relevant_files,
-            enable_rag=False  # Disable RAG for Reviewer
+            enable_rag=False,  # Disable RAG for Reviewer
         )
 
-    async def _execute_with_llm(
-        self,
-        task: str,
-        context,
-        history: List[dict]
-    ) -> dict:
+    async def _execute_with_llm(self, task: str, context, history: List[dict]) -> dict:
         """
         Execute review task with LLM.
 
@@ -141,7 +138,7 @@ class ReviewerAgent(BaseAgent):
             "tool_calls": [],
             "tests_passed": True,
             "lint_clean": True,
-            "review_notes": []
+            "review_notes": [],
         }
 
     async def should_commit(self, diff: str) -> dict:
@@ -159,14 +156,11 @@ class ReviewerAgent(BaseAgent):
             "should_commit": True,
             "message": "Changes look good for commit",
             "confidence": 0.85,
-            "suggested_message": "feat(core): implement agent review"
+            "suggested_message": "feat(core): implement agent review",
         }
 
     async def audit(
-        self,
-        task: str,
-        agent_output: str,
-        context: Dict[str, Any] = None
+        self, task: str, agent_output: str, context: Dict[str, Any] = None
     ) -> AuditResult:
         """
         Phase 15: Audit another agent's output (Feedback Loop).
@@ -190,15 +184,15 @@ class ReviewerAgent(BaseAgent):
             )
 
             if audit.approved:
-                print("✅ Approved!")
+                logger.info("✅ Approved!")
             else:
-                print(f"❌ Rejected: {audit.feedback}")
+                logger.warning(f"❌ Rejected: {audit.feedback}")
         """
         # Build audit system prompt
         audit_prompt = self._build_audit_prompt(task, agent_output, context)
 
         # Log audit start
-        print(f"[reviewer] 🕵️ Starting audit for: {task[:50]}...")
+        logger.info(f"🕵️ [reviewer] Starting audit for: {task[:50]}...")
 
         # Placeholder: In real implementation, call LLM with audit_prompt
         # For now, simulate basic validation
@@ -235,18 +229,15 @@ class ReviewerAgent(BaseAgent):
             feedback=feedback,
             confidence=0.85 if approved else 0.6,
             issues_found=issues_found,
-            suggestions=suggestions
+            suggestions=suggestions,
         )
 
-        print(f"[reviewer] ✅ Audit complete: approved={approved}")
+        logger.info(f"✅ [reviewer] Audit complete: approved={approved}")
 
         return result
 
     def _build_audit_prompt(
-        self,
-        task: str,
-        agent_output: str,
-        context: Dict[str, Any] = None
+        self, task: str, agent_output: str, context: Dict[str, Any] = None
     ) -> str:
         """
         Build the audit system prompt for quality review.

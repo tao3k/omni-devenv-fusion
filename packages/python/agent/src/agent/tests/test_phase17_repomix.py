@@ -8,6 +8,7 @@ repomix-generated XML for standardized knowledge ingestion.
 Usage:
     python -m pytest packages/python/agent/src/agent/tests/test_phase17_repomix.py -v
 """
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
@@ -45,7 +46,7 @@ class TestRepomixIngestor:
     @pytest.mark.asyncio
     async def test_ingest_from_repomix_xml_missing_file(self):
         """Verify error when XML file doesn't exist."""
-        with patch('agent.capabilities.knowledge_ingestor.get_vector_memory') as mock_vm:
+        with patch("agent.capabilities.knowledge_ingestor.get_vector_memory") as mock_vm:
             mock_vm.return_value.client = MagicMock()
 
             result = await ingest_from_repomix_xml("/nonexistent/path.xml")
@@ -58,12 +59,13 @@ class TestRepomixIngestor:
         """Verify XML is parsed and files are extracted."""
         # Create a temporary XML file
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as f:
             f.write(SAMPLE_REPOMIX_XML)
             temp_path = f.name
 
         try:
-            with patch('agent.capabilities.knowledge_ingestor.get_vector_memory') as mock_vm:
+            with patch("agent.capabilities.knowledge_ingestor.get_vector_memory") as mock_vm:
                 mock_vm.return_value.add = AsyncMock(return_value=True)
 
                 result = await ingest_from_repomix_xml(temp_path)
@@ -99,12 +101,13 @@ Content
 """
 
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as f:
             f.write(xml_content)
             temp_path = f.name
 
         try:
-            with patch('agent.capabilities.knowledge_ingestor.get_vector_memory') as mock_vm:
+            with patch("agent.capabilities.knowledge_ingestor.get_vector_memory") as mock_vm:
                 mock_vm.return_value.add = AsyncMock(return_value=True)
 
                 result = await ingest_from_repomix_xml(temp_path)
@@ -134,12 +137,13 @@ Some content here.
 """
 
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as f:
             f.write(xml_content)
             temp_path = f.name
 
         try:
-            with patch('agent.capabilities.knowledge_ingestor.get_vector_memory') as mock_vm:
+            with patch("agent.capabilities.knowledge_ingestor.get_vector_memory") as mock_vm:
                 mock_vm.return_value.add = AsyncMock(return_value=True)
 
                 result = await ingest_from_repomix_xml(temp_path)
@@ -168,12 +172,13 @@ Content here.
 """
 
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as f:
             f.write(xml_content)
             temp_path = f.name
 
         try:
-            with patch('agent.capabilities.knowledge_ingestor.get_vector_memory') as mock_vm:
+            with patch("agent.capabilities.knowledge_ingestor.get_vector_memory") as mock_vm:
                 mock_vm.return_value.add = AsyncMock(return_value=True)
 
                 result = await ingest_from_repomix_xml(temp_path)
@@ -203,12 +208,13 @@ Content here.
 """
 
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as f:
             f.write(xml_content)
             temp_path = f.name
 
         try:
-            with patch('agent.capabilities.knowledge_ingestor.get_vector_memory') as mock_vm:
+            with patch("agent.capabilities.knowledge_ingestor.get_vector_memory") as mock_vm:
                 mock_vm.return_value.add = AsyncMock(return_value=True)
 
                 result = await ingest_from_repomix_xml(temp_path)
@@ -233,12 +239,13 @@ Content
 """
 
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as f:
             f.write(xml_content)
             temp_path = f.name
 
         try:
-            with patch('agent.capabilities.knowledge_ingestor.get_vector_memory') as mock_vm:
+            with patch("agent.capabilities.knowledge_ingestor.get_vector_memory") as mock_vm:
                 mock_vm.return_value.add = AsyncMock(return_value=True)
 
                 result = await ingest_from_repomix_xml(temp_path)
@@ -255,7 +262,7 @@ Content
     async def test_default_xml_path(self):
         """Verify default REPOMIX_XML_PATH is used when none specified."""
         # Mock the project root to return a temp directory
-        with patch('agent.capabilities.knowledge_ingestor.get_project_root') as mock_root:
+        with patch("agent.capabilities.knowledge_ingestor.get_project_root") as mock_root:
             mock_root.return_value = Path("/nonexistent")
 
             result = await ingest_from_repomix_xml()
@@ -268,7 +275,8 @@ Content
     async def test_xml_parse_error_handling(self):
         """Verify XML parse errors are handled gracefully."""
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as f:
             f.write("This is not valid XML <")
             temp_path = f.name
 

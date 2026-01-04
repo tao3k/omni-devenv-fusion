@@ -6,6 +6,7 @@ Python only executes - no business logic.
 
 Philosophy: "Code is Mechanism, Prompt is Policy"
 """
+
 import asyncio
 import json
 import re
@@ -24,6 +25,7 @@ logger = structlog.get_logger(__name__)
 # WritingStyleCache - Singleton Cache for Writing Guidelines
 # =============================================================================
 
+
 class WritingStyleCache:
     """
     Singleton cache for writing style guidelines loaded from skills/writer/writing-style/*.md
@@ -31,6 +33,7 @@ class WritingStyleCache:
     Pattern: Follows GitRulesCache singleton pattern with lazy loading.
     Loaded once, reused across all polish_text calls.
     """
+
     _instance: Optional["WritingStyleCache"] = None
     _loaded: bool = False
     _guidelines: str = ""
@@ -105,14 +108,14 @@ class WritingStyleCache:
 
         key_rules = []
         for filename, content in guidelines.items():
-            lines = content.split('\n')
+            lines = content.split("\n")
             for line in lines:
-                if line.startswith('## '):
+                if line.startswith("## "):
                     key_rules.append(f"[{filename}] {line[3:]}")
-                elif line.startswith('- ') and len(line) < 100:
+                elif line.startswith("- ") and len(line) < 100:
                     key_rules.append(f"  {line}")
 
-        return '\n'.join(key_rules[:20])
+        return "\n".join(key_rules[:20])
 
 
 # =============================================================================
@@ -151,6 +154,7 @@ PASSIVE_VOICE_PATTERNS = [
 # Helper Functions
 # =============================================================================
 
+
 def _check_passive_voice(line: str) -> List[str]:
     """Detect passive voice in a line."""
     violations = []
@@ -166,6 +170,7 @@ def _check_passive_voice(line: str) -> List[str]:
 # Core Tools
 # =============================================================================
 
+
 async def lint_writing_style(text: str) -> str:
     """
     Check text against Module 02 (Rosenberg Mechanics) style guide.
@@ -179,7 +184,7 @@ async def lint_writing_style(text: str) -> str:
         JSON string with violations and suggestions
     """
     violations: List[Dict[str, Any]] = []
-    lines = text.split('\n')
+    lines = text.split("\n")
 
     for i, line in enumerate(lines, 1):
         line_num = i
@@ -188,24 +193,28 @@ async def lint_writing_style(text: str) -> str:
         for pattern, replacement in CLUTTER_WORDS.items():
             matches = list(re.finditer(pattern, line, re.IGNORECASE))
             for match in matches:
-                violations.append({
-                    "type": "clutter_word",
-                    "line": line_num,
-                    "text": match.group(0),
-                    "suggestion": replacement,
-                    "rule": "02_mechanics.md - Strip Clutter",
-                })
+                violations.append(
+                    {
+                        "type": "clutter_word",
+                        "line": line_num,
+                        "text": match.group(0),
+                        "suggestion": replacement,
+                        "rule": "02_mechanics.md - Strip Clutter",
+                    }
+                )
 
         # Check Passive Voice
         passive_matches = _check_passive_voice(line)
         for pmatch in passive_matches:
-            violations.append({
-                "type": "passive_voice",
-                "line": line_num,
-                "text": pmatch,
-                "suggestion": "Use Active Voice",
-                "rule": "02_mechanics.md - Active Voice",
-            })
+            violations.append(
+                {
+                    "type": "passive_voice",
+                    "line": line_num,
+                    "text": pmatch,
+                    "suggestion": "Use Active Voice",
+                    "rule": "02_mechanics.md - Active Voice",
+                }
+            )
 
         # Check weak language
         weak_patterns = [
@@ -216,26 +225,33 @@ async def lint_writing_style(text: str) -> str:
         ]
         for pattern, suggestion in weak_patterns:
             if re.search(pattern, line, re.IGNORECASE):
-                violations.append({
-                    "type": "weak_language",
-                    "line": line_num,
-                    "text": pattern.replace(r"\b", ""),
-                    "suggestion": suggestion,
-                    "rule": "02_mechanics.md - Strip Clutter",
-                })
+                violations.append(
+                    {
+                        "type": "weak_language",
+                        "line": line_num,
+                        "text": pattern.replace(r"\b", ""),
+                        "suggestion": suggestion,
+                        "rule": "02_mechanics.md - Strip Clutter",
+                    }
+                )
 
     if not violations:
-        return json.dumps({
-            "status": "clean",
-            "message": "No mechanical style violations found.",
-            "violations": [],
-        })
+        return json.dumps(
+            {
+                "status": "clean",
+                "message": "No mechanical style violations found.",
+                "violations": [],
+            }
+        )
 
-    return json.dumps({
-        "status": "violations",
-        "message": f"Found {len(violations)} style violation(s)",
-        "violations": violations,
-    }, indent=2)
+    return json.dumps(
+        {
+            "status": "violations",
+            "message": f"Found {len(violations)} style violation(s)",
+            "violations": violations,
+        },
+        indent=2,
+    )
 
 
 async def check_markdown_structure(text: str) -> str:
@@ -252,7 +268,7 @@ async def check_markdown_structure(text: str) -> str:
         JSON string with structure violations
     """
     violations: List[Dict[str, Any]] = []
-    lines = text.split('\n')
+    lines = text.split("\n")
     header_levels: List[int] = []
     h1_count = 0
     in_code_block = False
@@ -262,7 +278,7 @@ async def check_markdown_structure(text: str) -> str:
         line_num = i
 
         # Track code blocks
-        if line.strip().startswith('```'):
+        if line.strip().startswith("```"):
             if not in_code_block:
                 in_code_block = True
                 code_lang = line.strip()[3:].strip() or None
@@ -273,56 +289,67 @@ async def check_markdown_structure(text: str) -> str:
                 continue
 
         # Check headers
-        if line.startswith('#'):
-            level = len(line.split(' ')[0])
+        if line.startswith("#"):
+            level = len(line.split(" ")[0])
             header_levels.append(level)
 
             # H1 check
             if level == 1:
                 h1_count += 1
                 if h1_count > 1:
-                    violations.append({
-                        "type": "multiple_h1",
-                        "line": line_num,
-                        "text": line.strip(),
-                        "suggestion": "Use only one H1 per file",
-                        "rule": "03_structure_and_ai.md - H1 Uniqueness",
-                    })
+                    violations.append(
+                        {
+                            "type": "multiple_h1",
+                            "line": line_num,
+                            "text": line.strip(),
+                            "suggestion": "Use only one H1 per file",
+                            "rule": "03_structure_and_ai.md - H1 Uniqueness",
+                        }
+                    )
 
             # Hierarchy jumping check
             if len(header_levels) >= 2:
                 prev_level = header_levels[-2]
                 if level > prev_level + 1:
-                    violations.append({
-                        "type": "hierarchy_jump",
-                        "line": line_num,
-                        "text": f"H{prev_level} -> H{level}",
-                        "suggestion": f"Change to H{prev_level + 1} or lower",
-                        "rule": "03_structure_and_ai.md - No Header Skipping",
-                    })
+                    violations.append(
+                        {
+                            "type": "hierarchy_jump",
+                            "line": line_num,
+                            "text": f"H{prev_level} -> H{level}",
+                            "suggestion": f"Change to H{prev_level + 1} or lower",
+                            "rule": "03_structure_and_ai.md - No Header Skipping",
+                        }
+                    )
 
         # Check code block without language
-        if in_code_block and not code_lang and not line.strip().startswith('//'):
-            violations.append({
-                "type": "code_without_lang",
-                "line": line_num,
-                "text": line[:50] + "..." if len(line) > 50 else line,
-                "suggestion": "Add language tag to code block",
-                "rule": "03_structure_and_ai.md - Code Labels",
-            })
+        if in_code_block and not code_lang and not line.strip().startswith("//"):
+            violations.append(
+                {
+                    "type": "code_without_lang",
+                    "line": line_num,
+                    "text": line[:50] + "..." if len(line) > 50 else line,
+                    "suggestion": "Add language tag to code block",
+                    "rule": "03_structure_and_ai.md - Code Labels",
+                }
+            )
 
     if not violations:
-        return json.dumps({
-            "status": "clean",
-            "message": "Markdown structure is valid.",
-            "violations": [],
-        })
+        return json.dumps(
+            {
+                "status": "clean",
+                "message": "Markdown structure is valid.",
+                "violations": [],
+            }
+        )
 
-    return json.dumps({
-        "status": "violations",
-        "message": f"Found {len(violations)} structure violation(s)",
-        "violations": violations,
-    }, indent=2)
+    return json.dumps(
+        {
+            "status": "violations",
+            "message": f"Found {len(violations)} structure violation(s)",
+            "violations": violations,
+        },
+        indent=2,
+    )
 
 
 async def polish_text(text: str) -> str:
@@ -344,14 +371,17 @@ async def polish_text(text: str) -> str:
 
     all_violations = lint_data.get("violations", []) + structure_data.get("violations", [])
 
-    return json.dumps({
-        "status": "needs_polish" if all_violations else "clean",
-        "message": f"Found {len(all_violations)} style issue(s) to address",
-        "violations": all_violations,
-        "guidelines_used": guidelines,
-        "lint_violations": lint_data.get("violations", []),
-        "structure_violations": structure_data.get("violations", []),
-    }, indent=2)
+    return json.dumps(
+        {
+            "status": "needs_polish" if all_violations else "clean",
+            "message": f"Found {len(all_violations)} style issue(s) to address",
+            "violations": all_violations,
+            "guidelines_used": guidelines,
+            "lint_violations": lint_data.get("violations", []),
+            "structure_violations": structure_data.get("violations", []),
+        },
+        indent=2,
+    )
 
 
 async def load_writing_memory() -> str:
@@ -367,14 +397,17 @@ async def load_writing_memory() -> str:
     guidelines_dict = WritingStyleCache.get_guidelines_dict()
     full_content = "\n\n".join(guidelines_dict.values())
 
-    return json.dumps({
-        "status": "loaded",
-        "source": "skills/writer/writing-style/*.md",
-        "files_loaded": list(guidelines_dict.keys()),
-        "total_files": len(guidelines_dict),
-        "content": full_content,
-        "note": "Full writing guidelines loaded into context. Apply these rules."
-    }, indent=2)
+    return json.dumps(
+        {
+            "status": "loaded",
+            "source": "skills/writer/writing-style/*.md",
+            "files_loaded": list(guidelines_dict.keys()),
+            "total_files": len(guidelines_dict),
+            "content": full_content,
+            "note": "Full writing guidelines loaded into context. Apply these rules.",
+        },
+        indent=2,
+    )
 
 
 async def run_vale_check(file_path: str) -> str:
@@ -390,11 +423,13 @@ async def run_vale_check(file_path: str) -> str:
     try:
         subprocess.run(["vale", "--version"], capture_output=True, check=True)
     except (subprocess.CalledProcessError, FileNotFoundError):
-        return json.dumps({
-            "status": "error",
-            "message": "Vale CLI not found. Install with: brew install vale",
-            "violations": [],
-        })
+        return json.dumps(
+            {
+                "status": "error",
+                "message": "Vale CLI not found. Install with: brew install vale",
+                "violations": [],
+            }
+        )
 
     try:
         result = subprocess.run(
@@ -408,38 +443,48 @@ async def run_vale_check(file_path: str) -> str:
         violations = []
         for file_path_key, alerts in vale_results.items():
             for alert in alerts:
-                violations.append({
-                    "type": "vale",
-                    "file": file_path_key,
-                    "line": alert.get("Line", 0),
-                    "severity": alert.get("Severity", "info"),
-                    "message": alert.get("Message", ""),
-                    "check": alert.get("Check", ""),
-                })
+                violations.append(
+                    {
+                        "type": "vale",
+                        "file": file_path_key,
+                        "line": alert.get("Line", 0),
+                        "severity": alert.get("Severity", "info"),
+                        "message": alert.get("Message", ""),
+                        "check": alert.get("Check", ""),
+                    }
+                )
 
-        return json.dumps({
-            "status": "success",
-            "message": f"Vale found {len(violations)} issue(s)",
-            "violations": violations,
-        }, indent=2)
+        return json.dumps(
+            {
+                "status": "success",
+                "message": f"Vale found {len(violations)} issue(s)",
+                "violations": violations,
+            },
+            indent=2,
+        )
 
     except json.JSONDecodeError:
-        return json.dumps({
-            "status": "error",
-            "message": "Failed to parse Vale output",
-            "violations": [],
-        })
+        return json.dumps(
+            {
+                "status": "error",
+                "message": "Failed to parse Vale output",
+                "violations": [],
+            }
+        )
     except Exception as e:
-        return json.dumps({
-            "status": "error",
-            "message": f"Vale error: {str(e)}",
-            "violations": [],
-        })
+        return json.dumps(
+            {
+                "status": "error",
+                "message": f"Vale error: {str(e)}",
+                "violations": [],
+            }
+        )
 
 
 # =============================================================================
 # Registration
 # =============================================================================
+
 
 def register(mcp: FastMCP):
     """Register Writer skill tools."""

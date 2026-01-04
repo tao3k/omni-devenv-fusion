@@ -24,6 +24,7 @@ Usage:
         relevant_files=["packages/python/agent/src/agent/core/router.py"]
     )
 """
+
 from typing import List
 
 from agent.core.agents.base import BaseAgent
@@ -51,11 +52,11 @@ class CoderAgent(BaseAgent):
 
     # ✅ Narrow Context: Only code-related skills
     default_skills = [
-        "filesystem",        # Navigate and locate files
-        "file_ops",          # Read/write/modify files
-        "code_insight",      # AST analysis and code structure
-        "python_engineering", # Python-specific refactoring tools
-        "terminal",          # Simple shell commands (ls, python -c)
+        "filesystem",  # Navigate and locate files
+        "file_ops",  # Read/write/modify files
+        "code_insight",  # AST analysis and code structure
+        "python_engineering",  # Python-specific refactoring tools
+        "terminal",  # Simple shell commands (ls, python -c)
     ]
 
     async def run(
@@ -64,7 +65,7 @@ class CoderAgent(BaseAgent):
         mission_brief: str,
         constraints: List[str] = None,
         relevant_files: List[str] = None,
-        chat_history: List[dict] = None
+        chat_history: List[dict] = None,
     ) -> dict:
         """
         Execute coding task with Mission Brief.
@@ -84,15 +85,10 @@ class CoderAgent(BaseAgent):
             mission_brief=mission_brief,
             constraints=constraints,
             relevant_files=relevant_files,
-            chat_history=chat_history
+            chat_history=chat_history,
         )
 
-    async def _execute_with_llm(
-        self,
-        task: str,
-        context,
-        history: List[dict]
-    ) -> dict:
+    async def _execute_with_llm(self, task: str, context, history: List[dict]) -> dict:
         """
         Execute coding task with LLM.
 
@@ -110,5 +106,5 @@ class CoderAgent(BaseAgent):
             "message": f"Coder completed implementation",
             "confidence": 0.85,
             "tool_calls": [],
-            "files_modified": context.relevant_files or []
+            "files_modified": context.relevant_files or [],
         }

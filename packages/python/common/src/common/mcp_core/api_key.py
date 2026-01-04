@@ -12,6 +12,7 @@ Usage:
 
     api_key = get_anthropic_key()  # Auto-loads from best available source
 """
+
 import json
 import os
 from pathlib import Path
@@ -25,6 +26,7 @@ logger = structlog.get_logger("mcp-core.api-key")
 def _find_project_root() -> Path:
     """Find project root (git toplevel)."""
     from common.mcp_core.gitops import get_project_root
+
     return get_project_root()
 
 
@@ -38,6 +40,7 @@ def _load_settings_yaml() -> dict:
 
     try:
         import yaml
+
         with open(settings_path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
     except Exception as e:

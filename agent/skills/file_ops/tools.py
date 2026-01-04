@@ -3,6 +3,7 @@ File Operations Skill Tools
 Migrated from src/mcp_server/coder/main.py
 Provides file I/O, search, and AST-based refactoring.
 """
+
 import asyncio
 import json
 import os
@@ -21,8 +22,13 @@ logger = structlog.get_logger(__name__)
 
 # Safe hidden files that are allowed
 _ALLOWED_HIDDEN_FILES = {
-    ".gitignore", ".clang-format", ".prettierrc", ".markdownlintrc",
-    ".editorconfig", ".gitattributes", ".dockerignore",
+    ".gitignore",
+    ".clang-format",
+    ".prettierrc",
+    ".markdownlintrc",
+    ".editorconfig",
+    ".gitattributes",
+    ".dockerignore",
 }
 
 
@@ -30,11 +36,13 @@ _ALLOWED_HIDDEN_FILES = {
 # Utility Functions
 # =============================================================================
 
+
 def _validate_syntax(content: str, filepath: str) -> tuple[bool, str]:
     """Validate syntax for Python and Nix files."""
     if filepath.endswith(".py"):
         try:
             import ast
+
             ast.parse(content)
             return True, ""
         except SyntaxError as e:
@@ -47,7 +55,7 @@ def _validate_syntax(content: str, filepath: str) -> tuple[bool, str]:
                 input=content,
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=10,
             )
             if process.returncode != 0:
                 return False, f"Nix syntax error: {process.stderr.strip()}"
@@ -74,6 +82,7 @@ def _create_backup(filepath: Path) -> bool:
 # Core File Operations
 # =============================================================================
 
+
 async def read_file(path: str) -> str:
     """
     Read a single file with line numbering.
@@ -98,7 +107,7 @@ async def read_file(path: str) -> str:
     try:
         with open(full_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
-        numbered_lines = [f"{i+1:4d} | {line}" for i, line in enumerate(lines)]
+        numbered_lines = [f"{i + 1:4d} | {line}" for i, line in enumerate(lines)]
         content = "".join(numbered_lines)
         return f"--- File: {path} ({len(lines)} lines) ---\n{content}"
     except UnicodeDecodeError:
@@ -144,10 +153,14 @@ async def search_files(pattern: str, path: str = ".", use_regex: bool = False) -
                                 break
                             if use_regex:
                                 if regex.search(line):
-                                    matches.append(f"{filepath.relative_to(project_root)}:{i}: {line.rstrip()}")
+                                    matches.append(
+                                        f"{filepath.relative_to(project_root)}:{i}: {line.rstrip()}"
+                                    )
                             else:
                                 if pattern.lower() in line.lower():
-                                    matches.append(f"{filepath.relative_to(project_root)}:{i}: {line.rstrip()}")
+                                    matches.append(
+                                        f"{filepath.relative_to(project_root)}:{i}: {line.rstrip()}"
+                                    )
                 except Exception:
                     continue
 
@@ -175,7 +188,7 @@ async def save_file(
     content: str,
     create_backup: bool = True,
     validate_syntax: bool = True,
-    auto_check_writing: bool = True
+    auto_check_writing: bool = True,
 ) -> str:
     """
     Write content to a file within the project directory.
@@ -257,12 +270,11 @@ async def save_file(
 # AST-Based Tools
 # =============================================================================
 
+
 async def _run_ast_grep(pattern: str, lang: str = "py", search_path: str = ".") -> str:
     """Run ast-grep query and returns matches (async)."""
     returncode, stdout, stderr = await run_subprocess(
-        "ast-grep",
-        ["run", "-p", pattern, "-l", lang, search_path],
-        timeout=30
+        "ast-grep", ["run", "-p", pattern, "-l", lang, search_path], timeout=30
     )
 
     if returncode != 0 and "no matches" not in stderr.lower():
@@ -275,10 +287,7 @@ async def _run_ast_grep(pattern: str, lang: str = "py", search_path: str = ".") 
 
 
 async def _run_ast_rewrite(
-    pattern: str,
-    replacement: str,
-    lang: str = "py",
-    search_path: str = "."
+    pattern: str, replacement: str, lang: str = "py", search_path: str = "."
 ) -> str:
     """
     Apply AST-based rewrite using ast-grep (async).
@@ -288,7 +297,7 @@ async def _run_ast_rewrite(
     returncode, stdout, stderr = await run_subprocess(
         "ast-grep",
         ["run", "-p", pattern, "-r", replacement, "-l", lang, search_path, "--update-all"],
-        timeout=30
+        timeout=30,
     )
 
     # ast-grep returns exit code 1 when no matches found (not an error)
@@ -346,6 +355,7 @@ async def ast_rewrite(pattern: str, replacement: str, lang: str = "py", path: st
 # Registration
 # =============================================================================
 
+
 def register(mcp: FastMCP):
     """Register File Operations tools."""
 
@@ -363,7 +373,7 @@ def register(mcp: FastMCP):
         content: str,
         create_backup: bool = True,
         validate_syntax: bool = True,
-        auto_check_writing: bool = True
+        auto_check_writing: bool = True,
     ) -> str:
         return await save_file(path, content, create_backup, validate_syntax, auto_check_writing)
 
@@ -372,7 +382,9 @@ def register(mcp: FastMCP):
         return await ast_search(pattern, lang, path)
 
     @mcp.tool()
-    async def ast_rewrite_tool(pattern: str, replacement: str, lang: str = "py", path: str = ".") -> str:
+    async def ast_rewrite_tool(
+        pattern: str, replacement: str, lang: str = "py", path: str = "."
+    ) -> str:
         return await ast_rewrite(pattern, replacement, lang, path)
 
     logger.info("File Operations skill tools registered")

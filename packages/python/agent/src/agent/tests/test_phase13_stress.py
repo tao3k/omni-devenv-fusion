@@ -7,6 +7,7 @@ Focus:
 2. Performance: Measuring load latency.
 3. Stability: Repeated loading stress test.
 """
+
 import pytest
 import time
 import shutil
@@ -89,11 +90,17 @@ def toxic_skill_factory(registry):
         if toxic_type == "syntax_error":
             tools_file.write_text("def register(mcp): \n    THIS IS NOT PYTHON CODE !!!")
         elif toxic_type == "import_error":
-            tools_file.write_text("import non_existent_module_xyz_123\n\ndef register(mcp):\n    pass")
+            tools_file.write_text(
+                "import non_existent_module_xyz_123\n\ndef register(mcp):\n    pass"
+            )
         elif toxic_type == "runtime_error":
-            tools_file.write_text("def register(mcp):\n    raise ValueError('Boom! Toxic skill exploded!')\n")
+            tools_file.write_text(
+                "def register(mcp):\n    raise ValueError('Boom! Toxic skill exploded!')\n"
+            )
         elif toxic_type == "missing_register":
-            tools_file.write_text("# No register function defined!\ndef some_other_function(mcp):\n    pass")
+            tools_file.write_text(
+                "# No register function defined!\ndef some_other_function(mcp):\n    pass"
+            )
         elif toxic_type == "circular_import":
             tools_file.write_text(f"from {name} import circular\n\ndef register(mcp):\n    pass")
         elif toxic_type == "infinite_loop":
@@ -134,7 +141,11 @@ class TestKernelResilience:
 
         assert success is False, f"Expected failure, got success=True, message={message}"
         # Message should indicate syntax error (either "SyntaxError" or "invalid syntax")
-        assert "SyntaxError" in message or "invalid syntax" in message.lower() or "syntax" in message.lower()
+        assert (
+            "SyntaxError" in message
+            or "invalid syntax" in message.lower()
+            or "syntax" in message.lower()
+        )
         assert skill_name not in registry.loaded_skills
         # Ensure system didn't crash and is still initialized
         assert registry._initialized is True
@@ -149,7 +160,11 @@ class TestKernelResilience:
 
         assert success is False
         # Message should indicate an error (any failure indication)
-        assert "error" in message.lower() or "not found" in message.lower() or "fail" in message.lower()
+        assert (
+            "error" in message.lower()
+            or "not found" in message.lower()
+            or "fail" in message.lower()
+        )
         assert skill_name not in registry.loaded_skills
 
     def test_runtime_error_skill(self, registry, mock_mcp, toxic_skill_factory):

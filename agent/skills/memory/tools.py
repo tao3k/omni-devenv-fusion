@@ -18,6 +18,7 @@ Tools (from prompts.md):
   - recall: Semantic search across memories
   - harvest_session_insight: Extract and store key learnings
 """
+
 import json
 import os
 import subprocess
@@ -32,12 +33,12 @@ from chromadb.config import Settings
 # Path Configuration (Configurable via settings.yaml)
 # =============================================================================
 
+
 def _get_git_toplevel() -> Path:
     """Get git toplevel directory."""
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, timeout=5
+            ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, timeout=5
         )
         if result.returncode == 0:
             return Path(result.stdout.strip())
@@ -113,12 +114,10 @@ def register(mcp: Any) -> None:
         try:
             semantic_mem.add(
                 documents=[content],
-                metadatas=[
-                    {"timestamp": timestamp, "domain": domain, "type": "insight"}
-                ],
-                ids=[f"insight_{timestamp}"]
+                metadatas=[{"timestamp": timestamp, "domain": domain, "type": "insight"}],
+                ids=[f"insight_{timestamp}"],
             )
-            return f"✅ Insight stored in Hippocampus:\n[Domain: {domain}]\n\"{content[:100]}...\""
+            return f'✅ Insight stored in Hippocampus:\n[Domain: {domain}]\n"{content[:100]}..."'
         except Exception as e:
             return f"❌ Failed to store insight: {e}"
 
@@ -152,7 +151,7 @@ def register(mcp: Any) -> None:
             episodic_mem.add(
                 documents=[content],
                 metadatas=[{"timestamp": timestamp, "type": "episode"}],
-                ids=[f"epi_{timestamp}"]
+                ids=[f"epi_{timestamp}"],
             )
             return f"✅ Episode logged: {action[:50]}..."
         except Exception as e:
@@ -182,18 +181,15 @@ def register(mcp: Any) -> None:
             return "No semantic memory available."
 
         try:
-            results = semantic_mem.query(
-                query_texts=[query],
-                n_results=n_results
-            )
+            results = semantic_mem.query(query_texts=[query], n_results=n_results)
 
-            if not results['documents'][0]:
+            if not results["documents"][0]:
                 return "🧠 No relevant memories found."
 
             memories = []
-            for i, (doc, meta) in enumerate(zip(results['documents'][0], results['metadatas'][0])):
-                domain = meta.get('domain', 'unknown')
-                memories.append(f"[{i+1}] [{domain}] {doc}")
+            for i, (doc, meta) in enumerate(zip(results["documents"][0], results["metadatas"][0])):
+                domain = meta.get("domain", "unknown")
+                memories.append(f"[{i + 1}] [{domain}] {doc}")
 
             return f"🧠 **Hippocampus Recall**:\n" + "\n---\n".join(memories)
         except Exception as e:
@@ -214,12 +210,12 @@ def register(mcp: Any) -> None:
             # Get all insights
             results = semantic_mem.get(where={"type": "insight"})
 
-            if not results['documents']:
+            if not results["documents"]:
                 return "No harvested knowledge yet."
 
             by_domain: Dict[str, List[str]] = {}
-            for doc, meta in zip(results['documents'], results.get('metadatas', [])):
-                domain = meta.get('domain', 'general')
+            for doc, meta in zip(results["documents"], results.get("metadatas", [])):
+                domain = meta.get("domain", "general")
                 if domain not in by_domain:
                     by_domain[domain] = []
                 by_domain[domain].append(doc)
@@ -228,7 +224,7 @@ def register(mcp: Any) -> None:
             for domain, insights in by_domain.items():
                 lines.append(f"### {domain.upper()}")
                 for i, insight in enumerate(insights):
-                    lines.append(f"  {i+1}. {insight[:80]}...")
+                    lines.append(f"  {i + 1}. {insight[:80]}...")
                 lines.append("")
 
             return "\n".join(lines)
@@ -265,12 +261,10 @@ def register(mcp: Any) -> None:
         try:
             semantic_mem.add(
                 documents=[insight],
-                metadatas=[
-                    {"timestamp": timestamp, "domain": "session", "type": "harvest"}
-                ],
-                ids=[f"harvest_{timestamp}"]
+                metadatas=[{"timestamp": timestamp, "domain": "session", "type": "harvest"}],
+                ids=[f"harvest_{timestamp}"],
             )
-            return f"✅ Session insight harvested and stored.\n\"{context_summary[:100]}...\""
+            return f'✅ Session insight harvested and stored.\n"{context_summary[:100]}..."'
         except Exception as e:
             return f"❌ Harvest failed: {e}"
 

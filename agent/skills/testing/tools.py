@@ -3,6 +3,7 @@ Testing Skill Tools
 Refactored from src/mcp_server/executor/tester.py
 Provides pytest integration for quality assurance.
 """
+
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -42,7 +43,7 @@ async def run_tests(path: str = ".", verbose: bool = False, max_fail: int = 5) -
             cmd,
             capture_output=True,
             text=True,
-            timeout=300  # 5 min timeout
+            timeout=300,  # 5 min timeout
         )
 
         output = result.stdout + "\n" + result.stderr

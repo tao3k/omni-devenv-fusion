@@ -3,6 +3,7 @@ Testing Protocol Skill Tools
 Migrated from src/mcp_server/executor/tester.py
 Provides smart test runner and testing protocol tools.
 """
+
 import json
 import os
 import subprocess
@@ -21,29 +22,24 @@ def get_git_status() -> Dict[str, list]:
     try:
         # Get staged files
         result = subprocess.run(
-            ["git", "diff", "--cached", "--name-only"],
-            capture_output=True, text=True
+            ["git", "diff", "--cached", "--name-only"], capture_output=True, text=True
         )
-        staged = result.stdout.strip().split('\n') if result.stdout.strip() else []
+        staged = result.stdout.strip().split("\n") if result.stdout.strip() else []
 
         # Get unstaged files
-        result = subprocess.run(
-            ["git", "diff", "--name-only"],
-            capture_output=True, text=True
-        )
-        unstaged = result.stdout.strip().split('\n') if result.stdout.strip() else []
+        result = subprocess.run(["git", "diff", "--name-only"], capture_output=True, text=True)
+        unstaged = result.stdout.strip().split("\n") if result.stdout.strip() else []
 
         # Get untracked files
         result = subprocess.run(
-            ["git", "ls-files", "--others", "--exclude-standard"],
-            capture_output=True, text=True
+            ["git", "ls-files", "--others", "--exclude-standard"], capture_output=True, text=True
         )
-        untracked = result.stdout.strip().split('\n') if result.stdout.strip() else []
+        untracked = result.stdout.strip().split("\n") if result.stdout.strip() else []
 
         return {
             "staged": [f for f in staged if f],
             "unstaged": [f for f in unstaged if f],
-            "untracked": [f for f in untracked if f]
+            "untracked": [f for f in untracked if f],
         }
     except Exception as e:
         return {"error": str(e)}
@@ -59,8 +55,8 @@ def categorize_changes(files: list) -> Dict[str, bool]:
         "code_changes": False,
     }
 
-    doc_extensions = {'.md', '.txt', '.rst', '.adoc'}
-    code_extensions = {'.py', '.nix', '.yaml', '.yml', '.json', '.toml'}
+    doc_extensions = {".md", ".txt", ".rst", ".adoc"}
+    code_extensions = {".py", ".nix", ".yaml", ".yml", ".json", ".toml"}
 
     for f in files:
         f_lower = f.lower()
@@ -76,16 +72,16 @@ def categorize_changes(files: list) -> Dict[str, bool]:
         if is_code and not is_doc:
             categories["docs_only"] = False
 
-        if 'mcp-server/' in f or f.startswith('mcp-server/'):
+        if "mcp-server/" in f or f.startswith("mcp-server/"):
             categories["mcp_server"] = True
             categories["code_changes"] = True
-        if 'tool-router/' in f or f.startswith('tool-router/'):
+        if "tool-router/" in f or f.startswith("tool-router/"):
             categories["tool_router"] = True
             categories["code_changes"] = True
-        if '.nix' in f or 'devenv' in f:
+        if ".nix" in f or "devenv" in f:
             categories["nix_config"] = True
             categories["code_changes"] = True
-        if f.endswith('.py') and 'test' not in f:
+        if f.endswith(".py") and "test" not in f:
             categories["code_changes"] = True
 
     return categories
@@ -107,85 +103,105 @@ async def smart_test_runner(focus_file: str = None) -> str:
         JSON result with test strategy and execution
     """
     if focus_file:
-        return json.dumps({
-            "strategy": "focused",
-            "file": focus_file,
-            "command": f"pytest {focus_file}",
-            "reason": "Specific file requested"
-        }, indent=2)
+        return json.dumps(
+            {
+                "strategy": "focused",
+                "file": focus_file,
+                "command": f"pytest {focus_file}",
+                "reason": "Specific file requested",
+            },
+            indent=2,
+        )
 
     # Step 1: Get git status
     status = get_git_status()
     if "error" in status:
-        return json.dumps({
-            "status": "error",
-            "message": f"Failed to get git status: {status['error']}"
-        }, indent=2)
+        return json.dumps(
+            {"status": "error", "message": f"Failed to get git status: {status['error']}"}, indent=2
+        )
 
     all_files = status["staged"] + status["unstaged"] + status["untracked"]
 
     if not all_files:
-        return json.dumps({
-            "status": "success",
-            "message": "No changes detected",
-            "strategy": "skip",
-            "reason": "No modified files",
-            "command": "echo 'No changes to test'"
-        }, indent=2)
+        return json.dumps(
+            {
+                "status": "success",
+                "message": "No changes detected",
+                "strategy": "skip",
+                "reason": "No modified files",
+                "command": "echo 'No changes to test'",
+            },
+            indent=2,
+        )
 
     # Step 2: Categorize changes
     categories = categorize_changes(all_files)
 
     # Step 3: Determine strategy (Modified-Code Protocol)
     if categories["docs_only"]:
-        return json.dumps({
-            "status": "success",
-            "message": "Documentation changes only",
-            "strategy": "skip",
-            "reason": "agent/how-to/testing-workflows.md Rule #3: Docs only -> Skip tests",
-            "command": "echo 'Docs only - skipping tests'",
-            "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files
-        }, indent=2)
+        return json.dumps(
+            {
+                "status": "success",
+                "message": "Documentation changes only",
+                "strategy": "skip",
+                "reason": "agent/how-to/testing-workflows.md Rule #3: Docs only -> Skip tests",
+                "command": "echo 'Docs only - skipping tests'",
+                "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files,
+            },
+            indent=2,
+        )
 
     elif categories["mcp_server"]:
-        return json.dumps({
-            "status": "ready",
-            "message": "MCP server changes detected",
-            "strategy": "mcp_only",
-            "reason": "mcp-server/ modified -> Run MCP tests (agent/how-to/testing-workflows.md)",
-            "command": "just test-mcp-only",
-            "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files
-        }, indent=2)
+        return json.dumps(
+            {
+                "status": "ready",
+                "message": "MCP server changes detected",
+                "strategy": "mcp_only",
+                "reason": "mcp-server/ modified -> Run MCP tests (agent/how-to/testing-workflows.md)",
+                "command": "just test-mcp-only",
+                "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files,
+            },
+            indent=2,
+        )
 
     elif categories["tool_router"]:
-        return json.dumps({
-            "status": "ready",
-            "message": "Tool router changes detected",
-            "strategy": "mcp_only",
-            "reason": "tool-router/ modified -> Run MCP tests",
-            "command": "just test-mcp-only",
-            "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files
-        }, indent=2)
+        return json.dumps(
+            {
+                "status": "ready",
+                "message": "Tool router changes detected",
+                "strategy": "mcp_only",
+                "reason": "tool-router/ modified -> Run MCP tests",
+                "command": "just test-mcp-only",
+                "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files,
+            },
+            indent=2,
+        )
 
     elif categories["nix_config"]:
-        return json.dumps({
-            "status": "ready",
-            "message": "Infrastructure changes detected",
-            "strategy": "full",
-            "reason": ".nix or devenv modified -> Run full test suite",
-            "command": "just test",
-            "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files
-        }, indent=2)
+        return json.dumps(
+            {
+                "status": "ready",
+                "message": "Infrastructure changes detected",
+                "strategy": "full",
+                "reason": ".nix or devenv modified -> Run full test suite",
+                "command": "just test",
+                "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files,
+            },
+            indent=2,
+        )
 
     else:
-        return json.dumps({
-            "status": "ready",
-            "message": "Code changes detected",
-            "strategy": "full",
-            "reason": "General code changes -> Run full test suite",
-            "command": "just test",
-            "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files
-        }, indent=2)
+        return json.dumps(
+            {
+                "status": "ready",
+                "message": "Code changes detected",
+                "strategy": "full",
+                "reason": "General code changes -> Run full test suite",
+                "command": "just test",
+                "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files,
+            },
+            indent=2,
+        )
 
 
 async def run_test_command(command: str) -> str:
@@ -211,41 +227,36 @@ async def run_test_command(command: str) -> str:
     is_allowed = any(command.startswith(allowed) for allowed in allowed_commands)
 
     if not is_allowed:
-        return json.dumps({
-            "status": "error",
-            "message": "Command not allowed",
-            "allowed_commands": allowed_commands
-        }, indent=2)
-
-    try:
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=120
+        return json.dumps(
+            {
+                "status": "error",
+                "message": "Command not allowed",
+                "allowed_commands": allowed_commands,
+            },
+            indent=2,
         )
 
-        return json.dumps({
-            "status": "success" if result.returncode == 0 else "failed",
-            "command": command,
-            "returncode": result.returncode,
-            "stdout": result.stdout[:2000] if result.stdout else "",
-            "stderr": result.stderr[:500] if result.stderr else ""
-        }, indent=2)
+    try:
+        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=120)
+
+        return json.dumps(
+            {
+                "status": "success" if result.returncode == 0 else "failed",
+                "command": command,
+                "returncode": result.returncode,
+                "stdout": result.stdout[:2000] if result.stdout else "",
+                "stderr": result.stderr[:500] if result.stderr else "",
+            },
+            indent=2,
+        )
 
     except subprocess.TimeoutExpired:
-        return json.dumps({
-            "status": "error",
-            "message": "Command timed out (>120s)",
-            "command": command
-        }, indent=2)
+        return json.dumps(
+            {"status": "error", "message": "Command timed out (>120s)", "command": command},
+            indent=2,
+        )
     except Exception as e:
-        return json.dumps({
-            "status": "error",
-            "message": str(e),
-            "command": command
-        }, indent=2)
+        return json.dumps({"status": "error", "message": str(e), "command": command}, indent=2)
 
 
 async def get_test_protocol() -> str:
@@ -255,27 +266,30 @@ async def get_test_protocol() -> str:
     Returns:
         JSON summary of agent/how-to/testing-workflows.md
     """
-    return json.dumps({
-        "doc": "agent/how-to/testing-workflows.md",
-        "rules": [
-            "Rule #1: Fast tests first. Fail fast.",
-            "Rule #2: No feature code without test code.",
-            "Rule #3: Modified docs only -> Skip tests."
-        ],
-        "strategies": {
-            "docs_only": {"action": "skip", "command": "echo 'Docs only'"},
-            "mcp_server": {"action": "test-mcp-only", "command": "just test-mcp-only"},
-            "tool_router": {"action": "test-mcp-only", "command": "just test-mcp-only"},
-            "nix_config": {"action": "full", "command": "just test"},
-            "general": {"action": "full", "command": "just test"}
+    return json.dumps(
+        {
+            "doc": "agent/how-to/testing-workflows.md",
+            "rules": [
+                "Rule #1: Fast tests first. Fail fast.",
+                "Rule #2: No feature code without test code.",
+                "Rule #3: Modified docs only -> Skip tests.",
+            ],
+            "strategies": {
+                "docs_only": {"action": "skip", "command": "echo 'Docs only'"},
+                "mcp_server": {"action": "test-mcp-only", "command": "just test-mcp-only"},
+                "tool_router": {"action": "test-mcp-only", "command": "just test-mcp-only"},
+                "nix_config": {"action": "full", "command": "just test"},
+                "general": {"action": "full", "command": "just test"},
+            },
+            "test_levels": {
+                "unit": {"command": "just test-unit", "timeout": "<30s"},
+                "integration": {"command": "just test-int", "timeout": "<2m"},
+                "mcp": {"command": "just test-mcp-only", "timeout": "<60s"},
+                "full": {"command": "just test", "timeout": "varies"},
+            },
         },
-        "test_levels": {
-            "unit": {"command": "just test-unit", "timeout": "<30s"},
-            "integration": {"command": "just test-int", "timeout": "<2m"},
-            "mcp": {"command": "just test-mcp-only", "timeout": "<60s"},
-            "full": {"command": "just test", "timeout": "varies"}
-        }
-    }, indent=2)
+        indent=2,
+    )
 
 
 def register(mcp: FastMCP):

@@ -60,14 +60,10 @@ def build_messages(example: Dict, cards: List[ToolCard]) -> List[Dict]:
     system = (
         "You are a tool router. Choose the single best tool for the user's task. "
         "Use the provided tool cards only. Respond with JSON only, no prose: "
-        '{\"tool_id\": \"<id>\", \"confidence\": 0-1, \"reasoning\": \"brief\"}. '
+        '{"tool_id": "<id>", "confidence": 0-1, "reasoning": "brief"}. '
         "Never invent tools beyond the provided IDs."
     )
-    user = (
-        f"Task to route:\n{example.get('intent', '').strip()}\n"
-        "Available tools:\n"
-        f"{tool_sections}"
-    )
+    user = f"Task to route:\n{example.get('intent', '').strip()}\nAvailable tools:\n{tool_sections}"
     return [
         {"role": "system", "content": system},
         {"role": "user", "content": user},

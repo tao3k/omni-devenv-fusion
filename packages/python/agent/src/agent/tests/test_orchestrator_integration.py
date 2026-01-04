@@ -11,6 +11,7 @@ Tests the complete flow:
 Usage:
     python -m pytest packages/python/agent/src/agent/tests/test_orchestrator_integration.py -v
 """
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -29,21 +30,25 @@ class TestOrchestratorDispatch:
         orchestrator = Orchestrator()
 
         # Mock router to return coder route
-        orchestrator.router.route_to_agent = AsyncMock(return_value=AgentRoute(
-            target_agent="coder",
-            confidence=0.85,
-            reasoning="Keyword match: coding task",
-            task_brief="Fix the bug in router.py",
-            constraints=["Run tests after fix"],
-            relevant_files=["router.py"]
-        ))
+        orchestrator.router.route_to_agent = AsyncMock(
+            return_value=AgentRoute(
+                target_agent="coder",
+                confidence=0.85,
+                reasoning="Keyword match: coding task",
+                task_brief="Fix the bug in router.py",
+                constraints=["Run tests after fix"],
+                relevant_files=["router.py"],
+            )
+        )
 
-        with patch.object(orchestrator.router, 'route_to_agent', new_callable=AsyncMock) as mock_route:
+        with patch.object(
+            orchestrator.router, "route_to_agent", new_callable=AsyncMock
+        ) as mock_route:
             mock_route.return_value = AgentRoute(
                 target_agent="coder",
                 confidence=0.9,
                 reasoning="Test routing",
-                task_brief="Fix the bug"
+                task_brief="Fix the bug",
             )
 
             # Dispatch should work without errors
@@ -58,21 +63,25 @@ class TestOrchestratorDispatch:
         orchestrator = Orchestrator()
 
         # Mock router to return reviewer route
-        orchestrator.router.route_to_agent = AsyncMock(return_value=AgentRoute(
-            target_agent="reviewer",
-            confidence=0.88,
-            reasoning="Keyword match: review task",
-            task_brief="Review the changes in main.py",
-            constraints=["Check tests", "Verify lint"],
-            relevant_files=["main.py"]
-        ))
+        orchestrator.router.route_to_agent = AsyncMock(
+            return_value=AgentRoute(
+                target_agent="reviewer",
+                confidence=0.88,
+                reasoning="Keyword match: review task",
+                task_brief="Review the changes in main.py",
+                constraints=["Check tests", "Verify lint"],
+                relevant_files=["main.py"],
+            )
+        )
 
-        with patch.object(orchestrator.router, 'route_to_agent', new_callable=AsyncMock) as mock_route:
+        with patch.object(
+            orchestrator.router, "route_to_agent", new_callable=AsyncMock
+        ) as mock_route:
             mock_route.return_value = AgentRoute(
                 target_agent="reviewer",
                 confidence=0.9,
                 reasoning="Test routing",
-                task_brief="Review the code"
+                task_brief="Review the code",
             )
 
             response = await orchestrator.dispatch("Review main.py", history=[])
@@ -86,19 +95,23 @@ class TestOrchestratorDispatch:
         orchestrator = Orchestrator()
 
         # Mock router to return unknown agent
-        orchestrator.router.route_to_agent = AsyncMock(return_value=AgentRoute(
-            target_agent="unknown_agent",  # This agent doesn't exist
-            confidence=0.5,
-            reasoning="Unknown agent type",
-            task_brief="Do something"
-        ))
+        orchestrator.router.route_to_agent = AsyncMock(
+            return_value=AgentRoute(
+                target_agent="unknown_agent",  # This agent doesn't exist
+                confidence=0.5,
+                reasoning="Unknown agent type",
+                task_brief="Do something",
+            )
+        )
 
-        with patch.object(orchestrator.router, 'route_to_agent', new_callable=AsyncMock) as mock_route:
+        with patch.object(
+            orchestrator.router, "route_to_agent", new_callable=AsyncMock
+        ) as mock_route:
             mock_route.return_value = AgentRoute(
                 target_agent="unknown_agent",
                 confidence=0.5,
                 reasoning="Unknown",
-                task_brief="Do something"
+                task_brief="Do something",
             )
 
             # Should not crash, should fall back to coder
@@ -114,15 +127,17 @@ class TestOrchestratorDispatch:
 
         history = [
             {"role": "user", "content": "First question"},
-            {"role": "assistant", "content": "First answer"}
+            {"role": "assistant", "content": "First answer"},
         ]
 
-        with patch.object(orchestrator.router, 'route_to_agent', new_callable=AsyncMock) as mock_route:
+        with patch.object(
+            orchestrator.router, "route_to_agent", new_callable=AsyncMock
+        ) as mock_route:
             mock_route.return_value = AgentRoute(
                 target_agent="coder",
                 confidence=0.9,
                 reasoning="Test",
-                task_brief="Continue the task"
+                task_brief="Continue the task",
             )
 
             await orchestrator.dispatch("Continue the task", history=history)
@@ -147,15 +162,14 @@ class TestOrchestratorWithHiveContext:
             "mission_brief": "Review this PR carefully",
             "constraints": ["Check tests", "Verify lint"],
             "relevant_files": ["pr_changes.diff"],
-            "history": []
+            "history": [],
         }
 
         # Should route to reviewer without calling router
-        with patch.object(orchestrator.router, 'route_to_agent', new_callable=AsyncMock) as mock_route:
-            response = await orchestrator.dispatch_with_hive_context(
-                "Review this PR",
-                hive_context
-            )
+        with patch.object(
+            orchestrator.router, "route_to_agent", new_callable=AsyncMock
+        ) as mock_route:
+            response = await orchestrator.dispatch_with_hive_context("Review this PR", hive_context)
 
             # Router should NOT be called when explicit agent is provided
             mock_route.assert_not_called()
@@ -239,18 +253,15 @@ class TestMissionBriefIntegration:
 
         # Mock the registry
         coder.registry = MagicMock()
-        coder.registry.get_skill_manifest = MagicMock(return_value=MagicMock(
-            description="Test skill",
-            tools_module="test.tools"
-        ))
+        coder.registry.get_skill_manifest = MagicMock(
+            return_value=MagicMock(description="Test skill", tools_module="test.tools")
+        )
 
         # Prepare context with specific mission brief
         mission = "Fix the critical security vulnerability in auth.py"
 
         ctx = await coder.prepare_context(
-            mission_brief=mission,
-            constraints=["Security first"],
-            relevant_files=["auth.py"]
+            mission_brief=mission, constraints=["Security first"], relevant_files=["auth.py"]
         )
 
         # Verify Mission Brief is in system prompt
@@ -268,27 +279,30 @@ class TestOrchestratorIntegrationFlow:
         orchestrator = Orchestrator()
 
         # Mock router response
-        orchestrator.router.route_to_agent = AsyncMock(return_value=AgentRoute(
-            target_agent="coder",
-            confidence=0.92,
-            reasoning="High confidence coding task",
-            task_brief="Implement feature X with tests",
-            constraints=["Write tests"],
-            relevant_files=["feature.py"]
-        ))
+        orchestrator.router.route_to_agent = AsyncMock(
+            return_value=AgentRoute(
+                target_agent="coder",
+                confidence=0.92,
+                reasoning="High confidence coding task",
+                task_brief="Implement feature X with tests",
+                constraints=["Write tests"],
+                relevant_files=["feature.py"],
+            )
+        )
 
-        with patch.object(orchestrator.router, 'route_to_agent', new_callable=AsyncMock) as mock_route:
+        with patch.object(
+            orchestrator.router, "route_to_agent", new_callable=AsyncMock
+        ) as mock_route:
             mock_route.return_value = AgentRoute(
                 target_agent="coder",
                 confidence=0.9,
                 reasoning="Test",
-                task_brief="Implement feature"
+                task_brief="Implement feature",
             )
 
             # Execute dispatch
             response = await orchestrator.dispatch(
-                "Implement a new feature in feature.py",
-                history=[]
+                "Implement a new feature in feature.py", history=[]
             )
 
             # Verify complete flow
@@ -300,19 +314,17 @@ class TestOrchestratorIntegrationFlow:
         orchestrator = Orchestrator()
 
         # Mock router to return valid route
-        orchestrator.router.route_to_agent = AsyncMock(return_value=AgentRoute(
-            target_agent="coder",
-            confidence=0.9,
-            reasoning="Test",
-            task_brief="Test task"
-        ))
+        orchestrator.router.route_to_agent = AsyncMock(
+            return_value=AgentRoute(
+                target_agent="coder", confidence=0.9, reasoning="Test", task_brief="Test task"
+            )
+        )
 
-        with patch.object(orchestrator.router, 'route_to_agent', new_callable=AsyncMock) as mock_route:
+        with patch.object(
+            orchestrator.router, "route_to_agent", new_callable=AsyncMock
+        ) as mock_route:
             mock_route.return_value = AgentRoute(
-                target_agent="coder",
-                confidence=0.9,
-                reasoning="Test",
-                task_brief="Test task"
+                target_agent="coder", confidence=0.9, reasoning="Test", task_brief="Test task"
             )
 
             # Should not raise, should return error message
@@ -327,6 +339,7 @@ class TestOrchestratorIntegrationFlow:
 # =============================================================================
 # Phase 15: Feedback Loop Tests
 # =============================================================================
+
 
 class TestFeedbackLoop:
     """Test Phase 15 Feedback Loop (Virtuous Cycle)."""
@@ -343,7 +356,7 @@ class TestFeedbackLoop:
             target_agent="coder",
             confidence=0.9,
             reasoning="Test",
-            task_brief="Write a simple function"
+            task_brief="Write a simple function",
         )
 
         # Directly set up the mock on router before dispatch
@@ -355,25 +368,27 @@ class TestFeedbackLoop:
 
         coder_instance = MagicMock()
         coder_instance.name = "coder"
-        coder_instance.run = AsyncMock(return_value=MagicMock(
-            success=True,
-            content="def hello():\n    return 'Hello, World!'",
-            confidence=0.85
-        ))
+        coder_instance.run = AsyncMock(
+            return_value=MagicMock(
+                success=True, content="def hello():\n    return 'Hello, World!'", confidence=0.85
+            )
+        )
 
-        with patch.object(CoderAgent, '__init__', return_value=None):
-            with patch.object(CoderAgent, 'run', coder_instance.run):
+        with patch.object(CoderAgent, "__init__", return_value=None):
+            with patch.object(CoderAgent, "run", coder_instance.run):
                 # Mock reviewer's audit to approve
-                with patch.object(ReviewerAgent, '__init__', return_value=None):
+                with patch.object(ReviewerAgent, "__init__", return_value=None):
                     reviewer_instance = MagicMock()
-                    reviewer_instance.audit = AsyncMock(return_value=MagicMock(
-                        approved=True,
-                        feedback="Output meets quality standards.",
-                        confidence=0.9,
-                        issues_found=[],
-                        suggestions=[]
-                    ))
-                    with patch.object(ReviewerAgent, 'audit', reviewer_instance.audit):
+                    reviewer_instance.audit = AsyncMock(
+                        return_value=MagicMock(
+                            approved=True,
+                            feedback="Output meets quality standards.",
+                            confidence=0.9,
+                            issues_found=[],
+                            suggestions=[],
+                        )
+                    )
+                    with patch.object(ReviewerAgent, "audit", reviewer_instance.audit):
                         response = await orchestrator.dispatch("Write a hello function", history=[])
 
                         # Should return the worker's content
@@ -390,10 +405,7 @@ class TestFeedbackLoop:
 
         # Create the route
         coder_route = AgentRoute(
-            target_agent="coder",
-            confidence=0.9,
-            reasoning="Test",
-            task_brief="Write a function"
+            target_agent="coder", confidence=0.9, reasoning="Test", task_brief="Write a function"
         )
         orchestrator.router.route_to_agent = AsyncMock(return_value=coder_route)
 
@@ -405,13 +417,13 @@ class TestFeedbackLoop:
             return MagicMock(
                 success=True,
                 content=f"Attempt {call_count}: def test():\n    pass",
-                confidence=0.85
+                confidence=0.85,
             )
 
-        with patch.object(CoderAgent, '__init__', return_value=None):
-            with patch.object(CoderAgent, 'run', side_effect=mock_run):
+        with patch.object(CoderAgent, "__init__", return_value=None):
+            with patch.object(CoderAgent, "run", side_effect=mock_run):
                 # First audit rejects, second approves
-                with patch.object(ReviewerAgent, '__init__', return_value=None):
+                with patch.object(ReviewerAgent, "__init__", return_value=None):
                     reviewer_instance = MagicMock()
                     audit_responses = [
                         MagicMock(
@@ -419,18 +431,18 @@ class TestFeedbackLoop:
                             feedback="Missing docstring.",
                             confidence=0.6,
                             issues_found=["missing_docstring"],
-                            suggestions=["Add a docstring to the function"]
+                            suggestions=["Add a docstring to the function"],
                         ),
                         MagicMock(
                             approved=True,
                             feedback="Output meets quality standards.",
                             confidence=0.9,
                             issues_found=[],
-                            suggestions=[]
-                        )
+                            suggestions=[],
+                        ),
                     ]
                     reviewer_instance.audit = AsyncMock(side_effect=audit_responses)
-                    with patch.object(ReviewerAgent, 'audit', reviewer_instance.audit):
+                    with patch.object(ReviewerAgent, "audit", reviewer_instance.audit):
                         response = await orchestrator.dispatch("Write a function", history=[])
 
                         # Worker should have been called twice (initial + retry)
@@ -447,25 +459,22 @@ class TestFeedbackLoop:
 
         # Create the route
         coder_route = AgentRoute(
-            target_agent="coder",
-            confidence=0.9,
-            reasoning="Test",
-            task_brief="Write a function"
+            target_agent="coder", confidence=0.9, reasoning="Test", task_brief="Write a function"
         )
         orchestrator.router.route_to_agent = AsyncMock(return_value=coder_route)
 
-        with patch.object(CoderAgent, '__init__', return_value=None):
+        with patch.object(CoderAgent, "__init__", return_value=None):
             coder_instance = MagicMock()
-            coder_instance.run = AsyncMock(return_value=MagicMock(
-                success=True,
-                content="def test():\n    return True",
-                confidence=0.85
-            ))
-            with patch.object(CoderAgent, 'run', coder_instance.run):
+            coder_instance.run = AsyncMock(
+                return_value=MagicMock(
+                    success=True, content="def test():\n    return True", confidence=0.85
+                )
+            )
+            with patch.object(CoderAgent, "run", coder_instance.run):
                 # Patch reviewer to track if audit is called
-                with patch.object(ReviewerAgent, '__init__', return_value=None):
+                with patch.object(ReviewerAgent, "__init__", return_value=None):
                     reviewer_instance = MagicMock()
-                    with patch.object(ReviewerAgent, 'audit', reviewer_instance.audit):
+                    with patch.object(ReviewerAgent, "audit", reviewer_instance.audit):
                         response = await orchestrator.dispatch("Write a function", history=[])
 
                         # Audit should NOT be called when feedback is disabled
@@ -481,10 +490,7 @@ class TestFeedbackLoop:
 
         # Create the route
         coder_route = AgentRoute(
-            target_agent="coder",
-            confidence=0.9,
-            reasoning="Test",
-            task_brief="Write a function"
+            target_agent="coder", confidence=0.9, reasoning="Test", task_brief="Write a function"
         )
         orchestrator.router.route_to_agent = AsyncMock(return_value=coder_route)
 
@@ -496,22 +502,24 @@ class TestFeedbackLoop:
             return MagicMock(
                 success=True,
                 content=f"Attempt {call_count}: def test():\n    pass",
-                confidence=0.85
+                confidence=0.85,
             )
 
-        with patch.object(CoderAgent, '__init__', return_value=None):
-            with patch.object(CoderAgent, 'run', side_effect=mock_run):
+        with patch.object(CoderAgent, "__init__", return_value=None):
+            with patch.object(CoderAgent, "run", side_effect=mock_run):
                 # All audits reject
-                with patch.object(ReviewerAgent, '__init__', return_value=None):
+                with patch.object(ReviewerAgent, "__init__", return_value=None):
                     reviewer_instance = MagicMock()
-                    reviewer_instance.audit = AsyncMock(return_value=MagicMock(
-                        approved=False,
-                        feedback="Code quality issues.",
-                        confidence=0.5,
-                        issues_found=["style_issues", "missing_type_hints"],
-                        suggestions=["Fix style", "Add type hints"]
-                    ))
-                    with patch.object(ReviewerAgent, 'audit', reviewer_instance.audit):
+                    reviewer_instance.audit = AsyncMock(
+                        return_value=MagicMock(
+                            approved=False,
+                            feedback="Code quality issues.",
+                            confidence=0.5,
+                            issues_found=["style_issues", "missing_type_hints"],
+                            suggestions=["Fix style", "Add type hints"],
+                        )
+                    )
+                    with patch.object(ReviewerAgent, "audit", reviewer_instance.audit):
                         response = await orchestrator.dispatch("Write a function", history=[])
 
                         # Should have attempted max_retries times
@@ -528,10 +536,7 @@ class TestFeedbackLoop:
 
         # Create the route for reviewer
         reviewer_route = AgentRoute(
-            target_agent="reviewer",
-            confidence=0.9,
-            reasoning="Test",
-            task_brief="Review the code"
+            target_agent="reviewer", confidence=0.9, reasoning="Test", task_brief="Review the code"
         )
         orchestrator.router.route_to_agent = AsyncMock(return_value=reviewer_route)
 
@@ -543,17 +548,15 @@ class TestFeedbackLoop:
             coder_run_called = True
             return MagicMock(success=True, content="", confidence=0.85)
 
-        with patch.object(ReviewerAgent, '__init__', return_value=None):
+        with patch.object(ReviewerAgent, "__init__", return_value=None):
             reviewer_instance = MagicMock()
             reviewer_instance.name = "reviewer"
-            reviewer_instance.run = AsyncMock(return_value=MagicMock(
-                success=True,
-                content="Code looks good.",
-                confidence=0.85
-            ))
-            with patch.object(ReviewerAgent, 'run', reviewer_instance.run):
-                with patch.object(CoderAgent, '__init__', return_value=None):
-                    with patch.object(CoderAgent, 'run', mock_coder_run):
+            reviewer_instance.run = AsyncMock(
+                return_value=MagicMock(success=True, content="Code looks good.", confidence=0.85)
+            )
+            with patch.object(ReviewerAgent, "run", reviewer_instance.run):
+                with patch.object(CoderAgent, "__init__", return_value=None):
+                    with patch.object(CoderAgent, "run", mock_coder_run):
                         response = await orchestrator.dispatch("Review the code", history=[])
 
                         # Coder should not be involved in reviewer tasks
@@ -573,7 +576,7 @@ class TestAuditResult:
             feedback="Great work!",
             confidence=0.95,
             issues_found=[],
-            suggestions=["Consider adding tests"]
+            suggestions=["Consider adding tests"],
         )
 
         assert result.approved is True
@@ -590,7 +593,7 @@ class TestAuditResult:
             feedback="Missing error handling",
             confidence=0.6,
             issues_found=["no_error_handling", "missing_validation"],
-            suggestions=["Add try-except blocks", "Validate inputs"]
+            suggestions=["Add try-except blocks", "Validate inputs"],
         )
 
         assert result.approved is False

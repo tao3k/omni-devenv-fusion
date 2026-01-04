@@ -10,6 +10,7 @@ Features:
 - Environment variable loading
 - Common helper functions
 """
+
 import json
 import logging
 import os
@@ -22,6 +23,7 @@ import structlog
 # =============================================================================
 # Logging Setup
 # =============================================================================
+
 
 def setup_logging(
     level: str = "INFO",
@@ -94,6 +96,7 @@ def get_logger(name: str = "mcp") -> structlog.BoundLogger:
 # Decision Logging (for MCP tool audit trail)
 # =============================================================================
 
+
 def log_decision(event: str, payload: Dict[str, Any], logger: structlog.BoundLogger = None) -> None:
     """
     Log a decision/event with structured payload.
@@ -114,6 +117,7 @@ def log_decision(event: str, payload: Dict[str, Any], logger: structlog.BoundLog
 # =============================================================================
 # Path Safety Utilities
 # =============================================================================
+
 
 def is_safe_path(
     path: str,
@@ -211,6 +215,7 @@ def is_safe_command(command: str, allowed_commands: Dict[str, list] = None) -> t
 # Environment Variable Loading
 # =============================================================================
 
+
 def load_env_from_file(
     config_key: str = None,
     env_key: str = None,
@@ -283,7 +288,10 @@ def get_env(key: str, env_vars: Dict[str, str] = None, default: str = None) -> s
 # File Operations
 # =============================================================================
 
-def read_file_safely(path: str, max_size: int = 100 * 1024, project_root: Path = None) -> tuple[bool, str]:
+
+def read_file_safely(
+    path: str, max_size: int = 100 * 1024, project_root: Path = None
+) -> tuple[bool, str]:
     """
     Safely read a file within project boundaries.
 
@@ -376,6 +384,7 @@ def write_file_safely(
 # =============================================================================
 # Async Helpers
 # =============================================================================
+
 
 async def run_subprocess(
     command: str,

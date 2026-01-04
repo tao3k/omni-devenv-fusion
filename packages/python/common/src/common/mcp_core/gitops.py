@@ -29,6 +29,7 @@ GitOps Utilities:
     - get_src_dir(): Get src directory
     - run_git_cmd(): Run git command (for commit/push only)
 """
+
 import subprocess
 from pathlib import Path
 from typing import List, Optional
@@ -171,9 +172,7 @@ def is_project_root(path: Path) -> bool:
         True if this appears to be the project root
     """
     return (
-        (path / ".git").exists() or
-        (path / "justfile").exists() or
-        (path / "devenv.nix").exists()
+        (path / ".git").exists() or (path / "justfile").exists() or (path / "devenv.nix").exists()
     )
 
 

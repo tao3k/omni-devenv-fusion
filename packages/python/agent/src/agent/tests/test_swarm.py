@@ -11,6 +11,7 @@ Tests for:
 Usage:
     python -m pytest packages/python/agent/src/agent/tests/test_swarm.py -v
 """
+
 import pytest
 import asyncio
 import time
@@ -237,6 +238,7 @@ class TestSwarmMockScenarios:
 # Performance Tests
 # =============================================================================
 
+
 class TestSwarmPerformance:
     """Performance benchmarks for swarm monitoring."""
 
@@ -270,6 +272,7 @@ class TestSwarmPerformance:
 # Documentation Example Tests
 # These tests demonstrate the usage patterns from the documentation
 # =============================================================================
+
 
 class TestSwarmDocumentationExamples:
     """Tests demonstrating documented usage scenarios."""

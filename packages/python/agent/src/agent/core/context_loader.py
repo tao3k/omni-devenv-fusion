@@ -7,6 +7,7 @@ Responsible for hydrating the Agent's context from configuration and local overr
 Phase 13.9: Context Injection - Auto-inject Git status for zero-click awareness.
 Follows the Configuration vs Code separation principle.
 """
+
 import subprocess
 from pathlib import Path
 import structlog
@@ -53,22 +54,19 @@ class ContextLoader:
                 ["git", "branch", "--show-current"],
                 cwd=self.root,
                 text=True,
-                stderr=subprocess.DEVNULL
+                stderr=subprocess.DEVNULL,
             ).strip()
 
             # 2. Get short status
             status = subprocess.check_output(
-                ["git", "status", "--short"],
-                cwd=self.root,
-                text=True,
-                stderr=subprocess.DEVNULL
+                ["git", "status", "--short"], cwd=self.root, text=True, stderr=subprocess.DEVNULL
             ).strip()
 
             if not status:
                 return f"🟢 Git Branch: `{branch}` (Clean)"
 
             # Limit output to prevent context explosion
-            lines = status.split('\n')
+            lines = status.split("\n")
             if len(lines) > 15:
                 display = "\n".join(lines[:15]) + f"\n... ({len(lines) - 15} more files)"
             else:

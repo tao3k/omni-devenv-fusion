@@ -15,6 +15,7 @@ Usage:
     python scripts/test_router.py --query "commit my changes"        # Single query test
     python scripts/test_router.py --cache                            # Test cache behavior
 """
+
 import asyncio
 import argparse
 import sys
@@ -31,9 +32,9 @@ async def test_router(query: str):
     """Test the semantic router with a single query."""
     router = get_router()
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"QUERY: {query}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     result = await router.route(query)
 
@@ -45,7 +46,7 @@ async def test_router(query: str):
     print(f"   {result.mission_brief}")
     print(f"\n💭 REASONING:")
     print(f"   {result.reasoning}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     return result
 
@@ -81,7 +82,7 @@ async def test_cache_behavior():
     for _ in range(5):
         await router.route(query)
     elapsed = time.time() - start
-    print(f"   5 cached calls: {elapsed*1000:.1f}ms (should be near-instant)")
+    print(f"   5 cached calls: {elapsed * 1000:.1f}ms (should be near-instant)")
 
     print("=" * 60)
 
@@ -110,7 +111,10 @@ async def test_mission_brief():
 
         # Check brief quality
         brief = result.mission_brief
-        brief_has_action = any(word in brief.lower() for word in ['use', 'fix', 'commit', 'write', 'search', 'create', 'read'])
+        brief_has_action = any(
+            word in brief.lower()
+            for word in ["use", "fix", "commit", "write", "search", "create", "read"]
+        )
         brief_not_generic = len(brief) > 20  # Should be more than generic text
 
         passed = skills_ok and brief_has_action and brief_not_generic
@@ -278,9 +282,9 @@ async def interactive_test():
 
     while True:
         query = input("You: ").strip()
-        if query.lower() in ('quit', 'exit', 'q'):
+        if query.lower() in ("quit", "exit", "q"):
             break
-        if query.lower() == 'cache':
+        if query.lower() == "cache":
             await test_cache_behavior()
             continue
 
@@ -297,8 +301,15 @@ async def main():
     parser.add_argument("--all", "-a", action="store_true", help="Run all test cases")
     parser.add_argument("--cache", "-c", action="store_true", help="Test cache behavior")
     parser.add_argument("--brief", "-b", action="store_true", help="Test mission brief quality")
-    parser.add_argument("--skills", "-s", type=str, help="Run tests for specific skills (comma-separated, e.g., git,filesystem)")
-    parser.add_argument("--list-skills", "-l", action="store_true", help="List available skill groups")
+    parser.add_argument(
+        "--skills",
+        "-s",
+        type=str,
+        help="Run tests for specific skills (comma-separated, e.g., git,filesystem)",
+    )
+    parser.add_argument(
+        "--list-skills", "-l", action="store_true", help="List available skill groups"
+    )
 
     args = parser.parse_args()
 

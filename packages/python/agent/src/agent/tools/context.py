@@ -8,6 +8,7 @@ Tools:
 - manage_context: Read/update project context
 - get_project_instructions: Get project instructions
 """
+
 import asyncio
 from typing import Any, Dict, Optional
 
@@ -24,6 +25,7 @@ logger = structlog.get_logger(__name__)
 
 # Initialize project memory (singleton)
 project_memory = ProjectMemory()
+
 
 # For log_decision calls
 def log_decision(event: str, data: Dict[str, Any], _logger) -> None:
@@ -86,17 +88,19 @@ def register_context_tools(mcp: FastMCP) -> None:
                 # Show last 30 lines for context
                 recent_logs = "\n".join(lines[-30:])
                 if recent_logs:
-                    recent_logs = f"\n\nRecent Activity (last 30 lines of SCRATCHPAD.md):\n{recent_logs}"
+                    recent_logs = (
+                        f"\n\nRecent Activity (last 30 lines of SCRATCHPAD.md):\n{recent_logs}"
+                    )
 
             return f"""=== 📋 Omni-DevEnv Fusion - Active Context ===
 
 🎯 Current Mission:
-{status.get('mission', 'No active mission')}
+{status.get("mission", "No active mission")}
 
-📍 Phase: {status.get('phase', 'Unknown')}
-🔍 Focus: {status.get('focus', 'Not specified')}
+📍 Phase: {status.get("phase", "Unknown")}
+🔍 Focus: {status.get("focus", "Not specified")}
 
-📋 Backlog: {status.get('backlog', 'Empty')}
+📋 Backlog: {status.get("backlog", "Empty")}
 
 {recent_logs}
 
@@ -169,7 +173,9 @@ def register_context_tools(mcp: FastMCP) -> None:
         else:
             all_instructions = get_all_instructions_merged()
             if all_instructions:
-                log_decision("get_project_instructions.all", {"count": len(list_instruction_names())}, logger)
+                log_decision(
+                    "get_project_instructions.all", {"count": len(list_instruction_names())}, logger
+                )
                 return f"=== Project Instructions (All) ===\n\n{all_instructions}"
             return "No project instructions available."
 

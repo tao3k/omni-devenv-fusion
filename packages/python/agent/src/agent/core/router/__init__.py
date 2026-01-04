@@ -12,6 +12,7 @@ Modules:
 Usage:
     from agent.core.router import get_router, get_hive_router, RoutingResult, AgentRoute
 """
+
 from agent.core.router.models import (
     RoutingResult,
     AgentRoute,

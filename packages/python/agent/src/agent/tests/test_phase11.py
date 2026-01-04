@@ -10,6 +10,7 @@ Reference: agent/specs/phase11_neural_matrix.md
 
 In uv workspace, packages are installed and can be imported directly.
 """
+
 import pytest
 from pathlib import Path
 
@@ -27,6 +28,7 @@ from agent.core.schema import (
 # Schema Tests
 # =============================================================================
 
+
 class TestSpecGapAnalysis:
     """Tests for SpecGapAnalysis schema."""
 
@@ -38,7 +40,7 @@ class TestSpecGapAnalysis:
             completeness_score=85,
             missing_sections=["Security"],
             has_template_placeholders=False,
-            test_plan_defined=True
+            test_plan_defined=True,
         )
         assert gap.spec_exists is True
         assert gap.completeness_score == 85
@@ -52,7 +54,7 @@ class TestSpecGapAnalysis:
             completeness_score=0,
             missing_sections=["all"],
             has_template_placeholders=False,
-            test_plan_defined=False
+            test_plan_defined=False,
         )
         assert gap.spec_exists is False
         assert gap.completeness_score == 0
@@ -69,14 +71,14 @@ class TestLegislationDecision:
             completeness_score=90,
             missing_sections=[],
             has_template_placeholders=False,
-            test_plan_defined=True
+            test_plan_defined=True,
         )
         decision = LegislationDecision(
             decision="allowed",
             reasoning="Spec is complete",
             required_action="proceed_to_code",
             gap_analysis=gap,
-            spec_path="agent/specs/test.md"
+            spec_path="agent/specs/test.md",
         )
         assert decision.decision == "allowed"
         assert decision.required_action == "proceed_to_code"
@@ -93,7 +95,7 @@ class TestFeatureComplexity:
             definition="Typos, config tweaks",
             rationale="Documentation only change",
             test_requirements="just lint",
-            examples=["Fix typo", "Update README"]
+            examples=["Fix typo", "Update README"],
         )
         assert complexity.level == ComplexityLevel.L1
         assert complexity.level.value == "L1"
@@ -102,6 +104,7 @@ class TestFeatureComplexity:
 # =============================================================================
 # Router Domain Tests
 # =============================================================================
+
 
 class TestRouterDomain:
     """Tests for RouterDomain enum."""
@@ -121,12 +124,14 @@ class TestRouterDomain:
 # Phase 13.8: Configuration-Driven Context Tests
 # =============================================================================
 
+
 class TestContextLoader:
     """Tests for Configuration-Driven Context (Phase 13.8)."""
 
     def test_context_loader_exists(self):
         """Verify context_loader module exists."""
         from agent.core.context_loader import ContextLoader, load_system_context
+
         assert ContextLoader is not None
         assert callable(load_system_context)
 
@@ -177,6 +182,7 @@ class TestContextLoader:
 # =============================================================================
 # Phase 13.9: Git Status Injection Tests
 # =============================================================================
+
 
 class TestGitStatusInjection:
     """Tests for Phase 13.9 Context Injection."""
@@ -254,7 +260,9 @@ class TestGitSkill:
         # Should have: git_stage_all (with security scan), git_commit, git_push
         # Exclude private functions (starting with _)
         public_tools = [name for name in tool_names if not name.startswith("_")]
-        assert public_tools == ["git_stage_all", "git_commit", "git_push"], f"Expected git_stage_all, git_commit and git_push, found: {public_tools}"
+        assert public_tools == ["git_stage_all", "git_commit", "git_push"], (
+            f"Expected git_stage_all, git_commit and git_push, found: {public_tools}"
+        )
 
     def test_git_commit_has_message_param(self):
         """Verify git_commit has message parameter."""
@@ -343,12 +351,14 @@ class TestGitSkill:
 # Phase 13.10: Config-Driven Skill Loading Tests
 # =============================================================================
 
+
 class TestSkillRegistry:
     """Tests for Config-Driven Skill Loading (Phase 13.10)."""
 
     def test_skill_registry_exists(self):
         """Verify skill registry module exists."""
         from agent.core.skill_registry import get_skill_registry, SkillRegistry
+
         assert get_skill_registry is not None
         assert SkillRegistry is not None
 
@@ -447,6 +457,7 @@ class TestSkillRegistry:
 # Phase 13.10: Knowledge Skill Tests
 # =============================================================================
 
+
 class TestKnowledgeSkill:
     """Tests for Knowledge Skill (Project Cortex)."""
 
@@ -474,7 +485,7 @@ class TestKnowledgeSkill:
             "consult_architecture_doc",
             "consult_language_expert",
             "get_language_standards",
-            "list_supported_languages"
+            "list_supported_languages",
         ]
 
         for tool in expected_tools:
@@ -512,6 +523,7 @@ class TestKnowledgeSkill:
 # Phase 13.10: Writer Skill Tests
 # =============================================================================
 
+
 class TestWriterSkill:
     """Tests for Writer Skill (Writing Quality)."""
 
@@ -538,7 +550,7 @@ class TestWriterSkill:
             "check_markdown_structure",
             "polish_text",
             "load_writing_memory",
-            "run_vale_check"
+            "run_vale_check",
         ]
 
         for tool in expected_tools:
@@ -564,6 +576,7 @@ class TestWriterSkill:
 # =============================================================================
 # Phase 13.10: Memory Skill Tests (Hippocampus Interface)
 # =============================================================================
+
 
 class TestMemorySkill:
     """Tests for Memory Skill (Vector-based Memory)."""
@@ -592,7 +605,7 @@ class TestMemorySkill:
             "recall",
             "list_harvested_knowledge",
             "harvest_session_insight",
-            "get_memory_stats"
+            "get_memory_stats",
         ]
 
         for tool in expected_tools:

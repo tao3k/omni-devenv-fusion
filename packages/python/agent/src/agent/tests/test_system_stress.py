@@ -13,6 +13,7 @@ Scenarios:
 2. The Shape Shifter: Rapid skill context switching.
 3. The Memory Flood: RAG performance under load.
 """
+
 import pytest
 import time
 import asyncio
@@ -32,6 +33,7 @@ from mcp.server.fastmcp import FastMCP
 # -----------------------------------------------------------------------------
 # Fixtures
 # -----------------------------------------------------------------------------
+
 
 @pytest.fixture
 def system_components():
@@ -73,6 +75,7 @@ def skills_for_testing():
 # -----------------------------------------------------------------------------
 # Scenario 1: The Shape Shifter (Context Switching Stress)
 # -----------------------------------------------------------------------------
+
 
 class TestContextSwitching:
     """Test rapid loading/unloading of skills."""
@@ -165,6 +168,7 @@ class TestContextSwitching:
 # Scenario 2: The Memory Flood (RAG Saturation)
 # -----------------------------------------------------------------------------
 
+
 class TestMemorySaturation:
     """Test system performance when memory is full."""
 
@@ -179,20 +183,20 @@ class TestMemorySaturation:
         doc_count = 500
         print(f"\n🌊 Flooding Memory with {doc_count} documents...")
 
-        docs = [f"Knowledge entry number {i} regarding python optimization and system architecture patterns." for i in range(doc_count)]
+        docs = [
+            f"Knowledge entry number {i} regarding python optimization and system architecture patterns."
+            for i in range(doc_count)
+        ]
         ids = [f"doc_{i}" for i in range(doc_count)]
         metadatas = [{"type": "stress_test", "index": i} for i in range(doc_count)]
 
         start_ingest = time.perf_counter()
         success = await memory.add(
-            documents=docs,
-            ids=ids,
-            metadatas=metadatas,
-            collection=col_name
+            documents=docs, ids=ids, metadatas=metadatas, collection=col_name
         )
         ingest_time = time.perf_counter() - start_ingest
 
-        print(f"🌊 Ingested in {ingest_time:.2f}s ({(ingest_time/doc_count)*1000:.4f}ms/doc)")
+        print(f"🌊 Ingested in {ingest_time:.2f}s ({(ingest_time / doc_count) * 1000:.4f}ms/doc)")
         assert success, "Document ingestion failed"
 
         # 2. Stress Query
@@ -237,10 +241,7 @@ class TestMemorySaturation:
         start_time = time.perf_counter()
         for _ in range(50):
             results = await memory.search(
-                "code pattern",
-                n_results=10,
-                collection=col_name,
-                where_filter={"domain": "python"}
+                "code pattern", n_results=10, collection=col_name, where_filter={"domain": "python"}
             )
             # Results should be filtered
             for r in results:
@@ -273,7 +274,9 @@ class TestMemorySaturation:
         avg_latency = sum(latencies) / len(latencies)
         max_latency = max(latencies)
 
-        print(f"✅ Concurrent search passed. Total: {total_time:.2f}s, Avg: {avg_latency:.2f}ms, Max: {max_latency:.2f}ms")
+        print(
+            f"✅ Concurrent search passed. Total: {total_time:.2f}s, Avg: {avg_latency:.2f}ms, Max: {max_latency:.2f}ms"
+        )
 
         assert avg_latency < 150, f"Concurrent search too slow: {avg_latency:.2f}ms avg"
 
@@ -281,6 +284,7 @@ class TestMemorySaturation:
 # -----------------------------------------------------------------------------
 # Scenario 3: The Marathon (Endurance Integration)
 # -----------------------------------------------------------------------------
+
 
 class TestSystemEndurance:
     """Simulate a long-running, multi-step workflow."""
@@ -312,30 +316,30 @@ class TestSystemEndurance:
                 "category": random.choice(["CODE_PATTERN", "ARCHITECTURAL_DECISION", "WORKFLOW"]),
                 "context": f"Learning from iteration {i}",
                 "solution": "Keep iterating",
-                "takeaways": [f"Lesson {i}: Persistence matters"]
+                "takeaways": [f"Lesson {i}: Persistence matters"],
             }
 
             # Step 4: Save to Memory (Simulate Harvester)
             insight_doc = f"""
-# {insight['title']}
+# {insight["title"]}
 
-**Category**: {insight['category']}
+**Category**: {insight["category"]}
 **Turn**: {i}
 
 ## Context
-{insight['context']}
+{insight["context"]}
 
 ## Solution
-{insight['solution']}
+{insight["solution"]}
 
 ## Key Takeaways
-- {insight['takeaways'][0]}
+- {insight["takeaways"][0]}
 """
             await memory.add(
                 documents=[insight_doc],
                 ids=[f"marathon_{i}"],
                 metadatas={"type": "harvested", "turn": i},
-                collection=col_name
+                collection=col_name,
             )
 
             # Step 5: Recall (Validation)
@@ -346,7 +350,9 @@ class TestSystemEndurance:
             await asyncio.sleep(0.01)
 
         total_time = time.perf_counter() - start_time
-        print(f"✅ Marathon Passed. {turns} turns in {total_time:.2f}s ({total_time/turns*1000:.1f}ms/turn)")
+        print(
+            f"✅ Marathon Passed. {turns} turns in {total_time:.2f}s ({total_time / turns * 1000:.1f}ms/turn)"
+        )
 
         # Verify System Integrity
         assert "git" in registry.loaded_skills
@@ -366,13 +372,13 @@ class TestSystemEndurance:
         for i in range(operations):
             # Write
             await memory.add(
-                documents=[f"Persistence test doc {i}"],
-                ids=[f"persist_{i}"],
-                collection=col_name
+                documents=[f"Persistence test doc {i}"], ids=[f"persist_{i}"], collection=col_name
             )
 
             # Read (verify it exists)
-            results = await memory.search(f"Persistence test doc {i}", n_results=1, collection=col_name)
+            results = await memory.search(
+                f"Persistence test doc {i}", n_results=1, collection=col_name
+            )
             assert len(results) >= 1, f"Failed to read back doc {i}"
 
             if i % 50 == 0:
@@ -393,7 +399,7 @@ class TestSystemEndurance:
         # 2. Create skill-specific memory entries
         skill_memory = {
             "git": ["git commit workflow", "smart commit protocol", "branch management"],
-            "filesystem": ["file operations", "directory traversal"]
+            "filesystem": ["file operations", "directory traversal"],
         }
 
         for skill, keywords in skill_memory.items():
@@ -403,16 +409,13 @@ class TestSystemEndurance:
                         documents=[f"Knowledge about {keyword} for {skill}"],
                         ids=[f"{skill}_{keyword.replace(' ', '_')}"],
                         metadatas={"skill": skill, "keyword": keyword},
-                        collection=col_name
+                        collection=col_name,
                     )
 
         # 3. Query skill-specific knowledge
         for skill in registry.loaded_skills.keys():
             results = await memory.search(
-                f"{skill} workflow",
-                n_results=5,
-                collection=col_name,
-                where_filter={"skill": skill}
+                f"{skill} workflow", n_results=5, collection=col_name, where_filter={"skill": skill}
             )
             print(f"  📚 {skill}: Found {len(results)} related memories")
 
@@ -422,6 +425,7 @@ class TestSystemEndurance:
 # -----------------------------------------------------------------------------
 # Scenario 4: Chaos Testing (Edge Cases)
 # -----------------------------------------------------------------------------
+
 
 class TestChaosScenarios:
     """Test extreme edge cases and recovery."""
@@ -448,11 +452,7 @@ class TestChaosScenarios:
 
         # Add documents
         for i in range(20):
-            await memory.add(
-                documents=[f"To delete {i}"],
-                ids=[f"delete_{i}"],
-                collection=col_name
-            )
+            await memory.add(documents=[f"To delete {i}"], ids=[f"delete_{i}"], collection=col_name)
 
         # Delete them rapidly
         for i in range(20):
@@ -476,15 +476,11 @@ class TestChaosScenarios:
             "Emoji test 🚀🔥",
             "Russian текст",
             "Emoji chain 🔴🟡🟢🔵",
-            "Mixed 中文 + English + emojis 🎉"
+            "Mixed 中文 + English + emojis 🎉",
         ]
 
         for i, doc in enumerate(unicode_docs):
-            await memory.add(
-                documents=[doc],
-                ids=[f"unicode_{i}"],
-                collection=col_name
-            )
+            await memory.add(documents=[doc], ids=[f"unicode_{i}"], collection=col_name)
 
         # Query should handle unicode
         results = await memory.search("测试", n_results=5, collection=col_name)
@@ -495,4 +491,5 @@ class TestChaosScenarios:
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(pytest.main(["-v", "-s", __file__]))

@@ -21,6 +21,7 @@ Usage:
 
 Performance: Uses singleton caching - design docs loaded once per session from docs/.
 """
+
 import json
 import subprocess
 from pathlib import Path
@@ -29,6 +30,7 @@ from typing import Dict, Any, Optional, List
 # Phase 11: PydanticAI imports (lazy loaded for backward compatibility)
 try:
     from pydantic import BaseModel
+
     PYDANTIC_AVAILABLE = True
 except ImportError:
     PYDANTIC_AVAILABLE = False
@@ -41,12 +43,14 @@ from common.mcp_core.memory import ProjectMemory
 # Singleton Cache - Design docs loaded once per MCP session
 # =============================================================================
 
+
 class DesignDocsCache:
     """
     Singleton cache for design documents.
     Design docs are loaded from docs/ directory on first access,
     then cached in memory for the lifetime of the MCP server.
     """
+
     _instance = None
     _loaded = False
 
@@ -73,8 +77,14 @@ class DesignDocsCache:
         explanation_dir = docs_dir / "explanation"
         key_docs = [
             ("design-philosophy", "design-philosophy.md"),  # docs/explanation/design-philosophy.md
-            ("mcp-architecture-roadmap", "mcp-architecture-roadmap.md"),  # docs/explanation/mcp-architecture-roadmap.md
-            ("why-custom-mcp-architecture", "why-custom-mcp-architecture.md"),  # docs/explanation/why-custom-mcp-architecture.md
+            (
+                "mcp-architecture-roadmap",
+                "mcp-architecture-roadmap.md",
+            ),  # docs/explanation/mcp-architecture-roadmap.md
+            (
+                "why-custom-mcp-architecture",
+                "why-custom-mcp-architecture.md",
+            ),  # docs/explanation/why-custom-mcp-architecture.md
         ]
 
         for doc_name, doc_file in key_docs:
@@ -115,46 +125,56 @@ COMPLEXITY_LEVELS = {
         "name": "Trivial",
         "definition": "Typos, config tweaks, doc updates",
         "tests": "None (linting only)",
-        "examples": "Fix typo, update README, change comment"
+        "examples": "Fix typo, update README, change comment",
     },
     "L2": {
         "name": "Minor",
         "definition": "New utility function, minor tweak",
         "tests": "Unit Tests",
-        "examples": "Add helper function, refactor internal method"
+        "examples": "Add helper function, refactor internal method",
     },
     "L3": {
         "name": "Major",
         "definition": "New module, API, or DB schema change",
         "tests": "Unit + Integration Tests",
-        "examples": "New MCP tool, add API endpoint, DB migration"
+        "examples": "New MCP tool, add API endpoint, DB migration",
     },
     "L4": {
         "name": "Critical",
         "definition": "Core logic, Auth, Payments, breaking changes",
         "tests": "Unit + Integration + E2E Tests",
-        "examples": "Auth system, breaking API changes, security fixes"
-    }
+        "examples": "Auth system, breaking API changes, security fixes",
+    },
 }
 
 TEST_REQUIREMENTS = {
     "L1": "just lint (no test needed)",
     "L2": "just test-unit",
     "L3": "just test-unit && just test-int",
-    "L4": "just test-unit && just test-int && manual E2E"
+    "L4": "just test-unit && just test-int && manual E2E",
 }
 
 # Files that indicate critical functionality
 CRITICAL_PATTERNS = [
-    "auth", "login", "password", "credential",
-    "payment", "billing", "subscription",
-    "security", "encryption", "token",
-    "breaking", "migration", "schema"
+    "auth",
+    "login",
+    "password",
+    "credential",
+    "payment",
+    "billing",
+    "subscription",
+    "security",
+    "encryption",
+    "token",
+    "breaking",
+    "migration",
+    "schema",
 ]
 
 # =============================================================================
 # Phase 11: PydanticAI Schemas (Type-Safe Outputs)
 # =============================================================================
+
 
 def _get_spec_path_from_name(name: str) -> Optional[str]:
     """
@@ -177,21 +197,21 @@ def _get_spec_path_from_name(name: str) -> Optional[str]:
     candidates = set()
 
     # Candidate 1: Normalize with underscores
-    normalized = re.sub(r'[^a-zA-Z0-9]+', '_', name.lower())
-    normalized = re.sub(r'_+', '_', normalized).strip('_')
+    normalized = re.sub(r"[^a-zA-Z0-9]+", "_", name.lower())
+    normalized = re.sub(r"_+", "_", normalized).strip("_")
     candidates.add(normalized)
 
     # Candidate 2: Compact (no underscores)
-    compact = re.sub(r'[^a-z0-9]+', '', name.lower())
+    compact = re.sub(r"[^a-z0-9]+", "", name.lower())
     candidates.add(compact)
 
     # Candidate 3: Handle "Phase X" prefix
-    phase_match = re.search(r'phase\s*(\d+)', name.lower())
+    phase_match = re.search(r"phase\s*(\d+)", name.lower())
     if phase_match:
         phase_num = phase_match.group(1)
-        remaining = re.sub(r'phase\s*\d+\s*', '', name.lower())
-        remaining_underscore = re.sub(r'[^a-z0-9]+', '_', remaining)
-        remaining_underscore = re.sub(r'_+', '_', remaining_underscore).strip('_')
+        remaining = re.sub(r"phase\s*\d+\s*", "", name.lower())
+        remaining_underscore = re.sub(r"[^a-z0-9]+", "_", remaining)
+        remaining_underscore = re.sub(r"_+", "_", remaining_underscore).strip("_")
         phase_style = f"phase{phase_num}_{remaining_underscore}"
         candidates.add(phase_style)
         candidates.add(f"phase{phase_num}{remaining_underscore}")
@@ -219,7 +239,7 @@ def _analyze_spec_gap(spec_path: Optional[str]) -> Dict[str, Any]:
             "completeness_score": 0,
             "missing_sections": ["all"],
             "has_template_placeholders": False,
-            "test_plan_defined": False
+            "test_plan_defined": False,
         }
 
     path = Path(spec_path)
@@ -230,7 +250,7 @@ def _analyze_spec_gap(spec_path: Optional[str]) -> Dict[str, Any]:
             "completeness_score": 0,
             "missing_sections": ["file not found"],
             "has_template_placeholders": False,
-            "test_plan_defined": False
+            "test_plan_defined": False,
         }
 
     content = path.read_text(encoding="utf-8")
@@ -269,13 +289,14 @@ def _analyze_spec_gap(spec_path: Optional[str]) -> Dict[str, Any]:
         "completeness_score": score,
         "missing_sections": missing,
         "has_template_placeholders": has_placeholders,
-        "test_plan_defined": has_test_plan
+        "test_plan_defined": has_test_plan,
     }
 
 
 # =============================================================================
 # Helper Functions
 # =============================================================================
+
 
 def get_git_diff(staged: bool = True) -> str:
     """Get git diff for analysis."""
@@ -291,10 +312,9 @@ def get_changed_files() -> List[str]:
     """Get list of changed files."""
     try:
         result = subprocess.run(
-            ["git", "diff", "--cached", "--name-only"],
-            capture_output=True, text=True
+            ["git", "diff", "--cached", "--name-only"], capture_output=True, text=True
         )
-        return result.stdout.strip().split('\n') if result.stdout.strip() else []
+        return result.stdout.strip().split("\n") if result.stdout.strip() else []
     except Exception:
         return []
 
@@ -302,7 +322,7 @@ def get_changed_files() -> List[str]:
 def load_design_doc(filename: str) -> str:
     """Load a design document (uses cache for performance)."""
     # Remove .md extension if present
-    if filename.endswith('.md'):
+    if filename.endswith(".md"):
         filename = filename[:-3]
     return _design_cache.get_doc(filename)
 
@@ -325,19 +345,19 @@ def heuristic_complexity(files: List[str], diff: str) -> str:
 
     # Check for new modules (L3)
     if any(f.startswith("units/modules/") or f.startswith("mcp-server/") for f in files):
-        if len(diff.split('\n')) > 50:
+        if len(diff.split("\n")) > 50:
             return "L3"
 
     # Check for documentation only (L1)
-    if all(f.endswith('.md') or f.startswith('agent/') for f in files):
+    if all(f.endswith(".md") or f.startswith("agent/") for f in files):
         return "L1"
 
     # Check for nix config changes (L2-L3)
-    if any(f.endswith('.nix') for f in files):
+    if any(f.endswith(".nix") for f in files):
         return "L2"
 
     # Check for general code changes (L2)
-    if any(f.endswith('.py') for f in files):
+    if any(f.endswith(".py") for f in files):
         return "L2"
 
     return "L2"  # Default to L2
@@ -346,6 +366,7 @@ def heuristic_complexity(files: List[str], diff: str) -> str:
 # =============================================================================
 # Spec Management Functions
 # =============================================================================
+
 
 def _load_spec_template() -> str:
     """Load the Spec template (from references.yaml)."""
@@ -420,7 +441,7 @@ def _check_spec_completeness(content: str) -> List[str]:
         issues.append("Missing Verification Plan section")
 
     # Check for meaningful content
-    lines = [l for l in content.split('\n') if l.strip() and not l.strip().startswith('>')]
+    lines = [l for l in content.split("\n") if l.strip() and not l.strip().startswith(">")]
     if len(lines) < 10:
         issues.append("Spec appears too short - missing detail")
 
@@ -431,6 +452,7 @@ def _check_spec_completeness(content: str) -> List[str]:
 # MCP Tools
 # =============================================================================
 
+
 def register_product_owner_tools(mcp: Any) -> None:
     """Register all product owner tools with the MCP server."""
 
@@ -440,9 +462,7 @@ def register_product_owner_tools(mcp: Any) -> None:
 
     @mcp.tool()
     async def assess_feature_complexity(
-        code_diff: str = "",
-        files_changed: List[str] = None,
-        feature_description: str = ""
+        code_diff: str = "", files_changed: List[str] = None, feature_description: str = ""
     ) -> str:
         """
         Assess feature complexity level (L1-L4) using LLM analysis.
@@ -465,6 +485,7 @@ def register_product_owner_tools(mcp: Any) -> None:
         api_key = None
         try:
             from common.mcp_core import InferenceClient
+
             api_key = InferenceClient(api_key="", base_url="").api_key
         except Exception:
             pass
@@ -475,14 +496,13 @@ def register_product_owner_tools(mcp: Any) -> None:
                 from common.mcp_core import InferenceClient
 
                 inference = InferenceClient(
-                    api_key=api_key or "",
-                    base_url="https://api.minimax.io/anthropic"
+                    api_key=api_key or "", base_url="https://api.minimax.io/anthropic"
                 )
 
                 prompt = f"""Analyze the following code changes for complexity classification.
 
 Feature Description: {feature_description}
-Files Changed: {', '.join(files_changed) if files_changed else 'N/A'}
+Files Changed: {", ".join(files_changed) if files_changed else "N/A"}
 Code Diff: {diff[:3000]}...
 
 Classify complexity (L1-L4) based on agent/standards/feature-lifecycle.md:
@@ -498,7 +518,7 @@ Return JSON with:
                 result = await inference.complete(
                     prompt=prompt,
                     system_prompt="You are a software architect. Analyze code changes and classify complexity. Return only valid JSON.",
-                    max_tokens=500
+                    max_tokens=500,
                 )
 
                 # Try to parse LLM response
@@ -522,22 +542,25 @@ Return JSON with:
         level_info = COMPLEXITY_LEVELS.get(level, COMPLEXITY_LEVELS["L2"])
         test_req = TEST_REQUIREMENTS.get(level, "just test")
 
-        return json.dumps({
-            "level": level,
-            "name": level_info["name"],
-            "definition": level_info["definition"],
-            "test_requirements": test_req,
-            "examples": level_info["examples"],
-            "rationale": f"Based on {len(files_changed)} file(s) changed and diff analysis",
-            "reference": "agent/standards/feature-lifecycle.md"
-        }, indent=2)
+        return json.dumps(
+            {
+                "level": level,
+                "name": level_info["name"],
+                "definition": level_info["definition"],
+                "test_requirements": test_req,
+                "examples": level_info["examples"],
+                "rationale": f"Based on {len(files_changed)} file(s) changed and diff analysis",
+                "reference": "agent/standards/feature-lifecycle.md",
+            },
+            indent=2,
+        )
 
     @mcp.tool()
     async def verify_design_alignment(
         feature_description: str,
         check_philosophy: bool = True,
         check_roadmap: bool = True,
-        check_architecture: bool = True
+        check_architecture: bool = True,
     ) -> str:
         """
         Verify feature alignment with design documents.
@@ -559,7 +582,7 @@ Return JSON with:
         results = {
             "philosophy": {"aligned": True, "notes": []},
             "roadmap": {"aligned": True, "in_roadmap": None, "notes": []},
-            "architecture": {"aligned": True, "notes": []}
+            "architecture": {"aligned": True, "notes": []},
         }
 
         # Check philosophy
@@ -576,17 +599,23 @@ Return JSON with:
         # Check roadmap
         if check_roadmap:
             # Look for roadmap files in docs/
-            roadmap_files = list(Path("docs").glob("*roadmap*")) + list(Path("docs").glob("*vision*"))
+            roadmap_files = list(Path("docs").glob("*roadmap*")) + list(
+                Path("docs").glob("*vision*")
+            )
             in_roadmap = False
             for rf in roadmap_files:
                 content = rf.read_text().lower()
-                if feature_description.lower() in content or any(kw in content for kw in feature_description.lower().split()[:3]):
+                if feature_description.lower() in content or any(
+                    kw in content for kw in feature_description.lower().split()[:3]
+                ):
                     in_roadmap = True
                     break
             results["roadmap"]["in_roadmap"] = in_roadmap
             if not in_roadmap:
                 results["roadmap"]["aligned"] = False
-                results["roadmap"]["notes"].append("Feature not explicitly in roadmap - consider updating docs/")
+                results["roadmap"]["notes"].append(
+                    "Feature not explicitly in roadmap - consider updating docs/"
+                )
 
         # Check architecture
         if check_architecture:
@@ -595,23 +624,31 @@ Return JSON with:
                 # Check for architecture conflicts
                 desc_lower = feature_description.lower()
                 if "dual" in desc_lower or "orchestrator" in desc_lower or "coder" in desc_lower:
-                    if "orchestrator" in desc_lower and "mcp-server/orchestrator.py" not in " ".join([]):
-                        results["architecture"]["notes"].append("Orchestrator features should be in mcp-server/orchestrator.py")
+                    if (
+                        "orchestrator" in desc_lower
+                        and "mcp-server/orchestrator.py" not in " ".join([])
+                    ):
+                        results["architecture"]["notes"].append(
+                            "Orchestrator features should be in mcp-server/orchestrator.py"
+                        )
 
         # Overall alignment
         overall_aligned = all(r["aligned"] for r in results.values())
 
-        return json.dumps({
-            "aligned": overall_aligned,
-            "feature": feature_description,
-            "checks": results,
-            "recommendations": _get_recommendations(results),
-            "reference_docs": [
-                "docs/explanation/design-philosophy.md",
-                "docs/explanation/mcp-architecture-roadmap.md",
-                "agent/standards/feature-lifecycle.md"
-            ]
-        }, indent=2)
+        return json.dumps(
+            {
+                "aligned": overall_aligned,
+                "feature": feature_description,
+                "checks": results,
+                "recommendations": _get_recommendations(results),
+                "reference_docs": [
+                    "docs/explanation/design-philosophy.md",
+                    "docs/explanation/mcp-architecture-roadmap.md",
+                    "agent/standards/feature-lifecycle.md",
+                ],
+            },
+            indent=2,
+        )
 
     @mcp.tool()
     async def get_feature_requirements(complexity_level: str = "L2") -> str:
@@ -628,21 +665,24 @@ Return JSON with:
         if level not in ["L1", "L2", "L3", "L4"]:
             level = "L2"
 
-        return json.dumps({
-            "complexity": level,
-            "complexity_name": COMPLEXITY_LEVELS[level]["name"],
-            "definition": COMPLEXITY_LEVELS[level]["definition"],
-            "test_requirements": {
-                "command": TEST_REQUIREMENTS[level],
-                "coverage_target": "100% for new logic" if level in ["L3", "L4"] else "80%+"
+        return json.dumps(
+            {
+                "complexity": level,
+                "complexity_name": COMPLEXITY_LEVELS[level]["name"],
+                "definition": COMPLEXITY_LEVELS[level]["definition"],
+                "test_requirements": {
+                    "command": TEST_REQUIREMENTS[level],
+                    "coverage_target": "100% for new logic" if level in ["L3", "L4"] else "80%+",
+                },
+                "documentation_required": level in ["L3", "L4"],
+                "design_review_required": level in ["L3", "L4"],
+                "integration_tests_required": level in ["L3", "L4"],
+                "e2e_tests_required": level == "L4",
+                "checklist": _get_checklist(level),
+                "reference": "agent/standards/feature-lifecycle.md",
             },
-            "documentation_required": level in ["L3", "L4"],
-            "design_review_required": level in ["L3", "L4"],
-            "integration_tests_required": level in ["L3", "L4"],
-            "e2e_tests_required": level == "L4",
-            "checklist": _get_checklist(level),
-            "reference": "agent/standards/feature-lifecycle.md"
-        }, indent=2)
+            indent=2,
+        )
 
     @mcp.tool()
     async def check_doc_sync(changed_files: List[str] = None) -> str:
@@ -659,8 +699,8 @@ Return JSON with:
         """
         changed_files = changed_files or get_changed_files()
 
-        code_files = [f for f in changed_files if not f.endswith('.md')]
-        doc_files = [f for f in changed_files if f.endswith('.md') or f.startswith('agent/')]
+        code_files = [f for f in changed_files if not f.endswith(".md")]
+        doc_files = [f for f in changed_files if f.endswith(".md") or f.startswith("agent/")]
 
         sync_status = "ok"
         recommendations = []
@@ -671,40 +711,50 @@ Return JSON with:
             if f.startswith("mcp-server/"):
                 if not any(d in doc_files for d in ["mcp-server/README.md", "CLAUDE.md"]):
                     sync_status = "warning"
-                    required_docs.append({
-                        "file": "mcp-server/README.md and/or CLAUDE.md",
-                        "reason": f"mcp-server code changed: {f}",
-                        "action": "Add new tool to tool tables"
-                    })
+                    required_docs.append(
+                        {
+                            "file": "mcp-server/README.md and/or CLAUDE.md",
+                            "reason": f"mcp-server code changed: {f}",
+                            "action": "Add new tool to tool tables",
+                        }
+                    )
             elif f.startswith("units/modules/"):
-                required_docs.append({
-                    "file": "docs/ or infrastructure docs",
-                    "reason": f"Nix module changed: {f}",
-                    "action": "Update infrastructure documentation"
-                })
+                required_docs.append(
+                    {
+                        "file": "docs/ or infrastructure docs",
+                        "reason": f"Nix module changed: {f}",
+                        "action": "Update infrastructure documentation",
+                    }
+                )
             elif f == "justfile":
-                required_docs.append({
-                    "file": "docs/ and/or command help",
-                    "reason": "justfile changed",
-                    "action": "Update command documentation"
-                })
+                required_docs.append(
+                    {
+                        "file": "docs/ and/or command help",
+                        "reason": "justfile changed",
+                        "action": "Update command documentation",
+                    }
+                )
 
         # Check for spec changes
         spec_files = [f for f in changed_files if f.startswith("agent/specs/")]
         if spec_files:
             if "agent/standards/feature-lifecycle.md" not in doc_files:
                 sync_status = "warning"
-                required_docs.append({
-                    "file": "agent/standards/feature-lifecycle.md",
-                    "reason": f"Spec added/modified: {spec_files[0]}",
-                    "action": "Update workflow diagrams if needed"
-                })
+                required_docs.append(
+                    {
+                        "file": "agent/standards/feature-lifecycle.md",
+                        "reason": f"Spec added/modified: {spec_files[0]}",
+                        "action": "Update workflow diagrams if needed",
+                    }
+                )
 
         # Check for agent/standards changes
         std_files = [f for f in changed_files if f.startswith("agent/standards/")]
         if std_files and not doc_files:
             sync_status = "warning"
-            recommendations.append(f"Standards changed: {std_files}. Update related docs if needed.")
+            recommendations.append(
+                f"Standards changed: {std_files}. Update related docs if needed."
+            )
 
         if code_files and not doc_files and not required_docs:
             sync_status = "ok"
@@ -713,14 +763,19 @@ Return JSON with:
         if required_docs:
             recommendations = [f"Update {d['file']}: {d['action']}" for d in required_docs]
 
-        return json.dumps({
-            "status": sync_status,
-            "code_files_changed": len(code_files),
-            "doc_files_changed": len(doc_files),
-            "required_docs": required_docs,
-            "recommendations": recommendations if recommendations else ["Documentation is in sync"],
-            "reference": "agent/how-to/documentation-workflow.md"
-        }, indent=2)
+        return json.dumps(
+            {
+                "status": sync_status,
+                "code_files_changed": len(code_files),
+                "doc_files_changed": len(doc_files),
+                "required_docs": required_docs,
+                "recommendations": recommendations
+                if recommendations
+                else ["Documentation is in sync"],
+                "reference": "agent/how-to/documentation-workflow.md",
+            },
+            indent=2,
+        )
 
 
 def _get_recommendations(results: dict) -> list:

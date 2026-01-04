@@ -6,6 +6,7 @@ Provides beautiful terminal formatting using the Rich library.
 All output goes to stderr to avoid interfering with JSON-RPC communication.
 Replaces verbose print statements with styled output.
 """
+
 from typing import Any, Optional
 from rich.console import Console
 from rich.panel import Panel
@@ -275,6 +276,7 @@ def json_summary(data: dict[str, Any], title: str = "Summary") -> Panel:
 # Traceback Handling
 # =============================================================================
 
+
 def install_traceback_handler(
     width: int = 100,
     extra_lines: int = 3,
@@ -291,6 +293,7 @@ def install_traceback_handler(
         show_locals: Whether to show local variables in traceback
     """
     from rich import traceback
+
     traceback.install(
         width=width,
         extra_lines=extra_lines,

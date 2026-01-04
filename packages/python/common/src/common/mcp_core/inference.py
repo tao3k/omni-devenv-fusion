@@ -17,6 +17,7 @@ Usage:
     client = InferenceClient()
     result = await client.complete("You are a Python expert.", "Write a function to sort a list.")
 """
+
 import asyncio
 import json
 import os
@@ -46,6 +47,7 @@ def _get_git_toplevel() -> Optional[Path]:
         Path to git repository root or None
     """
     from common.mcp_core.gitops import get_git_toplevel
+
     return get_git_toplevel()
 
 
@@ -61,12 +63,14 @@ def _load_api_key_from_config() -> Optional[str]:
     Delegates to common.mcp_core.api_key.get_anthropic_api_key() for unified loading.
     """
     from common.mcp_core.api_key import get_anthropic_api_key
+
     return get_anthropic_api_key()
 
 
 # =============================================================================
 # InferenceClient Class
 # =============================================================================
+
 
 class InferenceClient:
     """
@@ -315,7 +319,7 @@ class InferenceClient:
             )
 
             if attempt < max_retries - 1:
-                await asyncio.sleep(backoff_factor * (2 ** attempt))
+                await asyncio.sleep(backoff_factor * (2**attempt))
 
         return {
             "success": False,

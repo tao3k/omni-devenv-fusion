@@ -3,6 +3,7 @@ Advanced Search Skill Tools
 Migrated from src/mcp_server/coder/advanced_search.py
 Provides high-performance code search using ripgrep.
 """
+
 import asyncio
 import json
 import re
@@ -21,6 +22,7 @@ logger = structlog.get_logger(__name__)
 
 class SearchResult(TypedDict):
     """Represents a single search match result."""
+
     file: str
     line_number: int
     line_content: str
@@ -29,6 +31,7 @@ class SearchResult(TypedDict):
 
 class SearchStats(TypedDict):
     """Statistics about the search operation."""
+
     files_searched: int
     total_matches: int
     elapsed_ms: float
@@ -36,17 +39,14 @@ class SearchStats(TypedDict):
 
 class SearchResponse(TypedDict):
     """Complete response from the search tool."""
+
     results: list[SearchResult]
     stats: SearchStats
     error: str | None
 
 
 def _build_ripgrep_command(
-    pattern: str,
-    path: str,
-    file_type: str | None,
-    include_hidden: bool,
-    context_lines: int = 2
+    pattern: str, path: str, file_type: str | None, include_hidden: bool, context_lines: int = 2
 ) -> list[str]:
     """Build ripgrep command with proper arguments."""
     cmd = ["rg", "--color=never", "--heading", "-n"]
@@ -65,29 +65,19 @@ def _build_ripgrep_command(
     return cmd
 
 
-async def _execute_search(
-    cmd: list[str],
-    cwd: str
-) -> tuple[str, str]:
+async def _execute_search(cmd: list[str], cwd: str) -> tuple[str, str]:
     """Execute ripgrep command asynchronously."""
     try:
         process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=cwd
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=cwd
         )
         stdout, stderr = await process.communicate()
-        return (stdout.decode("utf-8", errors="replace"),
-                stderr.decode("utf-8", errors="replace"))
+        return (stdout.decode("utf-8", errors="replace"), stderr.decode("utf-8", errors="replace"))
     except FileNotFoundError:
         raise RuntimeError("ripgrep (rg) is not installed. Please install ripgrep.")
 
 
-def _parse_ripgrep_output(
-    output: str,
-    context_lines: int = 2
-) -> list[SearchResult]:
+def _parse_ripgrep_output(output: str, context_lines: int = 2) -> list[SearchResult]:
     """Parse ripgrep output into structured SearchResult objects."""
     results: list[SearchResult] = []
 
@@ -114,12 +104,14 @@ def _parse_ripgrep_output(
                 line_number = int(parts[1].strip())
                 line_content = parts[2].strip()
 
-                results.append(SearchResult(
-                    file=file_path,
-                    line_number=line_number,
-                    line_content=line_content,
-                    match=line_content
-                ))
+                results.append(
+                    SearchResult(
+                        file=file_path,
+                        line_number=line_number,
+                        line_content=line_content,
+                        match=line_content,
+                    )
+                )
             except ValueError:
                 continue
 
@@ -131,7 +123,7 @@ async def search_project_code(
     path: str = ".",
     file_type: str | None = None,
     include_hidden: bool = False,
-    context_lines: int = 2
+    context_lines: int = 2,
 ) -> SearchResponse:
     """Search for a regex pattern in files using ripgrep.
 
@@ -152,7 +144,7 @@ async def search_project_code(
         return SearchResponse(
             results=[],
             stats=SearchStats(files_searched=0, total_matches=0, elapsed_ms=0.0),
-            error="Pattern cannot be empty"
+            error="Pattern cannot be empty",
         )
 
     # Validate path exists
@@ -161,7 +153,7 @@ async def search_project_code(
         return SearchResponse(
             results=[],
             stats=SearchStats(files_searched=0, total_matches=0, elapsed_ms=0.0),
-            error=f"Path does not exist: {path}"
+            error=f"Path does not exist: {path}",
         )
 
     # Build ripgrep command
@@ -170,7 +162,7 @@ async def search_project_code(
         path=path,
         file_type=file_type,
         include_hidden=include_hidden,
-        context_lines=context_lines
+        context_lines=context_lines,
     )
 
     try:
@@ -179,7 +171,7 @@ async def search_project_code(
         return SearchResponse(
             results=[],
             stats=SearchStats(files_searched=0, total_matches=0, elapsed_ms=0.0),
-            error=str(e)
+            error=str(e),
         )
 
     # Parse output into structured results
@@ -193,11 +185,9 @@ async def search_project_code(
     return SearchResponse(
         results=results,
         stats=SearchStats(
-            files_searched=files_searched,
-            total_matches=len(results),
-            elapsed_ms=elapsed_ms
+            files_searched=files_searched, total_matches=len(results), elapsed_ms=elapsed_ms
         ),
-        error=None
+        error=None,
     )
 
 
@@ -207,9 +197,11 @@ def _format_response(response: SearchResponse) -> str:
         return f"Error: {response['error']}"
 
     lines = []
-    lines.append(f"Found {response['stats']['total_matches']} matches in "
-                  f"{response['stats']['files_searched']} files "
-                  f"({response['stats']['elapsed_ms']:.2f}ms):\n")
+    lines.append(
+        f"Found {response['stats']['total_matches']} matches in "
+        f"{response['stats']['files_searched']} files "
+        f"({response['stats']['elapsed_ms']:.2f}ms):\n"
+    )
 
     for result in response["results"]:
         lines.append(f"{result['file']}:{result['line_number']}: {result['line_content']}")
@@ -226,7 +218,7 @@ def register(mcp: FastMCP):
         path: str = ".",
         file_type: str | None = None,
         include_hidden: bool = False,
-        context_lines: int = 2
+        context_lines: int = 2,
     ) -> str:
         """Search for a regex pattern in code files using ripgrep.
 
@@ -248,7 +240,7 @@ def register(mcp: FastMCP):
             path=path,
             file_type=file_type,
             include_hidden=include_hidden,
-            context_lines=context_lines
+            context_lines=context_lines,
         )
         return _format_response(response)
 

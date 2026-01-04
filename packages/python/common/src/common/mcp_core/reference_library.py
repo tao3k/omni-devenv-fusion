@@ -20,6 +20,7 @@ Usage:
     # Custom configuration directory
     python script.py --conf /path/to/conf
 """
+
 from __future__ import annotations
 
 import sys
@@ -33,6 +34,7 @@ from common.mcp_core.gitops import get_project_root
 # YAML support (try PyYAML first, fallback to simple parsing)
 try:
     import yaml
+
     YAML_AVAILABLE = True
 except ImportError:
     YAML_AVAILABLE = False
@@ -252,6 +254,7 @@ class ReferenceLibrary:
 # =============================================================================
 # Convenience Functions
 # =============================================================================
+
 
 def get_reference_path(key: str) -> str:
     """

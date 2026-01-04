@@ -4,6 +4,7 @@ The Kernel of the Skill-Centric OS.
 V2: Uses Spec-based loading for precise, pollution-free plugin management.
 Phase 13.10: Config-driven preloading + on-demand loading.
 """
+
 import json
 import importlib.util
 import sys
@@ -199,15 +200,18 @@ class SkillRegistry:
             if use_diff:
                 # Use git diff for token-efficient updates
                 import subprocess
+
                 try:
                     diff = subprocess.run(
                         ["git", "diff", str(file_path)],
                         cwd=self.project_root,
                         capture_output=True,
-                        text=True
+                        text=True,
                     )
                     if diff.returncode == 0 and diff.stdout.strip():
-                        return f"\n--- {skill_name.upper()} {file_label} (CHANGED) ---\n{diff.stdout}"
+                        return (
+                            f"\n--- {skill_name.upper()} {file_label} (CHANGED) ---\n{diff.stdout}"
+                        )
                     else:
                         return f"\n--- {skill_name.upper()} {file_label} ---\n[Unchanged - not showing]"
                 except Exception:
@@ -241,7 +245,9 @@ class SkillRegistry:
 
         combined = []
         combined.append("# 🧠 Active Skill Policies & Routing Rules")
-        combined.append("The following skills are loaded and active. You MUST follow their routing logic.\n")
+        combined.append(
+            "The following skills are loaded and active. You MUST follow their routing logic.\n"
+        )
 
         for skill_name in sorted(self.loaded_skills.keys()):
             manifest = self.loaded_skills[skill_name]

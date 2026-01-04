@@ -4,6 +4,7 @@ Code Insight Tools - Atomic, Dumb, Single-Purpose
 Tools are like Unix commands: they do ONE thing well.
 No business logic in tools - only pure execution.
 """
+
 import ast
 from pathlib import Path
 from typing import List
@@ -16,26 +17,28 @@ from common.mcp_core.config_paths import get_project_root
 # Pure Helper Functions (The "Hands")
 # =============================================================================
 
+
 def _is_tool_decorator(decorator: ast.AST) -> bool:
     """Check if a decorator is @tool or @mcp.tool."""
     # Case: @tool
-    if isinstance(decorator, ast.Name) and decorator.id == 'tool':
+    if isinstance(decorator, ast.Name) and decorator.id == "tool":
         return True
     # Case: @mcp.tool
-    if isinstance(decorator, ast.Attribute) and decorator.attr == 'tool':
+    if isinstance(decorator, ast.Attribute) and decorator.attr == "tool":
         return True
     # Case: @tool() or @mcp.tool()
     if isinstance(decorator, ast.Call):
         func = decorator.func
-        if isinstance(func, ast.Name) and func.id == 'tool':
+        if isinstance(func, ast.Name) and func.id == "tool":
             return True
-        if isinstance(func, ast.Attribute) and func.attr == 'tool':
+        if isinstance(func, ast.Attribute) and func.attr == "tool":
             return True
     return False
 
 
 class _ToolVisitor(ast.NodeVisitor):
     """Find all @tool decorated functions."""
+
     def __init__(self):
         self.tools: List[str] = []
 
@@ -48,6 +51,7 @@ class _ToolVisitor(ast.NodeVisitor):
 # =============================================================================
 # Atomic Tools (Dumb, Stateless)
 # =============================================================================
+
 
 async def find_tools(file_path: str) -> str:
     """
@@ -107,6 +111,7 @@ async def count_lines(file_path: str) -> str:
 # =============================================================================
 # Registration
 # =============================================================================
+
 
 def register(mcp: FastMCP):
     """Register atomic code insight tools."""

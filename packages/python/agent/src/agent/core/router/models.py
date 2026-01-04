@@ -7,6 +7,7 @@ Phase 14: Models for both Tool Routing (SemanticRouter) and Agent Routing (HiveR
 Usage:
     # Models are self-contained, no imports needed
 """
+
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -18,6 +19,7 @@ from pydantic import BaseModel
 # =============================================================================
 # Phase 14: Tool Routing Models
 # =============================================================================
+
 
 @dataclass
 class RoutingResult:
@@ -32,6 +34,7 @@ class RoutingResult:
     - from_cache: Whether this was a cache hit
     - timestamp: When routing decision was made
     """
+
     selected_skills: List[str]
     mission_brief: str
     reasoning: str
@@ -54,22 +57,26 @@ class RoutingResult:
 # Phase 14: Agent Routing Models
 # =============================================================================
 
+
 class Decision(Enum):
     """Possible decisions from agent thinking phase."""
-    ACT = "act"          # Execute tool call
+
+    ACT = "act"  # Execute tool call
     HANDOFF = "handoff"  # Transfer to another agent
     ASK_USER = "ask_user"  # Need clarification
-    FINISH = "finish"    # Task complete
+    FINISH = "finish"  # Task complete
 
 
 class ToolCall(BaseModel):
     """Represents a tool call to be executed."""
+
     tool: str  # Format: "skill.function_name", e.g., "filesystem.list_directory"
     args: Dict[str, Any] = {}
 
 
 class TaskBrief(BaseModel):
     """Context passed during agent handoff."""
+
     task_description: str
     constraints: List[str] = []
     relevant_files: List[str] = []
@@ -79,6 +86,7 @@ class TaskBrief(BaseModel):
 
 class AgentResponse(BaseModel):
     """Response from agent's thinking phase."""
+
     decision: Decision
     tool_call: Optional[ToolCall] = None
     handoff_to: Optional[str] = None
@@ -105,6 +113,7 @@ class AgentRoute(BaseModel):
     - relevant_files: Files relevant to the task
     - from_cache: Whether this was a cache hit (Phase 18)
     """
+
     target_agent: str  # "coder", "reviewer", "orchestrator"
     confidence: float = 0.5
     reasoning: str
@@ -121,17 +130,48 @@ class AgentRoute(BaseModel):
 AGENT_PERSONAS = {
     "coder": {
         "description": "Primary Executor. Writes code, refactors, fixes bugs, implements features.",
-        "keywords": ["write", "create", "implement", "refactor", "fix", "edit", "modify", "add function", "new file"],
-        "skills": ["filesystem", "software_engineering", "terminal", "testing"]
+        "keywords": [
+            "write",
+            "create",
+            "implement",
+            "refactor",
+            "fix",
+            "edit",
+            "modify",
+            "add function",
+            "new file",
+        ],
+        "skills": ["filesystem", "software_engineering", "terminal", "testing"],
     },
     "reviewer": {
         "description": "Quality Gatekeeper. Reviews changes, runs tests, checks git status, commits code.",
-        "keywords": ["review", "check", "test", "verify", "commit", "git", "diff", "status", "run tests", "lint"],
-        "skills": ["git", "testing", "linter"]
+        "keywords": [
+            "review",
+            "check",
+            "test",
+            "verify",
+            "commit",
+            "git",
+            "diff",
+            "status",
+            "run tests",
+            "lint",
+        ],
+        "skills": ["git", "testing", "linter"],
     },
     "orchestrator": {
         "description": "The Manager. Plans tasks, explains concepts, manages context, handles ambiguity.",
-        "keywords": ["plan", "explain", "how to", "what is", "analyze", "breakdown", "help", "understand", "context"],
-        "skills": ["context", "spec", "router", "knowledge"]
-    }
+        "keywords": [
+            "plan",
+            "explain",
+            "how to",
+            "what is",
+            "analyze",
+            "breakdown",
+            "help",
+            "understand",
+            "context",
+        ],
+        "skills": ["context", "spec", "router", "knowledge"],
+    },
 }

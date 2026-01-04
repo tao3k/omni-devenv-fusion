@@ -2,6 +2,7 @@
 src/agent/tools/status.py
 System status and introspection tools.
 """
+
 from mcp.server.fastmcp import FastMCP
 
 

@@ -20,6 +20,7 @@ Usage:
     orchestrator = Orchestrator(inference)
     response = await orchestrator.dispatch(user_query, history)
 """
+
 import structlog
 from typing import Dict, Any, Optional, List
 
@@ -53,7 +54,12 @@ class Orchestrator:
     - Shows routing, RAG knowledge, and audit results in real-time
     """
 
-    def __init__(self, inference_engine=None, feedback_enabled: bool = DEFAULT_FEEDBACK_ENABLED, max_retries: int = DEFAULT_MAX_RETRIES):
+    def __init__(
+        self,
+        inference_engine=None,
+        feedback_enabled: bool = DEFAULT_FEEDBACK_ENABLED,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+    ):
         """
         Initialize Orchestrator.
 
@@ -76,10 +82,7 @@ class Orchestrator:
         }
 
     async def dispatch(
-        self,
-        user_query: str,
-        history: List[Dict[str, Any]] = None,
-        context: Dict[str, Any] = None
+        self, user_query: str, history: List[Dict[str, Any]] = None, context: Dict[str, Any] = None
     ) -> str:
         """
         Main Dispatch Loop with Phase 15 Feedback Loop and Phase 18 UX.
@@ -114,9 +117,7 @@ class Orchestrator:
         # === Phase 1: Hive Routing ===
         self.ux.start_routing()
         route = await self.router.route_to_agent(
-            query=user_query,
-            context=str(history) if history else "",
-            use_cache=True
+            query=user_query, context=str(history) if history else "", use_cache=True
         )
         self.ux.stop_routing()
 
@@ -125,13 +126,11 @@ class Orchestrator:
             agent_name=route.target_agent,
             mission_brief=route.task_brief or user_query,
             confidence=route.confidence,
-            from_cache=route.from_cache
+            from_cache=route.from_cache,
         )
 
         logger.info(
-            "👉 Routing decision",
-            target_agent=route.target_agent,
-            confidence=route.confidence
+            "👉 Routing decision", target_agent=route.target_agent, confidence=route.confidence
         )
 
         # === Phase 2: Agent Instantiation ===
@@ -139,8 +138,7 @@ class Orchestrator:
 
         if not target_agent_class:
             logger.warning(
-                f"⚠️ No specialized agent for '{route.target_agent}', "
-                f"falling back to Coder"
+                f"⚠️ No specialized agent for '{route.target_agent}', falling back to Coder"
             )
             target_agent_class = CoderAgent
 
@@ -150,10 +148,7 @@ class Orchestrator:
         # === Phase 3: Execution with Mission Brief ===
         task_brief = route.task_brief or user_query
 
-        logger.info(
-            f"🚀 Executing with {target_agent_class.name.upper()}",
-            brief=task_brief[:80]
-        )
+        logger.info(f"🚀 Executing with {target_agent_class.name.upper()}", brief=task_brief[:80])
 
         # Phase 15: Feedback Loop for Coder tasks
         if self.feedback_enabled and route.target_agent == "coder":
@@ -163,7 +158,7 @@ class Orchestrator:
                 task_brief=task_brief,
                 constraints=route.constraints or [],
                 relevant_files=route.relevant_files or [],
-                history=history or []
+                history=history or [],
             )
 
         # Standard execution (non-feedback path)
@@ -174,7 +169,7 @@ class Orchestrator:
                 mission_brief=task_brief,
                 constraints=route.constraints or [],
                 relevant_files=route.relevant_files or [],
-                chat_history=history or []
+                chat_history=history or [],
             )
             self.ux.stop_execution()
 
@@ -183,12 +178,14 @@ class Orchestrator:
                 self.ux.show_rag_hits(result.rag_sources)
 
             # Phase 18: Show agent response
-            self.ux.print_agent_response(result.content, f"{target_agent_class.name.upper()} Output")
+            self.ux.print_agent_response(
+                result.content, f"{target_agent_class.name.upper()} Output"
+            )
 
             logger.info(
                 f"✅ {target_agent_class.name.upper()} complete",
                 success=result.success,
-                confidence=result.confidence
+                confidence=result.confidence,
             )
 
             self.ux.end_task(success=result.success)
@@ -207,7 +204,7 @@ class Orchestrator:
         task_brief: str,
         constraints: List[str],
         relevant_files: List[str],
-        history: List[Dict[str, Any]]
+        history: List[Dict[str, Any]],
     ) -> str:
         """
         Execute with Phase 15 Feedback Loop and Phase 18 UX.
@@ -247,7 +244,7 @@ class Orchestrator:
                     mission_brief=task_brief,
                     constraints=constraints,
                     relevant_files=relevant_files,
-                    chat_history=history
+                    chat_history=history,
                 )
                 self.ux.stop_execution()
 
@@ -256,7 +253,9 @@ class Orchestrator:
                     self.ux.show_rag_hits(result.rag_sources)
 
                 # Phase 18: Show agent response
-                self.ux.print_agent_response(result.content, f"{worker.name.upper()} Output (Attempt {attempt})")
+                self.ux.print_agent_response(
+                    result.content, f"{worker.name.upper()} Output (Attempt {attempt})"
+                )
 
             except Exception as e:
                 self.ux.show_error("Worker execution failed", str(e))
@@ -273,8 +272,8 @@ class Orchestrator:
                 context={
                     "constraints": constraints,
                     "relevant_files": relevant_files,
-                    "attempt": attempt
-                }
+                    "attempt": attempt,
+                },
             )
 
             # Phase 18: Show audit result
@@ -282,7 +281,7 @@ class Orchestrator:
                 approved=audit_result.approved,
                 feedback=audit_result.feedback,
                 issues=audit_result.issues_found,
-                suggestions=audit_result.suggestions
+                suggestions=audit_result.suggestions,
             )
 
             audit_entry = {
@@ -290,17 +289,13 @@ class Orchestrator:
                 "approved": audit_result.approved,
                 "feedback": audit_result.feedback,
                 "issues": audit_result.issues_found,
-                "suggestions": audit_result.suggestions
+                "suggestions": audit_result.suggestions,
             }
             audit_history.append(audit_entry)
 
             # Step 3: Check if approved
             if audit_result.approved:
-                logger.info(
-                    "✅ Audit passed",
-                    confidence=audit_result.confidence,
-                    attempt=attempt
-                )
+                logger.info("✅ Audit passed", confidence=audit_result.confidence, attempt=attempt)
 
                 # Log full audit history for transparency
                 logger.debug("Audit history", audits=audit_history)
@@ -311,7 +306,7 @@ class Orchestrator:
             # Step 4: Self-correction loop
             logger.info(
                 "⚠️ Audit failed, initiating self-correction",
-                issues=audit_result.issues_found[:3]  # Log first 3 issues
+                issues=audit_result.issues_found[:3],  # Log first 3 issues
             )
 
             # Build correction brief for retry
@@ -322,15 +317,17 @@ class Orchestrator:
                 "",
                 "Original task: " + user_query,
                 "",
-                "Please fix the issues and provide corrected output."
+                "Please fix the issues and provide corrected output.",
             ]
 
             if audit_result.suggestions:
-                correction_parts.extend([
-                    "",
-                    "Suggestions for improvement:",
-                    * [f"- {s}" for s in audit_result.suggestions]
-                ])
+                correction_parts.extend(
+                    [
+                        "",
+                        "Suggestions for improvement:",
+                        *[f"- {s}" for s in audit_result.suggestions],
+                    ]
+                )
 
             task_brief = "\n".join(correction_parts)
 
@@ -338,21 +335,21 @@ class Orchestrator:
         logger.error("❌ Max retries exceeded, returning last result with warnings")
         self.ux.show_error(
             f"Quality review failed after {self.max_retries} attempts",
-            f"Audit issues: {', '.join(audit_history[-1]['issues'])}"
+            f"Audit issues: {', '.join(audit_history[-1]['issues'])}",
         )
 
         # Include audit history in final response for transparency
         warning_header = f"⚠️ Quality review failed after {self.max_retries} attempts.\n"
         audit_summary = f"Audit issues: {', '.join(audit_history[-1]['issues'])}\n"
-        last_feedback = audit_history[-1]['feedback']
+        last_feedback = audit_history[-1]["feedback"]
 
         self.ux.end_task(success=False)
-        return f"{warning_header}{audit_summary}\nReviewer said: {last_feedback}\n\n{result.content}"
+        return (
+            f"{warning_header}{audit_summary}\nReviewer said: {last_feedback}\n\n{result.content}"
+        )
 
     async def dispatch_with_hive_context(
-        self,
-        user_query: str,
-        hive_context: Dict[str, Any]
+        self, user_query: str, hive_context: Dict[str, Any]
     ) -> str:
         """
         Dispatch with additional Hive context (from Orchestrator MCP).
@@ -380,10 +377,7 @@ class Orchestrator:
             target_agent_class = self.agent_map[explicit_agent]
             worker = target_agent_class()
 
-            logger.info(
-                f"🚀 Direct dispatch to {explicit_agent.upper()}",
-                brief=mission_brief[:80]
-            )
+            logger.info(f"🚀 Direct dispatch to {explicit_agent.upper()}", brief=mission_brief[:80])
 
             try:
                 result: AgentResult = await worker.run(
@@ -391,7 +385,7 @@ class Orchestrator:
                     mission_brief=mission_brief,
                     constraints=constraints,
                     relevant_files=relevant_files,
-                    chat_history=history
+                    chat_history=history,
                 )
                 return result.content
             except Exception as e:
@@ -411,7 +405,7 @@ class Orchestrator:
         return {
             "router_loaded": self.router is not None,
             "agents_available": list(self.agent_map.keys()),
-            "inference_configured": self.inference is not None
+            "inference_configured": self.inference is not None,
         }
 
 
@@ -420,6 +414,7 @@ async def orchestrator_main():
     CLI entry point for testing Orchestrator.
     """
     from rich.console import Console
+
     console = Console()
 
     console.print("🎯 Omni Agentic OS - Orchestrator Mode")
@@ -432,7 +427,7 @@ async def orchestrator_main():
     while True:
         try:
             user_input = input("\n🎤 You: ")
-            if user_input.lower() in ['exit', 'quit', 'q']:
+            if user_input.lower() in ["exit", "quit", "q"]:
                 console.print("👋 Goodbye!")
                 break
 
@@ -457,4 +452,5 @@ async def orchestrator_main():
 
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(orchestrator_main())

@@ -11,9 +11,12 @@ Usage:
     router = get_router()
     result = await router.route("Fix the bug in router.py")
 """
+
 import json
 import time
 from typing import Dict, List, Optional
+
+import structlog
 
 from common.mcp_core.inference import InferenceClient
 
@@ -22,6 +25,8 @@ from agent.core.vector_store import get_vector_memory
 
 from agent.core.router.models import RoutingResult
 from agent.core.router.cache import HiveMindCache
+
+logger = structlog.get_logger(__name__)
 
 
 class SemanticRouter:
@@ -64,7 +69,9 @@ class SemanticRouter:
         for skill in self.registry.list_available_skills():
             manifest = self.registry.get_skill_manifest(skill)
             if manifest:
-                keywords = manifest.routing_keywords if hasattr(manifest, 'routing_keywords') else []
+                keywords = (
+                    manifest.routing_keywords if hasattr(manifest, "routing_keywords") else []
+                )
                 keywords_str = ", ".join(keywords[:8]) if keywords else "general"
                 menu_items.append(
                     f"- [{skill}]: {manifest.description}\n  Keywords: {keywords_str}"
@@ -122,8 +129,7 @@ class SemanticRouter:
         if chat_history:
             recent = chat_history[-6:]
             history_context = "\n".join(
-                f"[{m.get('role', 'unknown')}]: {m.get('content', '')[:200]}"
-                for m in recent
+                f"[{m.get('role', 'unknown')}]: {m.get('content', '')[:200]}" for m in recent
             )
             history_context = f"\n\nRECENT CONVERSATION:\n{history_context}"
 
@@ -204,12 +210,10 @@ Route this request and provide a mission brief."""
             routing_result = RoutingResult(
                 selected_skills=valid_skills,
                 mission_brief=routing_data.get(
-                    "mission_brief",
-                    f"Handle the user's request about: {user_query}"
+                    "mission_brief", f"Handle the user's request about: {user_query}"
                 ),
                 reasoning=routing_data.get(
-                    "reasoning",
-                    "Skill selected based on request analysis."
+                    "reasoning", "Skill selected based on request analysis."
                 ),
                 confidence=routing_data.get("confidence", 0.5),
             )
@@ -230,6 +234,7 @@ Route this request and provide a mission brief."""
 # =============================================================================
 # Semantic Cortex (Phase 14.5) - Moved here for organization
 # =============================================================================
+
 
 class SemanticCortex:
     """
@@ -268,7 +273,7 @@ class SemanticCortex:
         try:
             self.vector_store = get_vector_memory()
         except Exception as e:
-            print(f"Warning: Could not initialize vector store: {e}")
+            logger.warning("Could not initialize vector store", error=str(e))
             self.vector_store = None
 
     def _similarity_to_score(self, distance: float) -> float:
@@ -290,9 +295,7 @@ class SemanticCortex:
 
         try:
             results = await self.vector_store.search(
-                query=query,
-                n_results=1,
-                collection=self.COLLECTION_NAME
+                query=query, n_results=1, collection=self.COLLECTION_NAME
             )
 
             if not results:
@@ -321,7 +324,7 @@ class SemanticCortex:
             return None
 
         except Exception as e:
-            print(f"Warning: Semantic recall failed: {e}")
+            logger.warning("Semantic recall failed", error=str(e))
             return None
 
     async def learn(self, query: str, result: RoutingResult):
@@ -331,19 +334,22 @@ class SemanticCortex:
 
         try:
             import uuid
+
             doc_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, query))
 
             await self.vector_store.add(
                 documents=[query],
                 ids=[doc_id],
                 collection=self.COLLECTION_NAME,
-                metadatas=[{
-                    "routing_result_json": json.dumps(result.to_dict()),
-                    "timestamp": str(result.timestamp),
-                }]
+                metadatas=[
+                    {
+                        "routing_result_json": json.dumps(result.to_dict()),
+                        "timestamp": str(result.timestamp),
+                    }
+                ],
             )
         except Exception as e:
-            print(f"Warning: Semantic learning failed: {e}")
+            logger.warning("Semantic learning failed", error=str(e))
 
 
 # =============================================================================

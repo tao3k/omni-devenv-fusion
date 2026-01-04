@@ -13,6 +13,7 @@ Features:
 - Timeout protection
 - Sandbox environment support
 """
+
 import asyncio
 import os
 import re
@@ -55,6 +56,7 @@ DEFAULT_ALLOWED_COMMANDS = {
 # =============================================================================
 # Security Check Functions
 # =============================================================================
+
 
 def check_dangerous_patterns(command: str, args: List[str]) -> Tuple[bool, str]:
     """
@@ -136,6 +138,7 @@ def create_sandbox_env(redact_keys: List[str] = None, restrict_home: bool = True
 # Execution Classes
 # =============================================================================
 
+
 class SafeExecutor:
     """
     Provides safe command execution with consistent security boundaries.
@@ -176,12 +179,24 @@ class SafeExecutor:
         is_safe, error_msg = check_whitelist(command, args, allowed_commands)
         if not is_safe:
             log.info("execution.blocked", command=command, args=args, reason=error_msg)
-            return {"success": False, "stdout": "", "stderr": error_msg, "exit_code": -1, "error": error_msg}
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": error_msg,
+                "exit_code": -1,
+                "error": error_msg,
+            }
 
         is_safe, error_msg = check_dangerous_patterns(command, args)
         if not is_safe:
             log.info("execution.dangerous_pattern", command=command, args=args, reason=error_msg)
-            return {"success": False, "stdout": "", "stderr": error_msg, "exit_code": -1, "error": error_msg}
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": error_msg,
+                "exit_code": -1,
+                "error": error_msg,
+            }
 
         log.info("execution.running", command=command, args=args)
 
@@ -220,10 +235,22 @@ class SafeExecutor:
 
         except asyncio.TimeoutExpired:
             log.info("execution.timeout", command=command, timeout=timeout)
-            return {"success": False, "stdout": "", "stderr": "", "exit_code": -1, "error": f"Timed out after {timeout}s"}
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": "",
+                "exit_code": -1,
+                "error": f"Timed out after {timeout}s",
+            }
 
         except FileNotFoundError:
-            return {"success": False, "stdout": "", "stderr": "", "exit_code": -1, "error": f"Command '{command}' not found"}
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": "",
+                "exit_code": -1,
+                "error": f"Command '{command}' not found",
+            }
 
         except Exception as e:
             log.info("execution.error", command=command, error=str(e))
@@ -257,7 +284,13 @@ class SafeExecutor:
         is_safe, error_msg = check_dangerous_patterns(command, args)
         if not is_safe:
             log.info("sandbox.blocked", command=command, args=args, reason=error_msg)
-            return {"success": False, "stdout": "", "stderr": error_msg, "exit_code": -1, "error": error_msg}
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": error_msg,
+                "exit_code": -1,
+                "error": error_msg,
+            }
 
         # Create sandbox environment
         env = sandbox_env or create_sandbox_env()
@@ -302,10 +335,22 @@ class SafeExecutor:
 
         except asyncio.TimeoutExpired:
             log.info("sandbox.timeout", command=command, timeout=timeout)
-            return {"success": False, "stdout": "", "stderr": "", "exit_code": -1, "error": f"Timed out after {timeout}s"}
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": "",
+                "exit_code": -1,
+                "error": f"Timed out after {timeout}s",
+            }
 
         except FileNotFoundError:
-            return {"success": False, "stdout": "", "stderr": "", "exit_code": -1, "error": f"Command '{command}' not found"}
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": "",
+                "exit_code": -1,
+                "error": f"Command '{command}' not found",
+            }
 
         except Exception as e:
             log.info("sandbox.error", command=command, error=str(e))

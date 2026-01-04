@@ -15,6 +15,7 @@ Rules (from prompts.md):
   - Call consult_language_expert() for language-specific coding standards
   - Return structured data, never execute operations
 """
+
 import json
 import re
 from pathlib import Path
@@ -54,6 +55,7 @@ LANG_NAMES = {
 
 class StandardsCache:
     """Singleton cache for language standards loaded from skills/knowledge/standards/."""
+
     _instance: Optional["StandardsCache"] = None
     _loaded: bool = False
     _standards: Dict[str, str] = {}
@@ -118,7 +120,9 @@ def _extract_relevant_standards(standard: str, task: str) -> Optional[str]:
                 overlap = task_words & set(re.findall(r"\w+", section_text)) - common_words
                 if overlap:
                     relevant_lines.append(line)
-                elif any(kw in section_text for kw in ["forbidden", "anti-pattern", "correct", "wrong"]):
+                elif any(
+                    kw in section_text for kw in ["forbidden", "anti-pattern", "correct", "wrong"]
+                ):
                     relevant_lines.append(line)
                 else:
                     relevant_lines = [line]
@@ -139,6 +143,7 @@ def _extract_relevant_standards(standard: str, task: str) -> Optional[str]:
 # =============================================================================
 # Knowledge Tools
 # =============================================================================
+
 
 def register(mcp: Any) -> None:
     """Register all knowledge tools."""
@@ -162,14 +167,25 @@ def register(mcp: Any) -> None:
         context = {
             "project": _get_project_name(),
             "git_rules": {
-                "types": ["feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore"],
+                "types": [
+                    "feat",
+                    "fix",
+                    "docs",
+                    "style",
+                    "refactor",
+                    "perf",
+                    "test",
+                    "build",
+                    "ci",
+                    "chore",
+                ],
                 "scopes": _load_scopes(),
                 "message_format": "<type>(<scope>): <description>",
-                "policy": "Conventional Commits + Atomic Steps"
+                "policy": "Conventional Commits + Atomic Steps",
             },
             "guardrails": _analyze_lefthook(),
             "writing_style": _get_writing_style(),
-            "architecture": _get_architecture_summary()
+            "architecture": _get_architecture_summary(),
         }
         return json.dumps(context, indent=2)
 
@@ -209,11 +225,14 @@ def register(mcp: Any) -> None:
         lang = _get_language_from_path(file_path)
 
         if not lang:
-            return json.dumps({
-                "status": "skipped",
-                "reason": f"No language expert for extension: {Path(file_path).suffix}",
-                "supported_extensions": list(EXT_TO_LANG.keys()),
-            }, indent=2)
+            return json.dumps(
+                {
+                    "status": "skipped",
+                    "reason": f"No language expert for extension: {Path(file_path).suffix}",
+                    "supported_extensions": list(EXT_TO_LANG.keys()),
+                },
+                indent=2,
+            )
 
         result = {
             "language": LANG_NAMES.get(lang, lang),
@@ -251,18 +270,24 @@ def register(mcp: Any) -> None:
         standard = _standards_cache.get_standard(lang)
 
         if not standard:
-            return json.dumps({
-                "status": "not_found",
-                "language": lang_name,
-                "available_languages": list(LANG_NAMES.keys()),
-            }, indent=2)
+            return json.dumps(
+                {
+                    "status": "not_found",
+                    "language": lang_name,
+                    "available_languages": list(LANG_NAMES.keys()),
+                },
+                indent=2,
+            )
 
-        return json.dumps({
-            "status": "success",
-            "language": lang_name,
-            "source": f"skills/knowledge/standards/lang-{lang}.md",
-            "content": standard,
-        }, indent=2)
+        return json.dumps(
+            {
+                "status": "success",
+                "language": lang_name,
+                "source": f"skills/knowledge/standards/lang-{lang}.md",
+                "content": standard,
+            },
+            indent=2,
+        )
 
     @mcp.tool()
     async def list_supported_languages() -> str:
@@ -278,23 +303,24 @@ def register(mcp: Any) -> None:
 
         for lang_id, lang_name in LANG_NAMES.items():
             std_path = standards_dir / f"lang-{lang_id}.md"
-            languages.append({
-                "id": lang_id,
-                "name": lang_name,
-                "standards_exists": std_path.exists(),
-                "file_extensions": [k for k, v in EXT_TO_LANG.items() if v == lang_id],
-            })
+            languages.append(
+                {
+                    "id": lang_id,
+                    "name": lang_name,
+                    "standards_exists": std_path.exists(),
+                    "file_extensions": [k for k, v in EXT_TO_LANG.items() if v == lang_id],
+                }
+            )
 
-        return json.dumps({
-            "status": "success",
-            "languages": languages,
-            "total": len(languages)
-        }, indent=2)
+        return json.dumps(
+            {"status": "success", "languages": languages, "total": len(languages)}, indent=2
+        )
 
 
 # =============================================================================
 # Internal Helpers (Pure Execution - No Business Logic)
 # =============================================================================
+
 
 def _get_project_name() -> str:
     """Extract project name from pyproject.toml."""
@@ -357,7 +383,7 @@ def _get_writing_style() -> Dict[str, Any]:
         "language": "english_only",
         "commit_language": "english_only",
         "max_sentence_length": 25,
-        "list_max_items": 4
+        "list_max_items": 4,
     }
 
 
@@ -370,8 +396,8 @@ def _get_architecture_summary() -> Dict[str, str]:
             "agent/": "LLM context (how-to, standards, specs)",
             "agent/skills/": "Skill modules",
             "docs/": "User documentation",
-            "packages/": "Python packages"
-        }
+            "packages/": "Python packages",
+        },
     }
 
 
@@ -393,10 +419,15 @@ def _search_docs(topic: str) -> str:
     if not matches:
         agent_dir = Path.cwd() / "agent"
         for md_file in agent_dir.rglob("*.md"):
-            if topic_lower in md_file.name.lower() or topic_lower in md_file.read_text().lower()[:2000]:
+            if (
+                topic_lower in md_file.name.lower()
+                or topic_lower in md_file.read_text().lower()[:2000]
+            ):
                 content = _read_file_content(str(md_file))
                 if content:
-                    matches.append(f"=== {md_file.relative_to(Path.cwd())} ===\n{content[:1000]}...")
+                    matches.append(
+                        f"=== {md_file.relative_to(Path.cwd())} ===\n{content[:1000]}..."
+                    )
 
     if matches:
         return f"\n\n---\n\n".join(matches[:3])

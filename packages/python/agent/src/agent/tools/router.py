@@ -9,6 +9,7 @@ Tools:
 - swarm_status: Check swarm health
 - community_proxy: Access community MCP servers
 """
+
 import json
 from typing import Any, Dict, Optional
 
@@ -28,6 +29,7 @@ def get_router():
     global router
     if router is None:
         from agent.core.router import get_router as _get_router
+
         router = _get_router()
     return router
 
@@ -56,37 +58,36 @@ def register_router_tools(mcp: FastMCP) -> None:
         try:
             r = get_router()
             if r is None:
-                return json.dumps({
-                    "success": False,
-                    "error": "Router not initialized",
-                    "message": "Tool router is not available. Install tool-router dependencies."
-                })
+                return json.dumps(
+                    {
+                        "success": False,
+                        "error": "Router not initialized",
+                        "message": "Tool router is not available. Install tool-router dependencies.",
+                    }
+                )
 
             result = r.route(query)
 
             if isinstance(result, dict):
-                return json.dumps({
-                    "success": True,
-                    "query": query,
-                    "recommended_tools": result.get("suggested_tools", result.get("tools", [])),
-                    "reasoning": result.get("reasoning", ""),
-                    "domain": result.get("domain", "unknown"),
-                    "rules": result.get("rules", "")
-                }, indent=2)
+                return json.dumps(
+                    {
+                        "success": True,
+                        "query": query,
+                        "recommended_tools": result.get("suggested_tools", result.get("tools", [])),
+                        "reasoning": result.get("reasoning", ""),
+                        "domain": result.get("domain", "unknown"),
+                        "rules": result.get("rules", ""),
+                    },
+                    indent=2,
+                )
             else:
-                return json.dumps({
-                    "success": True,
-                    "query": query,
-                    "routing": result
-                }, indent=2)
+                return json.dumps({"success": True, "query": query, "routing": result}, indent=2)
 
         except Exception as e:
             log_decision("router.consult_failed", {"error": str(e)}, logger)
-            return json.dumps({
-                "success": False,
-                "error": str(e),
-                "message": "Router consultation failed."
-            })
+            return json.dumps(
+                {"success": False, "error": str(e), "message": "Router consultation failed."}
+            )
 
     @mcp.tool()
     async def swarm_status() -> str:
@@ -102,31 +103,34 @@ def register_router_tools(mcp: FastMCP) -> None:
 
             health = get_swarm_health()
 
-            return json.dumps({
-                "status": "healthy" if health.get("healthy") else "degraded",
-                "servers": health.get("servers", {}),
-                "metrics": health.get("metrics", {}),
-                "timestamp": health.get("timestamp", "")
-            }, indent=2)
+            return json.dumps(
+                {
+                    "status": "healthy" if health.get("healthy") else "degraded",
+                    "servers": health.get("servers", {}),
+                    "metrics": health.get("metrics", {}),
+                    "timestamp": health.get("timestamp", ""),
+                },
+                indent=2,
+            )
 
         except ImportError:
             # Fallback if swarm module doesn't exist
-            return json.dumps({
-                "status": "unknown",
-                "message": "Swarm monitoring not available",
-                "servers": {
-                    "orchestrator": {"status": "running", "tools": "active"},
-                    "executor": {"status": "running", "tools": "active"},
-                    "coder": {"status": "running", "tools": "active"}
-                }
-            }, indent=2)
+            return json.dumps(
+                {
+                    "status": "unknown",
+                    "message": "Swarm monitoring not available",
+                    "servers": {
+                        "orchestrator": {"status": "running", "tools": "active"},
+                        "executor": {"status": "running", "tools": "active"},
+                        "coder": {"status": "running", "tools": "active"},
+                    },
+                },
+                indent=2,
+            )
 
         except Exception as e:
             log_decision("swarm.status_failed", {"error": str(e)}, logger)
-            return json.dumps({
-                "status": "error",
-                "error": str(e)
-            }, indent=2)
+            return json.dumps({"status": "error", "error": str(e)}, indent=2)
 
     @mcp.tool()
     async def community_proxy(mcp_name: str, query: str) -> str:
@@ -155,60 +159,72 @@ def register_router_tools(mcp: FastMCP) -> None:
                 "status": "not_configured",
                 "setup_url": "https://github.com/anthropic/mcp-kubernetes",
                 "description": "Kubernetes cluster management",
-                "requires_config": True
+                "requires_config": True,
             },
             "postgres": {
                 "status": "not_configured",
                 "setup_url": "https://github.com/anthropic/mcp-postgres",
                 "description": "PostgreSQL database operations",
-                "requires_config": True
+                "requires_config": True,
             },
             "filesystem": {
                 "status": "built-in",
                 "description": "Use coder.py tools for file operations",
-                "alternative": "save_file, read_file, search_files from coder.py"
-            }
+                "alternative": "save_file, read_file, search_files from coder.py",
+            },
         }
 
         if mcp_name not in community_mcps:
             available = list(community_mcps.keys())
-            return json.dumps({
-                "success": False,
-                "error": f"Unknown MCP: {mcp_name}",
-                "available_mcps": available
-            }, indent=2)
+            return json.dumps(
+                {
+                    "success": False,
+                    "error": f"Unknown MCP: {mcp_name}",
+                    "available_mcps": available,
+                },
+                indent=2,
+            )
 
         mcp_config = community_mcps[mcp_name]
 
         if mcp_config["status"] == "not_configured":
-            return json.dumps({
-                "success": False,
-                "mcp_name": mcp_name,
-                "status": "not_configured",
-                "description": mcp_config["description"],
-                "setup_url": mcp_config["setup_url"],
-                "message": f"Community MCP '{mcp_name}' is not configured.",
-                "instructions": f"Install and configure {mcp_config['setup_url']}"
-            }, indent=2)
+            return json.dumps(
+                {
+                    "success": False,
+                    "mcp_name": mcp_name,
+                    "status": "not_configured",
+                    "description": mcp_config["description"],
+                    "setup_url": mcp_config["setup_url"],
+                    "message": f"Community MCP '{mcp_name}' is not configured.",
+                    "instructions": f"Install and configure {mcp_config['setup_url']}",
+                },
+                indent=2,
+            )
 
         if mcp_name == "filesystem":
-            return json.dumps({
-                "success": True,
-                "mcp_name": mcp_name,
-                "status": "built-in",
-                "description": mcp_config["description"],
-                "alternative": mcp_config["alternative"],
-                "message": "Use coder.py MCP server for file operations"
-            }, indent=2)
+            return json.dumps(
+                {
+                    "success": True,
+                    "mcp_name": mcp_name,
+                    "status": "built-in",
+                    "description": mcp_config["description"],
+                    "alternative": mcp_config["alternative"],
+                    "message": "Use coder.py MCP server for file operations",
+                },
+                indent=2,
+            )
 
         # For configured MCPs, proxy the request
-        return json.dumps({
-            "success": False,
-            "status": "not_implemented",
-            "message": f"Community proxy for {mcp_name} not yet implemented",
-            "mcp_name": mcp_name,
-            "query": query
-        }, indent=2)
+        return json.dumps(
+            {
+                "success": False,
+                "status": "not_implemented",
+                "message": f"Community proxy for {mcp_name} not yet implemented",
+                "mcp_name": mcp_name,
+                "query": query,
+            },
+            indent=2,
+        )
 
     @mcp.tool()
     async def consult_specialist(role: str, query: str, stream: bool = False) -> str:
@@ -238,12 +254,15 @@ def register_router_tools(mcp: FastMCP) -> None:
         # Check if persona exists
         if role not in PERSONAS:
             available = list(PERSONAS.keys())
-            return json.dumps({
-                "success": False,
-                "error": f"Unknown persona: {role}",
-                "available_personas": available,
-                "message": f"Persona '{role}' is not defined. Choose from: {', '.join(available)}"
-            }, indent=2)
+            return json.dumps(
+                {
+                    "success": False,
+                    "error": f"Unknown persona: {role}",
+                    "available_personas": available,
+                    "message": f"Persona '{role}' is not defined. Choose from: {', '.join(available)}",
+                },
+                indent=2,
+            )
 
         persona = PERSONAS[role]
         persona_name = persona.get("name", role)
@@ -265,10 +284,7 @@ def register_router_tools(mcp: FastMCP) -> None:
                         pass
 
         # Build the expert response based on persona
-        expert_response = (
-            f"**Expert Opinion from {persona_name}**\n"
-            f"_{persona_description}_\n\n"
-        )
+        expert_response = f"**Expert Opinion from {persona_name}**\n_{persona_description}_\n\n"
 
         # Add project context if available
         if project_context:
@@ -383,12 +399,16 @@ def register_router_tools(mcp: FastMCP) -> None:
 
         log_decision("specialist.consult", {"role": role, "query_length": len(query)}, logger)
 
-        return json.dumps({
-            "success": True,
-            "role": role,
-            "persona": persona_name,
-            "query": query,
-            "response": expert_response
-        }, indent=2, ensure_ascii=False)
+        return json.dumps(
+            {
+                "success": True,
+                "role": role,
+                "persona": persona_name,
+                "query": query,
+                "response": expert_response,
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
 
     log_decision("router_tools.registered", {}, logger)

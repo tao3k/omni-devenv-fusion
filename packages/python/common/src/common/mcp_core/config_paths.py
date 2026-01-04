@@ -27,6 +27,7 @@ Usage:
     # Get MCP config path
     mcp_path = get_mcp_config_path()
 """
+
 from __future__ import annotations
 
 import json
@@ -42,6 +43,7 @@ from common.mcp_core.gitops import get_project_root
 # YAML support (try PyYAML first, fallback to simple parsing)
 try:
     import yaml
+
     YAML_AVAILABLE = True
 except ImportError:
     YAML_AVAILABLE = False
@@ -223,7 +225,7 @@ class ConfigPaths:
         settings_path = self.get_anthropic_settings_path()
         if settings_path and settings_path.exists():
             try:
-                with open(settings_path, 'r') as f:
+                with open(settings_path, "r") as f:
                     config = json.load(f)
                 env = config.get("env", {})
                 base_url = env.get("ANTHROPIC_BASE_URL")
@@ -259,7 +261,7 @@ class ConfigPaths:
         settings_path = self.get_anthropic_settings_path()
         if settings_path and settings_path.exists():
             try:
-                with open(settings_path, 'r') as f:
+                with open(settings_path, "r") as f:
                     config = json.load(f)
                 env = config.get("env", {})
                 api_key = env.get("ANTHROPIC_AUTH_TOKEN") or env.get("ANTHROPIC_API_KEY")
@@ -272,7 +274,7 @@ class ConfigPaths:
         mcp_path = self.get_mcp_config_path()
         if mcp_path and mcp_path.exists():
             try:
-                with open(mcp_path, 'r') as f:
+                with open(mcp_path, "r") as f:
                     config = json.load(f)
                 servers = config.get("mcpServers", {})
                 orchestrator = servers.get("orchestrator", {})
@@ -299,7 +301,7 @@ class ConfigPaths:
         mcp_path = self.get_mcp_config_path()
         if mcp_path and mcp_path.exists():
             try:
-                with open(mcp_path, 'r') as f:
+                with open(mcp_path, "r") as f:
                     return json.load(f)
             except Exception:
                 pass
@@ -350,23 +352,27 @@ class ConfigPaths:
             {
                 "name": "settings.yaml",
                 "path": str(Path(get_conf_dir()) / "settings.yaml"),
-                "exists": (Path(get_conf_dir()) / "settings.yaml").exists()
+                "exists": (Path(get_conf_dir()) / "settings.yaml").exists(),
             },
             {
                 "name": "anthropic_settings",
                 "path": str(self.get_anthropic_settings_path()),
-                "exists": self.get_anthropic_settings_path().exists() if self.get_anthropic_settings_path() else False
+                "exists": self.get_anthropic_settings_path().exists()
+                if self.get_anthropic_settings_path()
+                else False,
             },
             {
                 "name": "mcp_config",
                 "path": str(self.get_mcp_config_path()),
-                "exists": self.get_mcp_config_path().exists() if self.get_mcp_config_path() else False
+                "exists": self.get_mcp_config_path().exists()
+                if self.get_mcp_config_path()
+                else False,
             },
             {
                 "name": "cog_toml",
                 "path": str(self.get_cog_toml_path()),
-                "exists": self.get_cog_toml_path().exists() if self.get_cog_toml_path() else False
-            }
+                "exists": self.get_cog_toml_path().exists() if self.get_cog_toml_path() else False,
+            },
         ]
         return configs
 
@@ -380,6 +386,7 @@ class ConfigPaths:
 # =============================================================================
 # Convenience Functions
 # =============================================================================
+
 
 def get_config_paths() -> ConfigPaths:
     """Get the ConfigPaths singleton instance."""
@@ -519,7 +526,9 @@ class AuthorizationWait:
 """
 
     @classmethod
-    def check_confirmation(cls, user_input: str, auth_token: str | None = None) -> tuple[bool, str | None]:
+    def check_confirmation(
+        cls, user_input: str, auth_token: str | None = None
+    ) -> tuple[bool, str | None]:
         """
         Check if user input confirms any pending authorization.
 
