@@ -37,6 +37,18 @@ class AgentResult(BaseModel):
     tool_calls: List[Dict[str, Any]] = []
     message: str = ""
     confidence: float = 0.5
+    # Phase 15: Feedback Loop fields
+    audit_result: Optional[Dict[str, Any]] = None
+    needs_review: bool = False
+
+
+class AuditResult(BaseModel):
+    """Result from Reviewer's audit of another agent's output."""
+    approved: bool
+    feedback: str = ""
+    confidence: float = 0.5
+    issues_found: List[str] = []
+    suggestions: List[str] = []
 
 
 class BaseAgent(ABC):

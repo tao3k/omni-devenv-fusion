@@ -6,6 +6,10 @@ Phase 14 Enhancement:
 - Coordinates flow between User -> Router -> Specialized Agents
 - Handles dispatch, context injection, and execution lifecycle
 
+Phase 15 Enhancement:
+- Feedback Loop: Coder executes → Reviewer audits → Self-correction if needed
+- Virtuous Cycle ensures quality output before returning to user
+
 Usage:
     from agent.core.orchestrator import Orchestrator
 
@@ -16,11 +20,15 @@ import structlog
 from typing import Dict, Any, Optional, List
 
 from agent.core.router import get_hive_router, AgentRoute
-from agent.core.agents.base import BaseAgent, AgentResult
+from agent.core.agents.base import BaseAgent, AgentResult, AuditResult
 from agent.core.agents.coder import CoderAgent
 from agent.core.agents.reviewer import ReviewerAgent
 
 logger = structlog.get_logger()
+
+# Phase 15: Feedback Loop Configuration
+DEFAULT_MAX_RETRIES = 2
+DEFAULT_FEEDBACK_ENABLED = True
 
 
 class Orchestrator:
@@ -28,22 +36,27 @@ class Orchestrator:
     The Central Switchboard.
     Coordinates the flow between User -> Router -> Specialized Agents.
 
-    Responsibilities:
+    Phase 15: Implements the Virtuous Cycle (Feedback Loop):
     1. Route: Consult HiveRouter for agent delegation
-    2. Instantiate: Create the right Agent for the job
-    3. Execute: Run the agent with Mission Brief
-    4. Return: Aggregate results back to user
+    2. Execute: Worker agent runs with Mission Brief
+    3. Audit: Reviewer checks output (for Coder tasks)
+    4. Self-Correct: Retry with feedback if audit fails
+    5. Return: Quality-assured result to user
     """
 
-    def __init__(self, inference_engine=None):
+    def __init__(self, inference_engine=None, feedback_enabled: bool = DEFAULT_FEEDBACK_ENABLED, max_retries: int = DEFAULT_MAX_RETRIES):
         """
         Initialize Orchestrator.
 
         Args:
             inference_engine: Optional inference engine for LLM calls
+            feedback_enabled: Enable Phase 15 feedback loop (default: True)
+            max_retries: Maximum self-correction retries (default: 2)
         """
         self.inference = inference_engine
         self.router = get_hive_router()
+        self.feedback_enabled = feedback_enabled
+        self.max_retries = max_retries
 
         # Agent Registry - Maps target_agent names to Agent classes
         self.agent_map: Dict[str, type] = {
@@ -59,7 +72,14 @@ class Orchestrator:
         context: Dict[str, Any] = None
     ) -> str:
         """
-        Main Dispatch Loop.
+        Main Dispatch Loop with Phase 15 Feedback Loop.
+
+        Phase 15 Flow:
+        1. Route request to appropriate agent
+        2. Execute worker (Coder/Reviewer)
+        3. If Coder: Reviewer audits output
+        4. If audit fails: Retry with correction brief
+        5. Return quality-assured result
 
         Args:
             user_query: The user's request
@@ -105,6 +125,18 @@ class Orchestrator:
             brief=task_brief[:80]
         )
 
+        # Phase 15: Feedback Loop for Coder tasks
+        if self.feedback_enabled and route.target_agent == "coder":
+            return await self._execute_with_feedback_loop(
+                user_query=user_query,
+                worker=worker,
+                task_brief=task_brief,
+                constraints=route.constraints or [],
+                relevant_files=route.relevant_files or [],
+                history=history or []
+            )
+
+        # Standard execution (non-feedback path)
         try:
             result: AgentResult = await worker.run(
                 task=user_query,
@@ -125,6 +157,124 @@ class Orchestrator:
         except Exception as e:
             logger.error("❌ Agent execution failed", error=str(e))
             return f"System Error during execution: {str(e)}"
+
+    async def _execute_with_feedback_loop(
+        self,
+        user_query: str,
+        worker: BaseAgent,
+        task_brief: str,
+        constraints: List[str],
+        relevant_files: List[str],
+        history: List[Dict[str, Any]]
+    ) -> str:
+        """
+        Execute with Phase 15 Feedback Loop.
+
+        The Virtuous Cycle:
+        1. Execute CoderAgent
+        2. Reviewer audits output
+        3. If rejected: Retry with correction brief
+        4. Repeat until approved or max retries
+
+        Args:
+            user_query: Original user request
+            worker: CoderAgent instance
+            task_brief: Mission Brief
+            constraints: Task constraints
+            relevant_files: Relevant files
+            history: Conversation history
+
+        Returns:
+            Quality-assured response content
+        """
+        reviewer = ReviewerAgent()
+        audit_history = []
+
+        for attempt in range(1, self.max_retries + 1):
+            logger.info(f"🔄 Execution attempt {attempt}/{self.max_retries}")
+
+            # Step 1: Execute worker (Coder)
+            try:
+                result: AgentResult = await worker.run(
+                    task=user_query,
+                    mission_brief=task_brief,
+                    constraints=constraints,
+                    relevant_files=relevant_files,
+                    chat_history=history
+                )
+            except Exception as e:
+                logger.error("❌ Worker execution failed", error=str(e))
+                return f"System Error during execution: {str(e)}"
+
+            # Step 2: Reviewer audits output
+            logger.info("🕵️ Reviewer auditing output...")
+            audit_result: AuditResult = await reviewer.audit(
+                task=user_query,
+                agent_output=result.content,
+                context={
+                    "constraints": constraints,
+                    "relevant_files": relevant_files,
+                    "attempt": attempt
+                }
+            )
+
+            audit_entry = {
+                "attempt": attempt,
+                "approved": audit_result.approved,
+                "feedback": audit_result.feedback,
+                "issues": audit_result.issues_found,
+                "suggestions": audit_result.suggestions
+            }
+            audit_history.append(audit_entry)
+
+            # Step 3: Check if approved
+            if audit_result.approved:
+                logger.info(
+                    "✅ Audit passed",
+                    confidence=audit_result.confidence,
+                    attempt=attempt
+                )
+
+                # Log full audit history for transparency
+                logger.debug("Audit history", audits=audit_history)
+
+                return result.content
+
+            # Step 4: Self-correction loop
+            logger.info(
+                "⚠️ Audit failed, initiating self-correction",
+                issues=audit_result.issues_found[:3]  # Log first 3 issues
+            )
+
+            # Build correction brief for retry
+            correction_parts = [
+                f"Previous attempt (attempt {attempt}) was rejected by quality review.",
+                f"Issues found: {', '.join(audit_result.issues_found)}",
+                f"Reviewer feedback: {audit_result.feedback}",
+                "",
+                "Original task: " + user_query,
+                "",
+                "Please fix the issues and provide corrected output."
+            ]
+
+            if audit_result.suggestions:
+                correction_parts.extend([
+                    "",
+                    "Suggestions for improvement:",
+                    * [f"- {s}" for s in audit_result.suggestions]
+                ])
+
+            task_brief = "\n".join(correction_parts)
+
+        # Max retries exceeded
+        logger.error("❌ Max retries exceeded, returning last result with warnings")
+
+        # Include audit history in final response for transparency
+        warning_header = f"⚠️ Quality review failed after {self.max_retries} attempts.\n"
+        audit_summary = f"Audit issues: {', '.join(audit_history[-1]['issues'])}\n"
+        last_feedback = audit_history[-1]['feedback']
+
+        return f"{warning_header}{audit_summary}\nReviewer said: {last_feedback}\n\n{result.content}"
 
     async def dispatch_with_hive_context(
         self,
