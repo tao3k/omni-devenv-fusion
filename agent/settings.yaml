@@ -81,12 +81,23 @@ prompts:
   user_custom_path: ".cache/user_custom.md"
 
 # =============================================================================
+# Memory Configuration (Phase 13.10: Hippocampus)
+# =============================================================================
+# Memory path follows prj-spec: {git_toplevel}/.cache/{project}/.memory/
+# Override with custom path if needed
+memory:
+  # Custom memory path (leave empty to use default prj-spec)
+  # path: "/custom/path/.memory"
+  path: ""
+
+# =============================================================================
 # Phase 13.10: Dynamic Skill Loading
 # =============================================================================
 skills:
   # Skills to preload at server startup (loaded into context immediately)
   preload:
-    - knowledge
+    - knowledge # Project Cortex - Load FIRST
+    - memory # Hippocampus - Vector memory
     - git
     - filesystem
     - writer

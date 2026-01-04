@@ -27,10 +27,11 @@ GitOps Utilities:
     - get_docs_dir(): Get docs directory
     - get_agent_dir(): Get agent directory
     - get_src_dir(): Get src directory
+    - run_git_cmd(): Run git command (for commit/push only)
 """
-import sys
+import subprocess
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 # Cache for project root (singleton pattern)
 _project_root: Optional[Path] = None
@@ -59,7 +60,6 @@ def get_project_root() -> Path:
 
     # Method 1: Git toplevel (Primary - GitOps)
     try:
-        import subprocess
         result = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
             capture_output=True,
@@ -177,7 +177,6 @@ def is_project_root(path: Path) -> bool:
     )
 
 
-# For backwards compatibility, also expose the git toplevel function
 def get_git_toplevel() -> Optional[Path]:
     """
     Get git toplevel directory (legacy function, use get_project_root()).
@@ -186,7 +185,6 @@ def get_git_toplevel() -> Optional[Path]:
         Path to git repository root or None
     """
     try:
-        import subprocess
         result = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
             capture_output=True,
@@ -200,39 +198,15 @@ def get_git_toplevel() -> Optional[Path]:
     return None
 
 
-__all__ = [
-    "get_project_root",
-    "get_spec_dir",
-    "get_instructions_dir",
-    "get_docs_dir",
-    "get_agent_dir",
-    "get_src_dir",
-    "reset_project_root",
-    "is_project_root",
-    "is_git_repo",
-    "get_git_toplevel",
-    # Git command utilities
-    "run_git_cmd",
-    "get_git_status",
-    "get_git_diff",
-    "get_git_log",
-]
-
-
-# =============================================================================
-# Git Command Utilities
-# =============================================================================
-
-import subprocess
-from typing import List
-
-
 async def run_git_cmd(args: List[str]) -> str:
     """
     Run a git command and return the output.
 
+    Note: For safe read operations (status, diff, log), use Claude-native bash.
+    This function is ONLY for critical operations (commit, push) via MCP.
+
     Args:
-        args: Git command arguments (e.g., ["status", "-s"])
+        args: Git command arguments (e.g., ["commit", "-m", "message"])
 
     Returns:
         Command output string
@@ -251,38 +225,16 @@ async def run_git_cmd(args: List[str]) -> str:
     return result.stdout
 
 
-async def get_git_status() -> str:
-    """Get git status in porcelain format."""
-    result = subprocess.run(
-        ["git", "status", "--porcelain"],
-        capture_output=True,
-        text=True,
-    )
-    return result.stdout
-
-
-async def get_git_diff(staged: bool = True) -> str:
-    """Get git diff for staged or unstaged changes."""
-    if staged:
-        result = subprocess.run(
-            ["git", "diff", "--cached"],
-            capture_output=True,
-            text=True,
-        )
-    else:
-        result = subprocess.run(
-            ["git", "diff"],
-            capture_output=True,
-            text=True,
-        )
-    return result.stdout
-
-
-async def get_git_log(n: int = 5) -> str:
-    """Get recent git commits."""
-    result = subprocess.run(
-        ["git", "log", "--oneline", "-n", str(n)],
-        capture_output=True,
-        text=True,
-    )
-    return result.stdout
+__all__ = [
+    "get_project_root",
+    "get_spec_dir",
+    "get_instructions_dir",
+    "get_docs_dir",
+    "get_agent_dir",
+    "get_src_dir",
+    "reset_project_root",
+    "is_project_root",
+    "is_git_repo",
+    "get_git_toplevel",
+    "run_git_cmd",
+]

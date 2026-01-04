@@ -216,7 +216,7 @@ _SKILLS_ROOT = Path.cwd() / "agent" / "skills"
 
 
 class TestGitSkill:
-    """Tests for Git Skill (Phase 13.10 - Executor Mode)."""
+    """Tests for Git Skill (Phase 13.10 - Critical Operations Only)."""
 
     def test_git_skill_module_exists(self):
         """Verify git skill module exists."""
@@ -224,28 +224,23 @@ class TestGitSkill:
         assert git_tools_py.exists(), f"Git skill not found at {git_tools_py}"
 
     def test_git_skill_tools_defined(self):
-        """Verify all git skill tools are defined in the module."""
+        """Verify critical git tools (commit, push) are defined."""
         import ast
 
         git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
         content = git_tools_py.read_text()
         tree = ast.parse(content)
 
-        # Find all async function definitions (these are the tools)
         tool_names = []
         for node in ast.walk(tree):
             if isinstance(node, ast.AsyncFunctionDef):
                 tool_names.append(node.name)
 
-        # Expected tools (simplified - no deprecated tools)
-        expected_tools = ["git_status", "git_diff_staged", "git_diff_unstaged",
-                          "git_log", "git_add", "git_commit"]
-
-        for tool in expected_tools:
-            assert tool in tool_names, f"Expected tool '{tool}' not found. Found: {tool_names}"
+        assert "git_commit" in tool_names, "git_commit should be defined"
+        assert "git_push" in tool_names, "git_push should be defined"
 
     def test_no_deprecated_tools(self):
-        """Verify deprecated tools (spec_aware_commit, smart_commit) are removed."""
+        """Verify only critical git tools exist (commit, push)."""
         import ast
 
         git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
@@ -257,9 +252,8 @@ class TestGitSkill:
             if isinstance(node, ast.AsyncFunctionDef):
                 tool_names.append(node.name)
 
-        # These should NOT exist
-        assert "spec_aware_commit" not in tool_names, "spec_aware_commit should be removed"
-        assert "smart_commit" not in tool_names, "smart_commit should be removed"
+        # Should only have git_commit and git_push
+        assert tool_names == ["git_commit", "git_push"], f"Expected only git_commit and git_push, found: {tool_names}"
 
     def test_git_commit_has_message_param(self):
         """Verify git_commit has message parameter."""
@@ -282,8 +276,29 @@ class TestGitSkill:
         args = [arg.arg for arg in git_commit_func.args.args]
         assert "message" in args, "git_commit should have 'message' parameter"
 
+    def test_git_push_has_no_params(self):
+        """Verify git_push has no parameters (no-arg tool)."""
+        import ast
+
+        git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
+        content = git_tools_py.read_text()
+        tree = ast.parse(content)
+
+        # Find git_push function
+        git_push_func = None
+        for node in ast.walk(tree):
+            if isinstance(node, ast.AsyncFunctionDef) and node.name == "git_push":
+                git_push_func = node
+                break
+
+        assert git_push_func is not None, "git_push not found"
+
+        # Verify function has no required parameters
+        args = [arg.arg for arg in git_push_func.args.args]
+        assert len(args) == 0, f"git_push should have no parameters, found: {args}"
+
     def test_git_skill_uses_gitops(self):
-        """Verify git skill uses gitops module."""
+        """Verify git skill uses run_git_cmd from gitops."""
         import ast
 
         git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
@@ -298,10 +313,8 @@ class TestGitSkill:
                     for alias in node.names:
                         imports.append(alias.asname or alias.name)
 
-        # Should import git command functions
-        required_imports = ["run_git_cmd", "get_git_status", "get_git_diff", "get_git_log"]
-        for imp in required_imports:
-            assert imp in imports, f"git skill should import '{imp}' from gitops"
+        # Should import run_git_cmd
+        assert "run_git_cmd" in imports, "git skill should import 'run_git_cmd' from gitops"
 
     def test_git_skill_supports_hot_reload(self):
         """Verify git skill structure supports hot reload."""
@@ -490,6 +503,88 @@ class TestKnowledgeSkill:
         # Knowledge tools should NOT call subprocess
         assert "subprocess" not in content, "Knowledge tools should not execute commands"
         assert "os.system" not in content, "Knowledge tools should not execute commands"
+
+
+# =============================================================================
+# Phase 13.10: Memory Skill Tests (Hippocampus Interface)
+# =============================================================================
+
+class TestMemorySkill:
+    """Tests for Memory Skill (Vector-based Memory)."""
+
+    def test_memory_skill_module_exists(self):
+        """Verify memory skill module exists."""
+        memory_tools_py = _SKILLS_ROOT / "memory" / "tools.py"
+        assert memory_tools_py.exists(), f"Memory skill not found at {memory_tools_py}"
+
+    def test_memory_tools_defined(self):
+        """Verify memory tools are defined."""
+        import ast
+
+        memory_tools_py = _SKILLS_ROOT / "memory" / "tools.py"
+        content = memory_tools_py.read_text()
+        tree = ast.parse(content)
+
+        tool_names = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.AsyncFunctionDef):
+                tool_names.append(node.name)
+
+        expected_tools = [
+            "remember_insight",
+            "log_episode",
+            "recall",
+            "list_harvested_knowledge",
+            "harvest_session_insight",
+            "get_memory_stats"
+        ]
+
+        for tool in expected_tools:
+            assert tool in tool_names, f"Expected tool '{tool}' not found. Found: {tool_names}"
+
+    def test_memory_skill_has_register(self):
+        """Verify memory skill has register function."""
+        import ast
+
+        memory_tools_py = _SKILLS_ROOT / "memory" / "tools.py"
+        content = memory_tools_py.read_text()
+        tree = ast.parse(content)
+
+        has_register = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "register":
+                has_register = True
+                break
+
+        assert has_register, "Memory skill should have 'register' function"
+
+    def test_memory_skill_uses_chromadb(self):
+        """Verify memory skill uses ChromaDB for vector storage."""
+        import ast
+
+        memory_tools_py = _SKILLS_ROOT / "memory" / "tools.py"
+        content = memory_tools_py.read_text()
+
+        # Should import chromadb
+        assert "chromadb" in content, "Memory skill should use ChromaDB"
+
+    def test_memory_skill_manifest_valid(self):
+        """Verify memory skill has valid manifest."""
+        from agent.core.skill_registry import get_skill_registry
+
+        registry = get_skill_registry()
+        manifest = registry.get_skill_manifest("memory")
+
+        assert manifest is not None
+        assert manifest.name == "memory"
+        assert "Hippocampus" in manifest.description
+
+    def test_memory_skill_in_preload(self):
+        """Verify memory skill is in preload list."""
+        from common.mcp_core.settings import get_setting
+
+        preload = get_setting("skills.preload", [])
+        assert "memory" in preload, "memory skill should be preloaded"
 
 
 # =============================================================================

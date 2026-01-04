@@ -10,11 +10,11 @@
 
 Modern Agent systems should follow a clear separation of concerns:
 
-| Layer | Purpose | Technology | Rules |
-|-------|---------|------------|-------|
-| **Brain** | Rules, logic, routing | Markdown (`prompts.md`, `guide.md`) | LLM learns from docs |
-| **Muscle** | Atomic execution | Python (`tools.py`) | Blind, stateless |
-| **Guardrails** | Hard compliance | Lefthook, Cog, Pre-commit | System-level validation |
+| Layer          | Purpose               | Technology                          | Rules                   |
+| -------------- | --------------------- | ----------------------------------- | ----------------------- |
+| **Brain**      | Rules, logic, routing | Markdown (`prompts.md`, `guide.md`) | LLM learns from docs    |
+| **Muscle**     | Atomic execution      | Python (`tools.py`)                 | Blind, stateless        |
+| **Guardrails** | Hard compliance       | Lefthook, Cog, Pre-commit           | System-level validation |
 
 ### Key Principle
 
@@ -29,6 +29,7 @@ Modern Agent systems should follow a clear separation of concerns:
 ### 1. Zero Maintenance
 
 **Traditional Approach:**
+
 ```python
 # Python code holds business rules
 if scope not in VALID_SCOPES:
@@ -36,23 +37,26 @@ if scope not in VALID_SCOPES:
 ```
 
 **Agent Native Approach:**
+
 ```markdown
 # prompts.md
+
 Valid scopes: feat, fix, docs, style, refactor, perf, test, build, ci, chore
 ```
 
 **Result:**
+
 - Change rules without code changes
 - No Python hot reload needed
 - LLM learns from documentation
 
 ### 2. True Agentic Behavior
 
-| Traditional | Agent Native |
-|-------------|--------------|
+| Traditional              | Agent Native           |
+| ------------------------ | ---------------------- |
 | Python `if/else` routing | LLM reads `prompts.md` |
-| Hard-coded validation | LLM understands rules |
-| Code-driven workflow | Prompt-driven routing |
+| Hard-coded validation    | LLM understands rules  |
+| Code-driven workflow     | Prompt-driven routing  |
 
 ### 3. Separation of Concerns
 
@@ -131,19 +135,24 @@ def register(mcp: FastMCP):
 ## Router Logic
 
 ### When user says "X"
+
 1. **Observe**: Read context
 2. **Analyze**: Generate plan
 3. **Execute**: Call appropriate tool
 
 ### Anti-Patterns
+
 - Don't use [deprecated tool]
 - Don't do [wrong behavior]
 
 ## Example Flow
 ```
+
 User: commit
 Claude: (analyzes) → shows analysis → calls tool
+
 ```
+
 ```
 
 ### manifest.json
@@ -166,11 +175,13 @@ Claude: (analyzes) → shows analysis → calls tool
 ### Adding a New Rule
 
 **Before (Traditional):**
+
 1. Modify Python validation code
 2. Deploy/Reload
 3. Test
 
 **After (Agent Native):**
+
 1. Edit `prompts.md`
 2. Done - LLM learns immediately
 
@@ -226,6 +237,7 @@ def commit_workflow():
 # In prompts.md
 
 ## Workflow
+
 1. Observe git_status
 2. Generate message
 3. Show analysis
@@ -239,12 +251,12 @@ def commit_workflow():
 
 ### Guardrails (Validation)
 
-| Tool | Purpose |
-|------|---------|
+| Tool       | Purpose          |
+| ---------- | ---------------- |
 | `lefthook` | Pre-commit hooks |
-| `cog` | Code generation |
-| `ruff` | Python linting |
-| `vale` | Writing style |
+| `cog`      | Code generation  |
+| `ruff`     | Python linting   |
+| `vale`     | Writing style    |
 
 These are the **final line of defense**. If LLM produces invalid output, these tools reject it.
 
@@ -270,7 +282,7 @@ Skills are configured in `agent/settings.yaml`:
 skills:
   # Skills loaded at startup (available immediately)
   preload:
-    - knowledge    # Project Cortex - Load FIRST
+    - knowledge # Project Cortex - Load FIRST
     - git
     - filesystem
     - writer
@@ -284,9 +296,9 @@ skills:
 
 **How it works:**
 
-| Mode | How to Activate |
-|------|-----------------|
-| Preload | Auto-loaded at server startup |
+| Mode      | How to Activate                      |
+| --------- | ------------------------------------ |
+| Preload   | Auto-loaded at server startup        |
 | On-Demand | LLM calls `load_skill('skill_name')` |
 
 **Available tools:**
@@ -295,6 +307,21 @@ skills:
 - `get_active_skills()` - Show currently loaded skills
 - `list_skill_modes()` - Show preload vs available-on-demand status
 - `load_skill('name')` - Load a skill on-demand (also triggers hot reload)
+
+### Git Skill (Simplified)
+
+The git skill is now **minimal** - only critical operations go through MCP:
+
+| Operation    | How                | Why                     |
+| ------------ | ------------------ | ----------------------- |
+| `git_commit` | MCP tool           | Needs user confirmation |
+| `git_push`   | MCP tool           | Destructive operation   |
+| `git status` | Claude-native bash | Read-only, safe         |
+| `git diff`   | Claude-native bash | Read-only, safe         |
+| `git log`    | Claude-native bash | Read-only, safe         |
+| `git add`    | Claude-native bash | Safe staging            |
+
+**Principle: Read = bash. Write = MCP.**
 
 ### Knowledge Skill (Project Cortex)
 

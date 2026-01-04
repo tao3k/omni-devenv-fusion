@@ -6,11 +6,11 @@
 
 ## Quick Reference
 
-| Task         | Tool / Command                                 |
-| ------------ | --------------------------------------------- |
-| View status  | Auto-injected in System Prompt ({{git_status}}) |
-| Stage files  | `git_add(files=[...])`                        |
-| Commit       | `git_commit(message="type(scope): desc")`     |
+| Task        | Tool / Command                                  |
+| ----------- | ----------------------------------------------- |
+| View status | Auto-injected in System Prompt ({{git_status}}) |
+| Stage files | `git_add(files=[...])`                          |
+| Commit      | `git_commit(message="type(scope): desc")`       |
 
 ---
 
@@ -18,11 +18,11 @@
 
 **This is the #1 rule violation that keeps happening:**
 
-| What I Did Wrong          | Why It's Wrong                              |
-| ------------------------- | ------------------------------------------ |
-| `git status` (Bash)       | Status is auto-injected, no tool call      |
-| `git commit` (Bash)       | Bypasses authorization protocol            |
-| `git diff` (Bash)         | Should use `git_diff_staged()`              |
+| What I Did Wrong    | Why It's Wrong                        |
+| ------------------- | ------------------------------------- |
+| `git status` (Bash) | Status is auto-injected, no tool call |
+| `git commit` (Bash) | Bypasses authorization protocol       |
+| `git diff` (Bash)   | Should use `git_diff_staged()`        |
 
 ### The Correct Workflow (Executor Mode)
 
@@ -49,6 +49,7 @@ Claude: ✅ Commit Successful
 ```
 
 **Steps:**
+
 1. User says "commit"
 2. Claude reads `{{git_status}}` from context
 3. Claude generates message and shows analysis
@@ -60,12 +61,12 @@ Claude: ✅ Commit Successful
 
 Use MCP tools instead:
 
-| Instead of       | Use This Tool                    |
-| ---------------- | ------------------------------- |
-| `git commit`     | `git_commit(message="...")`     |
-| `git add .`      | `git_add(files=["."])`          |
-| `git status`     | Auto-injected (no tool)         |
-| `git diff`       | `git_diff_staged()`             |
+| Instead of   | Use This Tool               |
+| ------------ | --------------------------- |
+| `git commit` | `git_commit(message="...")` |
+| `git add .`  | `git_add(files=["."])`      |
+| `git status` | Auto-injected (no tool)     |
+| `git diff`   | `git_diff_staged()`         |
 
 ---
 
@@ -79,18 +80,18 @@ All commits follow **Conventional Commits**:
 
 ### Types
 
-| Type       | Description                                   |
-| ---------- | --------------------------------------------- |
-| `feat`     | New feature                                   |
-| `fix`      | Bug fix                                       |
-| `docs`     | Documentation changes                         |
-| `style`    | Formatting (no code change)                   |
-| `refactor` | Code restructure                              |
-| `perf`     | Performance improvement                       |
-| `test`     | Adding or fixing tests                        |
-| `build`    | Build system or dependencies                  |
-| `ci`       | CI/CD pipeline changes                        |
-| `chore`    | Maintenance tasks                             |
+| Type       | Description                  |
+| ---------- | ---------------------------- |
+| `feat`     | New feature                  |
+| `fix`      | Bug fix                      |
+| `docs`     | Documentation changes        |
+| `style`    | Formatting (no code change)  |
+| `refactor` | Code restructure             |
+| `perf`     | Performance improvement      |
+| `test`     | Adding or fixing tests       |
+| `build`    | Build system or dependencies |
+| `ci`       | CI/CD pipeline changes       |
+| `chore`    | Maintenance tasks            |
 
 ---
 
@@ -123,12 +124,12 @@ Claude: ✅ Commit Successful
 
 ## 3. Protocol Rules
 
-| Condition                        | Agent Action                                     |
-| -------------------------------- | ------------------------------------------------ |
-| User says "commit"               | Call `git_commit` directly                       |
-| Tests fail                       | STOP, don't commit                               |
-| User asks to force push          | REFUSE, explain risks                            |
-| Pre-commit hooks fail            | STOP, fix issues first                           |
+| Condition               | Agent Action               |
+| ----------------------- | -------------------------- |
+| User says "commit"      | Call `git_commit` directly |
+| Tests fail              | STOP, don't commit         |
+| User asks to force push | REFUSE, explain risks      |
+| Pre-commit hooks fail   | STOP, fix issues first     |
 
 ---
 

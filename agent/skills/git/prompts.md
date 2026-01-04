@@ -1,33 +1,55 @@
-# Git Skill Policy (Tool Router)
+# Git Skill Policy
 
 > **Code is Mechanism, Prompt is Policy**
->
-> Python provides atomic tools. You (LLM) provide the routing logic.
 
-## Your Role: Git Operator
+## Philosophy: MCP as Guard, Claude-native as Explorer
 
-You manage version control. You have access to `{{git_status}}` in your context.
+| Layer                             | Purpose                            | Operations                                     |
+| --------------------------------- | ---------------------------------- | ---------------------------------------------- |
+| **MCP (Guard)**                   | Dangerous ops needing confirmation | `git_commit`, `git_push`                       |
+| **Claude-native bash (Explorer)** | Safe read operations               | `git status`, `git diff`, `git log`, `git add` |
 
 ---
 
-## Router Logic (When to Call What)
+## Router Logic
 
-### Scenario 1: User says "commit" / "save"
+### Critical Operations (Use MCP Tools)
 
-**Condition**: You see changes in `{{git_status}}` (or it shows modified files).
+| Operation | Tool                  | When                       |
+| --------- | --------------------- | -------------------------- |
+| Commit    | `git_commit(message)` | User says "commit", "save" |
+| Push      | `git_push()`          | After successful commit    |
 
-**Router Logic:**
-1. **Observe**: Look at `{{git_status}}` to understand what changed
-2. **Generate**: Create a Conventional Commit message
-3. **Analyze**: Show the commit analysis to user
-4. **Wait**: Ask user to say "yes" or "confirm" or "skip"
-5. **Execute**: Only call `git_commit` AFTER user confirms
+### Safe Operations (Use Claude-native bash)
 
-**Example Flow:**
+| Operation       | Command             | Why             |
+| --------------- | ------------------- | --------------- |
+| Status          | `git status`        | Read-only, safe |
+| Diff (staged)   | `git diff --cached` | Read-only, safe |
+| Diff (unstaged) | `git diff`          | Read-only, safe |
+| Log             | `git log`           | Read-only, safe |
+| Add             | `git add <files>`   | Safe staging    |
+
+---
+
+## Workflow: Commit
+
 ```
 User: commit
 
-You: (analyzing changes...)
+Claude:
+  1. (Claude-native) git status → See what changed
+  2. (Claude-native) git diff --cached → Review staged
+  3. Generate commit message following format
+  4. Show analysis to user
+  5. User says "yes"
+  6. (MCP) git_commit(message="...") → Execute commit
+```
+
+### Example
+
+```
+Claude: (analyzing...)
 
     Commit Analysis:
 
@@ -35,85 +57,58 @@ You: (analyzing changes...)
     Scope: git
     Message: simplify to executor mode
 
-    commitToken: abc123
-    Authorization Required
-
     Please say: "yes" or "confirm", or "skip"
 
 User: yes
 
-You: git_commit(message="feat(git): simplify to executor mode")
+Claude: git_commit(message="feat(git): simplify to executor mode")
 ```
 
-### Scenario 2: User says "yes" / "confirm" after seeing analysis
+### Authorization Protocol
 
-**Router Logic:**
-1. Call `git_commit(message="...")` with the message you proposed
-
-### Scenario 3: User says "skip"
-
-**Router Logic:**
-1. Do nothing. Wait for user to provide correct instructions.
-
-### Scenario 4: User says "stage" / "add"
-
-**Router Logic:**
-1. Call `git_add(files=[...])`
-
-### Scenario 5: Need to review changes
-
-**Router Logic:**
-1. Call `git_diff_staged()` or `git_diff_unstaged()`
-2. Based on output, return to Scenario 1
+1. **Always show analysis first** - User must see what will be committed
+2. **Wait for "yes" or "confirm"** - User's response is the authorization
+3. **Only then call git_commit** - Execute after confirmation
+4. **If "skip"** - Do nothing, wait for corrected instructions
 
 ---
 
-## Anti-Patterns (What NOT to Do)
-
-| Wrong                                    | Correct                                    |
-| ---------------------------------------- | ------------------------------------------ |
-| Use `smart_commit` (doesn't exist)       | Generate analysis, ask for confirmation    |
-| Use `spec_aware_commit` (doesn't exist)  | Generate message yourself, ask for confirm |
-| Call git_commit without showing analysis | Always show analysis first                 |
-| Ask "Do you want to commit?"             | Show analysis, ask for "yes" or "confirm"  |
-| Check git status with Python             | Read `{{git_status}}` from context         |
-
----
-
-## Tool Reference
-
-| Tool                    | When to Use                                |
-| ----------------------- | ------------------------------------------ |
-| `git_commit(message)`   | User confirms the commit (after analysis)  |
-| `git_add(files)`        | User wants to stage specific files         |
-| `git_status`            | Rarely - context already has it            |
-| `git_diff_staged()`     | Need to review what will be committed      |
-| `git_diff_unstaged()`   | Need to review working directory changes   |
-| `git_log(n)`            | View recent commits                        |
-
----
-
-## Commit Analysis Template
-
-When proposing a commit, format it like this:
+## Workflow: Push
 
 ```
-Commit Analysis:
+User: push
 
-Type: <feat|fix|docs|style|refactor|perf|test|build|ci|chore>
-Scope: <module-name>
-Message: <description>
+Claude:
+  1. (Claude-native) git status → Verify commit succeeded
+  2. (MCP) git_push() → Push to remote
+```
 
-commitToken: <generate a random token>
-Authorization Required
+---
 
-Please say: "yes" or "confirm", or "skip"
+## Anti-Patterns
+
+| Wrong                                      | Correct                             |
+| ------------------------------------------ | ----------------------------------- |
+| Use MCP for `git status`, `git diff`       | Use Claude-native bash              |
+| Use MCP for `git add`                      | Use Claude-native bash              |
+| Call `git_commit` without showing analysis | Always show analysis first          |
+| Use `smart_commit` (doesn't exist)         | Use `git_commit` after confirmation |
+
+---
+
+## Commit Message Format
+
+```
+<type>(<scope>): <subject>
+
+Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
+Scope: Component or area (e.g., git, mcp, cli, docs)
+
+Example: feat(git): simplify to executor mode
 ```
 
 ---
 
 ## Key Principle
 
-> **Always show analysis before committing.**
->
-> User's "yes" or "confirm" is the authorization. The tool call comes after.
+> **Read operations = Claude-native bash. Write operations = MCP tools.**

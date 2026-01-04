@@ -6,18 +6,20 @@
 
 **This is the foundation of Omni-DevEnv (Phase 13.10):**
 
-| Layer | Purpose | Technology |
-|-------|---------|------------|
+| Layer              | Purpose               | Technology                                |
+| ------------------ | --------------------- | ----------------------------------------- |
 | **Brain (Prompt)** | Rules, logic, routing | Markdown files (`prompts.md`, `guide.md`) |
-| **Muscle (Code)** | Atomic execution | Python tools (`tools.py`) |
-| **Guardrails** | Hard compliance | Lefthook, Cog, Pre-commit hooks |
+| **Muscle (Code)**  | Atomic execution      | Python tools (`tools.py`)                 |
+| **Guardrails**     | Hard compliance       | Lefthook, Cog, Pre-commit hooks           |
 
 **Key Principle:**
+
 - **Python = Execution only** (blind, stateless, no business logic)
 - **Markdown = Rules** (LLM learns from docs)
 - **System Tools = Validation** (rejects invalid operations)
 
 **Why this matters:**
+
 - Change rules without code changes (just edit markdown)
 - No Python hot reload needed
 - LLM learns policies from documentation
@@ -54,12 +56,12 @@ Claude: ✅ Commit Successful
 
 **Tools:**
 
-| Tool | Purpose |
-|------|---------|
-| `git_commit(message)` | Direct commit execution |
-| `git_add(files)` | Stage files |
-| `git_diff_staged()` | Review changes |
-| `{{git_status}}` | Auto-injected (no tool call) |
+| Tool                  | Purpose                      |
+| --------------------- | ---------------------------- |
+| `git_commit(message)` | Direct commit execution      |
+| `git_add(files)`      | Stage files                  |
+| `git_diff_staged()`   | Review changes               |
+| `{{git_status}}`      | Auto-injected (no tool call) |
 
 **NEVER use:** `smart_commit`, `spec_aware_commit`, `git commit` (Bash)
 
@@ -161,16 +163,16 @@ When you judge the user is requesting NEW work, call `start_spec` FIRST:
 
 ## ⚠️ Rules
 
-| Category | Tools                                                                                              |
-| -------- | -------------------------------------------------------------------------------------------------- |
+| Category  | Tools                                                                                              |
+| --------- | -------------------------------------------------------------------------------------------------- |
 | Knowledge | `skill("knowledge", "get_development_context()")`, `skill("knowledge", "get_writing_memory()")`    |
-| Git      | `skill("git", "git_status()")`, `skill("git", "git_commit(message='...')")`                        |
-| Spec     | `start_spec` (gatekeeper), `draft_feature_spec`, `verify_spec_completeness`, `archive_spec_to_doc` |
-| Search   | `search_project_code` (ripgrep), `ast_search`, `ast_rewrite` (ast-grep)                            |
-| Test     | `skill("testing_protocol", "smart_test_runner()")`                                                 |
-| Review   | `review_staged_changes` (Immune System)                                                            |
-| Code     | `ast_search`, `ast_rewrite`, `save_file`, `read_file`                                              |
-| Lang     | `consult_language_expert`, `get_language_standards`                                                |
+| Git       | `skill("git", "git_status()")`, `skill("git", "git_commit(message='...')")`                        |
+| Spec      | `start_spec` (gatekeeper), `draft_feature_spec`, `verify_spec_completeness`, `archive_spec_to_doc` |
+| Search    | `search_project_code` (ripgrep), `ast_search`, `ast_rewrite` (ast-grep)                            |
+| Test      | `skill("testing_protocol", "smart_test_runner()")`                                                 |
+| Review    | `review_staged_changes` (Immune System)                                                            |
+| Code      | `ast_search`, `ast_rewrite`, `save_file`, `read_file`                                              |
+| Lang      | `consult_language_expert`, `get_language_standards`                                                |
 
 **Knowledge-First Rule:** Always call `get_development_context()` before any work.
 
@@ -185,13 +187,13 @@ When you judge the user is requesting NEW work, call `start_spec` FIRST:
 
 **CRITICAL: See `agent/how-to/gitops.md` for complete rules.**
 
-| Operation           | Tool to Use                                          | Why                         |
-| ------------------- | ---------------------------------------------------- | --------------------------- |
-| Commit              | `skill("git", "git_commit(message='type(scope): desc')")` | Direct execution (Phase 13.10) |
-| Git status/diff/log | `skill("git", "git_status()")`, `skill("git", "git_log()")` | Safe MCP execution          |
-| Git add             | `skill("git", "git_add(files=[...])")`               | Safe staging                |
+| Operation           | How to Use                                                | Why                                            |
+| ------------------- | --------------------------------------------------------- | ---------------------------------------------- |
+| Commit              | `skill("git", "git_commit(message='type(scope): desc')")` | MCP tool (needs confirmation)                  |
+| Push                | `skill("git", "git_push()")`                              | MCP tool (needs confirmation)                  |
+| Status/Diff/Log/Add | Use Claude-native bash                                    | `git status`, `git diff`, `git log`, `git add` |
 
-**NEVER use Bash for git operations.**
+**Principle: Read = bash. Write = MCP.**
 
 ## 📚 Documentation Classification
 
@@ -258,26 +260,27 @@ Skills are dynamically-loaded modules in `agent/skills/` that provide specialize
 
 ### Skill Categories
 
-| Skill | Category | Purpose |
-|-------|----------|---------|
-| `knowledge` | 🧠 Knowledge | Project rules, docs, writing standards |
-| `git` | 💪 Execution | Git operations |
-| `terminal` | 💪 Execution | Command execution |
-| `filesystem` | 💪 Execution | File I/O |
-| `writer` | 💪 Execution | Writing quality |
-| `testing_protocol` | 💪 Execution | Test runner |
-| `code_insight` | 💪 Execution | Static analysis |
+| Skill              | Category     | Purpose                                |
+| ------------------ | ------------ | -------------------------------------- |
+| `knowledge`        | 🧠 Knowledge | Project rules, docs, writing standards |
+| `git`              | 💪 Execution | Git operations                         |
+| `terminal`         | 💪 Execution | Command execution                      |
+| `filesystem`       | 💪 Execution | File I/O                               |
+| `writer`           | 💪 Execution | Writing quality                        |
+| `testing_protocol` | 💪 Execution | Test runner                            |
+| `code_insight`     | 💪 Execution | Static analysis                        |
 
 **Philosophy:**
+
 - `knowledge` skill = "The Brain" (read-only, structural knowledge)
 - Other skills = "The Muscle" (execution, for Desktop users)
 
 ### Skill Loading (Config-Driven)
 
-| Mode | Configuration | How to Use |
-|------|---------------|------------|
-| Preload | `skills.preload` in settings.yaml | Available at startup |
-| On-Demand | Any skill in `agent/skills/` | Call `load_skill('name')` |
+| Mode      | Configuration                     | How to Use                |
+| --------- | --------------------------------- | ------------------------- |
+| Preload   | `skills.preload` in settings.yaml | Available at startup      |
+| On-Demand | Any skill in `agent/skills/`      | Call `load_skill('name')` |
 
 ### Using Knowledge Skill (ALWAYS call first)
 
@@ -319,6 +322,7 @@ agent/skills/{skill}/
 ```
 
 **Design Rule:**
+
 - `tools.py` = Pure execution (no business logic)
 - `prompts.md` = Rules (LLM learns from docs)
 

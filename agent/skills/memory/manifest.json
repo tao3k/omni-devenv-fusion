@@ -1,0 +1,9 @@
+{
+  "name": "memory",
+  "version": "1.0.0",
+  "description": "The Hippocampus Interface - Vector-based Memory for LLM",
+  "tools_module": "agent.skills.memory.tools",
+  "guide_file": "guide.md",
+  "prompts_file": "prompts.md",
+  "dependencies": ["chromadb", "pyyaml"]
+}

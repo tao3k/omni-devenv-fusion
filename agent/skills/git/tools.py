@@ -1,56 +1,23 @@
 """
 agent/skills/git/tools.py
-Git Skill: Atomic Git Operations
+Git Skill: Critical Operations Only
 
-Phase 13.10: Executor Mode - Pure tool, no workflow logic.
+Phase 13.10: Executor Mode - MCP handles dangerous operations.
 
-This module provides atomic git operations. The workflow logic is handled
-by prompts (Brain), not by Python code (Hands).
+This module provides only critical git operations (commit, push).
+Safe operations (status, diff, log, add) should be done via Claude's native bash.
+
+Philosophy:
+- MCP = "The Guard" - handles operations that need explicit confirmation
+- Claude-native bash = "The Explorer" - safe read operations
 """
 from mcp.server.fastmcp import FastMCP
-from common.mcp_core.gitops import run_git_cmd, get_git_status, get_git_diff, get_git_log
+from common.mcp_core.gitops import run_git_cmd
 
 
 # =============================================================================
-# Atomic Git Tools (Hands)
+# Critical Git Tools (Require explicit confirmation)
 # =============================================================================
-
-async def git_status() -> str:
-    """Get git status."""
-    return await get_git_status()
-
-
-async def git_diff_staged() -> str:
-    """Get diff of staged changes."""
-    diff = await get_git_diff(staged=True)
-    if len(diff) > 20000:
-        stats = await run_git_cmd(["diff", "--cached", "--stat"])
-        return f"--- Diff too large (truncated) ---\n{stats}\n\nTotal: {len(diff)} bytes"
-    return diff
-
-
-async def git_diff_unstaged() -> str:
-    """Get diff of unstaged changes."""
-    diff = await get_git_diff(staged=False)
-    if len(diff) > 20000:
-        stats = await run_git_cmd(["diff", "--stat"])
-        return f"--- Diff too large (truncated) ---\n{stats}\n\nTotal: {len(diff)} bytes"
-    return diff
-
-
-async def git_log(n: int = 5) -> str:
-    """Get recent commit history."""
-    return await get_git_log(n)
-
-
-async def git_add(files: list[str]) -> str:
-    """Stage files for commit."""
-    try:
-        await run_git_cmd(["add"] + files)
-        return f"Staged {len(files)} files."
-    except Exception as e:
-        return f"Failed to stage files: {e}"
-
 
 async def git_commit(message: str) -> str:
     """
@@ -58,10 +25,11 @@ async def git_commit(message: str) -> str:
 
     Workflow (handled by prompts, not code):
     1. User says "commit"
-    2. Claude sees {{git_status}} in context
+    2. Claude sees {{git_status}} in context (from context injection)
     3. Claude generates conventional commit message
-    4. Claude calls this tool directly
+    4. Claude calls this tool
     5. User approves via Claude Desktop
+    6. Tool executes
 
     Args:
         message: Conventional commit message (e.g., "feat(core): add feature")
@@ -73,7 +41,7 @@ async def git_commit(message: str) -> str:
     try:
         stat = await run_git_cmd(["diff", "--cached", "--stat"])
         if not stat.strip():
-            return "Error: No staged changes. Stage first with git_add."
+            return "Error: No staged changes. Stage first with 'git add' via bash."
     except Exception as e:
         return f"Error checking staged changes: {e}"
 
@@ -85,15 +53,26 @@ async def git_commit(message: str) -> str:
         return f"Commit Failed: {e}"
 
 
+async def git_push() -> str:
+    """
+    Execute git push to remote.
+
+    Use this after successful commit to push changes.
+
+    Note: For first push of a new branch, use 'git push -u origin branch_name' via bash.
+    """
+    try:
+        output = await run_git_cmd(["push"])
+        return f"Push Successful:\n{output}"
+    except Exception as e:
+        return f"Push Failed: {e}\n\nTip: For new branches, use: git push -u origin <branch>"
+
+
 # =============================================================================
 # Registration
 # =============================================================================
 
 def register(mcp: FastMCP):
-    """Register all Git tools."""
-    mcp.tool()(git_status)
-    mcp.tool()(git_diff_staged)
-    mcp.tool()(git_diff_unstaged)
-    mcp.tool()(git_log)
-    mcp.tool()(git_add)
+    """Register critical Git tools only."""
     mcp.tool()(git_commit)
+    mcp.tool()(git_push)
