@@ -8,11 +8,13 @@
 ## 1. Context & Goal (Why)
 
 **Problem**: Current monolithic Orchestrator handles everything (planning, coding, reviewing) leading to:
+
 - Cognitive overload on complex tasks
 - No clear separation of concerns
 - Hard to scale specialized capabilities
 
 **Goal**: Transition from "Monolithic Brain" to "Specialized Swarm"
+
 - **Orchestrator**: The Manager. Talks to user, plans, delegates.
 - **Specialists**: The Workers. Single-minded, tool-heavy, no user-chat responsibility.
 
@@ -135,11 +137,11 @@ class BaseAgent(ABC):
 
 ### 4.1 Memory Layers
 
-| Layer | Type | Access | TTL |
-|-------|------|--------|-----|
-| **Shared Vector Store** | Long-term | All agents read/write | Persistent |
-| **Handoff Context** | Short-term | Transfer on handoff | Per task |
-| **Agent Scratchpad** | Ephemeral | Private to agent | Per turn |
+| Layer                   | Type       | Access                | TTL        |
+| ----------------------- | ---------- | --------------------- | ---------- |
+| **Shared Vector Store** | Long-term  | All agents read/write | Persistent |
+| **Handoff Context**     | Short-term | Transfer on handoff   | Per task   |
+| **Agent Scratchpad**    | Ephemeral  | Private to agent      | Per turn   |
 
 ### 4.2 Handoff Protocol
 
@@ -407,21 +409,21 @@ async def hive_main():
 
 ## 8. Testing Strategy
 
-| Level | Test File | Coverage |
-|-------|-----------|----------|
-| Unit | `test_agent_base.py` | BaseAgent lifecycle, decision logic |
-| Unit | `test_handoff_protocol.py` | Context transfer, error handling |
-| Integration | `test_coder_workflow.py` | CoderAgent file operations |
-| Integration | `test_reviewer_workflow.py` | ReviewerAgent quality checks |
-| E2E | `test_hive_end_to_end.py` | Complete user workflows |
+| Level       | Test File                   | Coverage                            |
+| ----------- | --------------------------- | ----------------------------------- |
+| Unit        | `test_agent_base.py`        | BaseAgent lifecycle, decision logic |
+| Unit        | `test_handoff_protocol.py`  | Context transfer, error handling    |
+| Integration | `test_coder_workflow.py`    | CoderAgent file operations          |
+| Integration | `test_reviewer_workflow.py` | ReviewerAgent quality checks        |
+| E2E         | `test_hive_end_to_end.py`   | Complete user workflows             |
 
 ## 9. Trade-offs & Constraints
 
-| Trade-off | Rationale |
-|-----------|-----------|
-| In-process vs. Separate processes | Shared memory, simpler state management |
-| No hard isolation | Agents trust each other (same process) |
-| Sequential by default | Parallel agent execution adds complexity |
+| Trade-off                         | Rationale                                |
+| --------------------------------- | ---------------------------------------- |
+| In-process vs. Separate processes | Shared memory, simpler state management  |
+| No hard isolation                 | Agents trust each other (same process)   |
+| Sequential by default             | Parallel agent execution adds complexity |
 
 ## 10. Rollout Plan
 
@@ -435,8 +437,8 @@ async def hive_main():
 
 ## 11. Related Documents
 
-| Document | Purpose |
-|----------|---------|
+| Document                       | Purpose                               |
+| ------------------------------ | ------------------------------------- |
 | `phase10_hive_architecture.md` | Multi-process architecture (Phase 10) |
-| `phase14_5_semantic_cortex.md` | Semantic caching for routing |
-| `skills/*/prompts.md` | Skill-specific rules |
+| `phase14_5_semantic_cortex.md` | Semantic caching for routing          |
+| `skills/*/prompts.md`          | Skill-specific rules                  |

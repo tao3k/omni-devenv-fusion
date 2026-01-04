@@ -162,7 +162,7 @@ class TestSemanticRouter:
     @pytest.fixture
     def router(self, mock_cortex):
         """Create SemanticRouter with mocked components."""
-        with patch("agent.core.router.get_skill_registry") as mock_reg:
+        with patch("agent.core.router.semantic_router.get_skill_registry") as mock_reg:
             mock_reg.return_value.list_available_skills = MagicMock(return_value=["git", "filesystem"])
             mock_reg.return_value.get_skill_manifest = MagicMock(
                 return_value=MagicMock(
@@ -178,14 +178,14 @@ class TestSemanticRouter:
 
     def test_router_has_semantic_cortex(self):
         """Test SemanticRouter initializes with SemanticCortex."""
-        with patch("agent.core.router.get_skill_registry") as mock_reg:
+        with patch("agent.core.router.semantic_router.get_skill_registry") as mock_reg:
             mock_reg.return_value.list_available_skills = MagicMock(return_value=[])
             router = SemanticRouter(use_semantic_cache=True)
             assert router.semantic_cortex is not None
 
     def test_router_has_hive_mind_cache(self):
         """Test SemanticRouter initializes with HiveMindCache."""
-        with patch("agent.core.router.get_skill_registry") as mock_reg:
+        with patch("agent.core.router.semantic_router.get_skill_registry") as mock_reg:
             mock_reg.return_value.list_available_skills = MagicMock(return_value=[])
             router = SemanticRouter(use_semantic_cache=False)
             assert isinstance(router.cache, HiveMindCache)
@@ -234,7 +234,7 @@ class TestGoldenPayload:
     @pytest.fixture
     def router(self):
         """Create router for testing mission briefs."""
-        with patch("agent.core.router.get_skill_registry") as mock_reg:
+        with patch("agent.core.router.semantic_router.get_skill_registry") as mock_reg:
             mock_reg.return_value.list_available_skills = MagicMock(return_value=["git", "filesystem", "testing"])
             mock_reg.return_value.get_skill_manifest = MagicMock(
                 return_value=MagicMock(description="Test skill", routing_keywords=[])
@@ -299,7 +299,7 @@ class TestGoldenPayload:
         """Test that router guidelines discourage step-by-step procedures."""
         # This test verifies the router's mission brief guidelines
         # The router prompt should discourage step-by-step language
-        with patch("agent.core.router.get_skill_registry") as mock_reg:
+        with patch("agent.core.router.semantic_router.get_skill_registry") as mock_reg:
             mock_reg.return_value.list_available_skills = MagicMock(return_value=["git", "filesystem", "testing"])
             mock_reg.return_value.get_skill_manifest = MagicMock(
                 return_value=MagicMock(description="Test skill", routing_keywords=[])
@@ -325,7 +325,7 @@ class TestPerformanceMetrics:
     @pytest.fixture
     def router(self):
         """Create router with semantic cache enabled."""
-        with patch("agent.core.router.get_skill_registry") as mock_reg:
+        with patch("agent.core.router.semantic_router.get_skill_registry") as mock_reg:
             mock_reg.return_value.list_available_skills = MagicMock(return_value=["git", "testing"])
             mock_reg.return_value.get_skill_manifest = MagicMock(
                 return_value=MagicMock(description="Test skill", routing_keywords=[])
@@ -368,7 +368,7 @@ class TestPerformanceMetrics:
         mock_cortex.recall = AsyncMock(return_value=None)  # First call: no cache
         mock_cortex.learn = AsyncMock()
 
-        with patch("agent.core.router.get_skill_registry") as mock_reg:
+        with patch("agent.core.router.semantic_router.get_skill_registry") as mock_reg:
             mock_reg.return_value.list_available_skills = MagicMock(return_value=["git", "testing"])
             mock_reg.return_value.get_skill_manifest = MagicMock(
                 return_value=MagicMock(description="Test skill", routing_keywords=[])
