@@ -226,6 +226,37 @@ class SkillRegistry:
 
         return content
 
+    def get_combined_context(self) -> str:
+        """
+        Aggregate prompts.md from all loaded skills into a single context string.
+
+        This is the "dynamic brain" of the Agent - it contains routing rules
+        and policies that Claude must follow for each active skill.
+
+        Returns:
+            Combined context string from all loaded skills' prompts.md files.
+        """
+        if not self.loaded_skills:
+            return "# No skills loaded\n\nActive skills will have their prompts.md aggregated here."
+
+        combined = []
+        combined.append("# 🧠 Active Skill Policies & Routing Rules")
+        combined.append("The following skills are loaded and active. You MUST follow their routing logic.\n")
+
+        for skill_name in sorted(self.loaded_skills.keys()):
+            manifest = self.loaded_skills[skill_name]
+
+            # Read prompts.md
+            if manifest.prompts_file:
+                prompts_path = self.skills_dir / skill_name / manifest.prompts_file
+                if prompts_path.exists():
+                    content = prompts_path.read_text(encoding="utf-8")
+                    combined.append(f"\n## 📦 Skill: {skill_name.upper()}")
+                    combined.append(content)
+                    combined.append("\n---\n")
+
+        return "\n".join(combined)
+
 
 _registry = None
 

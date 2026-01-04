@@ -3,7 +3,6 @@
 > **Quick Reference Index**. Full docs: `agent/skills/*/prompts.md`
 
 ---
-
 ## Core Philosophy
 
 **Code is Mechanism, Prompt is Policy**
