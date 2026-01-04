@@ -236,12 +236,39 @@ async def git_commit(message: str, skip_hooks: bool = False) -> str:
     use_cog = cog_toml.exists()
 
     if use_cog:
-        # Use cog commit - it handles message validation
-        cmd = ["cog", "commit", "-m", message]
+        # Use cog commit - parse conventional commit format
+        # Format: "type(scope): subject" -> "cog commit type subject scope"
+        import shlex
+        try:
+            # Parse the conventional commit message
+            # e.g., "feat(router): add new feature" -> type=feat, subject="add new feature", scope=router
+            if ":" in message:
+                type_scope, subject = message.split(":", 1)
+                type_scope = type_scope.strip()
+                subject = subject.strip()
+
+                if "(" in type_scope and ")" in type_scope:
+                    type_part = type_scope.split("(")[0]
+                    scope_part = type_scope.split("(")[1].rstrip(")")
+                else:
+                    type_part = type_scope
+                    scope_part = ""
+
+                # Build cog command: cog commit <TYPE> <SUBJECT> [SCOPE]
+                if scope_part:
+                    cmd = ["cog", "commit", type_part, subject, scope_part]
+                else:
+                    cmd = ["cog", "commit", type_part, subject]
+            else:
+                # Fallback: treat entire message as subject
+                cmd = ["cog", "commit", "chore", message]
+        except Exception:
+            # Fallback on parse error
+            cmd = ["cog", "commit", "chore", message]
     else:
-        cmd = ["commit", "-m", message]
+        cmd = ["git", "commit", "-m", message]
         if skip_hooks:
-            cmd.insert(1, "--no-verify")
+            cmd.insert(2, "--no-verify")
 
     # Execute commit
     try:
