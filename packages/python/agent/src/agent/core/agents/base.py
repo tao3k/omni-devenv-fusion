@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
 
 from agent.core.skill_registry import get_skill_registry
+from agent.core.vector_store import get_vector_memory, SearchResult
 
 
 class AgentContext(BaseModel):
@@ -28,6 +29,7 @@ class AgentContext(BaseModel):
     mission_brief: str
     constraints: List[str] = []
     relevant_files: List[str] = []
+    knowledge_context: str = ""  # Phase 16: RAG knowledge injection
 
 
 class AgentResult(BaseModel):
@@ -80,15 +82,18 @@ class BaseAgent(ABC):
         self,
         mission_brief: str,
         constraints: List[str] = None,
-        relevant_files: List[str] = None
+        relevant_files: List[str] = None,
+        enable_rag: bool = True  # Phase 16: Control RAG per agent
     ) -> AgentContext:
         """
         ⚡️ Core: Convert TaskBrief to System Prompt (Phase 14 Physical Implementation).
+        Phase 16: Injects relevant project knowledge from VectorStore.
 
         Args:
             mission_brief: The Commander's Intent from HiveRouter
             constraints: List of constraints for this task
             relevant_files: Files relevant to this task
+            enable_rag: Whether to enable RAG knowledge retrieval (default: True)
 
         Returns:
             AgentContext with system_prompt and tools
@@ -99,12 +104,18 @@ class BaseAgent(ABC):
         # 2. Get skill prompts (capabilities) from registry
         skill_prompts = self._get_skill_capabilities()
 
-        # 3. Build Telepathic System Prompt
+        # 3. Phase 16: Retrieve relevant knowledge from VectorStore
+        knowledge_context = ""
+        if enable_rag:
+            knowledge_context = await self._retrieve_relevant_knowledge(mission_brief)
+
+        # 4. Build Telepathic System Prompt with knowledge injection
         system_prompt = self._build_system_prompt(
             mission_brief=mission_brief,
             skill_prompts=skill_prompts,
             constraints=constraints or [],
-            relevant_files=relevant_files or []
+            relevant_files=relevant_files or [],
+            knowledge_context=knowledge_context
         )
 
         return AgentContext(
@@ -112,7 +123,8 @@ class BaseAgent(ABC):
             tools=tools,
             mission_brief=mission_brief,
             constraints=constraints or [],
-            relevant_files=relevant_files or []
+            relevant_files=relevant_files or [],
+            knowledge_context=knowledge_context
         )
 
     def _get_skill_tools(self) -> List[Dict[str, Any]]:
@@ -151,17 +163,68 @@ class BaseAgent(ABC):
                 capabilities.append(f"- [{skill_name}]: (skill manifest not found)")
         return "\n".join(capabilities)
 
+    async def _retrieve_relevant_knowledge(
+        self,
+        query: str,
+        n_results: int = 3
+    ) -> str:
+        """
+        Phase 16: Retrieve relevant project knowledge from VectorStore.
+
+        This enables "Active RAG" - the agent automatically fetches relevant
+        project documentation, coding standards, and patterns before execution.
+
+        Args:
+            query: The search query (typically the mission brief)
+            n_results: Maximum number of results to retrieve
+
+        Returns:
+            Formatted knowledge string for system prompt injection, or empty string
+        """
+        try:
+            vm = get_vector_memory()
+            results: list[SearchResult] = await vm.search(query, n_results=n_results)
+
+            if not results:
+                return ""
+
+            # Filter by similarity (distance < 0.3 means high similarity)
+            # ChromaDB distance: 0.0 = identical, smaller = more similar
+            filtered = [r for r in results if r.distance < 0.3]
+
+            if not filtered:
+                return ""
+
+            # Format as markdown sections
+            sections = []
+            for r in filtered:
+                source = r.metadata.get("source_file", r.metadata.get("title", "Knowledge"))
+                # Truncate to prevent context explosion (800 chars per doc)
+                content = r.content[:800] + ("..." if len(r.content) > 800 else "")
+                sections.append(f"- **{source}**:\n  {content}")
+
+            return "\n## 🧠 RELEVANT PROJECT KNOWLEDGE\n" + "\n".join(sections)
+
+        except Exception as e:
+            # RAG failure should not block execution
+            import structlog
+            logger = structlog.get_logger(__name__)
+            logger.warning("RAG retrieval failed", error=str(e))
+            return ""
+
     def _build_system_prompt(
         self,
         mission_brief: str,
         skill_prompts: str,
         constraints: List[str],
-        relevant_files: List[str]
+        relevant_files: List[str],
+        knowledge_context: str = ""  # Phase 16: RAG knowledge
     ) -> str:
         """
         Build the telepathic system prompt with Mission Brief.
 
         Phase 14: "Prompt is Policy" - The Brief IS the contract.
+        Phase 16: Injects relevant project knowledge from VectorStore.
         """
         prompt_parts = [
             f"# ROLE: {self.role}",
@@ -173,10 +236,20 @@ class BaseAgent(ABC):
             mission_brief,
             "=" * 50,
             "",
+        ]
+
+        # Phase 16: Inject knowledge if available
+        if knowledge_context:
+            prompt_parts.extend([
+                knowledge_context,
+                ""
+            ])
+
+        prompt_parts.extend([
             "## 🛠️ YOUR CAPABILITIES",
             skill_prompts,
             "",
-        ]
+        ])
 
         if constraints:
             prompt_parts.extend([

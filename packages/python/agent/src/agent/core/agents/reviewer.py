@@ -31,7 +31,7 @@ Usage:
 """
 from typing import Any, Dict, List, Optional
 
-from agent.core.agents.base import BaseAgent, AgentResult, AuditResult
+from agent.core.agents.base import BaseAgent, AgentResult, AuditResult, AgentContext
 
 
 class ReviewerAgent(BaseAgent):
@@ -96,6 +96,24 @@ class ReviewerAgent(BaseAgent):
             constraints=constraints,
             relevant_files=relevant_files,
             chat_history=chat_history
+        )
+
+    async def prepare_context(
+        self,
+        mission_brief: str,
+        constraints: List[str] = None,
+        relevant_files: List[str] = None
+    ) -> AgentContext:
+        """
+        Phase 16: Reviewer doesn't need RAG - it uses its own quality tools.
+
+        Reviewer focuses on auditing current output, not retrieving project knowledge.
+        """
+        return await super().prepare_context(
+            mission_brief=mission_brief,
+            constraints=constraints,
+            relevant_files=relevant_files,
+            enable_rag=False  # Disable RAG for Reviewer
         )
 
     async def _execute_with_llm(
