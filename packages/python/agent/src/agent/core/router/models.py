@@ -100,10 +100,16 @@ class AgentRoute(BaseModel):
     - target_agent: Which agent should handle this request
     - confidence: How confident the routing decision is
     - reasoning: Why this agent was chosen
+    - task_brief: Commander's Intent for the agent (Phase 14)
+    - constraints: List of constraints for the task
+    - relevant_files: Files relevant to the task
     """
     target_agent: str  # "coder", "reviewer", "orchestrator"
     confidence: float = 0.5
     reasoning: str
+    task_brief: str = ""
+    constraints: List[str] = []
+    relevant_files: List[str] = []
 
 
 # =============================================================================

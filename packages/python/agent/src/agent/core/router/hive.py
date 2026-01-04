@@ -112,7 +112,8 @@ class HiveRouter:
             return AgentRoute(
                 target_agent="reviewer",
                 confidence=0.75,
-                reasoning=f"Keyword match: QA/Git operations detected in '{query}'"
+                reasoning=f"Keyword match: QA/Git operations detected in '{query}'",
+                task_brief=query
             )
 
         # Check coder keywords
@@ -121,14 +122,16 @@ class HiveRouter:
             return AgentRoute(
                 target_agent="coder",
                 confidence=0.75,
-                reasoning=f"Keyword match: Coding task detected in '{query}'"
+                reasoning=f"Keyword match: Coding task detected in '{query}'",
+                task_brief=query
             )
 
         # Default to orchestrator (planning, clarification, or general tasks)
         return AgentRoute(
             target_agent="orchestrator",
             confidence=0.5,
-            reasoning=f"Default: No specific keywords matched. Requires planning or clarification."
+            reasoning=f"Default: No specific keywords matched. Requires planning or clarification.",
+            task_brief=query
         )
 
     async def _route_by_semantics(self, query: str) -> AgentRoute:
@@ -150,20 +153,23 @@ class HiveRouter:
                 return AgentRoute(
                     target_agent="reviewer",
                     confidence=cached_result.confidence,
-                    reasoning=f"Semantic match: Similar task was handled by reviewer (skills: {skills})"
+                    reasoning=f"Semantic match: Similar task was handled by reviewer (skills: {skills})",
+                    task_brief=query
                 )
             elif "filesystem" in skills or "software_engineering" in skills:
                 return AgentRoute(
                     target_agent="coder",
                     confidence=cached_result.confidence,
-                    reasoning=f"Semantic match: Similar task was handled by coder (skills: {skills})"
+                    reasoning=f"Semantic match: Similar task was handled by coder (skills: {skills})",
+                    task_brief=query
                 )
 
         # No semantic match found
         return AgentRoute(
             target_agent="orchestrator",
             confidence=0.4,
-            reasoning="No semantic match found in cortex. Defaulting to orchestrator."
+            reasoning="No semantic match found in cortex. Defaulting to orchestrator.",
+            task_brief=query
         )
 
     def create_task_brief(

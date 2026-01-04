@@ -38,6 +38,7 @@ let
     "orchestrator" # Orchestrator module
     "git-ops" # Git operations tools
     "mcp-server" # Legacy: for old commits (DEPRECATED, use "mcp")
+    "core" # Core agent modules: BaseAgent, CoderAgent, ReviewerAgent
   ];
   # Define generator configurations
   generators = [
