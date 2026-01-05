@@ -260,7 +260,9 @@ class TestDevWorkflowIntegration:
 
         # Mock git diff to return some changes
         with patch("subprocess.check_output") as mock_git:
-            mock_git.return_value = "diff --git a/scripts/hello.py b/scripts/hello.py\n+print('hello')"
+            mock_git.return_value = (
+                "diff --git a/scripts/hello.py b/scripts/hello.py\n+print('hello')"
+            )
 
             # Mock ReviewerAgent audit
             from agent.core.agents.reviewer import AuditResult

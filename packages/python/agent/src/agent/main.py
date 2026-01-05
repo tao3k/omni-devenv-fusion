@@ -38,6 +38,9 @@ from agent.tools.orchestrator import register_orchestrator_tools
 # Enable headless mode for UXManager when running as MCP Server
 os.environ["OMNI_UX_MODE"] = "headless"
 
+# Disable tokenizers parallelism to avoid fork deadlock warnings
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 setup_logging()
 logger = structlog.get_logger(__name__)
 

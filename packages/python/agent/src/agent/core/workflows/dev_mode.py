@@ -140,9 +140,7 @@ class DevWorkflow:
                 mission_brief=mission_brief,
                 confidence=0.9,
             )
-            self.ux.show_rag_hits(
-                [{"path": f} for f in context_info.get("files", [])]
-            )
+            self.ux.show_rag_hits([{"path": f} for f in context_info.get("files", [])])
 
             # Phase 3: Execute (Launch Claude Code)
             await self._execute_with_claude(mission_brief, context_info, result)
@@ -240,9 +238,7 @@ class DevWorkflow:
                 "search_results": search_results,
             }
 
-    def _build_mission_brief(
-        self, feature_request: str, context_info: Dict[str, Any]
-    ) -> str:
+    def _build_mission_brief(self, feature_request: str, context_info: Dict[str, Any]) -> str:
         """
         Phase 2: Build the mission brief for Claude Code.
 
@@ -346,9 +342,7 @@ class DevWorkflow:
 
         # Estimate cost
         if self.inference_client:
-            usage = CostEstimator.estimate(
-                mission_brief, result["claude_output"]
-            )
+            usage = CostEstimator.estimate(mission_brief, result["claude_output"])
             result["cost_usd"] = usage.cost_usd
         else:
             result["cost_usd"] = 0.0
@@ -369,9 +363,7 @@ class DevWorkflow:
             f"\n[bold cyan]Claude Code completed with exit code: {result['exit_code']}[/]"
         )
 
-    async def _verify_changes(
-        self, feature_request: str, result: Dict[str, Any]
-    ) -> None:
+    async def _verify_changes(self, feature_request: str, result: Dict[str, Any]) -> None:
         """
         Phase 4: Post-Mortem verification with ReviewerAgent.
 
@@ -380,7 +372,7 @@ class DevWorkflow:
             result: Result dict to update with audit status
         """
         with self.ux.console.status(
-            "🕵️ Running Post-Mortem Audit...", spinner="magnifying_glass_tilted_right"
+            "[bold yellow]🕵️ Running Post-Mortem Audit...[/]", spinner="dots"
         ):
             # Get git diff
             diff_summary = await self._get_git_diff()
