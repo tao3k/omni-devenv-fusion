@@ -1,7 +1,9 @@
 """
-Advanced Search Skill Tools
-Migrated from src/mcp_server/coder/advanced_search.py
-Provides high-performance code search using ripgrep.
+agent/skills/advanced_search/tools.py
+Advanced Search Skill - High-performance code search using ripgrep.
+
+Phase 25: Omni CLI Architecture
+Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
 """
 
 import asyncio
@@ -12,8 +14,6 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TypedDict, Any
-
-from mcp.server.fastmcp import FastMCP
 
 import structlog
 
@@ -43,6 +43,11 @@ class SearchResponse(TypedDict):
     results: list[SearchResult]
     stats: SearchStats
     error: str | None
+
+
+# =============================================================================
+# Core Tools
+# =============================================================================
 
 
 def _build_ripgrep_command(
@@ -124,37 +129,32 @@ async def search_project_code(
     file_type: str | None = None,
     include_hidden: bool = False,
     context_lines: int = 2,
-) -> SearchResponse:
-    """Search for a regex pattern in files using ripgrep.
+) -> str:
+    """Search for a regex pattern in code files using ripgrep.
+
+    Uses ripgrep for high-performance parallel searching. Returns
+    matches with line numbers and surrounding context.
 
     Args:
-        pattern: Required regex pattern to search for.
-        path: Search directory (defaults to current directory).
-        file_type: Optional file extension filter (e.g., "py" for Python files).
-        include_hidden: Whether to search in hidden files/directories.
-        context_lines: Number of context lines around matches.
+        pattern: The regex pattern to search for (required).
+        path: Directory to search in (default: current directory).
+        file_type: Filter by file extension, e.g., "py" or "nix".
+        include_hidden: Include hidden files and directories.
+        context_lines: Lines of context around matches (default: 2).
 
     Returns:
-        SearchResponse containing results list, stats, and any error message.
+        Formatted string with search results and statistics.
     """
     start_time = time.perf_counter()
 
     # Validate pattern is not empty
     if not pattern or not pattern.strip():
-        return SearchResponse(
-            results=[],
-            stats=SearchStats(files_searched=0, total_matches=0, elapsed_ms=0.0),
-            error="Pattern cannot be empty",
-        )
+        return "Error: Pattern cannot be empty"
 
     # Validate path exists
     search_path = Path(path)
     if not search_path.exists():
-        return SearchResponse(
-            results=[],
-            stats=SearchStats(files_searched=0, total_matches=0, elapsed_ms=0.0),
-            error=f"Path does not exist: {path}",
-        )
+        return f"Error: Path does not exist: {path}"
 
     # Build ripgrep command
     cmd = _build_ripgrep_command(
@@ -168,11 +168,7 @@ async def search_project_code(
     try:
         stdout, stderr = await _execute_search(cmd, cwd=path)
     except RuntimeError as e:
-        return SearchResponse(
-            results=[],
-            stats=SearchStats(files_searched=0, total_matches=0, elapsed_ms=0.0),
-            error=str(e),
-        )
+        return f"Error: {e}"
 
     # Parse output into structured results
     results = _parse_ripgrep_output(stdout, context_lines=context_lines)
@@ -182,66 +178,37 @@ async def search_project_code(
     # Calculate unique files searched (approximation)
     files_searched = len(set(r["file"] for r in results))
 
-    return SearchResponse(
-        results=results,
-        stats=SearchStats(
-            files_searched=files_searched, total_matches=len(results), elapsed_ms=elapsed_ms
-        ),
-        error=None,
-    )
-
-
-def _format_response(response: SearchResponse) -> str:
-    """Format SearchResponse as a readable string."""
-    if response["error"]:
-        return f"Error: {response['error']}"
-
+    # Format response
     lines = []
-    lines.append(
-        f"Found {response['stats']['total_matches']} matches in "
-        f"{response['stats']['files_searched']} files "
-        f"({response['stats']['elapsed_ms']:.2f}ms):\n"
-    )
+    lines.append(f"Found {len(results)} matches in {files_searched} files ({elapsed_ms:.2f}ms):\n")
 
-    for result in response["results"]:
+    for result in results:
         lines.append(f"{result['file']}:{result['line_number']}: {result['line_content']}")
 
     return "\n".join(lines[:100])  # Limit to 100 results for display
 
 
-def register(mcp: FastMCP):
-    """Register Advanced Search tools."""
+# =============================================================================
+# EXPOSED_COMMANDS - Omni CLI Entry Point
+# =============================================================================
 
-    @mcp.tool()
-    async def search_project_code(
-        pattern: str,
-        path: str = ".",
-        file_type: str | None = None,
-        include_hidden: bool = False,
-        context_lines: int = 2,
-    ) -> str:
-        """Search for a regex pattern in code files using ripgrep.
+EXPOSED_COMMANDS = {
+    "search_project_code": {
+        "func": search_project_code,
+        "description": "Search for a regex pattern in code files using ripgrep.",
+        "category": "read",
+    },
+}
 
-        Uses ripgrep for high-performance parallel searching. Returns
-        matches with line numbers and surrounding context.
 
-        Args:
-            pattern: The regex pattern to search for (required).
-            path: Directory to search in (default: current directory).
-            file_type: Filter by file extension, e.g., "py" or "nix".
-            include_hidden: Include hidden files and directories.
-            context_lines: Lines of context around matches (default: 2).
+# =============================================================================
+# Legacy Export for Compatibility
+# =============================================================================
 
-        Returns:
-            Formatted string with search results and statistics.
-        """
-        response = await search_project_code(
-            pattern=pattern,
-            path=path,
-            file_type=file_type,
-            include_hidden=include_hidden,
-            context_lines=context_lines,
-        )
-        return _format_response(response)
-
-    logger.info("Advanced Search skill tools registered")
+__all__ = [
+    "search_project_code",
+    "SearchResult",
+    "SearchStats",
+    "SearchResponse",
+    "EXPOSED_COMMANDS",
+]

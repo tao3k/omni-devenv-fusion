@@ -1,5 +1,9 @@
 """
-Code Insight Tools - Atomic, Dumb, Single-Purpose
+agent/skills/code_insight/tools.py
+Code Insight Tools - Atomic, Dumb, Single-Purpose.
+
+Phase 25: Omni CLI Architecture
+Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
 
 Tools are like Unix commands: they do ONE thing well.
 No business logic in tools - only pure execution.
@@ -8,9 +12,10 @@ No business logic in tools - only pure execution.
 import ast
 from pathlib import Path
 from typing import List
-from mcp.server.fastmcp import FastMCP
-
 from common.mcp_core.config_paths import get_project_root
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 
 # =============================================================================
@@ -109,11 +114,29 @@ async def count_lines(file_path: str) -> str:
 
 
 # =============================================================================
-# Registration
+# EXPOSED_COMMANDS - Omni CLI Entry Point
 # =============================================================================
 
+EXPOSED_COMMANDS = {
+    "find_tools": {
+        "func": find_tools,
+        "description": "Find all @tool decorated functions in a Python file.",
+        "category": "read",
+    },
+    "count_lines": {
+        "func": count_lines,
+        "description": "Count lines of code in a file.",
+        "category": "read",
+    },
+}
 
-def register(mcp: FastMCP):
-    """Register atomic code insight tools."""
-    mcp.tool()(find_tools)
-    mcp.tool()(count_lines)
+
+# =============================================================================
+# Legacy Export for Compatibility
+# =============================================================================
+
+__all__ = [
+    "find_tools",
+    "count_lines",
+    "EXPOSED_COMMANDS",
+]

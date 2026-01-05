@@ -1,15 +1,15 @@
 """
-Terminal Skill Tools
+agent/skills/terminal/tools.py
+Terminal Skill - Shell execution with safety.
 
-Unified shell execution with safety audit.
+Phase 25: Omni CLI Architecture
+Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
 """
 
 import asyncio
 from pathlib import Path
 from typing import Optional
-from mcp.server.fastmcp import FastMCP
 from common.mcp_core import log_decision, SafeExecutor, check_dangerous_patterns, ProjectMemory
-from common.mcp_core.gitops import get_project_root
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -27,7 +27,7 @@ def _get_project_memory():
 
 
 # =============================================================================
-# Module-Level Functions (for skill() tool compatibility)
+# Core Tools
 # =============================================================================
 
 
@@ -110,7 +110,7 @@ async def run_task(command: str, args: Optional[list[str]] = None) -> str:
 This command was blocked because git commit operations MUST go through the git skill.
 
 **Correct workflow:**
-1. skill("git", "git_commit(message='feat(scope): description')")
+1. omni_run("git", "git_commit", {"message": "feat(scope): description"})
 2. System shows analysis
 3. User confirms via Claude Desktop
 4. Commit is executed
@@ -214,49 +214,41 @@ async def inspect_environment() -> str:
 
 
 # =============================================================================
-# Registration
+# EXPOSED_COMMANDS - Omni CLI Entry Point
 # =============================================================================
 
+EXPOSED_COMMANDS = {
+    "execute_command": {
+        "func": execute_command,
+        "description": "Execute a shell command with whitelist validation.",
+        "category": "read",
+    },
+    "run_task": {
+        "func": run_task,
+        "description": "Run safe development tasks (just, nix, git) with FLIGHT RECORDER.",
+        "category": "read",
+    },
+    "analyze_last_error": {
+        "func": analyze_last_error,
+        "description": "[Debug Tool] Analyze the last failed command in Flight Recorder.",
+        "category": "read",
+    },
+    "inspect_environment": {
+        "func": inspect_environment,
+        "description": "Check the current execution environment (read-only, safe).",
+        "category": "read",
+    },
+}
 
-def register(mcp: FastMCP):
-    """Register Terminal tools using direct function binding."""
-    import sys
-    import types
 
-    # Get the current module from sys.modules (loaded by _load_module_from_path)
-    current_module = sys.modules.get("agent.skills.terminal.tools")
-    if current_module is None:
-        # Fallback: load module directly from file
-        import importlib.util
+# =============================================================================
+# Legacy Export for Compatibility
+# =============================================================================
 
-        spec = importlib.util.spec_from_file_location(
-            "agent.skills.terminal.tools", Path(__file__).resolve()
-        )
-        current_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(current_module)
-        sys.modules["agent.skills.terminal.tools"] = current_module
-
-    # Get functions from the module
-    exec_cmd = getattr(current_module, "execute_command", None)
-    run_tsk = getattr(current_module, "run_task", None)
-    analyze_err = getattr(current_module, "analyze_last_error", None)
-    inspect_env = getattr(current_module, "inspect_environment", None)
-
-    # Register tools
-    if exec_cmd:
-        mcp.add_tool(exec_cmd, "Execute a shell command with whitelist validation.")
-    if run_tsk:
-        mcp.add_tool(
-            run_tsk,
-            "Run safe development tasks (just, nix, git) with FLIGHT RECORDER. "
-            "Git commit is BLOCKED - use git_commit in git skill.",
-        )
-    if analyze_err:
-        mcp.add_tool(
-            analyze_err,
-            "[Debug Tool] Analyze the last failed command in Flight Recorder.",
-        )
-    if inspect_env:
-        mcp.add_tool(inspect_env, "Check the current execution environment (read-only, safe).")
-
-    logger.info("Terminal skill tools registered")
+__all__ = [
+    "execute_command",
+    "run_task",
+    "analyze_last_error",
+    "inspect_environment",
+    "EXPOSED_COMMANDS",
+]

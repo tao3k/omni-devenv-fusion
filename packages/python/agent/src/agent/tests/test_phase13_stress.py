@@ -2,6 +2,10 @@
 src/agent/tests/test_phase13_stress.py
 Advanced Stress & Resilience Testing for Skill Kernel.
 
+Phase 25: Omni CLI Architecture
+- Skills use EXPOSED_COMMANDS dictionary instead of register()
+- SkillManager handles command execution
+
 Focus:
 1. Resilience: Ensuring 'Bad Skills' don't crash the Kernel.
 2. Performance: Measuring load latency.
@@ -18,6 +22,7 @@ from unittest.mock import MagicMock
 from mcp.server.fastmcp import FastMCP
 
 from agent.core.skill_registry import get_skill_registry
+from agent.core.skill_manager import SkillManager, get_skill_manager
 
 
 @pytest.fixture
@@ -33,6 +38,20 @@ def registry():
 
 
 @pytest.fixture
+def skill_manager():
+    """Provide clean SkillManager for Phase 25 tests."""
+    import agent.core.skill_manager as sm_module
+
+    sm_module._skill_manager = None
+    manager = sm_module.get_skill_manager()
+    manager.skills.clear()
+    manager._skills_loaded = False
+    yield manager
+    manager.skills.clear()
+    manager._skills_loaded = False
+
+
+@pytest.fixture
 def mock_mcp():
     """Provide mock MCP server."""
     mcp = MagicMock(spec=FastMCP)
@@ -44,6 +63,7 @@ def mock_mcp():
 def toxic_skill_factory(registry):
     """
     Creates temporary 'toxic' skills to test error handling.
+    Phase 25: Skills use EXPOSED_COMMANDS instead of register().
     Skills are created in agent/skills/ so Python can import them.
     Cleans up after test.
     """
@@ -54,7 +74,7 @@ def toxic_skill_factory(registry):
 
         Args:
             name: Skill directory name (e.g., 'toxic_syntax')
-            toxic_type: Type of toxicity - 'syntax_error', 'import_error', 'runtime_error', 'missing_register'
+            toxic_type: Type of toxicity - 'syntax_error', 'import_error', 'runtime_error', 'missing_exposed'
             tools_module_path: Custom tools module path (defaults to agent.skills.{name}.tools)
         """
         # Create in agent/skills/ so Python can import it (skills are in project root)
@@ -88,23 +108,29 @@ def toxic_skill_factory(registry):
         tools_file = skill_dir / "tools.py"
 
         if toxic_type == "syntax_error":
-            tools_file.write_text("def register(mcp): \n    THIS IS NOT PYTHON CODE !!!")
+            tools_file.write_text(
+                "def dummy_command():\n    THIS IS NOT PYTHON CODE !!!\n\nEXPOSED_COMMANDS = {\n    'test': {'func': dummy_command, 'description': 'test', 'category': 'read'}\n}"
+            )
         elif toxic_type == "import_error":
             tools_file.write_text(
-                "import non_existent_module_xyz_123\n\ndef register(mcp):\n    pass"
+                "import non_existent_module_xyz_123\n\ndef dummy_command():\n    pass\n\nEXPOSED_COMMANDS = {\n    'test': {'func': dummy_command, 'description': 'test', 'category': 'read'}\n}"
             )
         elif toxic_type == "runtime_error":
             tools_file.write_text(
-                "def register(mcp):\n    raise ValueError('Boom! Toxic skill exploded!')\n"
+                "def dummy_command():\n    raise ValueError('Boom! Toxic skill exploded!')\n\nEXPOSED_COMMANDS = {\n    'test': {'func': dummy_command, 'description': 'test', 'category': 'read'}\n}"
             )
-        elif toxic_type == "missing_register":
+        elif toxic_type == "missing_exposed":
             tools_file.write_text(
-                "# No register function defined!\ndef some_other_function(mcp):\n    pass"
+                "# No EXPOSED_COMMANDS defined!\ndef some_other_function():\n    pass"
             )
         elif toxic_type == "circular_import":
-            tools_file.write_text(f"from {name} import circular\n\ndef register(mcp):\n    pass")
-        elif toxic_type == "infinite_loop":
-            tools_file.write_text("def register(mcp):\n    while True:\n        pass\n")
+            tools_file.write_text(
+                f"from {name} import circular\n\ndef dummy_command():\n    pass\n\nEXPOSED_COMMANDS = {{\n    'test': {{'func': dummy_command, 'description': 'test', 'category': 'read'}}\n}}"
+            )
+        elif toxic_type == "invalid_exposed_format":
+            tools_file.write_text(
+                "# EXPOSED_COMMANDS is not a dict!\nEXPOSED_COMMANDS = 'not a dict'\n\ndef dummy_command():\n    pass"
+            )
 
         # Create __init__.py to make it a valid Python package
         (skill_dir / "__init__.py").touch()
@@ -140,7 +166,7 @@ class TestKernelResilience:
         success, message = registry.load_skill(skill_name, mock_mcp)
 
         assert success is False, f"Expected failure, got success=True, message={message}"
-        # Message should indicate syntax error (either "SyntaxError" or "invalid syntax")
+        # Message should indicate syntax error
         assert (
             "SyntaxError" in message
             or "invalid syntax" in message.lower()
@@ -159,7 +185,7 @@ class TestKernelResilience:
         success, message = registry.load_skill(skill_name, mock_mcp)
 
         assert success is False
-        # Message should indicate an error (any failure indication)
+        # Message should indicate an error
         assert (
             "error" in message.lower()
             or "not found" in message.lower()
@@ -168,23 +194,25 @@ class TestKernelResilience:
         assert skill_name not in registry.loaded_skills
 
     def test_runtime_error_skill(self, registry, mock_mcp, toxic_skill_factory):
-        """Kernel should handle exceptions during tool registration."""
+        """Kernel should handle skills that have functions which raise errors."""
         skill_name, module_name = toxic_skill_factory("toxic_runtime", "runtime_error")
 
+        # In Phase 25, the module loads successfully even if it has runtime errors
+        # The error only manifests when the function is actually called
+        success, message = registry.load_skill(skill_name, mock_mcp)
+
+        # With Phase 25, the module loads (EXPOSED_COMMANDS pattern doesn't execute functions)
+        # The runtime error would only occur if SkillManager.run() is called
+        assert success is True, f"Phase 25 loads module: {message}"
+
+    def test_missing_exposed_commands(self, registry, mock_mcp, toxic_skill_factory):
+        """Kernel should reject skills without EXPOSED_COMMANDS."""
+        skill_name, module_name = toxic_skill_factory("toxic_no_exposed", "missing_exposed")
+
         success, message = registry.load_skill(skill_name, mock_mcp)
 
         assert success is False
-        # Message should indicate an error
-        assert "error" in message.lower() or "boom" in message.lower() or "fail" in message.lower()
-
-    def test_missing_register_function(self, registry, mock_mcp, toxic_skill_factory):
-        """Kernel should reject skills without register(mcp) function."""
-        skill_name, module_name = toxic_skill_factory("toxic_no_register", "missing_register")
-
-        success, message = registry.load_skill(skill_name, mock_mcp)
-
-        assert success is False
-        assert "register" in message.lower()
+        assert "EXPOSED_COMMANDS" in message or "no commands" in message.lower()
 
     def test_valid_skill_after_toxic(self, registry, mock_mcp, toxic_skill_factory):
         """Kernel should recover and load valid skills after toxic ones failed."""
@@ -221,6 +249,44 @@ class TestKernelResilience:
         assert len(registry.list_available_skills()) > 0
 
 
+class TestSkillManagerOmniCLI:
+    """Phase 25: Test SkillManager with EXPOSED_COMMANDS pattern."""
+
+    def test_skill_manager_loads_git(self, skill_manager):
+        """SkillManager should load git skill successfully."""
+        skills = skill_manager.load_skills()
+
+        assert "git" in skills, f"Git skill should be loaded, got: {list(skills.keys())}"
+        assert len(skills) >= 1
+
+    def test_skill_manager_git_has_commands(self, skill_manager):
+        """Git skill should have commands loaded via EXPOSED_COMMANDS."""
+        skill_manager.load_skills()
+
+        assert "git" in skill_manager.skills
+        git_skill = skill_manager.skills["git"]
+        assert len(git_skill.commands) >= 1
+
+    def test_skill_manager_execute_command(self, skill_manager):
+        """SkillManager.run() should execute commands from EXPOSED_COMMANDS."""
+        result = skill_manager.run("git", "git_status", {})
+
+        assert result is not None
+        assert isinstance(result, str)
+
+    def test_skill_manager_nonexistent_skill(self, skill_manager):
+        """Running command on nonexistent skill should return error."""
+        result = skill_manager.run("nonexistent", "some_command", {})
+
+        assert "Error" in result or "not found" in result.lower()
+
+    def test_skill_manager_nonexistent_command(self, skill_manager):
+        """Running nonexistent command should return error."""
+        result = skill_manager.run("git", "nonexistent_command", {})
+
+        assert "Error" in result or "not found" in result.lower()
+
+
 class TestKernelPerformance:
     """Benchmark the dynamic loader."""
 
@@ -241,7 +307,6 @@ class TestKernelPerformance:
         assert success is True, "Git skill should load successfully"
 
         # Performance threshold: 200ms for cold start (file IO + import)
-        # This is generous to account for filesystem variance
         assert duration_ms < 200, f"Cold load took {duration_ms:.2f}ms, expected < 200ms"
 
     def test_load_latency_hot(self, registry, mock_mcp):
@@ -256,10 +321,10 @@ class TestKernelPerformance:
         duration_ms = (end_time - start_time) * 1000
 
         assert success is True
-        # Message should indicate hot reload (not a fresh load)
+        # Message should indicate hot reload
         assert "hot reload" in msg.lower() or "loaded via" in msg.lower()
 
-        # Hot load should be essentially instant (dict lookup + manifest access)
+        # Hot load should be essentially instant
         assert duration_ms < 5.0, f"Hot load took {duration_ms:.4f}ms, expected < 5ms"
 
     def test_context_retrieval_speed(self, registry, mock_mcp):
@@ -308,7 +373,7 @@ class TestKernelStability:
         start_time = time.perf_counter()
 
         for i in range(iterations):
-            # Clear loaded_skills to force re-load (simulates fresh load attempts)
+            # Clear loaded_skills to force re-load
             registry.loaded_skills.clear()
             success, _ = registry.load_skill("git", mock_mcp)
             if success:
@@ -322,11 +387,10 @@ class TestKernelStability:
 
         # Performance check
         avg_time_ms = (total_time / iterations) * 1000
-        print(f"\n🔥 Rapid Fire: {iterations} loads in {total_time:.4f}s")
-        print(f"🔥 Average: {avg_time_ms:.2f}ms per load")
+        print(f"\n Rapid Fire: {iterations} loads in {total_time:.4f}s")
+        print(f" Average: {avg_time_ms:.2f}ms per load")
 
-        # Each iteration includes manifest parse + potentially import
-        # Average should be reasonable (< 50ms)
+        # Average should be reasonable
         assert avg_time_ms < 50, f"Average load time {avg_time_ms:.2f}ms too high"
 
     def test_concurrent_load_attempts(self, registry, mock_mcp):
@@ -343,7 +407,7 @@ class TestKernelStability:
         # All should succeed
         assert all(r[0] for r in results), "Some load attempts failed"
 
-        # State should be consistent - git depends on filesystem, so both should be loaded
+        # State should be consistent
         assert len(registry.loaded_skills) >= 1
         assert "git" in registry.loaded_skills
 
@@ -380,12 +444,11 @@ class TestKernelStability:
 
         final_modules = len([m for m in sys.modules if m.startswith("agent.skills")])
 
-        # Modules should not grow significantly (allow some variance)
-        # This is a soft check since Python caches imports
+        # Modules should not grow significantly
         module_growth = final_modules - initial_modules
-        print(f"\n📊 Sys.modules growth: {module_growth} modules")
+        print(f"\n Sys.modules growth: {module_growth} modules")
 
-        # Should not have exploded (allow 5 modules growth for safety)
+        # Should not have exploded
         assert module_growth < 5, f"sys.modules grew by {module_growth}, possible memory leak"
 
 
@@ -422,7 +485,7 @@ class TestKernelEdgeCases:
 
     def test_concurrent_module_imports(self, registry, mock_mcp):
         """Multiple rapid loads shouldn't cause import conflicts."""
-        # Clear all agent.skills modules first to get accurate count
+        # Clear all agent.skills modules first
         modules_to_remove = [m for m in sys.modules if m.startswith("agent.skills")]
         for m in modules_to_remove:
             del sys.modules[m]
@@ -437,7 +500,6 @@ class TestKernelEdgeCases:
         new_modules = modules_after - modules_before
 
         # Should have added some modules but not excessively
-        # (agent.skills.git, agent.skills.git.tools, etc.)
         assert len(new_modules) > 0, "Expected some modules to be imported"
         assert len(new_modules) < 20, f"Too many modules imported: {len(new_modules)}"
 

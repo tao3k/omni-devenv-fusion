@@ -1,20 +1,23 @@
 """
-Software Engineering Skill Tools
-Universal tools for architecture analysis and code navigation.
+agent/skills/software_engineering/tools.py
+Software Engineering Skill - Architecture analysis and code navigation.
+
+Phase 25: Omni CLI Architecture
+Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
 """
 
 import os
 import re
 from pathlib import Path
 from typing import List, Dict
-from mcp.server.fastmcp import FastMCP
 from common.mcp_core.gitops import get_project_root
 import structlog
 
 logger = structlog.get_logger(__name__)
 
+
 # =============================================================================
-# Module-level functions (accessible for direct testing)
+# Core Tools
 # =============================================================================
 
 
@@ -159,37 +162,35 @@ Frameworks/Tools: {", ".join(set(frameworks))}
 
 
 # =============================================================================
-# MCP Registration
+# EXPOSED_COMMANDS - Omni CLI Entry Point
 # =============================================================================
 
+EXPOSED_COMMANDS = {
+    "analyze_project_structure": {
+        "func": analyze_project_structure,
+        "description": "Generate a tree-like view of the project structure.",
+        "category": "read",
+    },
+    "grep_codebase": {
+        "func": grep_codebase,
+        "description": "Universal content search (grep) for patterns in files.",
+        "category": "read",
+    },
+    "detect_tech_stack": {
+        "func": detect_tech_stack,
+        "description": "Analyze the project to identify languages and frameworks.",
+        "category": "read",
+    },
+}
 
-def register(mcp: FastMCP):
-    """Register Software Engineering tools with MCP using direct function binding."""
-    import sys
-    import importlib.util
 
-    # Get the current module from sys.modules
-    current_module = sys.modules.get("agent.skills.software_engineering.tools")
-    if current_module is None:
-        spec = importlib.util.spec_from_file_location(
-            "agent.skills.software_engineering.tools",
-            Path(__file__).resolve(),
-        )
-        current_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(current_module)
-        sys.modules["agent.skills.software_engineering.tools"] = current_module
+# =============================================================================
+# Legacy Export for Compatibility
+# =============================================================================
 
-    # Get functions from the module
-    analyze = getattr(current_module, "analyze_project_structure", None)
-    grep = getattr(current_module, "grep_codebase", None)
-    detect = getattr(current_module, "detect_tech_stack", None)
-
-    # Register tools directly
-    if analyze:
-        mcp.add_tool(analyze, "Generate a tree-like view of the project structure.")
-    if grep:
-        mcp.add_tool(grep, "Universal content search (grep) for patterns in files.")
-    if detect:
-        mcp.add_tool(detect, "Analyze the project to identify languages and frameworks.")
-
-    logger.info("Software Engineering skill tools registered")
+__all__ = [
+    "analyze_project_structure",
+    "grep_codebase",
+    "detect_tech_stack",
+    "EXPOSED_COMMANDS",
+]

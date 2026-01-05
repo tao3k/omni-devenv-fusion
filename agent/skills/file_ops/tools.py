@@ -44,6 +44,7 @@ _ALLOWED_HIDDEN_FILES = {
 
 class FileOperation(BaseModel):
     """Single file operation for batch processing."""
+
     action: Literal["write", "append"] = Field(
         ..., description="Action to perform: write (create/overwrite) or append"
     )

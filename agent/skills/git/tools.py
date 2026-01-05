@@ -2,23 +2,22 @@
 agent/skills/git/tools.py
 Git Skill - Complete Git Operations for Version Control.
 
-Phase 24: The MiniMax Shift
-Protocol-Native Implementation - All tools return str for MCP compliance.
+Phase 25: Omni CLI Architecture
+Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
 
-This module provides all Git capabilities:
+This module provides all Git capabilities as a passive skill:
 - Status, diff, log operations (read-only)
 - View-Enhanced tools (Markdown with icons/code blocks)
 - Error handling and safe defaults
 
-Key Principle: All @mcp.tool functions return str (not dict).
-FastMCP auto-wraps str into CallToolResult(content=[TextContent...]).
+Key Principle: No @mcp.tool decorators. Commands are exposed via EXPOSED_COMMANDS.
+The SkillManager calls these functions directly based on user requests.
 """
 
 import subprocess
 import logging
 from pathlib import Path
 from typing import List, Optional, Tuple
-from mcp.server.fastmcp import FastMCP
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,7 @@ class GitError(Exception):
 
 
 # ==============================================================================
-# Core Git Implementation (Migrated from common/mcp_core/gitops.py)
+# Core Git Implementation
 # ==============================================================================
 
 
@@ -139,7 +138,6 @@ def git_read_backlog() -> str:
 
     content = backlog_path.read_text(encoding="utf-8")
 
-    # FastMCP auto-wraps str into CallToolResult(content=[TextContent(...)])
     return content
 
 
@@ -179,9 +177,7 @@ def _render_status_report(
     return report
 
 
-def _render_hotfix_plan(
-    issue_id: str, commands: list[str], explanation: list[str]
-) -> str:
+def _render_hotfix_plan(issue_id: str, commands: list[str], explanation: list[str]) -> str:
     """Render a Hotfix Plan as a Terminal Block."""
     cmd_block = " && \\\n    ".join(commands)
     expl_text = "\n".join([f"- {item}" for item in explanation])
@@ -243,7 +239,7 @@ def git_status_report() -> str:
 
 
 # ==============================================================================
-# Workflow Tools (Phase 24)
+# Workflow Tools (Phase 25)
 # ==============================================================================
 
 
@@ -286,10 +282,7 @@ def git_plan_hotfix(
             explanation.append(f"Branch: Creating '{branch_name}'")
             commands.append(f"git checkout -b {branch_name}")
 
-        cmd_block = " && \\\n    ".join(commands)
-        expl_text = "\n".join([f"- {item}" for item in explanation])
-
-        # 3. View: Render using views module
+        # 3. View: Render using local function
         return _render_hotfix_plan(issue_id, commands, explanation)
 
     except Exception as e:
@@ -631,9 +624,139 @@ def git_submodule_update(init: bool = False) -> str:
 
 
 # ==============================================================================
-# Exported Functions (for Skill Registry)
+# EXPOSED_COMMANDS - Omni CLI Entry Point
 # ==============================================================================
 
+EXPOSED_COMMANDS = {
+    # Read operations (safe)
+    "git_status": {
+        "func": git_status,
+        "description": "Get the current status of the git repository.",
+        "category": "read",
+    },
+    "git_diff": {
+        "func": git_diff,
+        "description": "Get the diff of changes.",
+        "category": "read",
+    },
+    "git_log": {
+        "func": git_log,
+        "description": "Show recent commit logs.",
+        "category": "read",
+    },
+    "git_branch": {
+        "func": git_branch,
+        "description": "List all git branches.",
+        "category": "read",
+    },
+    "git_show": {
+        "func": git_show,
+        "description": "Show file content at a specific commit.",
+        "category": "read",
+    },
+    "git_remote": {
+        "func": git_remote,
+        "description": "Show remote repositories.",
+        "category": "read",
+    },
+    "git_tag_list": {
+        "func": git_tag_list,
+        "description": "List all tags.",
+        "category": "read",
+    },
+    # Phase 25: Director Pattern (View-Enhanced Tools)
+    "git_status_report": {
+        "func": git_status_report,
+        "description": "[VIEW] Get a formatted git status report with icons.",
+        "category": "view",
+    },
+    # Phase 25: Workflow Tools
+    "git_plan_hotfix": {
+        "func": git_plan_hotfix,
+        "description": "[WORKFLOW] Generate a hotfix execution plan.",
+        "category": "workflow",
+    },
+    "git_smart_diff": {
+        "func": git_smart_diff,
+        "description": "[VIEW] Get instructions to view a native git diff.",
+        "category": "view",
+    },
+    # Write operations (require caution)
+    "git_add": {
+        "func": git_add,
+        "description": "Stage files for commit.",
+        "category": "write",
+    },
+    "git_stage_all": {
+        "func": git_stage_all,
+        "description": "Stage all changes with optional security scan.",
+        "category": "write",
+    },
+    "git_commit": {
+        "func": git_commit,
+        "description": "Commit staged changes.",
+        "category": "write",
+    },
+    "git_checkout": {
+        "func": git_checkout,
+        "description": "Switch to a branch or create a new one.",
+        "category": "write",
+    },
+    "git_stash_save": {
+        "func": git_stash_save,
+        "description": "Stash changes in the working directory.",
+        "category": "write",
+    },
+    "git_stash_pop": {
+        "func": git_stash_pop,
+        "description": "Apply the last stashed changes.",
+        "category": "write",
+    },
+    "git_stash_list": {
+        "func": git_stash_list,
+        "description": "List all stashed changes.",
+        "category": "write",
+    },
+    "git_reset": {
+        "func": git_reset,
+        "description": "Reset current HEAD to a specific state.",
+        "category": "write",
+    },
+    "git_revert": {
+        "func": git_revert,
+        "description": "Revert a specific commit.",
+        "category": "write",
+    },
+    # Tag operations
+    "git_tag_create": {
+        "func": git_tag_create,
+        "description": "Create an annotated tag.",
+        "category": "write",
+    },
+    # Merge operations
+    "git_merge": {
+        "func": git_merge,
+        "description": "Merge a branch into current branch.",
+        "category": "write",
+    },
+    # Submodule operations
+    "git_submodule_update": {
+        "func": git_submodule_update,
+        "description": "Update submodules.",
+        "category": "write",
+    },
+    # Phase 25: Self-Evolution Tools (Bootstrap Pattern)
+    "git_read_backlog": {
+        "func": git_read_backlog,
+        "description": "[Evolution] Read the Git Skill's own backlog.",
+        "category": "evolution",
+    },
+}
+
+
+# ==============================================================================
+# Legacy Export for Compatibility
+# ==============================================================================
 
 __all__ = [
     # Exceptions
@@ -646,9 +769,9 @@ __all__ = [
     "git_show",
     "git_remote",
     "git_tag_list",
-    # Phase 24: Director Pattern
+    # View-Enhanced Tools
     "git_status_report",
-    # Phase 24: Workflow Tools
+    # Workflow Tools
     "git_plan_hotfix",
     "git_smart_diff",
     # Write operations
@@ -667,190 +790,8 @@ __all__ = [
     "git_merge",
     # Submodule operations
     "git_submodule_update",
-    # Phase 24: Workflow
-    "invoke_git_workflow",
-    # Registration
-    "register",
+    # Self-Evolution
+    "git_read_backlog",
+    # Omni CLI
+    "EXPOSED_COMMANDS",
 ]
-
-
-# ==============================================================================
-# MCP Tool Registration
-# ==============================================================================
-
-
-async def invoke_git_workflow(
-    intent: str,
-    target_branch: str = "",
-    commit_message: str = "",
-    checkpoint_id: str = None,
-) -> str:
-    """
-    [Phase 24] Invoke Git workflow with LangGraph orchestration.
-
-    Use this for complex Git operations that require multiple steps:
-    - Hotfix: Check env -> Stash if dirty -> Switch branch -> Commit -> Pop stash
-    - PR workflow: Similar to hotfix with proper branch handling
-    - Branch operations: Switch with optional creation
-
-    Args:
-        intent: High-level intent (hotfix, pr, branch, commit, stash)
-        target_branch: Target branch for operations
-        commit_message: Commit message for commit operations
-        checkpoint_id: Optional checkpoint ID for state persistence
-
-    Returns:
-        Formatted workflow result with success/error status
-    """
-    try:
-        # Lazy load workflow module using importlib to avoid import issues
-        # during skill loading (spec-based loading doesn't register in sys.modules)
-        import importlib.util
-        import sys
-        from pathlib import Path
-
-        workflow_path = Path(__file__).parent / "workflow.py"
-        if not workflow_path.exists():
-            return "Error: Workflow module not found"
-
-        module_name = "agent.skills.git.workflow"
-
-        # Load the module if not already in sys.modules
-        if module_name not in sys.modules:
-            spec = importlib.util.spec_from_file_location(module_name, workflow_path)
-            if spec and spec.loader:
-                workflow_module = importlib.util.module_from_spec(spec)
-                sys.modules[module_name] = workflow_module
-                spec.loader.exec_module(workflow_module)
-            else:
-                return "Error: Could not create spec for workflow module"
-        else:
-            workflow_module = sys.modules[module_name]
-
-        result = await workflow_module.run_git_workflow(
-            intent=intent,
-            target_branch=target_branch,
-            commit_message=commit_message,
-            checkpoint_id=checkpoint_id,
-        )
-
-        return workflow_module.format_workflow_result(result)
-    except ImportError as e:
-        return f"Error: Workflow module not available. Ensure langgraph is installed.\nDetails: {e}"
-    except Exception as e:
-        logger.error("Workflow invocation failed", error=str(e))
-        return f"Error invoking Git workflow: {e}"
-
-
-def register(mcp: FastMCP) -> None:
-    """
-    Register all git tools with the MCP server.
-
-    This function is called by the SkillRegistry during hot reload.
-
-    Args:
-        mcp: FastMCP server instance
-    """
-    # Read operations (safe)
-    mcp.add_tool(git_status, description="Get the current status of the git repository.")
-    mcp.add_tool(git_diff, description="Get the diff of changes.")
-    mcp.add_tool(git_log, description="Show recent commit logs.")
-    mcp.add_tool(git_branch, description="List all git branches.")
-    mcp.add_tool(git_show, description="Show file content at a specific commit.")
-    mcp.add_tool(git_remote, description="Show remote repositories.")
-    mcp.add_tool(git_tag_list, description="List all tags.")
-
-    # Phase 24: Director Pattern (View-Enhanced Tools)
-    mcp.add_tool(
-        git_status_report,
-        description="""[VIEW] Get a formatted git status report with icons.
-
-        Returns a nicely formatted Markdown report showing:
-        - Current branch
-        - Working tree state (clean/dirty)
-        - Staged files (with ✅)
-        - Unstaged files (with ⚠️)
-
-        Use this for better UX instead of raw git status.
-        """,
-    )
-
-    # Phase 24: Workflow Tools
-    mcp.add_tool(
-        git_plan_hotfix,
-        description="""[WORKFLOW] Generate a hotfix execution plan.
-
-        Smartly handles the current environment:
-        - Stashes changes if working tree is dirty
-        - Switches to base branch and pulls latest
-        - Creates a new hotfix branch
-
-        Returns a terminal block with all commands to execute.
-        This uses Bypass Rendering for better UX.
-
-        Args:
-            issue_id: The issue identifier (e.g., "999")
-            base_branch: Base branch to work from (default: "main")
-            create_branch: Whether to create a new hotfix branch
-        """,
-    )
-    mcp.add_tool(
-        git_smart_diff,
-        description="""[VIEW] Get instructions to view a native git diff.
-
-        Use this instead of reading the file directly when you want
-        to see what changed. Returns a terminal block with the diff command.
-
-        Args:
-            filename: Path to the file to diff
-            context_lines: Number of context lines to show (default: 3)
-        """,
-    )
-
-    # Write operations (require caution)
-    mcp.add_tool(git_add, description="Stage files for commit.")
-    mcp.add_tool(git_stage_all, description="Stage all changes with optional security scan.")
-    mcp.add_tool(git_commit, description="Commit staged changes.")
-    mcp.add_tool(git_checkout, description="Switch to a branch or create a new one.")
-    mcp.add_tool(git_stash_save, description="Stash changes in the working directory.")
-    mcp.add_tool(git_stash_pop, description="Apply the last stashed changes.")
-    mcp.add_tool(git_stash_list, description="List all stashed changes.")
-    mcp.add_tool(git_reset, description="Reset current HEAD to a specific state.")
-    mcp.add_tool(git_revert, description="Revert a specific commit.")
-
-    # Advanced operations
-    mcp.add_tool(git_tag_create, description="Create an annotated tag.")
-    mcp.add_tool(git_merge, description="Merge a branch into current branch.")
-    mcp.add_tool(git_submodule_update, description="Update submodules.")
-
-    # Phase 24: Self-Evolution Tools (Bootstrap Pattern)
-    mcp.add_tool(
-        git_read_backlog,
-        description="""[Evolution] Read the Git Skill's own backlog to see what features are missing.
-
-        Use this to decide what to implement next. Returns the content of Backlog.md.
-        """,
-    )
-
-    # Phase 24: Living Skill Architecture - Workflow tools
-    mcp.add_tool(
-        invoke_git_workflow,
-        description="""Invoke Git workflow with LangGraph orchestration.
-
-        Use this for complex Git operations that require multiple steps:
-        - Hotfix: Check env -> Stash if dirty -> Switch branch -> Commit -> Pop stash
-        - PR workflow: Similar to hotfix with proper branch handling
-        - Branch operations: Switch with optional creation
-
-        Args:
-            intent: High-level intent (hotfix, pr, branch, commit, stash)
-            target_branch: Target branch for operations
-            commit_message: Commit message for commit operations
-            checkpoint_id: Optional checkpoint ID for state persistence
-
-        Returns:
-            Formatted workflow result with success/error status
-        """,
-    )
-
-    logger.info("Git skill tools registered with MCP server")

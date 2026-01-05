@@ -1,12 +1,14 @@
 """
-Filesystem Skill Tools
-Implementation of safe file operations.
+agent/skills/filesystem/tools.py
+Filesystem Skill - Safe File Operations.
+
+Phase 25: Omni CLI Architecture
+Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
 """
 
 import fnmatch
 from pathlib import Path
 from typing import List
-from mcp.server.fastmcp import FastMCP
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -111,42 +113,54 @@ async def search_files(pattern: str, path: str = ".") -> str:
         return f"Error searching files: {e}"
 
 
-def register(mcp: FastMCP):
-    """Register Filesystem tools with MCP using direct function binding."""
-    import sys
-    import importlib.util
+# =============================================================================
+# EXPOSED_COMMANDS - Omni CLI Entry Point
+# =============================================================================
 
-    # Get the current module from sys.modules
-    current_module = sys.modules.get("agent.skills.filesystem.tools")
-    if current_module is None:
-        spec = importlib.util.spec_from_file_location(
-            "agent.skills.filesystem.tools",
-            Path(__file__).resolve(),
-        )
-        current_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(current_module)
-        sys.modules["agent.skills.filesystem.tools"] = current_module
+EXPOSED_COMMANDS = {
+    "list_directory": {
+        "func": list_directory,
+        "description": "List files and directories in the given path.",
+        "category": "read",
+    },
+    "read_file": {
+        "func": read_file,
+        "description": "Read the full content of a file (UTF-8).",
+        "category": "read",
+    },
+    "read_multiple_files": {
+        "func": read_multiple_files,
+        "description": "Read multiple files at once.",
+        "category": "read",
+    },
+    "write_file": {
+        "func": write_file,
+        "description": "Create or Overwrite a file with new content.",
+        "category": "write",
+    },
+    "get_file_info": {
+        "func": get_file_info,
+        "description": "Get metadata about a file.",
+        "category": "read",
+    },
+    "search_files": {
+        "func": search_files,
+        "description": "Search for files matching a glob pattern.",
+        "category": "read",
+    },
+}
 
-    # Get functions from the module
-    list_dir = getattr(current_module, "list_directory", None)
-    read_file_fn = getattr(current_module, "read_file", None)
-    read_multi = getattr(current_module, "read_multiple_files", None)
-    write_file_fn = getattr(current_module, "write_file", None)
-    get_info = getattr(current_module, "get_file_info", None)
-    search = getattr(current_module, "search_files", None)
 
-    # Register tools directly
-    if list_dir:
-        mcp.add_tool(list_dir, "List files and directories in the given path.")
-    if read_file_fn:
-        mcp.add_tool(read_file_fn, "Read the full content of a file (UTF-8).")
-    if read_multi:
-        mcp.add_tool(read_multi, "Read multiple files at once.")
-    if write_file_fn:
-        mcp.add_tool(write_file_fn, "Create or Overwrite a file with new content.")
-    if get_info:
-        mcp.add_tool(get_info, "Get metadata about a file.")
-    if search:
-        mcp.add_tool(search, "Search for files matching a glob pattern.")
+# =============================================================================
+# Legacy Export for Compatibility
+# =============================================================================
 
-    logger.info("Filesystem skill tools registered")
+__all__ = [
+    "list_directory",
+    "read_file",
+    "read_multiple_files",
+    "write_file",
+    "get_file_info",
+    "search_files",
+    "EXPOSED_COMMANDS",
+]

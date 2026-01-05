@@ -1,9 +1,9 @@
 # CLAUDE.md - Omni-DevEnv Fusion
 
-> **Phase 24: The MiniMax Shift**
+> **Phase 25: One Tool Architecture**
 >
-> Direct tool registration - no `invoke_skill` middleware.
-> Tools are registered directly with snake_case names.
+> Single Entry Point: `@omni("skill.command")`
+> Only 1 tool registered with MCP - infinite skills, zero context bloat.
 >
 > Quick Reference: `agent/skills/*/prompts.md`
 
@@ -13,7 +13,7 @@
 
 **Direct `git commit` via Terminal is BLOCKED.**
 
-Use: `@omni-orchestrator git_commit` or call `git_commit()` directly.
+Use: `@omni("git.commit", {"message": "..."})` or call via omni tool.
 
 ---
 
@@ -49,37 +49,57 @@ Use: `@omni-orchestrator git_commit` or call `git_commit()` directly.
 
 ---
 
-## Phase 24: Direct Tool Registration
+## Phase 25: One Tool Architecture
 
-### Tool Names are snake_case
+### Only ONE Tool Registered: `@omni`
 
-| Old (Phase 13) | New (Phase 24) |
-| -------------- | -------------- |
-| `invoke_skill("git", "git_status", {})` | `git_status()` |
-| `skill("git", "git_commit(message='...')")` | `git_commit(message='...')` |
-| Descriptive text names | Function name = tool name |
+Claude sees only ONE tool. All operations go through this gate.
 
-### Git Tools (Example)
+| Old (Phase 24)                          | New (Phase 25)               |
+| --------------------------------------- | ---------------------------- |
+| `git_status()` (direct function)        | `@omni("git.status")`        |
+| `git_commit(message='...')`             | `@omni("git.commit", {...})` |
+| 100+ individual tools                   | 1 tool: `omni`               |
+| `invoke_skill("git", "git_status", {})` | `@omni("git.status")`        |
+
+### Usage Syntax
 
 ```python
-git_status()              # Get repository status
-git_status_report()       # [VIEW] Formatted report with icons
-git_plan_hotfix(issue_id) # [WORKFLOW] Hotfix execution plan
-git_commit(message)       # Commit changes
-git_branch()              # List branches
+# Execute commands
+@omni("git.status")                           # Get git status
+@omni("git.commit", {"message": "feat: add"}) # Commit with args
+@omni("file.read", {"path": "README.md"})     # Read file
+
+# Get help
+@omni("help")         # Show all skills
+@omni("git")          # Show git commands
 ```
 
-### Available Skills
+### Command Syntax Mapping
 
-| Skill | Purpose | Example Tool |
-|-------|---------|--------------|
-| `git` | Version control | `git_status()`, `git_commit()` |
-| `terminal` | Shell commands | `execute_command()` |
-| `filesystem` | File I/O | `read_file()`, `write_file()` |
-| `testing_protocol` | Test runner | `smart_test_runner()` |
-| `file_ops` | Batch file ops | `apply_file_changes()` |
-| `knowledge` | Project context | `get_development_context()` |
-| `writer` | Writing quality | `load_writing_memory()` |
+| Format          | Example      | Dispatches To            |
+| --------------- | ------------ | ------------------------ |
+| `skill.command` | `git.status` | `git.git_status()`       |
+| `skill.command` | `file.read`  | `filesystem.read_file()` |
+| `skill`         | `git`        | Shows git help           |
+| `help`          | `help`       | Shows all skills         |
+
+### Available Skills (13 total)
+
+| Skill                  | Purpose         | Example Command                         |
+| ---------------------- | --------------- | --------------------------------------- |
+| `git`                  | Version control | `@omni("git.status")`                   |
+| `terminal`             | Shell commands  | `@omni("terminal.execute", {...})`      |
+| `filesystem`           | File I/O        | `@omni("filesystem.read", {...})`       |
+| `testing_protocol`     | Test runner     | `@omni("testing_protocol.run", {...})`  |
+| `file_ops`             | Batch file ops  | `@omni("file_ops.apply", {...})`        |
+| `knowledge`            | Project context | `@omni("knowledge.get_context")`        |
+| `writer`               | Writing quality | `@omni("writer.lint", {...})`           |
+| `memory`               | Vector memory   | `@omni("memory.recall", {...})`         |
+| `documentation`        | Doc management  | `@omni("documentation.search", {...})`  |
+| `code_insight`         | Code analysis   | `@omni("code_insight.find", {...})`     |
+| `software_engineering` | Architecture    | `@omni("software_engineering.analyze")` |
+| `advanced_search`      | Semantic search | `@omni("advanced_search.query", {...})` |
 
 ---
 
@@ -88,20 +108,21 @@ git_branch()              # List branches
 ### Before Any Work
 
 ```python
-get_development_context()  # Load project rules
+@omni("knowledge.get_development_context")  # Load project rules
 ```
 
 ### When Writing Docs
 
 ```python
-load_writing_memory()  # Load writing standards
+@omni("writer.load_writing_memory")  # Load writing standards
 ```
 
 ### Git Operations
 
 ```python
-git_status_report()    # View formatted status
-git_commit(message="...")  # Commit directly
+@omni("git.status_report")  # View formatted status
+@omni("git.commit", {"message": "..."})  # Commit with args
+@omni("git.plan_hotfix", {"issue_id": "123"})  # Plan hotfix
 ```
 
 ### New Feature
@@ -125,6 +146,6 @@ start_spec("Feature Name")
 
 ## Anti-Patterns
 
-- **Don't** use Claude-native bash for `git commit` - use `skill("git", "git_commit(...)")`
-- **Don't** write docs without `skill("writer", "load_writing_memory()")`
+- **Don't** use Claude-native bash for `git commit` - use `@omni("git.commit", {...})`
+- **Don't** write docs without `@omni("writer.load_writing_memory")`
 - **Don't** skip `start_spec` for new features

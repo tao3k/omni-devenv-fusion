@@ -35,12 +35,12 @@ The system divides into two distinct MCP servers, each serving a specific abstra
 
 **Key Difference from Tri-MCP:**
 
-| Aspect     | Tri-MCP (Old)                   | Bi-MCP (Current)                           |
-| ---------- | ------------------------------- | ------------------------------------------ |
-| Servers    | orchestrator + executor + coder | orchestrator + coder                       |
-| Operations | Direct tools in executor        | Direct tool registration (Phase 24)        |
-| Git        | executor: git_status            | orchestrator: git_status()                 |
-| Tool Names | Descriptive text                | snake_case (e.g., `git_status_report`)     |
+| Aspect     | Tri-MCP (Old)                   | Bi-MCP (Current)                       |
+| ---------- | ------------------------------- | -------------------------------------- |
+| Servers    | orchestrator + executor + coder | orchestrator + coder                   |
+| Operations | Direct tools in executor        | Direct tool registration (Phase 24)    |
+| Git        | executor: git_status            | orchestrator: git_status()             |
+| Tool Names | Descriptive text                | snake_case (e.g., `git_status_report`) |
 
 ### Server A: The Orchestrator (The "Brain")
 
@@ -206,12 +206,12 @@ With Phase 24, we removed the `invoke_skill` middleware layer. Tools are now reg
 
 #### Before vs After
 
-| Aspect | Before (Phase 13) | After (Phase 24) |
-|--------|-------------------|------------------|
-| Tool Names | Descriptive text | `snake_case` function names |
-| Registration | Via `invoke_skill` middleware | Direct: `tools.register(mcp)` |
-| Return Type | `dict` | `str` (for CLI rendering) |
-| Call Style | `invoke_skill("git", "git_status", {})` | `git_status()` |
+| Aspect       | Before (Phase 13)                       | After (Phase 24)              |
+| ------------ | --------------------------------------- | ----------------------------- |
+| Tool Names   | Descriptive text                        | `snake_case` function names   |
+| Registration | Via `invoke_skill` middleware           | Direct: `tools.register(mcp)` |
+| Return Type  | `dict`                                  | `str` (for CLI rendering)     |
+| Call Style   | `invoke_skill("git", "git_status", {})` | `git_status()`                |
 
 #### Direct Tool Registration Pattern
 
@@ -236,20 +236,20 @@ def register(mcp: FastMCP) -> None:
 
 #### Available Core Skills (Phase 24)
 
-| Skill | Purpose | Example Tools |
-|-------|---------|---------------|
-| `git` | Version control | `git_status()`, `git_status_report()`, `git_commit()` |
-| `terminal` | Command execution | `execute_command()` |
-| `testing_protocol` | Test runner | `smart_test_runner()` |
-| `writer` | Writing quality | `lint_writing_style()`, `load_writing_memory()` |
-| `filesystem` | File operations | `read_file()`, `write_file()` |
-| `file_ops` | Batch file ops | `apply_file_changes()` |
+| Skill              | Purpose           | Example Tools                                         |
+| ------------------ | ----------------- | ----------------------------------------------------- |
+| `git`              | Version control   | `git_status()`, `git_status_report()`, `git_commit()` |
+| `terminal`         | Command execution | `execute_command()`                                   |
+| `testing_protocol` | Test runner       | `smart_test_runner()`                                 |
+| `writer`           | Writing quality   | `lint_writing_style()`, `load_writing_memory()`       |
+| `filesystem`       | File operations   | `read_file()`, `write_file()`                         |
+| `file_ops`         | Batch file ops    | `apply_file_changes()`                                |
 
 #### View-Enhanced Tools (Director Pattern)
 
 For complex UI rendering, tools can return Claude-friendly Markdown with "Run" hints:
 
-```python
+````python
 def git_plan_hotfix(issue_id: str, base_branch: str = "main") -> str:
     """[WORKFLOW] Generate a hotfix execution plan."""
     return f"""
@@ -261,9 +261,10 @@ cd $(git rev-parse --show-toplevel) && \\
     git checkout {base_branch} && \\
     git pull && \\
     git checkout -b hotfix/{issue_id}
-```
+````
 
-*Tip: Click "Run" to execute.*
+_Tip: Click "Run" to execute._
+
 ```
 
 ### What is a Skill?
@@ -271,12 +272,14 @@ cd $(git rev-parse --show-toplevel) && \\
 A Skill is a self-contained package of capability:
 
 ```
+
 agent/skills/{skill_name}/
-├── manifest.json              # Metadata: name, version, tools, dependencies
-├── guide.md                   # Procedural knowledge (LLM's "manual")
-├── tools.py                   # Executable tools ("hands")
-├── prompts.md                 # Context injection when active
-└── tests/                     # Self-contained tests
+├── manifest.json # Metadata: name, version, tools, dependencies
+├── guide.md # Procedural knowledge (LLM's "manual")
+├── tools.py # Executable tools ("hands")
+├── prompts.md # Context injection when active
+└── tests/ # Self-contained tests
+
 ```
 
 ### Phase 13 Roadmap: The Foundation (Skill Kernel)
@@ -338,26 +341,28 @@ When running Omni as an MCP Server (integrated with Claude Desktop, Aider, etc.)
 We separate **Control Flow** (JSON-RPC) from **Visualization Flow** (Event Stream):
 
 ```
+
 ┌─────────────────────────────────────────────────────────────────────┐
-│                          TERMINAL 1: Aider/Claude                    │
-│  ┌──────────────┐                              ┌─────────────────┐  │
-│  │ User Input   │ ──JSON-RPC──> │ Omni MCP │ ──Events──> │ Event Log     │  │
-│  │              │                              │ Server    │ (/tmp/omni_  │  │
-│  │ Final Result │ <──JSON-RPC── │           │           │  events.jsonl)│  │
-│  └──────────────┘                              └────────────┴──────────┘  │
+│ TERMINAL 1: Aider/Claude │
+│ ┌──────────────┐ ┌─────────────────┐ │
+│ │ User Input │ ──JSON-RPC──> │ Omni MCP │ ──Events──> │ Event Log │ │
+│ │ │ │ Server │ (/tmp/omni\_ │ │
+│ │ Final Result │ <──JSON-RPC── │ │ │ events.jsonl)│ │
+│ └──────────────┘ └────────────┴──────────┘ │
 └─────────────────────────────────────────────────────────────────────┘
-                                                                          │
-                     ┌────────────────────────────────────────┐            │
-                     │         TERMINAL 2: omni monitor         │            │
-                     │  ┌──────────────────────────────────┐  │            │
-                     │  │ UXManager (TUI Renderer)         │◄─┘            │
-                     │  │ • Routing Animation (Cyan)       │               │
-                     │  │ • RAG Knowledge Tree             │               │
-                     │  │ • Agent Status Panels            │               │
-                     │  │ • Task Progress Spinner          │               │
-                     │  └──────────────────────────────────┘               │
-                     └──────────────────────────────────────────────────────┘
-```
+│
+┌────────────────────────────────────────┐ │
+│ TERMINAL 2: omni monitor │ │
+│ ┌──────────────────────────────────┐ │ │
+│ │ UXManager (TUI Renderer) │◄─┘ │
+│ │ • Routing Animation (Cyan) │ │
+│ │ • RAG Knowledge Tree │ │
+│ │ • Agent Status Panels │ │
+│ │ • Task Progress Spinner │ │
+│ └──────────────────────────────────┘ │
+└──────────────────────────────────────────────────────┘
+
+````
 
 ### How It Works
 
@@ -390,7 +395,7 @@ class UXManager:
                 "session_id": self.session_id
             }
             f.write(json.dumps(event) + "\n")
-```
+````
 
 #### 2. Event Schema
 
@@ -989,3 +994,225 @@ def start_background_tasks():
 | Robustness    | 3      | ✅ Error handling       |
 | Feedback Loop | 4      | ✅ Audit integration    |
 | **Total**     | **45** | **100%**                |
+
+---
+
+## Phase 25: One Tool Architecture
+
+> **Status**: Complete
+> **Philosophy**: "Single Entry Point. Infinite Skills. Zero Context Bloat."
+
+### The Problem: Tool Overload
+
+When you register 100+ individual tools with an MCP server:
+
+| Problem              | Symptom                                                                |
+| -------------------- | ---------------------------------------------------------------------- |
+| **Context Bloat**    | Claude's system prompt becomes 50+ pages                               |
+| **Attention分散**    | Claude calls wrong tool (e.g., `git_checkout` instead of `git_status`) |
+| **Hallucination**    | Claude invokes tools that don't exist                                  |
+| **Maintenance Pain** | Adding a skill means updating MCP registration                         |
+
+```
+❌ Old Pattern (100+ tools):
+@omni git_status()  ← Claude sees this
+@omni git_commit()  ← And this
+@omni git_push()    ← And this...
+@omni file_read()   ← And 90 more...
+
+Claude's inner monologue:
+  "I have 100 tools. Which one? git_status? git_checkout?
+   Maybe git_branch? Let me guess..."
+```
+
+### The Solution: Single Entry Point
+
+Phase 25 introduces **"One Tool" Philosophy**:
+
+```
+✅ New Pattern (1 tool):
+@omni("git.status")      ← Execute git status
+@omni("git.commit", {...})  ← Execute with args
+@omni("help")            ← Show all skills
+
+Claude's inner monologue:
+  "I have ONE tool: omni. It dispatches to ANY skill.
+   User said 'git.status' → I call omni('git.status') → Done."
+```
+
+---
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Claude Desktop                               │
+│                                                                  │
+│  User: "@omni git.status"                                        │
+│  Claude sees: ONE tool named "omni"                              │
+└─────────────────────────────────┬───────────────────────────────┘
+                                  │ JSON-RPC
+                                  ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     MCP Server (Phase 25)                        │
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  @mcp.tool(name="omni")                                  │   │
+│  │  def omni(input: str, args: Optional[Dict] = None)       │   │
+│  │      → Parse skill.command                               │   │
+│  │      → SkillManager.run(skill, command, args)            │   │
+│  │      → Return result                                     │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  ⚡ Only 1 tool registered!                                       │
+└─────────────────────────────────┬───────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Skill Manager (Registry)                      │
+│                                                                  │
+│  Skills: git, filesystem, knowledge, memory, etc.               │
+│  Commands: 100+ functions in passive mode (no decorators)       │
+│                                                                  │
+│  @omni("git.status")     → git.git_status()                     │
+│  @omni("git.log", {...}) → git.git_log(n=3)                     │
+│  @omni("help")           → Render all skills                    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Key Changes from Phase 24
+
+| Aspect               | Phase 24                      | Phase 25                |
+| -------------------- | ----------------------------- | ----------------------- |
+| **Tools Registered** | 100+ individual tools         | 1 tool: `omni`          |
+| **Tool Names**       | `git_status()`, `file_read()` | `omni("git.status")`    |
+| **Skill Pattern**    | `register(mcp)` + decorators  | `EXPOSED_COMMANDS` dict |
+| **Invocation**       | Direct function call          | `omni("skill.command")` |
+
+---
+
+### Usage Examples
+
+#### Execute a Command
+
+```python
+# Claude calls:
+@omni("git.status")
+# → Dispatches to git.git_status()
+# → Returns: "On branch main\nChanges to be committed..."
+
+@omni("git.commit", {"message": "feat: add feature"})
+# → Dispatches to git.git_commit(message="feat: add feature")
+```
+
+#### Get Help
+
+```python
+@omni("help")
+# → Shows all available skills
+
+@omni("git")
+# → Shows git skill commands
+```
+
+#### Command Syntax
+
+| Format          | Example      | Dispatches To            |
+| --------------- | ------------ | ------------------------ |
+| `skill.command` | `git.status` | `git.git_status()`       |
+| `skill.command` | `file.read`  | `filesystem.read_file()` |
+| `skill help`    | `git.help`   | Shows git commands       |
+| `help`          | `help`       | Shows all skills         |
+
+---
+
+### Skill File Structure (Phase 25)
+
+```python
+# agent/skills/git/tools.py
+
+# NO @mcp.tool() decorators
+# NO register(mcp) function
+# ONLY passive functions + EXPOSED_COMMANDS
+
+async def git_status() -> str:
+    """Get the current git status."""
+    return _run_git(["status", "--short"])
+
+async def git_commit(message: str) -> str:
+    """Commit staged changes."""
+    ...
+
+# EXPOSED_COMMANDS - The ONLY interface
+EXPOSED_COMMANDS = {
+    "git_status": {
+        "func": git_status,
+        "description": "Get git status",
+        "category": "read",
+    },
+    "git_commit": {
+        "func": git_commit,
+        "description": "Commit staged changes",
+        "category": "write",
+    },
+}
+
+__all__ = ["EXPOSED_COMMANDS"]
+```
+
+---
+
+### Why This Works
+
+1. **Claude Sees Only 1 Tool**
+   - System prompt is minimal
+   - No confusion about which tool to use
+
+2. **Infinite Skills, Zero Cost**
+   - Add 500 skills → Claude sees still only 1 tool
+   - Skills loaded on-demand via `SkillManager`
+
+3. **Natural Language Interface**
+   - `@omni("git.status")` reads like English
+   - Claude learns pattern once, applies everywhere
+
+4. **Dynamic Discovery**
+   - `@omni("help")` → See all capabilities
+   - `@omni("git")` → See git commands
+
+---
+
+### Test Suite
+
+```bash
+# Run One Tool tests
+python -m pytest packages/python/agent/src/agent/tests/test_phase25_one_tool.py -v
+
+# Run Real LLM Session tests
+python packages/python/agent/src/agent/tests/test_actual_session_skills.py
+
+# Run Router tests
+python scripts/test_router.py --omni-test
+```
+
+**Test Results:**
+
+| Test Suite          | Status | Count             |
+| ------------------- | ------ | ----------------- |
+| Phase 25 One Tool   | ✅     | 16 passed         |
+| Full MCP Test Suite | ✅     | 82 passed         |
+| Real Session Skills | ✅     | API calls working |
+
+---
+
+### File Changes (Phase 25)
+
+| File                            | Change                                       |
+| ------------------------------- | -------------------------------------------- |
+| `agent/mcp_server.py`           | Single `omni` tool with dispatch logic       |
+| `agent/core/skill_manager.py`   | Command registry and `run()` method          |
+| `agent/skills/*/tools.py`       | Removed decorators, added `EXPOSED_COMMANDS` |
+| `test_phase25_one_tool.py`      | New: One Tool architecture tests             |
+| `test_actual_session_skills.py` | New: Real LLM session tests                  |

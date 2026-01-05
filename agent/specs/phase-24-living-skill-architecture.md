@@ -26,14 +26,14 @@ agent/skills/<skill_name>/
 
 ### File Responsibilities
 
-| File            | Role      | Intelligence | Purpose                                  |
-| --------------- | --------- | ------------ | ---------------------------------------- |
-| `manifest.json` | Identity  | ❌ None      | Metadata, dependencies, entry_point      |
-| `tools.py`      | Hands     | 🔵 Low       | Atomic actions, side-effects only        |
-| `workflow.py`   | Brain     | 🔴 High      | Orchestration, LangGraph graph           |
-| `state.py`      | Memory    | 🟡 Medium    | Pydantic models, structured context      |
-| `guide.md`      | Interface | 🟣 Semantic  | LLM alignment, usage docs                |
-| `prompts.md`    | Persona   | 🟣 Semantic  | Routing rules, prompt injection          |
+| File            | Role      | Intelligence | Purpose                             |
+| --------------- | --------- | ------------ | ----------------------------------- |
+| `manifest.json` | Identity  | ❌ None      | Metadata, dependencies, entry_point |
+| `tools.py`      | Hands     | 🔵 Low       | Atomic actions, side-effects only   |
+| `workflow.py`   | Brain     | 🔴 High      | Orchestration, LangGraph graph      |
+| `state.py`      | Memory    | 🟡 Medium    | Pydantic models, structured context |
+| `guide.md`      | Interface | 🟣 Semantic  | LLM alignment, usage docs           |
+| `prompts.md`    | Persona   | 🟣 Semantic  | Routing rules, prompt injection     |
 
 ### Current Git Skill Structure
 

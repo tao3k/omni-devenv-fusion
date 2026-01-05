@@ -1,13 +1,13 @@
 """
-Testing Skill Tools
-Refactored from src/mcp_server/executor/tester.py
-Provides pytest integration for quality assurance.
+agent/skills/testing/tools.py
+Testing Skill - Pytest integration.
+
+Phase 25: Omni CLI Architecture
+Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
 """
 
 import subprocess
 from pathlib import Path
-from typing import Optional
-from mcp.server.fastmcp import FastMCP
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -72,30 +72,30 @@ async def list_tests(path: str = ".") -> str:
         return f"Error listing tests: {str(e)}"
 
 
-def register(mcp: FastMCP):
-    """Register Testing tools using direct function binding."""
-    import sys
-    import importlib.util
+# =============================================================================
+# EXPOSED_COMMANDS - Omni CLI Entry Point
+# =============================================================================
 
-    # Get the current module from sys.modules
-    current_module = sys.modules.get("agent.skills.testing.tools")
-    if current_module is None:
-        spec = importlib.util.spec_from_file_location(
-            "agent.skills.testing.tools",
-            Path(__file__).resolve(),
-        )
-        current_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(current_module)
-        sys.modules["agent.skills.testing.tools"] = current_module
+EXPOSED_COMMANDS = {
+    "run_tests": {
+        "func": run_tests,
+        "description": "Run tests using pytest.",
+        "category": "read",
+    },
+    "list_tests": {
+        "func": list_tests,
+        "description": "Discover and list available tests without running them.",
+        "category": "read",
+    },
+}
 
-    # Get functions from the module
-    run_tests_fn = getattr(current_module, "run_tests", None)
-    list_tests_fn = getattr(current_module, "list_tests", None)
 
-    # Register tools directly
-    if run_tests_fn:
-        mcp.add_tool(run_tests_fn, "Run tests using pytest.")
-    if list_tests_fn:
-        mcp.add_tool(list_tests_fn, "Discover and list available tests without running them.")
+# =============================================================================
+# Legacy Export for Compatibility
+# =============================================================================
 
-    logger.info("Testing skill tools registered")
+__all__ = [
+    "run_tests",
+    "list_tests",
+    "EXPOSED_COMMANDS",
+]

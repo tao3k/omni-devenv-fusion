@@ -1,5 +1,9 @@
 """
-Knowledge Skill - The Project Cortex
+agent/skills/knowledge/tools.py
+Knowledge Skill - The Project Cortex.
+
+Phase 25: Omni CLI Architecture
+Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
 
 Role:
   Does NOT execute commands.
@@ -8,12 +12,6 @@ Role:
 
 Philosophy:
   "Knowledge is power." This skill fetches that knowledge.
-
-Rules (from prompts.md):
-  - Call get_development_context() BEFORE writing code or committing
-  - Call consult_architecture_doc() when you need to understand a topic
-  - Call consult_language_expert() for language-specific coding standards
-  - Return structured data, never execute operations
 """
 
 import json
@@ -25,6 +23,10 @@ try:
     import tomllib
 except ImportError:
     import tomli as tomllib
+
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 
 # =============================================================================
@@ -94,7 +96,6 @@ class StandardsCache:
         return self._standards.copy()
 
 
-# Global cache instance
 _standards_cache = StandardsCache()
 
 
@@ -138,183 +139,6 @@ def _extract_relevant_standards(standard: str, task: str) -> Optional[str]:
             return None
 
     return "\n".join(relevant_lines[:30]) if relevant_lines else None
-
-
-# =============================================================================
-# Knowledge Tools
-# =============================================================================
-
-
-def register(mcp: Any) -> None:
-    """Register all knowledge tools."""
-
-    @mcp.tool()
-    async def get_development_context() -> str:
-        """
-        [Cognition] Loads the "Rules of Engagement" for this project.
-
-        Call this BEFORE:
-        - Writing code
-        - Making commits
-        - Creating documentation
-
-        Returns:
-            - Valid Git Scopes (from cog.toml)
-            - Project Standards (from docs)
-            - Active Guardrails (Lefthook checks)
-            - Writing Style Rules
-        """
-        context = {
-            "project": _get_project_name(),
-            "git_rules": {
-                "types": [
-                    "feat",
-                    "fix",
-                    "docs",
-                    "style",
-                    "refactor",
-                    "perf",
-                    "test",
-                    "build",
-                    "ci",
-                    "chore",
-                ],
-                "scopes": _load_scopes(),
-                "message_format": "<type>(<scope>): <description>",
-                "policy": "Conventional Commits + Atomic Steps",
-            },
-            "guardrails": _analyze_lefthook(),
-            "writing_style": _get_writing_style(),
-            "architecture": _get_architecture_summary(),
-        }
-        return json.dumps(context, indent=2)
-
-    @mcp.tool()
-    async def consult_architecture_doc(topic: str) -> str:
-        """
-        [RAG] Semantic search for documentation.
-
-        Usage:
-        - consult_architecture_doc("writing style") -> Writing standards
-        - consult_architecture_doc("git workflow") -> Commit rules
-        - consult_architecture_doc("nix") -> Nix configuration
-
-        Returns relevant documentation sections without token waste.
-        """
-        return _search_docs(topic)
-
-    @mcp.tool()
-    async def consult_language_expert(file_path: str, task_description: str) -> str:
-        """
-        [Language Expert] Consult language-specific standards and code examples.
-
-        This is the primary tool for Router-Augmented Coding:
-        1. Reads L1a: Language standards (skills/knowledge/standards/lang-*.md)
-        2. Queries L2: Case law (tool-router/data/examples/*.jsonl)
-
-        Usage:
-        - consult_language_expert(file_path="units/modules/python.nix", task="extend generator")
-
-        Args:
-            file_path: Path to the file being edited
-            task_description: Description of the coding task
-
-        Returns:
-            JSON with language standards and matching examples
-        """
-        lang = _get_language_from_path(file_path)
-
-        if not lang:
-            return json.dumps(
-                {
-                    "status": "skipped",
-                    "reason": f"No language expert for extension: {Path(file_path).suffix}",
-                    "supported_extensions": list(EXT_TO_LANG.keys()),
-                },
-                indent=2,
-            )
-
-        result = {
-            "language": LANG_NAMES.get(lang, lang),
-            "file": file_path,
-            "task": task_description,
-        }
-
-        # Load Standards
-        standard = _standards_cache.get_standard(lang)
-        if standard:
-            relevant_std = _extract_relevant_standards(standard, task_description)
-            result["standards"] = relevant_std or standard[:500]
-            result["standards_source"] = f"skills/knowledge/standards/lang-{lang}.md"
-        else:
-            result["standards"] = None
-            result["standards_warning"] = f"No standards found for {lang}"
-
-        return json.dumps(result, indent=2)
-
-    @mcp.tool()
-    async def get_language_standards(lang: str) -> str:
-        """
-        [Standards] Get language-specific coding standards.
-
-        Usage:
-        - get_language_standards("nix") -> Nix formatting rules
-        - get_language_standards("python") -> Python style guide
-
-        Returns:
-            JSON with full standards document from skills/knowledge/standards/lang-{lang}.md
-        """
-        lang = lang.lower()
-        lang_name = LANG_NAMES.get(lang, lang.title())
-
-        standard = _standards_cache.get_standard(lang)
-
-        if not standard:
-            return json.dumps(
-                {
-                    "status": "not_found",
-                    "language": lang_name,
-                    "available_languages": list(LANG_NAMES.keys()),
-                },
-                indent=2,
-            )
-
-        return json.dumps(
-            {
-                "status": "success",
-                "language": lang_name,
-                "source": f"skills/knowledge/standards/lang-{lang}.md",
-                "content": standard,
-            },
-            indent=2,
-        )
-
-    @mcp.tool()
-    async def list_supported_languages() -> str:
-        """
-        List all supported languages with their standards.
-
-        Returns:
-            JSON list of supported languages
-        """
-        languages = []
-        skill_dir = Path(__file__).parent
-        standards_dir = skill_dir / "standards"
-
-        for lang_id, lang_name in LANG_NAMES.items():
-            std_path = standards_dir / f"lang-{lang_id}.md"
-            languages.append(
-                {
-                    "id": lang_id,
-                    "name": lang_name,
-                    "standards_exists": std_path.exists(),
-                    "file_extensions": [k for k, v in EXT_TO_LANG.items() if v == lang_id],
-                }
-            )
-
-        return json.dumps(
-            {"status": "success", "languages": languages, "total": len(languages)}, indent=2
-        )
 
 
 # =============================================================================
@@ -444,3 +268,223 @@ def _read_file_content(path: str) -> str:
     except Exception:
         pass
     return ""
+
+
+# =============================================================================
+# Core Tools
+# =============================================================================
+
+
+async def get_development_context() -> str:
+    """
+    [Cognition] Loads the "Rules of Engagement" for this project.
+
+    Call this BEFORE:
+    - Writing code
+    - Making commits
+    - Creating documentation
+
+    Returns:
+        - Valid Git Scopes (from cog.toml)
+        - Project Standards (from docs)
+        - Active Guardrails (Lefthook checks)
+        - Writing Style Rules
+    """
+    context = {
+        "project": _get_project_name(),
+        "git_rules": {
+            "types": [
+                "feat",
+                "fix",
+                "docs",
+                "style",
+                "refactor",
+                "perf",
+                "test",
+                "build",
+                "ci",
+                "chore",
+            ],
+            "scopes": _load_scopes(),
+            "message_format": "<type>(<scope>): <description>",
+            "policy": "Conventional Commits + Atomic Steps",
+        },
+        "guardrails": _analyze_lefthook(),
+        "writing_style": _get_writing_style(),
+        "architecture": _get_architecture_summary(),
+    }
+    return json.dumps(context, indent=2)
+
+
+async def consult_architecture_doc(topic: str) -> str:
+    """
+    [RAG] Semantic search for documentation.
+
+    Usage:
+    - consult_architecture_doc("writing style") -> Writing standards
+    - consult_architecture_doc("git workflow") -> Commit rules
+    - consult_architecture_doc("nix") -> Nix configuration
+
+    Returns relevant documentation sections without token waste.
+    """
+    return _search_docs(topic)
+
+
+async def consult_language_expert(file_path: str, task_description: str) -> str:
+    """
+    [Language Expert] Consult language-specific standards and code examples.
+
+    This is the primary tool for Router-Augmented Coding:
+    1. Reads L1a: Language standards (skills/knowledge/standards/lang-*.md)
+    2. Queries L2: Case law (tool-router/data/examples/*.jsonl)
+
+    Usage:
+    - consult_language_expert(file_path="units/modules/python.nix", task="extend generator")
+
+    Args:
+        file_path: Path to the file being edited
+        task_description: Description of the coding task
+
+    Returns:
+        JSON with language standards and matching examples
+    """
+    lang = _get_language_from_path(file_path)
+
+    if not lang:
+        return json.dumps(
+            {
+                "status": "skipped",
+                "reason": f"No language expert for extension: {Path(file_path).suffix}",
+                "supported_extensions": list(EXT_TO_LANG.keys()),
+            },
+            indent=2,
+        )
+
+    result = {
+        "language": LANG_NAMES.get(lang, lang),
+        "file": file_path,
+        "task": task_description,
+    }
+
+    # Load Standards
+    standard = _standards_cache.get_standard(lang)
+    if standard:
+        relevant_std = _extract_relevant_standards(standard, task_description)
+        result["standards"] = relevant_std or standard[:500]
+        result["standards_source"] = f"skills/knowledge/standards/lang-{lang}.md"
+    else:
+        result["standards"] = None
+        result["standards_warning"] = f"No standards found for {lang}"
+
+    return json.dumps(result, indent=2)
+
+
+async def get_language_standards(lang: str) -> str:
+    """
+    [Standards] Get language-specific coding standards.
+
+    Usage:
+    - get_language_standards("nix") -> Nix formatting rules
+    - get_language_standards("python") -> Python style guide
+
+    Returns:
+        JSON with full standards document from skills/knowledge/standards/lang-{lang}.md
+    """
+    lang = lang.lower()
+    lang_name = LANG_NAMES.get(lang, lang.title())
+
+    standard = _standards_cache.get_standard(lang)
+
+    if not standard:
+        return json.dumps(
+            {
+                "status": "not_found",
+                "language": lang_name,
+                "available_languages": list(LANG_NAMES.keys()),
+            },
+            indent=2,
+        )
+
+    return json.dumps(
+        {
+            "status": "success",
+            "language": lang_name,
+            "source": f"skills/knowledge/standards/lang-{lang}.md",
+            "content": standard,
+        },
+        indent=2,
+    )
+
+
+async def list_supported_languages() -> str:
+    """
+    List all supported languages with their standards.
+
+    Returns:
+        JSON list of supported languages
+    """
+    languages = []
+    skill_dir = Path(__file__).parent
+    standards_dir = skill_dir / "standards"
+
+    for lang_id, lang_name in LANG_NAMES.items():
+        std_path = standards_dir / f"lang-{lang_id}.md"
+        languages.append(
+            {
+                "id": lang_id,
+                "name": lang_name,
+                "standards_exists": std_path.exists(),
+                "file_extensions": [k for k, v in EXT_TO_LANG.items() if v == lang_id],
+            }
+        )
+
+    return json.dumps(
+        {"status": "success", "languages": languages, "total": len(languages)}, indent=2
+    )
+
+
+# =============================================================================
+# EXPOSED_COMMANDS - Omni CLI Entry Point
+# =============================================================================
+
+EXPOSED_COMMANDS = {
+    "get_development_context": {
+        "func": get_development_context,
+        "description": "[Cognition] Loads the Rules of Engagement for this project.",
+        "category": "read",
+    },
+    "consult_architecture_doc": {
+        "func": consult_architecture_doc,
+        "description": "[RAG] Semantic search for documentation.",
+        "category": "read",
+    },
+    "consult_language_expert": {
+        "func": consult_language_expert,
+        "description": "[Language Expert] Consult language-specific standards.",
+        "category": "read",
+    },
+    "get_language_standards": {
+        "func": get_language_standards,
+        "description": "[Standards] Get language-specific coding standards.",
+        "category": "read",
+    },
+    "list_supported_languages": {
+        "func": list_supported_languages,
+        "description": "List all supported languages with their standards.",
+        "category": "read",
+    },
+}
+
+
+# =============================================================================
+# Legacy Export for Compatibility
+# =============================================================================
+
+__all__ = [
+    "get_development_context",
+    "consult_architecture_doc",
+    "consult_language_expert",
+    "get_language_standards",
+    "list_supported_languages",
+    "EXPOSED_COMMANDS",
+]

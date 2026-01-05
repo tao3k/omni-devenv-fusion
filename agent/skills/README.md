@@ -127,12 +127,12 @@ The `SkillRegistry` class (in `src/agent/capabilities/skill_registry.py`) provid
 
 ### Key Changes
 
-| Aspect | Before (Phase 13) | After (Phase 24) |
-|--------|-------------------|------------------|
-| Tool Names | Descriptive text | `snake_case` function names |
-| Registration | Via `invoke_skill` middleware | Direct: `tools.register(mcp)` |
-| Return Type | `dict` | `str` (FastMCP auto-wraps) |
-| Operation Model | Atomic | Batch operations supported |
+| Aspect          | Before (Phase 13)             | After (Phase 24)              |
+| --------------- | ----------------------------- | ----------------------------- |
+| Tool Names      | Descriptive text              | `snake_case` function names   |
+| Registration    | Via `invoke_skill` middleware | Direct: `tools.register(mcp)` |
+| Return Type     | `dict`                        | `str` (FastMCP auto-wraps)    |
+| Operation Model | Atomic                        | Batch operations supported    |
 
 ### Direct Tool Registration Pattern
 
@@ -170,11 +170,14 @@ def git_read_backlog() -> str:
 ```
 
 **Result in Claude CLI:**
+
 ```json
-[{
-  "type": "text",
-  "text": "# Git Skill Backlog\n..."
-}]
+[
+  {
+    "type": "text",
+    "text": "# Git Skill Backlog\n..."
+  }
+]
 ```
 
 ### View-Enhanced Tools (Director Pattern)

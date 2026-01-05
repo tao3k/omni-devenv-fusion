@@ -1,7 +1,9 @@
 """
-Testing Protocol Skill Tools
-Migrated from src/mcp_server/executor/tester.py
-Provides smart test runner and testing protocol tools.
+agent/skills/testing_protocol/tools.py
+Testing Protocol Skill - Smart test runner.
+
+Phase 25: Omni CLI Architecture
+Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
 """
 
 import json
@@ -9,8 +11,6 @@ import os
 import subprocess
 from pathlib import Path
 from typing import Dict, Any
-
-from mcp.server.fastmcp import FastMCP
 
 import structlog
 
@@ -292,33 +292,36 @@ async def get_test_protocol() -> str:
     )
 
 
-def register(mcp: FastMCP):
-    """Register Testing Protocol tools using direct function binding."""
-    import sys
-    import importlib.util
+# =============================================================================
+# EXPOSED_COMMANDS - Omni CLI Entry Point
+# =============================================================================
 
-    # Get the current module from sys.modules
-    current_module = sys.modules.get("agent.skills.testing_protocol.tools")
-    if current_module is None:
-        spec = importlib.util.spec_from_file_location(
-            "agent.skills.testing_protocol.tools",
-            Path(__file__).resolve(),
-        )
-        current_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(current_module)
-        sys.modules["agent.skills.testing_protocol.tools"] = current_module
+EXPOSED_COMMANDS = {
+    "smart_test_runner": {
+        "func": smart_test_runner,
+        "description": "Execute tests following agent/how-to/testing-workflows.md.",
+        "category": "read",
+    },
+    "run_test_command": {
+        "func": run_test_command,
+        "description": "Run a test command and return results.",
+        "category": "read",
+    },
+    "get_test_protocol": {
+        "func": get_test_protocol,
+        "description": "Get the testing protocol summary.",
+        "category": "read",
+    },
+}
 
-    # Get functions from the module
-    smart_runner = getattr(current_module, "smart_test_runner", None)
-    run_cmd = getattr(current_module, "run_test_command", None)
-    get_proto = getattr(current_module, "get_test_protocol", None)
 
-    # Register tools directly
-    if smart_runner:
-        mcp.add_tool(smart_runner, "Execute tests following agent/how-to/testing-workflows.md.")
-    if run_cmd:
-        mcp.add_tool(run_cmd, "Run a test command and return results.")
-    if get_proto:
-        mcp.add_tool(get_proto, "Get the testing protocol summary.")
+# =============================================================================
+# Legacy Export for Compatibility
+# =============================================================================
 
-    logger.info("Testing Protocol skill tools registered")
+__all__ = [
+    "smart_test_runner",
+    "run_test_command",
+    "get_test_protocol",
+    "EXPOSED_COMMANDS",
+]

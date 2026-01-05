@@ -163,10 +163,16 @@ class SkillRegistry:
             module = self._load_module_from_path(module_name, source_path)
 
             # 4. Registration
-            if hasattr(module, "register"):
-                module.register(mcp)
+            # Phase 25: Only support EXPOSED_COMMANDS pattern
+            if hasattr(module, "EXPOSED_COMMANDS"):
+                # Phase 25 pattern: Skill uses EXPOSED_COMMANDS dictionary
+                # Commands are registered via SkillManager, not directly to MCP
+                logger.info(f"Skill '{skill_name}' uses Phase 25 EXPOSED_COMMANDS pattern")
             else:
-                return False, f"Module {source_path.name} has no 'register(mcp)' function."
+                return (
+                    False,
+                    f"Module {source_path.name} has no 'EXPOSED_COMMANDS' dictionary.",
+                )
 
             # Update State
             self.loaded_skills[skill_name] = manifest

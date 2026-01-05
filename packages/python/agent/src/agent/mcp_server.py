@@ -1,338 +1,186 @@
 """
 src/agent/mcp_server.py
-Omni MCP Server - Exposes Omni Skills to External Clients.
+Omni MCP Server - Phase 25 "One Tool" Architecture.
 
-Phase 19.6 Rev: Omni-Claude Symbiosis
-Exposes Omni's capabilities (RAG, Memory, Reviewer) as MCP tools.
+SINGLE ENTRY POINT PHILOSOPHY:
+- Only ONE tool registered with MCP: @omni
+- All skill operations go through this single gate
+- Claude's context stays clean and focused
 
-This allows Claude Code, Cursor, Windsurf, etc. to:
-- Query Omni's vector memory (Phase 16)
-- Request code reviews from ReviewerAgent
-- Access project-specific knowledge
+Architecture:
+- SkillManager: Scans skills, loads Python modules, builds command registry
+- omni: The only door Claude can see - dispatches to any skill
 
 Usage:
     # Start MCP Server
     python -m agent.mcp_server
 
-    # Configure Claude Code to connect
-    # Add to Claude Desktop or VS Code settings
+    # In Claude CLI (SINGLE tool with @omni prefix):
+    @omni("git.status")                    # Execute git status
+    @omni("git.commit", {"message": "..."})  # Execute with args
+    @omni("help")                          # Show all skills
+    @omni("git")                           # Show git commands
 """
 
 from mcp.server.fastmcp import FastMCP
-from mcp.types import Tool as MCPTool
+from typing import Optional, Dict, Any
 import structlog
 from pathlib import Path
 
 from common.mcp_core.settings import get_setting, get_project_root
-from agent.core.context_loader import load_system_context
-from agent.core.context_compressor import get_compressor
-from agent.core.session import SessionManager
-from agent.core.telemetry import CostEstimator
 
 logger = structlog.get_logger()
 
 # Get skills directory from settings
 SKILLS_DIR = get_project_root() / get_setting("skills.path", "agent/skills")
 
-# Initialize context compressor for RAG results
-_compressor = get_compressor()
-
-# Create MCP Server
+# Create MCP Server - Single tool only
 mcp = FastMCP("omni-agentic-os")
 
-# Global session manager for MCP tools
-_session_manager: SessionManager = None
-
-
-def get_session_manager() -> SessionManager:
-    """Get or create session manager."""
-    global _session_manager
-    if _session_manager is None:
-        _session_manager = SessionManager()
-    return _session_manager
-
 
 # =============================================================================
-# System Context Resource
+# Omni CLI - The ONE Entry Point Tool
 # =============================================================================
 
 
-@mcp.resource("omni://system/active_context")
-def get_active_context() -> str:
+@mcp.tool(name="omni")
+def omni(input: str, args: Optional[Dict[str, Any]] = None) -> str:
     """
-    Returns the dynamic system prompts and routing rules for all active skills.
-    This is the "brain dump" that external clients can read.
-    """
-    try:
-        from agent.core.skill_registry import get_skill_registry
+    Execute any skill command or get help.
 
-        registry = get_skill_registry()
-        return registry.get_combined_context()
-    except Exception as e:
-        return f"Error loading context: {e}"
+    This is THE ONLY tool registered with MCP. All operations go through this gate.
+    Use @omni in Claude to invoke.
 
+    Usage:
+        # Execute a command: @omni("skill.command")
+        @omni("git.status")
+        @omni("git.commit", {"message": "Fix bug"})
+        @omni("file.read", {"path": "README.md"})
 
-# =============================================================================
-# Memory/RAG Tools
-# =============================================================================
-
-
-@mcp.tool()
-async def omni_search_memory(query: str, n_results: int = 5) -> str:
-    """
-    Search Omni's long-term memory (Phase 16 RAG).
-
-    Uses context compression to prevent token explosion when returning results.
-    Configure via settings.yaml: context_compression.*
+        # Get help
+        @omni("help")           # List all skills
+        @omni("git")            # Show git commands
 
     Args:
-        query: Search query
-        n_results: Number of results to return
+        input: Command like "skill.command", "skill", or "help"
+        args: Optional arguments for the command (dict)
 
     Returns:
-        Relevant memories from the vector store (compressed if needed)
+        Command result as string (formatted Markdown)
     """
-    session = get_session_manager()
-    session.log("tool", "mcp_client", f"Memory search: {query}")
+    from agent.core.skill_manager import get_skill_manager
 
-    try:
-        from agent.capabilities.librarian import search_memory
+    manager = get_skill_manager()
 
-        results = await search_memory(query, n_results=n_results)
+    # Normalize input
+    input = input.strip()
+    args = args or {}
 
-        if not results:
-            return "No relevant memories found."
+    # Handle help cases
+    if input == "help" or input == "?":
+        return _render_help(manager)
 
-        # Format and compress results
-        formatted = []
-        current_tokens = 0
-        max_tokens = _compressor.max_tokens
+    # Show skill commands if just skill name (no dot)
+    if "." not in input:
+        skill_name = input
+        return _render_skill_help(manager, skill_name)
 
-        for i, result in enumerate(results, 1):
-            content = result.get("content", "")
+    # Parse skill.command
+    # Format: "skill.command" -> skill_name="git", cmd_name="git_status"
+    if "." not in input:
+        return f"Invalid format: '{input}'. Use '@omni(\"skill.command\")'"
 
-            # Apply context compression
-            compressed = _compressor.compress(content)
+    parts = input.split(".")
+    skill_name = parts[0]
+    # Build command name: skill.command -> skill_command (or just command)
+    # e.g., "git.status" -> "git_status", "file.read" -> "read_file"
+    raw_cmd = "_".join(parts[1:])
 
-            # Check token budget
-            estimated = _compressor.estimate_tokens(compressed)
-            if current_tokens + estimated > max_tokens:
-                formatted.append(f"... [{len(results) - i} results omitted for context limit]")
-                break
+    # Try both with and without skill prefix
+    cmd_with_prefix = f"{skill_name}_{raw_cmd}" if raw_cmd else raw_cmd
+    cmd_without_prefix = raw_cmd
 
-            formatted.append(
-                f"{i}. {compressed[:200]}..." if len(compressed) > 200 else f"{i}. {compressed}"
-            )
-            current_tokens += estimated
-
-        session.log(
-            "tool",
-            "mcp_client",
-            f"Memory search returned {len(results)} results (compressed)",
-        )
-
-        return "\n".join(formatted)
-
-    except Exception as e:
-        logger.error("Memory search failed", error=str(e))
-        return f"Error searching memory: {e}"
-
-
-@mcp.tool()
-async def omni_ingest_knowledge(documents: list, ids: list = None) -> str:
-    """
-    Ingest documents into Omni's long-term memory.
-
-    Args:
-        documents: List of document texts to ingest
-        ids: Optional list of IDs (auto-generated if not provided)
-
-    Returns:
-        Ingestion status
-    """
-    session = get_session_manager()
-    session.log("tool", "mcp_client", f"Ingesting {len(documents)} documents")
-
-    try:
-        from agent.capabilities.harvester import ingest_knowledge as harvest_ingest
-
-        result = await harvest_ingest(documents=documents, ids=ids or None)
-
-        session.log(
-            "tool",
-            "mcp_client",
-            f"Successfully ingested {len(documents)} documents",
-        )
-
-        return f"Successfully ingested {len(documents)} documents."
-
-    except Exception as e:
-        logger.error("Knowledge ingestion failed", error=str(e))
-        return f"Error ingesting knowledge: {e}"
-
-
-# =============================================================================
-# Reviewer Tools
-# =============================================================================
-
-
-@mcp.tool()
-async def omni_request_review(
-    code: str,
-    language: str = "python",
-    focus_areas: list = None,
-) -> str:
-    """
-    Request a code review from Omni's ReviewerAgent.
-
-    Args:
-        code: Code to review
-        language: Programming language
-        focus_areas: Areas to focus on (security, performance, style, etc.)
-
-    Returns:
-        Review feedback
-    """
-    session = get_session_manager()
-
-    try:
-        from agent.core.agents.reviewer import ReviewerAgent
-
-        reviewer = ReviewerAgent()
-
-        # Create a mock task and context for review
-        task = f"Review {language} code"
-        context = {
-            "constraints": focus_areas or ["security", "correctness", "style"],
-        }
-
-        result = await reviewer.audit(task=task, agent_output=code, context=context)
-
-        session.log(
-            "tool",
-            "mcp_client",
-            f"Review completed: approved={result.approved}",
-        )
-
-        # Format response
-        response = [
-            f"## Code Review ({'✅ Approved' if result.approved else '❌ Rejected'})",
-            "",
-        ]
-
-        if result.feedback:
-            response.append(f"**Feedback**: {result.feedback}")
-
-        if result.issues_found:
-            response.append("**Issues Found**:")
-            for issue in result.issues_found:
-                response.append(f"- {issue}")
-
-        if result.suggestions:
-            response.append("**Suggestions**:")
-            for suggestion in result.suggestions:
-                response.append(f"- {suggestion}")
-
-        response.append("")
-        response.append(f"Confidence: {result.confidence:.2%}")
-
-        session.log(
-            "tool",
-            "mcp_client",
-            f"Review complete: {len(result.issues_found)} issues",
-        )
-
-        return "\n".join(response)
-
-    except Exception as e:
-        logger.error("Review failed", error=str(e))
-        return f"Error during review: {e}"
-
-
-# =============================================================================
-# Session/Telemetry Tools
-# =============================================================================
-
-
-@mcp.tool()
-def omni_get_session_summary() -> str:
-    """
-    Get the current session summary (Black Box).
-
-    Returns:
-        Session ID, cost, and event count
-    """
-    session = get_session_manager()
-    return session.get_summary()
-
-
-@mcp.tool()
-def omni_list_sessions() -> str:
-    """
-    List all available sessions.
-
-    Returns:
-        List of session IDs with event counts
-    """
-    sessions = SessionManager.list_sessions()
-
-    if not sessions:
-        return "No sessions found."
-
-    formatted = ["Available Sessions:", ""]
-    for s in sessions:
-        formatted.append(f"- {s['session_id']} ({s['events']} events)")
-
-    return "\n".join(formatted)
-
-
-# =============================================================================
-# Skill Backlog Scanner (Product Owner Tool)
-# =============================================================================
-
-
-@mcp.tool()
-async def omni_scan_skill_backlogs(skill_name: str = None) -> str:
-    """
-    Product Owner Tool: Scan the Federated Backlogs of skills.
-
-    Use this to discover what features each skill is missing or needs improvement on.
-
-    Args:
-        skill_name: Optional. If provided (e.g., 'git'), returns only that skill's backlog.
-                    If not provided, returns all skill backlogs.
-
-    Returns:
-        Backlog content from the skill(s)
-    """
-    results = []
-
-    # Ensure directory exists
-    if not SKILLS_DIR.exists():
-        return f"❌ Skills directory not found at: {SKILLS_DIR}"
-
-    # Determine which skills to scan
-    if skill_name:
-        targets = [skill_name]
+    # First try with prefix (e.g., git_status), then without (e.g., read_file)
+    command = manager.get_command(skill_name, cmd_with_prefix)
+    if command is None:
+        command = manager.get_command(skill_name, cmd_without_prefix)
+        cmd_name = cmd_without_prefix
     else:
-        targets = [d.name for d in SKILLS_DIR.iterdir() if d.is_dir()]
+        cmd_name = cmd_with_prefix
 
-    for skill in targets:
-        backlog_path = SKILLS_DIR / skill / "Backlog.md"
-        if backlog_path.exists():
-            try:
-                content = backlog_path.read_text(encoding="utf-8")
-                results.append(f"=== SKILL: {skill.upper()} ===\n{content}")
-            except Exception as e:
-                results.append(f"=== SKILL: {skill.upper()} ===\nError reading backlog: {e}")
-        else:
-            if skill_name:
-                return f"❌ No Backlog.md found for skill: {skill} at {backlog_path}"
+    if command is None:
+        return f"Error: Command {skill_name}.{raw_cmd} not found"
 
-    if not results:
-        return f"No skill backlogs found in {SKILLS_DIR}."
+    # Execute the command
+    result = manager.run(skill_name, cmd_name, args)
+    return result
 
-    return "\n".join(results)
+
+def _render_help(manager) -> str:
+    """Render help showing all available skills."""
+    skills = manager.list_available_skills()
+
+    if not skills:
+        return "🛠️ **No skills available**"
+
+    lines = ["# 🛠️ Available Skills", ""]
+
+    for skill_name in sorted(skills):
+        info = manager.get_skill_info(skill_name)
+        if info:
+            lines.append(f"## {skill_name}")
+            lines.append(f"- **Commands**: {info['command_count']}")
+            lines.append("")
+
+            # Show first few commands (info["commands"] is a list)
+            cmds = sorted(info["commands"])[:5]
+            for cmd in cmds:
+                lines.append(f"  - `{skill_name}.{cmd}`")
+            if len(info["commands"]) > 5:
+                lines.append(f"  - ... and {len(info['commands']) - 5} more")
+            lines.append("")
+
+    lines.append("---")
+    lines.append("**Usage**: `@omni('skill.command', args={})`")
+    lines.append("**Help**: `@omni('skill')` or `@omni('help')`")
+
+    return "\n".join(lines)
+
+
+def _render_skill_help(manager, skill_name: str) -> str:
+    """Render help for a specific skill."""
+    if skill_name not in manager.skills:
+        available = manager.list_available_skills()
+        if not available:
+            return f"Skill '{skill_name}' not found. No skills available."
+        return f"Skill '{skill_name}' not found.\n\n**Available skills:**\n- " + "\n- ".join(
+            available
+        )
+
+    skill_obj = manager.skills[skill_name]
+
+    # Group commands by category
+    by_category: Dict[str, list] = {}
+    for cmd_name, cmd in skill_obj.commands.items():
+        cat = cmd.category
+        if cat not in by_category:
+            by_category[cat] = []
+        by_category[cat].append((cmd_name, cmd.description))
+
+    lines = [f"# 🛠️ {skill_name}", ""]
+
+    for category in ["read", "view", "workflow", "write", "evolution", "general"]:
+        if category in by_category:
+            lines.append(f"## {category.upper()}")
+            for cmd_name, description in sorted(by_category[category]):
+                lines.append(f"- `{skill_name}.{cmd_name}`: {description}")
+            lines.append("")
+
+    lines.append("---")
+    lines.append(f"**Usage**: `@omni('{skill_name}.<command>', args={{}})`")
+    lines.append(f"**Total**: {len(skill_obj.commands)} commands")
+
+    return "\n".join(lines)
 
 
 # =============================================================================
@@ -344,17 +192,18 @@ def main():
     """Run the Omni MCP Server."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Omni Agentic OS - MCP Server")
+    parser = argparse.ArgumentParser(description="Omni Agentic OS - MCP Server (Phase 25)")
     parser.add_argument("--port", type=int, default=None, help="Port to run on")
     parser.add_argument("--stdio", action="store_true", default=True, help="Use stdio transport")
     args = parser.parse_args()
 
-    # Load system context
-    system_prompt = load_system_context()
+    logger.info("🚀 Starting Omni MCP Server (Phase 25: One Tool Architecture)")
+    logger.info("📦 Single entry point: omni_run(command, args)")
 
-    logger.info("🚀 Starting Omni MCP Server")
-    logger.info("📦 Available tools:")
-    for tool in mcp._tool_manager._tools.values():
+    # Log available tools (should be exactly 1)
+    tools = list(mcp._tool_manager._tools.values())
+    logger.info(f"📋 Available tools: {len(tools)} (expected: 1)")
+    for tool in tools:
         logger.info(f"  - {tool.name}")
 
     if args.stdio:

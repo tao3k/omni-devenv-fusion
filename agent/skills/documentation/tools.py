@@ -1,110 +1,147 @@
 """
-Documentation Skill Tools
-Manages the knowledge base of the Agentic OS.
+agent/skills/documentation/tools.py
+Documentation Skill - Knowledge base management.
+
+Phase 25: Omni CLI Architecture
+Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
 """
 
 import os
 import datetime
 from pathlib import Path
 from typing import List, Optional
-from mcp.server.fastmcp import FastMCP
 from common.mcp_core.gitops import get_project_root
 import structlog
 
 logger = structlog.get_logger(__name__)
 
+# Get knowledge directory
+root = get_project_root()
+knowledge_dir = root / "agent" / "knowledge"
 
-def register(mcp: FastMCP):
-    """Register Documentation tools."""
 
-    root = get_project_root()
-    knowledge_dir = root / "agent" / "knowledge"
+# =============================================================================
+# Core Tools
+# =============================================================================
 
-    @mcp.tool()
-    async def create_knowledge_entry(title: str, category: str, content: str) -> str:
-        """
-        Create a new standardized knowledge entry.
 
-        Args:
-            title: Human readable title (e.g., "Fixing Deadlocks").
-            category: One of [architecture, debugging, pattern, workflow].
-            content: The Markdown content (excluding the header which is auto-generated).
-        """
-        try:
-            # 1. Prepare Paths
-            harvest_dir = knowledge_dir / "harvested"
-            harvest_dir.mkdir(parents=True, exist_ok=True)
+async def create_knowledge_entry(title: str, category: str, content: str) -> str:
+    """
+    Create a new standardized knowledge entry.
 
-            # 2. Format Filename
-            date_str = datetime.datetime.now().strftime("%Y%m%d")
-            slug = title.lower().replace(" ", "-").replace("/", "-")[:50]
-            filename = f"{date_str}-{category}-{slug}.md"
-            file_path = harvest_dir / filename
+    Args:
+        title: Human readable title (e.g., "Fixing Deadlocks").
+        category: One of [architecture, debugging, pattern, workflow].
+        content: The Markdown content (excluding the header which is auto-generated).
+    """
+    try:
+        # 1. Prepare Paths
+        harvest_dir = knowledge_dir / "harvested"
+        harvest_dir.mkdir(parents=True, exist_ok=True)
 
-            # 3. Format Content
-            full_content = f"# {title}\n\n> **Category**: {category.upper()} | **Date**: {datetime.datetime.now().strftime('%Y-%m-%d')}\n\n{content}\n"
+        # 2. Format Filename
+        date_str = datetime.datetime.now().strftime("%Y%m%d")
+        slug = title.lower().replace(" ", "-").replace("/", "-")[:50]
+        filename = f"{date_str}-{category}-{slug}.md"
+        file_path = harvest_dir / filename
 
-            # 4. Write
-            file_path.write_text(full_content, encoding="utf-8")
+        # 3. Format Content
+        full_content = f"# {title}\n\n> **Category**: {category.upper()} | **Date**: {datetime.datetime.now().strftime('%Y-%m-%d')}\n\n{content}\n"
 
-            return f"Created knowledge entry: {filename}"
-        except Exception as e:
-            return f"Failed to create doc: {e}"
+        # 4. Write
+        file_path.write_text(full_content, encoding="utf-8")
 
-    @mcp.tool()
-    async def rebuild_knowledge_index() -> str:
-        """
-        Scan all markdown files in agent/knowledge and update the main README.md index.
-        Call this after adding or deleting files.
-        """
-        try:
-            index_lines = [
-                "# Knowledge Base Index",
-                "",
-                "| Date | Category | Title | File |",
-                "|---|---|---|---|",
-            ]
+        return f"Created knowledge entry: {filename}"
+    except Exception as e:
+        return f"Failed to create doc: {e}"
 
-            # Scan harvested
-            harvest_dir = knowledge_dir / "harvested"
-            if harvest_dir.exists():
-                files = sorted(harvest_dir.glob("*.md"), reverse=True)
-                for f in files:
-                    # Parse filename: YYYYMMDD-category-title.md
-                    parts = f.stem.split("-", 2)
-                    if len(parts) >= 3:
-                        date, cat, title = parts[0], parts[1], parts[2].replace("-", " ").title()
-                        link = f"harvested/{f.name}"
-                        index_lines.append(f"| {date} | {cat} | {title} | [`{f.name}`]({link}) |")
 
-            # Update README
-            readme_path = knowledge_dir / "README.md"
-            readme_path.write_text("\n".join(index_lines), encoding="utf-8")
+async def rebuild_knowledge_index() -> str:
+    """
+    Scan all markdown files in agent/knowledge and update the main README.md index.
+    Call this after adding or deleting files.
+    """
+    try:
+        index_lines = [
+            "# Knowledge Base Index",
+            "",
+            "| Date | Category | Title | File |",
+            "|---|---|---|---|",
+        ]
 
-            return f"Index rebuilt. Found {len(index_lines) - 4} entries."
-        except Exception as e:
-            return f"Failed to rebuild index: {e}"
+        # Scan harvested
+        harvest_dir = knowledge_dir / "harvested"
+        if harvest_dir.exists():
+            files = sorted(harvest_dir.glob("*.md"), reverse=True)
+            for f in files:
+                # Parse filename: YYYYMMDD-category-title.md
+                parts = f.stem.split("-", 2)
+                if len(parts) >= 3:
+                    date, cat, title = parts[0], parts[1], parts[2].replace("-", " ").title()
+                    link = f"harvested/{f.name}"
+                    index_lines.append(f"| {date} | {cat} | {title} | [`{f.name}`]({link}) |")
 
-    @mcp.tool()
-    async def search_knowledge_base(query: str) -> str:
-        """
-        Simple text search across the knowledge base.
-        """
-        results = []
-        try:
-            for f in knowledge_dir.rglob("*.md"):
-                if "node_modules" in str(f) or ".git" in str(f):
-                    continue
+        # Update README
+        readme_path = knowledge_dir / "README.md"
+        readme_path.write_text("\n".join(index_lines), encoding="utf-8")
 
-                content = f.read_text(encoding="utf-8", errors="ignore")
-                if query.lower() in content.lower():
-                    snippet = content[:200].replace("\n", " ")
-                    results.append(f"- **{f.name}**: {snippet}...")
+        return f"Index rebuilt. Found {len(index_lines) - 4} entries."
+    except Exception as e:
+        return f"Failed to rebuild index: {e}"
 
-            if not results:
-                return f"No matches found for '{query}'."
-            return f"Found {len(results)} matches:\n" + "\n".join(results[:10])
-        except Exception as e:
-            return f"Search error: {e}"
 
-    logger.info("Documentation skill tools registered")
+async def search_knowledge_base(query: str) -> str:
+    """
+    Simple text search across the knowledge base.
+    """
+    results = []
+    try:
+        for f in knowledge_dir.rglob("*.md"):
+            if "node_modules" in str(f) or ".git" in str(f):
+                continue
+
+            content = f.read_text(encoding="utf-8", errors="ignore")
+            if query.lower() in content.lower():
+                snippet = content[:200].replace("\n", " ")
+                results.append(f"- **{f.name}**: {snippet}...")
+
+        if not results:
+            return f"No matches found for '{query}'."
+        return f"Found {len(results)} matches:\n" + "\n".join(results[:10])
+    except Exception as e:
+        return f"Search error: {e}"
+
+
+# =============================================================================
+# EXPOSED_COMMANDS - Omni CLI Entry Point
+# =============================================================================
+
+EXPOSED_COMMANDS = {
+    "create_knowledge_entry": {
+        "func": create_knowledge_entry,
+        "description": "Create a new standardized knowledge entry.",
+        "category": "write",
+    },
+    "rebuild_knowledge_index": {
+        "func": rebuild_knowledge_index,
+        "description": "Scan all markdown files and update the main README.md index.",
+        "category": "write",
+    },
+    "search_knowledge_base": {
+        "func": search_knowledge_base,
+        "description": "Simple text search across the knowledge base.",
+        "category": "read",
+    },
+}
+
+
+# =============================================================================
+# Legacy Export for Compatibility
+# =============================================================================
+
+__all__ = [
+    "create_knowledge_entry",
+    "rebuild_knowledge_index",
+    "search_knowledge_base",
+    "EXPOSED_COMMANDS",
+]

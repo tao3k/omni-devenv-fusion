@@ -1,10 +1,9 @@
 """
-Writer Skill Tools
+agent/skills/writer/tools.py
+Writer Skill - Writing quality enforcement.
 
-Writing quality enforcement. All rules are in prompts.md.
-Python only executes - no business logic.
-
-Philosophy: "Code is Mechanism, Prompt is Policy"
+Phase 25: Omni CLI Architecture
+Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
 """
 
 import asyncio
@@ -13,8 +12,6 @@ import re
 import subprocess
 from pathlib import Path
 from typing import Dict, List, Any, Optional
-
-from mcp.server.fastmcp import FastMCP
 
 import structlog
 
@@ -29,9 +26,6 @@ logger = structlog.get_logger(__name__)
 class WritingStyleCache:
     """
     Singleton cache for writing style guidelines loaded from skills/writer/writing-style/*.md
-
-    Pattern: Follows GitRulesCache singleton pattern with lazy loading.
-    Loaded once, reused across all polish_text calls.
     """
 
     _instance: Optional["WritingStyleCache"] = None
@@ -50,7 +44,6 @@ class WritingStyleCache:
 
     def _load_styles(self) -> None:
         """Load all writing style guidelines from skills/writer/writing-style/*.md"""
-        # Use Path traversal to find the skill directory
         skill_dir = Path(__file__).parent
         style_dir = skill_dir / "writing-style"
 
@@ -71,7 +64,6 @@ class WritingStyleCache:
 
         WritingStyleCache._guidelines = "\n".join(combined_content)
 
-        # Also build a dict for quick lookups
         for style_file in style_files:
             try:
                 content = style_file.read_text(encoding="utf-8")
@@ -83,7 +75,7 @@ class WritingStyleCache:
 
     @classmethod
     def get_guidelines(cls) -> str:
-        """Get combined guidelines text for injection into polish_text."""
+        """Get combined guidelines text."""
         if not cls._loaded:
             _ = cls()
             cls._instance._load_styles()
@@ -96,26 +88,6 @@ class WritingStyleCache:
             _ = cls()
             cls._instance._load_styles()
         return cls._guidelines_dict.copy()
-
-    @classmethod
-    def get_guidelines_for_prompt(cls) -> str:
-        """Get formatted guidelines for LLM context injection."""
-        if not cls._loaded:
-            _ = cls()
-        guidelines = cls.get_guidelines_dict()
-        if not guidelines:
-            return "No writing guidelines found."
-
-        key_rules = []
-        for filename, content in guidelines.items():
-            lines = content.split("\n")
-            for line in lines:
-                if line.startswith("## "):
-                    key_rules.append(f"[{filename}] {line[3:]}")
-                elif line.startswith("- ") and len(line) < 100:
-                    key_rules.append(f"  {line}")
-
-        return "\n".join(key_rules[:20])
 
 
 # =============================================================================
@@ -174,11 +146,6 @@ def _check_passive_voice(line: str) -> List[str]:
 async def lint_writing_style(text: str) -> str:
     """
     Check text against Module 02 (Rosenberg Mechanics) style guide.
-
-    Rules (from prompts.md):
-    - Strip clutter words (utilize -> use)
-    - Use active voice
-    - Avoid weak language
 
     Returns:
         JSON string with violations and suggestions
@@ -257,12 +224,6 @@ async def lint_writing_style(text: str) -> str:
 async def check_markdown_structure(text: str) -> str:
     """
     Check Markdown structure against Module 03 (Structure & AI).
-
-    Rules (from prompts.md):
-    - H1 uniqueness (only one # at top)
-    - No hierarchy jumping (H2 -> H4 not allowed)
-    - Code blocks need language tags
-    - Proper spacing
 
     Returns:
         JSON string with structure violations
@@ -355,9 +316,6 @@ async def check_markdown_structure(text: str) -> str:
 async def polish_text(text: str) -> str:
     """
     Polish text using writing guidelines from skills/writer/writing-style/.
-
-    Combines lint_writing_style and check_markdown_structure.
-    This is the primary function for auto-checking on save.
 
     Returns:
         JSON string with polished text and any style issues found
@@ -482,45 +440,47 @@ async def run_vale_check(file_path: str) -> str:
 
 
 # =============================================================================
-# Registration
+# EXPOSED_COMMANDS - Omni CLI Entry Point
 # =============================================================================
 
+EXPOSED_COMMANDS = {
+    "lint_writing_style": {
+        "func": lint_writing_style,
+        "description": "Check text against Module 02 (Rosenberg Mechanics) style guide.",
+        "category": "read",
+    },
+    "check_markdown_structure": {
+        "func": check_markdown_structure,
+        "description": "Check Markdown structure against Module 03 (Structure & AI).",
+        "category": "read",
+    },
+    "polish_text": {
+        "func": polish_text,
+        "description": "Polish text using writing guidelines from skills/writer/writing-style/.",
+        "category": "read",
+    },
+    "load_writing_memory": {
+        "func": load_writing_memory,
+        "description": "Load writing guidelines into LLM context.",
+        "category": "read",
+    },
+    "run_vale_check": {
+        "func": run_vale_check,
+        "description": "Run Vale CLI on a markdown file.",
+        "category": "read",
+    },
+}
 
-def register(mcp: FastMCP):
-    """Register Writer skill tools using direct function binding."""
-    import sys
-    import importlib.util
 
-    # Get the current module from sys.modules
-    current_module = sys.modules.get("agent.skills.writer.tools")
-    if current_module is None:
-        spec = importlib.util.spec_from_file_location(
-            "agent.skills.writer.tools",
-            Path(__file__).resolve(),
-        )
-        current_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(current_module)
-        sys.modules["agent.skills.writer.tools"] = current_module
+# =============================================================================
+# Legacy Export for Compatibility
+# =============================================================================
 
-    # Get functions from the module
-    lint = getattr(current_module, "lint_writing_style", None)
-    check_struct = getattr(current_module, "check_markdown_structure", None)
-    polish = getattr(current_module, "polish_text", None)
-    load_mem = getattr(current_module, "load_writing_memory", None)
-    vale = getattr(current_module, "run_vale_check", None)
-
-    # Register tools directly
-    if lint:
-        mcp.add_tool(lint, "Check text against Module 02 (Rosenberg Mechanics) style guide.")
-    if check_struct:
-        mcp.add_tool(check_struct, "Check Markdown structure against Module 03 (Structure & AI).")
-    if polish:
-        mcp.add_tool(
-            polish, "Polish text using writing guidelines from skills/writer/writing-style/."
-        )
-    if load_mem:
-        mcp.add_tool(load_mem, "Load writing guidelines into LLM context.")
-    if vale:
-        mcp.add_tool(vale, "Run Vale CLI on a markdown file.")
-
-    logger.info("Writer skill tools registered")
+__all__ = [
+    "lint_writing_style",
+    "check_markdown_structure",
+    "polish_text",
+    "load_writing_memory",
+    "run_vale_check",
+    "EXPOSED_COMMANDS",
+]
