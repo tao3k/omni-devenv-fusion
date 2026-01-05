@@ -47,7 +47,22 @@ DANGEROUS_PATTERNS = [
 DEFAULT_ALLOWED_COMMANDS = {
     "just": ["validate", "build", "test", "lint", "fmt", "test-basic", "test-mcp", "agent-commit"],
     "nix": ["fmt", "build", "shell", "flake-check"],
-    "git": ["status", "diff", "log", "add", "checkout", "branch"],
+    "git": [
+        "status",
+        "diff",
+        "log",
+        "add",
+        "checkout",
+        "branch",
+        "stash",
+        "merge",
+        "revert",
+        "tag",
+        "remote",
+        "show",
+        "reset",
+        "clean",
+    ],
     "echo": [],  # Safe for testing
     "find": [],  # Read-only exploration
 }
@@ -97,6 +112,27 @@ def check_whitelist(
         return False, f"Command '{command}' is not allowed."
 
     allowed_args = allowed_commands.get(command, [])
+
+    # Git commands accept paths as arguments (not just subcommands)
+    if command == "git":
+        # Git subcommands (like status, diff, log) are allowed
+        # And paths are always allowed for git
+        for arg in args:
+            if arg.startswith("-"):
+                continue  # Allow flags
+            # Allow any subcommand that is in allowed_args OR looks like a path
+            if arg in allowed_args:
+                continue
+            # Allow arguments that look like file paths (contain / or start with .)
+            if "/" in arg or arg.startswith(".") or arg.startswith("/"):
+                continue
+            # Allow arguments that are git subcommands
+            if arg in allowed_args:
+                continue
+            return False, f"Argument '{arg}' is not allowed for '{command}'."
+        return True, ""
+
+    # For non-git commands, use strict checking
     for arg in args:
         if arg.startswith("-"):
             continue  # Allow flags

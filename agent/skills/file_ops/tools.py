@@ -15,7 +15,10 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 from common.mcp_core import is_safe_path, run_subprocess
-from agent.skills.writer.tools import polish_text
+
+# NOTE: polish_text is imported dynamically in save_file() to avoid cross-skill
+# dependency issues at module load time. See save_file() for the implementation.
+
 
 import structlog
 
@@ -237,6 +240,9 @@ async def save_file(
     writing_warnings = []
     if auto_check_writing and path.endswith(".md"):
         try:
+            # Dynamic import to avoid cross-skill dependency at module load time
+            from agent.skills.writer.tools import polish_text
+
             polish_result = await polish_text(content)
             polish_data = json.loads(polish_result)
             violations = polish_data.get("violations", [])

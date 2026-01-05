@@ -9,6 +9,8 @@ All business logic is delegated to atomic modules.
 Phase 19: Supports --resume flag for session resumption.
 """
 
+# TODO: Fix critical bug - see ticket OSD-1234
+
 import os
 import sys
 import argparse

@@ -4,6 +4,14 @@
 
 ---
 
+## ⛔ CRITICAL: Git Commit Prohibition
+
+**Direct `git commit` via Terminal is BLOCKED.**
+
+Use: `@omni-orchestrator git_commit` or `skill("git", "git_commit(message='...')")`
+
+---
+
 ## Core Philosophy
 
 **Code is Mechanism, Prompt is Policy**
@@ -13,6 +21,19 @@
 | **Brain**      | Rules, routing | `prompts.md` (LLM reads when skill loads) |
 | **Muscle**     | Execution      | `tools.py` (blind, stateless)             |
 | **Guardrails** | Validation     | Lefthook, Cog, Pre-commit                 |
+
+---
+
+## 📍 Working Directory
+
+**Project Root:** `/Users/guangtao/ghq/github.com/tao3k/omni-devenv-fusion`
+
+**Relative paths are relative to Project Root.**
+
+**Do NOT use absolute paths like `/Users/...`** - use relative paths like:
+
+- `agent/main.py` (NOT `/Users/.../agent/main.py`)
+- `packages/python/agent/src/agent/` (NOT full absolute path)
 
 ---
 

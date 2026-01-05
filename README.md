@@ -209,3 +209,7 @@ Special thanks to the maintainers of these projects for enabling the AI-SDLC wor
 ---
 
 Built with ❤️ using devenv, Nix, and Claude Code
+
+## Atomic Git Skill (Phase 23)
+
+The Git Skill has been atomized for independent operation.
