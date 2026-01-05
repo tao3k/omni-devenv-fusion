@@ -272,3 +272,33 @@ def get_skill_registry():
     if _registry is None:
         _registry = SkillRegistry()
     return _registry
+
+
+def get_skill_tools(skill_name: str) -> Dict[str, callable]:
+    """
+    Get all tool functions from a loaded skill.
+
+    Phase 19: Enables ReAct loop to access dynamically loaded skill tools.
+
+    Args:
+        skill_name: Name of the skill (e.g., "filesystem")
+
+    Returns:
+        Dict of tool name -> callable function
+    """
+    registry = get_skill_registry()
+    module = registry.module_cache.get(skill_name)
+
+    if not module:
+        return {}
+
+    tools = {}
+    # Get all callables that don't start with underscore
+    for name in dir(module):
+        if name.startswith("_"):
+            continue
+        obj = getattr(module, name)
+        if callable(obj) and name not in ("register", "mcp"):
+            tools[name] = obj
+
+    return tools

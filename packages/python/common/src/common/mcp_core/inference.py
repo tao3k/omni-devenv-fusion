@@ -142,9 +142,13 @@ class InferenceClient:
         model: str = None,
         max_tokens: int = None,
         timeout: int = None,
+        messages: List[Dict] = None,
+        tools: List[Dict] = None,
     ) -> Dict[str, Any]:
         """
-        Make a non-streaming LLM call.
+        Make a non-streaming LLM call with optional tool support.
+
+        Phase 19: Supports ReAct loop with tool calls.
 
         Args:
             system_prompt: System prompt defining the persona/task
@@ -152,45 +156,73 @@ class InferenceClient:
             model: Override model name
             max_tokens: Override max tokens
             timeout: Override timeout
+            messages: Conversation history for multi-turn (ReAct)
+            tools: Tool definitions for tool use (JSON Schema format)
 
         Returns:
-            Dict with keys: success (bool), content (str), error (str), usage (Dict)
+            Dict with keys:
+            - success (bool)
+            - content (str) - text response
+            - tool_calls (List[Dict]) - if LLM requested tools
+            - error (str)
+            - usage (Dict)
         """
         actual_model = model or self.model
         actual_max_tokens = max_tokens or self.max_tokens
         actual_timeout = timeout or self.timeout
 
-        messages = [{"role": "user", "content": user_query}]
+        # Use provided messages or create new user message
+        message_list = messages or [{"role": "user", "content": user_query}]
 
         log.info(
             "inference.request",
             model=actual_model,
             prompt_length=len(system_prompt),
             query_length=len(user_query),
+            has_tools=tools is not None,
         )
 
         try:
+            # Build API call kwargs
+            api_kwargs = {
+                "model": actual_model,
+                "max_tokens": actual_max_tokens,
+                "system": system_prompt,
+                "messages": message_list,
+            }
+
+            # Add tools if provided (Phase 19: ReAct support)
+            if tools:
+                api_kwargs["tools"] = tools
+
             response = await asyncio.wait_for(
-                self.client.messages.create(
-                    model=actual_model,
-                    max_tokens=actual_max_tokens,
-                    system=system_prompt,
-                    messages=messages,
-                ),
+                self.client.messages.create(**api_kwargs),
                 timeout=actual_timeout,
             )
 
-            # Extract text from response
+            # Extract text and tool calls from response
             content = ""
+            tool_calls = []
+
             for block in response.content:
-                if hasattr(block, "type") and block.type == "text":
-                    content += block.text
-                elif hasattr(block, "text"):
-                    content += block.text
+                if hasattr(block, "type"):
+                    if block.type == "text":
+                        content += block.text if hasattr(block, "text") else ""
+                    elif block.type == "tool_use":
+                        # Phase 19: LLM requested a tool call
+                        tool_calls.append(
+                            {
+                                "id": block.id,
+                                "name": block.name,
+                                "input": block.input,
+                            }
+                        )
+                        content += f"[TOOL_CALL: {block.name}]\n"
 
             result = {
                 "success": True,
                 "content": content,
+                "tool_calls": tool_calls,
                 "model": actual_model,
                 "usage": {
                     "input_tokens": response.usage.input_tokens,
@@ -223,10 +255,112 @@ class InferenceClient:
             return {
                 "success": False,
                 "content": "",
+                "tool_calls": [],
                 "error": str(e),
                 "model": actual_model,
                 "usage": {},
             }
+
+    def get_tool_schema(self, skill_names: List[str] = None) -> List[Dict]:
+        """
+        Get tool definitions in JSON Schema format for ReAct loop.
+
+        Phase 19: Enables agents to use tools via LLM.
+
+        Args:
+            skill_names: List of skill names to get tools for (e.g., ["filesystem", "git"])
+
+        Returns:
+            List of tool definitions compatible with Anthropic API
+        """
+        # Define schemas for common tools (no dynamic imports needed)
+        tool_schemas = []
+
+        # File operations tools
+        if not skill_names or "filesystem" in skill_names or "file_ops" in skill_names:
+            tool_schemas.extend(
+                [
+                    {
+                        "name": "read_file",
+                        "description": "Read the full content of a file (UTF-8)",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "path": {"type": "string", "description": "Path to file to read"}
+                            },
+                            "required": ["path"],
+                        },
+                    },
+                    {
+                        "name": "write_file",
+                        "description": "Create or overwrite a file with new content",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "path": {"type": "string", "description": "Path to write"},
+                                "content": {"type": "string", "description": "Content to write"},
+                            },
+                            "required": ["path", "content"],
+                        },
+                    },
+                    {
+                        "name": "list_directory",
+                        "description": "List files and directories in a given path",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "path": {
+                                    "type": "string",
+                                    "description": "Directory path to list (default: '.')",
+                                },
+                            },
+                            "required": [],
+                        },
+                    },
+                    {
+                        "name": "search",
+                        "description": "Search for files matching a glob pattern",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "pattern": {
+                                    "type": "string",
+                                    "description": "Glob pattern (e.g., '**/*.py')",
+                                },
+                                "path": {
+                                    "type": "string",
+                                    "description": "Search directory (default: '.')",
+                                },
+                            },
+                            "required": ["pattern"],
+                        },
+                    },
+                    {
+                        "name": "get_file_info",
+                        "description": "Get metadata about a file (size, modified time, etc.)",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "path": {"type": "string", "description": "Path to file"},
+                            },
+                            "required": ["path"],
+                        },
+                    },
+                    {
+                        "name": "run_command",
+                        "description": "Run a shell command and return output",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "command": {"type": "string", "description": "Command to run"},
+                            },
+                            "required": ["command"],
+                        },
+                    },
+                ]
+            )
+
+        return tool_schemas
 
     async def stream_complete(
         self,

@@ -36,3 +36,20 @@ Claude Desktop
 - `just validate` - fmt, lint, test
 - `just test-mcp` - MCP tools test
 - `just fmt` - format code
+
+## 🎯 Delegation Protocol
+
+For complex multi-step tasks, delegate to the internal Agentic OS using the `delegate_mission` tool.
+
+**When to Delegate:**
+
+- Tasks requiring multiple steps (edit file, then run test, then fix)
+- Tasks needing specialized agents (Coder, Reviewer)
+- Tasks requiring self-correction loop
+- Tasks where you want real-time TUI visualization
+
+**❌ BAD Pattern (Single-step tasks only):**
+User: "Read file X" -> You: call `read_file`
+
+**✅ GOOD Pattern (Complex tasks):**
+User: "Fix the threading bug" -> You: call `delegate_mission("Fix the threading bug", context_files=["main.py"])`

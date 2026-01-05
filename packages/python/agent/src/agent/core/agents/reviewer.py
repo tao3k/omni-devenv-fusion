@@ -75,7 +75,7 @@ class ReviewerAgent(BaseAgent):
         constraints: List[str] = None,
         relevant_files: List[str] = None,
         chat_history: List[dict] = None,
-    ) -> dict:
+    ) -> AgentResult:
         """
         Execute review task with Mission Brief.
 
@@ -118,7 +118,7 @@ class ReviewerAgent(BaseAgent):
             enable_rag=False,  # Disable RAG for Reviewer
         )
 
-    async def _execute_with_llm(self, task: str, context, history: List[dict]) -> dict:
+    async def _execute_with_llm(self, task: str, context, history: List[dict]) -> AgentResult:
         """
         Execute review task with LLM.
 
@@ -130,16 +130,14 @@ class ReviewerAgent(BaseAgent):
         # Placeholder for actual LLM integration
         # In real implementation: call inference.chat with context.system_prompt
 
-        return {
-            "success": True,
-            "content": f"[REVIEWER] Reviewed: {task}",
-            "message": f"Reviewer completed quality check",
-            "confidence": 0.9,
-            "tool_calls": [],
-            "tests_passed": True,
-            "lint_clean": True,
-            "review_notes": [],
-        }
+        return AgentResult(
+            success=True,
+            content=f"[REVIEWER] Reviewed: {task}",
+            message=f"Reviewer completed quality check",
+            confidence=0.9,
+            tool_calls=[],
+            rag_sources=[],  # Will be set by BaseAgent.run()
+        )
 
     async def should_commit(self, diff: str) -> dict:
         """

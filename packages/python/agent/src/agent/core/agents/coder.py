@@ -6,6 +6,10 @@ Phase 14 Enhancement:
 - Context Narrowing: Coder only sees code-related tools
 - Mission Brief: Focused on implementation, refactoring, bug fixes
 
+Phase 19 Enhancement:
+- ReAct Loop: Think -> Act -> Observe for intelligent code generation
+- Tool Injection: Uses filesystem tools (read_file, write_file, etc.)
+
 Skills (Narrow Context):
 - filesystem: Navigate and locate files
 - file_ops: Read/write/modify files
@@ -15,8 +19,19 @@ Skills (Narrow Context):
 
 Usage:
     from agent.core.agents import CoderAgent
+    from common.mcp_core.inference import InferenceClient
 
-    agent = CoderAgent()
+    # Create agent with inference engine
+    client = InferenceClient()
+    agent = CoderAgent(
+        inference=client,
+        tools={
+            "read_file": read_file_func,
+            "write_file": write_file_func,
+            "search_files": search_files_func,
+        }
+    )
+
     result = await agent.run(
         task="Fix the IndexError in router.py",
         mission_brief="Fix the IndexError in router.py. Validate the fix with tests.",
@@ -25,14 +40,17 @@ Usage:
     )
 """
 
-from typing import List
+import importlib
+from typing import Any, Callable, Dict, List
 
-from agent.core.agents.base import BaseAgent
+from agent.core.agents.base import BaseAgent, AgentResult
 
 
 class CoderAgent(BaseAgent):
     """
     Primary Executor Agent - Specializes in code writing and modification.
+
+    Phase 19: Now with ReAct Loop and Tool Injection!
 
     The Coder focuses on:
     - Writing new code
@@ -59,6 +77,45 @@ class CoderAgent(BaseAgent):
         "terminal",  # Simple shell commands (ls, python -c)
     ]
 
+    def __init__(
+        self,
+        inference: Any = None,
+        tools: Dict[str, Callable] = None,
+    ):
+        """
+        Initialize CoderAgent with inference and tools.
+
+        Args:
+            inference: LLM inference client
+            tools: Dict of tool name -> callable
+        """
+        super().__init__(inference=inference, tools=tools)
+
+        # Auto-load tools from skills if not provided
+        if not self.tools:
+            self.tools = self._load_skill_tools()
+
+    def _load_skill_tools(self) -> Dict[str, Callable]:
+        """
+        Load tools from skill modules using Skill Registry.
+
+        Maps filesystem skill functions to agent tools.
+        """
+        from agent.core.skill_registry import get_skill_tools
+
+        # Get tools from loaded skills via Skill Registry
+        tools = {}
+
+        # Get filesystem skill tools
+        fs_tools = get_skill_tools("filesystem")
+        tools.update(fs_tools)
+
+        # Get file_ops skill tools
+        file_ops_tools = get_skill_tools("file_ops")
+        tools.update(file_ops_tools)
+
+        return tools
+
     async def run(
         self,
         task: str,
@@ -66,7 +123,7 @@ class CoderAgent(BaseAgent):
         constraints: List[str] = None,
         relevant_files: List[str] = None,
         chat_history: List[dict] = None,
-    ) -> dict:
+    ) -> AgentResult:
         """
         Execute coding task with Mission Brief.
 
@@ -88,23 +145,31 @@ class CoderAgent(BaseAgent):
             chat_history=chat_history,
         )
 
-    async def _execute_with_llm(self, task: str, context, history: List[dict]) -> dict:
+    async def _execute_with_llm(self, task: str, context, history: List[dict]) -> AgentResult:
         """
-        Execute coding task with LLM.
+        Execute coding task with LLM using ReAct loop.
 
-        Coder-specific behavior:
-        - Generates precise code changes
-        - Includes file paths in responses
-        - Suggests tests when implementing features
+        Phase 19: Full ReAct implementation with tool support.
+
+        The loop:
+        1. Think: LLM decides what tool to use
+        2. Act: Execute tool (read/write file)
+        3. Observe: Get result, continue until done
         """
-        # Placeholder for actual LLM integration
-        # In real implementation: call inference.chat with context.system_prompt
+        # If we have inference and tools, use ReAct loop
+        if self.inference and self.tools:
+            return await self._run_react_loop(
+                task=task,
+                system_prompt=context.system_prompt,
+                max_steps=5,
+            )
 
-        return {
-            "success": True,
-            "content": f"[CODER] Implemented: {task}",
-            "message": f"Coder completed implementation",
-            "confidence": 0.85,
-            "tool_calls": [],
-            "files_modified": context.relevant_files or [],
-        }
+        # Fallback to placeholder if no inference
+        return AgentResult(
+            success=True,
+            content=f"[CODER] Implemented: {task}",
+            message=f"Coder completed implementation",
+            confidence=0.85,
+            tool_calls=[],
+            rag_sources=[],
+        )

@@ -15,6 +15,7 @@ dependencies = [
 
 [project.scripts]
 orchestrator = "agent.main:main"
+omni = "agent.dashboard:main"
 
 [build-system]
 requires = ["hatchling"]

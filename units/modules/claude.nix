@@ -68,6 +68,10 @@
         "-m"
         "agent.main"
       ];
+
+      env = {
+        OMNI_UX_MODE = "headless";
+      };
     };
   };
 }

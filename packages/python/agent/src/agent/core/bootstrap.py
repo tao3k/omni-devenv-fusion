@@ -57,11 +57,14 @@ def boot_core_skills(mcp: FastMCP):
     logger.info("Skills preloaded", loaded=loaded_count, total=len(preload_skills))
 
 
-def start_background_tasks():
+def start_background_tasks() -> threading.Thread | None:
     """
     [Background] Initialize Knowledge Base ingestion in a separate thread.
     Does not block server startup.
+
+    Returns the thread reference so it can be joined on graceful shutdown.
     """
+    global _background_thread
 
     def _run_ingest():
         try:
@@ -72,22 +75,57 @@ def start_background_tasks():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
-            async def _async_task():
-                try:
-                    await ingest_all_knowledge()
-                    await bootstrap_knowledge()
-                    logger.info("Knowledge base bootstrap completed")
-                except Exception as e:
-                    logger.error(f"Knowledge base bootstrap failed: {e}")
+            try:
 
-            loop.run_until_complete(_async_task())
-            loop.close()
+                async def _async_task():
+                    try:
+                        await ingest_all_knowledge()
+                        await bootstrap_knowledge()
+                        logger.info("Knowledge base bootstrap completed")
+                    except Exception as e:
+                        logger.error(f"Knowledge base bootstrap failed: {e}")
+
+                loop.run_until_complete(_async_task())
+            finally:
+                # Ensure loop is properly closed even on exception
+                try:
+                    loop.close()
+                except Exception:
+                    pass  # Ignore close errors
         except Exception as e:
             logger.error(f"Background thread error: {e}")
 
-    thread = threading.Thread(target=_run_ingest, daemon=True)
-    thread.start()
+    _background_thread = threading.Thread(target=_run_ingest, daemon=False)
+    _background_thread.start()
     logger.info("Background tasks started")
 
+    return _background_thread
 
-__all__ = ["boot_core_skills", "start_background_tasks", "CORE_SKILLS"]
+
+# Global reference for shutdown handling
+_background_thread: threading.Thread | None = None
+
+
+def shutdown_background_tasks(timeout: float = 30.0) -> bool:
+    """
+    Gracefully shutdown background tasks by waiting for thread completion.
+
+    Args:
+        timeout: Maximum seconds to wait for thread to finish
+
+    Returns:
+        True if thread completed within timeout, False otherwise
+    """
+    global _background_thread
+    if _background_thread and _background_thread.is_alive():
+        logger.info("Waiting for background tasks to complete...")
+        _background_thread.join(timeout=timeout)
+        if _background_thread.is_alive():
+            logger.warning("Background tasks did not complete within timeout")
+            return False
+        logger.info("Background tasks completed")
+        return True
+    return True
+
+
+__all__ = ["boot_core_skills", "start_background_tasks", "shutdown_background_tasks", "CORE_SKILLS"]

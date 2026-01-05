@@ -7,6 +7,7 @@ This file is a pure Composition Root - it only assembles modules and triggers bo
 All business logic is delegated to atomic modules.
 """
 
+import os
 from mcp.server.fastmcp import FastMCP
 import structlog
 
@@ -27,8 +28,12 @@ from agent.tools.context import register_context_tools
 from agent.tools.spec import register_spec_tools
 from agent.tools.router import register_router_tools
 from agent.tools.status import register_status_tool
+from agent.tools.orchestrator import register_orchestrator_tools
 
 # --- Initialization ---
+# Enable headless mode for UXManager when running as MCP Server
+os.environ["OMNI_UX_MODE"] = "headless"
+
 setup_logging()
 logger = structlog.get_logger(__name__)
 
@@ -57,6 +62,7 @@ _register("context", register_context_tools)
 _register("spec", register_spec_tools)
 _register("router", register_router_tools)
 _register("status", register_status_tool)
+_register("orchestrator", register_orchestrator_tools)
 
 # Governance & Domain
 _register("product_owner", register_product_owner_tools)

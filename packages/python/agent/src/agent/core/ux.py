@@ -2,22 +2,30 @@
 src/agent/core/ux.py
 UXManager - Glass Cockpit for Omni Orchestrator
 
-Phase 18: The Glass Cockpit
+Phase 18: The Glass Cockpit (Sidecar Dashboard Pattern)
 - Real-time TUI for agent state visualization
 - Rich-powered terminal output
 - Visual audit feedback and RAG knowledge display
+- Dual-mode: 'tui' (direct rendering) or 'headless' (event emission)
 
-Usage:
+Usage (TUI mode - CLI):
     from agent.core.ux import ux_manager
 
     ux_manager.start_task("Fix SQL injection")
-    ux_manager.show_routing("coder", "Improve exception handling...")
-    ux_manager.show_rag_hits(["standards/security.md", "lang-python.md"])
-    ux_manager.update_status("coding")
-    ux_manager.show_audit_result(True, "All checks passed")
+    ux_manager.show_routing_result("coder", "Improve exception handling...")
+    ux_manager.show_rag_hits([...])
     ux_manager.end_task()
+
+Usage (Headless mode - MCP Server):
+    export OMNI_UX_MODE=headless
+    # Events are written to /tmp/omni_ux_events.jsonl
+    # Sidecar dashboard reads and replays them
 """
 
+import os
+import json
+import time
+from pathlib import Path
 from typing import Optional, List, Dict, Any
 from rich.console import Console
 from rich.panel import Panel
@@ -33,6 +41,9 @@ from rich.columns import Columns
 from rich.align import Align
 from rich.rule import Rule
 from enum import Enum
+
+# Event log path for sidecar pattern
+EVENT_LOG_PATH = Path("/tmp/omni_ux_events.jsonl")
 
 
 class AgentState(Enum):
@@ -52,9 +63,15 @@ class UXManager:
     Glass Cockpit - Terminal UI Manager for Omni Orchestrator.
 
     Transforms complex agent internal states into beautiful, readable TUI.
+
+    Dual-Mode Support:
+    - 'tui': Direct rendering to terminal (CLI mode)
+    - 'headless': Emit events to log file for sidecar dashboard (MCP Server mode)
     """
 
-    def __init__(self):
+    def __init__(self, force_mode: Optional[str] = None):
+        # mode: 'tui' (direct rendering) or 'headless' (write to event log)
+        self.mode = force_mode or os.getenv("OMNI_UX_MODE", "tui")
         self.console = Console()
         self.task_id: Optional[str] = None
         self.current_state: AgentState = AgentState.IDLE
@@ -62,11 +79,199 @@ class UXManager:
         self._status: Optional[Progress] = None
         self._phase_stack: List[str] = []
 
+    # ==================== Event Emission (Headless Mode) ====================
+
+    def _emit(self, method: str, **kwargs) -> None:
+        """
+        Emit event to the event log stream (for sidecar dashboard).
+
+        In headless mode, this is called instead of direct rendering.
+        """
+        event = {
+            "timestamp": time.time(),
+            "method": method,
+            "params": kwargs,
+        }
+        try:
+            with open(EVENT_LOG_PATH, "a") as f:
+                f.write(json.dumps(event) + "\n")
+        except Exception:
+            # Production: never let logging break the main flow
+            pass
+
+    def _should_emit(self) -> bool:
+        """Check if we should emit events (headless mode)."""
+        return self.mode == "headless"
+
+    # ==================== Proxy Methods ====================
+
     def rule(self, title: str = "", style: str = "blue") -> None:
+        """Print a rule (horizontal line) with title."""
+        if self._should_emit():
+            self._emit("rule", title=title, style=style)
+        else:
+            self._render_rule(title, style)
+
+    def start_task(self, user_query: str) -> None:
+        """Start a new task - show user query and initialize UI."""
+        if self._should_emit():
+            self._emit("start_task", user_query=user_query)
+        else:
+            self._render_start_task(user_query)
+
+    def end_task(self, success: bool = True) -> None:
+        """End the current task."""
+        if self._should_emit():
+            self._emit("end_task", success=success)
+        else:
+            self._render_end_task(success)
+
+    # ==================== Routing Visualization ====================
+
+    def start_routing(self) -> None:
+        """Show routing in progress."""
+        if self._should_emit():
+            self._emit("start_routing")
+        else:
+            self._render_start_routing()
+
+    def stop_routing(self) -> None:
+        """Stop routing spinner."""
+        if self._should_emit():
+            self._emit("stop_routing")
+        else:
+            self._render_stop_routing()
+
+    def show_routing_result(
+        self, agent_name: str, mission_brief: str, confidence: float = 1.0, from_cache: bool = False
+    ) -> None:
+        """Display routing result with mission brief."""
+        if self._should_emit():
+            self._emit(
+                "show_routing_result",
+                agent_name=agent_name,
+                mission_brief=mission_brief,
+                confidence=confidence,
+                from_cache=from_cache,
+            )
+        else:
+            self._render_show_routing_result(agent_name, mission_brief, confidence, from_cache)
+
+    # ==================== RAG Visualization ====================
+
+    def show_rag_hits(self, hits: List[Dict[str, Any]]) -> None:
+        """
+        Display RAG knowledge retrieval results.
+        """
+        if self._should_emit():
+            self._emit("show_rag_hits", hits=hits)
+        else:
+            self._render_show_rag_hits(hits)
+
+    # ==================== Execution Visualization ====================
+
+    def start_execution(self, agent_name: str) -> None:
+        """Show execution in progress."""
+        if self._should_emit():
+            self._emit("start_execution", agent_name=agent_name)
+        else:
+            self._render_start_execution(agent_name)
+
+    def stop_execution(self) -> None:
+        """Stop execution spinner."""
+        if self._should_emit():
+            self._emit("stop_execution")
+        else:
+            self._render_stop_execution()
+
+    # ==================== Review Visualization ====================
+
+    def start_review(self) -> None:
+        """Show review in progress."""
+        if self._should_emit():
+            self._emit("start_review")
+        else:
+            self._render_start_review()
+
+    def stop_review(self) -> None:
+        """Stop review spinner."""
+        if self._should_emit():
+            self._emit("stop_review")
+        else:
+            self._render_stop_review()
+
+    def show_audit_result(
+        self, approved: bool, feedback: str, issues: List[str] = None, suggestions: List[str] = None
+    ) -> None:
+        """Display audit result with rich visual feedback."""
+        if self._should_emit():
+            self._emit(
+                "show_audit_result",
+                approved=approved,
+                feedback=feedback,
+                issues=issues,
+                suggestions=suggestions,
+            )
+        else:
+            self._render_show_audit_result(approved, feedback, issues, suggestions)
+
+    # ==================== Correction Loop Visualization ====================
+
+    def show_correction_loop(self, attempt: int, max_attempts: int) -> None:
+        """Show self-correction loop entry."""
+        if self._should_emit():
+            self._emit("show_correction_loop", attempt=attempt, max_attempts=max_attempts)
+        else:
+            self._render_show_correction_loop(attempt, max_attempts)
+
+    # ==================== Agent Response Display ====================
+
+    def print_agent_response(self, content: str, title: str = "Agent Output") -> None:
+        """Print agent response with Markdown rendering."""
+        if self._should_emit():
+            self._emit("print_agent_response", content=content, title=title)
+        else:
+            self._render_print_agent_response(content, title)
+
+    # ==================== Progress & Status ====================
+
+    def show_progress_table(self, rows: List[List[str]], title: str = "Progress") -> None:
+        """Display a progress table."""
+        if self._should_emit():
+            self._emit("show_progress_table", rows=rows, title=title)
+        else:
+            self._render_show_progress_table(rows, title)
+
+    def show_status_summary(self, status: Dict[str, Any]) -> None:
+        """Display a summary of current status."""
+        if self._should_emit():
+            self._emit("show_status_summary", status=status)
+        else:
+            self._render_show_status_summary(status)
+
+    # ==================== Error Handling ====================
+
+    def show_error(self, message: str, details: str = None) -> None:
+        """Display error message."""
+        if self._should_emit():
+            self._emit("show_error", message=message, details=details)
+        else:
+            self._render_show_error(message, details)
+
+    def show_warning(self, message: str) -> None:
+        """Display warning message."""
+        if self._should_emit():
+            self._emit("show_warning", message=message)
+        else:
+            self._render_show_warning(message)
+
+    # ==================== Rendering Methods (Original Implementation) ====================
+
+    def _render_rule(self, title: str = "", style: str = "blue") -> None:
         """Print a rule (horizontal line) with title."""
         self.console.print(Rule(title, style=style))
 
-    def start_task(self, user_query: str) -> None:
+    def _render_start_task(self, user_query: str) -> None:
         """Start a new task - show user query and initialize UI."""
         self.task_id = user_query[:50] + "..." if len(user_query) > 50 else user_query
         self.current_state = AgentState.IDLE
@@ -83,7 +288,7 @@ class UXManager:
             )
         )
 
-    def end_task(self, success: bool = True) -> None:
+    def _render_end_task(self, success: bool = True) -> None:
         """End the current task."""
         style = "green" if success else "red"
         title = "✅ Task Completed" if success else "❌ Task Failed"
@@ -96,9 +301,7 @@ class UXManager:
         self.task_id = None
         self.current_state = AgentState.IDLE
 
-    # ==================== Routing Visualization ====================
-
-    def start_routing(self) -> None:
+    def _render_start_routing(self) -> None:
         """Show routing in progress."""
         self.current_state = AgentState.ROUTING
         self._status = self.console.status(
@@ -106,17 +309,17 @@ class UXManager:
         )
         self._status.start()
 
-    def stop_routing(self) -> None:
+    def _render_stop_routing(self) -> None:
         """Stop routing spinner."""
         if self._status:
             self._status.stop()
             self._status = None
 
-    def show_routing_result(
+    def _render_show_routing_result(
         self, agent_name: str, mission_brief: str, confidence: float = 1.0, from_cache: bool = False
     ) -> None:
         """Display routing result with mission brief."""
-        self.stop_routing()
+        self._render_stop_routing()
 
         cache_note = " [yellow](cached)[/]" if from_cache else ""
 
@@ -129,14 +332,9 @@ class UXManager:
         )
         self.console.print(brief_panel)
 
-    # ==================== RAG Visualization ====================
-
-    def show_rag_hits(self, hits: List[Dict[str, Any]]) -> None:
+    def _render_show_rag_hits(self, hits: List[Dict[str, Any]]) -> None:
         """
         Display RAG knowledge retrieval results.
-
-        Args:
-            hits: List of dicts with 'source_file', 'distance', 'title'
         """
         if not hits:
             return
@@ -161,43 +359,39 @@ class UXManager:
 
         self.console.print(tree)
 
-    # ==================== Execution Visualization ====================
-
-    def start_execution(self, agent_name: str) -> None:
+    def _render_start_execution(self, agent_name: str) -> None:
         """Show execution in progress."""
         self.current_state = AgentState.EXECUTING
         self._status = self.console.status(
-            f"[bold yellow]🛠️ {agent_name} is working...[/]", spinner="hammer"
+            f"[bold yellow]🛠️ {agent_name} is working...[/]", spinner="dots"
         )
         self._status.start()
 
-    def stop_execution(self) -> None:
+    def _render_stop_execution(self) -> None:
         """Stop execution spinner."""
         if self._status:
             self._status.stop()
             self._status = None
 
-    # ==================== Review Visualization ====================
-
-    def start_review(self) -> None:
+    def _render_start_review(self) -> None:
         """Show review in progress."""
         self.current_state = AgentState.REVIEWING
         self._status = self.console.status(
-            "[bold magenta]🕵️ Reviewer is auditing...[/]", spinner="magnifying_glass_tilted_right"
+            "[bold magenta]🕵️ Reviewer is auditing...[/]", spinner="dots2"
         )
         self._status.start()
 
-    def stop_review(self) -> None:
+    def _render_stop_review(self) -> None:
         """Stop review spinner."""
         if self._status:
             self._status.stop()
             self._status = None
 
-    def show_audit_result(
+    def _render_show_audit_result(
         self, approved: bool, feedback: str, issues: List[str] = None, suggestions: List[str] = None
     ) -> None:
         """Display audit result with rich visual feedback."""
-        self.stop_review()
+        self._render_stop_review()
 
         color = "green" if approved else "red"
         title = "✅ Audit Approved" if approved else "❌ Audit Rejected"
@@ -225,9 +419,7 @@ class UXManager:
             )
         )
 
-    # ==================== Correction Loop Visualization ====================
-
-    def show_correction_loop(self, attempt: int, max_attempts: int) -> None:
+    def _render_show_correction_loop(self, attempt: int, max_attempts: int) -> None:
         """Show self-correction loop entry."""
         self.current_state = AgentState.CORRECTING
 
@@ -243,9 +435,7 @@ class UXManager:
             )
         )
 
-    # ==================== Agent Response Display ====================
-
-    def print_agent_response(self, content: str, title: str = "Agent Output") -> None:
+    def _render_print_agent_response(self, content: str, title: str = "Agent Output") -> None:
         """Print agent response with Markdown rendering."""
         try:
             self.console.print(
@@ -257,9 +447,7 @@ class UXManager:
                 Panel(Text(content, justify="left"), title=f"🤖 {title}", border_style="white")
             )
 
-    # ==================== Progress & Status ====================
-
-    def show_progress_table(self, rows: List[List[str]], title: str = "Progress") -> None:
+    def _render_show_progress_table(self, rows: List[List[str]], title: str = "Progress") -> None:
         """Display a progress table."""
         table = Table(title=title, box=None, show_header=False)
 
@@ -272,7 +460,7 @@ class UXManager:
 
         self.console.print(table)
 
-    def show_status_summary(self, status: Dict[str, Any]) -> None:
+    def _render_show_status_summary(self, status: Dict[str, Any]) -> None:
         """Display a summary of current status."""
         # Create a simple text summary
         lines = [f"[bold]System Status[/]"]
@@ -283,9 +471,7 @@ class UXManager:
             Panel(Text("\n".join(lines), justify="left"), title="📊 Status", border_style="dim")
         )
 
-    # ==================== Error Handling ====================
-
-    def show_error(self, message: str, details: str = None) -> None:
+    def _render_show_error(self, message: str, details: str = None) -> None:
         """Display error message."""
         content = f"[bold red]Error:[/] {message}"
         if details:
@@ -297,7 +483,7 @@ class UXManager:
             )
         )
 
-    def show_warning(self, message: str) -> None:
+    def _render_show_warning(self, message: str) -> None:
         """Display warning message."""
         self.console.print(
             Panel(
@@ -308,7 +494,7 @@ class UXManager:
         )
 
 
-# Global UX manager instance
+# Global UX manager instance (auto-detects mode from OMNI_UX_MODE env var)
 ux_manager = UXManager()
 
 

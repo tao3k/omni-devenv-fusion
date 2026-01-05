@@ -63,11 +63,23 @@ class Orchestrator:
         """
         Initialize Orchestrator.
 
+        Phase 19: If no inference engine is provided, creates one automatically.
+
         Args:
             inference_engine: Optional inference engine for LLM calls
             feedback_enabled: Enable Phase 15 feedback loop (default: True)
             max_retries: Maximum self-correction retries (default: 2)
         """
+        # Phase 19: Auto-create inference client if not provided
+        if inference_engine is None:
+            try:
+                from common.mcp_core.inference import InferenceClient
+
+                inference_engine = InferenceClient()
+                logger.info("🧠 Inference engine initialized")
+            except Exception as e:
+                logger.warning(f"Could not initialize inference engine: {e}")
+
         self.inference = inference_engine
         self.router = get_hive_router()
         self.feedback_enabled = feedback_enabled
@@ -133,7 +145,7 @@ class Orchestrator:
             "👉 Routing decision", target_agent=route.target_agent, confidence=route.confidence
         )
 
-        # === Phase 2: Agent Instantiation ===
+        # === Phase 2: Agent Instantiation (Phase 19: Dependency Injection) ===
         target_agent_class = self.agent_map.get(route.target_agent)
 
         if not target_agent_class:
@@ -142,8 +154,14 @@ class Orchestrator:
             )
             target_agent_class = CoderAgent
 
-        # Create agent instance
-        worker: BaseAgent = target_agent_class()
+        # Create agent instance with injected dependencies
+        tools = self._get_tools_for_agent(route.target_agent)
+        worker: BaseAgent = target_agent_class(
+            inference=self.inference,
+            tools=tools,
+        )
+
+        logger.info(f"🏗️ Agent instantiated with {len(tools)} tools", agent=route.target_agent)
 
         # === Phase 3: Execution with Mission Brief ===
         task_brief = route.task_brief or user_query
@@ -394,6 +412,51 @@ class Orchestrator:
 
         # Fall back to normal routing
         return await self.dispatch(user_query, history)
+
+    # =========================================================================
+    # Phase 19: Tool Registry for Agent Dependency Injection
+    # =========================================================================
+
+    def _get_tools_for_agent(self, agent_name: str) -> Dict[str, Any]:
+        """
+        Get tools for a specific agent type.
+
+        Phase 19: Maps skill tools to agent capabilities using the Skill Registry.
+
+        Args:
+            agent_name: Name of the agent (coder, reviewer, etc.)
+
+        Returns:
+            Dict of tool name -> callable function
+        """
+        from agent.core.skill_registry import get_skill_tools
+
+        # Get tools from loaded skills via Skill Registry
+        tools = {}
+
+        # Get filesystem skill tools
+        fs_tools = get_skill_tools("filesystem")
+        tools.update(fs_tools)
+
+        # Get file_ops skill tools (may have additional tools)
+        file_ops_tools = get_skill_tools("file_ops")
+        tools.update(file_ops_tools)
+
+        # Add agent-specific tools
+        if agent_name == "coder":
+            # Coder gets write_file (already included in filesystem tools)
+            pass
+
+        elif agent_name == "reviewer":
+            # Reviewer gets git and testing tools from skill registry
+            from agent.core.skill_registry import get_skill_tools
+
+            git_tools = get_skill_tools("git")
+            testing_tools = get_skill_tools("testing")
+            tools.update(git_tools)
+            tools.update(testing_tools)
+
+        return tools
 
     def get_status(self) -> Dict[str, Any]:
         """

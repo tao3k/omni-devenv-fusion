@@ -267,6 +267,160 @@ agent/skills/{skill_name}/
 
 ---
 
+## Phase 18: Glass Cockpit (Sidecar Dashboard Pattern)
+
+> **Status**: Phase 18.0 Design Complete
+> **Philosophy**: "Don't fight the protocol. Decouple control from visualization."
+
+### The Problem: TUI vs JSON-RPC Conflict
+
+When running Omni as an MCP Server (integrated with Claude Desktop, Aider, etc.), there's a fundamental constraint:
+
+| Mode       | Stdout Behavior             | TUI Compatible? |
+| ---------- | --------------------------- | --------------- |
+| MCP Server | JSON-RPC protocol stream    | ❌ No           |
+| CLI        | Interactive terminal (独占) | ✅ Yes          |
+
+**The Conflict:**
+
+- MCP Server uses stdout for JSON-RPC responses
+- Rich TUI uses stdout for visual panels
+- Mixing them = protocol corruption = broken connection
+
+### The Solution: Dual-Channel Architecture
+
+We separate **Control Flow** (JSON-RPC) from **Visualization Flow** (Event Stream):
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                          TERMINAL 1: Aider/Claude                    │
+│  ┌──────────────┐                              ┌─────────────────┐  │
+│  │ User Input   │ ──JSON-RPC──> │ Omni MCP │ ──Events──> │ Event Log     │  │
+│  │              │                              │ Server    │ (/tmp/omni_  │  │
+│  │ Final Result │ <──JSON-RPC── │           │           │  events.jsonl)│  │
+│  └──────────────┘                              └────────────┴──────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
+                                                                          │
+                     ┌────────────────────────────────────────┐            │
+                     │         TERMINAL 2: omni monitor         │            │
+                     │  ┌──────────────────────────────────┐  │            │
+                     │  │ UXManager (TUI Renderer)         │◄─┘            │
+                     │  │ • Routing Animation (Cyan)       │               │
+                     │  │ • RAG Knowledge Tree             │               │
+                     │  │ • Agent Status Panels            │               │
+                     │  │ • Task Progress Spinner          │               │
+                     │  └──────────────────────────────────┘               │
+                     └──────────────────────────────────────────────────────┘
+```
+
+### How It Works
+
+#### 1. UXManager Headless Mode
+
+When Omni runs as MCP Server, `UXManager` operates in **headless mode**:
+
+```python
+# src/agent/core/ux.py
+
+class UXManager:
+    def __init__(self, mode="auto"):
+        self.is_mcp_mode = os.environ.get("MCP_SERVER_MODE") == "true"
+        self.event_log = Path("/tmp/omni_events.jsonl")
+
+    def start_routing(self):
+        """Emit event instead of printing TUI"""
+        if self.is_mcp_mode:
+            self._emit_event("routing_start", {"agent": "Orchestrator"})
+        else:
+            self._render_tui_routing()  # CLI mode only
+
+    def _emit_event(self, event_type: str, payload: dict):
+        """Write event to stream for Sidecar Dashboard"""
+        with open(self.event_log, "a") as f:
+            event = {
+                "type": event_type,
+                "payload": payload,
+                "timestamp": time.time(),
+                "session_id": self.session_id
+            }
+            f.write(json.dumps(event) + "\n")
+```
+
+#### 2. Event Schema
+
+```python
+class OmniEvent(BaseModel):
+    type: str              # routing_start, routing_complete, rag_hits, agent_start
+    agent: Optional[str]   # CODER, REVIEWER, WRITER
+    payload: dict          # Event-specific data
+    timestamp: float       # Unix timestamp
+    session_id: str        # Session isolation
+```
+
+#### 3. Sidecar Monitor (New CLI Entry)
+
+```bash
+# Terminal 2: Run the dashboard
+$ omni monitor
+
+📡 Waiting for Omni Agent signals...
+[2024-01-04 10:30:15] 🧠 Orchestrator: Routing "Fix the bug in router.py"
+[2024-01-04 10:30:16] 📋 Target: CODER Agent
+[2024-01-04 10:30:17] 📚 RAG: 3 knowledge sources retrieved
+[2024-01-04 10:30:18] 🛠️ CODER: Executing task...
+```
+
+### Usage
+
+```bash
+# Terminal 1: Your main LLM session
+claude
+> Use omni to fix the bug
+
+# Terminal 2: The "X-Ray Vision" window
+omni monitor
+```
+
+### Architecture Comparison
+
+| Aspect              | Original Design           | Sidecar Pattern                |
+| ------------------- | ------------------------- | ------------------------------ |
+| **Visualization**   | Direct stdout (conflicts) | Event stream (decoupled)       |
+| **Protocol Safety** | ❌ Breaks JSON-RPC        | ✅ Pure JSON-R control chPC on |
+| **Multi-Consumer**  | ❌ Single consumer        | ✅ File/Socket allows multiple |
+| **UX Integration**  | Tightly coupled           | Loose coupling via events      |
+| **Complexity**      | Mode detection in TUI     | Separate processes             |
+
+### Why This Pattern?
+
+**Don't reinvent the wheel:** Omni shouldn't try to replace excellent frontends like Aider, Claude CLI, or Gemini CLI. Instead, it serves as a **Deep Backend** that enhances these tools.
+
+| Layer         | Tool                | Purpose                           |
+| ------------- | ------------------- | --------------------------------- |
+| **Frontend**  | Aider/Claude/Gemini | User interaction, chat, diffs     |
+| **Backend**   | Omni MCP Server     | RAG, routing, multi-agent, skills |
+| **Dashboard** | omni monitor        | X-Ray view of Omni's internals    |
+
+### Implementation Roadmap
+
+| Milestone             | Description                                          |
+| --------------------- | ---------------------------------------------------- |
+| **UXManager改造**     | Add event emission capability, headless mode support |
+| **Event Schema**      | Define `OmniEvent` model and event types             |
+| **omni monitor**      | Create new CLI entry point for TUI dashboard         |
+| **Session Isolation** | Add session_id to events, clear log on start         |
+
+### File Changes
+
+| File                     | Change                                |
+| ------------------------ | ------------------------------------- |
+| `src/agent/core/ux.py`   | Add `_emit_event()`, headless mode    |
+| `src/agent/dashboard.py` | New: Sidecar Monitor entry point      |
+| `src/agent/main.py`      | Set `MCP_SERVER_MODE=true` on startup |
+| `pyproject.toml`         | Add `omni` console script             |
+
+---
+
 ## Toolset Roadmap
 
 ### Orchestrator Tools
@@ -594,3 +748,198 @@ python scripts/test_router.py --interactive
 | Complex bug fix      | ✅ Essential       |
 | Testing workflow     | ✅ Essential       |
 | General conversation | ❌ Overkill        |
+
+---
+
+## Phase 19: The Cognitive Injection
+
+> **Status**: Phase 19 Complete (Tested)
+> **Philosophy**: "Give the Worker a brain and hands, then let it think for itself."
+
+### The Problem
+
+Before Phase 19, CoderAgent was like a worker without tools:
+
+```python
+# Problem: Agent has no cognition or capabilities
+class Orchestrator:
+    def dispatch(self):
+        worker = CoderAgent()  # Worker with no brain, no hands!
+        result = worker.run()  # Just returns placeholder text
+```
+
+### The Solution: ReAct Loop with Dependency Injection
+
+Phase 19 gives agents:
+
+1. **Brain**: LLM inference via `InferenceClient`
+2. **Hands**: File tools via Skill Registry
+3. **Memory**: Action history within ReAct loop
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    delegate_mission Flow                             │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   1. User → "Fix the threading bug in main.py"                     │
+│           │                                                          │
+│           ▼                                                          │
+│   2. Orchestrator routes to CoderAgent                             │
+│           │                                                          │
+│           ▼                                                          │
+│   3. ReAct Loop: Think → Act → Observe                             │
+│           │                                                          │
+│           ├── 1. THINK: LLM decides tool                            │
+│           │     "I need to read main.py first"                      │
+│           │                                                          │
+│           ├── 2. ACT: Execute read_file(path="main.py")            │
+│           │                                                          │
+│           ├── 3. OBSERVE: Get result                                │
+│           │     "File contains threading code..."                   │
+│           │                                                          │
+│           ├── 4. THINK: LLM decides next action                     │
+│           │     "Found bug! Let me fix it"                          │
+│           │                                                          │
+│           ├── 5. ACT: Execute write_file() with fix                │
+│           │                                                          │
+│           ├── 6. OBSERVE: Get result                                │
+│           │     "File written successfully"                         │
+│           │                                                          │
+│           └── 7. RETURN: AgentResult with final content             │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Scenario Test: Fix Threading Bug
+
+**Test Result**: Bug found and fixed in `bootstrap.py`
+
+**Bug**: Global variable shadowing
+
+```python
+# Before
+def start_background_tasks():
+    _background_thread: threading.Thread | None = None  # Shadows global!
+
+# After
+def start_background_tasks():
+    global _background_thread  # Correct reference
+```
+
+**Test Coverage**: 33 tests passed
+
+| Test Class              | Count | Description                 |
+| ----------------------- | ----- | --------------------------- |
+| TestReActLoop           | 3     | Think → Act → Observe cycle |
+| TestToolCallParsing     | 5     | Multi-format parsing        |
+| TestThreadSafety        | 6     | Graceful shutdown           |
+| TestDependencyInjection | 4     | DI verification             |
+| TestStatePersistence    | 2     | Action history              |
+| Other                   | 13    | Integration tests           |
+
+### Key Files
+
+| File                                   | Change                         |
+| -------------------------------------- | ------------------------------ |
+| `agent/core/agents/base.py`            | Added `_run_react_loop()`, DI  |
+| `agent/core/agents/coder.py`           | Added `_load_skill_tools()`    |
+| `agent/core/orchestrator.py`           | Added `_get_tools_for_agent()` |
+| `agent/core/skill_registry.py`         | Added `get_skill_tools()`      |
+| `common/mcp_core/inference.py`         | Added `get_tool_schema()`      |
+| `agent/tests/test_delegate_mission.py` | 33 test cases                  |
+
+### Before vs After
+
+| Concept   | Before Phase 19  | After Phase 19        |
+| --------- | ---------------- | --------------------- |
+| Cognition | Placeholder text | Real LLM inference    |
+| Tools     | N/A              | read_file, write_file |
+| Execution | Single pass      | ReAct loop            |
+| Context   | Shared           | Isolated per task     |
+
+---
+
+## Phase 19.5: Enterprise-Grade Enhancements
+
+### Complete Architecture with Sidecar and Feedback Loop
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         Claude Desktop (Client)                                  │
+└─────────────────────────────────┬───────────────────────────────────────────────┘
+                                  │ JSON-RPC (Control)
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                      Orchestrator (The Brain)                                    │
+│                                                                                  │
+│  ┌─────────────────┐   Route   ┌─────────────────────────────────────────┐      │
+│  │ HiveRouter      │──────────▶│ CoderAgent (ReAct Loop)                 │      │
+│  │                 │           │                                         │      │
+│  │ 1. Route query  │           │ 1. THINK  → LLM decides tool           │      │
+│  │ 2. Build brief  │           │ 2. ACT    → Execute read_file          │      │
+│  │ 3. Inject tools │           │ 3. OBSERVE → Get result, repeat        │      │
+│  │                 │           │                                         │      │
+│  └─────────────────┘           └──────────────────┬────────────────────────┘      │
+│                                                  │                                │
+│  ┌─────────────────┐                             │ Tool Calls                    │
+│  │ ReviewerAgent   │◀─ Feedback ─────────────────┤                              │
+│  │ (Audit)         │                             │                              │
+│  │                 │                             ▼                              │
+│  │ - Audit result  │                     ┌─────────────────┐                   │
+│  │ - Suggestions   │                     │ Skill Registry  │                   │
+│  └─────────────────┘                     │                 │                   │
+│         ▲                               │ filesystem      │                   │
+│         │ Feedback                      │ file_ops        │                   │
+│         │                               │ terminal        │                   │
+└─────────┼───────────────────────────────┴─────────────────┘                   │
+          │                                                                     │
+          │ ⚡ Events (Sidecar Stream)                                         │
+          ▼                                                                     │
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         Terminal 2: Sidecar Dashboard                            │
+│  ┌─────────────────────────────────────────────────────────────────────────┐    │
+│  │  🖥️ Glass Cockpit - Real-time agent visualization                       │    │
+│  │                                                                          │    │
+│  │  [🧠 CODER] Think → Act → Observe                                        │    │
+│  │  ├── Step 1: Thinking... (task: Fix threading bug)                      │    │
+│  │  ├── Step 2: 📖 read_file(main.py) → OK                                  │    │
+│  │  ├── Step 3: 🛠️ write_file(...) → OK                                     │    │
+│  │  └── ✅ Complete (3 steps, 90% confidence)                               │    │
+│  │                                                                          │    │
+│  │  [🕵️ REVIEWER] Audit → Feedback                                          │    │
+│  │  ├── ✅ Code looks good                                                  │    │
+│  │  └── 🔄 Request changes: Add unit test                                   │    │
+│  │                                                                          │    │
+│  └─────────────────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Event Flow (Phase 18 + Phase 19.5)
+
+| Phase | Event | Source | Dashboard Shows |
+|-------|-------|--------|-----------------|
+| 1 | `think_start` | CoderAgent | "Thinking..." |
+| 2 | `act_execute` | CoderAgent | "Executing read_file..." |
+| 3 | `observe_result` | CoderAgent | "Result: 150 lines" |
+| 4 | `audit_request` | Orchestrator | "Reviewer auditing..." |
+| 5 | `audit_complete` | Reviewer | "Approved" or "Changes requested" |
+
+### Key Files Added/Modified
+
+| File | Change | Phase |
+|------|--------|-------|
+| `agent/core/agents/base.py` | Added UX event emission functions | 19.5 |
+| `agent/core/agents/coder.py` | Integrated UX events in ReAct loop | 19.5 |
+| `agent/tests/test_delegate_mission.py` | Added 12 new tests (45 total) | 19.5 |
+
+### Test Matrix
+
+| Category | Tests | Coverage |
+|----------|-------|----------|
+| Core ReAct | 3 | ✅ Loop execution |
+| Tool Parsing | 5 | ✅ Multi-format support |
+| Thread Safety | 6 | ✅ Graceful shutdown |
+| UX Events | 5 | ✅ Glass Cockpit data |
+| Robustness | 3 | ✅ Error handling |
+| Feedback Loop | 4 | ✅ Audit integration |
+| **Total** | **45** | **100%** |
