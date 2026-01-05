@@ -111,3 +111,36 @@ skills:
     enabled: true
     # Default to false - require explicit confirmation
     auto_confirm: false
+
+# =============================================================================
+# Phase 19.7: Claude Code Symbiosis - Context Compression
+# =============================================================================
+# Settings for Dynamic Context Compression when injecting context to Claude Code
+# Prevents context bloat by summarizing large RAG results
+
+context_compression:
+  # Enable/disable context compression globally
+  enabled: true
+
+  # Maximum context tokens before compression is triggered
+  # Claude 3.5 Sonnet has ~200K context window, but we compress to save tokens
+  max_context_tokens: 4000
+
+  # Maximum file size (KB) before compression is triggered
+  # Files larger than this will be summarized instead of fully included
+  max_file_size_kb: 50
+
+  # Compression method: "llm" (use LLM to summarize) or "truncate" (simple cut)
+  method: "llm"
+
+# =============================================================================
+# Phase 19.7: Claude Code Symbiosis - Post-Mortem Audit
+# =============================================================================
+# Settings for automatic review after Claude Code execution
+
+post_mortem:
+  # Enable/disable Post-Mortem audit after Claude Code execution
+  enabled: true
+
+  # Confidence threshold: audits below this are flagged for manual review
+  confidence_threshold: 0.8

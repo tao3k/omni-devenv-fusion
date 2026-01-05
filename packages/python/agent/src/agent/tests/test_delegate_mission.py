@@ -884,7 +884,9 @@ class TestReActLoopRobustness:
             return {
                 "success": True,
                 "content": "[TOOL_CALL: read_file]",
-                "tool_calls": [{"id": "1", "name": "read_file", "input": {"path": "error_file.py"}}],
+                "tool_calls": [
+                    {"id": "1", "name": "read_file", "input": {"path": "error_file.py"}}
+                ],
             }
 
         async def mock_read_file(path):

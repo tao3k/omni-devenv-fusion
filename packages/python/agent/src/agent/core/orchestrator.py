@@ -14,6 +14,10 @@ Phase 18 Enhancement:
 - Glass Cockpit: UXManager for real-time TUI visualization
 - Shows routing, RAG knowledge, and audit results beautifully
 
+Phase 19 Enhancement:
+- The Black Box: SessionManager for session persistence and telemetry
+- Records all decisions, actions, and costs for traceability
+
 Usage:
     from agent.core.orchestrator import Orchestrator
 
@@ -29,6 +33,8 @@ from agent.core.agents.base import BaseAgent, AgentResult, AuditResult
 from agent.core.agents.coder import CoderAgent
 from agent.core.agents.reviewer import ReviewerAgent
 from agent.core.ux import get_ux_manager  # Phase 18: Glass Cockpit
+from agent.core.session import SessionManager  # Phase 19: The Black Box
+from agent.core.telemetry import CostEstimator  # Phase 19: Telemetry
 
 logger = structlog.get_logger()
 
@@ -52,6 +58,10 @@ class Orchestrator:
     Phase 18: Glass Cockpit Integration:
     - Uses UXManager for beautiful terminal visualization
     - Shows routing, RAG knowledge, and audit results in real-time
+
+    Phase 19: The Black Box:
+    - SessionManager for session persistence and telemetry
+    - Records all decisions, actions, and costs for traceability
     """
 
     def __init__(
@@ -59,16 +69,19 @@ class Orchestrator:
         inference_engine=None,
         feedback_enabled: bool = DEFAULT_FEEDBACK_ENABLED,
         max_retries: int = DEFAULT_MAX_RETRIES,
+        session_id: Optional[str] = None,
     ):
         """
         Initialize Orchestrator.
 
         Phase 19: If no inference engine is provided, creates one automatically.
+        Phase 19: SessionManager for persistence and cost tracking.
 
         Args:
             inference_engine: Optional inference engine for LLM calls
             feedback_enabled: Enable Phase 15 feedback loop (default: True)
             max_retries: Maximum self-correction retries (default: 2)
+            session_id: Optional session ID for resumption
         """
         # Phase 19: Auto-create inference client if not provided
         if inference_engine is None:
@@ -85,6 +98,9 @@ class Orchestrator:
         self.feedback_enabled = feedback_enabled
         self.max_retries = max_retries
         self.ux = get_ux_manager()  # Phase 18: Glass Cockpit
+
+        # Phase 19: The Black Box - SessionManager for persistence and telemetry
+        self.session = SessionManager(session_id=session_id)
 
         # Agent Registry - Maps target_agent names to Agent classes
         self.agent_map: Dict[str, type] = {
@@ -113,6 +129,11 @@ class Orchestrator:
         - Execution progress
         - Audit results
 
+        Phase 19: The Black Box logs:
+        - User input to session
+        - Routing decision with cost
+        - Agent actions and outputs
+
         Args:
             user_query: The user's request
             history: Conversation history
@@ -125,6 +146,9 @@ class Orchestrator:
         self.ux.start_task(user_query)
 
         logger.info("🎹 Orchestrator processing request", query=user_query[:80])
+
+        # Phase 19: Log user input to session
+        self.session.log("user", "user", user_query)
 
         # === Phase 1: Hive Routing ===
         self.ux.start_routing()
@@ -140,6 +164,17 @@ class Orchestrator:
             confidence=route.confidence,
             from_cache=route.from_cache,
         )
+
+        # Phase 19: Log routing decision with cost estimate
+        route_info = {
+            "target_agent": route.target_agent,
+            "task_brief": route.task_brief,
+            "confidence": route.confidence,
+            "constraints": route.constraints,
+            "from_cache": route.from_cache,
+        }
+        usage = CostEstimator.estimate(user_query, str(route_info))
+        self.session.log("router", "hive_router", route_info, usage)
 
         logger.info(
             "👉 Routing decision", target_agent=route.target_agent, confidence=route.confidence
@@ -200,6 +235,10 @@ class Orchestrator:
                 result.content, f"{target_agent_class.name.upper()} Output"
             )
 
+            # Phase 19: Log agent output
+            agent_usage = CostEstimator.estimate(task_brief + user_query, result.content)
+            self.session.log("agent_action", target_agent_class.name, result.content, agent_usage)
+
             logger.info(
                 f"✅ {target_agent_class.name.upper()} complete",
                 success=result.success,
@@ -212,6 +251,7 @@ class Orchestrator:
         except Exception as e:
             self.ux.show_error("Agent execution failed", str(e))
             logger.error("❌ Agent execution failed", error=str(e))
+            self.session.log("error", "orchestrator", str(e))
             self.ux.end_task(success=False)
             return f"System Error during execution: {str(e)}"
 
@@ -234,6 +274,7 @@ class Orchestrator:
         4. Repeat until approved or max retries
 
         Phase 18: Visualizes each step with UXManager.
+        Phase 19: Logs each attempt to the Black Box session.
 
         Args:
             user_query: Original user request
@@ -253,6 +294,14 @@ class Orchestrator:
             # Phase 18: Show correction loop entry
             self.ux.show_correction_loop(attempt, self.max_retries)
             logger.info(f"🔄 Execution attempt {attempt}/{self.max_retries}")
+
+            # Phase 19: Log attempt start
+            self.session.log(
+                "agent_action",
+                worker.name,
+                f"Attempt {attempt} started",
+                metadata={"attempt": attempt, "max_retries": self.max_retries},
+            )
 
             # Step 1: Execute worker (Coder)
             try:
@@ -275,9 +324,20 @@ class Orchestrator:
                     result.content, f"{worker.name.upper()} Output (Attempt {attempt})"
                 )
 
+                # Phase 19: Log agent output with cost
+                agent_usage = CostEstimator.estimate(task_brief + user_query, result.content)
+                self.session.log(
+                    "agent_action",
+                    worker.name,
+                    result.content,
+                    agent_usage,
+                    metadata={"attempt": attempt, "success": result.success},
+                )
+
             except Exception as e:
                 self.ux.show_error("Worker execution failed", str(e))
                 logger.error("❌ Worker execution failed", error=str(e))
+                self.session.log("error", worker.name, str(e), metadata={"attempt": attempt})
                 self.ux.end_task(success=False)
                 return f"System Error during execution: {str(e)}"
 
@@ -302,6 +362,7 @@ class Orchestrator:
                 suggestions=audit_result.suggestions,
             )
 
+            # Phase 19: Log audit result
             audit_entry = {
                 "attempt": attempt,
                 "approved": audit_result.approved,
@@ -310,6 +371,14 @@ class Orchestrator:
                 "suggestions": audit_result.suggestions,
             }
             audit_history.append(audit_entry)
+
+            # Log audit to session
+            self.session.log(
+                "agent_action",
+                "reviewer",
+                f"Audit {'approved' if audit_result.approved else 'rejected'}",
+                metadata=audit_entry,
+            )
 
             # Step 3: Check if approved
             if audit_result.approved:

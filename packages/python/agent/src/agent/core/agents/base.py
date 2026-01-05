@@ -32,12 +32,14 @@ from agent.core.vector_store import get_vector_memory, SearchResult
 
 logger = structlog.get_logger(__name__)
 
+
 # UX Event Log Path (Phase 18: Glass Cockpit)
 # Use project-specific cache directory
 def _get_ux_event_log_path() -> Path:
     """Get UX event log path from project cache directory."""
     try:
         from common.mcp_core.gitops import get_project_root
+
         cache_dir = get_project_root() / ".cache"
         cache_dir.mkdir(exist_ok=True)
         return cache_dir / "omni_ux_events.jsonl"

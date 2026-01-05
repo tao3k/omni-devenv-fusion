@@ -5,9 +5,13 @@ Modular Interface: Configuration -> Registration -> Boot -> Run.
 
 This file is a pure Composition Root - it only assembles modules and triggers boot sequence.
 All business logic is delegated to atomic modules.
+
+Phase 19: Supports --resume flag for session resumption.
 """
 
 import os
+import sys
+import argparse
 from mcp.server.fastmcp import FastMCP
 import structlog
 
@@ -76,10 +80,33 @@ _register("skill_manager", register_skill_tools)
 # --- Boot Sequence ---
 def main():
     """Entry point for the orchestrator."""
+    # Phase 19: Parse CLI arguments for session resumption
+    parser = argparse.ArgumentParser(description="Omni Agentic OS - Orchestrator")
+    parser.add_argument("--resume", type=str, help="Resume a specific session ID")
+    parser.add_argument("--new", action="store_true", help="Force new session")
+    parser.add_argument("--list-sessions", action="store_true", help="List all sessions")
+    args = parser.parse_args()
+
+    # Handle session listing
+    if args.list_sessions:
+        from agent.core.session import SessionManager
+
+        sessions = SessionManager.list_sessions()
+        print("\n📼 Available Sessions:")
+        for s in sessions:
+            print(f"  - {s['session_id']} ({s['events']} events)")
+        sys.exit(0)
+
     from rich.console import Console
 
     console = Console(stderr=True)
-    console.print(banner("Orchestrator", "The Modular Brain", "🧠"))
+
+    # Phase 19: Show session info
+    session_id = args.resume
+    if session_id:
+        console.print(f"🔄 Resuming session: [bold]{session_id}[/bold]")
+    else:
+        console.print(banner("Orchestrator", "The Modular Brain", "🧠"))
 
     # 1. Boot Skills (Fixes 'Lobotomized Agent')
     section("Booting Kernel...")
@@ -105,6 +132,66 @@ def main():
     # 4. Run Server
     section("System Online")
     mcp.run()
+
+
+# --- Interactive CLI Mode ---
+async def run_cli_loop():
+    """
+    Interactive CLI loop with session support.
+
+    Usage:
+        python -m agent.main --cli
+        python -m agent.main --cli --resume <session_id>
+    """
+    import asyncio
+    from agent.core.orchestrator import Orchestrator
+    from agent.core.session import SessionManager
+
+    parser = argparse.ArgumentParser(description="Omni Agentic OS - Interactive Mode")
+    parser.add_argument("--resume", type=str, help="Resume a specific session ID")
+    parser.add_argument("--new", action="store_true", help="Force new session")
+    args = parser.parse_args()
+
+    console = Console()
+
+    # Initialize orchestrator with session
+    session_id = args.resume if args.resume else None
+    orchestrator = Orchestrator(session_id=session_id)
+
+    console.print(f"🤖 Omni Online | Session: [bold]{orchestrator.session.session_id}[/bold]")
+
+    if session_id:
+        history = orchestrator.session.get_history()
+        console.print(f"🔄 Context Resumed ({len(history)} messages)")
+
+    history = []
+
+    while True:
+        try:
+            user_input = input("\n🎤 You: ")
+            if user_input.lower() in ["exit", "quit", "q"]:
+                console.print("👋 Goodbye!")
+                console.print(
+                    f"💰 Session cost: ${orchestrator.session.telemetry.total_usage.cost_usd:.4f}"
+                )
+                break
+
+            response = await orchestrator.dispatch(user_input, history)
+            console.print(f"\n🤖 Agent: {response}")
+
+            # Update history
+            history.append({"role": "user", "content": user_input})
+            history.append({"role": "assistant", "content": response})
+
+            # Keep history manageable
+            if len(history) > 20:
+                history = history[-20:]
+
+        except KeyboardInterrupt:
+            console.print("\n👋 Interrupted. Goodbye!")
+            break
+        except Exception as e:
+            console.print(f"❌ Error: {e}")
 
 
 if __name__ == "__main__":

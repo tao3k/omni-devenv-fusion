@@ -916,30 +916,30 @@ def start_background_tasks():
 
 ### Event Flow (Phase 18 + Phase 19.5)
 
-| Phase | Event | Source | Dashboard Shows |
-|-------|-------|--------|-----------------|
-| 1 | `think_start` | CoderAgent | "Thinking..." |
-| 2 | `act_execute` | CoderAgent | "Executing read_file..." |
-| 3 | `observe_result` | CoderAgent | "Result: 150 lines" |
-| 4 | `audit_request` | Orchestrator | "Reviewer auditing..." |
-| 5 | `audit_complete` | Reviewer | "Approved" or "Changes requested" |
+| Phase | Event            | Source       | Dashboard Shows                   |
+| ----- | ---------------- | ------------ | --------------------------------- |
+| 1     | `think_start`    | CoderAgent   | "Thinking..."                     |
+| 2     | `act_execute`    | CoderAgent   | "Executing read_file..."          |
+| 3     | `observe_result` | CoderAgent   | "Result: 150 lines"               |
+| 4     | `audit_request`  | Orchestrator | "Reviewer auditing..."            |
+| 5     | `audit_complete` | Reviewer     | "Approved" or "Changes requested" |
 
 ### Key Files Added/Modified
 
-| File | Change | Phase |
-|------|--------|-------|
-| `agent/core/agents/base.py` | Added UX event emission functions | 19.5 |
-| `agent/core/agents/coder.py` | Integrated UX events in ReAct loop | 19.5 |
-| `agent/tests/test_delegate_mission.py` | Added 12 new tests (45 total) | 19.5 |
+| File                                   | Change                             | Phase |
+| -------------------------------------- | ---------------------------------- | ----- |
+| `agent/core/agents/base.py`            | Added UX event emission functions  | 19.5  |
+| `agent/core/agents/coder.py`           | Integrated UX events in ReAct loop | 19.5  |
+| `agent/tests/test_delegate_mission.py` | Added 12 new tests (45 total)      | 19.5  |
 
 ### Test Matrix
 
-| Category | Tests | Coverage |
-|----------|-------|----------|
-| Core ReAct | 3 | ✅ Loop execution |
-| Tool Parsing | 5 | ✅ Multi-format support |
-| Thread Safety | 6 | ✅ Graceful shutdown |
-| UX Events | 5 | ✅ Glass Cockpit data |
-| Robustness | 3 | ✅ Error handling |
-| Feedback Loop | 4 | ✅ Audit integration |
-| **Total** | **45** | **100%** |
+| Category      | Tests  | Coverage                |
+| ------------- | ------ | ----------------------- |
+| Core ReAct    | 3      | ✅ Loop execution       |
+| Tool Parsing  | 5      | ✅ Multi-format support |
+| Thread Safety | 6      | ✅ Graceful shutdown    |
+| UX Events     | 5      | ✅ Glass Cockpit data   |
+| Robustness    | 3      | ✅ Error handling       |
+| Feedback Loop | 4      | ✅ Audit integration    |
+| **Total**     | **45** | **100%**                |

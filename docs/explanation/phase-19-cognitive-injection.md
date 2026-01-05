@@ -389,11 +389,11 @@ Phase 18's Glass Cockpit now has real data from the ReAct loop.
 
 #### UX Event Types
 
-| Event Type | When Emitted | Payload |
-|------------|--------------|---------|
-| `think_start` | LLM starts reasoning | `{"step": 1, "task": "...", "history_length": 0}` |
-| `act_execute` | Tool execution starts | `{"step": 1, "tool": "read_file", "args": {"path": "..."}}` |
-| `observe_result` | Tool result received | `{"step": 1, "tool": "read_file", "success": true}` |
+| Event Type       | When Emitted          | Payload                                                     |
+| ---------------- | --------------------- | ----------------------------------------------------------- |
+| `think_start`    | LLM starts reasoning  | `{"step": 1, "task": "...", "history_length": 0}`           |
+| `act_execute`    | Tool execution starts | `{"step": 1, "tool": "read_file", "args": {"path": "..."}}` |
+| `observe_result` | Tool result received  | `{"step": 1, "tool": "read_file", "success": true}`         |
 
 #### Event Format
 
@@ -401,28 +401,28 @@ Phase 18's Glass Cockpit now has real data from the ReAct loop.
 {
   "type": "think_start",
   "agent": "coder",
-  "payload": {"step": 1, "task": "Fix the bug", "history_length": 0},
+  "payload": { "step": 1, "task": "Fix the bug", "history_length": 0 },
   "timestamp": 1704384000.123
 }
 ```
 
 #### Test Coverage
 
-| Test | Description |
-|------|-------------|
-| `test_emit_ux_event_writes_to_file` | Events written to `.cache/omni_ux_events.jsonl` |
-| `test_emit_ux_event_format` | Event has required fields (type, agent, payload, timestamp) |
-| `test_react_loop_emits_think_start_event` | ReAct loop emits `think_start` |
-| `test_react_loop_emits_act_execute_event` | ReAct loop emits `act_execute` |
-| `test_react_loop_emits_observe_result_event` | ReAct loop emits `observe_result` |
+| Test                                         | Description                                                 |
+| -------------------------------------------- | ----------------------------------------------------------- |
+| `test_emit_ux_event_writes_to_file`          | Events written to `.cache/omni_ux_events.jsonl`             |
+| `test_emit_ux_event_format`                  | Event has required fields (type, agent, payload, timestamp) |
+| `test_react_loop_emits_think_start_event`    | ReAct loop emits `think_start`                              |
+| `test_react_loop_emits_act_execute_event`    | ReAct loop emits `act_execute`                              |
+| `test_react_loop_emits_observe_result_event` | ReAct loop emits `observe_result`                           |
 
 ### 2. Robustness: ReAct Loop Error Handling
 
-| Test | Scenario | Expected Behavior |
-|------|----------|-------------------|
-| `test_stuck_loop_detection` | LLM calls same tool repeatedly | Stops at `max_steps` with low confidence |
-| `test_tool_exception_handling` | Tool throws exception | Caught and returned as error result |
-| `test_unavailable_tool_graceful_handling` | Tool not in registry | Error message to LLM, continue loop |
+| Test                                      | Scenario                       | Expected Behavior                        |
+| ----------------------------------------- | ------------------------------ | ---------------------------------------- |
+| `test_stuck_loop_detection`               | LLM calls same tool repeatedly | Stops at `max_steps` with low confidence |
+| `test_tool_exception_handling`            | Tool throws exception          | Caught and returned as error result      |
+| `test_unavailable_tool_graceful_handling` | Tool not in registry           | Error message to LLM, continue loop      |
 
 ### 3. Feedback Loop: Coder → Reviewer → Coder
 
@@ -449,23 +449,452 @@ Architecture support for Phase 15's Audit System:
 
 #### Test Coverage
 
-| Test | Description |
-|------|-------------|
-| `test_coder_review_cycle_exists` | `_execute_with_feedback_loop` method exists |
-| `test_reviewer_agent_has_audit_method` | ReviewerAgent has `audit()` method |
-| `test_orchestrator_has_tools_for_reviewer` | Reviewer tools available |
-| `test_feedback_loop_architecture_diagram` | Architecture supports cycle |
+| Test                                       | Description                                 |
+| ------------------------------------------ | ------------------------------------------- |
+| `test_coder_review_cycle_exists`           | `_execute_with_feedback_loop` method exists |
+| `test_reviewer_agent_has_audit_method`     | ReviewerAgent has `audit()` method          |
+| `test_orchestrator_has_tools_for_reviewer` | Reviewer tools available                    |
+| `test_feedback_loop_architecture_diagram`  | Architecture supports cycle                 |
 
 ### Test Results Summary
 
-| Category | Tests | Status |
-|----------|-------|--------|
-| Core ReAct Loop | 3 | ✅ Pass |
-| Tool Call Parsing | 5 | ✅ Pass |
-| Thread Safety | 6 | ✅ Pass |
-| Dependency Injection | 4 | ✅ Pass |
-| State Persistence | 2 | ✅ Pass |
-| UX Event Emission | 5 | ✅ Pass |
-| ReAct Robustness | 3 | ✅ Pass |
-| Feedback Loop | 4 | ✅ Pass |
-| **Total** | **45** | **✅ All Pass** |
+| Category             | Tests  | Status          |
+| -------------------- | ------ | --------------- |
+| Core ReAct Loop      | 3      | ✅ Pass         |
+| Tool Call Parsing    | 5      | ✅ Pass         |
+| Thread Safety        | 6      | ✅ Pass         |
+| Dependency Injection | 4      | ✅ Pass         |
+| State Persistence    | 2      | ✅ Pass         |
+| UX Event Emission    | 5      | ✅ Pass         |
+| ReAct Robustness     | 3      | ✅ Pass         |
+| Feedback Loop        | 4      | ✅ Pass         |
+| **Total**            | **45** | **✅ All Pass** |
+
+---
+
+## Phase 19.6: The Black Box
+
+> **Status**: Complete (30 new tests)
+> **Philosophy**: "Flight data recorder for traceability and resumability."
+
+### 1. Telemetry: Token Usage and Cost Estimation
+
+The Black Box tracks token consumption and estimates costs in real-time.
+
+```python
+from agent.core.telemetry import CostEstimator, TokenUsage
+
+# Estimate cost for a call
+usage = CostEstimator.estimate(
+    text_input="Hello, world!",
+    text_output="Hi there!",
+    model="claude-3-5-sonnet"
+)
+print(f"Cost: ${usage.cost_usd:.4f}")  # Cost: $0.0001
+```
+
+#### CostEstimator Pricing
+
+| Model             | Input ($/1M) | Output ($/1M) |
+| ----------------- | ------------ | ------------- |
+| Claude 3.5 Sonnet | $3.00        | $15.00        |
+| Claude 3 Opus     | $15.00       | $75.00        |
+| GPT-4o            | $5.00        | $15.00        |
+
+#### SessionTelemetry
+
+Accumulates usage across the entire session:
+
+```python
+telemetry = SessionTelemetry()
+telemetry.add_usage(TokenUsage(cost_usd=0.01))
+telemetry.add_usage(TokenUsage(cost_usd=0.02))
+
+print(telemetry.get_cost_rate())  # "$0.90/min"
+print(telemetry.get_summary())    # {total_cost_usd: 0.03, ...}
+```
+
+### 2. Session Manager: The Recorder
+
+The SessionManager persists all events to JSONL for traceability.
+
+```python
+from agent.core.session import SessionManager
+
+# Start new session
+session = SessionManager()
+session.log("user", "user", "Fix the threading bug")
+session.log("agent_action", "coder", "Fixed by adding global declaration")
+
+# Resume from disk
+session2 = SessionManager(session_id="abc12345")  # Auto-loads history
+```
+
+#### Session Event Types
+
+| Type           | Source         | Description                     |
+| -------------- | -------------- | ------------------------------- |
+| `user`         | user           | User input                      |
+| `router`       | hive_router    | Routing decision with reasoning |
+| `agent_action` | coder/reviewer | Agent output and audit results  |
+| `tool`         | filesystem/git | Tool execution                  |
+| `error`        | orchestrator   | Error events                    |
+
+#### Session File Format
+
+```jsonl
+{"id":"uuid","timestamp":1704384000.123,"type":"user","source":"user","content":"Fix the bug"}
+{"id":"uuid","timestamp":1704384000.456,"type":"router","source":"hive_router","content":{"target_agent":"coder"},"usage":{"input_tokens":100,"output_tokens":50,"cost_usd":0.001}}
+{"id":"uuid","timestamp":1704384000.789,"type":"agent_action","source":"coder","content":"Fixed the bug by..."}
+```
+
+### 3. Orchestrator Integration
+
+The Orchestrator now integrates SessionManager at key decision points:
+
+```python
+class Orchestrator:
+    def __init__(self, session_id=None):
+        self.session = SessionManager(session_id=session_id)
+
+    async def dispatch(self, user_query):
+        # Log user input
+        self.session.log("user", "user", user_query)
+
+        # Route and log decision
+        route = await self.router.route_to_agent(user_query)
+        self.session.log("router", "hive_router", route_info, usage)
+
+        # Execute and log result
+        result = await worker.run(...)
+        self.session.log("agent_action", worker.name, result.content)
+```
+
+### 4. CLI Commands
+
+```bash
+# List all sessions
+orchestrator --list-sessions
+
+# Resume a session
+orchestrator --resume abc12345
+
+# New session (default)
+orchestrator --new
+```
+
+### 5. Storage Location
+
+All session data is stored in the project cache:
+
+```
+.cache/agent/sessions/
+├── {session_id}.jsonl    # Session events
+├── latest -> {session_id}.jsonl  # Symlink to latest
+└── ...                   # Historical sessions
+```
+
+### 6. Test Coverage
+
+| Category         | Tests  | Description                          |
+| ---------------- | ------ | ------------------------------------ |
+| TokenUsage       | 3      | Model creation and arithmetic        |
+| CostEstimator    | 6      | Token counting and cost calculation  |
+| SessionTelemetry | 2      | Session-wide accumulation            |
+| SessionEvent     | 3      | Event model and serialization        |
+| SessionManager   | 12     | Logging, persistence, resumption     |
+| Class Methods    | 2      | list_sessions, get_latest_session_id |
+| Integration      | 3      | Orchestrator session integration     |
+| CLI              | 2      | Argument parsing                     |
+| **Total**        | **30** | **✅ All Pass**                      |
+
+### 7. Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Phase 19.6: The Black Box                        │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   User Input                                                         │
+│       │                                                              │
+│       ▼                                                              │
+│   ┌──────────────────────────────────────────────────────────────┐  │
+│   │                    Orchestrator.dispatch()                    │  │
+│   │                                                              │  │
+│   │   1. Log user input to SessionManager                        │  │
+│   │   2. Route via HiveRouter                                    │  │
+│   │   3. Log routing decision (with cost estimate)               │  │
+│   │   4. Execute agent (Coder/Reviewer)                          │  │
+│   │   5. Log agent output (with cost estimate)                   │  │
+│   │   6. Return result to user                                   │  │
+│   │                                                              │  │
+│   └──────────────────────────────────────────────────────────────┘  │
+│       │                                                              │
+│       │ SessionManager                                              │
+│       ▼                                                              │
+│   ┌──────────────────────────────────────────────────────────────┐  │
+│   │                    Session Events                             │  │
+│   │                                                              │  │
+│   │   • user → agent_action (conversation history)               │  │
+│   │   • router → agent_action (control flow)                     │  │
+│   │   • audit → retry (feedback loop)                            │  │
+│   │                                                              │  │
+│   └──────────────────────────────────────────────────────────────┘  │
+│       │                                                              │
+│       ▼                                                              │
+│   ┌──────────────────────────────────────────────────────────────┐  │
+│   │                 .cache/agent/sessions/                        │  │
+│   │                 {session_id}.jsonl                            │  │
+│   │                                                              │  │
+│   │   {"type":"user","source":"user","content":"Fix bug"}        │  │
+│   │   {"type":"router","source":"hive_router",...}               │  │
+│   │   {"type":"agent_action","source":"coder",...}               │  │
+│   │                                                              │  │
+│   └──────────────────────────────────────────────────────────────┬──┘  │
+│                                                          │          │
+│   Resumption:                                            ▼          │
+│   orchestrator --resume <id>                    ┌──────────────┐   │
+│                                              │   Telemetry   │   │
+│                                              │   $0.05 spent │   │
+│                                              └──────────────┘   │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 8. Why Not Just Use Aider?
+
+| Layer              | Responsibility               | Analogy                |
+| ------------------ | ---------------------------- | ---------------------- |
+| **Aider**          | Conversation recording (CVR) | Cockpit Voice Recorder |
+| **Omni Black Box** | State snapshots (FDR)        | Flight Data Recorder   |
+
+Aider records what was _said_. The Black Box records:
+
+- **Routing decisions** (why coder instead of reviewer?)
+- **Control flow** (which iteration of the feedback loop?)
+- **Context snapshots** (what did the reviewer see?)
+- **Cost accumulation** (how much did this cost?)
+
+### 9. Files Changed
+
+- `agent/core/telemetry.py` - New: TokenUsage, CostEstimator, SessionTelemetry
+- `agent/core/session.py` - New: SessionManager, SessionEvent, SessionState
+- `agent/core/orchestrator.py` - Added SessionManager integration
+- `agent/main.py` - Added `--resume`, `--new`, `--list-sessions` CLI args
+- `agent/tests/test_phase19_blackbox.py` - 30 tests
+
+### 10. Test Results
+
+| Suite                   | Tests  | Status          |
+| ----------------------- | ------ | --------------- |
+| Phase 19.5 (ReAct + UX) | 45     | ✅ Pass         |
+| Phase 19.6 (Black Box)  | 30     | ✅ Pass         |
+| **Total**               | **75** | **✅ All Pass** |
+
+---
+
+## Phase 19.7: Claude Code Symbiosis
+
+> **Status**: Complete (17 new tests)
+> **Philosophy**: "Omni as the strategic brain, Claude Code as the tactical hand."
+
+### Strategic Shift
+
+Instead of building a replacement for Claude Code, Omni now **enhances** it:
+
+| Layer | Responsibility | Component |
+|-------|---------------|-----------|
+| **Strategic (Omni)** | Context injection, Routing, Memory, Audit | RAG, MCP Server, Session |
+| **Tactical (Claude Code)** | Terminal, Git, Diff, Test Execution | Official CLI |
+
+### 1. ClaudeCodeAdapter - The Wrapper
+
+Omni wraps Claude CLI instead of replacing it:
+
+```python
+from agent.core.adapters.claude_cli import ClaudeCodeAdapter
+
+adapter = ClaudeCodeAdapter(session=session_manager)
+result = await adapter.run_mission(
+    mission_brief="Fix the threading bug",
+    relevant_files=["agent/core/bootstrap.py"],
+    relevant_docs=["docs/threading-guide.md"],
+)
+```
+
+**Features:**
+- Dynamic context injection via temporary files
+- Real-time output streaming
+- Session tracking (Black Box)
+- Cost estimation
+
+### 2. ContextInjector - Dynamic CLAUDE.md
+
+Generates project-specific context for Claude Code:
+
+```python
+context = injector.generate_context_file(
+    mission_brief="Add authentication",
+    relevant_files=["src/auth/models.py"],
+    relevant_docs=["docs/security/auth.md"],
+)
+# Output:
+# # Mission Context
+# **Task**: Add authentication
+# **Generated**: 2026-01-04T10:00:00
+#
+# ## Relevant Files
+# 1. `src/auth/models.py`
+#
+# ## Documentation References
+# - docs/security/auth.md
+```
+
+### 3. Omni MCP Server - Skills as Services
+
+Exposes Omni capabilities to any MCP client:
+
+```python
+# Tools available to Claude Code, Cursor, Windsurf:
+- omni_search_memory()     # Query Phase 16 RAG
+- omni_ingest_knowledge()  # Store new knowledge
+- omni_request_review()    # Request code review
+- omni_get_session_summary() # Get Black Box status
+- omni_list_sessions()     # List historical sessions
+- omni_generate_context()  # Generate CLAUDE.md
+```
+
+### 4. Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Omni-Claude Symbiosis                            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   ┌─────────────────────────────────────────────────────────────┐   │
+│   │                    Omni (Strategic Layer)                   │   │
+│   │                                                             │   │
+│   │   ┌─────────────────┐     ┌─────────────────────────────┐  │   │
+│   │   │ ContextInjector │────►│ Dynamic CLAUDE.md Generator │  │   │
+│   │   └─────────────────┘     └─────────────────────────────┘  │   │
+│   │           │                       │                          │   │
+│   │           ▼                       ▼                          │   │
+│   │   ┌─────────────────────────────────────────────────────┐  │   │
+│   │   │              ClaudeCodeAdapter                      │  │   │
+│   │   │   - Wraps `claude` CLI                              │  │   │
+│   │   │   - Injects context file                            │  │   │
+│   │   │   - Tracks session (Black Box)                      │  │   │
+│   │   │   - Streams output to TUI                           │  │   │
+│   │   └─────────────────────────────────────────────────────┘  │   │
+│   │           │                       │                          │   │
+│   └───────────┼───────────────────────┼──────────────────────────┘   │
+│               │                       │                              │
+│               ▼                       ▼                              │
+│   ┌─────────────────────────┐  ┌─────────────────────────────────┐  │
+│   │ Claude Code CLI         │  │ MCP Clients (Cursor/Windsurf)   │  │
+│   │ (Tactical Execution)    │  │                                 │  │
+│   │ - Terminal              │  │  - omni_search_memory()         │  │
+│   │ - Git/Diff              │  │  - omni_request_review()        │  │
+│   │ - Test Runner           │  │  - omni_ingest_knowledge()      │  │
+│   └─────────────────────────┘  └─────────────────────────────────┘  │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 5. Why This Architecture?
+
+| Old Approach | New Approach |
+|-------------|--------------|
+| Build a new Agent from scratch | Wrap existing Claude Code |
+| Reimplement Git/Diff/Test tools | Let Claude Code handle them |
+| Single context window | Dynamic context injection |
+| Proprietary execution | MCP protocol integration |
+
+**Benefits:**
+- Best-in-class terminal experience (Claude Code)
+- Best-in-class code editing (Claude Code)
+- Best-in-class project memory (Omni RAG)
+- Best-in-class auditing (Omni Reviewer)
+
+### 6. Files Changed
+
+| File | Changes |
+|------|---------|
+| `agent/core/adapters/claude_cli.py` | New: ClaudeCodeAdapter, ContextInjector |
+| `agent/mcp_server.py` | New: FastMCP server with Omni tools |
+| `agent/tests/test_phase19_claude_symbiosis.py` | New: 17 tests |
+| `agent/main.py` | Added `--list-sessions` CLI arg |
+| `agent/core/session.py` | Enhanced session tracking |
+| `agent/core/telemetry.py` | Enhanced cost estimation |
+
+### 7. Usage
+
+```bash
+# Start MCP Server (for Claude Desktop/Cursor)
+python -m agent.mcp_server --stdio
+
+# List sessions
+orchestrator --list-sessions
+
+# Resume session
+orchestrator --resume abc12345
+```
+
+### 8. Test Results
+
+| Suite | Tests | Status |
+|-------|-------|--------|
+| Phase 19.5 (ReAct + UX) | 45 | ✅ Pass |
+| Phase 19.6 (Black Box) | 30 | ✅ Pass |
+| Phase 19.7 (Claude Symbiosis) | 17 | ✅ Pass |
+| **Total** | **92** | **✅ All Pass** |
+
+### 9. MCP Tool Reference
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `omni_search_memory` | Query vector store | `query: str, n_results: int` |
+| `omni_ingest_knowledge` | Store documents | `documents: list, ids: list` |
+| `omni_request_review` | Code review | `code: str, language: str, focus_areas: list` |
+| `omni_get_session_summary` | Session status | None |
+| `omni_list_sessions` | List sessions | None |
+| `omni_generate_context` | Generate CLAUDE.md | `mission: str, relevant_files: list` |
+
+### 10. Configuration (settings.yaml)
+
+Context compression and Post-Mortem audit can be configured in `agent/settings.yaml`:
+
+```yaml
+# Context Compression (Phase 19.7)
+context_compression:
+  # Enable/disable context compression globally
+  enabled: true
+
+  # Maximum context tokens before compression is triggered
+  max_context_tokens: 4000
+
+  # Maximum file size (KB) before truncation
+  max_file_size_kb: 50
+
+  # Compression method: "llm" (LLM summary) or "truncate"
+  method: "llm"
+
+# Post-Mortem Audit (Phase 19.7)
+post_mortem:
+  # Enable/disable Post-Mortem audit after Claude Code execution
+  enabled: true
+
+  # Confidence threshold for auto-approval
+  confidence_threshold: 0.8
+```
+
+#### Configuration Options
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `context_compression.enabled` | `true` | Enable/disable LLM-based context compression |
+| `context_compression.max_context_tokens` | `4000` | Token threshold before compression |
+| `context_compression.max_file_size_kb` | `50` | Max file size in KB before truncation |
+| `context_compression.method` | `"llm"` | `"llm"` for LLM summary, `"truncate"` for simple cut |
+| `post_mortem.enabled` | `true` | Enable/disable automatic review after execution |
+| `post_mortem.confidence_threshold` | `0.8` | Min confidence for auto-approval |
