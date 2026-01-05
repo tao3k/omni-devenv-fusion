@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 # Project root detection using GitOps
-from common.mcp_core.gitops import get_project_root
+from common.gitops import get_project_root
 
 # YAML support (try PyYAML first, fallback to simple parsing)
 try:

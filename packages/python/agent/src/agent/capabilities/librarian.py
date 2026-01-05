@@ -23,7 +23,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 # In uv workspace, 'common' package is available directly
-from common.mcp_core.gitops import get_project_root
+from common.gitops import get_project_root
 
 from mcp.server.fastmcp import FastMCP
 import structlog

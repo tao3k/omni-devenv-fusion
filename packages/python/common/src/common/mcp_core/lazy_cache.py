@@ -46,7 +46,7 @@ from typing import Any, Generic, TypeVar, Callable, Optional
 T = TypeVar("T")
 
 # Project root detection using GitOps
-from common.mcp_core.gitops import get_project_root
+from common.gitops import get_project_root
 
 _PROJECT_ROOT: Path | None = None
 

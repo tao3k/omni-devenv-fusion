@@ -66,9 +66,9 @@
         "run"
         "python"
         "-m"
-        "agent.main"
+        "agent.cli"
+        "mcp"
       ];
-
       env = {
         OMNI_UX_MODE = "headless";
       };

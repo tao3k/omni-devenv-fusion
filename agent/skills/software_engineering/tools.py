@@ -10,7 +10,7 @@ import os
 import re
 from pathlib import Path
 from typing import List, Dict
-from common.mcp_core.gitops import get_project_root
+from common.gitops import get_project_root
 import structlog
 
 logger = structlog.get_logger(__name__)

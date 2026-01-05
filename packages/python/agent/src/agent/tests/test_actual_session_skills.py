@@ -46,7 +46,7 @@ except ImportError:
 
 # Import settings utilities
 from common.mcp_core.settings import get_setting, get_config_path
-from common.mcp_core.gitops import get_project_root
+from common.gitops import get_project_root
 
 
 # =============================================================================

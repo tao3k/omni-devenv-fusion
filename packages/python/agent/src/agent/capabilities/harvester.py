@@ -29,7 +29,7 @@ from typing import List, Optional
 import structlog
 
 from agent.core.schema import HarvestedInsight, KnowledgeCategory
-from common.mcp_core.gitops import get_project_root
+from common.gitops import get_project_root
 from common.mcp_core.api_key import get_anthropic_api_key
 from agent.core.vector_store import get_vector_memory
 

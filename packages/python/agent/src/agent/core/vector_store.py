@@ -33,7 +33,7 @@ from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 
 # In uv workspace, 'common' package is available directly
-from common.mcp_core.gitops import get_project_root
+from common.gitops import get_project_root
 
 import chromadb
 from chromadb.config import Settings
@@ -298,7 +298,7 @@ async def bootstrap_knowledge_base() -> None:
     - Architecture decisions
     - Preloaded skill prompts.md (git, knowledge, writer, etc.)
     """
-    from common.mcp_core.gitops import get_project_root
+    from common.gitops import get_project_root
 
     project_root = get_project_root()
 

@@ -161,7 +161,7 @@ def _get_project_name() -> str:
 
 def _load_scopes() -> List[str]:
     """Load valid git scopes from cog.toml."""
-    from common.mcp_core.gitops import get_project_root
+    from common.gitops import get_project_root
     from common.mcp_core.settings import get_setting
 
     try:

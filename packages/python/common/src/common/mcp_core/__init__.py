@@ -11,6 +11,9 @@ Modules:
 - project_context: Project-specific coding context framework
 - instructions: Eager-loaded project instructions (agent/instructions/)
 
+NOTE: Project root detection has moved to `common.gitops` for faster CLI imports.
+      Use `from common.gitops import get_project_root` instead of `from mcp_core import get_project_root`
+
 Usage:
     from mcp_core.execution import SafeExecutor
     from mcp_core.memory import ProjectMemory
@@ -22,6 +25,9 @@ Usage:
 
     # Get all project instructions (eager loaded at session start)
     instructions = get_all_instructions_merged()
+
+    # For project root detection (faster):
+    from common.gitops import get_project_root
 """
 
 __version__ = "1.2.0"
@@ -29,7 +35,6 @@ __version__ = "1.2.0"
 from .execution import SafeExecutor, check_dangerous_patterns
 from .memory import ProjectMemory
 from .inference import InferenceClient, PERSONAS, build_persona_prompt, _load_api_key_from_config
-from .gitops import get_project_root
 from .utils import setup_logging, is_safe_path, log_decision, run_subprocess
 from .lazy_cache import LazyCache, FileCache, MarkdownCache, ConfigCache, CompositeCache
 from .project_context import (
@@ -61,7 +66,6 @@ __all__ = [
     "InferenceClient",
     "PERSONAS",
     "build_persona_prompt",
-    "get_project_root",
     "setup_logging",
     "is_safe_path",
     "log_decision",

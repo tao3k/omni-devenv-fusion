@@ -15,7 +15,7 @@ import structlog
 from mcp.server.fastmcp import FastMCP
 
 from agent.core.schema import SkillManifest
-from common.mcp_core.gitops import get_project_root
+from common.gitops import get_project_root
 from common.mcp_core.settings import get_setting
 
 logger = structlog.get_logger(__name__)

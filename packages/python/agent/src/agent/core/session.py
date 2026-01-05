@@ -40,7 +40,7 @@ import structlog
 
 from pydantic import BaseModel, Field
 
-from common.mcp_core.gitops import get_project_root
+from common.gitops import get_project_root
 from agent.core.telemetry import TokenUsage, SessionTelemetry
 
 logger = structlog.get_logger()

@@ -14,7 +14,7 @@ import structlog
 
 # Reuse existing Settings class from mcp_core
 from common.mcp_core.settings import get_setting
-from common.mcp_core.gitops import get_project_root
+from common.gitops import get_project_root
 
 logger = structlog.get_logger(__name__)
 

@@ -53,7 +53,7 @@ def _get_memory_path() -> Path:
     Falls back to: {git_toplevel}/.cache/{project}/.memory/
     """
     from common.mcp_core.settings import get_setting
-    from common.mcp_core.gitops import get_project_root
+    from common.gitops import get_project_root
 
     custom_path = get_setting("memory.path", "")
     if custom_path:

@@ -26,7 +26,7 @@ class TestSkillArchitecture:
 
     def test_common_mcp_core_imports(self):
         """common.mcp_core modules should import successfully."""
-        from common.mcp_core.gitops import get_project_root
+        from common.gitops import get_project_root
 
         root = get_project_root()
         assert root is not None

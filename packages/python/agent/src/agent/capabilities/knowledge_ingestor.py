@@ -30,7 +30,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
-from common.mcp_core.gitops import get_project_root
+from common.gitops import get_project_root
 from common.mcp_core.rich_utils import console, panel, success, error, warning, info, section
 
 from agent.core.vector_store import get_vector_memory

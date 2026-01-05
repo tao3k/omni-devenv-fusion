@@ -187,7 +187,7 @@ def _get_spec_path_from_name(name: str) -> Optional[str]:
     from pathlib import Path
 
     # GitOps - Get project root using single source of truth
-    from common.mcp_core.gitops import get_project_root
+    from common.gitops import get_project_root
     from common.mcp_core.reference_library import get_reference_path
 
     project_root = get_project_root()
@@ -371,7 +371,7 @@ def heuristic_complexity(files: List[str], diff: str) -> str:
 def _load_spec_template() -> str:
     """Load the Spec template (from references.yaml)."""
     from common.mcp_core.reference_library import get_reference_path
-    from common.mcp_core.gitops import get_project_root
+    from common.gitops import get_project_root
 
     template_path = get_project_root() / get_reference_path("specs.template")
     if template_path.exists():
@@ -382,7 +382,7 @@ def _load_spec_template() -> str:
 def _save_spec(title: str, content: str) -> str:
     """Save a spec file (to specs.dir from references.yaml)."""
     from common.mcp_core.reference_library import get_reference_path
-    from common.mcp_core.gitops import get_project_root
+    from common.gitops import get_project_root
 
     filename = title.lower().replace(" ", "_").replace("/", "-") + ".md"
     specs_dir = get_project_root() / get_reference_path("specs.dir")
@@ -399,7 +399,7 @@ def _scan_standards() -> str:
     Path resolved from references.yaml.
     """
     from common.mcp_core.reference_library import get_reference_path
-    from common.mcp_core.gitops import get_project_root
+    from common.gitops import get_project_root
 
     standards_dir = get_project_root() / get_reference_path("standards.dir")
     if not standards_dir.exists():

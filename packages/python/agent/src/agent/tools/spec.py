@@ -16,7 +16,7 @@ from typing import Any, Dict, Optional
 
 from mcp.server.fastmcp import FastMCP
 from common.mcp_core import log_decision
-from common.mcp_core.gitops import get_project_root
+from common.gitops import get_project_root
 import structlog
 
 logger = structlog.get_logger(__name__)

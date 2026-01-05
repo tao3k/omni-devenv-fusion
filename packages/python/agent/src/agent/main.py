@@ -1,203 +1,85 @@
+#!/usr/bin/env python3
 """
-src/agent/main.py
-The Brain of the Omni-DevEnv.
-Modular Interface: Configuration -> Registration -> Boot -> Run.
+agent/main.py - Phase 25 One Tool CLI
 
-This file is a pure Composition Root - it only assembles modules and triggers boot sequence.
-All business logic is delegated to atomic modules.
+A CLI wrapper for calling @omni commands directly from terminal.
+Works with Claude Code CLI and any other terminal.
 
-Phase 19: Supports --resume flag for session resumption.
+Usage:
+    python -m agent.main git.status
+    python -m agent.main "git.log" '{"n": 5}'
+    python -m agent.main help
+
+As installed script:
+    omni git.status
+    omni git.log '{"n": 5}'
+    omni help
 """
 
-# TODO: Fix critical bug - see ticket OSD-1234
-
-import os
 import sys
+import json
 import argparse
-from mcp.server.fastmcp import FastMCP
-import structlog
-
-# 1. Core Infrastructure
-from common.mcp_core import setup_logging, log_decision
-from common.mcp_core.rich_utils import banner, section, tool_registered, tool_failed
-from agent.core.context_loader import load_system_context
-from agent.core.bootstrap import boot_core_skills, start_background_tasks
-
-# 2. Capabilities (Domain Logic)
-from agent.capabilities.product_owner import register_product_owner_tools
-from agent.capabilities.librarian import register_librarian_tools
-from agent.capabilities.harvester import register_harvester_tools
-from agent.capabilities.skill_manager import register_skill_tools
-
-# 3. Core Tools (Operational Logic)
-from agent.tools.context import register_context_tools
-from agent.tools.spec import register_spec_tools
-from agent.tools.router import register_router_tools
-from agent.tools.status import register_status_tool
-from agent.tools.orchestrator import register_orchestrator_tools
-
-# --- Initialization ---
-# Enable headless mode for UXManager when running as MCP Server
-os.environ["OMNI_UX_MODE"] = "headless"
-
-# Disable tokenizers parallelism to avoid fork deadlock warnings
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
-setup_logging()
-logger = structlog.get_logger(__name__)
-
-# Load System Prompt (from settings.yaml via context_loader)
-system_prompt = load_system_context()
-
-# Initialize Server
-mcp = FastMCP("omni-orchestrator", instructions=system_prompt)
+from pathlib import Path
 
 
-# --- Helper ---
-def _register(module_name: str, register_func):
-    """Standardized registration interface."""
-    try:
-        register_func(mcp)
-        tool_registered(module_name, 0)
-    except Exception as e:
-        tool_failed(module_name, str(e))
-        logger.error(f"Failed to register {module_name}", error=str(e))
-
-
-# --- Module Registration (The Interface) ---
-
-# Core
-_register("context", register_context_tools)
-_register("spec", register_spec_tools)
-_register("router", register_router_tools)
-_register("status", register_status_tool)
-_register("orchestrator", register_orchestrator_tools)
-
-# Governance & Domain
-_register("product_owner", register_product_owner_tools)
-_register("librarian", register_librarian_tools)
-
-# Evolution
-_register("harvester", register_harvester_tools)
-_register("skill_manager", register_skill_tools)
-
-
-# --- Boot Sequence ---
 def main():
-    """Entry point for the orchestrator."""
-    # Parse CLI arguments for session resumption
-    parser = argparse.ArgumentParser(description="Omni Agentic OS - Orchestrator")
-    parser.add_argument("--resume", type=str, help="Resume a specific session ID")
-    parser.add_argument("--new", action="store_true", help="Force new session")
-    parser.add_argument("--list-sessions", action="store_true", help="List all sessions")
+    parser = argparse.ArgumentParser(
+        description="Phase 25 One Tool CLI - Execute @omni commands",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+    python -m agent.main git.status                    # View git status
+    python -m agent.main "git.log" '{"n": 5}'          # View 5 commits
+    python -m agent.main help                           # Show all skills
+    python -m agent.main git                            # Show git commands
+
+From Claude Code CLI:
+    You: Run `python -m agent.main git.status` to check status
+        """,
+    )
+    parser.add_argument(
+        "command", nargs="?", default="help", help="Command (e.g., git.status, help)"
+    )
+    parser.add_argument(
+        "args",
+        nargs="?",
+        default="{}",
+        help="JSON arguments (e.g., '{\"n\": 5}')",
+    )
+    parser.add_argument(
+        "--format",
+        "-f",
+        choices=["text", "markdown", "json"],
+        default="text",
+        help="Output format (default: text)",
+    )
 
     args = parser.parse_args()
 
-    # Handle session listing
-    if args.list_sessions:
-        from agent.core.session import SessionManager
+    # Parse arguments
+    try:
+        if args.args == "{}":
+            parsed_args = {}
+        else:
+            parsed_args = json.loads(args.args)
+    except json.JSONDecodeError as e:
+        print(f"❌ Invalid JSON arguments: {e}")
+        sys.exit(1)
 
-        sessions = SessionManager.list_sessions()
-        print("\n📼 Available Sessions:")
-        for s in sessions:
-            print(f"  - {s['session_id']} ({s['events']} events)")
-        sys.exit(0)
+    # Import and call omni
+    try:
+        from agent.mcp_server import omni
 
-    from rich.console import Console
+        result = omni(args.command, parsed_args)
+        print(result)
 
-    console = Console(stderr=True)
-
-    # Phase 19: Show session info
-    session_id = args.resume
-    if session_id:
-        console.print(f"🔄 Resuming session: [bold]{session_id}[/bold]")
-    else:
-        console.print(banner("Orchestrator", "The Modular Brain", "🧠"))
-
-    # 1. Boot Skills (Fixes 'Lobotomized Agent')
-    section("Booting Kernel...")
-    boot_core_skills(mcp)
-
-    # 2. Register Dynamic Context Resource
-    # This exposes all loaded skill prompts.md as an MCP Resource
-    section("Registering Dynamic Context...")
-    from agent.core.skill_registry import get_skill_registry
-
-    @mcp.resource("omni://system/active_context")
-    def get_active_context() -> str:
-        """
-        Returns the dynamic system prompts and routing rules for all active skills.
-        READ THIS at the start of the session to understand your capabilities.
-        """
-        registry = get_skill_registry()
-        return registry.get_combined_context()
-
-    # 3. Start Background Tasks
-    start_background_tasks()
-
-    # 4. Run Server
-    section("System Online")
-    mcp.run()
-
-
-# --- Interactive CLI Mode ---
-async def run_cli_loop():
-    """
-    Interactive CLI loop with session support.
-
-    Usage:
-        python -m agent.main --cli
-        python -m agent.main --cli --resume <session_id>
-    """
-    import asyncio
-    from agent.core.orchestrator import Orchestrator
-    from agent.core.session import SessionManager
-
-    parser = argparse.ArgumentParser(description="Omni Agentic OS - Interactive Mode")
-    parser.add_argument("--resume", type=str, help="Resume a specific session ID")
-    parser.add_argument("--new", action="store_true", help="Force new session")
-    args = parser.parse_args()
-
-    console = Console()
-
-    # Initialize orchestrator with session
-    session_id = args.resume if args.resume else None
-    orchestrator = Orchestrator(session_id=session_id)
-
-    console.print(f"🤖 Omni Online | Session: [bold]{orchestrator.session.session_id}[/bold]")
-
-    if session_id:
-        history = orchestrator.session.get_history()
-        console.print(f"🔄 Context Resumed ({len(history)} messages)")
-
-    history = []
-
-    while True:
-        try:
-            user_input = input("\n🎤 You: ")
-            if user_input.lower() in ["exit", "quit", "q"]:
-                console.print("👋 Goodbye!")
-                console.print(
-                    f"💰 Session cost: ${orchestrator.session.telemetry.total_usage.cost_usd:.4f}"
-                )
-                break
-
-            response = await orchestrator.dispatch(user_input, history)
-            console.print(f"\n🤖 Agent: {response}")
-
-            # Update history
-            history.append({"role": "user", "content": user_input})
-            history.append({"role": "assistant", "content": response})
-
-            # Keep history manageable
-            if len(history) > 20:
-                history = history[-20:]
-
-        except KeyboardInterrupt:
-            console.print("\n👋 Interrupted. Goodbye!")
-            break
-        except Exception as e:
-            console.print(f"❌ Error: {e}")
+    except ImportError as e:
+        print(f"❌ Import error: {e}")
+        print("Make sure you're running from the project root.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

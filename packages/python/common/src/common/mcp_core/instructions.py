@@ -23,7 +23,7 @@ from pathlib import Path
 import threading
 
 # Project root detection using GitOps
-from common.mcp_core.gitops import get_project_root, get_instructions_dir
+from common.gitops import get_project_root, get_instructions_dir
 
 _PROJECT_ROOT = get_project_root()
 instructions_dir = get_instructions_dir()

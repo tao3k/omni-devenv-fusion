@@ -46,7 +46,7 @@ def _get_git_toplevel() -> Optional[Path]:
     Returns:
         Path to git repository root or None
     """
-    from common.mcp_core.gitops import get_git_toplevel
+    from common.gitops import get_git_toplevel
 
     return get_git_toplevel()
 

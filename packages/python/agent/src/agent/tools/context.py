@@ -18,7 +18,7 @@ from common.mcp_core import (
     get_all_instructions_merged,
     list_instruction_names,
 )
-from common.mcp_core.gitops import get_project_root
+from common.gitops import get_project_root
 import structlog
 
 logger = structlog.get_logger(__name__)

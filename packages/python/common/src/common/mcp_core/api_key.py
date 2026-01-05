@@ -25,7 +25,7 @@ logger = structlog.get_logger("mcp-core.api-key")
 
 def _find_project_root() -> Path:
     """Find project root (git toplevel)."""
-    from common.mcp_core.gitops import get_project_root
+    from common.gitops import get_project_root
 
     return get_project_root()
 

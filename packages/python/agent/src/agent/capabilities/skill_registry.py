@@ -26,7 +26,7 @@ from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
 from enum import Enum
 
-from common.mcp_core.gitops import get_project_root
+from common.gitops import get_project_root
 import structlog
 
 logger = structlog.get_logger(__name__)

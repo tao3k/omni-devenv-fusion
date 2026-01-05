@@ -38,7 +38,7 @@ logger = structlog.get_logger(__name__)
 def _get_ux_event_log_path() -> Path:
     """Get UX event log path from project cache directory."""
     try:
-        from common.mcp_core.gitops import get_project_root
+        from common.gitops import get_project_root
 
         cache_dir = get_project_root() / ".cache"
         cache_dir.mkdir(exist_ok=True)
