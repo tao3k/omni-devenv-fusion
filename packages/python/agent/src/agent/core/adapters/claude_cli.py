@@ -42,7 +42,9 @@ from agent.core.telemetry import CostEstimator, TokenUsage
 logger = structlog.get_logger()
 
 # Default context compression settings (fallbacks when settings.yaml not available)
-DEFAULT_MAX_CONTEXT_TOKENS = 4000  # Claude 3.5 Sonnet context window is ~200K, but we want to save tokens
+DEFAULT_MAX_CONTEXT_TOKENS = (
+    4000  # Claude 3.5 Sonnet context window is ~200K, but we want to save tokens
+)
 DEFAULT_MAX_FILE_SIZE_KB = 50
 DEFAULT_COMPRESSION_PROMPT = """
 Summarize the following project context into a concise brief (max 500 words).
@@ -83,13 +85,9 @@ class ContextCompressor:
             compression_method: "llm" or "truncate" (default from settings)
         """
         self.max_tokens = max_tokens or get_setting(
-            "context_compression.max_context_tokens",
-            DEFAULT_MAX_CONTEXT_TOKENS
+            "context_compression.max_context_tokens", DEFAULT_MAX_CONTEXT_TOKENS
         )
-        self.method = compression_method or get_setting(
-            "context_compression.method",
-            "llm"
-        )
+        self.method = compression_method or get_setting("context_compression.method", "llm")
         self.enabled = get_setting("context_compression.enabled", True)
 
         logger.info(
@@ -181,7 +179,7 @@ class ContextCompressor:
         if len(context) <= max_chars:
             return context
 
-        return context[:int(max_chars)] + "\n\n[... context truncated for length]"
+        return context[: int(max_chars)] + "\n\n[... context truncated for length]"
 
 
 class ContextInjector:
@@ -216,8 +214,7 @@ class ContextInjector:
         self.compressor = ContextCompressor(max_tokens=max_tokens)
         self.inference_client = inference_client
         self.max_file_size_kb = max_file_size_kb or get_setting(
-            "context_compression.max_file_size_kb",
-            DEFAULT_MAX_FILE_SIZE_KB
+            "context_compression.max_file_size_kb", DEFAULT_MAX_FILE_SIZE_KB
         )
 
         logger.info(
@@ -280,7 +277,7 @@ class ContextInjector:
                 max_chars = self.max_file_size_kb * 1024
 
                 # Truncate based on config setting
-                display_content = content[:int(max_chars)] if len(content) > max_chars else content
+                display_content = content[: int(max_chars)] if len(content) > max_chars else content
                 context_lines.append(f"### {file_path}")
                 context_lines.append("```")
                 context_lines.append(display_content)

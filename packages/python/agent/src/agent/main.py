@@ -85,6 +85,13 @@ def main():
     parser.add_argument("--resume", type=str, help="Resume a specific session ID")
     parser.add_argument("--new", action="store_true", help="Force new session")
     parser.add_argument("--list-sessions", action="store_true", help="List all sessions")
+
+    # Phase 20: Add dev subcommand
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    dev_parser = subparsers.add_parser("dev", help="Run Omni Dev Mode for feature development")
+    dev_parser.add_argument("query", nargs="...", help="Feature request description")
+    dev_parser.add_argument("--resume", type=str, help="Resume a specific session ID")
+
     args = parser.parse_args()
 
     # Handle session listing
@@ -95,6 +102,29 @@ def main():
         print("\n📼 Available Sessions:")
         for s in sessions:
             print(f"  - {s['session_id']} ({s['events']} events)")
+        sys.exit(0)
+
+    # Phase 20: Handle dev command
+    if args.command == "dev":
+        import asyncio
+        from agent.core.workflows.dev_mode import create_dev_workflow
+
+        # Build query from remaining args
+        query = " ".join(args.query) if hasattr(args, "query") and args.query else ""
+
+        if not query:
+            print("Error: Please provide a feature request description")
+            print("Usage: python -m agent.main dev 'Add a hello-world script'")
+            sys.exit(1)
+
+        # Initialize components
+        session_id = args.resume
+        workflow = create_dev_workflow()
+
+        print(f"\n🚀 Starting Omni Dev Mode: {query}")
+
+        # Run the workflow
+        asyncio.run(workflow.run(query))
         sys.exit(0)
 
     from rich.console import Console

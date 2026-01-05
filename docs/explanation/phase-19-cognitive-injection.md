@@ -702,10 +702,10 @@ Aider records what was _said_. The Black Box records:
 
 Instead of building a replacement for Claude Code, Omni now **enhances** it:
 
-| Layer | Responsibility | Component |
-|-------|---------------|-----------|
-| **Strategic (Omni)** | Context injection, Routing, Memory, Audit | RAG, MCP Server, Session |
-| **Tactical (Claude Code)** | Terminal, Git, Diff, Test Execution | Official CLI |
+| Layer                      | Responsibility                            | Component                |
+| -------------------------- | ----------------------------------------- | ------------------------ |
+| **Strategic (Omni)**       | Context injection, Routing, Memory, Audit | RAG, MCP Server, Session |
+| **Tactical (Claude Code)** | Terminal, Git, Diff, Test Execution       | Official CLI             |
 
 ### 1. ClaudeCodeAdapter - The Wrapper
 
@@ -723,6 +723,7 @@ result = await adapter.run_mission(
 ```
 
 **Features:**
+
 - Dynamic context injection via temporary files
 - Real-time output streaming
 - Session tracking (Black Box)
@@ -803,14 +804,15 @@ Exposes Omni capabilities to any MCP client:
 
 ### 5. Why This Architecture?
 
-| Old Approach | New Approach |
-|-------------|--------------|
-| Build a new Agent from scratch | Wrap existing Claude Code |
+| Old Approach                    | New Approach                |
+| ------------------------------- | --------------------------- |
+| Build a new Agent from scratch  | Wrap existing Claude Code   |
 | Reimplement Git/Diff/Test tools | Let Claude Code handle them |
-| Single context window | Dynamic context injection |
-| Proprietary execution | MCP protocol integration |
+| Single context window           | Dynamic context injection   |
+| Proprietary execution           | MCP protocol integration    |
 
 **Benefits:**
+
 - Best-in-class terminal experience (Claude Code)
 - Best-in-class code editing (Claude Code)
 - Best-in-class project memory (Omni RAG)
@@ -818,14 +820,14 @@ Exposes Omni capabilities to any MCP client:
 
 ### 6. Files Changed
 
-| File | Changes |
-|------|---------|
-| `agent/core/adapters/claude_cli.py` | New: ClaudeCodeAdapter, ContextInjector |
-| `agent/mcp_server.py` | New: FastMCP server with Omni tools |
-| `agent/tests/test_phase19_claude_symbiosis.py` | New: 17 tests |
-| `agent/main.py` | Added `--list-sessions` CLI arg |
-| `agent/core/session.py` | Enhanced session tracking |
-| `agent/core/telemetry.py` | Enhanced cost estimation |
+| File                                           | Changes                                 |
+| ---------------------------------------------- | --------------------------------------- |
+| `agent/core/adapters/claude_cli.py`            | New: ClaudeCodeAdapter, ContextInjector |
+| `agent/mcp_server.py`                          | New: FastMCP server with Omni tools     |
+| `agent/tests/test_phase19_claude_symbiosis.py` | New: 17 tests                           |
+| `agent/main.py`                                | Added `--list-sessions` CLI arg         |
+| `agent/core/session.py`                        | Enhanced session tracking               |
+| `agent/core/telemetry.py`                      | Enhanced cost estimation                |
 
 ### 7. Usage
 
@@ -842,23 +844,23 @@ orchestrator --resume abc12345
 
 ### 8. Test Results
 
-| Suite | Tests | Status |
-|-------|-------|--------|
-| Phase 19.5 (ReAct + UX) | 45 | ✅ Pass |
-| Phase 19.6 (Black Box) | 30 | ✅ Pass |
-| Phase 19.7 (Claude Symbiosis) | 17 | ✅ Pass |
-| **Total** | **92** | **✅ All Pass** |
+| Suite                         | Tests  | Status          |
+| ----------------------------- | ------ | --------------- |
+| Phase 19.5 (ReAct + UX)       | 45     | ✅ Pass         |
+| Phase 19.6 (Black Box)        | 30     | ✅ Pass         |
+| Phase 19.7 (Claude Symbiosis) | 17     | ✅ Pass         |
+| **Total**                     | **92** | **✅ All Pass** |
 
 ### 9. MCP Tool Reference
 
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `omni_search_memory` | Query vector store | `query: str, n_results: int` |
-| `omni_ingest_knowledge` | Store documents | `documents: list, ids: list` |
-| `omni_request_review` | Code review | `code: str, language: str, focus_areas: list` |
-| `omni_get_session_summary` | Session status | None |
-| `omni_list_sessions` | List sessions | None |
-| `omni_generate_context` | Generate CLAUDE.md | `mission: str, relevant_files: list` |
+| Tool                       | Description        | Parameters                                    |
+| -------------------------- | ------------------ | --------------------------------------------- |
+| `omni_search_memory`       | Query vector store | `query: str, n_results: int`                  |
+| `omni_ingest_knowledge`    | Store documents    | `documents: list, ids: list`                  |
+| `omni_request_review`      | Code review        | `code: str, language: str, focus_areas: list` |
+| `omni_get_session_summary` | Session status     | None                                          |
+| `omni_list_sessions`       | List sessions      | None                                          |
+| `omni_generate_context`    | Generate CLAUDE.md | `mission: str, relevant_files: list`          |
 
 ### 10. Configuration (settings.yaml)
 
@@ -890,11 +892,151 @@ post_mortem:
 
 #### Configuration Options
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `context_compression.enabled` | `true` | Enable/disable LLM-based context compression |
-| `context_compression.max_context_tokens` | `4000` | Token threshold before compression |
-| `context_compression.max_file_size_kb` | `50` | Max file size in KB before truncation |
-| `context_compression.method` | `"llm"` | `"llm"` for LLM summary, `"truncate"` for simple cut |
-| `post_mortem.enabled` | `true` | Enable/disable automatic review after execution |
-| `post_mortem.confidence_threshold` | `0.8` | Min confidence for auto-approval |
+| Setting                                  | Default | Description                                          |
+| ---------------------------------------- | ------- | ---------------------------------------------------- |
+| `context_compression.enabled`            | `true`  | Enable/disable LLM-based context compression         |
+| `context_compression.max_context_tokens` | `4000`  | Token threshold before compression                   |
+| `context_compression.max_file_size_kb`   | `50`    | Max file size in KB before truncation                |
+| `context_compression.method`             | `"llm"` | `"llm"` for LLM summary, `"truncate"` for simple cut |
+| `post_mortem.enabled`                    | `true`  | Enable/disable automatic review after execution      |
+| `post_mortem.confidence_threshold`       | `0.8`   | Min confidence for auto-approval                     |
+
+---
+
+## Phase 20: The Recursive Evolution (The `omni dev` Command)
+
+> **Status**: Complete (15 new tests)
+> **Philosophy**: "The system that builds itself."
+
+### Overview
+
+Phase 20 introduces **DevWorkflow** - a self-evolution engine that orchestrates the complete feature development lifecycle. This is the "singularity" moment where Omni gains the ability to autonomously develop features.
+
+### The DevWorkflow Engine
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    DevWorkflow (Orchestrator)                       │
+│                                                                     │
+│   ┌─────────────┐   ┌─────────────┐   ┌─────────────────────┐      │
+│   │VectorMemory │──►│ContextInjector│──►│  ClaudeCodeAdapter  │      │
+│   │   (RAG)     │   │  (CLAUDE.md) │   │    (CLI Wrapper)    │      │
+│   └─────────────┘   └─────────────┘   └─────────────────────┘      │
+│                                      │                              │
+│                                      ▼                              │
+│   ┌─────────────────────────────────────────────────────────────┐  │
+│   │                 ReviewerAgent                               │  │
+│   │                 (Post-Mortem Audit)                         │  │
+│   └─────────────────────────────────────────────────────────────┘  │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Lifecycle
+
+| Phase | Component | Description |
+|-------|-----------|-------------|
+| 1. Plan & Retrieve | VectorMemory | RAG-based context retrieval |
+| 2. Contextualize | ContextInjector | Dynamic CLAUDE.md generation |
+| 3. Execute | ClaudeCodeAdapter | Launch Claude CLI for implementation |
+| 4. Verify | ReviewerAgent | Post-Mortem audit of changes |
+
+### Usage
+
+```bash
+# Run a feature development task
+uv run omni dev "Add a hello-world script to scripts/"
+
+# With session resumption
+uv run omni dev --resume abc123 "Add user authentication"
+```
+
+### API
+
+```python
+from agent.core.workflows.dev_mode import DevWorkflow, create_dev_workflow
+
+# Factory creation
+workflow = create_dev_workflow()
+
+# Execute feature development
+result = await workflow.run("Add user authentication feature")
+
+print(result)
+# {
+#   "feature_request": "Add user authentication feature",
+#   "success": True,
+#   "context_files": [...],
+#   "claude_output": "...",
+#   "audit_result": {...},
+#   "duration_seconds": 45.2
+# }
+```
+
+### Test Coverage
+
+| Suite | Tests | Status |
+|-------|-------|--------|
+| Phase 19.5 (ReAct + UX) | 45 | ✅ Pass |
+| Phase 19.6 (Black Box) | 30 | ✅ Pass |
+| Phase 19.7 (Claude Symbiosis) | 25 | ✅ Pass |
+| Phase 20 (DevWorkflow) | 15 | ✅ Pass |
+| **Total** | **115** | **✅ All Pass** |
+
+### Files Changed
+
+| File | Changes |
+|------|---------|
+| `agent/core/workflows/dev_mode.py` | New: DevWorkflow engine |
+| `agent/main.py` | Added `dev` subcommand |
+| `agent/tests/test_phase20_dev_mode.py` | New: 15 tests |
+
+### Why This Matters
+
+| Layer | Before Phase 20 | After Phase 20 |
+|-------|-----------------|----------------|
+| Development | Manual coding | Automated feature development |
+| Context | Manual RAG | Automatic context retrieval |
+| Review | Manual audit | Automatic post-mortem audit |
+| Workflow | Linear | Full lifecycle automation |
+
+### The Three-Layer Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Strategic Layer (Omni)                           │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  • Routing (what to build)                                  │   │
+│  │  • RAG (context injection)                                  │   │
+│  │  • Planning (mission briefs)                                │   │
+│  │  • Auditing (quality gates)                                 │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                              │                                       │
+│                              ▼                                       │
+│                    Tactical Layer (Claude Code)                      │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  • Terminal operations                                      │   │
+│  │  • File editing                                             │   │
+│  │  • Git operations                                           │   │
+│  │  • Test execution                                           │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                              │                                       │
+│                              ▼                                       │
+│                    Infrastructure Layer                              │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  • Vector Memory (persistent knowledge)                     │   │
+│  │  • Black Box (session tracking)                             │   │
+│  │  • MCP Server (tool exposure)                               │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Summary
+
+Phase 20 transforms Omni from a helper into a true **Agentic OS** that can:
+- Understand feature requests
+- Retrieve relevant context automatically
+- Execute development via Claude Code
+- Verify quality via Post-Mortem audit
+
+This is the foundation for **recursive self-improvement** - Omni can now build features, and those features can make Omni better.

@@ -449,9 +449,6 @@ class TestClaudeCodeAdapterConfig:
 
                 session = SessionManager("test-explicit")
                 # Explicitly enable
-                adapter = ClaudeCodeAdapter(
-                    session=session,
-                    enable_post_mortem=True
-                )
+                adapter = ClaudeCodeAdapter(session=session, enable_post_mortem=True)
 
                 assert adapter.enable_post_mortem is True
