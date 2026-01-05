@@ -17,6 +17,7 @@ import pytest
 import sys
 import os
 import time
+import importlib.util
 from pathlib import Path
 from unittest.mock import MagicMock, patch, AsyncMock
 from mcp.server.fastmcp import FastMCP
@@ -24,6 +25,32 @@ from mcp.server.fastmcp import FastMCP
 # Import core components
 from agent.core.schema import SkillManifest
 from agent.core.skill_registry import SkillRegistry, get_skill_registry
+
+
+def _load_skill_module_for_test(skill_name: str, test_file: str):
+    """
+    Load a skill module directly from file using importlib.util.
+    This bypasses the normal import system which may resolve 'agent' to the package.
+    """
+    # Get project root and skill path
+    project_root = Path(test_file).resolve().parent.parent.parent.parent.parent.parent.parent
+    skill_tools_path = project_root / "agent" / "skills" / skill_name / "tools.py"
+
+    if not skill_tools_path.exists():
+        raise FileNotFoundError(f"Skill tools not found: {skill_tools_path}")
+
+    # Create a unique module name to avoid conflicts
+    module_name = f"_test_skill_{skill_name}"
+
+    # Load the module from file
+    spec = importlib.util.spec_from_file_location(
+        module_name, skill_tools_path, submodule_search_locations=[str(skill_tools_path.parent)]
+    )
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+
+    return module
 
 
 @pytest.fixture
@@ -574,14 +601,63 @@ class TestSkillManager:
         assert "filesystem" in result
 
     @pytest.mark.asyncio
-    async def test_invoke_skill_tool_exists(self, registry, real_mcp):
-        """Test that invoke_skill tool is registered."""
-        from agent.capabilities.skill_manager import register_skill_tools
+    async def test_direct_tool_registration(self, registry, real_mcp):
+        """Test that skills register tools directly (Phase 24: MiniMax Shift)."""
+        git_tools = _load_skill_module_for_test("git", __file__)
 
-        register_skill_tools(real_mcp)
+        # Register git skill tools directly
+        git_tools.register(real_mcp)
 
-        invoke_func = self._get_tool_func(real_mcp, "invoke_skill")
-        assert invoke_func is not None
+        # Verify git tools are available directly (not through invoke_skill)
+        tools = list(real_mcp._tool_manager._tools.values())
+        tool_names = [t.name for t in tools]
+
+        # Should have git-specific tools
+        assert "git_status" in tool_names or any("git" in name.lower() for name in tool_names)
+
+    @pytest.mark.asyncio
+    async def test_git_status_report_direct_call(self, registry, real_mcp):
+        """Test calling git_status_report directly (no invoke_skill)."""
+        git_tools = _load_skill_module_for_test("git", __file__)
+
+        # Register git tools
+        git_tools.register(real_mcp)
+
+        # Get the function
+        tools = list(real_mcp._tool_manager._tools.values())
+        status_report_fn = None
+        for t in tools:
+            if t.name == "git_status_report":
+                status_report_fn = t.fn
+                break
+
+        assert status_report_fn is not None, "git_status_report should be registered"
+
+        # Call directly
+        result = status_report_fn()
+        assert "Git Status" in result or "branch" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_git_plan_hotfix_direct_call(self, registry, real_mcp):
+        """Test calling git_plan_hotfix directly (no invoke_skill)."""
+        git_tools = _load_skill_module_for_test("git", __file__)
+
+        # Register git tools
+        git_tools.register(real_mcp)
+
+        # Get the function
+        tools = list(real_mcp._tool_manager._tools.values())
+        plan_hotfix_fn = None
+        for t in tools:
+            if "hotfix" in t.name.lower():
+                plan_hotfix_fn = t.fn
+                break
+
+        assert plan_hotfix_fn is not None, "git_plan_hotfix should be registered"
+
+        # Call directly
+        result = plan_hotfix_fn(issue_id="TEST-123")
+        assert "Hotfix Plan" in result or "TEST-123" in result
 
 
 class TestSkillEdgeCases:
@@ -739,92 +815,101 @@ class TestCodeInsightSkill:
         assert "119" in result or "118" in result or "120" in result
 
 
-class TestInvokeSkillTool:
-    """Test invoke_skill tool (replaces deprecated skill() with AST parsing)."""
+class TestDirectToolRegistration:
+    """Test Phase 24: MiniMax Shift - Direct tool registration without invoke_skill."""
 
-    def _get_tool_func(self, mcp, tool_name):
-        """Helper to get tool function from FastMCP."""
-        tools = list(mcp._tool_manager._tools.values())
-        tool = [t for t in tools if t.name == tool_name][0]
-        return tool.fn
+    def _get_tool_names(self, mcp):
+        """Helper to get all tool names from MCP."""
+        return [t.name for t in mcp._tool_manager._tools.values()]
 
-    @pytest.mark.asyncio
-    async def test_invoke_skill_auto_loads(self, registry, real_mcp):
-        """invoke_skill should auto-load when skill not loaded."""
-        from agent.capabilities.skill_manager import register_skill_tools
+    def _load_skill_module(self, skill_name: str):
+        """
+        Load a skill module directly from file using importlib.util.
+        This bypasses the normal import system which may resolve 'agent' to the package.
+        """
+        import sys
+        import importlib.util
+        from pathlib import Path
 
-        register_skill_tools(real_mcp)
+        # Get project root and skill path
+        project_root = Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent
+        skill_tools_path = project_root / "agent" / "skills" / skill_name / "tools.py"
 
-        invoke_func = self._get_tool_func(real_mcp, "invoke_skill")
+        if not skill_tools_path.exists():
+            raise FileNotFoundError(f"Skill tools not found: {skill_tools_path}")
 
-        # Execute with auto-load
-        result = await invoke_func(
-            skill="filesystem", tool="list_directory", args={"path": "agent/skills"}
+        # Create a unique module name to avoid conflicts
+        module_name = f"_test_skill_{skill_name}"
+
+        # Load the module from file
+        spec = importlib.util.spec_from_file_location(
+            module_name, skill_tools_path, submodule_search_locations=[str(skill_tools_path.parent)]
         )
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
 
-        assert "auto-loaded" in result.lower() or "filesystem" in result.lower()
-
-    @pytest.mark.asyncio
-    async def test_invoke_skill_calls_filesystem(self, registry, real_mcp):
-        """invoke_skill should call filesystem.list_directory."""
-        from agent.capabilities.skill_manager import register_skill_tools
-
-        register_skill_tools(real_mcp)
-
-        invoke_func = self._get_tool_func(real_mcp, "invoke_skill")
-
-        result = await invoke_func(
-            skill="filesystem", tool="list_directory", args={"path": "agent/skills"}
-        )
-
-        assert "filesystem" in result or "_template" in result
+        return module
 
     @pytest.mark.asyncio
-    async def test_invoke_skill_calls_git_stage_all(self, registry, real_mcp):
-        """invoke_skill should call git.git_stage_all."""
-        from agent.capabilities.skill_manager import register_skill_tools
+    async def test_git_tools_registered_directly(self, registry, real_mcp):
+        """Git skill tools should be registered directly (not through invoke_skill)."""
+        git_tools = self._load_skill_module("git")
 
-        register_skill_tools(real_mcp)
+        # Register git tools directly
+        git_tools.register(real_mcp)
 
-        invoke_func = self._get_tool_func(real_mcp, "invoke_skill")
+        tool_names = self._get_tool_names(real_mcp)
 
-        result = await invoke_func(
-            skill="git",
-            tool="git_stage_all",
-            args={"scan": False},  # Skip scan for test
-        )
-
-        # Should not return "Operation not found"
-        assert "Operation 'git_stage_all' not found" not in result
+        # Should have git-specific tools registered
+        assert any("git" in name.lower() for name in tool_names)
+        # Should NOT have invoke_skill
+        assert "invoke_skill" not in tool_names
 
     @pytest.mark.asyncio
-    async def test_invoke_skill_handles_empty_args(self, registry, real_mcp):
-        """invoke_skill should handle empty args dict."""
-        from agent.capabilities.skill_manager import register_skill_tools
+    async def test_file_ops_batch_tool_registered(self, registry, real_mcp):
+        """File ops skill should have batch tool registered."""
+        file_ops_tools = self._load_skill_module("file_ops")
 
-        register_skill_tools(real_mcp)
+        # Register file ops tools
+        file_ops_tools.register(real_mcp)
 
-        invoke_func = self._get_tool_func(real_mcp, "invoke_skill")
+        tool_names = self._get_tool_names(real_mcp)
 
-        result = await invoke_func(skill="git", tool="git_stage_all", args={})
-
-        assert "Invalid" not in result
+        # Should have file-related tools
+        assert any("file" in name.lower() or "read" in name.lower() for name in tool_names)
 
     @pytest.mark.asyncio
-    async def test_invoke_skill_nonexistent_operation(self, registry, real_mcp):
-        """invoke_skill should return error for nonexistent operation with available ops list."""
-        from agent.capabilities.skill_manager import register_skill_tools
+    async def test_mcp_protocol_format_str_return(self, registry, real_mcp):
+        """
+        Test Phase 24: Tools returning str are auto-wrapped by FastMCP into proper MCP format.
 
-        register_skill_tools(real_mcp)
+        When a tool function returns str, FastMCP should auto-wrap it into:
+        CallToolResult(content=[TextContent(type="text", text=STR)])
 
-        invoke_func = self._get_tool_func(real_mcp, "invoke_skill")
+        This ensures Claude CLI receives the correct protocol format.
+        """
+        git_tools = self._load_skill_module("git")
 
-        # Call with nonexistent operation
-        result = await invoke_func(skill="filesystem", tool="nonexistent_operation_xyz", args={})
-        # Should return error with available operations listed
-        assert "not found" in result.lower()
-        # Should list available operations
-        assert "Available:" in result or "list_directory" in result
+        # Register git tools
+        git_tools.register(real_mcp)
+
+        # Get git_read_backlog function and call it
+        tools = list(real_mcp._tool_manager._tools.values())
+        read_backlog_fn = None
+        for t in tools:
+            if t.name == "git_read_backlog":
+                read_backlog_fn = t.fn
+                break
+
+        assert read_backlog_fn is not None, "git_read_backlog should be registered"
+
+        # Call the function - it should return str
+        result = read_backlog_fn()
+
+        # Verify it returns a string (FastMCP handles the wrapping)
+        assert isinstance(result, str), f"Expected str, got {type(result)}"
+        assert "Git Skill Backlog" in result, "Result should contain backlog content"
 
 
 class TestWriterSkill:

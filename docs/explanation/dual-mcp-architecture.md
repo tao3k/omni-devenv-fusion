@@ -2,7 +2,7 @@
 
 > Date: 2024-12-31
 > Author: Claude (Human: tao3k)
-> Status: Implemented (Updated: Phase 13.9)
+> Status: Implemented (Updated: Phase 24)
 
 ## Core Philosophy
 
@@ -42,11 +42,11 @@
 ```
 Claude Desktop
        │
-       ├── 🧠 orchestrator (skill() for operations)
-       │      └── git, terminal, testing, writer, filesystem...
+       ├── 🧠 orchestrator (direct tool calls)
+       │      └── git_status(), git_commit(), execute_command()...
        │
        └── 📝 coder (direct file tools)
-              └── read_file, save_file, search_files, ast_search
+              └── read_file(), save_file(), search_files(), ast_search()
 ```
 
 ### Phase 13.9: Modular Entrypoint

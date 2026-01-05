@@ -1,7 +1,7 @@
 # Design & Roadmap: Bi-MCP Architecture
 
 > **Philosophy**: Separation of Concerns. "Macro" orchestration vs. "Micro" surgical coding.
-> **Status**: Phase 13.9 (Modular Entrypoint)
+> **Status**: Phase 24 (The MiniMax Shift) - Direct Tool Registration
 
 This document outlines the architectural vision for `omni-dev-fusion`. We move from a single monolithic MCP server to a specialized dual-server setup. This design acts as a **Bridge** between generic LLM capabilities and the strict requirements of our Nix-based project environment.
 
@@ -38,8 +38,9 @@ The system divides into two distinct MCP servers, each serving a specific abstra
 | Aspect     | Tri-MCP (Old)                   | Bi-MCP (Current)                           |
 | ---------- | ------------------------------- | ------------------------------------------ |
 | Servers    | orchestrator + executor + coder | orchestrator + coder                       |
-| Operations | Direct tools in executor        | Skills via `skill()` in orchestrator       |
-| Git        | executor: git_status            | orchestrator: skill("git", "git_status()") |
+| Operations | Direct tools in executor        | Direct tool registration (Phase 24)        |
+| Git        | executor: git_status            | orchestrator: git_status()                 |
+| Tool Names | Descriptive text                | snake_case (e.g., `git_status_report`)     |
 
 ### Server A: The Orchestrator (The "Brain")
 
@@ -196,29 +197,74 @@ main.py (87 lines)
             └── filesystem, git, terminal, testing_protocol (auto-boot)
 ```
 
-### The skill() Tool
+### Phase 24: The MiniMax Shift (Direct Tool Registration)
 
-Operations are accessed via the `skill()` tool instead of direct tool calls:
+> **Status**: COMPLETED
+> **Philosophy**: "Direct tool registration for native CLI experience."
 
-```json
-{
-  "tool": "skill",
-  "arguments": {
-    "skill": "git",
-    "call": "smart_commit(message='feat(scope): description')"
-  }
-}
+With Phase 24, we removed the `invoke_skill` middleware layer. Tools are now registered directly with the MCP server using snake_case names.
+
+#### Before vs After
+
+| Aspect | Before (Phase 13) | After (Phase 24) |
+|--------|-------------------|------------------|
+| Tool Names | Descriptive text | `snake_case` function names |
+| Registration | Via `invoke_skill` middleware | Direct: `tools.register(mcp)` |
+| Return Type | `dict` | `str` (for CLI rendering) |
+| Call Style | `invoke_skill("git", "git_status", {})` | `git_status()` |
+
+#### Direct Tool Registration Pattern
+
+```python
+# agent/skills/git/tools.py
+from mcp.server.fastmcp import FastMCP
+
+def git_status() -> str:
+    """Get the current status of the git repository."""
+    return _run_git(["status", "--short"])
+
+def git_status_report() -> str:
+    """[VIEW] Returns a formatted git status report with icons."""
+    # Returns Markdown with ✅/⚠️ icons
+    return formatted_report
+
+def register(mcp: FastMCP) -> None:
+    """Register all git tools with the MCP server."""
+    mcp.add_tool(git_status, description="Get git status.")
+    mcp.add_tool(git_status_report, description="Formatted status report.")
 ```
 
-**Available Core Skills:**
+#### Available Core Skills (Phase 24)
 
-| Skill              | Purpose           | Tools                                                |
-| ------------------ | ----------------- | ---------------------------------------------------- |
-| `git`              | Version control   | git_status, git_log, git_add, smart_commit           |
-| `terminal`         | Command execution | execute_command, inspect_environment                 |
-| `testing_protocol` | Test runner       | smart_test_runner, run_test_command                  |
-| `writer`           | Writing quality   | lint_writing_style, polish_text, load_writing_memory |
-| `filesystem`       | File operations   | list_directory, read_file, write_file                |
+| Skill | Purpose | Example Tools |
+|-------|---------|---------------|
+| `git` | Version control | `git_status()`, `git_status_report()`, `git_commit()` |
+| `terminal` | Command execution | `execute_command()` |
+| `testing_protocol` | Test runner | `smart_test_runner()` |
+| `writer` | Writing quality | `lint_writing_style()`, `load_writing_memory()` |
+| `filesystem` | File operations | `read_file()`, `write_file()` |
+| `file_ops` | Batch file ops | `apply_file_changes()` |
+
+#### View-Enhanced Tools (Director Pattern)
+
+For complex UI rendering, tools can return Claude-friendly Markdown with "Run" hints:
+
+```python
+def git_plan_hotfix(issue_id: str, base_branch: str = "main") -> str:
+    """[WORKFLOW] Generate a hotfix execution plan."""
+    return f"""
+🛠️ **Hotfix Plan for {issue_id}**
+
+```bash
+cd $(git rev-parse --show-toplevel) && \\
+    git stash push -m "Auto-stash before hotfix/{issue_id}" && \\
+    git checkout {base_branch} && \\
+    git pull && \\
+    git checkout -b hotfix/{issue_id}
+```
+
+*Tip: Click "Run" to execute.*
+```
 
 ### What is a Skill?
 

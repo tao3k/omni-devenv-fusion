@@ -113,22 +113,11 @@ Skill '{skill_name}' loaded successfully!
 
         return "\n".join(lines)
 
-    @mcp.tool()
-    async def invoke_skill(skill: str, tool: str, args: dict) -> str:
-        """
-        [Structured] Execute a skill operation with structured arguments.
-
-        Usage:
-        - invoke_skill("filesystem", "list_directory", {"path": "."})
-        - invoke_skill("git", "git_status", {})
-        - invoke_skill("git", "git_commit", {"message": "feat: add feature"})
-
-        Args:
-            skill: The skill name (e.g., "filesystem", "git", "terminal")
-            tool: The function name to call (e.g., "list_directory", "git_status")
-            args: Arguments as a JSON object/dict
-        """
-        return await _execute_skill_operation(skill, tool, args, mcp, registry)
+    # =============================================================================
+    # NOTE: invoke_skill has been removed in Phase 24 (MiniMax Shift)
+    # Skills are now registered directly via boot_core_skills() -> skill.register(mcp)
+    # Users call skill tools directly (e.g., git_status_report instead of invoke_skill("git", "git_status_report", {}))
+    # =============================================================================
 
 
 async def _execute_skill_operation(

@@ -1,6 +1,11 @@
 # CLAUDE.md - Omni-DevEnv Fusion
 
-> **Quick Reference Index**. Full docs: `agent/skills/*/prompts.md`
+> **Phase 24: The MiniMax Shift**
+>
+> Direct tool registration - no `invoke_skill` middleware.
+> Tools are registered directly with snake_case names.
+>
+> Quick Reference: `agent/skills/*/prompts.md`
 
 ---
 
@@ -8,7 +13,7 @@
 
 **Direct `git commit` via Terminal is BLOCKED.**
 
-Use: `@omni-orchestrator git_commit` or `skill("git", "git_commit(message='...')")`
+Use: `@omni-orchestrator git_commit` or call `git_commit()` directly.
 
 ---
 
@@ -44,23 +49,37 @@ Use: `@omni-orchestrator git_commit` or `skill("git", "git_commit(message='...')
 
 ---
 
-## Skills (Load with `load_skill()`)
+## Phase 24: Direct Tool Registration
 
-### Always Load First
+### Tool Names are snake_case
 
-| Skill       | Purpose                           | Command                                           |
-| ----------- | --------------------------------- | ------------------------------------------------- |
-| `knowledge` | Project rules, scopes, guardrails | `skill("knowledge", "get_development_context()")` |
-| `writer`    | Writing quality                   | `skill("writer", "load_writing_memory()")`        |
+| Old (Phase 13) | New (Phase 24) |
+| -------------- | -------------- |
+| `invoke_skill("git", "git_status", {})` | `git_status()` |
+| `skill("git", "git_commit(message='...')")` | `git_commit(message='...')` |
+| Descriptive text names | Function name = tool name |
 
-### Execution Skills
+### Git Tools (Example)
 
-| Skill              | Purpose      | Command                                               |
-| ------------------ | ------------ | ----------------------------------------------------- |
-| `git`              | Commit, Push | `skill("git", "git_commit(message='...')")`           |
-| `terminal`         | Commands     | `skill("terminal", "execute_command(command='...')")` |
-| `filesystem`       | File I/O     | `skill("filesystem", "read_file(path='...')")`        |
-| `testing_protocol` | Tests        | `skill("testing_protocol", "smart_test_runner()")`    |
+```python
+git_status()              # Get repository status
+git_status_report()       # [VIEW] Formatted report with icons
+git_plan_hotfix(issue_id) # [WORKFLOW] Hotfix execution plan
+git_commit(message)       # Commit changes
+git_branch()              # List branches
+```
+
+### Available Skills
+
+| Skill | Purpose | Example Tool |
+|-------|---------|--------------|
+| `git` | Version control | `git_status()`, `git_commit()` |
+| `terminal` | Shell commands | `execute_command()` |
+| `filesystem` | File I/O | `read_file()`, `write_file()` |
+| `testing_protocol` | Test runner | `smart_test_runner()` |
+| `file_ops` | Batch file ops | `apply_file_changes()` |
+| `knowledge` | Project context | `get_development_context()` |
+| `writer` | Writing quality | `load_writing_memory()` |
 
 ---
 
@@ -69,13 +88,20 @@ Use: `@omni-orchestrator git_commit` or `skill("git", "git_commit(message='...')
 ### Before Any Work
 
 ```python
-skill("knowledge", "get_development_context()")
+get_development_context()  # Load project rules
 ```
 
 ### When Writing Docs
 
 ```python
-skill("writer", "load_writing_memory()")
+load_writing_memory()  # Load writing standards
+```
+
+### Git Operations
+
+```python
+git_status_report()    # View formatted status
+git_commit(message="...")  # Commit directly
 ```
 
 ### New Feature

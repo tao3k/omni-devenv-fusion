@@ -1,7 +1,7 @@
 """
 File Operations Skill Tools
 Migrated from src/mcp_server/coder/main.py
-Provides file I/O, search, and AST-based refactoring.
+Provides file I/O, search, AST-based refactoring, and batch operations.
 """
 
 import asyncio
@@ -11,9 +11,10 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, List, Literal
 
 from mcp.server.fastmcp import FastMCP
+from pydantic import BaseModel, Field
 from common.mcp_core import is_safe_path, run_subprocess
 
 # NOTE: polish_text is imported dynamically in save_file() to avoid cross-skill
@@ -34,6 +35,20 @@ _ALLOWED_HIDDEN_FILES = {
     ".gitattributes",
     ".dockerignore",
 }
+
+
+# =============================================================================
+# Pydantic Models for Batch Operations (Phase 24: MiniMax Style)
+# =============================================================================
+
+
+class FileOperation(BaseModel):
+    """Single file operation for batch processing."""
+    action: Literal["write", "append"] = Field(
+        ..., description="Action to perform: write (create/overwrite) or append"
+    )
+    path: str = Field(..., description="Relative path to file")
+    content: str = Field(..., description="Content to write or append")
 
 
 # =============================================================================
@@ -274,6 +289,70 @@ async def save_file(
 
 
 # =============================================================================
+# Batch Operations (Phase 24: MiniMax Style)
+# =============================================================================
+
+
+async def apply_file_changes(changes: List[FileOperation]) -> str:
+    """
+    [BATCH] Efficiently apply changes to multiple files in one go.
+
+    Use this for code generation or refactoring tasks to minimize tool calls
+    and reduce permission confirmations.
+
+    Args:
+        changes: List of FileOperation objects specifying action, path, and content
+
+    Returns:
+        Markdown report of all changes made
+    """
+    project_root = Path.cwd()
+    report = []
+    success_count = 0
+    error_count = 0
+
+    for change in changes:
+        try:
+            full_path = project_root / change.path
+
+            # Validate path safety
+            is_safe, error_msg = is_safe_path(
+                change.path,
+                allow_hidden=False,
+                allowed_hidden_files=_ALLOWED_HIDDEN_FILES,
+            )
+            if not is_safe:
+                report.append(f"- ❌ `{change.path}`: {error_msg}")
+                error_count += 1
+                continue
+
+            # Ensure directory exists
+            full_path.parent.mkdir(parents=True, exist_ok=True)
+
+            if change.action == "write":
+                full_path.write_text(change.content, encoding="utf-8")
+                report.append(f"- ✅ **Wrote**: `{change.path}` ({len(change.content)} bytes)")
+            elif change.action == "append":
+                with open(full_path, "a", encoding="utf-8") as f:
+                    f.write(change.content)
+                report.append(f"- ➕ **Appended**: `{change.path}` ({len(change.content)} bytes)")
+
+            success_count += 1
+
+        except Exception as e:
+            report.append(f"- ❌ **Failed**: `{change.path}` - {str(e)}")
+            error_count += 1
+
+    # Build summary
+    summary = f"**File Operations Summary**\n\n"
+    summary += f"- Success: {success_count}\n"
+    summary += f"- Errors: {error_count}\n\n"
+    summary += "**Details:**\n" + "\n".join(report)
+
+    return summary
+
+
+# =============================================================================
 # AST-Based Tools
 # =============================================================================
 
@@ -383,6 +462,7 @@ def register(mcp: FastMCP):
     read_file_fn = getattr(current_module, "read_file", None)
     search_files_fn = getattr(current_module, "search_files", None)
     save_file_fn = getattr(current_module, "save_file", None)
+    apply_changes_fn = getattr(current_module, "apply_file_changes", None)
     ast_search_fn = getattr(current_module, "ast_search", None)
     ast_rewrite_fn = getattr(current_module, "ast_rewrite", None)
 
@@ -393,9 +473,21 @@ def register(mcp: FastMCP):
         mcp.add_tool(search_files_fn, "Search for text patterns in files (like grep).")
     if save_file_fn:
         mcp.add_tool(save_file_fn, "Write content to a file within the project directory.")
+    # Phase 24: Batch Operations (MiniMax Style)
+    if apply_changes_fn:
+        mcp.add_tool(
+            apply_changes_fn,
+            """[BATCH] Efficiently apply changes to multiple files in one go.
+
+            Use this for code generation or refactoring tasks to minimize tool calls.
+            Each change specifies: action (write/append), path, and content.
+
+            Returns a Markdown report of all changes made.
+            """,
+        )
     if ast_search_fn:
         mcp.add_tool(ast_search_fn, "Query code structure using ast-grep patterns.")
     if ast_rewrite_fn:
         mcp.add_tool(ast_rewrite_fn, "Apply AST-based code rewrite using ast-grep.")
 
-    logger.info("File Operations skill tools registered")
+    logger.info("File Operations skill tools registered (Batch Mode enabled)")

@@ -193,7 +193,7 @@ def register_librarian_tools(mcp: FastMCP) -> None:
         return result
 
     @mcp.tool()
-    async def bootstrap_knowledge() -> Dict[str, Any]:
+    async def bootstrap_knowledge() -> str:
         """
         Bootstrap the knowledge base with essential project documentation.
 
@@ -201,28 +201,22 @@ def register_librarian_tools(mcp: FastMCP) -> None:
         store with core project knowledge (git workflow, architecture, etc.).
 
         Returns:
-            Dict containing bootstrap status and count of documents added
+            Formatted status message
         """
         try:
             await bootstrap_knowledge_base()
-            return {
-                "success": True,
-                "message": "Knowledge base bootstrapped with core project documentation",
-            }
+            return "✅ Knowledge base bootstrapped successfully with core project documentation."
         except Exception as e:
             logger.error("Bootstrap failed", error=str(e))
-            return {
-                "success": False,
-                "error": str(e),
-            }
+            return f"❌ Bootstrap failed: {e}"
 
     @mcp.tool()
-    async def list_knowledge_domains() -> Dict[str, Any]:
+    async def list_knowledge_domains() -> str:
         """
         List available knowledge domains and their document counts.
 
         Returns:
-            Dict containing collections and their document counts
+            Formatted list of domains
         """
         vm = get_vector_memory()
 
@@ -230,20 +224,25 @@ def register_librarian_tools(mcp: FastMCP) -> None:
         collections = await vm.list_collections()
 
         # Get counts for each collection
-        domain_counts: Dict[str, int] = {}
+        domain_counts = {}
         for coll in collections:
             count = await vm.count(collection=coll)
             domain_counts[coll] = count
 
-        return {
-            "domains": domain_counts,
-            "total_documents": sum(domain_counts.values()),
-        }
+        total = sum(domain_counts.values())
+
+        if not domain_counts:
+            return "📚 No knowledge domains found."
+
+        lines = ["📚 **Knowledge Domains:**", ""]
+        for domain, count in domain_counts.items():
+            lines.append(f"- **{domain}**: {count} documents")
+        lines.append(f"\n**Total**: {total} documents")
+
+        return "\n".join(lines)
 
     @mcp.tool()
-    async def search_project_rules(
-        query: str,
-    ) -> Dict[str, Any]:
+    async def search_project_rules(query: str) -> str:
         """
         Search specifically for project rules and workflows.
 
@@ -254,7 +253,7 @@ def register_librarian_tools(mcp: FastMCP) -> None:
             query: The rule or workflow to search for
 
         Returns:
-            Matching rules and workflows with relevance scores
+            Formatted search results
         """
         # Search with high priority filter
         all_results = await search_knowledge(query=query, n_results=10)
@@ -266,20 +265,18 @@ def register_librarian_tools(mcp: FastMCP) -> None:
         if not relevant:
             relevant = all_results[:5]
 
-        formatted = [
-            {
-                "content": r.content,
-                "source": r.metadata.get("domain", "general"),
-                "relevance": 1.0 - r.distance,
-            }
-            for r in relevant
-        ]
+        if not relevant:
+            return f"No matching rules found for: '{query}'"
 
-        return {
-            "query": query,
-            "matching_rules": formatted,
-            "count": len(formatted),
-        }
+        lines = [f"🔍 **Search Results for**: '{query}'", ""]
+        for r in relevant:
+            source = r.metadata.get("domain", "general")
+            relevance = "⭐" * int((1.0 - r.distance) * 5)
+            lines.append(f"{relevance} **{source}**")
+            lines.append(f"> {r.content[:200]}...")
+            lines.append("")
+
+        return "\n".join(lines)
 
     logger.info("Librarian tools registered")
 

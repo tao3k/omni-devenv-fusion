@@ -16,24 +16,37 @@ Transform skills from simple function collections into "Intelligent Microservice
 
 ```
 agent/skills/<skill_name>/
-├── 📄 manifest.json       # [IDENTITY] 身份与配置 (元数据)
-├── 🛠️ tools.py            # [HANDS]    原子工具 (无状态、纯执行)
-├── 🧠 workflow.py         # [BRAIN]    工作流逻辑 (LangGraph 图)
-├── 💾 state.py            # [MEMORY]   状态定义 (Pydantic 模型)
-├── 📘 guide.md            # [INTERFACE] 使用说明 (RAG/Prompt 上下文)
-└── 📝 prompts.md          # [PERSONA]  专用提示词 (可选)
+├── 📄 manifest.json       # [IDENTITY]  Metadata & configuration
+├── 🛠️ tools.py            # [HANDS]     Atomic tools (stateless, side-effects only)
+├── 🧠 workflow.py         # [BRAIN]     Workflow logic (LangGraph graph)
+├── 💾 state.py            # [MEMORY]    State definition (Pydantic models)
+├── 📘 guide.md            # [INTERFACE] Usage docs (RAG/prompt context)
+└── 📝 prompts.md          # [PERSONA]   Routing rules & prompt injection
 ```
 
 ### File Responsibilities
 
-| File            | Role      | Intelligence | Purpose                             |
-| --------------- | --------- | ------------ | ----------------------------------- |
-| `manifest.json` | Identity  | ❌ None      | Metadata, dependencies, entry_point |
-| `tools.py`      | Hands     | 🔵 Low       | Atomic actions, side-effects only   |
-| `workflow.py`   | Brain     | 🔴 High      | Orchestration, LangGraph graph      |
-| `state.py`      | Memory    | 🟡 Medium    | Pydantic models, structured context |
-| `guide.md`      | Interface | 🟣 Semantic  | LLM alignment, usage docs           |
-| `prompts.md`    | Persona   | 🟣 Semantic  | Routing rules, prompt injection     |
+| File            | Role      | Intelligence | Purpose                                  |
+| --------------- | --------- | ------------ | ---------------------------------------- |
+| `manifest.json` | Identity  | ❌ None      | Metadata, dependencies, entry_point      |
+| `tools.py`      | Hands     | 🔵 Low       | Atomic actions, side-effects only        |
+| `workflow.py`   | Brain     | 🔴 High      | Orchestration, LangGraph graph           |
+| `state.py`      | Memory    | 🟡 Medium    | Pydantic models, structured context      |
+| `guide.md`      | Interface | 🟣 Semantic  | LLM alignment, usage docs                |
+| `prompts.md`    | Persona   | 🟣 Semantic  | Routing rules, prompt injection          |
+
+### Current Git Skill Structure
+
+```
+agent/skills/git/
+├── manifest.json          # v2.0.0 - Skill metadata
+├── tools.py               # All Git operations (atomic tools)
+├── workflow.py            # LangGraph workflow orchestration
+├── state.py               # GitWorkflowState Pydantic model
+├── guide.md               # Usage documentation
+├── prompts.md             # Routing rules & persona
+└── Backlog.md             # Feature backlog (optional)
+```
 
 ## 🚀 Implementation Plan
 
