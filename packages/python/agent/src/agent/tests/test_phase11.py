@@ -221,7 +221,7 @@ _SKILLS_ROOT = Path.cwd() / "agent" / "skills"
 
 
 class TestGitSkill:
-    """Tests for Git Skill (Phase 13.10 - Critical Operations Only)."""
+    """Tests for Git Skill (Phase 23 - Skill Singularity)."""
 
     def test_git_skill_module_exists(self):
         """Verify git skill module exists."""
@@ -229,40 +229,47 @@ class TestGitSkill:
         assert git_tools_py.exists(), f"Git skill not found at {git_tools_py}"
 
     def test_git_skill_tools_defined(self):
-        """Verify critical git tools (commit, push) are defined."""
+        """Verify critical git tools are defined."""
         import ast
 
         git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
         content = git_tools_py.read_text()
         tree = ast.parse(content)
 
-        tool_names = []
+        # Get all function names (both sync and async)
+        tool_names = set()
         for node in ast.walk(tree):
-            if isinstance(node, ast.AsyncFunctionDef):
-                tool_names.append(node.name)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                tool_names.add(node.name)
 
         assert "git_commit" in tool_names, "git_commit should be defined"
-        assert "git_push" in tool_names, "git_push should be defined"
+        assert "git_status" in tool_names, "git_status should be defined"
+        assert "git_add" in tool_names, "git_add should be defined"
 
-    def test_no_deprecated_tools(self):
-        """Verify only critical git tools exist (commit, push)."""
+    def test_git_skill_has_required_operations(self):
+        """Verify git skill has read and write operations."""
         import ast
 
         git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
         content = git_tools_py.read_text()
         tree = ast.parse(content)
 
-        tool_names = []
+        # Get all function names
+        tool_names = set()
         for node in ast.walk(tree):
-            if isinstance(node, ast.AsyncFunctionDef):
-                tool_names.append(node.name)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                tool_names.add(node.name)
 
-        # Should have: git_stage_all (with security scan), git_commit, git_push
-        # Exclude private functions (starting with _)
-        public_tools = [name for name in tool_names if not name.startswith("_")]
-        assert public_tools == ["git_stage_all", "git_commit", "git_push"], (
-            f"Expected git_stage_all, git_commit and git_push, found: {public_tools}"
-        )
+        # Read operations
+        read_ops = ["git_status", "git_diff", "git_log", "git_branch"]
+        # Write operations
+        write_ops = ["git_add", "git_commit", "git_checkout"]
+
+        read_found = [op for op in read_ops if op in tool_names]
+        write_found = [op for op in write_ops if op in tool_names]
+
+        assert len(read_found) >= 2, f"Should have at least 2 read operations, found: {read_found}"
+        assert len(write_found) >= 2, f"Should have at least 2 write operations, found: {write_found}"
 
     def test_git_commit_has_message_param(self):
         """Verify git_commit has message parameter."""
@@ -272,10 +279,10 @@ class TestGitSkill:
         content = git_tools_py.read_text()
         tree = ast.parse(content)
 
-        # Find git_commit function
+        # Find git_commit function (sync or async)
         git_commit_func = None
         for node in ast.walk(tree):
-            if isinstance(node, ast.AsyncFunctionDef) and node.name == "git_commit":
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "git_commit":
                 git_commit_func = node
                 break
 
@@ -285,66 +292,68 @@ class TestGitSkill:
         args = [arg.arg for arg in git_commit_func.args.args]
         assert "message" in args, "git_commit should have 'message' parameter"
 
-    def test_git_push_has_no_params(self):
-        """Verify git_push has no parameters (no-arg tool)."""
+    def test_git_skill_has_native_implementation(self):
+        """Verify git skill has native implementation (Phase 23: Skill Singularity)."""
         import ast
 
         git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
         content = git_tools_py.read_text()
         tree = ast.parse(content)
 
-        # Find git_push function
-        git_push_func = None
-        for node in ast.walk(tree):
-            if isinstance(node, ast.AsyncFunctionDef) and node.name == "git_push":
-                git_push_func = node
-                break
-
-        assert git_push_func is not None, "git_push not found"
-
-        # Verify function has no required parameters
-        args = [arg.arg for arg in git_push_func.args.args]
-        assert len(args) == 0, f"git_push should have no parameters, found: {args}"
-
-    def test_git_skill_uses_gitops(self):
-        """Verify git skill uses run_git_cmd from gitops."""
-        import ast
-
-        git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
-        content = git_tools_py.read_text()
-        tree = ast.parse(content)
-
-        # Check imports from gitops
-        imports = []
+        # Should NOT import from gitops (now has native implementation)
+        has_gitops_import = False
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
                 if node.module and "gitops" in node.module:
-                    for alias in node.names:
-                        imports.append(alias.asname or alias.name)
+                    has_gitops_import = True
+                    break
 
-        # Should import run_git_cmd
-        assert "run_git_cmd" in imports, "git skill should import 'run_git_cmd' from gitops"
+        assert not has_gitops_import, "git skill should NOT import from gitops (native implementation)"
 
-    def test_git_skill_supports_hot_reload(self):
-        """Verify git skill structure supports hot reload."""
+        # Should have _run_git internal helper
+        has_run_git = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "_run_git":
+                has_run_git = True
+                break
+
+        assert has_run_git, "git skill should have native _run_git implementation"
+
+    def test_git_skill_exports_all_functions(self):
+        """Verify git skill exports functions via __all__."""
         import ast
 
         git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
         content = git_tools_py.read_text()
         tree = ast.parse(content)
 
-        # Find register function
-        register_func = None
+        # Find __all__ definition
+        has_all = False
         for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.name == "register":
-                register_func = node
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id == "__all__":
+                        has_all = True
+                        break
+
+        assert has_all, "git skill should define __all__ for function exports"
+
+    def test_git_skill_has_error_class(self):
+        """Verify git skill has GitError exception class."""
+        import ast
+
+        git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
+        content = git_tools_py.read_text()
+        tree = ast.parse(content)
+
+        # Find GitError class
+        has_git_error = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == "GitError":
+                has_git_error = True
                 break
 
-        assert register_func is not None, "register function not found"
-
-        # Verify register function has mcp parameter (FastMCP pattern)
-        args = [arg.arg for arg in register_func.args.args]
-        assert "mcp" in args, "register should have 'mcp' parameter for FastMCP"
+        assert has_git_error, "git skill should have GitError exception class"
 
 
 # =============================================================================

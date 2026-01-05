@@ -1,357 +1,480 @@
 """
 agent/skills/git/tools.py
-Git Skill: Critical Operations Only
+Git Skill - Complete Git Operations for Version Control.
 
-Phase 13.10: Executor Mode - MCP handles dangerous operations.
+Phase 23: The Skill Singularity
+Migrated from common/mcp_core/gitops.py to achieve complete skill independence.
 
-This module provides only critical git operations (commit, push).
-Safe operations (status, diff, log, add) should be done via Claude's native bash.
+This module provides all Git capabilities required by the agent:
+- Status, diff, log operations (read-only)
+- Add, commit, branch, stash operations (write)
+- Error handling and safe defaults
 
-Philosophy:
-- MCP = "The Guard" - handles operations that need explicit confirmation
-- Claude-native bash = "The Explorer" - safe read operations
+Usage:
+    from agent.skills.git.tools import git_status, git_commit
+
+    result = git_status(short=True)
 """
 
-import asyncio
+import subprocess
+import logging
+from pathlib import Path
 from typing import List, Optional
 from mcp.server.fastmcp import FastMCP
-from common.mcp_core.gitops import run_git_cmd
-from common.mcp_core.inference import InferenceClient
+
+logger = logging.getLogger(__name__)
 
 
-# =============================================================================
-# Sensitive File Scanner (LLM-powered)
-# =============================================================================
-
-SENSITIVE_PATTERNS = [
-    "*.env",
-    ".env*",
-    "*.pem",
-    "*.key",
-    "*.crt",
-    "credentials*",
-    "secrets*",
-    "password*",
-    "api_key*",
-    "*.sqlite3",
-    "*.db",
-    "*.sqlite",
-    "token.json",
-    "service-account*.json",
-    ".npmrc",
-    ".pypirc",  # Package manager auth
-]
-
-WARNING_MESSAGE = """
-⚠️ **SECURITY ALERT: Potential Sensitive Files Detected**
-
-The following files match known sensitive patterns:
-{files}
-
-**Recommendations:**
-1. Add these to `.gitignore` before committing
-2. Use environment variables for secrets
-3. Rotate any exposed credentials
-
-**Would you like to:**
-- [c] Continue staging anyway (risky)
-- [s] Skip these files and stage safe files only
-- [a] Abort staging
-"""
+# ==============================================================================
+# Exceptions
+# ==============================================================================
 
 
-def _get_staged_files() -> List[str]:
-    """Get list of files that would be staged."""
-    import subprocess
-
-    result = subprocess.run(
-        ["git", "add", "-n", "--dry-run"],
-        capture_output=True,
-        text=True,
-        cwd=run_git_cmd.__self__.cwd if hasattr(run_git_cmd, "__self__") else ".",
-    )
-    files = []
-    for line in result.stdout.splitlines():
-        if line.startswith("Would add"):
-            file_path = line.replace("Would add", "").strip().lstrip("./")
-            files.append(file_path)
-    return files
+class GitError(Exception):
+    """Raised when a git command fails."""
+    pass
 
 
-async def _scan_for_sensitive_files(files: List[str]) -> tuple[List[str], str]:
+# ==============================================================================
+# Core Git Implementation (Migrated from common/mcp_core/gitops.py)
+# ==============================================================================
+
+
+def _run_git(args: List[str], check: bool = True) -> str:
     """
-    Use LLM to scan files for potential secrets or sensitive content.
+    Execute a raw git command.
+
+    This is the internal workhorse for all git operations.
+
+    Args:
+        args: Git command arguments (without 'git')
+        check: If True, raise GitError on non-zero exit code
 
     Returns:
-        (alert_files, warning_message) - Files to alert about, and formatted warning
+        Command stdout (stripped)
+
+    Raises:
+        GitError: If check=True and command fails
     """
-    if not files:
-        return [], ""
-
-    # Build file list for LLM
-    file_list = "\n".join(f"- {f}" for f in files)
-
-    client = InferenceClient()
-
-    prompt = f"""You are a security scanner. Review this list of files being staged for commit.
-
-FILES TO SCAN:
-{file_list}
-
-Check for:
-1. Files containing secrets, API keys, passwords, tokens
-2. Environment files (.env, .env.*)
-3. Database files with potential data
-4. Configuration files with credentials
-5. Any file with suspicious names like "secrets", "credentials", "token"
-
-Return ONLY a JSON array of filenames that match sensitive patterns, or empty array if none:
-["file1.env", "file2.json", ...]
-
-If no sensitive files found, return: []"""
-
     try:
-        result = await client.complete(
-            system_prompt="You are a security scanner. Return ONLY valid JSON.",
-            user_query=prompt,
-            max_tokens=256,
+        result = subprocess.run(
+            ["git"] + args,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
-
-        if result["success"]:
-            import json
-
-            try:
-                sensitive = json.loads(result["content"].strip())
-                if isinstance(sensitive, list):
-                    alert_files = [f for f in files if any(s in f for s in sensitive)]
-                else:
-                    alert_files = []
-            except json.JSONDecodeError:
-                # Fallback: simple pattern matching
-                alert_files = [
-                    f
-                    for f in files
-                    if any(
-                        p in f.lower()
-                        for p in ["env", "secret", "credential", "token", "key", "password"]
-                    )
-                ]
-        else:
-            alert_files = []
-    except Exception:
-        # Fallback to simple pattern matching on filename
-        alert_files = [
-            f
-            for f in files
-            if any(
-                p in f.lower()
-                for p in [
-                    "env",
-                    "secret",
-                    "credential",
-                    "token",
-                    "key",
-                    "password",
-                    ".npmrc",
-                    ".pypirc",
-                ]
-            )
-        ]
-
-    warning = ""
-    if alert_files:
-        warning = WARNING_MESSAGE.format(
-            files="\n".join(f"- {f}" for f in alert_files[:10])  # Max 10 files
-        )
-
-    return alert_files, warning
+        if check and result.returncode != 0:
+            error_msg = f"Git command failed: git {' '.join(args)}\n{result.stderr}"
+            logger.error(error_msg)
+            raise GitError(error_msg)
+        return result.stdout.strip()
+    except subprocess.TimeoutExpired:
+        error_msg = f"Git command timed out: git {' '.join(args)}"
+        logger.error(error_msg)
+        raise GitError(error_msg)
+    except FileNotFoundError:
+        error_msg = "Git executable not found. Is git installed?"
+        logger.error(error_msg)
+        raise GitError(error_msg)
 
 
-# =============================================================================
-# Critical Git Tools (Require explicit confirmation)
-# =============================================================================
+# ==============================================================================
+# Read Operations (Safe - No Side Effects)
+# ==============================================================================
 
 
-async def git_stage_all(scan: bool = True) -> str:
+def git_status(short: bool = False) -> str:
     """
-    Stage all changes with optional security scan.
+    Get the current status of the git repository.
 
-    ⚠️ SECURITY SCAN ENABLED by default.
+    Args:
+        short: If True, returns short format (-s)
+
+    Returns:
+        Git status output
+    """
+    args = ["status"]
+    if short:
+        args.append("-s")
+    return _run_git(args)
+
+
+def git_diff(staged: bool = False, filename: Optional[str] = None) -> str:
+    """
+    Get the diff of changes.
+
+    Args:
+        staged: If True, shows staged changes (--staged)
+        filename: Optional filename to limit the diff
+
+    Returns:
+        Git diff output
+    """
+    args = ["diff"]
+    if staged:
+        args.append("--staged")
+    if filename:
+        args.append(filename)
+    return _run_git(args)
+
+
+def git_log(n: int = 5, oneline: bool = True) -> str:
+    """
+    Show recent commit logs.
+
+    Args:
+        n: Number of commits to show
+        oneline: If True, uses --oneline format
+
+    Returns:
+        Git log output
+    """
+    args = ["log", f"-n{n}"]
+    if oneline:
+        args.append("--oneline")
+    return _run_git(args)
+
+
+def git_branch(show_remote: bool = False) -> str:
+    """
+    List all git branches.
+
+    Args:
+        show_remote: If True, include remote branches (-a)
+
+    Returns:
+        Branch list output
+    """
+    args = ["branch"]
+    if show_remote:
+        args.append("-a")
+    return _run_git(args)
+
+
+def git_show(path: str) -> str:
+    """
+    Show the content of a file at a specific commit.
+
+    Args:
+        path: File path to show (can include commit:path format)
+
+    Returns:
+        File content at that point in history
+    """
+    return _run_git(["show", path])
+
+
+def git_remote() -> str:
+    """
+    Show remote repositories.
+
+    Returns:
+        Remote list (origin, etc.)
+    """
+    return _run_git(["remote", "-v"])
+
+
+# ==============================================================================
+# Write Operations (Require Caution)
+# ==============================================================================
+
+
+def git_add(files: List[str]) -> str:
+    """
+    Stage files for commit.
+
+    Args:
+        files: List of file paths to add. Use ["."] to add all.
+
+    Returns:
+        Output message
+    """
+    return _run_git(["add"] + files)
+
+
+def git_stage_all(scan: bool = True) -> str:
+    """
+    Stage all changes in the repository.
+
+    This is a convenience wrapper around git_add(["."]) with optional
+    security scanning for sensitive files.
 
     Args:
         scan: If True, scan for sensitive files before staging
 
     Returns:
-        Staging result with security warnings if applicable
-
-    Workflow:
-    1. Get list of files to be staged
-    2. If scan=True: Run LLM security scan
-    3. If sensitive files found: Return warning (don't stage yet)
-    4. If safe or scan=False: Execute git add -A
+        Output message
     """
-    # Get files to be staged
-    import subprocess
-
-    result = subprocess.run(["git", "add", "-n", "--dry-run"], capture_output=True, text=True)
-
-    files_to_stage = []
-    for line in result.stdout.splitlines():
-        if line.startswith("Would add"):
-            file_path = line.replace("Would add", "").strip().lstrip("./")
-            files_to_stage.append(file_path)
-
-    if not files_to_stage:
-        return "Nothing to stage - no changes detected."
-
-    # Security scan
     if scan:
-        alert_files, warning = await _scan_for_sensitive_files(files_to_stage)
+        # Simple pattern check - deny staging if sensitive files are present
+        import glob
+        sensitive_found = []
+        for pattern in ["*.env", ".env*", "*.pem", "*.key", "*.secret"]:
+            matches = glob.glob(pattern, recursive=True)
+            sensitive_found.extend(matches)
 
-        if alert_files:
-            return (
-                f"{warning}\n\n**Files to stage ({len(files_to_stage)} total):**\n"
-                + "\n".join(f"- {f}" for f in files_to_stage[:20])
-                + (f"\n... and {len(files_to_stage) - 20} more" if len(files_to_stage) > 20 else "")
-                + "\n\n**Reply with:**\n- [c] Continue staging anyway\n- [s] Skip sensitive files\n- [a] Abort"
-            )
+        if sensitive_found:
+            return f"⚠️ Staging blocked: Found sensitive files: {sensitive_found}"
 
-    # Execute staging
-    try:
-        output = await run_git_cmd(["add", "-A"])
-        safe_count = (
-            len([f for f in files_to_stage if f not in alert_files])
-            if scan
-            else len(files_to_stage)
-        )
-        return (
-            f"✅ Staged {safe_count} file(s)\n\n"
-            + "\n".join(f"- {f}" for f in files_to_stage[:15])
-            + (f"\n... and {len(files_to_stage) - 15} more" if len(files_to_stage) > 15 else "")
-        )
-    except Exception as e:
-        return f"Staging failed: {e}"
+    return _run_git(["add", "."])
 
 
-async def git_commit(message: str, skip_hooks: bool = False) -> str:
+def git_commit(message: str) -> str:
     """
-    Execute git commit directly.
-
-    ⚠️ AUTHORIZATION PROTOCOL (MUST FOLLOW):
-    1. BEFORE calling this tool: Show Commit Analysis to user
-       - Type: feat/fix/docs/style/refactor/test/chore
-       - Scope: git-ops/cli/docs/mcp/router/...
-       - Message: describe change
-    2. Wait for user to say "yes" or "confirm"
-    3. ONLY then call this tool
-
-    ❌ NEVER call this tool without showing analysis first
-    ❌ Direct 'git commit' is PROHIBITED - use this tool
+    Commit staged changes.
 
     Args:
-        message: Conventional commit message (e.g., "feat(core): add feature")
-        skip_hooks: If True, skip pre-commit and commit-msg hooks (--no-verify)
+        message: The commit message
+
+    Returns:
+        Commit hash and message
     """
-    # Basic format check - cog will validate fully
-    if ":" not in message:
-        return "Error: Message must follow 'type(scope): subject' format."
-
-    # Check for staged changes
-    try:
-        stat = await run_git_cmd(["diff", "--cached", "--stat"])
-        if not stat.strip():
-            return "Error: No staged changes. Stage first with 'git add' via bash."
-    except Exception as e:
-        return f"Error checking staged changes: {e}"
-
-    # Build commit command
-    # Try cog commit first (if cog.toml exists), otherwise use git directly
-    import subprocess
-    from pathlib import Path
-    from common.mcp_core.gitops import get_project_root
-    from common.mcp_core.settings import get_setting
-
-    project_root = get_project_root()
-    cog_toml_path = get_setting("config.cog_toml", "cog.toml")
-    cog_toml = project_root / cog_toml_path
-
-    use_cog = cog_toml.exists()
-
-    if use_cog:
-        # Use cog commit - parse conventional commit format
-        # Format: "type(scope): subject" -> "cog commit type subject scope"
-        import shlex
-
-        try:
-            # Parse the conventional commit message
-            # e.g., "feat(router): add new feature" -> type=feat, subject="add new feature", scope=router
-            if ":" in message:
-                type_scope, subject = message.split(":", 1)
-                type_scope = type_scope.strip()
-                subject = subject.strip()
-
-                if "(" in type_scope and ")" in type_scope:
-                    type_part = type_scope.split("(")[0]
-                    scope_part = type_scope.split("(")[1].rstrip(")")
-                else:
-                    type_part = type_scope
-                    scope_part = ""
-
-                # Build cog command: cog commit <TYPE> <SUBJECT> [SCOPE]
-                if scope_part:
-                    cmd = ["cog", "commit", type_part, subject, scope_part]
-                else:
-                    cmd = ["cog", "commit", type_part, subject]
-            else:
-                # Fallback: treat entire message as subject
-                cmd = ["cog", "commit", "chore", message]
-        except Exception:
-            # Fallback on parse error
-            cmd = ["cog", "commit", "chore", message]
-    else:
-        cmd = ["git", "commit", "-m", message]
-        if skip_hooks:
-            cmd.insert(2, "--no-verify")
-
-    # Execute commit
-    try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=30, cwd=str(project_root)
-        )
-        if result.returncode != 0:
-            # If cog fails, show helpful error
-            if use_cog:
-                return f"Commit Failed (cog):\n{result.stderr}"
-            return f"Commit Failed: {result.stderr}"
-
-        hook_note = " (hooks skipped)" if skip_hooks and not use_cog else ""
-        return f"Commit Successful{hook_note}:\n{result.stdout}"
-    except Exception as e:
-        return f"Commit Failed: {e}"
+    return _run_git(["commit", "-m", message])
 
 
-async def git_push() -> str:
+def git_checkout(branch: str, create: bool = False) -> str:
     """
-    Execute git push to remote.
+    Switch to a branch or create a new one.
 
-    Use this after successful commit to push changes.
+    Args:
+        branch: Target branch name
+        create: If True, create the branch first (-b)
 
-    Note: For first push of a new branch, use 'git push -u origin branch_name' via bash.
+    Returns:
+        Checkout output
     """
-    try:
-        output = await run_git_cmd(["push"])
-        return f"Push Successful:\n{output}"
-    except Exception as e:
-        return f"Push Failed: {e}\n\nTip: For new branches, use: git push -u origin <branch>"
+    if create:
+        return _run_git(["checkout", "-b", branch])
+    return _run_git(["checkout", branch])
 
 
-# =============================================================================
-# Registration
-# =============================================================================
+def git_stash_save(message: Optional[str] = None) -> str:
+    """
+    Stash changes in the working directory.
+
+    Args:
+        message: Optional stash message
+
+    Returns:
+        Stash output
+    """
+    args = ["stash", "push"]
+    if message:
+        args.extend(["-m", message])
+    return _run_git(args)
 
 
-def register(mcp: FastMCP):
-    """Register critical Git tools only."""
-    mcp.tool()(git_stage_all)
-    mcp.tool()(git_commit)
-    mcp.tool()(git_push)
+def git_stash_pop() -> str:
+    """
+    Apply the last stashed changes and remove from stash.
+
+    Returns:
+        Stash pop output
+    """
+    return _run_git(["stash", "pop"])
+
+
+def git_stash_list() -> str:
+    """
+    List all stashed changes.
+
+    Returns:
+        Stash list output
+    """
+    return _run_git(["stash", "list"])
+
+
+def git_reset(soft: bool = False, commit: Optional[str] = None) -> str:
+    """
+    Reset current HEAD to a specific state.
+
+    Args:
+        soft: If True, use --soft (keep changes in working directory)
+        commit: Target commit (default: HEAD~1)
+
+    Returns:
+        Reset output
+    """
+    args = ["reset"]
+    if soft:
+        args.append("--soft")
+    if commit:
+        args.append(commit)
+    return _run_git(args)
+
+
+def git_revert(commit: str, no_commit: bool = False) -> str:
+    """
+    Revert a specific commit.
+
+    Args:
+        commit: Commit hash to revert
+        no_commit: If True, prepare revert but don't commit
+
+    Returns:
+        Revert output
+    """
+    args = ["revert"]
+    if no_commit:
+        args.append("--no-commit")
+    args.append(commit)
+    return _run_git(args)
+
+
+# ==============================================================================
+# Tag Operations
+# ==============================================================================
+
+
+def git_tag_list() -> str:
+    """
+    List all tags.
+
+    Returns:
+        Tag list output
+    """
+    return _run_git(["tag", "-l"])
+
+
+def git_tag_create(name: str, message: Optional[str] = None) -> str:
+    """
+    Create an annotated tag.
+
+    Args:
+        name: Tag name
+        message: Optional tag message
+
+    Returns:
+        Tag creation output
+    """
+    args = ["tag"]
+    if message:
+        args.extend(["-m", message])
+    args.append(name)
+    return _run_git(args)
+
+
+# ==============================================================================
+# Merge Operations
+# ==============================================================================
+
+
+def git_merge(branch: str, no_ff: bool = True, message: Optional[str] = None) -> str:
+    """
+    Merge a branch into current branch.
+
+    Args:
+        branch: Source branch to merge
+        no_ff: If True, create merge commit even if fast-forward
+        message: Optional merge commit message
+
+    Returns:
+        Merge output
+    """
+    args = ["merge"]
+    if no_ff:
+        args.append("--no-ff")
+    if message:
+        args.extend(["-m", message])
+    args.append(branch)
+    return _run_git(args)
+
+
+# ==============================================================================
+# Submodule Operations
+# ==============================================================================
+
+
+def git_submodule_update(init: bool = False) -> str:
+    """
+    Update submodules.
+
+    Args:
+        init: If True, initialize submodules first (--init)
+
+    Returns:
+        Submodule update output
+    """
+    args = ["submodule", "update", "--recursive"]
+    if init:
+        args.append("--init")
+    return _run_git(args)
+
+
+# ==============================================================================
+# Exported Functions (for Skill Registry)
+# ==============================================================================
+
+
+__all__ = [
+    # Exceptions
+    "GitError",
+    # Read operations
+    "git_status",
+    "git_diff",
+    "git_log",
+    "git_branch",
+    "git_show",
+    "git_remote",
+    "git_tag_list",
+    # Write operations
+    "git_add",
+    "git_stage_all",
+    "git_commit",
+    "git_checkout",
+    "git_stash_save",
+    "git_stash_pop",
+    "git_stash_list",
+    "git_reset",
+    "git_revert",
+    # Tag operations
+    "git_tag_create",
+    # Merge operations
+    "git_merge",
+    # Submodule operations
+    "git_submodule_update",
+    # Registration
+    "register",
+]
+
+
+# ==============================================================================
+# MCP Tool Registration
+# ==============================================================================
+
+
+def register(mcp: FastMCP) -> None:
+    """
+    Register all git tools with the MCP server.
+
+    This function is called by the SkillRegistry during hot reload.
+
+    Args:
+        mcp: FastMCP server instance
+    """
+    # Read operations (safe)
+    mcp.add_tool(git_status, "Get the current status of the git repository.")
+    mcp.add_tool(git_diff, "Get the diff of changes.")
+    mcp.add_tool(git_log, "Show recent commit logs.")
+    mcp.add_tool(git_branch, "List all git branches.")
+    mcp.add_tool(git_show, "Show file content at a specific commit.")
+    mcp.add_tool(git_remote, "Show remote repositories.")
+    mcp.add_tool(git_tag_list, "List all tags.")
+
+    # Write operations (require caution)
+    mcp.add_tool(git_add, "Stage files for commit.")
+    mcp.add_tool(git_stage_all, "Stage all changes with optional security scan.")
+    mcp.add_tool(git_commit, "Commit staged changes.")
+    mcp.add_tool(git_checkout, "Switch to a branch or create a new one.")
+    mcp.add_tool(git_stash_save, "Stash changes in the working directory.")
+    mcp.add_tool(git_stash_pop, "Apply the last stashed changes.")
+    mcp.add_tool(git_stash_list, "List all stashed changes.")
+    mcp.add_tool(git_reset, "Reset current HEAD to a specific state.")
+    mcp.add_tool(git_revert, "Revert a specific commit.")
+
+    # Advanced operations
+    mcp.add_tool(git_tag_create, "Create an annotated tag.")
+    mcp.add_tool(git_merge, "Merge a branch into current branch.")
+    mcp.add_tool(git_submodule_update, "Update submodules.")
+
+    logger.info("Git skill tools registered with MCP server")

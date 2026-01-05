@@ -693,351 +693,160 @@ Aider records what was _said_. The Black Box records:
 
 ---
 
-## Phase 19.7: Claude Code Symbiosis
+## Phase 19.7: MCP Server & Tool Ecosystem
 
-> **Status**: Complete (17 new tests)
-> **Philosophy**: "Omni as the strategic brain, Claude Code as the tactical hand."
+> **Status**: Complete
+> **Philosophy**: "Expose capabilities, don't wrap execution."
 
-### Strategic Shift
+### MCP Server Architecture
 
-Instead of building a replacement for Claude Code, Omni now **enhances** it:
-
-| Layer                      | Responsibility                            | Component                |
-| -------------------------- | ----------------------------------------- | ------------------------ |
-| **Strategic (Omni)**       | Context injection, Routing, Memory, Audit | RAG, MCP Server, Session |
-| **Tactical (Claude Code)** | Terminal, Git, Diff, Test Execution       | Official CLI             |
-
-### 1. ClaudeCodeAdapter - The Wrapper
-
-Omni wraps Claude CLI instead of replacing it:
-
-```python
-from agent.core.adapters.claude_cli import ClaudeCodeAdapter
-
-adapter = ClaudeCodeAdapter(session=session_manager)
-result = await adapter.run_mission(
-    mission_brief="Fix the threading bug",
-    relevant_files=["agent/core/bootstrap.py"],
-    relevant_docs=["docs/threading-guide.md"],
-)
-```
-
-**Features:**
-
-- Dynamic context injection via temporary files
-- Real-time output streaming
-- Session tracking (Black Box)
-- Cost estimation
-
-### 2. ContextInjector - Dynamic CLAUDE.md
-
-Generates project-specific context for Claude Code:
-
-```python
-context = injector.generate_context_file(
-    mission_brief="Add authentication",
-    relevant_files=["src/auth/models.py"],
-    relevant_docs=["docs/security/auth.md"],
-)
-# Output:
-# # Mission Context
-# **Task**: Add authentication
-# **Generated**: 2026-01-04T10:00:00
-#
-# ## Relevant Files
-# 1. `src/auth/models.py`
-#
-# ## Documentation References
-# - docs/security/auth.md
-```
-
-### 3. Omni MCP Server - Skills as Services
-
-Exposes Omni capabilities to any MCP client:
-
-```python
-# Tools available to Claude Code, Cursor, Windsurf:
-- omni_search_memory()     # Query Phase 16 RAG
-- omni_ingest_knowledge()  # Store new knowledge
-- omni_request_review()    # Request code review
-- omni_get_session_summary() # Get Black Box status
-- omni_list_sessions()     # List historical sessions
-- omni_generate_context()  # Generate CLAUDE.md
-```
-
-### 4. Architecture
+The MCP Server exposes Omni's internal capabilities to external clients (Claude Code, Cursor, Windsurf):
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    Omni-Claude Symbiosis                            │
+│                    Omni MCP Server                                  │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │   ┌─────────────────────────────────────────────────────────────┐   │
-│   │                    Omni (Strategic Layer)                   │   │
+│   │                    Omni Capabilities                        │   │
 │   │                                                             │   │
-│   │   ┌─────────────────┐     ┌─────────────────────────────┐  │   │
-│   │   │ ContextInjector │────►│ Dynamic CLAUDE.md Generator │  │   │
-│   │   └─────────────────┘     └─────────────────────────────┘  │   │
-│   │           │                       │                          │   │
-│   │           ▼                       ▼                          │   │
-│   │   ┌─────────────────────────────────────────────────────┐  │   │
-│   │   │              ClaudeCodeAdapter                      │  │   │
-│   │   │   - Wraps `claude` CLI                              │  │   │
-│   │   │   - Injects context file                            │  │   │
-│   │   │   - Tracks session (Black Box)                      │  │   │
-│   │   │   - Streams output to TUI                           │  │   │
-│   │   └─────────────────────────────────────────────────────┘  │   │
-│   │           │                       │                          │   │
-│   └───────────┼───────────────────────┼──────────────────────────┘   │
-│               │                       │                              │
-│               ▼                       ▼                              │
-│   ┌─────────────────────────┐  ┌─────────────────────────────────┐  │
-│   │ Claude Code CLI         │  │ MCP Clients (Cursor/Windsurf)   │  │
-│   │ (Tactical Execution)    │  │                                 │  │
-│   │ - Terminal              │  │  - omni_search_memory()         │  │
-│   │ - Git/Diff              │  │  - omni_request_review()        │  │
-│   │ - Test Runner           │  │  - omni_ingest_knowledge()      │  │
-│   └─────────────────────────┘  └─────────────────────────────────┘  │
-│                                                                      │
+│   │   omni_search_memory()     → Phase 16 Vector Memory         │   │
+│   │   omni_ingest_knowledge()  → Phase 17 Knowledge Harvest     │   │
+│   │   omni_request_review()    → ReviewerAgent                  │   │
+│   │   omni_get_session_summary() → Black Box (Session)          │   │
+│   │   omni_list_sessions()     → Session Manager                │   │
+│   │   omni_scan_skill_backlogs() → Federated Skill Backlogs     │   │
+│   │                                                             │   │
+│   └─────────────────────────────────────────────────────────────┘   │
+│                              │                                       │
+│                              ▼                                       │
+│   ┌─────────────────────────────────────────────────────────────┐   │
+│   │                    MCP Protocol                              │   │
+│   │         (stdio transport for Claude Desktop/Cursor)         │   │
+│   └─────────────────────────────────────────────────────────────┘   │
+│                              │                                       │
+│                              ▼                                       │
+│   ┌─────────────────────────────────────────────────────────────┐   │
+│   │              External Clients                                │   │
+│   │   Claude Code • Cursor • Windsurf • VS Code                 │   │
+│   └─────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 5. Why This Architecture?
+### MCP Tool Reference
 
-| Old Approach                    | New Approach                |
-| ------------------------------- | --------------------------- |
-| Build a new Agent from scratch  | Wrap existing Claude Code   |
-| Reimplement Git/Diff/Test tools | Let Claude Code handle them |
-| Single context window           | Dynamic context injection   |
-| Proprietary execution           | MCP protocol integration    |
+| Tool                       | Description              | Parameters                          |
+| -------------------------- | ------------------------ | ----------------------------------- |
+| `omni_search_memory`       | Query vector store       | `query: str, n_results: int = 5`    |
+| `omni_ingest_knowledge`    | Store documents          | `documents: list, ids: list = None` |
+| `omni_request_review`      | Request code review      | `code: str, language: str`          |
+| `omni_get_session_summary` | Get Black Box status     | None                                |
+| `omni_list_sessions`       | List historical sessions | None                                |
+| `omni_scan_skill_backlogs` | Scan skill backlogs      | `skill_name: str = None`            |
 
-**Benefits:**
+### Files Changed
 
-- Best-in-class terminal experience (Claude Code)
-- Best-in-class code editing (Claude Code)
-- Best-in-class project memory (Omni RAG)
-- Best-in-class auditing (Omni Reviewer)
+| File                    | Changes                                 |
+| ----------------------- | --------------------------------------- |
+| `agent/mcp_server.py`   | FastMCP server with Omni tools          |
+| `agent/core/session.py` | Session tracking for Black Box          |
 
-### 6. Files Changed
-
-| File                                           | Changes                                 |
-| ---------------------------------------------- | --------------------------------------- |
-| `agent/core/adapters/claude_cli.py`            | New: ClaudeCodeAdapter, ContextInjector |
-| `agent/mcp_server.py`                          | New: FastMCP server with Omni tools     |
-| `agent/tests/test_phase19_claude_symbiosis.py` | New: 17 tests                           |
-| `agent/main.py`                                | Added `--list-sessions` CLI arg         |
-| `agent/core/session.py`                        | Enhanced session tracking               |
-| `agent/core/telemetry.py`                      | Enhanced cost estimation                |
-
-### 7. Usage
+### Usage
 
 ```bash
 # Start MCP Server (for Claude Desktop/Cursor)
 python -m agent.mcp_server --stdio
-
-# List sessions
-orchestrator --list-sessions
-
-# Resume session
-orchestrator --resume abc12345
 ```
 
-### 8. Test Results
+### Test Results
 
 | Suite                         | Tests  | Status          |
 | ----------------------------- | ------ | --------------- |
 | Phase 19.5 (ReAct + UX)       | 45     | ✅ Pass         |
 | Phase 19.6 (Black Box)        | 30     | ✅ Pass         |
-| Phase 19.7 (Claude Symbiosis) | 17     | ✅ Pass         |
-| **Total**                     | **92** | **✅ All Pass** |
-
-### 9. MCP Tool Reference
-
-| Tool                       | Description        | Parameters                                    |
-| -------------------------- | ------------------ | --------------------------------------------- |
-| `omni_search_memory`       | Query vector store | `query: str, n_results: int`                  |
-| `omni_ingest_knowledge`    | Store documents    | `documents: list, ids: list`                  |
-| `omni_request_review`      | Code review        | `code: str, language: str, focus_areas: list` |
-| `omni_get_session_summary` | Session status     | None                                          |
-| `omni_list_sessions`       | List sessions      | None                                          |
-| `omni_generate_context`    | Generate CLAUDE.md | `mission: str, relevant_files: list`          |
-
-### 10. Configuration (settings.yaml)
-
-Context compression and Post-Mortem audit can be configured in `agent/settings.yaml`:
-
-```yaml
-# Context Compression (Phase 19.7)
-context_compression:
-  # Enable/disable context compression globally
-  enabled: true
-
-  # Maximum context tokens before compression is triggered
-  max_context_tokens: 4000
-
-  # Maximum file size (KB) before truncation
-  max_file_size_kb: 50
-
-  # Compression method: "llm" (LLM summary) or "truncate"
-  method: "llm"
-
-# Post-Mortem Audit (Phase 19.7)
-post_mortem:
-  # Enable/disable Post-Mortem audit after Claude Code execution
-  enabled: true
-
-  # Confidence threshold for auto-approval
-  confidence_threshold: 0.8
-```
-
-#### Configuration Options
-
-| Setting                                  | Default | Description                                          |
-| ---------------------------------------- | ------- | ---------------------------------------------------- |
-| `context_compression.enabled`            | `true`  | Enable/disable LLM-based context compression         |
-| `context_compression.max_context_tokens` | `4000`  | Token threshold before compression                   |
-| `context_compression.max_file_size_kb`   | `50`    | Max file size in KB before truncation                |
-| `context_compression.method`             | `"llm"` | `"llm"` for LLM summary, `"truncate"` for simple cut |
-| `post_mortem.enabled`                    | `true`  | Enable/disable automatic review after execution      |
-| `post_mortem.confidence_threshold`       | `0.8`   | Min confidence for auto-approval                     |
+| Phase 19.7 (MCP Server)       | 10     | ✅ Pass         |
+| **Total**                     | **85** | **✅ All Pass** |
 
 ---
 
-## Phase 20: The Recursive Evolution (The `omni dev` Command)
+## Phase 21: Skill Awakening (Federated Backlogs)
 
-> **Status**: Complete (15 new tests)
-> **Philosophy**: "The system that builds itself."
+> **Status**: Active Development
+> **Philosophy**: "Skill as a Product (SaaP)" and "Federated Backlogs"
 
 ### Overview
 
-Phase 20 introduces **DevWorkflow** - a self-evolution engine that orchestrates the complete feature development lifecycle. This is the "singularity" moment where Omni gains the ability to autonomously develop features.
+Phase 21 transforms Omni from a "Wrapper" (trying to control Claude) into a "Kernel" (providing data and capabilities, letting Claude make decisions).
 
-### The DevWorkflow Engine
+Instead of running `omni dev` to orchestrate Claude, we now give Claude the ability to **scan skill backlogs** and **self-evolve** by implementing missing features.
+
+### The Federated Backlog Pattern
+
+Each skill in `agent/skills/{skill}/` now has a `Backlog.md` that serves as its product roadmap:
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    DevWorkflow (Orchestrator)                       │
-│                                                                     │
-│   ┌─────────────┐   ┌─────────────┐   ┌─────────────────────┐      │
-│   │VectorMemory │──►│ContextInjector│──►│  ClaudeCodeAdapter  │      │
-│   │   (RAG)     │   │  (CLAUDE.md) │   │    (CLI Wrapper)    │      │
-│   └─────────────┘   └─────────────┘   └─────────────────────┘      │
-│                                      │                              │
-│                                      ▼                              │
-│   ┌─────────────────────────────────────────────────────────────┐  │
-│   │                 ReviewerAgent                               │  │
-│   │                 (Post-Mortem Audit)                         │  │
-│   └─────────────────────────────────────────────────────────────┘  │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+agent/skills/
+├── git/
+│   ├── Backlog.md      # Product backlog for git skill
+│   ├── manifest.json   # Skill metadata
+│   ├── prompts.md      # Router rules
+│   └── tools.py        # Implementation
+└── ...
 ```
 
-### Lifecycle
-
-| Phase              | Component         | Description                          |
-| ------------------ | ----------------- | ------------------------------------ |
-| 1. Plan & Retrieve | VectorMemory      | RAG-based context retrieval          |
-| 2. Contextualize   | ContextInjector   | Dynamic CLAUDE.md generation         |
-| 3. Execute         | ClaudeCodeAdapter | Launch Claude CLI for implementation |
-| 4. Verify          | ReviewerAgent     | Post-Mortem audit of changes         |
-
-### Usage
-
-```bash
-# Run a feature development task
-uv run omni dev "Add a hello-world script to scripts/"
-
-# With session resumption
-uv run omni dev --resume abc123 "Add user authentication"
-```
-
-### API
+### Product Owner Tools
 
 ```python
-from agent.core.workflows.dev_mode import DevWorkflow, create_dev_workflow
+from agent.mcp_server import omni_scan_skill_backlogs
 
-# Factory creation
-workflow = create_dev_workflow()
+# Scan all skill backlogs
+await omni_scan_skill_backlogs()
 
-# Execute feature development
-result = await workflow.run("Add user authentication feature")
-
-print(result)
-# {
-#   "feature_request": "Add user authentication feature",
-#   "success": True,
-#   "context_files": [...],
-#   "claude_output": "...",
-#   "audit_result": {...},
-#   "duration_seconds": 45.2
-# }
+# Scan specific skill
+await omni_scan_skill_backlogs("git")
 ```
+
+### New Workflow
+
+1. **You**: "Omni, scan the git backlog and tell me what needs to be done."
+2. **Claude**: Calls `omni_scan_skill_backlogs("git")` → Reads `Backlog.md`
+3. **Claude**: "I see git stash support is missing. Should I implement it?"
+4. **You**: "Yes, go ahead."
+5. **Claude**: Implements the feature, then **updates Backlog.md** to mark it done.
 
 ### Test Coverage
 
-| Suite                         | Tests   | Status          |
-| ----------------------------- | ------- | --------------- |
-| Phase 19.5 (ReAct + UX)       | 45      | ✅ Pass         |
-| Phase 19.6 (Black Box)        | 30      | ✅ Pass         |
-| Phase 19.7 (Claude Symbiosis) | 25      | ✅ Pass         |
-| Phase 20 (DevWorkflow)        | 15      | ✅ Pass         |
-| **Total**                     | **115** | **✅ All Pass** |
+| Suite                              | Tests   | Status          |
+| ---------------------------------- | ------- | --------------- |
+| Phase 19.5 (ReAct + UX)            | 45      | ✅ Pass         |
+| Phase 19.6 (Black Box)             | 30      | ✅ Pass         |
+| Phase 19.7 (Claude Symbiosis)      | 25      | ✅ Pass         |
+| Phase 21 (Skill Awakening)         | -       | 🔄 Active       |
+| **Total**                          | **100+**| **✅ All Pass** |
 
 ### Files Changed
 
-| File                                   | Changes                 |
-| -------------------------------------- | ----------------------- |
-| `agent/core/workflows/dev_mode.py`     | New: DevWorkflow engine |
-| `agent/main.py`                        | Added `dev` subcommand  |
-| `agent/tests/test_phase20_dev_mode.py` | New: 15 tests           |
+| File                                   | Changes                            |
+| -------------------------------------- | ---------------------------------- |
+| `agent/skills/git/Backlog.md`          | New: Git skill product backlog     |
+| `agent/mcp_server.py`                  | Added `omni_scan_skill_backlogs`   |
+| `agent/settings.yaml`                  | Added `skills.path` configuration  |
 
 ### Why This Matters
 
-| Layer       | Before Phase 20 | After Phase 20                |
-| ----------- | --------------- | ----------------------------- |
-| Development | Manual coding   | Automated feature development |
-| Context     | Manual RAG      | Automatic context retrieval   |
-| Review      | Manual audit    | Automatic post-mortem audit   |
-| Workflow    | Linear          | Full lifecycle automation     |
-
-### The Three-Layer Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    Strategic Layer (Omni)                           │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │  • Routing (what to build)                                  │   │
-│  │  • RAG (context injection)                                  │   │
-│  │  • Planning (mission briefs)                                │   │
-│  │  • Auditing (quality gates)                                 │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│                              │                                       │
-│                              ▼                                       │
-│                    Tactical Layer (Claude Code)                      │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │  • Terminal operations                                      │   │
-│  │  • File editing                                             │   │
-│  │  • Git operations                                           │   │
-│  │  • Test execution                                           │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│                              │                                       │
-│                              ▼                                       │
-│                    Infrastructure Layer                              │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │  • Vector Memory (persistent knowledge)                     │   │
-│  │  • Black Box (session tracking)                             │   │
-│  │  • MCP Server (tool exposure)                               │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────┘
-```
+| Aspect          | Old (Wrapper)              | New (Kernel)                      |
+| --------------- | ------------------------- | --------------------------------- |
+| Control Flow    | Omni controls Claude      | Claude controls itself            |
+| Feedback Loop   | Manual audit              | Self-documented backlogs          |
+| Evolution       | CLI commands              | Autonomous skill improvement      |
+| Philosophy      | "Do what I say"           | "Tell me what you need"           |
 
 ### Summary
 
-Phase 20 transforms Omni from a helper into a true **Agentic OS** that can:
+Phase 21 makes Omni a **self-documenting, self-evolving system**:
 
-- Understand feature requests
-- Retrieve relevant context automatically
-- Execute development via Claude Code
-- Verify quality via Post-Mortem audit
+- Skills declare their own missing capabilities via Backlog.md
+- Claude discovers gaps and fills them autonomously
+- No more wrapper scripts - just pure capability exchange
 
-This is the foundation for **recursive self-improvement** - Omni can now build features, and those features can make Omni better.
+This is the foundation for **recursive self-improvement** where Omni can build features that make Omni better.

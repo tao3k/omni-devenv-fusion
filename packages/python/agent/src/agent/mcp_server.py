@@ -21,12 +21,21 @@ Usage:
 from mcp.server.fastmcp import FastMCP
 from mcp.types import Tool as MCPTool
 import structlog
+from pathlib import Path
 
+from common.mcp_core.settings import get_setting, get_project_root
 from agent.core.context_loader import load_system_context
+from agent.core.context_compressor import get_compressor
 from agent.core.session import SessionManager
 from agent.core.telemetry import CostEstimator
 
 logger = structlog.get_logger()
+
+# Get skills directory from settings
+SKILLS_DIR = get_project_root() / get_setting("skills.path", "agent/skills")
+
+# Initialize context compressor for RAG results
+_compressor = get_compressor()
 
 # Create MCP Server
 mcp = FastMCP("omni-agentic-os")
@@ -73,12 +82,15 @@ async def omni_search_memory(query: str, n_results: int = 5) -> str:
     """
     Search Omni's long-term memory (Phase 16 RAG).
 
+    Uses context compression to prevent token explosion when returning results.
+    Configure via settings.yaml: context_compression.*
+
     Args:
         query: Search query
         n_results: Number of results to return
 
     Returns:
-        Relevant memories from the vector store
+        Relevant memories from the vector store (compressed if needed)
     """
     session = get_session_manager()
     session.log("tool", "mcp_client", f"Memory search: {query}")
@@ -91,15 +103,30 @@ async def omni_search_memory(query: str, n_results: int = 5) -> str:
         if not results:
             return "No relevant memories found."
 
-        # Format results
+        # Format and compress results
         formatted = []
+        current_tokens = 0
+        max_tokens = _compressor.max_tokens
+
         for i, result in enumerate(results, 1):
-            formatted.append(f"{i}. {result.get('content', '')[:200]}...")
+            content = result.get('content', '')
+
+            # Apply context compression
+            compressed = _compressor.compress(content)
+
+            # Check token budget
+            estimated = _compressor.estimate_tokens(compressed)
+            if current_tokens + estimated > max_tokens:
+                formatted.append(f"... [{len(results) - i} results omitted for context limit]")
+                break
+
+            formatted.append(f"{i}. {compressed[:200]}..." if len(compressed) > 200 else f"{i}. {compressed}")
+            current_tokens += estimated
 
         session.log(
             "tool",
             "mcp_client",
-            f"Memory search returned {len(results)} results",
+            f"Memory search returned {len(results)} results (compressed)",
         )
 
         return "\n".join(formatted)
@@ -258,43 +285,52 @@ def omni_list_sessions() -> str:
 
 
 # =============================================================================
-# Context Generation Tools
+# Skill Backlog Scanner (Product Owner Tool)
 # =============================================================================
 
 
 @mcp.tool()
-def omni_generate_context(
-    mission: str,
-    relevant_files: list = None,
-) -> str:
+async def omni_scan_skill_backlogs(skill_name: str = None) -> str:
     """
-    Generate dynamic context file for Claude Code.
+    Product Owner Tool: Scan the Federated Backlogs of skills.
 
-    This creates a CLAUDE.md-style context that can be passed to Claude CLI.
+    Use this to discover what features each skill is missing or needs improvement on.
 
     Args:
-        mission: Mission brief
-        relevant_files: Files relevant to the mission
+        skill_name: Optional. If provided (e.g., 'git'), returns only that skill's backlog.
+                    If not provided, returns all skill backlogs.
 
     Returns:
-        Generated context content
+        Backlog content from the skill(s)
     """
-    from agent.core.adapters.claude_cli import ContextInjector
+    results = []
 
-    injector = ContextInjector()
-    context = injector.generate_context_file(
-        mission_brief=mission,
-        relevant_files=relevant_files or [],
-    )
+    # Ensure directory exists
+    if not SKILLS_DIR.exists():
+        return f"❌ Skills directory not found at: {SKILLS_DIR}"
 
-    session = get_session_manager()
-    session.log(
-        "tool",
-        "mcp_client",
-        f"Context generated for mission: {mission[:50]}...",
-    )
+    # Determine which skills to scan
+    if skill_name:
+        targets = [skill_name]
+    else:
+        targets = [d.name for d in SKILLS_DIR.iterdir() if d.is_dir()]
 
-    return context
+    for skill in targets:
+        backlog_path = SKILLS_DIR / skill / "Backlog.md"
+        if backlog_path.exists():
+            try:
+                content = backlog_path.read_text(encoding="utf-8")
+                results.append(f"=== SKILL: {skill.upper()} ===\n{content}")
+            except Exception as e:
+                results.append(f"=== SKILL: {skill.upper()} ===\nError reading backlog: {e}")
+        else:
+            if skill_name:
+                return f"❌ No Backlog.md found for skill: {skill} at {backlog_path}"
+
+    if not results:
+        return f"No skill backlogs found in {SKILLS_DIR}."
+
+    return "\n".join(results)
 
 
 # =============================================================================

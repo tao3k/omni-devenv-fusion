@@ -184,6 +184,32 @@ class UXManager:
         else:
             self._render_stop_execution()
 
+    def stop_live(self) -> None:
+        """Stop Rich Live display to release TTY for external processes like Claude CLI."""
+        # Stop the status spinner if running
+        if self._status:
+            self._status.stop()
+            self._status = None
+
+        # Stop Live if running
+        if self._live and self._live.is_started:
+            self._live.stop()
+            self._live = None
+
+        # Print handoff message after stopping spinners (don't clear it)
+        self.console.print("[bold yellow]🎮 Handoff to Claude Code...[/]")
+
+    def start_live(self) -> None:
+        """Restart Rich Live display after external process completes."""
+        self.console.print("\n" + "=" * 50)
+        self.console.print("[bold yellow]🔙 Control returned to Omni. Starting Post-Mortem...[/]")
+        self.console.print("=" * 50 + "\n")
+
+        # Restart status spinner for post-mortem
+        if self._status:
+            self._live = Live(self._status.console, refresh_per_second=4, transient=True)
+            self._live.start()
+
     # ==================== Review Visualization ====================
 
     def start_review(self) -> None:

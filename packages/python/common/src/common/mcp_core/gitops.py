@@ -1,16 +1,17 @@
-# common/mcp_core/gitops.py
 """
-GitOps - Single Source of Truth for Project Path Management
+common/mcp_core/gitops.py
+GitOps - Project Path Detection (Infrastructure Layer).
 
-This module provides GitOps-based utilities for project path detection
-and management. All path detection in the project should use these functions.
+Phase 23 Refactored: Only保留项目路径检测功能。
+Git 操作能力已迁移到 agent/skills/git/tools.py。
+
+This module provides GitOps-based utilities for project path detection.
+All path detection in the project should use these functions.
 
 Core Principles:
 1. Git is the single source of truth for project structure
 2. Deterministic, reproducible paths across environments
 3. Fallback mechanisms for non-git environments (testing)
-
-Reference: numtide/prj-spec conventions
 
 Usage:
     from common.mcp_core.gitops import get_project_root, get_spec_dir
@@ -18,21 +19,20 @@ Usage:
     root = get_project_root()
     spec_dir = get_spec_dir()
 
-GitOps Utilities:
+Path Functions:
     - get_project_root(): Get project root from git toplevel
-    - get_git_toplevel(): Direct git toplevel (legacy compatibility)
-    - is_git_repo(): Check if path is a git repository
     - get_spec_dir(): Get agent/specs directory
     - get_instructions_dir(): Get agent/instructions directory
     - get_docs_dir(): Get docs directory
     - get_agent_dir(): Get agent directory
     - get_src_dir(): Get src directory
-    - run_git_cmd(): Run git command (for commit/push only)
+    - is_git_repo(): Check if path is a git repository
+    - is_project_root(): Check if path appears to be project root
 """
 
 import subprocess
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 # Cache for project root (singleton pattern)
 _project_root: Optional[Path] = None
@@ -151,16 +151,6 @@ def is_git_repo(path: Optional[Path] = None) -> bool:
     return (check_path / ".git").exists()
 
 
-def reset_project_root():
-    """
-    Reset the cached project root (for testing purposes only).
-
-    WARNING: Do not use this in production code.
-    """
-    global _project_root
-    _project_root = None
-
-
 def is_project_root(path: Path) -> bool:
     """
     Check if a path is the project root.
@@ -174,6 +164,16 @@ def is_project_root(path: Path) -> bool:
     return (
         (path / ".git").exists() or (path / "justfile").exists() or (path / "devenv.nix").exists()
     )
+
+
+def reset_project_root():
+    """
+    Reset the cached project root (for testing purposes only).
+
+    WARNING: Do not use this in production code.
+    """
+    global _project_root
+    _project_root = None
 
 
 def get_git_toplevel() -> Optional[Path]:
@@ -197,33 +197,6 @@ def get_git_toplevel() -> Optional[Path]:
     return None
 
 
-async def run_git_cmd(args: List[str]) -> str:
-    """
-    Run a git command and return the output.
-
-    Note: For safe read operations (status, diff, log), use Claude-native bash.
-    This function is ONLY for critical operations (commit, push) via MCP.
-
-    Args:
-        args: Git command arguments (e.g., ["commit", "-m", "message"])
-
-    Returns:
-        Command output string
-
-    Raises:
-        Exception: If git command fails
-    """
-    result = subprocess.run(
-        ["git"] + args,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    if result.returncode != 0:
-        raise Exception(f"Git command failed: {result.stderr}")
-    return result.stdout
-
-
 __all__ = [
     "get_project_root",
     "get_spec_dir",
@@ -235,5 +208,4 @@ __all__ = [
     "is_project_root",
     "is_git_repo",
     "get_git_toplevel",
-    "run_git_cmd",
 ]

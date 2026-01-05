@@ -211,10 +211,38 @@ class ReviewerAgent(BaseAgent):
             feedback = "Output is suspiciously short. Did the agent complete the task?"
             issues_found.append("short_output")
         else:
-            # Simulate successful audit
-            approved = True
-            feedback = "Output meets quality standards."
-            suggestions.append("Consider adding comments for complex logic.")
+            # Check if task involves coding/file changes
+            coding_keywords = [
+                "create",
+                "write",
+                "edit",
+                "modify",
+                "add",
+                "fix",
+                "implement",
+                "update",
+                "refactor",
+                "delete",
+                "remove",
+            ]
+            is_coding_task = any(keyword in task.lower() for keyword in coding_keywords)
+
+            # Must explicitly see diff --git to confirm changes
+            has_changes = "diff --git" in agent_output
+
+            # If it's a coding task but no changes detected, reject
+            if is_coding_task and not has_changes:
+                approved = False
+                feedback = "No code changes detected. The tool execution might have failed or was rejected by the user."
+                issues_found.append("no_changes_detected")
+                suggestions.append("Check if Claude actually modified any files.")
+            else:
+                # Simulate successful audit
+                approved = True
+                feedback = "Output meets quality standards."
+                if has_changes:
+                    feedback += " Changes detected and verified."
+                suggestions.append("Consider adding comments for complex logic.")
 
         # Placeholder: In production, this would be:
         # result = await self.inference.chat(
