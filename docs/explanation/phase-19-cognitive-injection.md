@@ -746,10 +746,10 @@ The MCP Server exposes Omni's internal capabilities to external clients (Claude 
 
 ### Files Changed
 
-| File                    | Changes                                 |
-| ----------------------- | --------------------------------------- |
-| `agent/mcp_server.py`   | FastMCP server with Omni tools          |
-| `agent/core/session.py` | Session tracking for Black Box          |
+| File                    | Changes                        |
+| ----------------------- | ------------------------------ |
+| `agent/mcp_server.py`   | FastMCP server with Omni tools |
+| `agent/core/session.py` | Session tracking for Black Box |
 
 ### Usage
 
@@ -760,12 +760,12 @@ python -m agent.mcp_server --stdio
 
 ### Test Results
 
-| Suite                         | Tests  | Status          |
-| ----------------------------- | ------ | --------------- |
-| Phase 19.5 (ReAct + UX)       | 45     | ✅ Pass         |
-| Phase 19.6 (Black Box)        | 30     | ✅ Pass         |
-| Phase 19.7 (MCP Server)       | 10     | ✅ Pass         |
-| **Total**                     | **85** | **✅ All Pass** |
+| Suite                   | Tests  | Status          |
+| ----------------------- | ------ | --------------- |
+| Phase 19.5 (ReAct + UX) | 45     | ✅ Pass         |
+| Phase 19.6 (Black Box)  | 30     | ✅ Pass         |
+| Phase 19.7 (MCP Server) | 10     | ✅ Pass         |
+| **Total**               | **85** | **✅ All Pass** |
 
 ---
 
@@ -816,30 +816,30 @@ await omni_scan_skill_backlogs("git")
 
 ### Test Coverage
 
-| Suite                              | Tests   | Status          |
-| ---------------------------------- | ------- | --------------- |
-| Phase 19.5 (ReAct + UX)            | 45      | ✅ Pass         |
-| Phase 19.6 (Black Box)             | 30      | ✅ Pass         |
-| Phase 19.7 (Claude Symbiosis)      | 25      | ✅ Pass         |
-| Phase 21 (Skill Awakening)         | -       | 🔄 Active       |
-| **Total**                          | **100+**| **✅ All Pass** |
+| Suite                         | Tests    | Status          |
+| ----------------------------- | -------- | --------------- |
+| Phase 19.5 (ReAct + UX)       | 45       | ✅ Pass         |
+| Phase 19.6 (Black Box)        | 30       | ✅ Pass         |
+| Phase 19.7 (Claude Symbiosis) | 25       | ✅ Pass         |
+| Phase 21 (Skill Awakening)    | -        | 🔄 Active       |
+| **Total**                     | **100+** | **✅ All Pass** |
 
 ### Files Changed
 
-| File                                   | Changes                            |
-| -------------------------------------- | ---------------------------------- |
-| `agent/skills/git/Backlog.md`          | New: Git skill product backlog     |
-| `agent/mcp_server.py`                  | Added `omni_scan_skill_backlogs`   |
-| `agent/settings.yaml`                  | Added `skills.path` configuration  |
+| File                          | Changes                           |
+| ----------------------------- | --------------------------------- |
+| `agent/skills/git/Backlog.md` | New: Git skill product backlog    |
+| `agent/mcp_server.py`         | Added `omni_scan_skill_backlogs`  |
+| `agent/settings.yaml`         | Added `skills.path` configuration |
 
 ### Why This Matters
 
-| Aspect          | Old (Wrapper)              | New (Kernel)                      |
-| --------------- | ------------------------- | --------------------------------- |
-| Control Flow    | Omni controls Claude      | Claude controls itself            |
-| Feedback Loop   | Manual audit              | Self-documented backlogs          |
-| Evolution       | CLI commands              | Autonomous skill improvement      |
-| Philosophy      | "Do what I say"           | "Tell me what you need"           |
+| Aspect        | Old (Wrapper)        | New (Kernel)                 |
+| ------------- | -------------------- | ---------------------------- |
+| Control Flow  | Omni controls Claude | Claude controls itself       |
+| Feedback Loop | Manual audit         | Self-documented backlogs     |
+| Evolution     | CLI commands         | Autonomous skill improvement |
+| Philosophy    | "Do what I say"      | "Tell me what you need"      |
 
 ### Summary
 

@@ -293,18 +293,32 @@ async def get_test_protocol() -> str:
 
 
 def register(mcp: FastMCP):
-    """Register Testing Protocol tools."""
+    """Register Testing Protocol tools using direct function binding."""
+    import sys
+    import importlib.util
 
-    @mcp.tool()
-    async def smart_test_runner_tool(focus_file: str = None) -> str:
-        return await smart_test_runner(focus_file)
+    # Get the current module from sys.modules
+    current_module = sys.modules.get("agent.skills.testing_protocol.tools")
+    if current_module is None:
+        spec = importlib.util.spec_from_file_location(
+            "agent.skills.testing_protocol.tools",
+            Path(__file__).resolve(),
+        )
+        current_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(current_module)
+        sys.modules["agent.skills.testing_protocol.tools"] = current_module
 
-    @mcp.tool()
-    async def run_test_command_tool(command: str) -> str:
-        return await run_test_command(command)
+    # Get functions from the module
+    smart_runner = getattr(current_module, "smart_test_runner", None)
+    run_cmd = getattr(current_module, "run_test_command", None)
+    get_proto = getattr(current_module, "get_test_protocol", None)
 
-    @mcp.tool()
-    async def get_test_protocol_tool() -> str:
-        return await get_test_protocol()
+    # Register tools directly
+    if smart_runner:
+        mcp.add_tool(smart_runner, "Execute tests following agent/how-to/testing-workflows.md.")
+    if run_cmd:
+        mcp.add_tool(run_cmd, "Run a test command and return results.")
+    if get_proto:
+        mcp.add_tool(get_proto, "Get the testing protocol summary.")
 
     logger.info("Testing Protocol skill tools registered")

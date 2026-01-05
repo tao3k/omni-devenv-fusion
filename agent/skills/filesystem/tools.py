@@ -112,30 +112,41 @@ async def search_files(pattern: str, path: str = ".") -> str:
 
 
 def register(mcp: FastMCP):
-    """Register Filesystem tools with MCP."""
+    """Register Filesystem tools with MCP using direct function binding."""
+    import sys
+    import importlib.util
 
-    @mcp.tool()
-    async def list_directory(path: str = ".") -> str:
-        return await list_directory(path)
+    # Get the current module from sys.modules
+    current_module = sys.modules.get("agent.skills.filesystem.tools")
+    if current_module is None:
+        spec = importlib.util.spec_from_file_location(
+            "agent.skills.filesystem.tools",
+            Path(__file__).resolve(),
+        )
+        current_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(current_module)
+        sys.modules["agent.skills.filesystem.tools"] = current_module
 
-    @mcp.tool()
-    async def read_file(path: str) -> str:
-        return await read_file(path)
+    # Get functions from the module
+    list_dir = getattr(current_module, "list_directory", None)
+    read_file_fn = getattr(current_module, "read_file", None)
+    read_multi = getattr(current_module, "read_multiple_files", None)
+    write_file_fn = getattr(current_module, "write_file", None)
+    get_info = getattr(current_module, "get_file_info", None)
+    search = getattr(current_module, "search_files", None)
 
-    @mcp.tool()
-    async def read_multiple_files(paths: List[str]) -> str:
-        return await read_multiple_files(paths)
-
-    @mcp.tool()
-    async def write_file(path: str, content: str) -> str:
-        return await write_file(path, content)
-
-    @mcp.tool()
-    async def get_file_info(path: str) -> str:
-        return await get_file_info(path)
-
-    @mcp.tool()
-    async def search_files(pattern: str, path: str = ".") -> str:
-        return await search_files(pattern, path)
+    # Register tools directly
+    if list_dir:
+        mcp.add_tool(list_dir, "List files and directories in the given path.")
+    if read_file_fn:
+        mcp.add_tool(read_file_fn, "Read the full content of a file (UTF-8).")
+    if read_multi:
+        mcp.add_tool(read_multi, "Read multiple files at once.")
+    if write_file_fn:
+        mcp.add_tool(write_file_fn, "Create or Overwrite a file with new content.")
+    if get_info:
+        mcp.add_tool(get_info, "Get metadata about a file.")
+    if search:
+        mcp.add_tool(search, "Search for files matching a glob pattern.")
 
     logger.info("Filesystem skill tools registered")

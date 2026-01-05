@@ -269,7 +269,9 @@ class TestGitSkill:
         write_found = [op for op in write_ops if op in tool_names]
 
         assert len(read_found) >= 2, f"Should have at least 2 read operations, found: {read_found}"
-        assert len(write_found) >= 2, f"Should have at least 2 write operations, found: {write_found}"
+        assert len(write_found) >= 2, (
+            f"Should have at least 2 write operations, found: {write_found}"
+        )
 
     def test_git_commit_has_message_param(self):
         """Verify git_commit has message parameter."""
@@ -282,7 +284,10 @@ class TestGitSkill:
         # Find git_commit function (sync or async)
         git_commit_func = None
         for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "git_commit":
+            if (
+                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name == "git_commit"
+            ):
                 git_commit_func = node
                 break
 
@@ -308,7 +313,9 @@ class TestGitSkill:
                     has_gitops_import = True
                     break
 
-        assert not has_gitops_import, "git skill should NOT import from gitops (native implementation)"
+        assert not has_gitops_import, (
+            "git skill should NOT import from gitops (native implementation)"
+        )
 
         # Should have _run_git internal helper
         has_run_git = False

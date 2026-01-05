@@ -74,8 +74,8 @@ def register_context_tools(mcp: FastMCP) -> None:
 
             instructions = get_all_instructions_merged()
 
-            # 2. Read macro status
-            status = project_memory.get_status()
+            # 2. Read macro status (returns string, not dict)
+            status_text = project_memory.get_status()
 
             logger.info("context.read")
 
@@ -94,13 +94,7 @@ def register_context_tools(mcp: FastMCP) -> None:
 
             return f"""=== 📋 Omni-DevEnv Fusion - Active Context ===
 
-🎯 Current Mission:
-{status.get("mission", "No active mission")}
-
-📍 Phase: {status.get("phase", "Unknown")}
-🔍 Focus: {status.get("focus", "Not specified")}
-
-📋 Backlog: {status.get("backlog", "Empty")}
+{status_text}
 
 {recent_logs}
 

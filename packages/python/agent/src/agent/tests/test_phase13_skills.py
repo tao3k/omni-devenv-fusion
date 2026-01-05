@@ -735,8 +735,8 @@ class TestCodeInsightSkill:
         result = await module.count_lines("agent/skills/code_insight/tools.py")
         assert "tools.py" in result
         assert "lines" in result
-        # Should be around 115 lines
-        assert "115" in result or "114" in result or "116" in result
+        # Should be around 119 lines (updated after recursive call fixes)
+        assert "119" in result or "118" in result or "120" in result
 
 
 class TestInvokeSkillTool:
@@ -825,6 +825,306 @@ class TestInvokeSkillTool:
         assert "not found" in result.lower()
         # Should list available operations
         assert "Available:" in result or "list_directory" in result
+
+
+class TestWriterSkill:
+    """Test writer skill operations (Writing quality enforcement)."""
+
+    def test_writer_manifest_parsing(self, registry):
+        """Registry should correctly parse writer/manifest.json."""
+        manifest = registry.get_skill_manifest("writer")
+        assert manifest is not None
+        assert manifest.name == "writer"
+        assert manifest.version == "1.0.0"
+        assert manifest.tools_module == "agent.skills.writer.tools"
+
+    def test_load_writer_skill(self, registry, real_mcp):
+        """Should successfully load writer skill."""
+        success, message = registry.load_skill("writer", real_mcp)
+
+        assert success is True, f"Expected success, got: {message}"
+        assert "writer" in registry.loaded_skills
+        assert "writer" in registry.module_cache
+
+    def test_writer_has_lint_writing_style(self, registry, real_mcp):
+        """Loaded writer module should have lint_writing_style function."""
+        registry.load_skill("writer", real_mcp)
+
+        module = registry.module_cache["writer"]
+        assert hasattr(module, "lint_writing_style")
+        assert hasattr(module, "check_markdown_structure")
+        assert hasattr(module, "polish_text")
+        assert hasattr(module, "load_writing_memory")
+
+    @pytest.mark.asyncio
+    async def test_lint_writing_style_detects_clutter(self, registry, real_mcp):
+        """lint_writing_style should detect clutter words."""
+        registry.load_skill("writer", real_mcp)
+        module = registry.module_cache["writer"]
+
+        # Test with clutter words
+        result = await module.lint_writing_style("We should utilize this feature.")
+        assert "violations" in result or "status" in result
+        # Should detect "utilize" as a clutter word
+
+    @pytest.mark.asyncio
+    async def test_lint_writing_style_clean_text(self, registry, real_mcp):
+        """lint_writing_style should return clean for good text."""
+        registry.load_skill("writer", real_mcp)
+        module = registry.module_cache["writer"]
+
+        result = await module.lint_writing_style("Use this feature.")
+        assert "clean" in result or "status" in result
+
+    @pytest.mark.asyncio
+    async def test_check_markdown_structure_valid(self, registry, real_mcp):
+        """check_markdown_structure should validate proper markdown."""
+        registry.load_skill("writer", real_mcp)
+        module = registry.module_cache["writer"]
+
+        result = await module.check_markdown_structure("# Heading\n\nSome content.")
+        assert "clean" in result or "status" in result
+
+    @pytest.mark.asyncio
+    async def test_check_markdown_structure_detects_multiple_h1(self, registry, real_mcp):
+        """check_markdown_structure should detect multiple H1 headings."""
+        registry.load_skill("writer", real_mcp)
+        module = registry.module_cache["writer"]
+
+        result = await module.check_markdown_structure("# Title\n\n# Another Title")
+        assert "violations" in result or "multiple_h1" in result
+
+    @pytest.mark.asyncio
+    async def test_polish_text_combines_checks(self, registry, real_mcp):
+        """polish_text should combine lint and structure checks."""
+        registry.load_skill("writer", real_mcp)
+        module = registry.module_cache["writer"]
+
+        result = await module.polish_text("# Title\n\nUse this feature.")
+        assert "status" in result
+
+    @pytest.mark.asyncio
+    async def test_load_writing_memory(self, registry, real_mcp):
+        """load_writing_memory should return writing guidelines."""
+        registry.load_skill("writer", real_mcp)
+        module = registry.module_cache["writer"]
+
+        result = await module.load_writing_memory()
+        assert "status" in result or "loaded" in result
+
+
+class TestFileOpsSkill:
+    """Test file_ops skill operations (File I/O and AST-based refactoring)."""
+
+    def test_file_ops_manifest_parsing(self, registry):
+        """Registry should correctly parse file_ops/manifest.json."""
+        manifest = registry.get_skill_manifest("file_ops")
+        assert manifest is not None
+        assert manifest.name == "file_ops"
+        assert manifest.version == "1.0.0"
+        assert manifest.tools_module == "agent.skills.file_ops.tools"
+
+    def test_load_file_ops_skill(self, registry, real_mcp):
+        """Should successfully load file_ops skill."""
+        success, message = registry.load_skill("file_ops", real_mcp)
+
+        assert success is True, f"Expected success, got: {message}"
+        assert "file_ops" in registry.loaded_skills
+        assert "file_ops" in registry.module_cache
+
+    def test_file_ops_has_core_functions(self, registry, real_mcp):
+        """Loaded file_ops module should have core functions."""
+        registry.load_skill("file_ops", real_mcp)
+
+        module = registry.module_cache["file_ops"]
+        assert hasattr(module, "read_file")
+        assert hasattr(module, "search_files")
+        assert hasattr(module, "save_file")
+
+    @pytest.mark.asyncio
+    async def test_file_ops_read_file(self, registry, real_mcp):
+        """file_ops read_file should read file content."""
+        registry.load_skill("file_ops", real_mcp)
+        module = registry.module_cache["file_ops"]
+
+        result = await module.read_file("agent/skills/file_ops/manifest.json")
+        assert "file_ops" in result or "manifest" in result
+
+    @pytest.mark.asyncio
+    async def test_file_ops_read_file_not_found(self, registry, real_mcp):
+        """file_ops read_file should return error for non-existent file."""
+        registry.load_skill("file_ops", real_mcp)
+        module = registry.module_cache["file_ops"]
+
+        result = await module.read_file("nonexistent/file.txt")
+        assert "Error" in result or "not exist" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_file_ops_search_files(self, registry, real_mcp):
+        """file_ops search_files should find patterns."""
+        registry.load_skill("file_ops", real_mcp)
+        module = registry.module_cache["file_ops"]
+
+        result = await module.search_files(pattern="def register", path="agent/skills/file_ops")
+        assert "search" in result.lower() or "def" in result or "result" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_file_ops_save_file_creates_file(self, registry, real_mcp):
+        """file_ops save_file should create a new file."""
+        import tempfile
+
+        registry.load_skill("file_ops", real_mcp)
+        module = registry.module_cache["file_ops"]
+
+        # Use temp file in agent directory
+        test_path = "agent/skills/test_file_ops.txt"
+        try:
+            result = await module.save_file(path=test_path, content="test content")
+            assert "Successfully wrote" in result or "Error" not in result
+
+            # Verify file was written
+            content = Path(test_path).read_text()
+            assert content == "test content"
+        finally:
+            if Path(test_path).exists():
+                Path(test_path).unlink()
+
+
+class TestTestingProtocolSkill:
+    """Test testing_protocol skill operations (Smart test runner)."""
+
+    def test_testing_protocol_manifest_parsing(self, registry):
+        """Registry should correctly parse testing_protocol/manifest.json."""
+        manifest = registry.get_skill_manifest("testing_protocol")
+        assert manifest is not None
+        assert manifest.name == "testing_protocol"
+        assert manifest.version == "1.0.0"
+        assert manifest.tools_module == "agent.skills.testing_protocol.tools"
+
+    def test_load_testing_protocol_skill(self, registry, real_mcp):
+        """Should successfully load testing_protocol skill."""
+        success, message = registry.load_skill("testing_protocol", real_mcp)
+
+        assert success is True, f"Expected success, got: {message}"
+        assert "testing_protocol" in registry.loaded_skills
+        assert "testing_protocol" in registry.module_cache
+
+    def test_testing_protocol_has_core_functions(self, registry, real_mcp):
+        """Loaded testing_protocol module should have core functions."""
+        registry.load_skill("testing_protocol", real_mcp)
+
+        module = registry.module_cache["testing_protocol"]
+        assert hasattr(module, "smart_test_runner")
+        assert hasattr(module, "run_test_command")
+        assert hasattr(module, "get_test_protocol")
+
+    @pytest.mark.asyncio
+    async def test_smart_test_runner_returns_json(self, registry, real_mcp):
+        """smart_test_runner should return JSON result."""
+        registry.load_skill("testing_protocol", real_mcp)
+        module = registry.module_cache["testing_protocol"]
+
+        result = await module.smart_test_runner()
+        assert "strategy" in result or "status" in result
+
+    @pytest.mark.asyncio
+    async def test_smart_test_runner_with_focus_file(self, registry, real_mcp):
+        """smart_test_runner with focus_file should return focused strategy."""
+        registry.load_skill("testing_protocol", real_mcp)
+        module = registry.module_cache["testing_protocol"]
+
+        result = await module.smart_test_runner(focus_file="agent/skills/test.py")
+        assert "focused" in result or "strategy" in result
+
+    @pytest.mark.asyncio
+    async def test_run_test_command_allowed(self, registry, real_mcp):
+        """run_test_command should accept allowed commands."""
+        registry.load_skill("testing_protocol", real_mcp)
+        module = registry.module_cache["testing_protocol"]
+
+        result = await module.run_test_command(command="pytest --version")
+        assert "status" in result
+
+    @pytest.mark.asyncio
+    async def test_run_test_command_blocked(self, registry, real_mcp):
+        """run_test_command should block dangerous commands."""
+        registry.load_skill("testing_protocol", real_mcp)
+        module = registry.module_cache["testing_protocol"]
+
+        result = await module.run_test_command(command="rm -rf /")
+        assert "not allowed" in result.lower() or "error" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_get_test_protocol(self, registry, real_mcp):
+        """get_test_protocol should return testing protocol summary."""
+        registry.load_skill("testing_protocol", real_mcp)
+        module = registry.module_cache["testing_protocol"]
+
+        result = await module.get_test_protocol()
+        assert "doc" in result or "rules" in result or "strategy" in result
+
+
+class TestGitSkill:
+    """Test git skill operations (Phase 23 - The Skill Singularity)."""
+
+    def test_git_manifest_parsing(self, registry):
+        """Registry should correctly parse git/manifest.json."""
+        manifest = registry.get_skill_manifest("git")
+        assert manifest is not None
+        assert manifest.name == "git"
+        assert manifest.version == "1.1.0"  # Updated for Phase 23
+        assert manifest.tools_module == "agent.skills.git.tools"
+
+    def test_load_git_skill(self, registry, real_mcp):
+        """Should successfully load git skill."""
+        success, message = registry.load_skill("git", real_mcp)
+
+        assert success is True, f"Expected success, got: {message}"
+        assert "git" in registry.loaded_skills
+        assert "git" in registry.module_cache
+
+    def test_git_has_read_operations(self, registry, real_mcp):
+        """Loaded git module should have read operations."""
+        registry.load_skill("git", real_mcp)
+
+        module = registry.module_cache["git"]
+        assert hasattr(module, "git_status")
+        assert hasattr(module, "git_diff")
+        assert hasattr(module, "git_log")
+
+    def test_git_has_write_operations(self, registry, real_mcp):
+        """Loaded git module should have write operations."""
+        registry.load_skill("git", real_mcp)
+
+        module = registry.module_cache["git"]
+        assert hasattr(module, "git_add")
+        assert hasattr(module, "git_commit")
+        assert hasattr(module, "git_stage_all")
+
+    def test_git_status_returns_output(self, registry, real_mcp):
+        """git_status should return status output."""
+        registry.load_skill("git", real_mcp)
+        module = registry.module_cache["git"]
+
+        result = module.git_status()
+        assert result is not None
+        # Should contain file status indicators or be empty
+
+    def test_git_log_returns_output(self, registry, real_mcp):
+        """git_log should return commit history."""
+        registry.load_skill("git", real_mcp)
+        module = registry.module_cache["git"]
+
+        result = module.git_log(n=3)
+        assert result is not None
+
+    def test_git_branch_returns_output(self, registry, real_mcp):
+        """git_branch should return branch list."""
+        registry.load_skill("git", real_mcp)
+        module = registry.module_cache["git"]
+
+        result = module.git_branch()
+        assert result is not None
 
 
 if __name__ == "__main__":

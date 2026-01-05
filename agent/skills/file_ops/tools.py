@@ -14,7 +14,8 @@ from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
-from common.mcp_core import is_safe_path, run_subprocess, polish_text
+from common.mcp_core import is_safe_path, run_subprocess
+from agent.skills.writer.tools import polish_text
 
 import structlog
 
@@ -357,34 +358,38 @@ async def ast_rewrite(pattern: str, replacement: str, lang: str = "py", path: st
 
 
 def register(mcp: FastMCP):
-    """Register File Operations tools."""
+    """Register File Operations tools using direct function binding."""
+    import sys
+    import importlib.util
 
-    @mcp.tool()
-    async def read_file_tool(path: str) -> str:
-        return await read_file(path)
+    # Get the current module from sys.modules
+    current_module = sys.modules.get("agent.skills.file_ops.tools")
+    if current_module is None:
+        spec = importlib.util.spec_from_file_location(
+            "agent.skills.file_ops.tools",
+            Path(__file__).resolve(),
+        )
+        current_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(current_module)
+        sys.modules["agent.skills.file_ops.tools"] = current_module
 
-    @mcp.tool()
-    async def search_files_tool(pattern: str, path: str = ".", use_regex: bool = False) -> str:
-        return await search_files(pattern, path, use_regex)
+    # Get functions from the module
+    read_file_fn = getattr(current_module, "read_file", None)
+    search_files_fn = getattr(current_module, "search_files", None)
+    save_file_fn = getattr(current_module, "save_file", None)
+    ast_search_fn = getattr(current_module, "ast_search", None)
+    ast_rewrite_fn = getattr(current_module, "ast_rewrite", None)
 
-    @mcp.tool()
-    async def save_file_tool(
-        path: str,
-        content: str,
-        create_backup: bool = True,
-        validate_syntax: bool = True,
-        auto_check_writing: bool = True,
-    ) -> str:
-        return await save_file(path, content, create_backup, validate_syntax, auto_check_writing)
-
-    @mcp.tool()
-    async def ast_search_tool(pattern: str, lang: str = "py", path: str = ".") -> str:
-        return await ast_search(pattern, lang, path)
-
-    @mcp.tool()
-    async def ast_rewrite_tool(
-        pattern: str, replacement: str, lang: str = "py", path: str = "."
-    ) -> str:
-        return await ast_rewrite(pattern, replacement, lang, path)
+    # Register tools directly
+    if read_file_fn:
+        mcp.add_tool(read_file_fn, "Read a single file with line numbering.")
+    if search_files_fn:
+        mcp.add_tool(search_files_fn, "Search for text patterns in files (like grep).")
+    if save_file_fn:
+        mcp.add_tool(save_file_fn, "Write content to a file within the project directory.")
+    if ast_search_fn:
+        mcp.add_tool(ast_search_fn, "Query code structure using ast-grep patterns.")
+    if ast_rewrite_fn:
+        mcp.add_tool(ast_rewrite_fn, "Apply AST-based code rewrite using ast-grep.")
 
     logger.info("File Operations skill tools registered")

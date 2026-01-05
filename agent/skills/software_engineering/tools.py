@@ -164,18 +164,32 @@ Frameworks/Tools: {", ".join(set(frameworks))}
 
 
 def register(mcp: FastMCP):
-    """Register Software Engineering tools with MCP."""
+    """Register Software Engineering tools with MCP using direct function binding."""
+    import sys
+    import importlib.util
 
-    @mcp.tool()
-    async def analyze_project_structure(depth: int = 2) -> str:
-        return await analyze_project_structure(depth)
+    # Get the current module from sys.modules
+    current_module = sys.modules.get("agent.skills.software_engineering.tools")
+    if current_module is None:
+        spec = importlib.util.spec_from_file_location(
+            "agent.skills.software_engineering.tools",
+            Path(__file__).resolve(),
+        )
+        current_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(current_module)
+        sys.modules["agent.skills.software_engineering.tools"] = current_module
 
-    @mcp.tool()
-    async def grep_codebase(pattern: str, file_extension: str = "", path: str = ".") -> str:
-        return await grep_codebase(pattern, file_extension, path)
+    # Get functions from the module
+    analyze = getattr(current_module, "analyze_project_structure", None)
+    grep = getattr(current_module, "grep_codebase", None)
+    detect = getattr(current_module, "detect_tech_stack", None)
 
-    @mcp.tool()
-    async def detect_tech_stack() -> str:
-        return await detect_tech_stack()
+    # Register tools directly
+    if analyze:
+        mcp.add_tool(analyze, "Generate a tree-like view of the project structure.")
+    if grep:
+        mcp.add_tool(grep, "Universal content search (grep) for patterns in files.")
+    if detect:
+        mcp.add_tool(detect, "Analyze the project to identify languages and frameworks.")
 
     logger.info("Software Engineering skill tools registered")

@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 class GitError(Exception):
     """Raised when a git command fails."""
+
     pass
 
 
@@ -208,6 +209,7 @@ def git_stage_all(scan: bool = True) -> str:
     if scan:
         # Simple pattern check - deny staging if sensitive files are present
         import glob
+
         sensitive_found = []
         for pattern in ["*.env", ".env*", "*.pem", "*.key", "*.secret"]:
             matches = glob.glob(pattern, recursive=True)

@@ -109,7 +109,7 @@ async def omni_search_memory(query: str, n_results: int = 5) -> str:
         max_tokens = _compressor.max_tokens
 
         for i, result in enumerate(results, 1):
-            content = result.get('content', '')
+            content = result.get("content", "")
 
             # Apply context compression
             compressed = _compressor.compress(content)
@@ -120,7 +120,9 @@ async def omni_search_memory(query: str, n_results: int = 5) -> str:
                 formatted.append(f"... [{len(results) - i} results omitted for context limit]")
                 break
 
-            formatted.append(f"{i}. {compressed[:200]}..." if len(compressed) > 200 else f"{i}. {compressed}")
+            formatted.append(
+                f"{i}. {compressed[:200]}..." if len(compressed) > 200 else f"{i}. {compressed}"
+            )
             current_tokens += estimated
 
         session.log(

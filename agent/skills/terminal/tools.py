@@ -219,41 +219,44 @@ async def inspect_environment() -> str:
 
 
 def register(mcp: FastMCP):
-    """Register Terminal tools."""
+    """Register Terminal tools using direct function binding."""
+    import sys
+    import types
 
-    @mcp.tool()
-    async def execute_command(command: str, timeout: int = 60) -> str:
-        """
-        Execute a shell command with whitelist validation.
+    # Get the current module from sys.modules (loaded by _load_module_from_path)
+    current_module = sys.modules.get("agent.skills.terminal.tools")
+    if current_module is None:
+        # Fallback: load module directly from file
+        import importlib.util
 
-        Security is provided by check_dangerous_patterns().
-        """
-        return await execute_command(command, timeout)
+        spec = importlib.util.spec_from_file_location(
+            "agent.skills.terminal.tools", Path(__file__).resolve()
+        )
+        current_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(current_module)
+        sys.modules["agent.skills.terminal.tools"] = current_module
 
-    @mcp.tool()
-    async def run_task(command: str, args: Optional[list[str]] = None) -> str:
-        """
-        Run safe development tasks (just, nix, git) with FLIGHT RECORDER.
+    # Get functions from the module
+    exec_cmd = getattr(current_module, "execute_command", None)
+    run_tsk = getattr(current_module, "run_task", None)
+    analyze_err = getattr(current_module, "analyze_last_error", None)
+    inspect_env = getattr(current_module, "inspect_environment", None)
 
-        Allowed commands:
-        - just: validate, build, test, lint, fmt, test-basic, test-mcp, agent-commit
-        - nix: fmt, build, shell, flake-check
-        - git: status, diff, log, add, checkout, branch
-
-        Git commit is BLOCKED. Use git_commit in git skill.
-        """
-        return await run_task(command, args)
-
-    @mcp.tool()
-    async def analyze_last_error() -> str:
-        """
-        [Debug Tool] Analyze the last failed command in Flight Recorder.
-        """
-        return await analyze_last_error()
-
-    @mcp.tool()
-    async def inspect_environment() -> str:
-        """Check the current execution environment (read-only, safe)."""
-        return await inspect_environment()
+    # Register tools
+    if exec_cmd:
+        mcp.add_tool(exec_cmd, "Execute a shell command with whitelist validation.")
+    if run_tsk:
+        mcp.add_tool(
+            run_tsk,
+            "Run safe development tasks (just, nix, git) with FLIGHT RECORDER. "
+            "Git commit is BLOCKED - use git_commit in git skill.",
+        )
+    if analyze_err:
+        mcp.add_tool(
+            analyze_err,
+            "[Debug Tool] Analyze the last failed command in Flight Recorder.",
+        )
+    if inspect_env:
+        mcp.add_tool(inspect_env, "Check the current execution environment (read-only, safe).")
 
     logger.info("Terminal skill tools registered")

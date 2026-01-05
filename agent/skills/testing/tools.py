@@ -73,14 +73,29 @@ async def list_tests(path: str = ".") -> str:
 
 
 def register(mcp: FastMCP):
-    """Register Testing tools."""
+    """Register Testing tools using direct function binding."""
+    import sys
+    import importlib.util
 
-    @mcp.tool()
-    async def run_tests_tool(path: str = ".", verbose: bool = False, max_fail: int = 5) -> str:
-        return await run_tests(path, verbose, max_fail)
+    # Get the current module from sys.modules
+    current_module = sys.modules.get("agent.skills.testing.tools")
+    if current_module is None:
+        spec = importlib.util.spec_from_file_location(
+            "agent.skills.testing.tools",
+            Path(__file__).resolve(),
+        )
+        current_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(current_module)
+        sys.modules["agent.skills.testing.tools"] = current_module
 
-    @mcp.tool()
-    async def list_tests_tool(path: str = ".") -> str:
-        return await list_tests(path)
+    # Get functions from the module
+    run_tests_fn = getattr(current_module, "run_tests", None)
+    list_tests_fn = getattr(current_module, "list_tests", None)
+
+    # Register tools directly
+    if run_tests_fn:
+        mcp.add_tool(run_tests_fn, "Run tests using pytest.")
+    if list_tests_fn:
+        mcp.add_tool(list_tests_fn, "Discover and list available tests without running them.")
 
     logger.info("Testing skill tools registered")

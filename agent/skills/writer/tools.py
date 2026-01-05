@@ -487,26 +487,40 @@ async def run_vale_check(file_path: str) -> str:
 
 
 def register(mcp: FastMCP):
-    """Register Writer skill tools."""
+    """Register Writer skill tools using direct function binding."""
+    import sys
+    import importlib.util
 
-    @mcp.tool()
-    async def lint_writing_style_tool(text: str) -> str:
-        return await lint_writing_style(text)
+    # Get the current module from sys.modules
+    current_module = sys.modules.get("agent.skills.writer.tools")
+    if current_module is None:
+        spec = importlib.util.spec_from_file_location(
+            "agent.skills.writer.tools",
+            Path(__file__).resolve(),
+        )
+        current_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(current_module)
+        sys.modules["agent.skills.writer.tools"] = current_module
 
-    @mcp.tool()
-    async def check_markdown_structure_tool(text: str) -> str:
-        return await check_markdown_structure(text)
+    # Get functions from the module
+    lint = getattr(current_module, "lint_writing_style", None)
+    check_struct = getattr(current_module, "check_markdown_structure", None)
+    polish = getattr(current_module, "polish_text", None)
+    load_mem = getattr(current_module, "load_writing_memory", None)
+    vale = getattr(current_module, "run_vale_check", None)
 
-    @mcp.tool()
-    async def polish_text_tool(text: str) -> str:
-        return await polish_text(text)
-
-    @mcp.tool()
-    async def load_writing_memory_tool() -> str:
-        return await load_writing_memory()
-
-    @mcp.tool()
-    async def run_vale_check_tool(file_path: str) -> str:
-        return await run_vale_check(file_path)
+    # Register tools directly
+    if lint:
+        mcp.add_tool(lint, "Check text against Module 02 (Rosenberg Mechanics) style guide.")
+    if check_struct:
+        mcp.add_tool(check_struct, "Check Markdown structure against Module 03 (Structure & AI).")
+    if polish:
+        mcp.add_tool(
+            polish, "Polish text using writing guidelines from skills/writer/writing-style/."
+        )
+    if load_mem:
+        mcp.add_tool(load_mem, "Load writing guidelines into LLM context.")
+    if vale:
+        mcp.add_tool(vale, "Run Vale CLI on a markdown file.")
 
     logger.info("Writer skill tools registered")
