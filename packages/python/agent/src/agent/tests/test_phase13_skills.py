@@ -1072,7 +1072,7 @@ class TestGitSkill:
         manifest = registry.get_skill_manifest("git")
         assert manifest is not None
         assert manifest.name == "git"
-        assert manifest.version == "1.1.0"  # Updated for Phase 23
+        assert manifest.version == "2.0.0"  # Updated for Phase 24
         assert manifest.tools_module == "agent.skills.git.tools"
 
     def test_load_git_skill(self, registry, real_mcp):

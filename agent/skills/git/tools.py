@@ -445,6 +445,47 @@ __all__ = [
 # ==============================================================================
 
 
+async def invoke_git_workflow(
+    intent: str,
+    target_branch: str = "",
+    commit_message: str = "",
+    checkpoint_id: str = None,
+) -> str:
+    """
+    [Phase 24] Invoke Git workflow with LangGraph orchestration.
+
+    Use this for complex Git operations that require multiple steps:
+    - Hotfix: Check env -> Stash if dirty -> Switch branch -> Commit -> Pop stash
+    - PR workflow: Similar to hotfix with proper branch handling
+    - Branch operations: Switch with optional creation
+
+    Args:
+        intent: High-level intent (hotfix, pr, branch, commit, stash)
+        target_branch: Target branch for operations
+        commit_message: Commit message for commit operations
+        checkpoint_id: Optional checkpoint ID for state persistence
+
+    Returns:
+        Formatted workflow result with success/error status
+    """
+    try:
+        from agent.skills.git.workflow import run_git_workflow, format_workflow_result
+
+        result = await run_git_workflow(
+            intent=intent,
+            target_branch=target_branch,
+            commit_message=commit_message,
+            checkpoint_id=checkpoint_id,
+        )
+
+        return format_workflow_result(result)
+    except ImportError as e:
+        return f"Error: Workflow module not available. Ensure langgraph is installed.\nDetails: {e}"
+    except Exception as e:
+        logger.error("Workflow invocation failed", error=str(e))
+        return f"Error invoking Git workflow: {e}"
+
+
 def register(mcp: FastMCP) -> None:
     """
     Register all git tools with the MCP server.
@@ -478,5 +519,26 @@ def register(mcp: FastMCP) -> None:
     mcp.add_tool(git_tag_create, "Create an annotated tag.")
     mcp.add_tool(git_merge, "Merge a branch into current branch.")
     mcp.add_tool(git_submodule_update, "Update submodules.")
+
+    # Phase 24: Living Skill Architecture - Workflow tools
+    mcp.add_tool(
+        invoke_git_workflow,
+        """Invoke Git workflow with LangGraph orchestration.
+
+        Use this for complex Git operations that require multiple steps:
+        - Hotfix: Check env -> Stash if dirty -> Switch branch -> Commit -> Pop stash
+        - PR workflow: Similar to hotfix with proper branch handling
+        - Branch operations: Switch with optional creation
+
+        Args:
+            intent: High-level intent (hotfix, pr, branch, commit, stash)
+            target_branch: Target branch for operations
+            commit_message: Commit message for commit operations
+            checkpoint_id: Optional checkpoint ID for state persistence
+
+        Returns:
+            Formatted workflow result with success/error status
+        """,
+    )
 
     logger.info("Git skill tools registered with MCP server")
