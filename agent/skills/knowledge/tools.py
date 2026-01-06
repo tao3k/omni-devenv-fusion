@@ -3,7 +3,7 @@ agent/skills/knowledge/tools.py
 Knowledge Skill - The Project Cortex.
 
 Phase 25: Omni CLI Architecture
-Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
+Skill implementation with @skill_command decorators.
 
 Role:
   Does NOT execute commands.
@@ -25,6 +25,8 @@ except ImportError:
     import tomli as tomllib
 
 import structlog
+
+from agent.skills.decorators import skill_command
 
 logger = structlog.get_logger(__name__)
 
@@ -162,7 +164,7 @@ def _get_project_name() -> str:
 def _load_scopes() -> List[str]:
     """Load valid git scopes from cog.toml."""
     from common.gitops import get_project_root
-    from common.mcp_core.settings import get_setting
+    from common.settings import get_setting
 
     try:
         project_root = get_project_root()
@@ -275,6 +277,11 @@ def _read_file_content(path: str) -> str:
 # =============================================================================
 
 
+@skill_command(
+    name="knowledge_get_development_context",
+    category="read",
+    description="[Cognition] Load the Rules of Engagement for this project.",
+)
 async def get_development_context() -> str:
     """
     [Cognition] Loads the "Rules of Engagement" for this project.
@@ -316,6 +323,11 @@ async def get_development_context() -> str:
     return json.dumps(context, indent=2)
 
 
+@skill_command(
+    name="knowledge_consult_architecture_doc",
+    category="read",
+    description="[RAG] Semantic search for documentation.",
+)
 async def consult_architecture_doc(topic: str) -> str:
     """
     [RAG] Semantic search for documentation.
@@ -330,6 +342,11 @@ async def consult_architecture_doc(topic: str) -> str:
     return _search_docs(topic)
 
 
+@skill_command(
+    name="knowledge_consult_language_expert",
+    category="read",
+    description="[Language Expert] Consult language-specific standards.",
+)
 async def consult_language_expert(file_path: str, task_description: str) -> str:
     """
     [Language Expert] Consult language-specific standards and code examples.
@@ -379,6 +396,11 @@ async def consult_language_expert(file_path: str, task_description: str) -> str:
     return json.dumps(result, indent=2)
 
 
+@skill_command(
+    name="knowledge_get_language_standards",
+    category="read",
+    description="[Standards] Get language-specific coding standards.",
+)
 async def get_language_standards(lang: str) -> str:
     """
     [Standards] Get language-specific coding standards.
@@ -416,6 +438,11 @@ async def get_language_standards(lang: str) -> str:
     )
 
 
+@skill_command(
+    name="knowledge_list_supported_languages",
+    category="read",
+    description="List all supported languages with their standards.",
+)
 async def list_supported_languages() -> str:
     """
     List all supported languages with their standards.
@@ -441,50 +468,3 @@ async def list_supported_languages() -> str:
     return json.dumps(
         {"status": "success", "languages": languages, "total": len(languages)}, indent=2
     )
-
-
-# =============================================================================
-# EXPOSED_COMMANDS - Omni CLI Entry Point
-# =============================================================================
-
-EXPOSED_COMMANDS = {
-    "get_development_context": {
-        "func": get_development_context,
-        "description": "[Cognition] Loads the Rules of Engagement for this project.",
-        "category": "read",
-    },
-    "consult_architecture_doc": {
-        "func": consult_architecture_doc,
-        "description": "[RAG] Semantic search for documentation.",
-        "category": "read",
-    },
-    "consult_language_expert": {
-        "func": consult_language_expert,
-        "description": "[Language Expert] Consult language-specific standards.",
-        "category": "read",
-    },
-    "get_language_standards": {
-        "func": get_language_standards,
-        "description": "[Standards] Get language-specific coding standards.",
-        "category": "read",
-    },
-    "list_supported_languages": {
-        "func": list_supported_languages,
-        "description": "List all supported languages with their standards.",
-        "category": "read",
-    },
-}
-
-
-# =============================================================================
-# Legacy Export for Compatibility
-# =============================================================================
-
-__all__ = [
-    "get_development_context",
-    "consult_architecture_doc",
-    "consult_language_expert",
-    "get_language_standards",
-    "list_supported_languages",
-    "EXPOSED_COMMANDS",
-]

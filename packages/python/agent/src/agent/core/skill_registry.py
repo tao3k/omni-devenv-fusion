@@ -3,6 +3,7 @@ src/agent/core/skill_registry.py
 The Kernel of the Skill-Centric OS.
 V2: Uses Spec-based loading for precise, pollution-free plugin management.
 Phase 13.10: Config-driven preloading + on-demand loading.
+Phase 25.1: Supports @skill_command decorator pattern.
 """
 
 import json
@@ -16,9 +17,12 @@ from mcp.server.fastmcp import FastMCP
 
 from agent.core.schema import SkillManifest
 from common.gitops import get_project_root
-from common.mcp_core.settings import get_setting
+from common.settings import get_setting
 
 logger = structlog.get_logger(__name__)
+
+# Marker attribute for @skill_command decorated functions
+_SKILL_COMMAND_MARKER = "_is_skill_command"
 
 
 class SkillRegistry:
@@ -106,9 +110,36 @@ class SkillRegistry:
         Load a python module directly from a file path without polluting sys.path.
         Enables hot reloading by re-executing the module code.
         """
+        import types
+
         # Clear any existing module from sys.modules to ensure hot reload works
         if module_name in sys.modules:
             del sys.modules[module_name]
+
+        # Resolve the project root and skills directory
+        skills_dir = self.skills_dir
+
+        # Ensure parent packages exist in sys.modules for relative imports
+        # This allows 'from agent.skills.decorators import ...' to work
+        parts = module_name.split(".")
+        for i in range(1, len(parts)):
+            parent_name = ".".join(parts[:i])
+            if parent_name not in sys.modules:
+                parent_mod = types.ModuleType(parent_name)
+                # Set __path__ to make it a package (required for subpackage imports)
+                parent_mod.__path__ = []
+                sys.modules[parent_name] = parent_mod
+
+        # Pre-load the decorators module if the skill imports it
+        # This is required for @skill_command decorator to work
+        decorators_path = skills_dir / "decorators.py"
+        if decorators_path.exists() and "agent.skills.decorators" not in sys.modules:
+            decorators_spec = importlib.util.spec_from_file_location(
+                "agent.skills.decorators", decorators_path
+            )
+            decorators_module = importlib.util.module_from_spec(decorators_spec)
+            sys.modules["agent.skills.decorators"] = decorators_module
+            decorators_spec.loader.exec_module(decorators_module)
 
         # Create the Spec (The Blueprint)
         spec = importlib.util.spec_from_file_location(module_name, file_path)
@@ -117,6 +148,13 @@ class SkillRegistry:
 
         # Create the Module (The Instance)
         module = importlib.util.module_from_spec(spec)
+
+        # Set __package__ to enable relative imports inside the skill
+        # Extract package from module name (e.g., "agent.skills.git.tools" -> "agent.skills.git")
+        if len(parts) > 1:
+            module.__package__ = ".".join(parts[:-1])
+        else:
+            module.__package__ = ""
 
         # Register in sys.modules for relative imports inside the skill
         sys.modules[module_name] = module
@@ -163,15 +201,23 @@ class SkillRegistry:
             module = self._load_module_from_path(module_name, source_path)
 
             # 4. Registration
-            # Phase 25: Only support EXPOSED_COMMANDS pattern
-            if hasattr(module, "EXPOSED_COMMANDS"):
-                # Phase 25 pattern: Skill uses EXPOSED_COMMANDS dictionary
-                # Commands are registered via SkillManager, not directly to MCP
-                logger.info(f"Skill '{skill_name}' uses Phase 25 EXPOSED_COMMANDS pattern")
+            # Phase 25.1: Check for @skill_command decorated functions
+            skill_commands = []
+            for name in dir(module):
+                if name.startswith("_"):
+                    continue
+                obj = getattr(module, name)
+                if callable(obj) and hasattr(obj, _SKILL_COMMAND_MARKER):
+                    skill_commands.append(name)
+
+            if skill_commands:
+                logger.info(
+                    f"Skill '{skill_name}' uses @skill_command pattern. Commands: {skill_commands}"
+                )
             else:
                 return (
                     False,
-                    f"Module {source_path.name} has no 'EXPOSED_COMMANDS' dictionary.",
+                    f"Module {source_path.name} has no @skill_command decorated functions.",
                 )
 
             # Update State
@@ -285,6 +331,7 @@ def get_skill_tools(skill_name: str) -> Dict[str, callable]:
     Get all tool functions from a loaded skill.
 
     Phase 19: Enables ReAct loop to access dynamically loaded skill tools.
+    Phase 25.1: Returns only @skill_command decorated functions.
 
     Args:
         skill_name: Name of the skill (e.g., "filesystem")
@@ -299,12 +346,12 @@ def get_skill_tools(skill_name: str) -> Dict[str, callable]:
         return {}
 
     tools = {}
-    # Get all callables that don't start with underscore
+    # Get all callables with @skill_command decorator (has _is_skill_command attribute)
     for name in dir(module):
         if name.startswith("_"):
             continue
         obj = getattr(module, name)
-        if callable(obj) and name not in ("register", "mcp"):
+        if callable(obj) and hasattr(obj, _SKILL_COMMAND_MARKER):
             tools[name] = obj
 
     return tools

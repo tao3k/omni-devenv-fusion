@@ -3,7 +3,7 @@ agent/skills/writer/tools.py
 Writer Skill - Writing quality enforcement.
 
 Phase 25: Omni CLI Architecture
-Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
+Skill implementation with @skill_command decorators.
 """
 
 import asyncio
@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 
 import structlog
+
+from agent.skills.decorators import skill_command
 
 logger = structlog.get_logger(__name__)
 
@@ -143,6 +145,11 @@ def _check_passive_voice(line: str) -> List[str]:
 # =============================================================================
 
 
+@skill_command(
+    name="writer_lint_writing_style",
+    category="read",
+    description="Check text against Module 02 (Rosenberg Mechanics) style guide.",
+)
 async def lint_writing_style(text: str) -> str:
     """
     Check text against Module 02 (Rosenberg Mechanics) style guide.
@@ -221,6 +228,11 @@ async def lint_writing_style(text: str) -> str:
     )
 
 
+@skill_command(
+    name="writer_check_markdown_structure",
+    category="read",
+    description="Check Markdown structure against Module 03 (Structure & AI).",
+)
 async def check_markdown_structure(text: str) -> str:
     """
     Check Markdown structure against Module 03 (Structure & AI).
@@ -313,6 +325,11 @@ async def check_markdown_structure(text: str) -> str:
     )
 
 
+@skill_command(
+    name="writer_polish_text",
+    category="read",
+    description="Polish text using writing guidelines.",
+)
 async def polish_text(text: str) -> str:
     """
     Polish text using writing guidelines from skills/writer/writing-style/.
@@ -342,6 +359,11 @@ async def polish_text(text: str) -> str:
     )
 
 
+@skill_command(
+    name="writer_load_writing_memory",
+    category="read",
+    description="Load writing guidelines into LLM context.",
+)
 async def load_writing_memory() -> str:
     """
     Load writing guidelines into LLM context.
@@ -368,6 +390,11 @@ async def load_writing_memory() -> str:
     )
 
 
+@skill_command(
+    name="writer_run_vale_check",
+    category="read",
+    description="Run Vale CLI on a markdown file.",
+)
 async def run_vale_check(file_path: str) -> str:
     """
     Run Vale CLI on a markdown file.
@@ -437,50 +464,3 @@ async def run_vale_check(file_path: str) -> str:
                 "violations": [],
             }
         )
-
-
-# =============================================================================
-# EXPOSED_COMMANDS - Omni CLI Entry Point
-# =============================================================================
-
-EXPOSED_COMMANDS = {
-    "lint_writing_style": {
-        "func": lint_writing_style,
-        "description": "Check text against Module 02 (Rosenberg Mechanics) style guide.",
-        "category": "read",
-    },
-    "check_markdown_structure": {
-        "func": check_markdown_structure,
-        "description": "Check Markdown structure against Module 03 (Structure & AI).",
-        "category": "read",
-    },
-    "polish_text": {
-        "func": polish_text,
-        "description": "Polish text using writing guidelines from skills/writer/writing-style/.",
-        "category": "read",
-    },
-    "load_writing_memory": {
-        "func": load_writing_memory,
-        "description": "Load writing guidelines into LLM context.",
-        "category": "read",
-    },
-    "run_vale_check": {
-        "func": run_vale_check,
-        "description": "Run Vale CLI on a markdown file.",
-        "category": "read",
-    },
-}
-
-
-# =============================================================================
-# Legacy Export for Compatibility
-# =============================================================================
-
-__all__ = [
-    "lint_writing_style",
-    "check_markdown_structure",
-    "polish_text",
-    "load_writing_memory",
-    "run_vale_check",
-    "EXPOSED_COMMANDS",
-]

@@ -2,8 +2,7 @@
 agent/skills/terminal/tools.py
 Terminal Skill - Shell execution with safety.
 
-Phase 25: Omni CLI Architecture
-Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
+Phase 25.1: Macro System with @skill_command decorators.
 """
 
 import asyncio
@@ -11,6 +10,8 @@ from pathlib import Path
 from typing import Optional
 from common.mcp_core import log_decision, SafeExecutor, check_dangerous_patterns, ProjectMemory
 import structlog
+
+from agent.skills.decorators import skill_command
 
 logger = structlog.get_logger(__name__)
 
@@ -26,11 +27,11 @@ def _get_project_memory():
     return _project_memory
 
 
-# =============================================================================
-# Core Tools
-# =============================================================================
-
-
+@skill_command(
+    name="terminal_execute_command",
+    category="workflow",
+    description="Execute a shell command with whitelist validation.",
+)
 async def execute_command(command: str, timeout: int = 60) -> str:
     """
     Execute a shell command with whitelist validation.
@@ -87,6 +88,11 @@ async def execute_command(command: str, timeout: int = 60) -> str:
     return SafeExecutor.format_result(result, cmd, args)
 
 
+@skill_command(
+    name="terminal_run_task",
+    category="workflow",
+    description="Run safe development tasks (just, nix, git) with FLIGHT RECORDER.",
+)
 async def run_task(command: str, args: Optional[list[str]] = None) -> str:
     """
     Run safe development tasks (just, nix, git) with FLIGHT RECORDER.
@@ -170,6 +176,11 @@ Use git_commit in git skill instead.
     return formatted_output
 
 
+@skill_command(
+    name="terminal_analyze_last_error",
+    category="view",
+    description="Analyze the last failed command in Flight Recorder.",
+)
 async def analyze_last_error() -> str:
     """
     [Debug Tool] Deeply analyzes the LAST failed command in the Flight Recorder.
@@ -205,50 +216,14 @@ Please analyze it to find:
         return f"Error reading crash logs: {e}"
 
 
+@skill_command(
+    name="terminal_inspect_environment",
+    category="read",
+    description="Check the current execution environment.",
+)
 async def inspect_environment() -> str:
     """Check the current execution environment."""
     import os
     import platform
 
     return f"OS: {platform.system()}, CWD: {os.getcwd()}"
-
-
-# =============================================================================
-# EXPOSED_COMMANDS - Omni CLI Entry Point
-# =============================================================================
-
-EXPOSED_COMMANDS = {
-    "execute_command": {
-        "func": execute_command,
-        "description": "Execute a shell command with whitelist validation.",
-        "category": "read",
-    },
-    "run_task": {
-        "func": run_task,
-        "description": "Run safe development tasks (just, nix, git) with FLIGHT RECORDER.",
-        "category": "read",
-    },
-    "analyze_last_error": {
-        "func": analyze_last_error,
-        "description": "[Debug Tool] Analyze the last failed command in Flight Recorder.",
-        "category": "read",
-    },
-    "inspect_environment": {
-        "func": inspect_environment,
-        "description": "Check the current execution environment (read-only, safe).",
-        "category": "read",
-    },
-}
-
-
-# =============================================================================
-# Legacy Export for Compatibility
-# =============================================================================
-
-__all__ = [
-    "execute_command",
-    "run_task",
-    "analyze_last_error",
-    "inspect_environment",
-    "EXPOSED_COMMANDS",
-]

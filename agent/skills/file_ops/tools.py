@@ -2,6 +2,8 @@
 File Operations Skill Tools
 Migrated from src/mcp_server/coder/main.py
 Provides file I/O, search, AST-based refactoring, and batch operations.
+
+Phase 25.1: Macro System with @skill_command decorators.
 """
 
 import asyncio
@@ -13,15 +15,15 @@ import subprocess
 from pathlib import Path
 from typing import Any, List, Literal
 
-from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field
 from common.mcp_core import is_safe_path, run_subprocess
 
 # NOTE: polish_text is imported dynamically in save_file() to avoid cross-skill
 # dependency issues at module load time. See save_file() for the implementation.
 
-
 import structlog
+
+from agent.skills.decorators import skill_command
 
 logger = structlog.get_logger(__name__)
 
@@ -98,11 +100,11 @@ def _create_backup(filepath: Path) -> bool:
         return False
 
 
-# =============================================================================
-# Core File Operations
-# =============================================================================
-
-
+@skill_command(
+    name="file_ops_read_file",
+    category="read",
+    description="Read a single file with line numbering.",
+)
 async def read_file(path: str) -> str:
     """
     Read a single file with line numbering.
@@ -136,6 +138,11 @@ async def read_file(path: str) -> str:
         return f"Error reading file: {e}"
 
 
+@skill_command(
+    name="file_ops_search_files",
+    category="read",
+    description="Search for text patterns in files (like grep).",
+)
 async def search_files(pattern: str, path: str = ".", use_regex: bool = False) -> str:
     """
     Search for text patterns in files (like grep).
@@ -203,6 +210,11 @@ async def search_files(pattern: str, path: str = ".", use_regex: bool = False) -
         return f"Error searching: {e}"
 
 
+@skill_command(
+    name="file_ops_save_file",
+    category="write",
+    description="Write content to a file within the project directory.",
+)
 async def save_file(
     path: str,
     content: str,
@@ -289,11 +301,11 @@ async def save_file(
         return f"Error writing file: {e}"
 
 
-# =============================================================================
-# Batch Operations (Phase 24: MiniMax Style)
-# =============================================================================
-
-
+@skill_command(
+    name="file_ops_apply_changes",
+    category="write",
+    description="Apply changes to multiple files in one go.",
+)
 async def apply_file_changes(changes: List[FileOperation]) -> str:
     """
     [BATCH] Efficiently apply changes to multiple files in one go.
@@ -353,11 +365,6 @@ async def apply_file_changes(changes: List[FileOperation]) -> str:
     return summary
 
 
-# =============================================================================
-# AST-Based Tools
-# =============================================================================
-
-
 async def _run_ast_grep(pattern: str, lang: str = "py", search_path: str = ".") -> str:
     """Run ast-grep query and returns matches (async)."""
     returncode, stdout, stderr = await run_subprocess(
@@ -397,6 +404,11 @@ async def _run_ast_rewrite(
     return f"--- ast-rewrite Applied ---\n{stdout}"
 
 
+@skill_command(
+    name="file_ops_ast_search",
+    category="read",
+    description="Query code structure using ast-grep patterns.",
+)
 async def ast_search(pattern: str, lang: str = "py", path: str = ".") -> str:
     """
     Query code structure using ast-grep patterns.
@@ -418,6 +430,11 @@ async def ast_search(pattern: str, lang: str = "py", path: str = ".") -> str:
     return await _run_ast_grep(pattern, lang, path)
 
 
+@skill_command(
+    name="file_ops_ast_rewrite",
+    category="write",
+    description="Apply AST-based code rewrite using ast-grep.",
+)
 async def ast_rewrite(pattern: str, replacement: str, lang: str = "py", path: str = ".") -> str:
     """
     Apply AST-based code rewrite using ast-grep.
@@ -436,59 +453,3 @@ async def ast_rewrite(pattern: str, replacement: str, lang: str = "py", path: st
         return f"Error: {error_msg}"
 
     return await _run_ast_rewrite(pattern, replacement, lang, path)
-
-
-# =============================================================================
-# Registration
-# =============================================================================
-
-
-def register(mcp: FastMCP):
-    """Register File Operations tools using direct function binding."""
-    import sys
-    import importlib.util
-
-    # Get the current module from sys.modules
-    current_module = sys.modules.get("agent.skills.file_ops.tools")
-    if current_module is None:
-        spec = importlib.util.spec_from_file_location(
-            "agent.skills.file_ops.tools",
-            Path(__file__).resolve(),
-        )
-        current_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(current_module)
-        sys.modules["agent.skills.file_ops.tools"] = current_module
-
-    # Get functions from the module
-    read_file_fn = getattr(current_module, "read_file", None)
-    search_files_fn = getattr(current_module, "search_files", None)
-    save_file_fn = getattr(current_module, "save_file", None)
-    apply_changes_fn = getattr(current_module, "apply_file_changes", None)
-    ast_search_fn = getattr(current_module, "ast_search", None)
-    ast_rewrite_fn = getattr(current_module, "ast_rewrite", None)
-
-    # Register tools directly
-    if read_file_fn:
-        mcp.add_tool(read_file_fn, "Read a single file with line numbering.")
-    if search_files_fn:
-        mcp.add_tool(search_files_fn, "Search for text patterns in files (like grep).")
-    if save_file_fn:
-        mcp.add_tool(save_file_fn, "Write content to a file within the project directory.")
-    # Phase 24: Batch Operations (MiniMax Style)
-    if apply_changes_fn:
-        mcp.add_tool(
-            apply_changes_fn,
-            """[BATCH] Efficiently apply changes to multiple files in one go.
-
-            Use this for code generation or refactoring tasks to minimize tool calls.
-            Each change specifies: action (write/append), path, and content.
-
-            Returns a Markdown report of all changes made.
-            """,
-        )
-    if ast_search_fn:
-        mcp.add_tool(ast_search_fn, "Query code structure using ast-grep patterns.")
-    if ast_rewrite_fn:
-        mcp.add_tool(ast_rewrite_fn, "Apply AST-based code rewrite using ast-grep.")
-
-    logger.info("File Operations skill tools registered (Batch Mode enabled)")

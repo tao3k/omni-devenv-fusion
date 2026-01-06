@@ -61,7 +61,7 @@ def get_knowledge_dirs() -> list[dict[str, str]]:
         List of directory configs with path, domain, description
     """
     try:
-        from common.mcp_core.settings import get_setting
+        from common.settings import get_setting
 
         # Try to read from settings.yaml
         settings_dirs = get_setting("knowledge.directories")

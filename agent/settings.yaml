@@ -7,7 +7,7 @@
 # Usage:
 #   python script.py --conf ./agent
 #
-#   from common.mcp_core.settings import get_setting
+#   from common.settings import get_setting
 #   cog_path = get_setting("config.cog_toml")
 #
 # Note: Actual commit types/scopes are read from cog.toml/.conform.yaml,

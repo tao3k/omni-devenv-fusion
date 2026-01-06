@@ -3,7 +3,7 @@ agent/skills/code_insight/tools.py
 Code Insight Tools - Atomic, Dumb, Single-Purpose.
 
 Phase 25: Omni CLI Architecture
-Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
+Skill implementation with @skill_command decorators.
 
 Tools are like Unix commands: they do ONE thing well.
 No business logic in tools - only pure execution.
@@ -12,8 +12,10 @@ No business logic in tools - only pure execution.
 import ast
 from pathlib import Path
 from typing import List
-from common.mcp_core.config_paths import get_project_root
+from common.config_paths import get_project_root
 import structlog
+
+from agent.skills.decorators import skill_command
 
 logger = structlog.get_logger(__name__)
 
@@ -58,6 +60,11 @@ class _ToolVisitor(ast.NodeVisitor):
 # =============================================================================
 
 
+@skill_command(
+    name="code_insight_find_tools",
+    category="read",
+    description="Find all @tool decorated functions in a Python file.",
+)
 async def find_tools(file_path: str) -> str:
     """
     Find all @tool decorated functions in a Python file.
@@ -93,6 +100,11 @@ async def find_tools(file_path: str) -> str:
         return f"Error: {e}"
 
 
+@skill_command(
+    name="code_insight_count_lines",
+    category="read",
+    description="Count lines of code in a file.",
+)
 async def count_lines(file_path: str) -> str:
     """
     Count lines of code in a file.
@@ -111,32 +123,3 @@ async def count_lines(file_path: str) -> str:
 
     lines = target.read_text().splitlines()
     return f"{file_path}: {len(lines)} lines"
-
-
-# =============================================================================
-# EXPOSED_COMMANDS - Omni CLI Entry Point
-# =============================================================================
-
-EXPOSED_COMMANDS = {
-    "find_tools": {
-        "func": find_tools,
-        "description": "Find all @tool decorated functions in a Python file.",
-        "category": "read",
-    },
-    "count_lines": {
-        "func": count_lines,
-        "description": "Count lines of code in a file.",
-        "category": "read",
-    },
-}
-
-
-# =============================================================================
-# Legacy Export for Compatibility
-# =============================================================================
-
-__all__ = [
-    "find_tools",
-    "count_lines",
-    "EXPOSED_COMMANDS",
-]

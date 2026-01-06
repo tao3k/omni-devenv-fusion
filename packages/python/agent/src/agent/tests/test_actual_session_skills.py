@@ -45,7 +45,7 @@ except ImportError:
     print("⚠️  Anthropic SDK not installed. Run: pip install anthropic")
 
 # Import settings utilities
-from common.mcp_core.settings import get_setting, get_config_path
+from common.settings import get_setting, get_config_path
 from common.gitops import get_project_root
 
 

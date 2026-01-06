@@ -169,7 +169,7 @@ class TestContextLoader:
 
     def test_settings_prompts_config_exists(self):
         """Verify settings.yaml has prompts configuration."""
-        from common.mcp_core.settings import get_setting
+        from common.settings import get_setting
 
         core_path = get_setting("prompts.core_path")
         user_path = get_setting("prompts.user_custom_path")
@@ -438,7 +438,7 @@ class TestSkillRegistry:
 
     def test_settings_yaml_has_skills_config(self):
         """Verify settings.yaml has skills configuration."""
-        from common.mcp_core.settings import get_setting
+        from common.settings import get_setting
 
         preload = get_setting("skills.preload")
         reload_enabled = get_setting("skills.reload.enabled")
@@ -449,7 +449,7 @@ class TestSkillRegistry:
 
     def test_knowledge_skill_in_preload(self):
         """Verify knowledge skill is in preload list."""
-        from common.mcp_core.settings import get_setting
+        from common.settings import get_setting
 
         preload = get_setting("skills.preload", [])
 
@@ -666,7 +666,7 @@ class TestMemorySkill:
 
     def test_memory_skill_in_preload(self):
         """Verify memory skill is in preload list."""
-        from common.mcp_core.settings import get_setting
+        from common.settings import get_setting
 
         preload = get_setting("skills.preload", [])
         assert "memory" in preload, "memory skill should be preloaded"

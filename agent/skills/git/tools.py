@@ -1,797 +1,383 @@
 """
 agent/skills/git/tools.py
-Git Skill - Complete Git Operations for Version Control.
+Git Skill - Phase 25.1 Macro System
 
-Phase 25: Omni CLI Architecture
-Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
-
-This module provides all Git capabilities as a passive skill:
-- Status, diff, log operations (read-only)
-- View-Enhanced tools (Markdown with icons/code blocks)
-- Error handling and safe defaults
-
-Key Principle: No @mcp.tool decorators. Commands are exposed via EXPOSED_COMMANDS.
-The SkillManager calls these functions directly based on user requests.
+Clean, simple Git operations with @skill_command decorators and DI.
 """
 
 import subprocess
-import logging
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Optional
 
-logger = logging.getLogger(__name__)
-
-
-# ==============================================================================
-# Exceptions
-# ==============================================================================
-
-
-class GitError(Exception):
-    """Raised when a git command fails."""
-
-    pass
+from agent.skills.decorators import skill_command
 
 
 # ==============================================================================
-# Core Git Implementation
+# Helper (private)
 # ==============================================================================
 
 
-def _run_git(args: List[str], check: bool = True) -> str:
-    """
-    Execute a raw git command.
-
-    This is the internal workhorse for all git operations.
-
-    Args:
-        args: Git command arguments (without 'git')
-        check: If True, raise GitError on non-zero exit code
-
-    Returns:
-        Command stdout (stripped)
-
-    Raises:
-        GitError: If check=True and command fails
-    """
-    try:
-        result = subprocess.run(
-            ["git"] + args,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if check and result.returncode != 0:
-            error_msg = f"Git command failed: git {' '.join(args)}\n{result.stderr}"
-            logger.error(error_msg)
-            raise GitError(error_msg)
-        return result.stdout.strip()
-    except subprocess.TimeoutExpired:
-        error_msg = f"Git command timed out: git {' '.join(args)}"
-        logger.error(error_msg)
-        raise GitError(error_msg)
-    except FileNotFoundError:
-        error_msg = "Git executable not found. Is git installed?"
-        logger.error(error_msg)
-        raise GitError(error_msg)
+def _run(cmd: list[str], cwd: Optional[Path] = None) -> str:
+    """Execute a git command and return output."""
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
+    return result.stdout.strip()
 
 
 # ==============================================================================
-# Helper Functions for View Layer
+# Read Operations (safe, idempotent)
 # ==============================================================================
 
 
-def _get_status_details() -> Tuple[str, bool, List[str], List[str]]:
-    """
-    Get detailed git status for rendering.
-
-    Returns:
-        Tuple of (branch, is_dirty, staged_files, unstaged_files)
-    """
-    # Get current branch
-    try:
-        branch = _run_git(["branch", "--show-current"])
-    except GitError:
-        branch = "unknown"
-
-    # Get porcelain status
-    status_output = _run_git(["status", "--porcelain"])
-
-    staged = []
-    unstaged = []
-
-    for line in status_output.splitlines():
-        if not line:
-            continue
-        code = line[:2]
-        path = line[3:]
-
-        # First column: staged (added, modified, deleted, renamed, copied)
-        # Second column: unstaged (modified, deleted, untracked)
-        if code[0] in "AMDRC":
-            staged.append(path)
-        if code[1] in "AMDRC?" or code[1] != " ":
-            unstaged.append(path)
-
-    is_dirty = bool(staged or unstaged)
-
-    return branch, is_dirty, staged, unstaged
+@skill_command(
+    name="git_status",
+    category="read",
+    description="Get git status",
+    inject_root=True,
+)
+def status(project_root: Path = None) -> str:
+    """Check git status in project directory."""
+    return _run(["git", "status", "--short"], cwd=project_root) or "✅ Clean"
 
 
-# ==============================================================================
-# Self-Evolution Tools (Bootstrap Pattern)
-# ==============================================================================
+@skill_command(name="git_branch", category="read", description="List git branches.")
+def branch() -> str:
+    """List all branches."""
+    return _run(["git", "branch", "-a"])
 
 
-def git_read_backlog() -> str:
-    """
-    [Evolution] Read the Git Skill's own backlog to see what features are missing.
-    Use this to decide what to implement next.
-    """
-    from pathlib import Path
-
-    # Backlog.md is in the same directory as tools.py
-    backlog_path = Path(__file__).parent / "Backlog.md"
-
-    if not backlog_path.exists():
-        return "Backlog.md not found in git skill directory."
-
-    content = backlog_path.read_text(encoding="utf-8")
-
-    return content
+@skill_command(name="git_log", category="read", description="Show recent commits.")
+def log(n: int = 5) -> str:
+    """Show recent commit history."""
+    return _run(["git", "log", f"-n{n}", "--oneline"])
 
 
-# ==============================================================================
-# View-Enhanced Tools (Inline Markdown Formatting)
-# ==============================================================================
-
-
-def _render_status_report(
-    branch: str, is_dirty: bool, staged: list[str], unstaged: list[str]
-) -> str:
-    """Render a status report using Markdown with icons."""
-    status_icon = "🔴 Dirty" if is_dirty else "🟢 Clean"
-
-    report = f"""
-📊 **Git Status Report**
-
-* **Branch**: `{branch}`
-* **State**: {status_icon}
-"""
-
+@skill_command(name="git_diff", category="read", description="Show changes.")
+def diff(staged: bool = False, filename: Optional[str] = None) -> str:
+    """Show working directory or staged changes."""
+    cmd = ["git", "diff"]
     if staged:
-        report += "\n**Staged Changes:**\n"
-        for f in staged:
-            report += f"  ✅ `{f}`\n"
-        report += "\n"
-
-    if unstaged:
-        report += "**Unstaged Changes:**\n"
-        for f in unstaged:
-            report += f"  ⚠️ `{f}`\n"
-        report += "\n"
-
-    if not staged and not unstaged:
-        report += "\n✅ Working tree is clean. No changes to commit.\n"
-
-    return report
-
-
-def _render_hotfix_plan(issue_id: str, commands: list[str], explanation: list[str]) -> str:
-    """Render a Hotfix Plan as a Terminal Block."""
-    cmd_block = " && \\\n    ".join(commands)
-    expl_text = "\n".join([f"- {item}" for item in explanation])
-
-    return f"""
-🛠️ **Hotfix Plan Prepared**
-
-I have calculated the safe path to fix Issue-{issue_id}.
-
-**Strategy:**
-{expl_text}
-
-**Please execute the following command block in your terminal to apply this environment:**
-
-```bash
-cd $(git rev-parse --show-toplevel) && \\
-    {cmd_block}
-
-```
-
-*Tip: Click "Run" to execute, or copy the command block.*
-"""
-
-
-def _render_smart_diff(filename: str, context_lines: int = 3) -> str:
-    """Instruct Claude to run git diff natively."""
-    return f"""
-🔍 **Review Required**
-
-I have identified that `{filename}` has modifications that need your attention.
-To review them with the best UX, please execute the following command:
-
-```bash
-git diff -U{context_lines} {filename}
-
-```
-
-This will show you exactly what changed in a familiar diff format.
-"""
-
-
-def git_status_report() -> str:
-    """
-    [VIEW] Returns a formatted git status report with UI hints.
-
-    Returns a nicely formatted Markdown report showing:
-    - Current branch
-    - Working tree state (clean/dirty)
-    - Staged files (with ✅)
-    - Unstaged files (with ⚠️)
-
-    Use this for better UX instead of raw git status.
-    """
-    try:
-        branch, is_dirty, staged, unstaged = _get_status_details()
-        return _render_status_report(branch, is_dirty, staged, unstaged)
-    except Exception as e:
-        return f"Error checking status: {e}"
-
-
-# ==============================================================================
-# Workflow Tools (Phase 25)
-# ==============================================================================
-
-
-def git_plan_hotfix(
-    issue_id: str,
-    base_branch: str = "main",
-    create_branch: bool = True,
-) -> str:
-    """
-    [WORKFLOW] Generates a hotfix execution plan.
-
-    Smartly handles stashing if the working directory is dirty.
-
-    Args:
-        issue_id: The issue identifier (e.g., "999", "OSD-123")
-        base_branch: Base branch to work from
-        create_branch: Whether to create a new hotfix branch
-
-    Returns:
-        A formatted plan with commands to execute
-    """
-    try:
-        # 1. Logic: Check environment
-        branch, is_dirty, staged, unstaged = _get_status_details()
-
-        commands = []
-        explanation = []
-
-        # 2. Logic: Build Plan
-        if is_dirty:
-            explanation.append("Stash: Detected uncommitted changes, stashing them first")
-            commands.append(f'git stash push -m "Auto-stash before hotfix/{issue_id}"')
-
-        explanation.append(f"Checkout: Switching to '{base_branch}' and updating")
-        commands.append(f"git checkout {base_branch}")
-        commands.append("git pull")
-
-        if create_branch:
-            branch_name = f"hotfix/{issue_id}"
-            explanation.append(f"Branch: Creating '{branch_name}'")
-            commands.append(f"git checkout -b {branch_name}")
-
-        # 3. View: Render using local function
-        return _render_hotfix_plan(issue_id, commands, explanation)
-
-    except Exception as e:
-        return f"Error: {e}"
-
-
-def git_smart_diff(filename: str, context_lines: int = 3) -> str:
-    """
-    [VIEW] Returns instructions to show a native git diff.
-
-    Use this instead of reading the file if you suspect changes.
-    Claude will render this with native git diff UI.
-    """
-    return _render_smart_diff(filename, context_lines)
-
-
-# ==============================================================================
-# Atomic Tools (Preserved for Low-Level Access)
-# ==============================================================================
-
-
-def git_status(short: bool = False) -> str:
-    """
-    Get the current status of the git repository.
-
-    Args:
-        short: If True, returns short format (-s)
-
-    Returns:
-        Git status output
-    """
-    args = ["status"]
-    if short:
-        args.append("-s")
-    return _run_git(args)
-
-
-def git_diff(staged: bool = False, filename: Optional[str] = None) -> str:
-    """
-    Get the diff of changes.
-
-    Args:
-        staged: If True, shows staged changes (--staged)
-        filename: Optional filename to limit the diff
-
-    Returns:
-        Git diff output
-    """
-    args = ["diff"]
-    if staged:
-        args.append("--staged")
+        cmd.append("--staged")
     if filename:
-        args.append(filename)
-    return _run_git(args)
+        cmd.append(filename)
+    return _run(cmd)
 
 
-def git_log(n: int = 5, oneline: bool = True) -> str:
-    """
-    Show recent commit logs.
-
-    Args:
-        n: Number of commits to show
-        oneline: If True, uses --oneline format
-
-    Returns:
-        Git log output
-    """
-    args = ["log", f"-n{n}"]
-    if oneline:
-        args.append("--oneline")
-    return _run_git(args)
+@skill_command(name="git_remote", category="read", description="Show remotes.")
+def remote() -> str:
+    """Show remote repositories."""
+    return _run(["git", "remote", "-v"])
 
 
-def git_branch(show_remote: bool = False) -> str:
-    """
-    List all git branches.
-
-    Args:
-        show_remote: If True, include remote branches (-a)
-
-    Returns:
-        Branch list output
-    """
-    args = ["branch"]
-    if show_remote:
-        args.append("-a")
-    return _run_git(args)
-
-
-def git_show(path: str) -> str:
-    """
-    Show the content of a file at a specific commit.
-
-    Args:
-        path: File path to show (can include commit:path format)
-
-    Returns:
-        File content at that point in history
-    """
-    return _run_git(["show", path])
-
-
-def git_remote() -> str:
-    """
-    Show remote repositories.
-
-    Returns:
-        Remote list (origin, etc.)
-    """
-    return _run_git(["remote", "-v"])
+@skill_command(name="git_tag_list", category="read", description="List tags.")
+def tag_list() -> str:
+    """List all git tags."""
+    return _run(["git", "tag", "-l"])
 
 
 # ==============================================================================
-# Write Operations (Require Caution)
+# View Operations (enhanced UX)
 # ==============================================================================
 
 
-def git_add(files: List[str]) -> str:
-    """
-    Stage files for commit.
+@skill_command(name="git_status_report", category="view", description="Formatted status report.")
+def status_report() -> str:
+    """Get a nice formatted status report."""
+    branch = _run(["git", "branch", "--show-current"]) or "unknown"
+    staged = _run(["git", "diff", "--staged", "--name-only"])
+    unstaged = _run(["git", "diff", "--name-only"])
 
-    Args:
-        files: List of file paths to add. Use ["."] to add all.
+    lines = [f"**Branch**: `{branch}", ""]
+    if staged:
+        lines.extend(["**Staged**:", *[f"  ✅ {f}" for f in staged.split("\n")], ""])
+    if unstaged:
+        lines.extend(["**Unstaged**:", *[f"  ⚠️ {f}" for f in unstaged.split("\n")], ""])
+    if not staged and not unstaged:
+        lines.append("✅ Working tree clean")
 
-    Returns:
-        Output message
-    """
-    return _run_git(["add"] + files)
+    return "\n".join(lines)
 
 
-def git_stage_all(scan: bool = True) -> str:
-    """
-    Stage all changes in the repository.
+@skill_command(name="git_smart_diff", category="view", description="Instructions for native diff.")
+def smart_diff(filename: str, context: int = 3) -> str:
+    """Show how to view diff natively."""
+    return f"Run: `git diff -U{context} {filename}`"
 
-    This is a convenience wrapper around git_add(["."]) with optional
-    security scanning for sensitive files.
 
-    Args:
-        scan: If True, scan for sensitive files before staging
+# ==============================================================================
+# Workflow Operations
+# ==============================================================================
 
-    Returns:
-        Output message
-    """
+
+@skill_command(name="git_plan_hotfix", category="workflow", description="Generate hotfix plan.")
+def hotfix(issue_id: str, base: str = "main") -> str:
+    """Generate a hotfix execution plan."""
+    plan = [
+        f"git checkout {base}",
+        "git pull",
+        f"git checkout -b hotfix/{issue_id}",
+    ]
+    return f"**Hotfix Plan for {issue_id}**\n\n" + "\n".join([f"`{c}`" for c in plan])
+
+
+# ==============================================================================
+# Write Operations (caution required)
+# ==============================================================================
+
+
+@skill_command(name="git_add", category="write", description="Stage files.")
+def add(files: list[str]) -> str:
+    """Stage files for commit."""
+    return _run(["git", "add"] + files)
+
+
+@skill_command(name="git_stage_all", category="write", description="Stage all changes.")
+def stage_all(scan: bool = True) -> str:
+    """Stage all changes with optional security scan."""
     if scan:
-        # Simple pattern check - deny staging if sensitive files are present
         import glob
 
-        sensitive_found = []
-        for pattern in ["*.env", ".env*", "*.pem", "*.key", "*.secret"]:
-            matches = glob.glob(pattern, recursive=True)
-            sensitive_found.extend(matches)
+        sensitive = []
+        for p in ["*.env", "*.pem", "*.key", "*.secret"]:
+            sensitive.extend(glob.glob(p, recursive=True))
 
-        if sensitive_found:
-            return f"⚠️ Staging blocked: Found sensitive files: {sensitive_found}"
+        if sensitive:
+            return f"⚠️ Blocked: {sensitive}"
 
-    return _run_git(["add", "."])
-
-
-def git_commit(message: str) -> str:
-    """
-    Commit staged changes.
-
-    Args:
-        message: The commit message
-
-    Returns:
-        Commit hash and message
-    """
-    return _run_git(["commit", "-m", message])
+    return _run(["git", "add", "."])
 
 
-def git_checkout(branch: str, create: bool = False) -> str:
-    """
-    Switch to a branch or create a new one.
+@skill_command(name="git_commit", category="write", description="Commit changes.")
+def commit(message: str) -> str:
+    """Commit staged changes."""
+    return _run(["git", "commit", "-m", message])
 
-    Args:
-        branch: Target branch name
-        create: If True, create the branch first (-b)
 
-    Returns:
-        Checkout output
-    """
+@skill_command(name="git_checkout", category="write", description="Switch branch.")
+def checkout(branch: str, create: bool = False) -> str:
+    """Switch to a branch."""
+    cmd = ["git", "checkout"]
     if create:
-        return _run_git(["checkout", "-b", branch])
-    return _run_git(["checkout", branch])
+        cmd.append("-b")
+    cmd.append(branch)
+    return _run(cmd)
 
 
-def git_stash_save(message: Optional[str] = None) -> str:
-    """
-    Stash changes in the working directory.
-
-    Args:
-        message: Optional stash message
-
-    Returns:
-        Stash output
-    """
-    args = ["stash", "push"]
-    if message:
-        args.extend(["-m", message])
-    return _run_git(args)
+@skill_command(name="git_stash_save", category="write", description="Stash changes.")
+def stash_save(msg: Optional[str] = None) -> str:
+    """Stash working directory changes."""
+    cmd = ["git", "stash", "push"]
+    if msg:
+        cmd.extend(["-m", msg])
+    return _run(cmd)
 
 
-def git_stash_pop() -> str:
-    """
-    Apply the last stashed changes and remove from stash.
-
-    Returns:
-        Stash pop output
-    """
-    return _run_git(["stash", "pop"])
+@skill_command(name="git_stash_pop", category="write", description="Pop stash.")
+def stash_pop() -> str:
+    """Apply and remove last stash."""
+    return _run(["git", "stash", "pop"])
 
 
-def git_stash_list() -> str:
-    """
-    List all stashed changes.
-
-    Returns:
-        Stash list output
-    """
-    return _run_git(["stash", "list"])
+@skill_command(name="git_stash_list", category="write", description="List stashes.")
+def stash_list() -> str:
+    """List all stashes."""
+    return _run(["git", "stash", "list"])
 
 
-def git_reset(soft: bool = False, commit: Optional[str] = None) -> str:
-    """
-    Reset current HEAD to a specific state.
-
-    Args:
-        soft: If True, use --soft (keep changes in working directory)
-        commit: Target commit (default: HEAD~1)
-
-    Returns:
-        Reset output
-    """
-    args = ["reset"]
+@skill_command(name="git_reset", category="write", description="Reset HEAD.")
+def reset(soft: bool = False, commit: Optional[str] = None) -> str:
+    """Reset HEAD to a commit."""
+    cmd = ["git", "reset"]
     if soft:
-        args.append("--soft")
+        cmd.append("--soft")
     if commit:
-        args.append(commit)
-    return _run_git(args)
+        cmd.append(commit)
+    return _run(cmd)
 
 
-def git_revert(commit: str, no_commit: bool = False) -> str:
-    """
-    Revert a specific commit.
-
-    Args:
-        commit: Commit hash to revert
-        no_commit: If True, prepare revert but don't commit
-
-    Returns:
-        Revert output
-    """
-    args = ["revert"]
-    if no_commit:
-        args.append("--no-commit")
-    args.append(commit)
-    return _run_git(args)
-
-
-# ==============================================================================
-# Tag Operations
-# ==============================================================================
-
-
-def git_tag_list() -> str:
-    """
-    List all tags.
-
-    Returns:
-        Tag list output
-    """
-    return _run_git(["tag", "-l"])
-
-
-def git_tag_create(name: str, message: Optional[str] = None) -> str:
-    """
-    Create an annotated tag.
-
-    Args:
-        name: Tag name
-        message: Optional tag message
-
-    Returns:
-        Tag creation output
-    """
-    args = ["tag"]
-    if message:
-        args.extend(["-m", message])
-    args.append(name)
-    return _run_git(args)
-
-
-# ==============================================================================
-# Merge Operations
-# ==============================================================================
-
-
-def git_merge(branch: str, no_ff: bool = True, message: Optional[str] = None) -> str:
-    """
-    Merge a branch into current branch.
-
-    Args:
-        branch: Source branch to merge
-        no_ff: If True, create merge commit even if fast-forward
-        message: Optional merge commit message
-
-    Returns:
-        Merge output
-    """
-    args = ["merge"]
+@skill_command(name="git_merge", category="write", description="Merge branch.")
+def merge(branch: str, no_ff: bool = True) -> str:
+    """Merge a branch."""
+    cmd = ["git", "merge"]
     if no_ff:
-        args.append("--no-ff")
-    if message:
-        args.extend(["-m", message])
-    args.append(branch)
-    return _run_git(args)
+        cmd.append("--no-ff")
+    cmd.append(branch)
+    return _run(cmd)
 
 
-# ==============================================================================
-# Submodule Operations
-# ==============================================================================
+@skill_command(name="git_tag_create", category="write", description="Create tag.")
+def tag_create(name: str, msg: Optional[str] = None) -> str:
+    """Create an annotated tag."""
+    cmd = ["git", "tag"]
+    if msg:
+        cmd.extend(["-m", msg])
+    cmd.append(name)
+    return _run(cmd)
 
 
-def git_submodule_update(init: bool = False) -> str:
-    """
-    Update submodules.
+@skill_command(name="git_revert", category="write", description="Revert commit.")
+def revert(commit: str, no_commit: bool = False) -> str:
+    """Revert a specific commit."""
+    cmd = ["git", "revert"]
+    if no_commit:
+        cmd.append("--no-commit")
+    cmd.append(commit)
+    return _run(cmd)
 
-    Args:
-        init: If True, initialize submodules first (--init)
 
-    Returns:
-        Submodule update output
-    """
-    args = ["submodule", "update", "--recursive"]
+@skill_command(name="git_submodule_update", category="write", description="Update submodules.")
+def submodule_update(init: bool = False) -> str:
+    """Update git submodules."""
+    cmd = ["git", "submodule", "update", "--recursive"]
     if init:
-        args.append("--init")
-    return _run_git(args)
+        cmd.append("--init")
+    return _run(cmd)
 
 
 # ==============================================================================
-# EXPOSED_COMMANDS - Omni CLI Entry Point
+# Smart Commit Flow (Phase 25.2)
 # ==============================================================================
 
-EXPOSED_COMMANDS = {
-    # Read operations (safe)
-    "git_status": {
-        "func": git_status,
-        "description": "Get the current status of the git repository.",
-        "category": "read",
-    },
-    "git_diff": {
-        "func": git_diff,
-        "description": "Get the diff of changes.",
-        "category": "read",
-    },
-    "git_log": {
-        "func": git_log,
-        "description": "Show recent commit logs.",
-        "category": "read",
-    },
-    "git_branch": {
-        "func": git_branch,
-        "description": "List all git branches.",
-        "category": "read",
-    },
-    "git_show": {
-        "func": git_show,
-        "description": "Show file content at a specific commit.",
-        "category": "read",
-    },
-    "git_remote": {
-        "func": git_remote,
-        "description": "Show remote repositories.",
-        "category": "read",
-    },
-    "git_tag_list": {
-        "func": git_tag_list,
-        "description": "List all tags.",
-        "category": "read",
-    },
-    # Phase 25: Director Pattern (View-Enhanced Tools)
-    "git_status_report": {
-        "func": git_status_report,
-        "description": "[VIEW] Get a formatted git status report with icons.",
-        "category": "view",
-    },
-    # Phase 25: Workflow Tools
-    "git_plan_hotfix": {
-        "func": git_plan_hotfix,
-        "description": "[WORKFLOW] Generate a hotfix execution plan.",
-        "category": "workflow",
-    },
-    "git_smart_diff": {
-        "func": git_smart_diff,
-        "description": "[VIEW] Get instructions to view a native git diff.",
-        "category": "view",
-    },
-    # Write operations (require caution)
-    "git_add": {
-        "func": git_add,
-        "description": "Stage files for commit.",
-        "category": "write",
-    },
-    "git_stage_all": {
-        "func": git_stage_all,
-        "description": "Stage all changes with optional security scan.",
-        "category": "write",
-    },
-    "git_commit": {
-        "func": git_commit,
-        "description": "Commit staged changes.",
-        "category": "write",
-    },
-    "git_checkout": {
-        "func": git_checkout,
-        "description": "Switch to a branch or create a new one.",
-        "category": "write",
-    },
-    "git_stash_save": {
-        "func": git_stash_save,
-        "description": "Stash changes in the working directory.",
-        "category": "write",
-    },
-    "git_stash_pop": {
-        "func": git_stash_pop,
-        "description": "Apply the last stashed changes.",
-        "category": "write",
-    },
-    "git_stash_list": {
-        "func": git_stash_list,
-        "description": "List all stashed changes.",
-        "category": "write",
-    },
-    "git_reset": {
-        "func": git_reset,
-        "description": "Reset current HEAD to a specific state.",
-        "category": "write",
-    },
-    "git_revert": {
-        "func": git_revert,
-        "description": "Revert a specific commit.",
-        "category": "write",
-    },
-    # Tag operations
-    "git_tag_create": {
-        "func": git_tag_create,
-        "description": "Create an annotated tag.",
-        "category": "write",
-    },
-    # Merge operations
-    "git_merge": {
-        "func": git_merge,
-        "description": "Merge a branch into current branch.",
-        "category": "write",
-    },
-    # Submodule operations
-    "git_submodule_update": {
-        "func": git_submodule_update,
-        "description": "Update submodules.",
-        "category": "write",
-    },
-    # Phase 25: Self-Evolution Tools (Bootstrap Pattern)
-    "git_read_backlog": {
-        "func": git_read_backlog,
-        "description": "[Evolution] Read the Git Skill's own backlog.",
-        "category": "evolution",
-    },
-}
+
+def _run_with_rc(cmd: list[str], cwd: Optional[Path] = None) -> tuple[str, int]:
+    """Execute a command and return (output, returncode)."""
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
+    return result.stdout.strip(), result.returncode
+
+
+@skill_command(
+    name="git_prepare_commit",
+    category="workflow",
+    description="Stage files, run lefthook, return diff for analysis",
+    inject_root=True,
+)
+def prepare_commit(project_root: Path = None) -> str:
+    """[Phase 1] Prepare for commit: stage, lefthook, re-stage, return diff."""
+    import shutil
+
+    results = ["🔍 **Git Commit Preparation**"]
+
+    # 0. Check if there are staged files (even if working tree is clean)
+    staged_files, _ = _run_with_rc(["git", "diff", "--cached", "--name-only"], cwd=project_root)
+    has_staged = bool(staged_files)
+
+    # 1. First Stage
+    _, rc = _run_with_rc(["git", "add", "."], cwd=project_root)
+    if rc != 0:
+        return "❌ **Stage Failed**"
+
+    # 2. Lefthook Checks
+    if shutil.which("lefthook"):
+        results.append("Running `lefthook run pre-commit`...")
+        lh_out, lh_rc = _run_with_rc(["lefthook", "run", "pre-commit"], cwd=project_root)
+
+        if lh_rc != 0:
+            return f"""❌ **Lefthook Checks Failed**
+
+Automatic checks found issues that need your attention before committing.
+
+```text
+{lh_out}
+```
+
+**Action Required:**
+Please fix the errors above and run `/commit` again.
+"""
+        if "fixed" in lh_out.lower() or "formatted" in lh_out.lower():
+            results.append("✨ Lefthook auto-fixed some files.")
+        else:
+            results.append("✅ Lefthook checks passed.")
+
+        # 3. Re-stage (in case lefthook modified files)
+        _run_with_rc(["git", "add", "."], cwd=project_root)
+    else:
+        results.append("⚠️ Lefthook not found, skipping checks.")
+
+    # 4. Check working tree status
+    status, _ = _run_with_rc(["git", "status", "--porcelain"], cwd=project_root)
+
+    # Check if there are UNSTAGED changes (working tree has modifications)
+    unstaged, _ = _run_with_rc(["git", "diff", "--name-only"], cwd=project_root)
+    has_unstaged = bool(unstaged)
+
+    # Re-check staged files after re-stage
+    staged_files, _ = _run_with_rc(["git", "diff", "--cached", "--name-only"], cwd=project_root)
+
+    if not staged_files:
+        return "🛑 **Nothing to commit**. Working tree clean."
+
+    if not has_unstaged and staged_files:
+        # Staged but working tree clean (e.g., after reset --soft)
+        # Skip analysis, go directly to commit
+        staged_list = "\n".join([f"  ✅ {f}" for f in staged_files.split("\n") if f])
+        return f"""🔄 **Reset Detected - Ready to Commit**
+
+**{len(staged_files.split(chr(10)))} staged files ready to commit:**
+
+{staged_list}
+
+**Please confirm:** Press `Yes` to submit commit, or `No` to cancel.
+"""
+
+    stats, _ = _run_with_rc(["git", "diff", "--cached", "--stat"], cwd=project_root)
+    diff, _ = _run_with_rc(["git", "diff", "--cached"], cwd=project_root)
+    if len(diff) > 8000:
+        diff = diff[:8000] + "\n... (diff truncated)"
+
+    return f"""
+
+{chr(10).join(results)}
+
+✅ **Ready for Analysis**
+
+**Staged Changes:**
+
+```text
+{stats}
+
+```
+
+**Detailed Diff:**
+
+```diff
+{diff}
+
+```
+
+"""
+
+
+@skill_command(
+    name="git_execute_commit",
+    category="workflow",
+    description="Execute the final commit with a message",
+    inject_root=True,
+)
+def execute_commit(message: str, project_root: Path = None) -> str:
+    """[Phase 2] Execute the commit."""
+    out, rc = _run_with_rc(["git", "commit", "-m", message], cwd=project_root)
+
+    if rc != 0:
+        return f"💾 COMMIT FAILED:\n```\n{out}\n```"
+
+    commit_hash, _ = _run_with_rc(["git", "rev-parse", "--short", "HEAD"], cwd=project_root)
+
+    return f"""💾 COMMITTING `{commit_hash}`
+
+✅ **Commit Successful!**
+
+{message}
+
+---
+*Verified by Omni Git Skill*"""
 
 
 # ==============================================================================
-# Legacy Export for Compatibility
+# Evolution (Bootstrap)
 # ==============================================================================
 
-__all__ = [
-    # Exceptions
-    "GitError",
-    # Read operations
-    "git_status",
-    "git_diff",
-    "git_log",
-    "git_branch",
-    "git_show",
-    "git_remote",
-    "git_tag_list",
-    # View-Enhanced Tools
-    "git_status_report",
-    # Workflow Tools
-    "git_plan_hotfix",
-    "git_smart_diff",
-    # Write operations
-    "git_add",
-    "git_stage_all",
-    "git_commit",
-    "git_checkout",
-    "git_stash_save",
-    "git_stash_pop",
-    "git_stash_list",
-    "git_reset",
-    "git_revert",
-    # Tag operations
-    "git_tag_create",
-    # Merge operations
-    "git_merge",
-    # Submodule operations
-    "git_submodule_update",
-    # Self-Evolution
-    "git_read_backlog",
-    # Omni CLI
-    "EXPOSED_COMMANDS",
-]
+
+@skill_command(name="git_read_backlog", category="evolution", description="Read skill backlog.")
+def read_backlog() -> str:
+    """Read the Git Skill's own backlog."""
+    backlog = Path(__file__).parent / "Backlog.md"
+    return backlog.read_text() if backlog.exists() else "No backlog found"

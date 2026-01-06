@@ -3,7 +3,7 @@ agent/skills/advanced_search/tools.py
 Advanced Search Skill - High-performance code search using ripgrep.
 
 Phase 25: Omni CLI Architecture
-Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
+Skill implementation with @skill_command decorators.
 """
 
 import asyncio
@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import TypedDict, Any
 
 import structlog
+
+from agent.skills.decorators import skill_command
 
 logger = structlog.get_logger(__name__)
 
@@ -123,6 +125,11 @@ def _parse_ripgrep_output(output: str, context_lines: int = 2) -> list[SearchRes
     return results
 
 
+@skill_command(
+    name="advanced_search_search_project_code",
+    category="read",
+    description="Search for a regex pattern in code files using ripgrep.",
+)
 async def search_project_code(
     pattern: str,
     path: str = ".",
@@ -186,29 +193,3 @@ async def search_project_code(
         lines.append(f"{result['file']}:{result['line_number']}: {result['line_content']}")
 
     return "\n".join(lines[:100])  # Limit to 100 results for display
-
-
-# =============================================================================
-# EXPOSED_COMMANDS - Omni CLI Entry Point
-# =============================================================================
-
-EXPOSED_COMMANDS = {
-    "search_project_code": {
-        "func": search_project_code,
-        "description": "Search for a regex pattern in code files using ripgrep.",
-        "category": "read",
-    },
-}
-
-
-# =============================================================================
-# Legacy Export for Compatibility
-# =============================================================================
-
-__all__ = [
-    "search_project_code",
-    "SearchResult",
-    "SearchStats",
-    "SearchResponse",
-    "EXPOSED_COMMANDS",
-]

@@ -12,8 +12,7 @@ import subprocess
 from pathlib import Path
 import structlog
 
-# Reuse existing Settings class from mcp_core
-from common.mcp_core.settings import get_setting
+from common.settings import get_setting
 from common.gitops import get_project_root
 
 logger = structlog.get_logger(__name__)

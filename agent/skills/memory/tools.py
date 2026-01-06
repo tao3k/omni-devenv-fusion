@@ -2,8 +2,7 @@
 agent/skills/memory/tools.py
 Memory Skill - The Hippocampus Interface.
 
-Phase 25: Omni CLI Architecture
-Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
+Phase 25.1: Macro System with @skill_command decorators.
 
 Role:
   Allows the Agent to semantically store and retrieve knowledge via ChromaDB.
@@ -24,6 +23,8 @@ import chromadb
 from chromadb.config import Settings
 
 import structlog
+
+from agent.skills.decorators import skill_command
 
 logger = structlog.get_logger(__name__)
 
@@ -52,7 +53,7 @@ def _get_memory_path() -> Path:
     Configurable via settings.yaml: memory.path
     Falls back to: {git_toplevel}/.cache/{project}/.memory/
     """
-    from common.mcp_core.settings import get_setting
+    from common.settings import get_setting
     from common.gitops import get_project_root
 
     custom_path = get_setting("memory.path", "")
@@ -80,11 +81,11 @@ except Exception as e:
     semantic_mem = None
 
 
-# =============================================================================
-# Core Tools
-# =============================================================================
-
-
+@skill_command(
+    name="memory_remember_insight",
+    category="write",
+    description="Store a key insight into ChromaDB.",
+)
 async def remember_insight(content: str, domain: str = "general") -> str:
     """
     [Long-term Memory] Store a key insight, decision, or learning into ChromaDB.
@@ -117,6 +118,11 @@ async def remember_insight(content: str, domain: str = "general") -> str:
         return f"Failed to store insight: {e}"
 
 
+@skill_command(
+    name="memory_log_episode",
+    category="write",
+    description="Log a significant action taken during the session.",
+)
 async def log_episode(action: str, result: str, context: str = "") -> str:
     """
     [Short-term Memory] Log a significant action taken during the session.
@@ -153,6 +159,11 @@ async def log_episode(action: str, result: str, context: str = "") -> str:
         return f"Failed to log episode: {e}"
 
 
+@skill_command(
+    name="memory_recall",
+    category="read",
+    description="Semantically search memory for relevant past experiences.",
+)
 async def recall(query: str, n_results: int = 3) -> str:
     """
     [Retrieval] Semantically search memory for relevant past experiences or rules.
@@ -191,6 +202,11 @@ async def recall(query: str, n_results: int = 3) -> str:
         return f"Recall failed: {e}"
 
 
+@skill_command(
+    name="memory_list_harvested_knowledge",
+    category="read",
+    description="List all harvested insights stored in memory.",
+)
 async def list_harvested_knowledge() -> str:
     """
     [Reflection] List all harvested insights stored in memory.
@@ -226,6 +242,11 @@ async def list_harvested_knowledge() -> str:
         return f"Failed to list knowledge: {e}"
 
 
+@skill_command(
+    name="memory_harvest_session_insight",
+    category="write",
+    description="Extract and store key learnings from current session.",
+)
 async def harvest_session_insight(context_summary: str, files_changed: List[str] = None) -> str:
     """
     [Consolidation] Extract key learnings from current session and store in memory.
@@ -262,6 +283,11 @@ async def harvest_session_insight(context_summary: str, files_changed: List[str]
         return f"Harvest failed: {e}"
 
 
+@skill_command(
+    name="memory_get_stats",
+    category="view",
+    description="Get statistics about stored memories.",
+)
 async def get_memory_stats() -> str:
     """
     [Diagnostics] Get statistics about stored memories.
@@ -288,53 +314,162 @@ async def get_memory_stats() -> str:
 
 
 # =============================================================================
-# EXPOSED_COMMANDS - Omni CLI Entry Point
+# Skill Loader - Load skills into semantic memory
 # =============================================================================
 
-EXPOSED_COMMANDS = {
-    "remember_insight": {
-        "func": remember_insight,
-        "description": "[Long-term Memory] Store a key insight into ChromaDB.",
-        "category": "write",
-    },
-    "log_episode": {
-        "func": log_episode,
-        "description": "[Short-term Memory] Log a significant action.",
-        "category": "write",
-    },
-    "recall": {
-        "func": recall,
-        "description": "[Retrieval] Semantically search memory.",
-        "category": "read",
-    },
-    "list_harvested_knowledge": {
-        "func": list_harvested_knowledge,
-        "description": "[Reflection] List all harvested insights.",
-        "category": "read",
-    },
-    "harvest_session_insight": {
-        "func": harvest_session_insight,
-        "description": "[Consolidation] Extract and store key learnings.",
-        "category": "write",
-    },
-    "get_memory_stats": {
-        "func": get_memory_stats,
-        "description": "[Diagnostics] Get statistics about stored memories.",
-        "category": "read",
-    },
-}
+
+def _get_skills_dir() -> Path:
+    """Get skills directory path."""
+    from common.settings import get_setting
+    from common.gitops import get_project_root
+
+    skills_path = get_setting("skills.path", "agent/skills")
+    project_root = get_project_root()
+    return project_root / skills_path
 
 
-# =============================================================================
-# Legacy Export for Compatibility
-# =============================================================================
+def _load_manifest(skill_name: str) -> Optional[Dict[str, Any]]:
+    """Load a skill's manifest.json."""
+    skills_dir = _get_skills_dir()
+    manifest_path = skills_dir / skill_name / "manifest.json"
 
-__all__ = [
-    "remember_insight",
-    "log_episode",
-    "recall",
-    "list_harvested_knowledge",
-    "harvest_session_insight",
-    "get_memory_stats",
-    "EXPOSED_COMMANDS",
-]
+    if not manifest_path.exists():
+        return None
+
+    try:
+        return json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _load_prompts(skill_name: str) -> Optional[str]:
+    """Load a skill's prompts.md if it exists."""
+    skills_dir = _get_skills_dir()
+    prompts_path = skills_dir / skill_name / "prompts.md"
+
+    if prompts_path.exists():
+        return prompts_path.read_text(encoding="utf-8")
+    return None
+
+
+@skill_command(
+    name="memory_load_skill",
+    category="write",
+    description="Load a skill's manifest into semantic memory.",
+)
+async def load_skill(skill_name: str) -> str:
+    """
+    [Skill Loader] Load a single skill's manifest into semantic memory.
+
+    Usage:
+    - load_skill("git") - Load git skill
+    - load_skill("terminal") - Load terminal skill
+
+    This enables LLM to recall skill capabilities via semantic search.
+
+    Returns:
+        Confirmation message with skill details
+    """
+    if not CHROMA_AVAILABLE or not semantic_mem:
+        return "ChromaDB not available. Cannot load skill."
+
+    manifest = _load_manifest(skill_name)
+    if not manifest:
+        return f"Skill '{skill_name}' not found or invalid manifest."
+
+    # Build document from manifest
+    routing_kw = manifest.get("routing_keywords", [])
+    intents = manifest.get("intents", [])
+    deps = manifest.get("dependencies", [])
+
+    document = f"""# {manifest.get("name", skill_name)}
+
+{manifest.get("description", "No description.")}
+
+**Version:** {manifest.get("version", "unknown")}
+**Routing Keywords:** {", ".join(routing_kw)}
+**Intents:** {", ".join(intents)}
+**Dependencies:** {", ".join(deps) if deps else "None"}
+"""
+
+    # Append prompts.md content if available
+    prompts = _load_prompts(skill_name)
+    if prompts:
+        document += f"\n---\n\n## System Prompts\n{prompts[:2000]}"
+
+    timestamp = datetime.now().isoformat()
+    skill_id = f"skill_{skill_name}"
+
+    try:
+        # Upsert skill manifest (replace if exists)
+        semantic_mem.delete(ids=[skill_id])
+        semantic_mem.add(
+            documents=[document],
+            metadatas=[
+                {
+                    "timestamp": timestamp,
+                    "type": "skill_manifest",
+                    "skill_name": skill_name,
+                    "version": manifest.get("version", "unknown"),
+                    "routing_keywords": json.dumps(routing_kw),
+                    "intents": json.dumps(intents),
+                    "domain": "skill",
+                }
+            ],
+            ids=[skill_id],
+        )
+
+        return (
+            f"✅ Skill '{skill_name}' loaded into semantic memory.\n"
+            f"**Routing Keywords:** {', '.join(routing_kw[:5])}..."
+        )
+    except Exception as e:
+        return f"Failed to load skill '{skill_name}': {e}"
+
+
+@skill_command(
+    name="memory_load_activated_skills",
+    category="write",
+    description="Load all activated skills into semantic memory.",
+)
+async def load_activated_skills() -> str:
+    """
+    [Skill Loader] Load all activated skills into semantic memory.
+
+    Reads skills from SkillManager and stores each manifest in ChromaDB.
+
+    Returns:
+        Summary of loaded skills
+    """
+    if not CHROMA_AVAILABLE or not semantic_mem:
+        return "ChromaDB not available. Cannot load skills."
+
+    from agent.core.skill_manager import get_skill_manager
+
+    try:
+        manager = get_skill_manager()
+        activated_skills = manager.list_loaded_skills()
+
+        if not activated_skills:
+            return "No activated skills found."
+
+        loaded = []
+        failed = []
+
+        for skill_name in activated_skills:
+            result = await load_skill(skill_name)
+            if result.startswith("✅"):
+                loaded.append(skill_name)
+            else:
+                failed.append(skill_name)
+
+        summary = f"**Loaded {len(loaded)} skills:**\n"
+        for skill in loaded:
+            summary += f"- {skill}\n"
+
+        if failed:
+            summary += f"\n**Failed:** {', '.join(failed)}"
+
+        return summary
+    except Exception as e:
+        return f"Failed to load activated skills: {e}"

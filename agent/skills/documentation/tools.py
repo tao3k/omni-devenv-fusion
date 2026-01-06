@@ -3,7 +3,7 @@ agent/skills/documentation/tools.py
 Documentation Skill - Knowledge base management.
 
 Phase 25: Omni CLI Architecture
-Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
+Skill implementation with @skill_command decorators.
 """
 
 import os
@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import List, Optional
 from common.gitops import get_project_root
 import structlog
+
+from agent.skills.decorators import skill_command
 
 logger = structlog.get_logger(__name__)
 
@@ -25,6 +27,11 @@ knowledge_dir = root / "agent" / "knowledge"
 # =============================================================================
 
 
+@skill_command(
+    name="documentation_create_knowledge_entry",
+    category="write",
+    description="Create a new standardized knowledge entry.",
+)
 async def create_knowledge_entry(title: str, category: str, content: str) -> str:
     """
     Create a new standardized knowledge entry.
@@ -56,6 +63,11 @@ async def create_knowledge_entry(title: str, category: str, content: str) -> str
         return f"Failed to create doc: {e}"
 
 
+@skill_command(
+    name="documentation_rebuild_knowledge_index",
+    category="write",
+    description="Scan all markdown files and update the main README.md index.",
+)
 async def rebuild_knowledge_index() -> str:
     """
     Scan all markdown files in agent/knowledge and update the main README.md index.
@@ -90,6 +102,11 @@ async def rebuild_knowledge_index() -> str:
         return f"Failed to rebuild index: {e}"
 
 
+@skill_command(
+    name="documentation_search_knowledge_base",
+    category="read",
+    description="Simple text search across the knowledge base.",
+)
 async def search_knowledge_base(query: str) -> str:
     """
     Simple text search across the knowledge base.
@@ -110,38 +127,3 @@ async def search_knowledge_base(query: str) -> str:
         return f"Found {len(results)} matches:\n" + "\n".join(results[:10])
     except Exception as e:
         return f"Search error: {e}"
-
-
-# =============================================================================
-# EXPOSED_COMMANDS - Omni CLI Entry Point
-# =============================================================================
-
-EXPOSED_COMMANDS = {
-    "create_knowledge_entry": {
-        "func": create_knowledge_entry,
-        "description": "Create a new standardized knowledge entry.",
-        "category": "write",
-    },
-    "rebuild_knowledge_index": {
-        "func": rebuild_knowledge_index,
-        "description": "Scan all markdown files and update the main README.md index.",
-        "category": "write",
-    },
-    "search_knowledge_base": {
-        "func": search_knowledge_base,
-        "description": "Simple text search across the knowledge base.",
-        "category": "read",
-    },
-}
-
-
-# =============================================================================
-# Legacy Export for Compatibility
-# =============================================================================
-
-__all__ = [
-    "create_knowledge_entry",
-    "rebuild_knowledge_index",
-    "search_knowledge_base",
-    "EXPOSED_COMMANDS",
-]

@@ -3,7 +3,7 @@ agent/skills/testing_protocol/tools.py
 Testing Protocol Skill - Smart test runner.
 
 Phase 25: Omni CLI Architecture
-Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
+Skill implementation with @skill_command decorators.
 """
 
 import json
@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Dict, Any
 
 import structlog
+
+from agent.skills.decorators import skill_command
 
 logger = structlog.get_logger(__name__)
 
@@ -87,6 +89,11 @@ def categorize_changes(files: list) -> Dict[str, bool]:
     return categories
 
 
+@skill_command(
+    name="testing_protocol_smart_test_runner",
+    category="read",
+    description="Execute tests following agent/how-to/testing-workflows.md.",
+)
 async def smart_test_runner(focus_file: str = None) -> str:
     """
     Execute tests following agent/how-to/testing-workflows.md.
@@ -204,6 +211,11 @@ async def smart_test_runner(focus_file: str = None) -> str:
         )
 
 
+@skill_command(
+    name="testing_protocol_run_test_command",
+    category="read",
+    description="Run a test command and return results.",
+)
 async def run_test_command(command: str) -> str:
     """
     Run a test command and return results.
@@ -259,6 +271,11 @@ async def run_test_command(command: str) -> str:
         return json.dumps({"status": "error", "message": str(e), "command": command}, indent=2)
 
 
+@skill_command(
+    name="testing_protocol_get_test_protocol",
+    category="read",
+    description="Get the testing protocol summary.",
+)
 async def get_test_protocol() -> str:
     """
     Get the testing protocol summary.
@@ -290,38 +307,3 @@ async def get_test_protocol() -> str:
         },
         indent=2,
     )
-
-
-# =============================================================================
-# EXPOSED_COMMANDS - Omni CLI Entry Point
-# =============================================================================
-
-EXPOSED_COMMANDS = {
-    "smart_test_runner": {
-        "func": smart_test_runner,
-        "description": "Execute tests following agent/how-to/testing-workflows.md.",
-        "category": "read",
-    },
-    "run_test_command": {
-        "func": run_test_command,
-        "description": "Run a test command and return results.",
-        "category": "read",
-    },
-    "get_test_protocol": {
-        "func": get_test_protocol,
-        "description": "Get the testing protocol summary.",
-        "category": "read",
-    },
-}
-
-
-# =============================================================================
-# Legacy Export for Compatibility
-# =============================================================================
-
-__all__ = [
-    "smart_test_runner",
-    "run_test_command",
-    "get_test_protocol",
-    "EXPOSED_COMMANDS",
-]

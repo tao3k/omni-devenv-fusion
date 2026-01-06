@@ -16,7 +16,7 @@ You are strictly FORBIDDEN from generating the following types of "show-off" cod
 
 - **NEVER** use `Path(__file__).parent.parent...` chains.
 - **Reason**: This breaks when the package is installed or moved.
-- **Alternative**: Always use `common.mcp_core.config_paths.get_project_root()`.
+- **Alternative**: Always use `common.config_paths.get_project_root()`.
 
 ### 3. Reinventing the Wheel
 

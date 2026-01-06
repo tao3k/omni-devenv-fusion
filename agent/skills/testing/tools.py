@@ -3,16 +3,23 @@ agent/skills/testing/tools.py
 Testing Skill - Pytest integration.
 
 Phase 25: Omni CLI Architecture
-Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
+Skill implementation with @skill_command decorators.
 """
 
 import subprocess
 from pathlib import Path
 import structlog
 
+from agent.skills.decorators import skill_command
+
 logger = structlog.get_logger(__name__)
 
 
+@skill_command(
+    name="testing_run_tests",
+    category="read",
+    description="Run tests using pytest.",
+)
 async def run_tests(path: str = ".", verbose: bool = False, max_fail: int = 5) -> str:
     """
     Run tests using pytest.
@@ -59,6 +66,11 @@ async def run_tests(path: str = ".", verbose: bool = False, max_fail: int = 5) -
         return f"Execution Error: {str(e)}"
 
 
+@skill_command(
+    name="testing_list_tests",
+    category="read",
+    description="Discover and list available tests without running them.",
+)
 async def list_tests(path: str = ".") -> str:
     """
     Discover and list available tests without running them.
@@ -70,32 +82,3 @@ async def list_tests(path: str = ".") -> str:
         return f"Discovered Tests:\n{result.stdout}"
     except Exception as e:
         return f"Error listing tests: {str(e)}"
-
-
-# =============================================================================
-# EXPOSED_COMMANDS - Omni CLI Entry Point
-# =============================================================================
-
-EXPOSED_COMMANDS = {
-    "run_tests": {
-        "func": run_tests,
-        "description": "Run tests using pytest.",
-        "category": "read",
-    },
-    "list_tests": {
-        "func": list_tests,
-        "description": "Discover and list available tests without running them.",
-        "category": "read",
-    },
-}
-
-
-# =============================================================================
-# Legacy Export for Compatibility
-# =============================================================================
-
-__all__ = [
-    "run_tests",
-    "list_tests",
-    "EXPOSED_COMMANDS",
-]

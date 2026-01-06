@@ -2,28 +2,31 @@
 src/agent/core/skill_manager.py
 Omni CLI - Single Entry Point for All Skills.
 
-Phase 25: Omni CLI Architecture
-Replaces Phase 24's direct tool registration with a unified command router.
+Phase 25.1: Macro System (Skill Decorators + DI)
+Replaces Phase 25's manual EXPOSED_COMMANDS with @skill_command decorators.
 
 Architecture:
-- SkillManager (central command) scans skills and builds registry
-- Skills expose EXPOSED_COMMANDS dictionary (no @mcp.tool decorators)
-- Single omni_run(command, args) tool handles all operations
+- @skill_command decorator marks functions with metadata and DI support
+- SkillManager scans skills and builds registry from decorated functions
+- Built-in help macro automatically reads guide.md
+- Single omni tool handles all operations
 
 Usage:
     skill_manager = SkillManager()
     skill_manager.load_skills()
-    result = skill_manager.run("git", "git_status_report", {})
+    result = await skill_manager.run("git", "status", {})
 """
 
+import asyncio
 import importlib.util
+import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Callable, Dict, List, Optional
 from dataclasses import dataclass, field
-import logging
 
-from common.mcp_core.settings import get_setting, get_project_root
+from common.settings import get_setting
+from common.config_paths import get_project_root
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +108,8 @@ class SkillManager:
         Returns:
             Module name if successful, None otherwise
         """
+        import types
+
         tools_path = skill_dir / "tools.py"
         module_name = f"agent.skills.{skill_dir.name}.tools"
 
@@ -113,6 +118,37 @@ class SkillManager:
             return module_name
 
         try:
+            # Pre-create parent packages in sys.modules for nested imports to work
+            # This allows 'from agent.skills.decorators import ...' to work
+            skills_path = skill_dir.parent
+            agent_path = skills_path.parent
+
+            # Create and register 'agent' package if not exists
+            if "agent" not in sys.modules:
+                agent_pkg = types.ModuleType("agent")
+                agent_pkg.__path__ = [str(agent_path)]
+                agent_pkg.__file__ = str(agent_path / "__init__.py")
+                sys.modules["agent"] = agent_pkg
+
+            # Create and register 'agent.skills' package if not exists
+            if "agent.skills" not in sys.modules:
+                skills_pkg = types.ModuleType("agent.skills")
+                skills_pkg.__path__ = [str(skills_path)]
+                skills_pkg.__file__ = str(skills_path / "__init__.py")
+                sys.modules["agent.skills"] = skills_pkg
+                sys.modules["agent"].skills = skills_pkg
+
+            # Create and register 'agent.skills.decorators' module if not exists and file exists
+            decorators_path = skills_path / "decorators.py"
+            if "agent.skills.decorators" not in sys.modules and decorators_path.exists():
+                decorators_spec = importlib.util.spec_from_file_location(
+                    "agent.skills.decorators", decorators_path
+                )
+                decorators_module = importlib.util.module_from_spec(decorators_spec)
+                sys.modules["agent.skills.decorators"] = decorators_module
+                decorators_spec.loader.exec_module(decorators_module)
+                sys.modules["agent.skills"].decorators = decorators_module
+
             spec = importlib.util.spec_from_file_location(module_name, tools_path)
             if spec is None or spec.loader is None:
                 logger.error(f"Could not create spec for {module_name}")
@@ -130,17 +166,11 @@ class SkillManager:
 
     def _extract_commands(self, module, skill_name: str) -> Dict[str, SkillCommand]:
         """
-        Extract EXPOSED_COMMANDS from a skill module.
+        Extract commands from a skill module.
 
-        Skills should define:
-            EXPOSED_COMMANDS = {
-                "command_name": {
-                    "func": function_reference,
-                    "description": "What this command does",
-                    "category": "read|write|workflow|evolution"
-                },
-                ...
-            }
+        Supports two patterns:
+        1. @skill_command decorators (Phase 25+)
+        2. EXPOSED_COMMANDS dictionary (legacy, for backward compatibility)
 
         Args:
             module: The loaded skill module
@@ -149,13 +179,48 @@ class SkillManager:
         Returns:
             Dictionary of command name -> SkillCommand
         """
+        import inspect
+
         commands = {}
 
-        # Check for EXPOSED_COMMANDS
+        # Debug: Count functions in module
+        all_funcs = [n for n, o in inspect.getmembers(module) if inspect.isfunction(o)]
+        logger.debug(f"[{skill_name}] Found {len(all_funcs)} functions in module")
+
+        # Method 1: Check for @skill_command decorated functions
+        for name, obj in inspect.getmembers(module):
+            if inspect.isfunction(obj):
+                has_marker = getattr(obj, "_is_skill_command", False)
+                if has_marker:
+                    config = obj._skill_config
+                    cmd_name = config.get("name") or name
+
+                    commands[cmd_name] = SkillCommand(
+                        name=cmd_name,
+                        func=obj,
+                        description=config.get("description", ""),
+                        category=config.get("category", "general"),
+                    )
+                    logger.debug(f"[{skill_name}] Loaded decorated command: {cmd_name}")
+
+        # Debug: List functions with markers
+        if not commands:
+            funcs_with_marker = [
+                (n, getattr(o, "_is_skill_command", None))
+                for n, o in inspect.getmembers(module)
+                if inspect.isfunction(o)
+            ]
+            logger.debug(f"[{skill_name}] Functions with markers: {funcs_with_marker[:5]}...")
+
+        # Method 2: Check for EXPOSED_COMMANDS (legacy/transition)
         if hasattr(module, "EXPOSED_COMMANDS"):
             exposed = module.EXPOSED_COMMANDS
             if isinstance(exposed, dict):
                 for cmd_name, cmd_info in exposed.items():
+                    # Skip if already loaded via decorator
+                    if cmd_name in commands:
+                        continue
+
                     if isinstance(cmd_info, dict):
                         func = cmd_info.get("func")
                         description = cmd_info.get("description", "")
@@ -168,17 +233,16 @@ class SkillManager:
                                 description=description,
                                 category=category,
                             )
-                            logger.debug(f"Loaded command: {skill_name}.{cmd_name}")
+                            logger.debug(f"[{skill_name}] Loaded from EXPOSED_COMMANDS: {cmd_name}")
                         else:
                             logger.warning(
-                                f"Command {cmd_name} in {skill_name} has no callable func"
+                                f"[{skill_name}] Command {cmd_name} has no callable func"
                             )
                     else:
-                        logger.warning(f"Invalid command format for {cmd_name} in {skill_name}")
-            else:
-                logger.warning(f"EXPOSED_COMMANDS in {skill_name} is not a dict")
-        else:
-            logger.warning(f"Skill {skill_name} has no EXPOSED_COMMANDS defined")
+                        logger.warning(f"[{skill_name}] Invalid command format for {cmd_name}")
+
+        if not commands:
+            logger.warning(f"[{skill_name}] No commands found")
 
         return commands
 
@@ -260,16 +324,19 @@ class SkillManager:
 
         return command
 
-    def run(
+    async def run(
         self,
         skill_name: str,
         command_name: str,
         args: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
-        Execute a command from a skill.
+        Execute a command from a skill (Async Native).
 
         This is the main entry point for executing skill commands.
+
+        Built-in commands:
+            - help: Returns guide.md content for the skill
 
         Args:
             skill_name: Name of the skill (e.g., "git")
@@ -279,35 +346,26 @@ class SkillManager:
         Returns:
             String result from the command execution
         """
+        # Built-in: help command returns guide.md
+        if command_name == "help":
+            return self._get_skill_guide(skill_name)
+
         command = self.get_command(skill_name, command_name)
         if command is None:
             return f"Error: Command {skill_name}.{command_name} not found"
 
         try:
-            import asyncio
-
             func = command.func
             args = args or {}
 
+            # Native async/await - no ThreadPoolExecutor needed
             if asyncio.iscoroutinefunction(func):
-                # Run async function - handle both with and without running event loop
-                try:
-                    loop = asyncio.get_running_loop()
-                except RuntimeError:
-                    # No running loop, safe to use asyncio.run()
-                    result = asyncio.run(func(**args))
-                else:
-                    # Already in an event loop, create a new thread with its own event loop
-                    import concurrent.futures
-
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                        future = executor.submit(asyncio.run, func(**args))
-                        result = future.result()
+                result = await func(**args)
             else:
-                # Run sync function
+                # Sync function - FastMCP handles this gracefully
                 result = func(**args)
 
-            return result
+            return str(result)
 
         except TypeError as e:
             # Handle missing arguments
@@ -315,6 +373,30 @@ class SkillManager:
         except Exception as e:
             logger.error(f"Error executing {skill_name}.{command_name}: {e}")
             return f"Error: {e}"
+
+    def _get_skill_guide(self, skill_name: str) -> str:
+        """
+        Get skill guide content (reads guide.md automatically).
+
+        This is a macro - every skill can use @omni("skill.help") to get
+        its guide.md content without defining a help function.
+
+        Args:
+            skill_name: Name of the skill
+
+        Returns:
+            Guide content or error message
+        """
+        skill = self.skills.get(skill_name)
+        if skill is None:
+            return f"Skill '{skill_name}' not found"
+
+        # guide.md is in the skill directory
+        guide_path = self.skills_dir / skill_name / "guide.md"
+        if guide_path.exists():
+            return guide_path.read_text()
+        else:
+            return f"# {skill_name}\n\nNo guide.md found for this skill."
 
     def list_available_skills(self) -> List[str]:
         """

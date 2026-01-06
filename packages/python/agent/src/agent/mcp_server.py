@@ -1,11 +1,16 @@
 """
 src/agent/mcp_server.py
-Omni MCP Server - Phase 25 "One Tool" Architecture.
+Omni MCP Server - Phase 25.1 "One Tool" Architecture with Macro System.
 
 SINGLE ENTRY POINT PHILOSOPHY:
 - Only ONE tool registered with MCP: @omni
 - All skill operations go through this single gate
 - Claude's context stays clean and focused
+
+Phase 25.1 Features:
+- @skill_command decorator with DI support (inject_root, inject_settings)
+- Built-in help macro automatically reads guide.md
+- Context injection for logging and progress
 
 Architecture:
 - SkillManager: Scans skills, loads Python modules, builds command registry
@@ -22,12 +27,13 @@ Usage:
     @omni("git")                           # Show git commands
 """
 
-from mcp.server.fastmcp import FastMCP
-from typing import Optional, Dict, Any
+from mcp.server.fastmcp import FastMCP, Context, Image
+from typing import Optional, Dict, Any, Union
 import structlog
 from pathlib import Path
 
-from common.mcp_core.settings import get_setting, get_project_root
+from common.settings import get_setting
+from common.config_paths import get_project_root
 
 logger = structlog.get_logger()
 
@@ -44,7 +50,11 @@ mcp = FastMCP("omni-agentic-os")
 
 
 @mcp.tool(name="omni")
-def omni(input: str, args: Optional[Dict[str, Any]] = None) -> str:
+async def omni(
+    input: str,
+    args: Optional[Dict[str, Any]] = None,
+    ctx: Context = None,
+) -> str:
     """
     Execute any skill command or get help.
 
@@ -64,6 +74,7 @@ def omni(input: str, args: Optional[Dict[str, Any]] = None) -> str:
     Args:
         input: Command like "skill.command", "skill", or "help"
         args: Optional arguments for the command (dict)
+        ctx: MCP Context for logging and progress reporting
 
     Returns:
         Command result as string (formatted Markdown)
@@ -75,6 +86,10 @@ def omni(input: str, args: Optional[Dict[str, Any]] = None) -> str:
     # Normalize input
     input = input.strip()
     args = args or {}
+
+    # Log dispatch info to Claude
+    if ctx:
+        ctx.info(f"Omni Dispatch: {input} | Args: {len(args)}")
 
     # Handle help cases
     if input == "help" or input == "?":
@@ -111,8 +126,16 @@ def omni(input: str, args: Optional[Dict[str, Any]] = None) -> str:
     if command is None:
         return f"Error: Command {skill_name}.{raw_cmd} not found"
 
-    # Execute the command
-    result = manager.run(skill_name, cmd_name, args)
+    # Report progress for potentially long operations
+    if ctx:
+        await ctx.report_progress(0, 100)
+
+    # Execute the command (async native)
+    result = await manager.run(skill_name, cmd_name, args)
+
+    if ctx:
+        await ctx.report_progress(100, 100)
+
     return result
 
 
@@ -179,6 +202,55 @@ def _render_skill_help(manager, skill_name: str) -> str:
     lines.append("---")
     lines.append(f"**Usage**: `@omni('{skill_name}.<command>', args={{}})`")
     lines.append(f"**Total**: {len(skill_obj.commands)} commands")
+
+    return "\n".join(lines)
+
+
+# =============================================================================
+# Prompt Templates
+# =============================================================================
+
+
+@mcp.prompt()
+def omni_help_prompt() -> str:
+    """
+    Returns the manual for Omni CLI.
+
+    This prompt is automatically available to Claude when using the Omni MCP Server.
+    """
+    from agent.core.skill_manager import get_skill_manager
+
+    manager = get_skill_manager()
+    skills = manager.list_available_skills()
+
+    lines = [
+        "# Omni Agentic OS - Quick Reference",
+        "",
+        "## Single Entry Point",
+        "All capabilities are accessed via the SINGLE tool: `omni`.",
+        "",
+        "## Available Skills:",
+    ]
+
+    for skill_name in sorted(skills):
+        info = manager.get_skill_info(skill_name)
+        if info:
+            lines.append(f"- **{skill_name}**: {info['command_count']} commands")
+
+    lines.extend(
+        [
+            "",
+            "## Usage Examples:",
+            '- `@omni("git.status")` - Check git status',
+            '- `@omni("file.read", path="README.md")` - Read a file',
+            '- `@omni("help")` - Show all skills',
+            '- `@omni("git")` - Show git commands',
+            "",
+            "## Key Principle",
+            "Code is Mechanism, Prompt is Policy.",
+            "Brain (prompts.md) -> Muscle (tools.py) -> Guardrails (lefthook).",
+        ]
+    )
 
     return "\n".join(lines)
 

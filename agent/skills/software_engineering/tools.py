@@ -3,7 +3,7 @@ agent/skills/software_engineering/tools.py
 Software Engineering Skill - Architecture analysis and code navigation.
 
 Phase 25: Omni CLI Architecture
-Passive Skill Implementation - Exposes EXPOSED_COMMANDS dictionary.
+Skill implementation with @skill_command decorators.
 """
 
 import os
@@ -13,6 +13,8 @@ from typing import List, Dict
 from common.gitops import get_project_root
 import structlog
 
+from agent.skills.decorators import skill_command
+
 logger = structlog.get_logger(__name__)
 
 
@@ -21,6 +23,11 @@ logger = structlog.get_logger(__name__)
 # =============================================================================
 
 
+@skill_command(
+    name="software_engineering_analyze_project_structure",
+    category="read",
+    description="Generate a tree-like view of the project structure.",
+)
 async def analyze_project_structure(depth: int = 2) -> str:
     """
     Generate a tree-like view of the project structure to understand architecture.
@@ -60,6 +67,11 @@ async def analyze_project_structure(depth: int = 2) -> str:
     return "\n".join(output)
 
 
+@skill_command(
+    name="software_engineering_grep_codebase",
+    category="read",
+    description="Universal content search (grep) for patterns in files.",
+)
 async def grep_codebase(pattern: str, file_extension: str = "", path: str = ".") -> str:
     """
     Universal content search (grep).
@@ -120,6 +132,11 @@ async def grep_codebase(pattern: str, file_extension: str = "", path: str = ".")
         return f"Error: {e}"
 
 
+@skill_command(
+    name="software_engineering_detect_tech_stack",
+    category="read",
+    description="Analyze the project to identify languages and frameworks.",
+)
 async def detect_tech_stack() -> str:
     """
     Analyze the project to identify languages and frameworks used.
@@ -159,38 +176,3 @@ async def detect_tech_stack() -> str:
 Languages: {", ".join([f"{l} ({c} files)" for l, c in sorted_langs])}
 Frameworks/Tools: {", ".join(set(frameworks))}
 """
-
-
-# =============================================================================
-# EXPOSED_COMMANDS - Omni CLI Entry Point
-# =============================================================================
-
-EXPOSED_COMMANDS = {
-    "analyze_project_structure": {
-        "func": analyze_project_structure,
-        "description": "Generate a tree-like view of the project structure.",
-        "category": "read",
-    },
-    "grep_codebase": {
-        "func": grep_codebase,
-        "description": "Universal content search (grep) for patterns in files.",
-        "category": "read",
-    },
-    "detect_tech_stack": {
-        "func": detect_tech_stack,
-        "description": "Analyze the project to identify languages and frameworks.",
-        "category": "read",
-    },
-}
-
-
-# =============================================================================
-# Legacy Export for Compatibility
-# =============================================================================
-
-__all__ = [
-    "analyze_project_structure",
-    "grep_codebase",
-    "detect_tech_stack",
-    "EXPOSED_COMMANDS",
-]
