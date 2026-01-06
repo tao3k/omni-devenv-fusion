@@ -23,6 +23,37 @@ def _run(cmd: list[str], cwd: Optional[Path] = None) -> str:
     return result.stdout.strip()
 
 
+def _check_sensitive_files(staged_files: list[str]) -> list[str]:
+    """Check for potentially sensitive files in staged changes."""
+    import glob
+
+    sensitive_patterns = [
+        "*.env*",
+        "*.pem",
+        "*.key",
+        "*.secret",
+        "*.credentials*",
+        "*.psd",
+        "*.ai",
+        "*.sketch",
+        "*.fig",
+        "id_rsa*",
+        "id_ed25519*",
+        "*.priv",
+        "secrets.yml",
+        "secrets.yaml",
+        "credentials.yml",
+    ]
+
+    sensitive = []
+    for pattern in sensitive_patterns:
+        matches = glob.glob(pattern, recursive=True)
+        for m in matches:
+            if m in staged_files and m not in sensitive:
+                sensitive.append(m)
+    return sensitive
+
+
 # ==============================================================================
 # Read Operations (safe, idempotent)
 # ==============================================================================
@@ -255,6 +286,7 @@ def prepare_commit(project_root: Path = None) -> str:
     import shutil
 
     results = ["🔍 **Git Commit Preparation**"]
+    lefthook_report = ""
 
     # 0. Check if there are staged files (even if working tree is clean)
     staged_files, _ = _run_with_rc(["git", "diff", "--cached", "--name-only"], cwd=project_root)
@@ -282,6 +314,16 @@ Automatic checks found issues that need your attention before committing.
 **Action Required:**
 Please fix the errors above and run `/commit` again.
 """
+
+        # Capture lefthook version and output for commit message
+        lh_version, _ = _run_with_rc(["lefthook", "--version"], cwd=project_root)
+
+        if lh_out.strip():
+            lefthook_report = f"""
+🥊 lefthook {lh_version}  hook: pre-commit
+╰───────────────────────────────────────╯
+{lh_out}"""
+
         if "fixed" in lh_out.lower() or "formatted" in lh_out.lower():
             results.append("✨ Lefthook auto-fixed some files.")
         else:
@@ -305,16 +347,39 @@ Please fix the errors above and run `/commit` again.
     if not staged_files:
         return "🛑 **Nothing to commit**. Working tree clean."
 
+    # 5. Check for sensitive files
+    staged_list_all = staged_files.split("\n")
+    sensitive_files = _check_sensitive_files(staged_list_all)
+    security_warning = ""
+    if sensitive_files:
+        sensitive_display = "\n".join([f"  ⚠️ {f}" for f in sensitive_files])
+        security_warning = f"""
+⚠️ **Security Check**
+
+Detected {len(sensitive_files)} potentially sensitive file(s):
+
+{sensitive_display}
+
+**LLM Advisory:** Please verify these files are safe to commit.
+- Are they intentional additions (not accidentally staged)?
+- Do they contain secrets, keys, or credentials?
+- Should they be in `.gitignore`?
+
+If unsure, press `No` and run `git reset <file>` to unstage.
+"""
+
     if not has_unstaged and staged_files:
         # Staged but working tree clean (e.g., after reset --soft)
         # Skip analysis, go directly to commit
-        staged_list = "\n".join([f"  ✅ {f}" for f in staged_files.split("\n") if f])
-        return f"""🔄 **Reset Detected - Ready to Commit**
+        staged_list = "\n".join([f"  ✅ {f}" for f in staged_list_all if f])
+        return f"""🔄 **Staged Files Detected - Ready to Commit**
 
-**{len(staged_files.split(chr(10)))} staged files ready to commit:**
+**{len(staged_list_all)} staged files ready to commit:**
 
 {staged_list}
 
+{lefthook_report}
+{security_warning}
 **Please confirm:** Press `Yes` to submit commit, or `No` to cancel.
 """
 
@@ -329,6 +394,8 @@ Please fix the errors above and run `/commit` again.
 
 ✅ **Ready for Analysis**
 
+{lefthook_report}
+{security_warning}
 **Staged Changes:**
 
 ```text

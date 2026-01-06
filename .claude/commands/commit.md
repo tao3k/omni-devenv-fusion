@@ -1,73 +1,24 @@
 ---
-description: Smart Commit Flow (Stage -> Lefthook -> Analyze -> Commit)
+description: Smart Commit Flow with lefthook checks and security scan
 argument-hint: [message_hint]
 ---
 
 # Smart Commit Workflow
 
-Please execute the following 3-step workflow to ensure code quality and meaningful commit messages.
+See [agent/skills/git/commit-workflow.md](../../agent/skills/git/commit-workflow.md) for full documentation.
 
-## Step 1: Preparation & Checks
-
-Call the Omni tool to stage files and run quality checks:
-`@omni("git.prepare_commit")`
-
-## Step 2: Analysis & Report
-
-**IF** the preparation tool returns "✅ Checks Passed":
-
-1. **Analyze** the staged diff provided in the tool output.
-2. **Determine** the commit Type (feat, fix, refactor, docs, style, test, chore) and Scope.
-3. **Generate** a commit analysis report using this template:
-
-```markdown
-### 📋 Commit Analysis
-
-| Field           | Value               |
-| --------------- | ------------------- |
-| **Type**        | `{type}`            |
-| **Scope**       | `{scope}`           |
-| **Description** | {short_description} |
-
-#### 📁 Files to commit (already staged)
-
-- `{file1}` - {change1}
-- `{file2}` - {change2}
-- ...
-
-#### 📝 Message
-```
-
-{type}({scope}): {description}
-
-- {change_detail_1}
-- {change_detail_2}
-- ...
-
-````
-
----
-*🤖 Generated with [Claude Code](https://claude.com/claude-code)*
-
-*Co-Authored-By: Claude <noreply@anthropic.com>*
-
-**IMPORTANT**: Include ALL files shown in the staged diff in your analysis.
-
-## Step 3: Execute Commit 👇
-
-**MCP Tool:** Run this command right now:
+## Quick Usage
 
 ```bash
-@mcp__orchestrator__omni("git.execute_commit", {"message": "YOUR_GENERATED_MESSAGE"})
-````
-
----
-
-**IF** the preparation tool returns "❌ Checks Failed":
-
-- Stop the workflow.
-- Display the errors to me so I can fix them.
-
+/commit
 ```
 
-```
+## Workflow
+
+1. **Preparation** - Stage files, run lefthook, check security
+2. **Analysis** - Generate commit message with type/scope/files
+3. **Confirm** - Press `Yes` to submit, `No` to cancel
+
+## Sensitive Files Detected
+
+If sensitive files are staged, you'll see a security warning. Review carefully before confirming.
