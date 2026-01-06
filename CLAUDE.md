@@ -23,7 +23,7 @@
 ## Essential Commands
 
 - `just validate` - fmt, lint, test
-- `/mcp enable orchestrator` - Reconnect orchestrator
+- `/mcp enable orchestrator` - Reconnect omni mcp
 
 ---
 

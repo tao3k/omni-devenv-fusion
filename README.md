@@ -6,6 +6,22 @@ Omni-DevEnv Fusion is an Agentic OS kernel that bridges the gap between human in
 
 With **Nix** for absolute environment reproducibility and a rigorous "Legislation-Execution" policy engine, Fusion empowers AI to autonomously handle the complete SDLC—from architectural design to AST-level refactoring.
 
+## Phase 25: One Tool Architecture
+
+Fusion uses a single MCP tool entry point with infinite skill commands:
+
+```python
+@omni("git.status")           # Get git status
+@omni("git.commit", {...})    # Commit with cog validation
+@omni("file.read", {...})     # Read file
+@omni("help")                 # Show all skills
+```
+
+| Pattern         | Example      | Dispatches To      |
+| --------------- | ------------ | ------------------ |
+| `skill.command` | `git.status` | `git.git_status()` |
+| `skill`         | `git`        | Shows skill help   |
+
 ## The Vision
 
 **Copilot** (today): AI helps you write code, you drive.
@@ -13,6 +29,28 @@ With **Nix** for absolute environment reproducibility and a rigorous "Legislatio
 **Autopilot** (tomorrow): AI drives, you architect.
 
 The gap is State, Memory, Policy, Orchestration. **Fusion fills this gap.**
+
+## Smart Commit Workflow
+
+Fusion includes an intelligent commit workflow powered by cog for scope validation:
+
+```bash
+/commit
+```
+
+**Workflow:**
+
+1. **Preparation** - Stage files, run lefthook pre-commit, check sensitive files
+2. **Analysis** - Generate commit message with type/scope/files
+3. **Validation** - cog validates scope against `cog.toml`
+4. **Execute** - User confirms, commit is executed
+
+**Features:**
+
+- Automatic lefthook integration
+- Sensitive file detection (.env, .pem, .key, etc.)
+- cog scope validation (type + scope checking)
+- Conventional commit format enforcement
 
 ## Tri-MCP Architecture
 
@@ -179,14 +217,28 @@ just validate
 
 ## Documentation Structure
 
-| Topic          | Location                                              |
-| -------------- | ----------------------------------------------------- |
-| Architecture   | `docs/reference/mcp-orchestrator.md`                  |
-| Tri-MCP Design | `docs/explanation/dual-mcp-architecture.md`           |
-| MCP Tools      | `src/agent/main.py` (Orchestrator), `src/mcp_server/` |
-| Workflows      | `agent/how-to/*.md`                                   |
-| Standards      | `agent/standards/*.md`                                |
-| Specs          | `agent/specs/*.md`                                    |
+| Topic          | Location                                        |
+| -------------- | ----------------------------------------------- |
+| Architecture   | `docs/reference/mcp-orchestrator.md`            |
+| Tri-MCP Design | `docs/explanation/dual-mcp-architecture.md`     |
+| MCP Tools      | `packages/python/agent/src/agent/mcp_server.py` |
+| Workflows      | `agent/skills/*/prompts.md`                     |
+| Slash Commands | `.claude/commands/*.md`                         |
+| Skill Docs     | `agent/skills/{skill}/commit-workflow.md`       |
+| Specs          | `agent/specs/*.md`                              |
+
+## Skill Architecture
+
+Each skill is a self-contained module:
+
+```
+agent/skills/{skill}/
+├── prompts.md       # Rules & routing (LLM reads when active)
+├── tools.py         # Atomic execution (blind, stateless)
+└── commit-workflow.md  # Workflow documentation (if applicable)
+```
+
+**To load a skill:** `/load-skill <skill_name>`
 
 ## License
 

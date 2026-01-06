@@ -416,15 +416,82 @@ If unsure, press `No` and run `git reset <file>` to unstage.
 @skill_command(
     name="git_execute_commit",
     category="workflow",
-    description="Execute the final commit with a message",
+    description="Execute the commit using cog (validates scope automatically)",
     inject_root=True,
 )
 def execute_commit(message: str, project_root: Path = None) -> str:
-    """[Phase 2] Execute the commit."""
+    """[Phase 2] Execute the commit using cog.
+
+    Args:
+        message: Full commit message in format: "type(scope): description\n\n- detail..."
+        project_root: Project root directory
+
+    Uses cog commit which validates:
+    - Type: feat, fix, docs, style, refactor, test, chore, perf, build, ci, revert
+    - Scope: Against cog.toml allowed scopes
+    """
+    import shutil
+
+    # Parse the message to extract type, scope, and description
+    # Format: "type(scope): description\n\n- detail..."
+    lines = message.strip().split('\n')
+    first_line = lines[0]
+
+    # Parse "type(scope): description" or "type: description"
+    import re
+    match = re.match(r'^(\w+)(?:\(([^)]+)\))?:\s*(.+)$', first_line)
+
+    if not match:
+        return f"""❌ **Invalid Message Format**
+
+Expected format: `type(scope): description`
+
+Got: `{first_line}`
+
+**Action:** Please regenerate the commit message.
+"""
+
+    commit_type = match.group(1)
+    scope = match.group(2) or ""
+    description = match.group(3)
+
+    # Try cog first, fallback to git
+    if shutil.which("cog"):
+        cmd = ["cog", "commit", commit_type, description]
+        if scope:
+            cmd.append(scope)
+
+        out, rc = _run_with_rc(cmd, cwd=project_root)
+
+        if rc != 0:
+            return f"""❌ **Commit Failed (cog)**
+
+```text
+{out}
+```
+
+**Action:** Please fix the issue and run `/commit` again.
+"""
+
+        commit_hash, _ = _run_with_rc(["git", "rev-parse", "--short", "HEAD"], cwd=project_root)
+        return f"""💾 COMMITTING `{commit_hash}`
+
+✅ **Commit Successful!**
+
+{first_line}
+
+---
+*Verified by Omni Git Skill (cog)*"""
+
+    # Fallback to git commit
     out, rc = _run_with_rc(["git", "commit", "-m", message], cwd=project_root)
 
     if rc != 0:
-        return f"💾 COMMIT FAILED:\n```\n{out}\n```"
+        return f"""💾 COMMIT FAILED:
+
+```text
+{out}
+```"""
 
     commit_hash, _ = _run_with_rc(["git", "rev-parse", "--short", "HEAD"], cwd=project_root)
 
@@ -432,7 +499,7 @@ def execute_commit(message: str, project_root: Path = None) -> str:
 
 ✅ **Commit Successful!**
 
-{message}
+{first_line}
 
 ---
 *Verified by Omni Git Skill*"""
