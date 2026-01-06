@@ -63,6 +63,69 @@ omni skill info pandas-expert
 4. **Lockfile**: Generates `.omni-lock.json` for reproducible installs
 5. **Dirty Handling**: Stashes local changes, pulls, then pops (stash strategy)
 
+## Phase 27: JIT Skill Acquisition
+
+Omni can **dynamically discover and install skills** when you need capabilities not currently loaded:
+
+```python
+# Discover skills matching a query
+@omni("skill.discover", {"query": "data analysis", "limit": 5})
+
+# Get task-based suggestions
+@omni("skill.suggest", {"task": "analyze pcap file"})
+
+# Install and load a skill
+@omni("skill.jit_install", {"skill_id": "network-analysis"})
+
+# List all known skills
+@omni("skill.list_index")
+```
+
+### Workflow: Acquiring a New Capability
+
+```
+User: "Analyze this pcap file"
+
+You: @omni("skill.suggest", {"task": "analyze pcap file"})
+     → Found: network-analysis (keywords: pcap, network, wireshark)
+
+     @omni("skill.jit_install", {"skill_id": "network-analysis"})
+     → ✅ Installed and loaded!
+
+     Ready to analyze your pcap file.
+```
+
+### Available Skills in Index (20 skills)
+
+| Skill ID           | Description                               | Keywords                           |
+| ------------------ | ----------------------------------------- | ---------------------------------- |
+| `pandas-expert`    | Advanced pandas data manipulation         | pandas, dataframe, data-analysis   |
+| `docker-ops`       | Docker container management               | docker, containers, kubernetes     |
+| `network-analysis` | PCAP analysis and network troubleshooting | pcap, network, wireshark           |
+| `ml-pytorch`       | Machine learning with PyTorch             | pytorch, ml, deep-learning         |
+| `aws-cloud`        | AWS cloud services management             | aws, ec2, s3, lambda               |
+| `database-sql`     | SQL database operations                   | sql, postgres, mysql, query        |
+| `video-processing` | FFmpeg video transcoding                  | video, ffmpeg, transcoding         |
+| `rust-systems`     | Rust systems programming                  | rust, wasm, systems                |
+| `graphql-api`      | GraphQL schema design                     | graphql, api, schema               |
+| `terraform-infra`  | Infrastructure as Code                    | terraform, infrastructure, iac     |
+| `security-audit`   | Security vulnerability scanning           | security, vulnerability, audit     |
+| `regex-master`     | Regular expression parsing                | regex, pattern, text               |
+| `http-client`      | HTTP requests and API testing             | http, api, rest, curl              |
+| `git-advanced`     | Advanced git operations                   | git, rebase, bisect, workflow      |
+| `shell-scripting`  | Bash/shell scripting                      | bash, shell, scripting, automation |
+| `cryptography`     | Encryption and cryptographic ops          | crypto, encryption, hash           |
+| `testing-pytest`   | Python testing with pytest                | pytest, testing, coverage          |
+| `async-python`     | Python async/await programming            | async, asyncio, concurrency        |
+| `fastapi-web`      | FastAPI web framework                     | fastapi, web, api, openapi         |
+| `image-processing` | PIL/Pillow image manipulation             | image, pillow, png, jpeg           |
+
+### Key Features
+
+1. **Weighted Scoring**: Keywords (+10), ID (+8), Name (+5), Description (+2)
+2. **Auto-Load**: Skills are automatically loaded after installation
+3. **Index-Based**: Uses `known_skills.json` for reliable discovery
+
 ## The Vision
 
 **Copilot** (today): AI helps you write code, you drive.

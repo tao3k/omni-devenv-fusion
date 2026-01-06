@@ -25,6 +25,7 @@ import asyncio
 import os
 import time
 import importlib.util
+import types
 from pathlib import Path
 from unittest.mock import MagicMock, patch, AsyncMock
 from mcp.server.fastmcp import FastMCP
@@ -34,55 +35,29 @@ from agent.core.schema import SkillManifest
 from agent.core.skill_registry import SkillRegistry, get_skill_registry
 from agent.core.skill_manager import SkillManager, get_skill_manager
 
+# Use gitops and settings for path resolution
+from common.gitops import get_project_root
+from common.settings import get_setting
 
-def _load_skill_module_for_test(skill_name: str, test_file: str):
+
+def _load_skill_module_for_test(skill_name: str):
     """
     Load a skill module directly from file using importlib.util.
     This bypasses the normal import system which may resolve 'agent' to the package.
-    """
-    import types
 
-    # Get project root and skill path
-    project_root = Path(test_file).resolve().parent.parent.parent.parent.parent.parent.parent
-    skill_tools_path = project_root / "assets" / "skills" / skill_name / "tools.py"
+    Uses get_project_root() + get_setting() for path resolution.
+    """
+    # Get project root from gitops and skills path from settings
+    project_root = get_project_root()
+    skills_path = get_setting("skills.path", "assets/skills")
+    skill_tools_path = project_root / skills_path / skill_name / "tools.py"
 
     if not skill_tools_path.exists():
         raise FileNotFoundError(f"Skill tools not found: {skill_tools_path}")
 
-    # Pre-create parent packages in sys.modules for nested imports to work
-    # This allows 'from assets.skills.decorators import ...' to work
-    skills_path = skill_tools_path.parent
-    assets_path = skills_path.parent
-
-    # Reuse existing packages if they exist in sys.modules
-    # This prevents breaking the import system when tests run in sequence
-    if "assets" in sys.modules:
-        assets_pkg = sys.modules["assets"]
-    else:
-        assets_pkg = types.ModuleType("assets")
-        assets_pkg.__path__ = [str(assets_path)]
-        assets_pkg.__file__ = str(assets_path / "__init__.py")
-        sys.modules["assets"] = assets_pkg
-
-    if "assets.skills" in sys.modules:
-        skills_pkg = sys.modules["assets.skills"]
-    else:
-        skills_pkg = types.ModuleType("assets.skills")
-        skills_pkg.__path__ = [str(skills_path)]
-        skills_pkg.__file__ = str(skills_path / "__init__.py")
-        sys.modules["assets.skills"] = skills_pkg
-        assets_pkg.skills = skills_pkg
-
-    # Ensure decorators module is loaded
-    decorators_path = skills_path / "decorators.py"
-    if decorators_path.exists() and "assets.skills.decorators" not in sys.modules:
-        decorators_spec = importlib.util.spec_from_file_location(
-            "assets.skills.decorators", decorators_path
-        )
-        decorators_module = importlib.util.module_from_spec(decorators_spec)
-        sys.modules["assets.skills.decorators"] = decorators_module
-        decorators_spec.loader.exec_module(decorators_module)
-        skills_pkg.decorators = decorators_module
+    # Set up paths
+    skills_parent = project_root / skills_path  # assets/skills/
+    skills_parent_str = str(skills_parent)
 
     # Create a unique module name to avoid conflicts
     module_name = f"_test_skill_{skill_name}"
@@ -93,7 +68,7 @@ def _load_skill_module_for_test(skill_name: str, test_file: str):
 
     # Load the module from file
     spec = importlib.util.spec_from_file_location(
-        module_name, skill_tools_path, submodule_search_locations=[str(skill_tools_path.parent)]
+        module_name, skill_tools_path, submodule_search_locations=[skills_parent_str]
     )
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
@@ -484,7 +459,7 @@ class TestGitSkillDecorators:
 
     def _load_git_module(self):
         """Load git skill module for testing."""
-        return _load_skill_module_for_test("git", __file__)
+        return _load_skill_module_for_test("git")
 
     def test_git_functions_have_skill_command_marker(self):
         """Git functions should have _is_skill_command marker."""
@@ -553,7 +528,7 @@ class TestGitSkillDirectCalls:
 
     def _load_git_module(self):
         """Load git skill module for testing."""
-        return _load_skill_module_for_test("git", __file__)
+        return _load_skill_module_for_test("git")
 
     def test_git_status_report_returns_markdown(self):
         """status_report should return formatted markdown."""
@@ -772,15 +747,19 @@ class TestSkillPerformance:
 class TestOneToolArchitecture:
     """Test Phase 25: Single 'omni' tool with simplified syntax."""
 
-    def test_only_one_tool_registered(self, skill_manager):
-        """MCP server should only have ONE tool registered."""
+    def test_only_omni_tool(self, skill_manager):
+        """MCP server should have ONLY 'omni' tool registered."""
         from agent.mcp_server import mcp
 
         tools = list(mcp._tool_manager._tools.values())
-        assert len(tools) == 1, f"Expected 1 tool, got {len(tools)}: {[t.name for t in tools]}"
+        tool_names = [t.name for t in tools]
 
-    def test_tool_named_omni(self, skill_manager):
-        """The single tool should be named 'omni'."""
+        # Phase 25: Only 'omni' should be registered as MCP tool
+        # Phase 27: JIT tools are skill commands under 'omni', not separate MCP tools
+        assert tool_names == ["omni"], f"Expected only 'omni', got: {tool_names}"
+
+    def test_omni_is_primary_tool(self, skill_manager):
+        """The 'omni' tool should be the first/main tool."""
         from agent.mcp_server import mcp
 
         tools = list(mcp._tool_manager._tools.values())
@@ -1149,15 +1128,19 @@ class TestContextInjection:
 class TestArchitectureCompliance:
     """Verify Phase 25+ architecture compliance."""
 
-    def test_only_one_tool_registered(self, skill_manager):
-        """MCP server should only have ONE tool registered."""
+    def test_only_one_tool(self, skill_manager):
+        """MCP server should have ONLY ONE tool registered (omni)."""
         from agent.mcp_server import mcp
 
         tools = list(mcp._tool_manager._tools.values())
-        assert len(tools) == 1, f"Expected 1 tool, got {len(tools)}: {[t.name for t in tools]}"
+        tool_names = [t.name for t in tools]
+
+        # Phase 25: Only 'omni' should be registered as MCP tool
+        # Phase 27: JIT tools are skill commands under 'omni', not separate MCP tools
+        assert tool_names == ["omni"], f"Expected only 'omni', got: {tool_names}"
 
     def test_tool_named_omni(self, skill_manager):
-        """The single tool should be named 'omni'."""
+        """The 'omni' tool should be the first/main tool."""
         from agent.mcp_server import mcp
 
         tools = list(mcp._tool_manager._tools.values())

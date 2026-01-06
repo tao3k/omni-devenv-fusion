@@ -1,0 +1,233 @@
+{
+  "version": "1.0.0",
+  "description": "Official Omni Skill Index - Known skills available for JIT installation",
+  "last_updated": "2026-01-06",
+  "maintainer": "omni-dev",
+  "skills": [
+    {
+      "id": "pandas-expert",
+      "name": "Pandas Expert",
+      "url": "https://github.com/omni-dev/skill-pandas",
+      "description": "Advanced pandas data manipulation and analysis",
+      "keywords": ["pandas", "dataframe", "data-analysis", "csv", "excel"],
+      "version": "1.0.0",
+      "author": "omni-dev",
+      "license": "MIT"
+    },
+    {
+      "id": "docker-ops",
+      "name": "Docker Operations",
+      "url": "https://github.com/omni-dev/skill-docker",
+      "description": "Docker container management and orchestration",
+      "keywords": ["docker", "containers", "kubernetes", "devops"],
+      "version": "1.0.0",
+      "author": "omni-dev",
+      "license": "MIT"
+    },
+    {
+      "id": "network-analysis",
+      "name": "Network Analysis",
+      "url": "https://github.com/omni-dev/skill-network",
+      "description": "PCAP analysis and network troubleshooting",
+      "keywords": [
+        "pcap",
+        "network",
+        "wireshark",
+        "tcpdump",
+        "packet-capture",
+        "traffic-analysis"
+      ],
+      "version": "1.0.0",
+      "author": "omni-dev",
+      "license": "MIT"
+    },
+    {
+      "id": "ml-pytorch",
+      "name": "PyTorch ML",
+      "url": "https://github.com/omni-dev/skill-pytorch",
+      "description": "Machine learning with PyTorch",
+      "keywords": ["pytorch", "ml", "deep-learning", "neural-networks", "ai"],
+      "version": "1.0.0",
+      "author": "omni-dev",
+      "license": "MIT"
+    },
+    {
+      "id": "aws-cloud",
+      "name": "AWS Cloud",
+      "url": "https://github.com/omni-dev/skill-aws",
+      "description": "AWS cloud services and infrastructure management",
+      "keywords": ["aws", "ec2", "s3", "lambda", "cloud", "cloud-services"],
+      "version": "1.0.0",
+      "author": "omni-dev",
+      "license": "MIT"
+    },
+    {
+      "id": "database-sql",
+      "name": "Database SQL",
+      "url": "https://github.com/omni-dev/skill-database",
+      "description": "SQL database operations, optimization and migrations",
+      "keywords": ["sql", "postgres", "mysql", "database", "query", "orm"],
+      "version": "1.0.0",
+      "author": "omni-dev",
+      "license": "MIT"
+    },
+    {
+      "id": "video-processing",
+      "name": "Video Processing",
+      "url": "https://github.com/omni-dev/skill-video",
+      "description": "FFmpeg video transcoding and editing",
+      "keywords": ["video", "ffmpeg", "transcoding", "video-editing"],
+      "version": "1.0.0",
+      "author": "omni-dev",
+      "license": "MIT"
+    },
+    {
+      "id": "rust-systems",
+      "name": "Rust Systems",
+      "url": "https://github.com/omni-dev/skill-rust",
+      "description": "Rust systems programming and WASM",
+      "keywords": ["rust", "wasm", "systems", "cargo", "performance"],
+      "version": "1.0.0",
+      "author": "omni-dev",
+      "license": "MIT"
+    },
+    {
+      "id": "graphql-api",
+      "name": "GraphQL API",
+      "url": "https://github.com/omni-dev/skill-graphql",
+      "description": "GraphQL schema design and API development",
+      "keywords": ["graphql", "api", "rest", "apollo", "schema"],
+      "version": "1.0.0",
+      "author": "omni-dev",
+      "license": "MIT"
+    },
+    {
+      "id": "terraform-infra",
+      "name": "Terraform Infrastructure",
+      "url": "https://github.com/omni-dev/skill-terraform",
+      "description": "Infrastructure as Code with Terraform",
+      "keywords": ["terraform", "infrastructure", "iac", "aws", "cloud"],
+      "version": "1.0.0",
+      "author": "omni-dev",
+      "license": "MIT"
+    },
+    {
+      "id": "security-audit",
+      "name": "Security Audit",
+      "url": "https://github.com/omni-dev/skill-security",
+      "description": "Security vulnerability scanning and penetration testing",
+      "keywords": [
+        "security",
+        "vulnerability",
+        "audit",
+        "pentest",
+        "penetration-testing"
+      ],
+      "version": "1.0.0",
+      "author": "omni-dev",
+      "license": "MIT"
+    },
+    {
+      "id": "regex-master",
+      "name": "Regex Master",
+      "url": "https://github.com/omni-dev/skill-regex",
+      "description": "Regular expression parsing and generation",
+      "keywords": [
+        "regex",
+        "pattern",
+        "text",
+        "parsing",
+        "regular-expressions"
+      ],
+      "version": "1.0.0",
+      "author": "omni-dev",
+      "license": "MIT"
+    },
+    {
+      "id": "http-client",
+      "name": "HTTP Client",
+      "url": "https://github.com/omni-dev/skill-http",
+      "description": "HTTP requests, API testing and REST client",
+      "keywords": ["http", "api", "rest", "curl", "requests"],
+      "version": "1.0.0",
+      "author": "omni-dev",
+      "license": "MIT"
+    },
+    {
+      "id": "git-advanced",
+      "name": "Advanced Git",
+      "url": "https://github.com/omni-dev/skill-git-advanced",
+      "description": "Advanced git operations, rebase, bisect, and workflows",
+      "keywords": ["git", "rebase", "bisect", "workflow", "version-control"],
+      "version": "1.0.0",
+      "author": "omni-dev",
+      "license": "MIT"
+    },
+    {
+      "id": "shell-scripting",
+      "name": "Shell Scripting",
+      "url": "https://github.com/omni-dev/skill-shell",
+      "description": "Bash/shell scripting and automation",
+      "keywords": ["bash", "shell", "scripting", "automation", "scripts"],
+      "version": "1.0.0",
+      "author": "omni-dev",
+      "license": "MIT"
+    },
+    {
+      "id": "cryptography",
+      "name": "Cryptography",
+      "url": "https://github.com/omni-dev/skill-crypto",
+      "description": "Encryption, decryption and cryptographic operations",
+      "keywords": ["crypto", "encryption", "security", "hash", "cryptography"],
+      "version": "1.0.0",
+      "author": "omni-dev",
+      "license": "MIT"
+    },
+    {
+      "id": "testing-pytest",
+      "name": "Pytest Testing",
+      "url": "https://github.com/omni-dev/skill-pytest",
+      "description": "Python testing with pytest, fixtures and coverage",
+      "keywords": [
+        "pytest",
+        "testing",
+        "unit-test",
+        "coverage",
+        "test-automation"
+      ],
+      "version": "1.0.0",
+      "author": "omni-dev",
+      "license": "MIT"
+    },
+    {
+      "id": "async-python",
+      "name": "Async Python",
+      "url": "https://github.com/omni-dev/skill-async",
+      "description": "Python async/await, asyncio and concurrent programming",
+      "keywords": ["async", "asyncio", "concurrency", "await", "parallel"],
+      "version": "1.0.0",
+      "author": "omni-dev",
+      "license": "MIT"
+    },
+    {
+      "id": "fastapi-web",
+      "name": "FastAPI Web",
+      "url": "https://github.com/omni-dev/skill-fastapi",
+      "description": "FastAPI web framework, REST APIs and OpenAPI",
+      "keywords": ["fastapi", "web", "api", "rest", "openapi"],
+      "version": "1.0.0",
+      "author": "omni-dev",
+      "license": "MIT"
+    },
+    {
+      "id": "image-processing",
+      "name": "Image Processing",
+      "url": "https://github.com/omni-dev/skill-image",
+      "description": "PIL/Pillow image manipulation and processing",
+      "keywords": ["image", "pillow", "png", "jpeg", "image-processing"],
+      "version": "1.0.0",
+      "author": "omni-dev",
+      "license": "MIT"
+    }
+  ]
+}

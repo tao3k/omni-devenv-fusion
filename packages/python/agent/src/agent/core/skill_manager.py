@@ -147,7 +147,8 @@ class SkillManager:
                 sys.modules["agent"].skills = skills_pkg
 
             # Create and register 'agent.skills.decorators' module if not exists
-            decorators_path = skills_path / "decorators.py"
+            # decorators.py is now in src/agent/skills/ (Python package)
+            decorators_path = agent_path / "skills" / "decorators.py"
             if "agent.skills.decorators" not in sys.modules and decorators_path.exists():
                 decorators_spec = importlib.util.spec_from_file_location(
                     "agent.skills.decorators", decorators_path

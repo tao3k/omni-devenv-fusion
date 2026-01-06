@@ -704,3 +704,125 @@ def get_skill_tools(skill_name: str) -> Dict[str, callable]:
             tools[name] = obj
 
     return tools
+
+
+# =========================================================================
+# Phase 27: JIT Skill Acquisition
+# =========================================================================
+
+
+def jit_install_skill(skill_id: str, auto_load: bool = True) -> dict:
+    """
+    Just-in-Time Skill Installation.
+
+    Automatically install a skill from the known skills index and optionally load it.
+
+    Args:
+        skill_id: Skill ID from known_skills.json (e.g., "pandas-expert")
+        auto_load: Whether to load the skill after installation (default: True)
+
+    Returns:
+        Dict with success status and details
+    """
+    from agent.core.skill_discovery import SkillDiscovery
+
+    registry = get_skill_registry()
+    discovery = SkillDiscovery()
+
+    # Find skill in index
+    skill = discovery.find_by_id(skill_id)
+    if not skill:
+        # Try searching
+        results = discovery.search_local(skill_id, limit=1)
+        if results:
+            skill = results[0]
+        else:
+            return {
+                "success": False,
+                "error": f"Skill '{skill_id}' not found in known skills index",
+                "hint": f"Use 'omni skill list' to see installed skills, or 'discover_skills(\"{skill_id}\")' to search.",
+            }
+
+    skill_name = skill["id"]
+    repo_url = skill["url"]
+    version = skill.get("version", "main")
+
+    # Check if already installed
+    target_dir = registry.skills_dir / skill_name
+    if target_dir.exists():
+        return {
+            "success": False,
+            "error": f"Skill '{skill_name}' is already installed",
+            "path": str(target_dir),
+            "hint": "Use 'omni skill update " + skill_name + "' to update",
+        }
+
+    # Install the skill
+    success, msg = registry.install_remote_skill(skill_name, repo_url, version)
+
+    if not success:
+        return {"success": False, "error": msg}
+
+    # Optionally load the skill
+    loaded = False
+    load_msg = ""
+    if auto_load:
+        try:
+            from agent.mcp_server import mcp
+
+            success, load_msg = registry.load_skill(skill_name, mcp)
+            loaded = success
+        except Exception as e:
+            load_msg = str(e)
+
+    return {
+        "success": True,
+        "skill_id": skill_id,
+        "skill_name": skill_name,
+        "url": repo_url,
+        "version": version,
+        "installed_path": str(target_dir),
+        "loaded": loaded,
+        "load_message": load_msg if loaded else f"Load skipped or failed: {load_msg}",
+        "ready_to_use": True,
+    }
+
+
+def discover_skills(query: str = "", limit: int = 5) -> dict:
+    """
+    Search the known skills index for matching skills.
+
+    Args:
+        query: Search query (matched against name, description, keywords)
+        limit: Maximum number of results
+
+    Returns:
+        Dict with query results
+    """
+    from agent.core.skill_discovery import SkillDiscovery
+
+    discovery = SkillDiscovery()
+    results = discovery.search_local(query, limit)
+
+    return {
+        "query": query,
+        "count": len(results),
+        "skills": results,
+        "ready_to_install": [s["id"] for s in results],
+    }
+
+
+def suggest_skills_for_task(task: str) -> dict:
+    """
+    Analyze a task and suggest relevant skills from the index.
+
+    Args:
+        task: Task description (e.g., "analyze pcap file")
+
+    Returns:
+        Dict with task analysis and skill suggestions
+    """
+    from agent.core.skill_discovery import SkillDiscovery
+
+    discovery = SkillDiscovery()
+    return discovery.suggest_for_query(task)

@@ -44,15 +44,19 @@ def real_skill_manager():
 class TestOmniToolRegistration:
     """Test that only one tool 'omni' is registered with MCP."""
 
-    def test_only_one_tool_in_mcp_server(self):
-        """Verify MCP server has exactly one tool registered."""
+    def test_only_omni_tool_in_mcp_server(self):
+        """Verify MCP server has ONLY 'omni' tool registered."""
         from agent.mcp_server import mcp
 
         tools = list(mcp._tool_manager._tools.values())
-        assert len(tools) == 1, f"Expected 1 tool, got {len(tools)}: {[t.name for t in tools]}"
+        tool_names = [t.name for t in tools]
 
-    def test_tool_is_named_omni(self):
-        """Verify the single tool is named 'omni'."""
+        # Phase 25: Only 'omni' should be registered as MCP tool
+        # Phase 27: JIT tools are skill commands under 'omni', not separate MCP tools
+        assert tool_names == ["omni"], f"Expected only 'omni', got: {tool_names}"
+
+    def test_omni_is_primary_tool(self):
+        """Verify the 'omni' tool is the first/main tool."""
         from agent.mcp_server import mcp
 
         tools = list(mcp._tool_manager._tools.values())

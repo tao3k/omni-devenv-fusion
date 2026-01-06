@@ -249,6 +249,38 @@ def run_skill_info(name: str):
         console.print(Panel(JSON(json.dumps(info["lockfile"])), title="Lockfile", expand=False))
 
 
+def run_skill_discover(query: str = "", limit: int = 5):
+    """Discover skills from the known index."""
+    from agent.core.skill_registry import discover_skills as registry_discover
+    from rich.table import Table
+    from rich.text import Text
+
+    result = registry_discover(query=query, limit=limit)
+
+    if result["count"] == 0:
+        console.print(Panel("No matching skills found", title="🔍 Search Results", style="yellow"))
+        return
+
+    table = Table(title="🔍 Skill Discovery Results", show_header=True)
+    table.add_column("ID", style="cyan")
+    table.add_column("Name", style="bold")
+    table.add_column("Description")
+    table.add_column("Keywords", style="dim")
+
+    for skill in result["skills"]:
+        keywords = ", ".join(skill.get("keywords", [])[:3])
+        table.add_row(
+            skill["id"],
+            skill["name"],
+            skill["description"],
+            keywords,
+        )
+
+    console.print(table)
+    console.print(f"\n💡 To install: omni skill install <url>")
+    console.print(f"   Or use JIT: @jit_install_skill('{result['skills'][0]['id']}') via MCP")
+
+
 def main():
     # Main parser
     parser = argparse.ArgumentParser(
@@ -294,6 +326,13 @@ def main():
     info_parser = skill_subparsers.add_parser("info", help="Show skill information")
     info_parser.add_argument("name", help="Skill name")
 
+    # skill discover
+    discover_parser = skill_subparsers.add_parser(
+        "discover", help="Discover skills from known index"
+    )
+    discover_parser.add_argument("query", nargs="?", default="", help="Search query (optional)")
+    discover_parser.add_argument("--limit", type=int, default=5, help="Max results (default: 5)")
+
     # Parse arguments
     args = parser.parse_args()
 
@@ -317,6 +356,8 @@ def main():
             run_skill_list()
         elif args.skill_command == "info":
             run_skill_info(args.name)
+        elif args.skill_command == "discover":
+            run_skill_discover(args.query, args.limit)
         else:
             skill_parser.print_help()
     else:

@@ -1,0 +1,16 @@
+{
+  "manifest_version": "2.0.0",
+  "type": "skill",
+  "name": "Skill Manager",
+  "version": "1.0.0",
+  "description": "Manage skills - discover, install, and update from remote repositories",
+  "author": "omni-dev",
+  "license": "Apache-2.0",
+  "routing_keywords": ["skill", "discovery", "install", "jit"],
+  "tools_module": "agent.skills.skill.tools",
+  "guide_file": "guide.md",
+  "dependencies": {
+    "skills": {},
+    "python": {}
+  }
+}
