@@ -38,8 +38,8 @@ class SpecGapAnalysis(BaseModel):
     )
     test_plan_defined: bool = Field(..., description="Verification plan is present")
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "examples": [
                 {
                     "spec_exists": True,
@@ -51,6 +51,7 @@ class SpecGapAnalysis(BaseModel):
                 }
             ]
         }
+    }
 
 
 class LegislationDecision(BaseModel):
@@ -64,8 +65,8 @@ class LegislationDecision(BaseModel):
     gap_analysis: SpecGapAnalysis = Field(..., description="Detailed gap analysis")
     spec_path: Optional[str] = Field(None, description="Auto-detected spec path")
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "examples": [
                 {
                     "decision": "blocked",
@@ -83,6 +84,7 @@ class LegislationDecision(BaseModel):
                 }
             ]
         }
+    }
 
 
 # =============================================================================
@@ -111,8 +113,8 @@ class FeatureComplexity(BaseModel):
         default_factory=list, description="Examples of this complexity level"
     )
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "examples": [
                 {
                     "level": "L2",
@@ -124,6 +126,7 @@ class FeatureComplexity(BaseModel):
                 }
             ]
         }
+    }
 
 
 # =============================================================================
@@ -329,8 +332,8 @@ class HarvestedInsight(BaseModel):
         default_factory=list, description="Files that were modified or created"
     )
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "examples": [
                 {
                     "title": "Fixing Deadlock in Nested Locks",
@@ -347,6 +350,7 @@ class HarvestedInsight(BaseModel):
                 }
             ]
         }
+    }
 
 
 # =============================================================================
@@ -354,23 +358,55 @@ class HarvestedInsight(BaseModel):
 # =============================================================================
 
 
+class SkillDependencies(BaseModel):
+    """Skill dependency configuration (Manifest v2.0)."""
+
+    skills: dict[str, str] = Field(
+        default_factory=dict, description="Skill dependencies with version constraints"
+    )
+    python: dict[str, str] = Field(
+        default_factory=dict, description="Python package dependencies with version constraints"
+    )
+
+
 class SkillManifest(BaseModel):
-    """Metadata for a dynamically loadable skill."""
+    """Metadata for a dynamically loadable skill (Manifest v2.0)."""
 
     model_config = {"extra": "allow"}  # Allow extra fields like routing_keywords
 
+    # v2.0 new fields
+    manifest_version: str = Field(default="1.0.0", description="Manifest version format")
+    type: str = Field(default="skill", description="Component type: skill, agent, instruction")
     name: str = Field(..., description="Unique skill identifier (e.g., 'git')")
     version: str = Field(..., description="Semantic version")
     description: str = Field(..., description="What this skill does")
+    author: str = Field(default="omni-dev-fusion", description="Skill author")
+    license: str = Field(default="Apache-2.0", description="License identifier")
+
+    repository: Optional[dict[str, str]] = Field(
+        None, description="Repository configuration with type, url, and directory"
+    )
+
+    # v1.x fields (kept for backward compatibility)
     routing_keywords: List[str] = Field(
         default_factory=list,
         description="Keywords for semantic routing (e.g., ['git', 'commit', 'push'])",
     )
-    dependencies: List[str] = Field(
-        default_factory=list, description="List of other skills this skill requires"
+    intents: List[str] = Field(default_factory=list, description="Intent types this skill handles")
+
+    # v2.0 dependencies (replaces v1.x List[str])
+    dependencies: SkillDependencies = Field(
+        default_factory=SkillDependencies, description="Dependencies configuration"
     )
+
     tools_module: str = Field(
         ..., description="Python module path containing the tool registration logic"
+    )
+    workflow_module: Optional[str] = Field(
+        None, description="Workflow module path for skills with complex workflows"
+    )
+    state_module: Optional[str] = Field(
+        None, description="State module path for skills with persistent state"
     )
     guide_file: str = Field(
         default="guide.md", description="Path to the markdown guide file (relative to skill dir)"
@@ -412,5 +448,11 @@ __all__ = [
     "KnowledgeCategory",
     "HarvestedInsight",
     # Phase 13: Skill
+    "SkillDependencies",
     "SkillManifest",
 ]
+
+# Pydantic forward reference resolution
+# Must be called after all classes are defined
+SkillDependencies.model_rebuild()
+SkillManifest.model_rebuild()

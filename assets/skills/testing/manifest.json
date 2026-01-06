@@ -1,7 +1,16 @@
 {
+  "manifest_version": "2.0.0",
+  "type": "skill",
   "name": "testing",
   "version": "1.0.0",
   "description": "Run unit tests and analyze test results using Pytest.",
+  "author": "omni-dev-fusion",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tao3k/omni-devenv-fusion",
+    "directory": "assets/skills/testing"
+  },
   "routing_keywords": [
     "test",
     "pytest",
@@ -15,8 +24,13 @@
     "spec",
     "validate"
   ],
-  "dependencies": ["filesystem"],
   "tools_module": "assets.skills.testing.tools",
   "guide_file": "guide.md",
-  "prompts_file": "prompts.md"
+  "prompts_file": "prompts.md",
+  "dependencies": {
+    "skills": {
+      "filesystem": ">=1.0.0"
+    },
+    "python": {}
+  }
 }

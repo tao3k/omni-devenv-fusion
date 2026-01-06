@@ -22,6 +22,47 @@ Fusion uses a single MCP tool entry point with infinite skill commands:
 | `skill.command` | `git.status` | `git.git_status()` |
 | `skill`         | `git`        | Shows skill help   |
 
+## Phase 26: Skill Network (Git Installer)
+
+Omni can now **download and install skills from Git repositories** at runtime, enabling true capability expansion:
+
+```bash
+# Install a skill from GitHub
+omni skill install https://github.com/omni-dev/skill-pandas
+
+# Install specific version
+omni skill install https://github.com/omni-dev/skill-docker --version v2.1.0
+
+# Update an installed skill
+omni skill update pandas-expert
+
+# List all installed skills
+omni skill list
+
+# Show skill details
+omni skill info pandas-expert
+```
+
+### Skill Management Commands
+
+| Command                                                        | Description                        |
+| -------------------------------------------------------------- | ---------------------------------- |
+| `omni skill install <url>`                                     | Install skill from Git URL         |
+| `omni skill install <url> --name <name>`                       | Install with custom name           |
+| `omni skill install <url> --version <ref>`                     | Install specific branch/tag/commit |
+| `omni skill update <skill>`                                    | Update skill to latest             |
+| `omni skill update <skill> --strategy stash\|abort\|overwrite` | Update with conflict handling      |
+| `omni skill list`                                              | List all installed skills          |
+| `omni skill info <skill>`                                      | Show skill manifest and lockfile   |
+
+### How It Works
+
+1. **Clone/Update**: Uses GitPython + subprocess for reliable Git operations
+2. **Sparse Checkout**: Supports monorepo subdirectory installation
+3. **Dependency Detection**: Prevents circular dependencies during install
+4. **Lockfile**: Generates `.omni-lock.json` for reproducible installs
+5. **Dirty Handling**: Stashes local changes, pulls, then pops (stash strategy)
+
 ## The Vision
 
 **Copilot** (today): AI helps you write code, you drive.

@@ -1,7 +1,16 @@
 {
+  "manifest_version": "2.0.0",
+  "type": "skill",
   "name": "software_engineering",
   "version": "1.0.0",
   "description": "The foundation of engineering mindset. Focuses on architecture, system patterns, and universal code navigation.",
+  "author": "omni-dev-fusion",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tao3k/omni-devenv-fusion",
+    "directory": "assets/skills/software_engineering"
+  },
   "routing_keywords": [
     "architecture",
     "design",
@@ -16,8 +25,13 @@
     "modular",
     "components"
   ],
-  "dependencies": ["filesystem"],
   "tools_module": "assets.skills.software_engineering.tools",
   "guide_file": "guide.md",
-  "prompts_file": "prompts.md"
+  "prompts_file": "prompts.md",
+  "dependencies": {
+    "skills": {
+      "filesystem": ">=1.0.0"
+    },
+    "python": {}
+  }
 }

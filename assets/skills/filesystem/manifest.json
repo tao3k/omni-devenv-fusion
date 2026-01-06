@@ -1,7 +1,16 @@
 {
+  "manifest_version": "2.0.0",
+  "type": "skill",
   "name": "filesystem",
   "version": "1.0.0",
   "description": "Safe file operations (read, write, list, search) with codebase awareness.",
+  "author": "omni-dev-fusion",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tao3k/omni-devenv-fusion",
+    "directory": "assets/skills/filesystem"
+  },
   "routing_keywords": [
     "file",
     "read",
@@ -18,8 +27,11 @@
     "delete",
     "edit"
   ],
-  "dependencies": [],
   "tools_module": "assets.skills.filesystem.tools",
   "guide_file": "guide.md",
-  "prompts_file": "prompts.md"
+  "prompts_file": "prompts.md",
+  "dependencies": {
+    "skills": {},
+    "python": {}
+  }
 }

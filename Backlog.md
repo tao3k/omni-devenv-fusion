@@ -2,13 +2,12 @@
 
 ## 🏃 Active Sprint (Focus Here)
 
-- [ ] **Agentic OS Phase 5**: Complete Smart Publisher with config-driven commit messages
+- [ ] **Phase 27: JIT Skill Acquisition** - Auto-download skills when needed
 
 ## 📋 Ready for Development
 
-- [ ] **Context Injection**: Implement just agent-start for automated context dump
-- [ ] **Lefthook Recovery**: Auto-fix common pre-commit failures (nixfmt, vale)
-- [ ] **Tool Router**: Complete intent-based tool routing
+- [ ] **Skill Discovery Protocol** - Search and resolve missing skills automatically
+- [ ] **Known Skills Index** - Centralized registry of available skills
 
 ## 🔄 In Progress
 
@@ -16,6 +15,12 @@
 
 ## ✅ Completed
 
+- [x] **Phase 26: Skill Network & Installer** - GitPython + subprocess installer
+- [x] Phase 26.1: Smart stash/update for dirty repos
+- [x] Phase 26.2: Sparse checkout for monorepo support
+- [x] Phase 26.3: Dependency cycle detection
+- [x] Phase 26.4: Lockfile generation (.omni-lock.json)
+- [x] Phase 26.5: CLI commands (omni skill install/update/list/info)
 - [x] RCA Protocol: Implement problem-solving.md and error self-correction
 - [x] V2 Tests: test_git_ops_v2.py for config-driven git operations
 - [x] Writing Style Cache: WritingStyleCache singleton with design/writing-style/ guidelines

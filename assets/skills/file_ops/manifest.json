@@ -1,7 +1,16 @@
 {
+  "manifest_version": "2.0.0",
+  "type": "skill",
   "name": "file_ops",
   "version": "1.0.0",
   "description": "File operations including read, write, search, and AST-based refactoring.",
+  "author": "omni-dev-fusion",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tao3k/omni-devenv-fusion",
+    "directory": "assets/skills/file_ops"
+  },
   "routing_keywords": [
     "refactor",
     "rewrite",
@@ -14,8 +23,13 @@
     "rename",
     "refactoring"
   ],
-  "dependencies": ["filesystem"],
   "tools_module": "assets.skills.file_ops.tools",
   "guide_file": "guide.md",
-  "prompts_file": "prompts.md"
+  "prompts_file": "prompts.md",
+  "dependencies": {
+    "skills": {
+      "filesystem": ">=1.0.0"
+    },
+    "python": {}
+  }
 }

@@ -4,18 +4,22 @@ The Kernel of the Skill-Centric OS.
 V2: Uses Spec-based loading for precise, pollution-free plugin management.
 Phase 13.10: Config-driven preloading + on-demand loading.
 Phase 25.1: Supports @skill_command decorator pattern.
+Phase 26: Skill Network with libvcs + GitPython, version resolution from manifest/lockfile/git.
 """
 
 import json
 import importlib.util
+import subprocess
 import sys
 import types
 from pathlib import Path
 from typing import Dict, Optional, List, Tuple
 import structlog
 from mcp.server.fastmcp import FastMCP
+from git import Repo, InvalidGitRepositoryError
 
 from agent.core.schema import SkillManifest
+from agent.core.installer import SkillInstaller, install_skill
 from common.gitops import get_project_root
 from common.settings import get_setting
 
@@ -179,12 +183,32 @@ class SkillRegistry:
         if not manifest:
             return False, f"Skill '{skill_name}' not found or invalid."
 
-        # 1. Resolve Dependencies
-        for dep in manifest.dependencies:
-            if dep not in self.loaded_skills:
-                success, msg = self.load_skill(dep, mcp)
-                if not success:
-                    return False, f"Dependency '{dep}' failed: {msg}"
+        # 1. Resolve Skill Dependencies
+        skill_deps = (
+            manifest.dependencies.skills if hasattr(manifest.dependencies, "skills") else {}
+        )
+        if isinstance(skill_deps, dict):
+            # v2.0 format: dependencies = {"skills": {"filesystem": ">=1.0.0"}, "python": {...}}
+            for dep in skill_deps.keys():
+                if dep not in self.loaded_skills:
+                    success, msg = self.load_skill(dep, mcp)
+                    if not success:
+                        return False, f"Dependency '{dep}' failed: {msg}"
+        elif isinstance(manifest.dependencies, list):
+            # v1.x format: dependencies = ["filesystem"]
+            for dep in manifest.dependencies:
+                if dep not in self.loaded_skills:
+                    success, msg = self.load_skill(dep, mcp)
+                    if not success:
+                        return False, f"Dependency '{dep}' failed: {msg}"
+
+        # 2. Check Python Dependencies (future implementation)
+        python_deps = (
+            manifest.dependencies.python if hasattr(manifest.dependencies, "python") else {}
+        )
+        if isinstance(python_deps, dict) and python_deps:
+            # TODO: Implement Python package installation
+            logger.info(f"[{skill_name}] Python dependencies declared: {list(python_deps.keys())}")
 
         # 2. Locate the Tools File
         # tools_module="agent.skills.git.tools" -> agent/skills/git/tools.py
@@ -319,6 +343,326 @@ class SkillRegistry:
                     combined.append("\n---\n")
 
         return "\n".join(combined)
+
+    # =========================================================================
+    # Phase 26: Remote Skill Installation (libvcs + GitPython)
+    # =========================================================================
+
+    def install_remote_skill(
+        self,
+        skill_name: str,
+        repo_url: str,
+        version: str = "main",
+        install_deps: bool = True,
+    ) -> Tuple[bool, str]:
+        """
+        Install a skill from a remote Git repository using libvcs + GitPython.
+
+        Args:
+            skill_name: Name to assign to the skill locally
+            repo_url: URL of the Git repository
+            version: Git ref (branch, tag, commit) to checkout
+            install_deps: Whether to install skill dependencies (default: True)
+
+        Returns:
+            Tuple of (success, message)
+        """
+        target_dir = self.skills_dir / skill_name
+
+        # Check if skill already exists locally
+        if target_dir.exists():
+            return (
+                False,
+                f"Skill '{skill_name}' already exists locally. Use update_remote_skill() to update.",
+            )
+
+        installer = SkillInstaller()
+
+        try:
+            result = installer.install(
+                repo_url=repo_url,
+                target_dir=target_dir,
+                version=version,
+            )
+
+            # Install Python dependencies if requested
+            if install_deps:
+                self._install_skill_python_deps(target_dir)
+
+            logger.info(f"Installed remote skill '{skill_name}' from {repo_url}")
+            return True, f"Skill '{skill_name}' installed from {repo_url}"
+
+        except Exception as e:
+            logger.error(f"Failed to install remote skill '{skill_name}': {e}")
+            return False, f"Installation failed: {str(e)}"
+
+    def install_remote_skill_with_deps(
+        self,
+        skill_name: str,
+        repo_url: str,
+        version: str = "main",
+        visited: Optional[set] = None,
+    ) -> Tuple[bool, str]:
+        """
+        Install a skill and recursively install its dependencies from manifest.
+
+        Args:
+            skill_name: Name to assign to the skill locally
+            repo_url: URL of the Git repository
+            version: Git ref (branch, tag, commit) to checkout
+            visited: Set of already-installed repos (for cycle detection)
+
+        Returns:
+            Tuple of (success, message)
+        """
+        if visited is None:
+            visited = set()
+
+        # Prevent circular dependencies
+        if skill_name in visited:
+            logger.warning(f"Skipping already-processed skill: {skill_name}")
+            return True, f"Skill '{skill_name}' (skipped - circular dependency)"
+
+        visited.add(skill_name)
+
+        # First install dependencies
+        target_dir = self.skills_dir / skill_name
+        if not target_dir.exists():
+            # Install dependencies first (recursively)
+            manifest_path = None
+            temp_dir = self.skills_dir / f".{skill_name}_temp"
+            try:
+                # Download manifest to check dependencies
+                import tempfile
+                import subprocess
+
+                subprocess.run(
+                    ["git", "clone", "--depth", "1", repo_url, str(temp_dir)],
+                    capture_output=True,
+                )
+                manifest_path = temp_dir / "manifest.json"
+            except Exception:
+                pass
+
+            if manifest_path and manifest_path.exists():
+                try:
+                    import json
+
+                    manifest = json.loads(manifest_path.read_text())
+                    deps = manifest.get("dependencies", {}).get("skills", {})
+
+                    for dep_name, dep_version in deps.items():
+                        # Find the dependency repo URL (simplified - would need registry)
+                        logger.info(f"Installing dependency: {dep_name}")
+
+                        # Check if already installed
+                        if (self.skills_dir / dep_name).exists():
+                            logger.info(f"Dependency {dep_name} already installed")
+                            continue
+
+                        # TODO: Resolve dependency URL from skill registry
+                        logger.warning(
+                            f"Dependency resolution for '{dep_name}' not yet implemented. "
+                            "Please install manually."
+                        )
+                except Exception as e:
+                    logger.warning(f"Could not parse dependencies: {e}")
+                finally:
+                    if temp_dir.exists():
+                        import shutil
+
+                        shutil.rmtree(temp_dir)
+
+        # Now install the main skill
+        return self.install_remote_skill(skill_name, repo_url, version, install_deps=True)
+
+    def update_remote_skill(
+        self,
+        skill_name: str,
+        strategy: str = "stash",
+    ) -> Tuple[bool, str]:
+        """
+        Update an already installed skill from its remote repository.
+
+        Args:
+            skill_name: Name of the installed skill
+            strategy: Update strategy for dirty repos:
+                - "stash": Stash local changes, pull, then pop (default)
+                - "abort": Abort if local changes detected
+                - "overwrite": Force overwrite (dangerous!)
+
+        Returns:
+            Tuple of (success, message)
+        """
+        target_dir = self.skills_dir / skill_name
+
+        if not target_dir.exists():
+            return False, f"Skill '{skill_name}' not found locally."
+
+        installer = SkillInstaller()
+
+        try:
+            result = installer.update(target_dir, strategy=strategy)
+            logger.info(f"Updated skill '{skill_name}'")
+            return (
+                True,
+                f"Skill '{skill_name}' updated to revision {result.get('revision', 'unknown')}",
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to update skill '{skill_name}': {e}")
+            return False, f"Update failed: {str(e)}"
+
+    def _install_skill_python_deps(self, target_dir: Path) -> Tuple[bool, str]:
+        """Install Python dependencies from skill's manifest."""
+        installer = SkillInstaller()
+        result = installer.install_python_deps(target_dir)
+
+        if result.get("success"):
+            packages = result.get("packages", [])
+            if packages:
+                logger.info(f"Installed Python dependencies: {packages}")
+            return True, f"Dependencies installed: {packages}"
+        else:
+            logger.warning(f"Failed to install Python deps: {result.get('error')}")
+            return False, f"Failed to install dependencies: {result.get('error')}"
+
+    def get_skill_revision(self, skill_name: str) -> Optional[str]:
+        """
+        Get the current revision of an installed skill.
+
+        Args:
+            skill_name: Name of the skill
+
+        Returns:
+            Commit hash or None
+        """
+        target_dir = self.skills_dir / skill_name
+        if not target_dir.exists():
+            return None
+
+        installer = SkillInstaller()
+        return installer.get_revision(target_dir)
+
+    def _resolve_skill_version(self, skill_path: Path) -> str:
+        """
+        Multi-strategy skill version resolution:
+        1.优先读取 .omni-lock.json (if installed via omni install)
+        2.其次读取 manifest.json 中的 version 字段
+        3.再次尝试 git rev-parse HEAD
+        4.均失败则返回 "unknown"
+        """
+        # Strategy 1: Lockfile (Omni Managed)
+        lockfile_path = skill_path / ".omni-lock.json"
+        if lockfile_path.exists():
+            try:
+                data = json.loads(lockfile_path.read_text())
+                revision = data.get("revision", "")[:7]
+                updated = data.get("updated_at", "")[:10]
+                return f"{revision} ({updated})"
+            except Exception:
+                pass
+
+        # Strategy 2: Manifest (Static version)
+        manifest_path = skill_path / "manifest.json"
+        if manifest_path.exists():
+            try:
+                data = json.loads(manifest_path.read_text())
+                if "version" in data:
+                    return data["version"]
+            except Exception:
+                pass
+
+        # Strategy 3: Git HEAD (Dev Mode)
+        try:
+            # Try native git repo first
+            repo = Repo(skill_path)
+            sha = repo.head.commit.hexsha
+            is_dirty = repo.is_dirty()
+            suffix = " *" if is_dirty else ""
+            return f"{sha[:7]}{suffix}"
+        except (InvalidGitRepositoryError, ValueError):
+            pass
+
+        # Strategy 4: Git rev-parse from parent repo (for skills in monorepo)
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=str(skill_path),
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                sha = result.stdout.strip()
+                # Check dirty status (only within this skill directory)
+                diff_result = subprocess.run(
+                    ["git", "diff", "--name-only", "--", "."],
+                    cwd=str(skill_path),
+                    capture_output=True,
+                    text=True,
+                )
+                untracked_result = subprocess.run(
+                    ["git", "ls-files", "--others", "--exclude-standard"],
+                    cwd=str(skill_path),
+                    capture_output=True,
+                    text=True,
+                )
+                is_dirty = bool(diff_result.stdout.strip() or untracked_result.stdout.strip())
+                suffix = " *" if is_dirty else ""
+                return f"{sha[:7]}{suffix}"
+        except Exception:
+            pass
+
+        return "unknown"
+
+    def get_skill_info(self, skill_name: str) -> dict:
+        """
+        Get detailed information about an installed skill.
+
+        Args:
+            skill_name: Name of the skill
+
+        Returns:
+            Dict with skill info (manifest, lockfile, revision, etc.)
+        """
+        target_dir = self.skills_dir / skill_name
+        if not target_dir.exists():
+            return {"error": f"Skill '{skill_name}' not found"}
+
+        installer = SkillInstaller()
+
+        # Resolve version using multi-strategy approach
+        version = self._resolve_skill_version(target_dir)
+
+        info = {
+            "name": skill_name,
+            "version": version,
+            "path": str(target_dir),
+            "revision": installer.get_revision(target_dir),
+            "is_dirty": installer.is_dirty(target_dir),
+        }
+
+        # Read manifest
+        manifest_path = target_dir / "manifest.json"
+        if manifest_path.exists():
+            try:
+                import json
+
+                info["manifest"] = json.loads(manifest_path.read_text())
+            except Exception as e:
+                info["manifest_error"] = str(e)
+
+        # Read lockfile
+        lockfile_path = target_dir / ".omni-lock.json"
+        if lockfile_path.exists():
+            try:
+                import json
+
+                info["lockfile"] = json.loads(lockfile_path.read_text())
+            except Exception as e:
+                info["lockfile_error"] = str(e)
+
+        return info
 
 
 _registry = None

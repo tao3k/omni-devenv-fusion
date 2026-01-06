@@ -151,30 +151,150 @@ def run_skills(commands):
     print(result)
 
 
+def run_skill_install(name: str, url: str, version: str = "main"):
+    """Install a skill from a remote repository."""
+    from agent.core.skill_registry import get_skill_registry
+    from rich.panel import Panel
+    from rich.text import Text
+
+    registry = get_skill_registry()
+    success, msg = registry.install_remote_skill(name, url, version)
+    if success:
+        console.print(Panel(f"Installed {name} from {url}", title="✅ Success", style="green"))
+    else:
+        console.print(Panel(msg, title="❌ Failed", style="red"))
+        sys.exit(1)
+
+
+def run_skill_update(name: str, strategy: str = "stash"):
+    """Update an installed skill."""
+    from agent.core.skill_registry import get_skill_registry
+    from rich.panel import Panel
+
+    registry = get_skill_registry()
+    success, msg = registry.update_remote_skill(name, strategy)
+    if success:
+        console.print(Panel(msg, title="✅ Updated", style="green"))
+    else:
+        console.print(Panel(msg, title="❌ Failed", style="red"))
+        sys.exit(1)
+
+
+def run_skill_list():
+    """List installed skills."""
+    from agent.core.skill_registry import get_skill_registry
+    from rich.table import Table
+    from rich.text import Text
+
+    registry = get_skill_registry()
+    skills = registry.list_available_skills()
+    loaded = registry.list_loaded_skills()
+
+    table = Table(title="📦 Installed Skills", show_header=True)
+    table.add_column("Skill", style="bold")
+    table.add_column("Status")
+    table.add_column("Version")
+    table.add_column("Dirty")
+
+    for skill in sorted(skills):
+        status = "loaded" if skill in loaded else "unloaded"
+        status_style = "green" if status == "loaded" else "yellow"
+
+        info = registry.get_skill_info(skill)
+        version = info.get("version", "unknown")
+        is_dirty = info.get("is_dirty", False)
+        dirty_text = Text("⚠️", style="red") if is_dirty else Text("-", style="dim")
+
+        table.add_row(
+            skill,
+            Text(status, style=status_style),
+            version,
+            dirty_text,
+        )
+
+    console.print(table)
+
+
+def run_skill_info(name: str):
+    """Show detailed info about a skill."""
+    from agent.core.skill_registry import get_skill_registry
+    from rich.panel import Panel
+    from rich.json import JSON
+    from rich.text import Text
+
+    registry = get_skill_registry()
+    info = registry.get_skill_info(name)
+
+    if "error" in info:
+        console.print(Panel(f"Skill '{name}' not found", title="❌ Error", style="red"))
+        sys.exit(1)
+
+    # Build info display
+    content = []
+    content.append(f"Path: {info.get('path', 'unknown')}")
+    content.append(
+        f"Revision: {info.get('revision', 'unknown')[:8] if info.get('revision') else 'unknown'}"
+    )
+
+    dirty = info.get("is_dirty", False)
+    dirty_text = Text("⚠️ Yes", style="red") if dirty else Text("No", style="green")
+    content.append(f"Dirty: {dirty_text}")
+
+    console.print(Panel("\n".join(content), title=f"📋 {name}", expand=False))
+
+    if "manifest" in info:
+        console.print(Panel(JSON(json.dumps(info["manifest"])), title="Manifest", expand=False))
+
+    if "lockfile" in info:
+        console.print(Panel(JSON(json.dumps(info["lockfile"])), title="Lockfile", expand=False))
+
+
 def main():
+    # Main parser
     parser = argparse.ArgumentParser(
         description="Phase 25 One Tool CLI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Commands:
-    mcp          Start MCP server (for Claude Desktop)
-    skills       Execute skill commands
-
-Examples:
-    omni mcp
-    omni skills git.status
-    omni skills git.log '{"n": 5}'
-        """,
     )
-    parser.add_argument(
-        "command",
-        nargs="?",
-        default="help",
-        choices=["mcp", "skills", "help"],
-        help="Command to run",
-    )
-    parser.add_argument("args", nargs="*", help="Arguments")
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
+    # MCP command
+    mcp_parser = subparsers.add_parser("mcp", help="Start MCP server")
+    mcp_parser.add_argument("--port", type=int, default=None, help="Port for SSE transport")
+
+    # Skills command (for executing skill commands)
+    skills_parser = subparsers.add_parser("skills", help="Execute skill commands")
+    skills_parser.add_argument("args", nargs="*", help="Skill command and arguments")
+
+    # Skill management subcommands
+    skill_parser = subparsers.add_parser("skill", help="Skill management commands")
+    skill_subparsers = skill_parser.add_subparsers(dest="skill_command", help="Skill subcommands")
+
+    # skill install
+    install_parser = skill_subparsers.add_parser("install", help="Install a skill from URL")
+    install_parser.add_argument("url", help="Git repository URL")
+    install_parser.add_argument(
+        "name", nargs="?", help="Skill name (derived from URL if not provided)"
+    )
+    install_parser.add_argument("--version", default="main", help="Git ref (default: main)")
+
+    # skill update
+    update_parser = skill_subparsers.add_parser("update", help="Update an installed skill")
+    update_parser.add_argument("name", help="Skill name")
+    update_parser.add_argument(
+        "--strategy",
+        choices=["stash", "abort", "overwrite"],
+        default="stash",
+        help="Update strategy for dirty repos (default: stash)",
+    )
+
+    # skill list
+    list_parser = skill_subparsers.add_parser("list", help="List installed skills")
+
+    # skill info
+    info_parser = skill_subparsers.add_parser("info", help="Show skill information")
+    info_parser.add_argument("name", help="Skill name")
+
+    # Parse arguments
     args = parser.parse_args()
 
     if args.command == "mcp":
@@ -184,6 +304,21 @@ Examples:
         mcp.run(transport="stdio")
     elif args.command == "skills":
         run_skills(args.args)
+    elif args.command == "skill":
+        if args.skill_command == "install":
+            name = args.name
+            if not name:
+                # Derive name from URL
+                name = args.url.rstrip("/").split("/")[-1].replace("-skill", "")
+            run_skill_install(name, args.url, args.version)
+        elif args.skill_command == "update":
+            run_skill_update(args.name, args.strategy)
+        elif args.skill_command == "list":
+            run_skill_list()
+        elif args.skill_command == "info":
+            run_skill_info(args.name)
+        else:
+            skill_parser.print_help()
     else:
         parser.print_help()
 

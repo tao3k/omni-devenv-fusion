@@ -1,7 +1,16 @@
 {
+  "manifest_version": "2.0.0",
+  "type": "skill",
   "name": "knowledge",
   "version": "1.0.0",
   "description": "Project Cortex - Structural Knowledge Injection for LLM",
+  "author": "omni-dev-fusion",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tao3k/omni-devenv-fusion",
+    "directory": "assets/skills/knowledge"
+  },
   "routing_keywords": [
     "knowledge",
     "context",
@@ -19,5 +28,8 @@
   "tools_module": "assets.skills.knowledge.tools",
   "guide_file": "guide.md",
   "prompts_file": "prompts.md",
-  "dependencies": []
+  "dependencies": {
+    "skills": {},
+    "python": {}
+  }
 }

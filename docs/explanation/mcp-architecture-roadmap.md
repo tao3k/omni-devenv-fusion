@@ -1,7 +1,7 @@
 # Design & Roadmap: Bi-MCP Architecture
 
 > **Philosophy**: Separation of Concerns. "Macro" orchestration vs. "Micro" surgical coding.
-> **Status**: Phase 24 (The MiniMax Shift) - Direct Tool Registration
+> **Status**: Phase 26 (Skill Network) Complete - Phase 27 (JIT Acquisition) Ready
 
 This document outlines the architectural vision for `omni-dev-fusion`. We move from a single monolithic MCP server to a specialized dual-server setup. This design acts as a **Bridge** between generic LLM capabilities and the strict requirements of our Nix-based project environment.
 
@@ -1216,3 +1216,155 @@ python scripts/test_router.py --omni-test
 | `agent/skills/*/tools.py`       | Removed decorators, added `EXPOSED_COMMANDS` |
 | `test_phase25_one_tool.py`      | New: One Tool architecture tests             |
 | `test_actual_session_skills.py` | New: Real LLM session tests                  |
+
+---
+
+## Phase 26: Skill Network (Git Installer)
+
+> **Status**: COMPLETED
+> **Philosophy**: "Give Omni the ability to learn new skills from the outside world."
+
+Phase 26 introduces the **Skill Network** - Omni can now download and install skills from Git repositories at runtime.
+
+### The Problem: Fixed Capability Set
+
+Before Phase 26, Omni's skills were fixed at build time:
+
+```
+❌ User: "Analyze this pcap file"
+Omni: "I don't have pcap analysis skills. Ask me something else."
+```
+
+### The Solution: Runtime Skill Acquisition
+
+After Phase 26, Omni can install skills on-demand:
+
+```
+✅ User: "Analyze this pcap file"
+Omni: "I don't have pcap skills. Installing network-analysis skill..."
+→ omni skill install https://github.com/omni-dev/skill-pcap
+→ Skill loaded
+→ Executes pcap analysis
+```
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Skill Network Layer                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌─────────────────┐   ┌─────────────────────────────────────┐  │
+│  │ SkillInstaller  │   │ SkillRegistry                       │  │
+│  │                 │   │                                     │  │
+│  │ • Git clone     │   │ • list_available_skills()           │  │
+│  │ • Git update    │   │ • get_skill_info()                  │  │
+│  │ • Sparse checkout│  │ • _resolve_skill_version()          │  │
+│  │ • Lockfile      │   │ • install_remote_skill()            │  │
+│  └─────────────────┘   └─────────────────────────────────────┘  │
+│           │                       │                              │
+│           └───────────────────────┼──────────────────────────────┘
+│                                   ▼
+│                    ┌─────────────────────────────────┐
+│                    │   assets/skills/ (install dir)  │
+│                    │                                 │
+│                    │   • skill-pcap/                 │
+│                    │   • skill-pandas/               │
+│                    │   • .omni-lock.json             │
+│                    └─────────────────────────────────┘
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Key Features
+
+| Feature             | Description                                           |
+| ------------------- | ----------------------------------------------------- |
+| **Git Integration** | Uses GitPython + subprocess for reliable operations   |
+| **Sparse Checkout** | Supports monorepo subdirectory installation           |
+| **Dirty Handling**  | Stashes local changes before update, pops after       |
+| **Lockfile**        | Generates `.omni-lock.json` for reproducibility       |
+| **Cycle Detection** | Prevents infinite recursion during dependency install |
+| **Error Hints**     | Provides actionable hints for common errors           |
+
+### CLI Commands
+
+```bash
+# Install from URL
+omni skill install https://github.com/omni-dev/skill-pandas
+
+# Install with version
+omni skill install https://github.com/omni-dev/skill-docker --version v2.1.0
+
+# Update installed skill
+omni skill update pandas-expert
+
+# List all skills
+omni skill list
+
+# Show skill details
+omni skill info pandas-expert
+```
+
+### Update Strategies
+
+| Strategy          | Behavior                            |
+| ----------------- | ----------------------------------- |
+| `stash` (default) | Stash local changes, pull, then pop |
+| `abort`           | Fail if local changes detected      |
+| `overwrite`       | Discard local changes (dangerous!)  |
+
+### File Changes (Phase 26)
+
+| File                           | Change                               |
+| ------------------------------ | ------------------------------------ |
+| `agent/core/installer.py`      | New: SkillInstaller class            |
+| `agent/core/skill_registry.py` | Added: remote install/update methods |
+| `agent/cli.py`                 | Added: `omni skill` subcommands      |
+| `test_phase26_installer.py`    | New: 15 comprehensive tests          |
+
+### Test Results
+
+| Suite                 | Status | Count      |
+| --------------------- | ------ | ---------- |
+| Phase 26 Installer    | ✅     | 15 passed  |
+| Full Agent Test Suite | ✅     | 412 passed |
+
+---
+
+## Phase 27: JIT Skill Acquisition (Upcoming)
+
+> **Status**: DESIGN PHASE
+> **Philosophy**: "When the router can't find a skill, acquire it automatically."
+
+### The Vision
+
+```
+User: "Analyze this pcap file"
+
+Router: "No matching skill found for 'pcap analysis'"
+
+Orchestrator:
+  1. Search known_skills.json for "pcap" or "network"
+  2. Found: skill-pcap (network-analysis)
+  3. "I need the pcap-analysis skill. Installing..."
+  4. omni skill install https://github.com/omni-dev/skill-pcap
+  5. Skill loaded
+  6. Retry routing with new skill
+  7. Route to: pcap.analyze()
+```
+
+### Implementation Plan
+
+1. **Skill Discovery Protocol**
+   - Search local index (`known_skills.json`)
+   - Fallback to GitHub search API
+   - Fuzzy matching on routing keywords
+
+2. **Auto-Install Hook**
+   - Modify Router to detect missing skills
+   - Call SkillInstaller automatically
+   - Reload skills after install
+
+3. **User Confirmation Flow**
+   - "I need skill X to do this. Install? [Y/n]"
+   - Or auto-install in trusted mode

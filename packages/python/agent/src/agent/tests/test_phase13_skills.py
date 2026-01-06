@@ -144,19 +144,19 @@ class TestSkillManifest:
     """Test the DNA of skills - Schema validation."""
 
     def test_valid_manifest_creation(self):
-        """Test creating a valid SkillManifest."""
+        """Test creating a valid SkillManifest with v2.0 format."""
         data = {
             "name": "test_skill",
             "version": "1.0.0",
             "description": "A test skill",
-            "dependencies": ["git"],
+            "dependencies": {"skills": {"git": ">=1.0.0"}},
             "tools_module": "assets.skills.test.tools",
             "guide_file": "guide.md",
         }
         manifest = SkillManifest(**data)
         assert manifest.name == "test_skill"
         assert manifest.version == "1.0.0"
-        assert manifest.dependencies == ["git"]
+        assert manifest.dependencies.skills == {"git": ">=1.0.0"}
         assert manifest.tools_module == "assets.skills.test.tools"
 
     def test_minimal_manifest(self):
@@ -169,7 +169,8 @@ class TestSkillManifest:
         }
         manifest = SkillManifest(**data)
         assert manifest.name == "minimal_skill"
-        assert manifest.dependencies == []
+        assert manifest.dependencies.skills == {}
+        assert manifest.dependencies.python == {}
         assert manifest.guide_file == "guide.md"
         assert manifest.prompts_file is None
 

@@ -1,7 +1,16 @@
 {
+  "manifest_version": "2.0.0",
+  "type": "skill",
   "name": "writer",
   "version": "1.0.0",
   "description": "Writing quality tools for enforcing project writing standards.",
+  "author": "omni-dev-fusion",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tao3k/omni-devenv-fusion",
+    "directory": "assets/skills/writer"
+  },
   "routing_keywords": [
     "writing",
     "style",
@@ -15,8 +24,11 @@
     "voice",
     "tone"
   ],
-  "dependencies": [],
   "tools_module": "assets.skills.writer.tools",
   "guide_file": "guide.md",
-  "prompts_file": "prompts.md"
+  "prompts_file": "prompts.md",
+  "dependencies": {
+    "skills": {},
+    "python": {}
+  }
 }

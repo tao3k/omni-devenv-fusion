@@ -1,7 +1,16 @@
 {
+  "manifest_version": "2.0.0",
+  "type": "skill",
   "name": "testing_protocol",
   "version": "1.0.0",
   "description": "Testing workflow tools following Modified-Code Protocol for intelligent test selection.",
+  "author": "omni-dev-fusion",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tao3k/omni-devenv-fusion",
+    "directory": "assets/skills/testing_protocol"
+  },
   "routing_keywords": [
     "testing protocol",
     "smart test",
@@ -11,8 +20,11 @@
     "test strategy",
     "which tests"
   ],
-  "dependencies": ["testing"],
   "tools_module": "assets.skills.testing_protocol.tools",
   "guide_file": "guide.md",
-  "prompts_file": "prompts.md"
+  "prompts_file": "prompts.md",
+  "dependencies": {
+    "skills": {},
+    "python": {}
+  }
 }

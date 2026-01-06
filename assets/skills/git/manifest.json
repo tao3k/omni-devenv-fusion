@@ -1,7 +1,16 @@
 {
+  "manifest_version": "2.0.0",
+  "type": "skill",
   "name": "git",
   "version": "2.0.0",
   "description": "Git integration with LangGraph workflow support, Smart Commit V2, and Spec-Awareness",
+  "author": "omni-dev-fusion",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tao3k/omni-devenv-fusion",
+    "directory": "assets/skills/git"
+  },
   "routing_keywords": [
     "git",
     "commit",
@@ -33,11 +42,15 @@
     "tag",
     "status"
   ],
-  "dependencies": ["filesystem"],
-  "entry_point": "workflow",
   "tools_module": "assets.skills.git.tools",
   "workflow_module": "assets.skills.git.workflow",
   "state_module": "assets.skills.git.state",
   "guide_file": "guide.md",
-  "prompts_file": "prompts.md"
+  "prompts_file": "prompts.md",
+  "dependencies": {
+    "skills": {
+      "filesystem": ">=1.0.0"
+    },
+    "python": {}
+  }
 }
