@@ -2,6 +2,16 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.2.0](https://github.com/tao3k/omni-dev-fusion/compare/1c9c93cb0409380bf4e75a8ba32704ebc9b1b267..v0.2.0) - 2026-01-06
+#### Documentation
+- Update Phase 25 documentation - ([1690dae](https://github.com/tao3k/omni-dev-fusion/commit/1690dae41d55b5513896e254b8323d0928315475)) - guangtao
+#### Tests
+- (**core**) Remove dynamic git commands from syntax variations test - ([dc59a44](https://github.com/tao3k/omni-dev-fusion/commit/dc59a44eaad82175c05e01b42d5143fa223271e3)) - guangtao
+#### Miscellaneous Chores
+- sync with release - ([1c9c93c](https://github.com/tao3k/omni-dev-fusion/commit/1c9c93cb0409380bf4e75a8ba32704ebc9b1b267)) - guangtao
+
+- - -
+
 ## [v0.1.0](https://github.com/tao3k/omni-dev-fusion/compare/5215ac951e138bb1d52350beedb0ff1381da9ed1..v0.1.0) - 2026-01-06
 #### Features
 - (**docs**) add documentation workflow with check_doc_sync enhancement - ([271d710](https://github.com/tao3k/omni-dev-fusion/commit/271d710f71139085fd3c3760ad9737ff53fdf6c2)) - guangtao
