@@ -1,0 +1,10 @@
+{
+  "name": "_template",
+  "version": "1.0.0",
+  "description": "Template skill for new capabilities",
+  "routing_keywords": ["template", "new skill", "create skill", "scaffold"],
+  "dependencies": [],
+  "tools_module": "assets.skills._template.tools",
+  "guide_file": "guide.md",
+  "prompts_file": "prompts.md"
+}

@@ -17,14 +17,15 @@ from typing import Any, Dict, Optional
 from mcp.server.fastmcp import FastMCP
 from common.mcp_core import log_decision
 from common.gitops import get_project_root
+from common.settings import get_setting
 import structlog
 
 logger = structlog.get_logger(__name__)
 
 # Path resolution
 PROJECT_ROOT = get_project_root()
-SPECS_DIR = PROJECT_ROOT / "agent/specs"
-ARCHIVE_DIR = PROJECT_ROOT / "agent/specs.archive"
+SPECS_DIR = PROJECT_ROOT / get_setting("assets.specs_dir", "assets/specs")
+ARCHIVE_DIR = PROJECT_ROOT / get_setting("assets.specs_archive_dir", "assets/specs.archive")
 
 
 def register_spec_tools(mcp: FastMCP) -> None:
@@ -118,7 +119,7 @@ def register_spec_tools(mcp: FastMCP) -> None:
         from mcp_core.inference import InferenceClient
 
         # Load template
-        template_path = PROJECT_ROOT / "agent/specs/template.md"
+        template_path = PROJECT_ROOT / get_setting("specs.template", "assets/specs/template.md")
         if not template_path.exists():
             return json.dumps({"success": False, "error": f"Template not found: {template_path}"})
 
@@ -138,7 +139,7 @@ def register_spec_tools(mcp: FastMCP) -> None:
 
 Context files:{context}
 
-Please fill out the spec template below. Use the pattern from agent/standards/feature-lifecycle.md for complexity levels.
+Please fill out the spec template below. Use the pattern from assets/standards/feature-lifecycle.md for complexity levels.
 
 TEMPLATE:
 {template}
@@ -282,7 +283,7 @@ Fill in all sections with appropriate detail. Return ONLY the filled template co
             JSON with archive status
 
         Examples:
-            @omni-orchestrator archive_spec_to_doc(spec_path="agent/specs/auth_module.md")
+            @omni-orchestrator archive_spec_to_doc(spec_path="assets/specs/auth_module.md")
         """
         # Validate target category
         valid_categories = ["explanation", "reference", "how-to"]

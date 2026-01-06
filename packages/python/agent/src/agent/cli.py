@@ -66,6 +66,7 @@ logger = structlog.get_logger()
 
 # Get project root from gitops (uses PRJ_ROOT env or git toplevel)
 from common.gitops import get_project_root
+from common.settings import get_setting
 
 PROJECT_ROOT = get_project_root()
 
@@ -109,7 +110,9 @@ def run_skills(commands):
     cmd_name = "_".join(parts[1:])
 
     # Load only the specific skill module
-    skill_path = PROJECT_ROOT / f"agent/skills/{skill_name}/tools.py"
+    skill_path = (
+        PROJECT_ROOT / get_setting("skills.path", "assets/skills") / f"{skill_name}/tools.py"
+    )
     if not skill_path.exists():
         logger.warning("Skill not found", skill=skill_name)
         print(f"Skill not found: {skill_name}")

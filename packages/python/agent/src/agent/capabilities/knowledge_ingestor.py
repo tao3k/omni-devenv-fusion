@@ -16,7 +16,7 @@ Usage:
     await ingest_all_knowledge()
 
     # Ingest specific directory
-    await ingest_directory("agent/knowledge", domain="knowledge")
+    await ingest_directory("assets/knowledge", domain="knowledge")
 
     # Phase 17: Ingest from repomix XML
     await ingest_from_repomix_xml()
@@ -40,11 +40,11 @@ REPOMIX_XML_PATH = ".data/project_knowledge.xml"
 
 # Default knowledge directories (fallback when settings.yaml not configured)
 DEFAULT_KNOWLEDGE_DIRS = [
-    {"path": "agent/knowledge", "domain": "knowledge", "description": "Project knowledge base"},
-    {"path": "agent/how-to", "domain": "workflow", "description": "How-to guides"},
+    {"path": "assets/knowledge", "domain": "knowledge", "description": "Project knowledge base"},
+    {"path": "assets/how-to", "domain": "workflow", "description": "How-to guides"},
     {"path": "docs/explanation", "domain": "architecture", "description": "Architecture docs"},
     {
-        "path": "agent/skills/knowledge/standards",
+        "path": "assets/skills/knowledge/standards",
         "domain": "standards",
         "description": "Coding standards",
     },
@@ -242,7 +242,9 @@ async def ingest_all_knowledge() -> dict[str, Any]:
 async def ingest_thread_specific_knowledge() -> dict[str, Any]:
     """Ingest thread/deadlock-related knowledge."""
     return await ingest_directory(
-        dir_path="agent/knowledge", domain="threading", collection="threading_knowledge"
+        dir_path=get_setting("knowledge.base_dir", "assets/knowledge"),
+        domain="threading",
+        collection="threading_knowledge",
     )
 
 
@@ -251,7 +253,10 @@ async def ingest_git_workflow_knowledge() -> dict[str, Any]:
     project_root = get_project_root()
     results = []
 
-    for path in ["agent/how-to/gitops.md", "agent/knowledge/gitops-cache.md"]:
+    for path in [
+        get_setting("knowledge.gitops_file", "assets/how-to/gitops.md"),
+        get_setting("knowledge.gitops_cache", "assets/knowledge/gitops-cache.md"),
+    ]:
         if (project_root / path).exists():
             results.append(await ingest_file(project_root / path, domain="git"))
 

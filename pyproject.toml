@@ -5,6 +5,12 @@ description = "Tri-MCP Agentic OS: orchestrator + executor + coder"
 readme = "README.md"
 requires-python = ">=3.12"
 
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+
 dependencies = [
     # Install the orchestrator package from this workspace (pulls all transitive deps)
     "omni-dev-fusion-agent",
@@ -50,3 +56,7 @@ omni-dev-fusion-common = { workspace = true }
 # Workspace configuration
 [tool.uv.workspace]
 members = ["packages/python/*"]
+
+[tool.hatch.build.targets.wheel]
+packages = []
+bypass-selection = true

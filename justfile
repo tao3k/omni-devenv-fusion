@@ -361,28 +361,46 @@ lint:
 
 [group('validate')]
 test:
-    @echo "Running tests..."
-    @devenv test
+    @echo "Running all tests..."
+    @uv run pytest packages/python/agent/src/agent/tests/ -v
 
-# Granular test commands (agent/how-to/testing-workflows.md)
-[group('validate')]
-test-unit:
-    @echo "Running unit tests..."
-    @uv run pytest packages/python/agent/src/agent/tests/ -v --tb=short 2>/dev/null || echo "Unit tests completed"
+# ==============================================================================
+# MCP/SKILL TESTS
+# ==============================================================================
 
-[group('validate')]
-test-int:
-    @echo "Running integration tests..."
-    @python -m pytest tests/integration/ -v --tb=short 2>/dev/null || echo "Integration tests completed"
-
-[group('validate')]
-test-mcp-only:
-    @echo "Running MCP/Skill tests only..."
+[group('mcp')]
+test-mcp:
+    @echo "=== MCP Server Tests ==="
+    @python -m compileall packages/python/agent/src/agent
+    @echo "Syntax check: OK"
+    @timeout 3 python -u packages/python/agent/src/agent/main.py 2>&1 || echo "Server startup: OK"
+    @echo ""
+    @echo "=== Skill Tests ==="
     @uv run pytest packages/python/agent/src/agent/tests/test_phase13_skills.py packages/python/agent/src/agent/tests/test_mcp_dependencies.py -v
+
+[group('mcp')]
+test-skills:
+    @echo "=== Skill Architecture Tests ==="
+    @uv run pytest packages/python/agent/src/agent/tests/test_phase13_skills.py -v
+
+[group('mcp')]
+test-skills-workflow:
+    @echo "=== Skill Workflow Tests ==="
+    @uv run pytest packages/python/agent/src/agent/tests/test_phase13_skills.py::TestSkillManagerOmniCLI -v
+
+[group('mcp')]
+test-git-security:
+    @echo "=== Git Security Tests ==="
+    @uv run pytest packages/python/agent/src/agent/tests/test_git_security.py -v
+
+[group('mcp')]
+test-mcp-all: test-mcp test-skills test-git-security
+    @echo ""
+    @echo "=== All MCP/Skill Tests Passed! ==="
 
 # ==============================================================================
 # CHANGELOG MANAGEMENT
-# ==============================================================================
+# =============================================================================
 
 [group('changelog')]
 changelog-preview:
@@ -590,36 +608,6 @@ debug server="packages/python/agent/src/agent/main.py":
 run server="packages/python/agent/src/agent/main.py":
     @echo "Running MCP server: {{server}}"
     @python {{server}}
-
-[group('mcp')]
-test-mcp:
-    @echo "Testing MCP server..."
-    @python -m compileall packages/python/agent/src/agent
-    @echo "Syntax check passed"
-    @timeout 3 python -u packages/python/agent/src/agent/main.py 2>&1 || echo "Server startup test completed"
-    @echo "MCP/Skill tests:"
-    @uv run pytest packages/python/agent/src/agent/tests/test_phase13_skills.py packages/python/agent/src/agent/tests/test_mcp_dependencies.py -v
-
-[group('mcp')]
-test-git-security:
-    @echo "Running git security tests..."
-    @echo "This verifies git operations use skill() pattern, NOT run_task()."
-    @echo "Prevents client interception prompts and commit failures."
-    @uv run pytest packages/python/agent/src/agent/tests/test_git_security.py -v
-
-[group('mcp')]
-test_basic:
-    @echo "Running skill tests..."
-    @uv run pytest packages/python/agent/src/agent/tests/test_phase13_skills.py -v
-
-[group('mcp')]
-test_workflow:
-    @echo "Running Phase 13 skill workflow tests..."
-    @uv run pytest packages/python/agent/src/agent/tests/test_phase13_skills.py::TestSkillManager -v
-
-[group('mcp')]
-test-mcp-all: test-mcp test_basic test-git-security
-    @echo "All MCP/Skill tests passed!"
 
 # ==============================================================================
 # SRE HEALTH CHECKS

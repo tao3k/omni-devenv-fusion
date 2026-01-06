@@ -78,8 +78,8 @@ def get_conf_dir() -> str:
             _CONF_DIR = arg.split("=", 1)[1]
             return _CONF_DIR
 
-    # Default to agent/
-    _CONF_DIR = "agent"
+    # Default to assets/ (previously agent/)
+    _CONF_DIR = "assets"
     return _CONF_DIR
 
 

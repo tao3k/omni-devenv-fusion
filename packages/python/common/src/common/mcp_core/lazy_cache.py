@@ -37,7 +37,12 @@ Usage:
 
 from __future__ import annotations
 
+import json
+import logging
 import re
+import shutil
+import subprocess
+import tempfile
 import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -47,6 +52,7 @@ T = TypeVar("T")
 
 # Project root detection using GitOps
 from common.gitops import get_project_root
+from common.settings import get_setting
 
 _PROJECT_ROOT: Path | None = None
 
@@ -69,7 +75,7 @@ class LazyCache(ABC, Generic[T]):
         class WritingStyleCache(LazyCache[dict]):
             @property
             def _file_path(self) -> Path:
-                return get_project_root() / "agent/writing-style/concise.md"
+                return get_project_root() / get_setting("assets.writing_style_dir") / "concise.md"
 
             def _load(self) -> dict:
                 # Parse writing style guidelines from file
@@ -183,7 +189,7 @@ class FileCache(LazyCache[str]):
     """Lazy cache for loading and caching file contents.
 
     Example:
-        cache = FileCache(get_project_root() / "agent/how-to/gitops.md")
+        cache = FileCache(get_project_root() / get_setting("assets.howto_dir") / "gitops.md")
         content = cache.get()  # Loaded once, cached forever
     """
 
@@ -223,7 +229,7 @@ class MarkdownCache(LazyCache[dict[str, Any]]):
     Extracts title, content, and sections from markdown files.
 
     Example:
-        cache = MarkdownCache(get_project_root() / "agent/how-to/gitops.md")
+        cache = MarkdownCache(get_project_root() / get_setting("assets.howto_dir") / "gitops.md")
         data = cache.get()  # {"title": "...", "content": "...", "sections": {...}}
     """
 
@@ -369,7 +375,7 @@ class CompositeCache(LazyCache[dict[str, Any]]):
     Example:
         cache = CompositeCache([
             ConfigCache(get_project_root() / "cog.toml"),
-            MarkdownCache(get_project_root() / "agent/how-to/gitops.md"),
+            MarkdownCache(get_project_root() / get_setting("assets.howto_dir") / "gitops.md"),
         ])
         data = cache.get()  # Merged from all sources
     """
@@ -417,3 +423,193 @@ class CompositeCache(LazyCache[dict[str, Any]]):
             if data:
                 results.append(data)
         return self._merger(results)
+
+
+class RepomixCache:
+    """Pack directory as XML using repomix for LLM context.
+
+    Features:
+    - Caching: Stores XML in .cache/<project>/skill_<name>_repomix.xml
+    - Atomicity: Uses repomix.json in target directory if present.
+    - Dynamic: Generates temp config if no repomix.json found.
+    - XML Native: Forces XML output for optimal LLM parsing.
+
+    Note: Unlike LazyCache, this is NOT a singleton. Each skill gets its own instance.
+
+    Usage:
+        cache = RepomixCache(target_path=skill_dir)
+        xml_context = cache.get()
+    """
+
+    logger = logging.getLogger(__name__)
+
+    def __init__(
+        self,
+        target_path: Path,
+        config_path: Optional[Path] = None,
+        ignore_patterns: Optional[list[str]] = None,
+    ) -> None:
+        """Initialize RepomixCache.
+
+        Args:
+            target_path: Directory or file to pack.
+            config_path: Explicit path to repomix.json.
+            ignore_patterns: Additional dynamic ignores.
+        """
+        from common.gitops import get_project_root
+
+        self._target_path = target_path
+        self._explicit_config = config_path
+        self._ignore_patterns = ignore_patterns or []
+        self._repomix_bin = shutil.which("repomix")
+
+        # Determine cache directory and output file path
+        project_root = get_project_root()
+        project_name = project_root.name
+        skill_name = target_path.name
+
+        self._cache_dir = project_root / ".cache" / project_name
+        self._output_file = self._cache_dir / f"skill_{skill_name}_repomix.xml"
+
+        self._cached: Optional[str] = None
+        self._loaded = False
+
+    def get(self) -> str:
+        """Get XML content, loading if necessary.
+
+        Returns:
+            XML content from repomix, or empty string on error.
+        """
+        if not self._loaded:
+            self._cached = self._load()
+            self._loaded = True
+        return self._cached or ""
+
+    def reload(self) -> str:
+        """Force reload of cached data.
+
+        Returns:
+            Newly loaded XML content.
+        """
+        self._cached = self._load()
+        self._loaded = True
+        return self._cached or ""
+
+    def _load(self) -> str:
+        """Execute repomix and return XML content.
+
+        Returns:
+            XML content from repomix, or empty string on error.
+        """
+        if not self._repomix_bin:
+            self.logger.warning("repomix not found in PATH")
+            return ""
+
+        if not self._target_path.exists():
+            self.logger.warning(f"Target path does not exist: {self._target_path}")
+            return ""
+
+        # Create cache directory if needed
+        self._cache_dir.mkdir(parents=True, exist_ok=True)
+
+        # Check if cached file exists - use it directly
+        if self._output_file.exists():
+            self.logger.debug(f"Using cached repomix: {self._output_file}")
+            return self._output_file.read_text(encoding="utf-8")
+
+        # Determine config to use
+        config_to_use: Optional[Path] = self._explicit_config
+        local_config = self._target_path / "repomix.json"
+        temp_config_file: Optional[Path] = None
+
+        # Check for local repomix.json if no explicit config
+        if not config_to_use and local_config.exists():
+            config_to_use = local_config
+
+        # Generate dynamic config if no config found
+        if not config_to_use:
+            default_config = {
+                "output": {
+                    "style": "xml",
+                    "fileSummary": True,
+                    "removeComments": False,
+                },
+                "include": [
+                    "**/*.py",
+                    "**/*.md",
+                    "**/*.json",
+                    "**/*.yaml",
+                    "**/*.yml",
+                    "Justfile",
+                    "Dockerfile",
+                    "Makefile",
+                ],
+                "ignore": {
+                    "patterns": [
+                        "**/__pycache__/**",
+                        "**/*.pyc",
+                        "**/.git/**",
+                        "**/.gitignore",
+                        "**/node_modules/**",
+                        "**/venv/**",
+                        ".env*",
+                        "uv.lock",
+                        "package-lock.json",
+                        "*.egg-info/**",
+                        ".pytest_cache/**",
+                        ".hypothesis/**",
+                    ],
+                    "characters": self._ignore_patterns,
+                },
+            }
+
+            try:
+                temp_config_file = tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".json", delete=False
+                )
+                json.dump(default_config, temp_config_file)
+                temp_config_file.close()
+                config_to_use = Path(temp_config_file.name)
+            except Exception as e:
+                self.logger.error(f"Failed to create temp config: {e}")
+                return ""
+
+        try:
+            # Build command with --output to cache file
+            cmd = [
+                self._repomix_bin,
+                "--config",
+                str(config_to_use),
+                "--style",
+                "xml",
+                "--output",
+                str(self._output_file),
+                str(self._target_path),
+            ]
+
+            # Execute
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            if result.returncode != 0:
+                self.logger.error(f"repomix failed: {result.stderr}")
+                return ""
+
+            # Read and return XML content from cache
+            if self._output_file.exists():
+                return self._output_file.read_text(encoding="utf-8")
+
+            return ""
+
+        except Exception as e:
+            self.logger.error(f"RepomixCache error: {e}")
+            return ""
+
+        finally:
+            # Cleanup temp config file
+            if temp_config_file and Path(temp_config_file.name).exists():
+                Path(temp_config_file.name).unlink(missing_ok=True)

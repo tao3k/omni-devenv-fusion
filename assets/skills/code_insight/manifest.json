@@ -1,0 +1,23 @@
+{
+  "name": "code_insight",
+  "version": "1.0.0",
+  "description": "Static analysis capabilities for codebase introspection",
+  "routing_keywords": [
+    "analyze",
+    "structure",
+    "ast",
+    "static analysis",
+    "code structure",
+    "functions",
+    "classes",
+    "imports",
+    "tools",
+    "decorators",
+    "inspect",
+    "parse"
+  ],
+  "dependencies": [],
+  "tools_module": "assets.skills.code_insight.tools",
+  "guide_file": "guide.md",
+  "prompts_file": null
+}

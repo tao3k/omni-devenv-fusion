@@ -1,0 +1,18 @@
+{
+  "name": "testing_protocol",
+  "version": "1.0.0",
+  "description": "Testing workflow tools following Modified-Code Protocol for intelligent test selection.",
+  "routing_keywords": [
+    "testing protocol",
+    "smart test",
+    "modified code",
+    "test selection",
+    "what to test",
+    "test strategy",
+    "which tests"
+  ],
+  "dependencies": ["testing"],
+  "tools_module": "assets.skills.testing_protocol.tools",
+  "guide_file": "guide.md",
+  "prompts_file": "prompts.md"
+}

@@ -39,7 +39,8 @@ class SkillRegistry:
             return
 
         self.project_root = get_project_root()
-        self.skills_dir = self.project_root / "agent" / "skills"
+        skills_path = get_setting("skills.path", "assets/skills")
+        self.skills_dir = self.project_root / skills_path
         self.loaded_skills: Dict[str, SkillManifest] = {}
         self.module_cache: Dict[str, types.ModuleType] = {}
         self.skill_tools: Dict[str, list[str]] = {}  # Track tool names per skill
@@ -187,7 +188,11 @@ class SkillRegistry:
 
         # 2. Locate the Tools File
         # tools_module="agent.skills.git.tools" -> agent/skills/git/tools.py
-        relative_path = manifest.tools_module.replace(".", "/") + ".py"
+        # Handle both "agent.skills" and "assets.skills" prefixes for backward/forward compatibility
+        tools_module = manifest.tools_module
+        if tools_module.startswith("agent.skills."):
+            tools_module = "assets.skills." + tools_module[len("agent.skills.") :]
+        relative_path = tools_module.replace(".", "/") + ".py"
         source_path = self.project_root / relative_path
 
         if not source_path.exists():

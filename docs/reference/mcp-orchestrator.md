@@ -105,29 +105,51 @@ main.py (87 lines)
             └── filesystem, git, terminal, testing_protocol (auto-boot)
 ```
 
-### Skill System
+### Skill System (Phase 25.3: Trinity Architecture)
 
-Operations (git, terminal, testing, etc.) are accessed via the `skill()` tool:
+Operations (git, terminal, testing, etc.) are accessed via the `omni` tool:
 
 ```json
 {
-  "tool": "skill",
+  "tool": "omni",
   "arguments": {
-    "skill": "git",
-    "call": "git_status()"
+    "input": "git.status"
   }
 }
 ```
 
+**Trinity Architecture:**
+
+| Component   | Implementation           | Purpose                            |
+| ----------- | ------------------------ | ---------------------------------- |
+| **Code**    | `mtime`-based hot-reload | <1ms response, auto-reload on edit |
+| **Context** | `RepomixCache` per skill | XML-packed context for LLM         |
+| **State**   | `Skill` registry         | Metadata, commands, mtime          |
+
 **Available Skills:**
 
-| Skill              | Tools                                                |
-| ------------------ | ---------------------------------------------------- |
-| `git`              | git_status, git_log, git_add, smart_commit           |
-| `terminal`         | execute_command, inspect_environment                 |
-| `testing_protocol` | smart_test_runner, run_test_command                  |
-| `writer`           | lint_writing_style, polish_text, load_writing_memory |
-| `filesystem`       | list_directory, read_file, write_file, search_files  |
+| Skill              | Example Commands                             |
+| ------------------ | -------------------------------------------- |
+| `git`              | status, commit, log, branch, checkout, stash |
+| `terminal`         | execute, env                                 |
+| `testing_protocol` | run, test                                    |
+| `writer`           | lint, polish, load_memory                    |
+| `filesystem`       | read, write, list, search                    |
+| `knowledge`        | get_context, load_development_context        |
+| `memory`           | recall, save                                 |
+
+**Skill Help:**
+
+```json
+{
+  "tool": "omni",
+  "arguments": {
+    "input": "git.help"
+  }
+}
+```
+
+Returns XML-packed skill context (code + docs) via Repomix.
 
 ---
 

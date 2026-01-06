@@ -1,0 +1,22 @@
+{
+  "name": "advanced_search",
+  "version": "1.0.0",
+  "description": "High-performance code search using ripgrep with structured results.",
+  "routing_keywords": [
+    "search",
+    "grep",
+    "find",
+    "ripgrep",
+    "code search",
+    "pattern",
+    "regex",
+    "replace",
+    "match",
+    "content",
+    "text search"
+  ],
+  "dependencies": [],
+  "tools_module": "assets.skills.advanced_search.tools",
+  "guide_file": "guide.md",
+  "prompts_file": "prompts.md"
+}

@@ -14,8 +14,8 @@ Features:
 Usage:
     from common.mcp_core.reference_library import ReferenceLibrary, get_reference_path
 
-    # Default (uses agent/ directory)
-    specs_dir = get_reference_path("specs.dir")  # Returns: "agent/specs"
+    # Default (uses assets/ directory)
+    specs_dir = get_reference_path("specs.dir")  # Returns: "assets/specs"
 
     # Custom configuration directory
     python script.py --conf /path/to/conf
@@ -68,8 +68,8 @@ def get_conf_dir() -> str:
             _CONF_DIR = arg.split("=", 1)[1]
             return _CONF_DIR
 
-    # Default to agent/
-    _CONF_DIR = "agent"
+    # Default to assets/
+    _CONF_DIR = "assets"
     return _CONF_DIR
 
 
@@ -81,7 +81,7 @@ class ReferenceLibrary:
 
     Usage:
         ref = ReferenceLibrary()
-        doc_path = ref.get_path("specs.dir")  # Returns: "agent/specs"
+        doc_path = ref.get_path("specs.dir")  # Returns: "assets/specs"
     """
 
     _instance: Optional["ReferenceLibrary"] = None

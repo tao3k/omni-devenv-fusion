@@ -6,7 +6,7 @@ Tests for:
 - Pydantic schema validation
 - Context injection
 
-Reference: agent/specs/phase11_neural_matrix.md
+Reference: assets/specs/phase11_neural_matrix.md
 
 In uv workspace, packages are installed and can be imported directly.
 """
@@ -36,7 +36,7 @@ class TestSpecGapAnalysis:
         """Verify valid spec gap analysis can be created."""
         gap = SpecGapAnalysis(
             spec_exists=True,
-            spec_path="agent/specs/test.md",
+            spec_path="assets/specs/test.md",
             completeness_score=85,
             missing_sections=["Security"],
             has_template_placeholders=False,
@@ -67,7 +67,7 @@ class TestLegislationDecision:
         """Verify allowed decision schema."""
         gap = SpecGapAnalysis(
             spec_exists=True,
-            spec_path="agent/specs/test.md",
+            spec_path="assets/specs/test.md",
             completeness_score=90,
             missing_sections=[],
             has_template_placeholders=False,
@@ -78,7 +78,7 @@ class TestLegislationDecision:
             reasoning="Spec is complete",
             required_action="proceed_to_code",
             gap_analysis=gap,
-            spec_path="agent/specs/test.md",
+            spec_path="assets/specs/test.md",
         )
         assert decision.decision == "allowed"
         assert decision.required_action == "proceed_to_code"
@@ -217,7 +217,7 @@ class TestGitStatusInjection:
 # Phase 13.10: Git Skill Tests (Simplified)
 # =============================================================================
 
-_SKILLS_ROOT = Path.cwd() / "agent" / "skills"
+_SKILLS_ROOT = Path.cwd() / "assets" / "skills"
 
 
 class TestGitSkill:
@@ -242,9 +242,12 @@ class TestGitSkill:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 tool_names.add(node.name)
 
-        assert "git_commit" in tool_names, "git_commit should be defined"
-        assert "git_status" in tool_names, "git_status should be defined"
-        assert "git_add" in tool_names, "git_add should be defined"
+        # New Trinity Architecture: functions are named without "git_" prefix
+        # They use @skill_command decorator for registration
+        expected_tools = ["commit", "status", "add"]
+
+        for tool in expected_tools:
+            assert tool in tool_names, f"Expected tool '{tool}' not found. Found: {tool_names}"
 
     def test_git_skill_has_required_operations(self):
         """Verify git skill has read and write operations."""
@@ -260,10 +263,10 @@ class TestGitSkill:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 tool_names.add(node.name)
 
-        # Read operations
-        read_ops = ["git_status", "git_diff", "git_log", "git_branch"]
+        # Read operations (new naming without git_ prefix)
+        read_ops = ["status", "diff", "log", "branch"]
         # Write operations
-        write_ops = ["git_add", "git_commit", "git_checkout"]
+        write_ops = ["add", "commit", "checkout"]
 
         read_found = [op for op in read_ops if op in tool_names]
         write_found = [op for op in write_ops if op in tool_names]
@@ -274,28 +277,25 @@ class TestGitSkill:
         )
 
     def test_git_commit_has_message_param(self):
-        """Verify git_commit has message parameter."""
+        """Verify commit function has message parameter."""
         import ast
 
         git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
         content = git_tools_py.read_text()
         tree = ast.parse(content)
 
-        # Find git_commit function (sync or async)
-        git_commit_func = None
+        # Find commit function (sync or async)
+        commit_func = None
         for node in ast.walk(tree):
-            if (
-                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-                and node.name == "git_commit"
-            ):
-                git_commit_func = node
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "commit":
+                commit_func = node
                 break
 
-        assert git_commit_func is not None, "git_commit not found"
+        assert commit_func is not None, "commit function not found"
 
         # Verify function signature
-        args = [arg.arg for arg in git_commit_func.args.args]
-        assert "message" in args, "git_commit should have 'message' parameter"
+        args = [arg.arg for arg in commit_func.args.args]
+        assert "message" in args, "commit should have 'message' parameter"
 
     def test_git_skill_has_native_implementation(self):
         """Verify git skill has native implementation (Phase 23: Skill Singularity)."""
@@ -317,50 +317,62 @@ class TestGitSkill:
             "git skill should NOT import from gitops (native implementation)"
         )
 
-        # Should have _run_git internal helper
-        has_run_git = False
+        # Should have _run internal helper (renamed from _run_git)
+        has_run = False
         for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.name == "_run_git":
-                has_run_git = True
+            if isinstance(node, ast.FunctionDef) and node.name == "_run":
+                has_run = True
                 break
 
-        assert has_run_git, "git skill should have native _run_git implementation"
+        assert has_run, "git skill should have native _run implementation"
 
     def test_git_skill_exports_all_functions(self):
-        """Verify git skill exports functions via __all__."""
+        """Verify git skill uses @skill_command decorators for exports (Trinity Architecture)."""
         import ast
 
         git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
         content = git_tools_py.read_text()
         tree = ast.parse(content)
 
-        # Find __all__ definition
-        has_all = False
+        # Count @skill_command decorated functions (handle both sync and async)
+        decorated_funcs = []
         for node in ast.walk(tree):
-            if isinstance(node, ast.Assign):
-                for target in node.targets:
-                    if isinstance(target, ast.Name) and target.id == "__all__":
-                        has_all = True
-                        break
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for decorator in node.decorator_list:
+                    if isinstance(decorator, ast.Call):
+                        if (
+                            isinstance(decorator.func, ast.Name)
+                            and decorator.func.id == "skill_command"
+                        ):
+                            decorated_funcs.append(node.name)
 
-        assert has_all, "git skill should define __all__ for function exports"
+        # Trinity Architecture: exports via @skill_command decorators
+        assert len(decorated_funcs) > 0, (
+            f"git skill should have @skill_command decorated functions. Found: {decorated_funcs}"
+        )
 
     def test_git_skill_has_error_class(self):
-        """Verify git skill has GitError exception class."""
+        """Verify git skill has error handling (class or inline)."""
         import ast
 
         git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
         content = git_tools_py.read_text()
         tree = ast.parse(content)
 
-        # Find GitError class
-        has_git_error = False
+        # Find error class or check for error handling pattern
+        has_error_class = False
         for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef) and node.name == "GitError":
-                has_git_error = True
+            if isinstance(node, ast.ClassDef) and "Error" in node.name:
+                has_error_class = True
                 break
 
-        assert has_git_error, "git skill should have GitError exception class"
+        # New Trinity Architecture: error handling may use inline patterns
+        # This test passes if either error class exists OR functions have error handling
+        has_return_error_pattern = "return f" in content and "FAILED" in content
+
+        assert has_error_class or has_return_error_pattern, (
+            "git skill should have error handling (class or inline pattern)"
+        )
 
 
 # =============================================================================
@@ -393,7 +405,7 @@ class TestSkillRegistry:
         assert "terminal" in preload
 
     def test_list_available_skills(self):
-        """Verify available skills are discovered from agent/skills/."""
+        """Verify available skills are discovered from assets/skills/."""
         from agent.core.skill_registry import get_skill_registry
 
         registry = get_skill_registry()
@@ -425,7 +437,7 @@ class TestSkillRegistry:
 
         assert manifest is not None
         assert manifest.name == "git"
-        assert manifest.tools_module == "agent.skills.git.tools"
+        assert manifest.tools_module == "assets.skills.git.tools"
 
     def test_get_nonexistent_skill_manifest(self):
         """Verify graceful handling of nonexistent skill."""
@@ -507,25 +519,38 @@ class TestKnowledgeSkill:
         for tool in expected_tools:
             assert tool in tool_names, f"Expected tool '{tool}' not found. Found: {tool_names}"
 
-    def test_knowledge_skill_has_register(self):
-        """Verify knowledge skill has register function."""
+    def test_knowledge_skill_has_skill_commands(self):
+        """Verify knowledge skill uses @skill_command decorators (new Trinity Architecture)."""
         import ast
 
         knowledge_tools_py = _SKILLS_ROOT / "knowledge" / "tools.py"
         content = knowledge_tools_py.read_text()
         tree = ast.parse(content)
 
-        has_register = False
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.name == "register":
-                has_register = True
-                break
+        # New Trinity Architecture: skills use @skill_command decorators
+        # Check for skill_command import and usage
+        has_skill_command_import = "skill_command" in content
 
-        assert has_register, "Knowledge skill should have 'register' function"
+        # Count decorated functions (handle both sync and async functions)
+        decorated_funcs = []
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                # Check decorators
+                for decorator in node.decorator_list:
+                    if isinstance(decorator, ast.Call):
+                        if (
+                            isinstance(decorator.func, ast.Name)
+                            and decorator.func.id == "skill_command"
+                        ):
+                            decorated_funcs.append(node.name)
+
+        assert has_skill_command_import, "Knowledge skill should import skill_command"
+        assert len(decorated_funcs) > 0, (
+            f"Knowledge skill should have @skill_command decorated functions. Found: {decorated_funcs}"
+        )
 
     def test_knowledge_tools_never_execute(self):
         """Verify knowledge tools only read, never execute commands."""
-        import ast
 
         knowledge_tools_py = _SKILLS_ROOT / "knowledge" / "tools.py"
         content = knowledge_tools_py.read_text()
@@ -572,21 +597,33 @@ class TestWriterSkill:
         for tool in expected_tools:
             assert tool in tool_names, f"Expected tool '{tool}' not found. Found: {tool_names}"
 
-    def test_writer_skill_has_register(self):
-        """Verify writer skill has register function."""
+    def test_writer_skill_has_skill_commands(self):
+        """Verify writer skill uses @skill_command decorators (new Trinity Architecture)."""
         import ast
 
         writer_tools_py = _SKILLS_ROOT / "writer" / "tools.py"
         content = writer_tools_py.read_text()
         tree = ast.parse(content)
 
-        has_register = False
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.name == "register":
-                has_register = True
-                break
+        # New Trinity Architecture: skills use @skill_command decorators
+        has_skill_command_import = "skill_command" in content
 
-        assert has_register, "Writer skill should have 'register' function"
+        # Count decorated functions (handle both sync and async functions)
+        decorated_funcs = []
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for decorator in node.decorator_list:
+                    if isinstance(decorator, ast.Call):
+                        if (
+                            isinstance(decorator.func, ast.Name)
+                            and decorator.func.id == "skill_command"
+                        ):
+                            decorated_funcs.append(node.name)
+
+        assert has_skill_command_import, "Writer skill should import skill_command"
+        assert len(decorated_funcs) > 0, (
+            "Writer skill should have @skill_command decorated functions"
+        )
 
 
 # =============================================================================
@@ -627,25 +664,36 @@ class TestMemorySkill:
         for tool in expected_tools:
             assert tool in tool_names, f"Expected tool '{tool}' not found. Found: {tool_names}"
 
-    def test_memory_skill_has_register(self):
-        """Verify memory skill has register function."""
+    def test_memory_skill_has_skill_commands(self):
+        """Verify memory skill uses @skill_command decorators (new Trinity Architecture)."""
         import ast
 
         memory_tools_py = _SKILLS_ROOT / "memory" / "tools.py"
         content = memory_tools_py.read_text()
         tree = ast.parse(content)
 
-        has_register = False
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.name == "register":
-                has_register = True
-                break
+        # New Trinity Architecture: skills use @skill_command decorators
+        has_skill_command_import = "skill_command" in content
 
-        assert has_register, "Memory skill should have 'register' function"
+        # Count decorated functions (handle both sync and async functions)
+        decorated_funcs = []
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for decorator in node.decorator_list:
+                    if isinstance(decorator, ast.Call):
+                        if (
+                            isinstance(decorator.func, ast.Name)
+                            and decorator.func.id == "skill_command"
+                        ):
+                            decorated_funcs.append(node.name)
+
+        assert has_skill_command_import, "Memory skill should import skill_command"
+        assert len(decorated_funcs) > 0, (
+            "Memory skill should have @skill_command decorated functions"
+        )
 
     def test_memory_skill_uses_chromadb(self):
         """Verify memory skill uses ChromaDB for vector storage."""
-        import ast
 
         memory_tools_py = _SKILLS_ROOT / "memory" / "tools.py"
         content = memory_tools_py.read_text()

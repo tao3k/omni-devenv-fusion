@@ -64,7 +64,7 @@ def toxic_skill_factory(registry):
     """
     Creates temporary 'toxic' skills to test error handling.
     Phase 25: Skills use EXPOSED_COMMANDS instead of register().
-    Skills are created in agent/skills/ so Python can import them.
+    Skills are created in assets/skills/ so Python can import them.
     Cleans up after test.
     """
     created_paths = []
@@ -75,18 +75,18 @@ def toxic_skill_factory(registry):
         Args:
             name: Skill directory name (e.g., 'toxic_syntax')
             toxic_type: Type of toxicity - 'syntax_error', 'import_error', 'runtime_error', 'missing_exposed'
-            tools_module_path: Custom tools module path (defaults to agent.skills.{name}.tools)
+            tools_module_path: Custom tools module path (defaults to assets.skills.{name}.tools)
         """
-        # Create in agent/skills/ so Python can import it (skills are in project root)
-        skill_dir = Path("agent/skills") / name
+        # Create in assets/skills/ so Python can import it (skills are in project root)
+        skill_dir = Path("assets/skills") / name
         skill_dir.mkdir(parents=True, exist_ok=True)
         created_paths.append(skill_dir)
 
         # Determine tools module
-        module_name = tools_module_path or f"agent.skills.{name}.tools"
+        module_name = tools_module_path or f"assets.skills.{name}.tools"
 
-        # 1. Manifest (in agent/skills/ for discovery)
-        manifest_dir = Path("agent/skills") / name
+        # 1. Manifest (in assets/skills/ for discovery)
+        manifest_dir = Path("assets/skills") / name
         manifest_dir.mkdir(parents=True, exist_ok=True)
         created_paths.append(manifest_dir)
 
@@ -104,32 +104,32 @@ def toxic_skill_factory(registry):
         # 2. Guide
         (manifest_dir / "guide.md").write_text("# Toxic Guide\n\nThis is a test skill.")
 
-        # 3. Tools in agent/skills/{name}/ (for import)
+        # 3. Tools in assets/skills/{name}/ (for import)
         tools_file = skill_dir / "tools.py"
 
         if toxic_type == "syntax_error":
             tools_file.write_text(
-                "def dummy_command():\n    THIS IS NOT PYTHON CODE !!!\n\nEXPOSED_COMMANDS = {\n    'test': {'func': dummy_command, 'description': 'test', 'category': 'read'}\n}"
+                "from agent.skills.decorators import skill_command\n\n@skill_command(category='test', description='test')\ndef dummy_command():\n    THIS IS NOT PYTHON CODE !!!\n"
             )
         elif toxic_type == "import_error":
             tools_file.write_text(
-                "import non_existent_module_xyz_123\n\ndef dummy_command():\n    pass\n\nEXPOSED_COMMANDS = {\n    'test': {'func': dummy_command, 'description': 'test', 'category': 'read'}\n}"
+                "from agent.skills.decorators import skill_command\nimport non_existent_module_xyz_123\n\n@skill_command(category='test', description='test')\ndef dummy_command():\n    pass\n"
             )
         elif toxic_type == "runtime_error":
             tools_file.write_text(
-                "def dummy_command():\n    raise ValueError('Boom! Toxic skill exploded!')\n\nEXPOSED_COMMANDS = {\n    'test': {'func': dummy_command, 'description': 'test', 'category': 'read'}\n}"
+                "from agent.skills.decorators import skill_command\n\n@skill_command(category='test', description='test')\ndef dummy_command():\n    raise ValueError('Boom! Toxic skill exploded!')\n"
             )
         elif toxic_type == "missing_exposed":
             tools_file.write_text(
-                "# No EXPOSED_COMMANDS defined!\ndef some_other_function():\n    pass"
+                "# No @skill_command decorators!\ndef some_other_function():\n    pass\n"
             )
         elif toxic_type == "circular_import":
             tools_file.write_text(
-                f"from {name} import circular\n\ndef dummy_command():\n    pass\n\nEXPOSED_COMMANDS = {{\n    'test': {{'func': dummy_command, 'description': 'test', 'category': 'read'}}\n}}"
+                f"from agent.skills.decorators import skill_command\nfrom {name} import circular\n\n@skill_command(category='test', description='test')\ndef dummy_command():\n    pass\n"
             )
         elif toxic_type == "invalid_exposed_format":
             tools_file.write_text(
-                "# EXPOSED_COMMANDS is not a dict!\nEXPOSED_COMMANDS = 'not a dict'\n\ndef dummy_command():\n    pass"
+                "from agent.skills.decorators import skill_command\n\n# Invalid decorator usage\ndef dummy_command():\n    pass\n"
             )
 
         # Create __init__.py to make it a valid Python package
@@ -151,7 +151,7 @@ def toxic_skill_factory(registry):
     # Also cleanup any created modules from sys.modules
     for path in created_paths:
         if path.name.startswith("toxic_"):
-            module_name = f"agent.skills.{path.name}.tools"
+            module_name = f"assets.skills.{path.name}.tools"
             if module_name in sys.modules:
                 del sys.modules[module_name]
 
@@ -197,22 +197,21 @@ class TestKernelResilience:
         """Kernel should handle skills that have functions which raise errors."""
         skill_name, module_name = toxic_skill_factory("toxic_runtime", "runtime_error")
 
-        # In Phase 25, the module loads successfully even if it has runtime errors
+        # In Trinity Architecture, the module loads successfully
         # The error only manifests when the function is actually called
         success, message = registry.load_skill(skill_name, mock_mcp)
 
-        # With Phase 25, the module loads (EXPOSED_COMMANDS pattern doesn't execute functions)
-        # The runtime error would only occur if SkillManager.run() is called
-        assert success is True, f"Phase 25 loads module: {message}"
+        # With Trinity Architecture, the module loads (runtime errors only on call)
+        assert success is True, f"Trinity Architecture loads module: {message}"
 
     def test_missing_exposed_commands(self, registry, mock_mcp, toxic_skill_factory):
-        """Kernel should reject skills without EXPOSED_COMMANDS."""
+        """Kernel should reject skills without @skill_command decorators."""
         skill_name, module_name = toxic_skill_factory("toxic_no_exposed", "missing_exposed")
 
         success, message = registry.load_skill(skill_name, mock_mcp)
 
         assert success is False
-        assert "EXPOSED_COMMANDS" in message or "no commands" in message.lower()
+        assert "@skill_command" in message or "no commands" in message.lower()
 
     def test_valid_skill_after_toxic(self, registry, mock_mcp, toxic_skill_factory):
         """Kernel should recover and load valid skills after toxic ones failed."""
@@ -260,29 +259,38 @@ class TestSkillManagerOmniCLI:
         assert len(skills) >= 1
 
     def test_skill_manager_git_has_commands(self, skill_manager):
-        """Git skill should have commands loaded via EXPOSED_COMMANDS."""
+        """Git skill should have commands loaded via @skill_command."""
         skill_manager.load_skills()
 
         assert "git" in skill_manager.skills
         git_skill = skill_manager.skills["git"]
         assert len(git_skill.commands) >= 1
 
-    def test_skill_manager_execute_command(self, skill_manager):
-        """SkillManager.run() should execute commands from EXPOSED_COMMANDS."""
-        result = skill_manager.run("git", "git_status", {})
+    @pytest.mark.asyncio
+    async def test_skill_manager_execute_command(self, skill_manager):
+        """SkillManager.run() should execute commands from @skill_command."""
+        skill_manager.load_skills()
+
+        result = await skill_manager.run("git", "status", {})
 
         assert result is not None
         assert isinstance(result, str)
 
-    def test_skill_manager_nonexistent_skill(self, skill_manager):
+    @pytest.mark.asyncio
+    async def test_skill_manager_nonexistent_skill(self, skill_manager):
         """Running command on nonexistent skill should return error."""
-        result = skill_manager.run("nonexistent", "some_command", {})
+        skill_manager.load_skills()
+
+        result = await skill_manager.run("nonexistent", "some_command", {})
 
         assert "Error" in result or "not found" in result.lower()
 
-    def test_skill_manager_nonexistent_command(self, skill_manager):
+    @pytest.mark.asyncio
+    async def test_skill_manager_nonexistent_command(self, skill_manager):
         """Running nonexistent command should return error."""
-        result = skill_manager.run("git", "nonexistent_command", {})
+        skill_manager.load_skills()
+
+        result = await skill_manager.run("git", "nonexistent_command", {})
 
         assert "Error" in result or "not found" in result.lower()
 
@@ -295,8 +303,8 @@ class TestKernelPerformance:
         # Ensure git is unloaded and module is cleared
         if "git" in registry.loaded_skills:
             del registry.loaded_skills["git"]
-        if "agent.skills.git.tools" in sys.modules:
-            del sys.modules["agent.skills.git.tools"]
+        if "assets.skills.git.tools" in sys.modules:
+            del sys.modules["assets.skills.git.tools"]
 
         start_time = time.perf_counter()
         success, _ = registry.load_skill("git", mock_mcp)
@@ -435,14 +443,14 @@ class TestKernelStability:
         # Clear initial state
         registry.loaded_skills.clear()
 
-        initial_modules = len([m for m in sys.modules if m.startswith("agent.skills")])
+        initial_modules = len([m for m in sys.modules if m.startswith("assets.skills")])
 
         # Rapid load/unload cycle
         for _ in range(10):
             registry.load_skill("git", mock_mcp)
             registry.loaded_skills.clear()
 
-        final_modules = len([m for m in sys.modules if m.startswith("agent.skills")])
+        final_modules = len([m for m in sys.modules if m.startswith("assets.skills")])
 
         # Modules should not grow significantly
         module_growth = final_modules - initial_modules
@@ -485,8 +493,8 @@ class TestKernelEdgeCases:
 
     def test_concurrent_module_imports(self, registry, mock_mcp):
         """Multiple rapid loads shouldn't cause import conflicts."""
-        # Clear all agent.skills modules first
-        modules_to_remove = [m for m in sys.modules if m.startswith("agent.skills")]
+        # Clear all assets.skills modules first
+        modules_to_remove = [m for m in sys.modules if m.startswith("assets.skills")]
         for m in modules_to_remove:
             del sys.modules[m]
 

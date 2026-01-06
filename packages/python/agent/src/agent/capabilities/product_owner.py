@@ -2,7 +2,7 @@
 """
 Product Owner - Feature Lifecycle Integrity Enforcement & Spec Management
 
-Tools for enforcing agent/standards/feature-lifecycle.md and Spec-Driven Development:
+Tools for enforcing assets/standards/feature-lifecycle.md and Spec-Driven Development:
 - start_spec: [Gatekeeper] Enforces spec exists before coding new work (Phase 11 PydanticAI)
 - assess_feature_complexity: LLM-powered complexity assessment (L1-L4)
 - draft_feature_spec: Create a structured implementation plan from a description
@@ -349,7 +349,7 @@ def heuristic_complexity(files: List[str], diff: str) -> str:
             return "L3"
 
     # Check for documentation only (L1)
-    if all(f.endswith(".md") or f.startswith("agent/") for f in files):
+    if all(f.endswith(".md") or f.startswith("assets/") for f in files):
         return "L1"
 
     # Check for nix config changes (L2-L3)
@@ -550,7 +550,9 @@ Return JSON with:
                 "test_requirements": test_req,
                 "examples": level_info["examples"],
                 "rationale": f"Based on {len(files_changed)} file(s) changed and diff analysis",
-                "reference": "agent/standards/feature-lifecycle.md",
+                "reference": get_setting(
+                    "standards.feature_lifecycle", "assets/standards/feature-lifecycle.md"
+                ),
             },
             indent=2,
         )
@@ -644,7 +646,7 @@ Return JSON with:
                 "reference_docs": [
                     "docs/explanation/design-philosophy.md",
                     "docs/explanation/mcp-architecture-roadmap.md",
-                    "agent/standards/feature-lifecycle.md",
+                    "assets/standards/feature-lifecycle.md",
                 ],
             },
             indent=2,
@@ -679,7 +681,9 @@ Return JSON with:
                 "integration_tests_required": level in ["L3", "L4"],
                 "e2e_tests_required": level == "L4",
                 "checklist": _get_checklist(level),
-                "reference": "agent/standards/feature-lifecycle.md",
+                "reference": get_setting(
+                    "standards.feature_lifecycle", "assets/standards/feature-lifecycle.md"
+                ),
             },
             indent=2,
         )
@@ -700,7 +704,7 @@ Return JSON with:
         changed_files = changed_files or get_changed_files()
 
         code_files = [f for f in changed_files if not f.endswith(".md")]
-        doc_files = [f for f in changed_files if f.endswith(".md") or f.startswith("agent/")]
+        doc_files = [f for f in changed_files if f.endswith(".md") or f.startswith("assets/")]
 
         sync_status = "ok"
         recommendations = []
@@ -736,20 +740,20 @@ Return JSON with:
                 )
 
         # Check for spec changes
-        spec_files = [f for f in changed_files if f.startswith("agent/specs/")]
+        spec_files = [f for f in changed_files if f.startswith("assets/specs/")]
         if spec_files:
-            if "agent/standards/feature-lifecycle.md" not in doc_files:
+            if "assets/standards/feature-lifecycle.md" not in doc_files:
                 sync_status = "warning"
                 required_docs.append(
                     {
-                        "file": "agent/standards/feature-lifecycle.md",
+                        "file": "assets/standards/feature-lifecycle.md",
                         "reason": f"Spec added/modified: {spec_files[0]}",
                         "action": "Update workflow diagrams if needed",
                     }
                 )
 
         # Check for agent/standards changes
-        std_files = [f for f in changed_files if f.startswith("agent/standards/")]
+        std_files = [f for f in changed_files if f.startswith("assets/standards/")]
         if std_files and not doc_files:
             sync_status = "warning"
             recommendations.append(
@@ -772,7 +776,7 @@ Return JSON with:
                 "recommendations": recommendations
                 if recommendations
                 else ["Documentation is in sync"],
-                "reference": "agent/how-to/documentation-workflow.md",
+                "reference": "assets/how-to/documentation-workflow.md",
             },
             indent=2,
         )

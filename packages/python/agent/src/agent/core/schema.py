@@ -43,7 +43,7 @@ class SpecGapAnalysis(BaseModel):
             "examples": [
                 {
                     "spec_exists": True,
-                    "spec_path": "agent/specs/auth_module.md",
+                    "spec_path": "assets/specs/auth_module.md",
                     "completeness_score": 85,
                     "missing_sections": ["Security Considerations"],
                     "has_template_placeholders": False,

@@ -33,7 +33,7 @@ class TestSkillArchitecture:
         assert root.exists()
 
     def test_skills_directory_exists(self):
-        """agent/skills/ directory should exist with skill modules."""
+        """assets/skills/ directory should exist with skill modules."""
         from agent.core.skill_registry import get_skill_registry
 
         registry = get_skill_registry()
@@ -66,7 +66,7 @@ class TestSkillRegistry:
     """Test that skill registry can discover and load skills."""
 
     def test_skill_registry_discovers_skills(self):
-        """SkillRegistry should discover all skills in agent/skills/."""
+        """SkillRegistry should discover all skills in assets/skills/."""
         from agent.core.skill_registry import get_skill_registry
 
         registry = get_skill_registry()

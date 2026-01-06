@@ -86,7 +86,7 @@ class TestBaseAgent:
         agent.registry = MagicMock()
         agent.registry.get_skill_manifest = MagicMock(
             return_value=MagicMock(
-                description="Test skill", tools_module="agent.skills.filesystem.tools"
+                description="Test skill", tools_module="assets.skills.filesystem.tools"
             )
         )
 
@@ -162,7 +162,7 @@ class TestBaseAgent:
         agent.registry = MagicMock()
         agent.registry.get_skill_manifest = MagicMock(
             return_value=MagicMock(
-                description="File system operations", tools_module="agent.skills.filesystem.tools"
+                description="File system operations", tools_module="assets.skills.filesystem.tools"
             )
         )
 

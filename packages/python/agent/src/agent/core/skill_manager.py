@@ -1,37 +1,42 @@
 """
 src/agent/core/skill_manager.py
-Omni CLI - Single Entry Point for All Skills.
+Phase 25.3: The "Trinity" Architecture
 
-Phase 25.1: Macro System (Skill Decorators + DI)
-Replaces Phase 25's manual EXPOSED_COMMANDS with @skill_command decorators.
+Integrates:
+- Code (Hot-Reloading): Lazy mtime-based reload, millisecond response
+- Context (RepomixCache): XML-packed skill context for LLM understanding
+- State (Registry): Skill registry with metadata
 
 Architecture:
-- @skill_command decorator marks functions with metadata and DI support
-- SkillManager scans skills and builds registry from decorated functions
-- Built-in help macro automatically reads guide.md
+- @skill_command decorator marks functions with metadata
+- SkillManager maintains skill registry with mtime tracking
+- RepomixCache per skill for deep context injection
 - Single omni tool handles all operations
 
 Usage:
-    skill_manager = SkillManager()
-    skill_manager.load_skills()
-    result = await skill_manager.run("git", "status", {})
+    manager = SkillManager()
+    manager.load_skills()
+    result = await manager.run("git", "status", {})
 """
 
 import asyncio
+import importlib
 import importlib.util
 import logging
 import sys
+import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 from dataclasses import dataclass, field
 
 from common.settings import get_setting
 from common.config_paths import get_project_root
+from common.mcp_core.lazy_cache import RepomixCache
 
 logger = logging.getLogger(__name__)
 
 # Get skills directory from settings.yaml
-SKILLS_DIR = get_project_root() / get_setting("skills.path", "agent/skills")
+SKILLS_DIR = get_project_root() / get_setting("skills.path", "assets/skills")
 
 
 @dataclass
@@ -46,24 +51,32 @@ class SkillCommand:
 
 @dataclass
 class Skill:
-    """Represents a loaded skill with its commands."""
+    """Represents a loaded skill with its commands and context cache."""
 
     name: str
     module_name: str
+    path: Path
+    mtime: float
     commands: Dict[str, SkillCommand] = field(default_factory=dict)
-    loaded: bool = False
+    # Trinity: Context Cache for deep skill understanding
+    context_cache: Optional[RepomixCache] = None
 
 
 class SkillManager:
     """
     Central command manager that scans skills and builds registry.
 
+    Phase 25.3 Trinity Architecture:
+    - Code (Hot-Reloading): mtime-based lazy reload
+    - Context (RepomixCache): XML-packed skill context
+    - State (Registry): Skill metadata and commands
+
     Key Methods:
-        load_skills() - Scan and load all skills from agent/skills/
-        get_command(skill_name, command_name) - Get a specific command
-        run(skill_name, command_name, args) - Execute a command
-        list_available_skills() - List all loaded skills
-        list_commands(skill_name) - List commands for a skill
+        load_skills() - Bootstrap all skills
+        get_command(skill_name, command_name) - Get with hot-reload check
+        run(skill_name, command_name, args) - Execute command
+        _ensure_fresh(skill_name) - Hot-reload if file modified
+        _get_skill_context(skill_name) - Get XML context via Repomix
     """
 
     def __init__(self, skills_dir: Optional[Path] = None):
@@ -100,7 +113,7 @@ class SkillManager:
 
     def _load_skill_module(self, skill_dir: Path) -> Optional[str]:
         """
-        Dynamically load a skill module from tools.py.
+        Low-level module loader with reload support.
 
         Args:
             skill_dir: Path to the skill directory
@@ -113,13 +126,8 @@ class SkillManager:
         tools_path = skill_dir / "tools.py"
         module_name = f"agent.skills.{skill_dir.name}.tools"
 
-        # Check if already loaded
-        if module_name in sys.modules:
-            return module_name
-
         try:
             # Pre-create parent packages in sys.modules for nested imports to work
-            # This allows 'from agent.skills.decorators import ...' to work
             skills_path = skill_dir.parent
             agent_path = skills_path.parent
 
@@ -138,7 +146,7 @@ class SkillManager:
                 sys.modules["agent.skills"] = skills_pkg
                 sys.modules["agent"].skills = skills_pkg
 
-            # Create and register 'agent.skills.decorators' module if not exists and file exists
+            # Create and register 'agent.skills.decorators' module if not exists
             decorators_path = skills_path / "decorators.py"
             if "agent.skills.decorators" not in sys.modules and decorators_path.exists():
                 decorators_spec = importlib.util.spec_from_file_location(
@@ -246,15 +254,115 @@ class SkillManager:
 
         return commands
 
+    def _register_skill(self, skill_dir: Path) -> Optional[Skill]:
+        """
+        Register or reload a skill (hot-reload aware).
+
+        Args:
+            skill_dir: Path to the skill directory
+
+        Returns:
+            Skill object if successful, None otherwise
+        """
+        skill_name = skill_dir.name
+        tools_path = skill_dir / "tools.py"
+        module_name = f"agent.skills.{skill_name}.tools"
+
+        # Get current modification time
+        try:
+            current_mtime = tools_path.stat().st_mtime
+        except FileNotFoundError:
+            logger.error(f"Skill file not found: {tools_path}")
+            return None
+
+        # Remove old module from sys.modules for clean reload
+        # This avoids importlib.reload issues with dynamically created packages
+        if module_name in sys.modules:
+            del sys.modules[module_name]
+        # Also remove parent package if it exists
+        parent_name = f"agent.skills.{skill_name}"
+        if parent_name in sys.modules:
+            del sys.modules[parent_name]
+
+        # Load module (fresh load handles parent package creation)
+        loaded_name = self._load_skill_module(skill_dir)
+        if loaded_name is None:
+            return None
+        module = sys.modules.get(loaded_name)
+        if module is None:
+            return None
+
+        # Extract commands
+        commands = self._extract_commands(module, skill_name)
+
+        # Check for local repomix.json
+        config_path = skill_dir / "repomix.json"
+        if not config_path.exists():
+            config_path = None
+
+        # Create or update skill
+        skill = Skill(
+            name=skill_name,
+            module_name=module_name,
+            path=tools_path,
+            mtime=current_mtime,
+            commands=commands,
+            # Initialize RepomixCache (lazy - won't execute until get() called)
+            context_cache=RepomixCache(
+                target_path=skill_dir,
+                config_path=config_path,
+            ),
+        )
+
+        self.skills[skill_name] = skill
+        logger.info(f"🧩 Skill Loaded: {skill_name} ({len(commands)} cmds)")
+        return skill
+
+    def _ensure_fresh(self, skill_name: str) -> bool:
+        """
+        🔥 The Hot-Load Magic.
+
+        Checks file modification time and reloads if necessary.
+        This is called before every command execution.
+
+        Args:
+            skill_name: Name of the skill to check
+
+        Returns:
+            True if skill is loaded and fresh, False if not found
+        """
+        # 1. Check if skill exists on disk
+        skill_path = self.skills_dir / skill_name
+        if not skill_path.exists():
+            logger.debug(f"Skill not found on disk: {skill_name}")
+            return False
+
+        tools_path = skill_path / "tools.py"
+
+        # 2. If not in memory, load it
+        if skill_name not in self.skills:
+            self._register_skill(skill_path)
+            return skill_name in self.skills
+
+        # 3. If in memory, check freshness
+        skill = self.skills[skill_name]
+        try:
+            current_mtime = tools_path.stat().st_mtime
+            if current_mtime > skill.mtime:
+                logger.info(f"🔥 Hot-Reloading Skill: {skill_name}")
+                self._register_skill(skill_path)
+        except FileNotFoundError:
+            logger.warning(f"Skill file deleted: {skill_name}")
+            # Keep the cached version, but mark as potentially stale
+            pass
+
+        return True
+
     def load_skills(self) -> Dict[str, Skill]:
         """
-        Scan and load all skills from the skills directory.
+        Bootstrap: Load all skills from the skills directory.
 
-        This method:
-        1. Discovers all skill directories
-        2. Loads each skill's tools.py module
-        3. Extracts EXPOSED_COMMANDS from each module
-        4. Builds the skill registry
+        This is called once at startup.
 
         Returns:
             Dictionary of skill name -> Skill object
@@ -269,32 +377,7 @@ class SkillManager:
         logger.info(f"Found {len(skill_dirs)} skill directories")
 
         for skill_dir in skill_dirs:
-            skill_name = skill_dir.name
-
-            # Load the module
-            module_name = self._load_skill_module(skill_dir)
-            if module_name is None:
-                continue
-
-            # Get the module from sys.modules
-            module = sys.modules.get(module_name)
-            if module is None:
-                continue
-
-            # Extract commands
-            commands = self._extract_commands(module, skill_name)
-
-            if commands:
-                skill = Skill(
-                    name=skill_name,
-                    module_name=module_name,
-                    commands=commands,
-                    loaded=True,
-                )
-                self.skills[skill_name] = skill
-                logger.info(f"Loaded skill: {skill_name} with {len(commands)} commands")
-            else:
-                logger.warning(f"Skill {skill_name} has no commands, skipping")
+            self._register_skill(skill_dir)
 
         self._skills_loaded = True
         logger.info(f"Skill loading complete. Loaded {len(self.skills)} skills")
@@ -303,7 +386,7 @@ class SkillManager:
 
     def get_command(self, skill_name: str, command_name: str) -> Optional[SkillCommand]:
         """
-        Get a specific command from a skill.
+        Get a specific command from a skill (with hot-reload check).
 
         Args:
             skill_name: Name of the skill (e.g., "git")
@@ -312,14 +395,18 @@ class SkillManager:
         Returns:
             SkillCommand if found, None otherwise
         """
+        # Ensure skill is fresh (hot-reload check)
+        if not self._ensure_fresh(skill_name):
+            logger.warning(f"Skill not found: {skill_name}")
+            return None
+
         skill = self.skills.get(skill_name)
         if skill is None:
-            logger.warning(f"Skill not found: {skill_name}")
             return None
 
         command = skill.commands.get(command_name)
         if command is None:
-            logger.warning(f"Command not found: {skill_name}.{command_name}")
+            logger.debug(f"Command not found: {skill_name}.{command_name}")
             return None
 
         return command
@@ -331,12 +418,11 @@ class SkillManager:
         args: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
-        Execute a command from a skill (Async Native).
+        Execute a command from a skill.
 
-        This is the main entry point for executing skill commands.
-
-        Built-in commands:
-            - help: Returns guide.md content for the skill
+        Trinity Entry Point:
+        - help: Returns XML context via RepomixCache
+        - Other: Executes the command function
 
         Args:
             skill_name: Name of the skill (e.g., "git")
@@ -346,9 +432,9 @@ class SkillManager:
         Returns:
             String result from the command execution
         """
-        # Built-in: help command returns guide.md
+        # Trinity: Context command
         if command_name == "help":
-            return self._get_skill_guide(skill_name)
+            return self._get_skill_context(skill_name)
 
         command = self.get_command(skill_name, command_name)
         if command is None:
@@ -362,61 +448,72 @@ class SkillManager:
             if asyncio.iscoroutinefunction(func):
                 result = await func(**args)
             else:
-                # Sync function - FastMCP handles this gracefully
                 result = func(**args)
 
             return str(result)
 
         except TypeError as e:
-            # Handle missing arguments
             return f"Error executing {skill_name}.{command_name}: {e}"
         except Exception as e:
             logger.error(f"Error executing {skill_name}.{command_name}: {e}")
             return f"Error: {e}"
 
-    def _get_skill_guide(self, skill_name: str) -> str:
+    def _get_skill_context(self, skill_name: str) -> str:
         """
-        Get skill guide content (reads guide.md automatically).
+        Trinity: Get deep skill context via RepomixCache.
 
-        This is a macro - every skill can use @omni("skill.help") to get
-        its guide.md content without defining a help function.
+        Returns XML-packed skill context including:
+        - Code (tools.py)
+        - Documentation (prompts.md, guide.md, workflows)
+        - Configuration (repomix.json, cog.toml)
 
         Args:
             skill_name: Name of the skill
 
         Returns:
-            Guide content or error message
+            XML-packed skill context or error message
         """
+        # Ensure skill is registered
+        if not self._ensure_fresh(skill_name):
+            return f"Skill '{skill_name}' not found"
+
         skill = self.skills.get(skill_name)
         if skill is None:
             return f"Skill '{skill_name}' not found"
 
-        # guide.md is in the skill directory
-        guide_path = self.skills_dir / skill_name / "guide.md"
-        if guide_path.exists():
-            return guide_path.read_text()
-        else:
-            return f"# {skill_name}\n\nNo guide.md found for this skill."
+        # Use the skill's RepomixCache
+        if skill.context_cache is None:
+            # Fallback: should not happen, but handle gracefully
+            skill_dir = self.skills_dir / skill_name
+            config_path = skill_dir / "repomix.json"
+            if not config_path.exists():
+                config_path = None
+            skill.context_cache = RepomixCache(
+                target_path=skill_dir,
+                config_path=config_path,
+            )
+
+        xml_content = skill.context_cache.get()
+
+        if not xml_content:
+            # Fallback to guide.md if repomix fails
+            skill_dir = self.skills_dir / skill_name
+            guide_path = skill_dir / "guide.md"
+            if guide_path.exists():
+                return f"# {skill_name}\n\n{guide_path.read_text()}"
+            return f"# {skill_name}\n\nNo guide.md or repomix context available."
+
+        return xml_content
 
     def list_available_skills(self) -> List[str]:
-        """
-        List all loaded skills.
-
-        Returns:
-            List of skill names
-        """
+        """List all loaded skills."""
         return list(self.skills.keys())
 
     def list_commands(self, skill_name: str) -> List[str]:
-        """
-        List all commands for a skill.
+        """List all commands for a skill."""
+        if not self._ensure_fresh(skill_name):
+            return []
 
-        Args:
-            skill_name: Name of the skill
-
-        Returns:
-            List of command names
-        """
         skill = self.skills.get(skill_name)
         if skill is None:
             return []
@@ -424,15 +521,10 @@ class SkillManager:
         return list(skill.commands.keys())
 
     def get_skill_info(self, skill_name: str) -> Optional[Dict[str, Any]]:
-        """
-        Get information about a skill.
+        """Get information about a skill."""
+        if not self._ensure_fresh(skill_name):
+            return None
 
-        Args:
-            skill_name: Name of the skill
-
-        Returns:
-            Dictionary with skill info or None if not found
-        """
         skill = self.skills.get(skill_name)
         if skill is None:
             return None
@@ -440,14 +532,15 @@ class SkillManager:
         return {
             "name": skill.name,
             "module_name": skill.module_name,
-            "loaded": skill.loaded,
+            "loaded": True,
             "command_count": len(skill.commands),
             "commands": list(skill.commands.keys()),
+            "mtime": skill.mtime,
         }
 
     def reload_skill(self, skill_name: str) -> bool:
         """
-        Reload a single skill.
+        Force reload a skill (bypass mtime check).
 
         Args:
             skill_name: Name of the skill to reload
@@ -456,15 +549,12 @@ class SkillManager:
             True if successful, False otherwise
         """
         skill_dir = self.skills_dir / skill_name
-        tools_path = skill_dir / "tools.py"
-
-        if not tools_path.exists():
+        if not skill_dir.exists():
             logger.error(f"Skill not found: {skill_name}")
             return False
 
-        module_name = f"agent.skills.{skill_name}.tools"
-
         # Remove old module from sys.modules
+        module_name = f"agent.skills.{skill_name}.tools"
         if module_name in sys.modules:
             del sys.modules[module_name]
 
@@ -472,31 +562,8 @@ class SkillManager:
         if skill_name in self.skills:
             del self.skills[skill_name]
 
-        # Reload the module
-        module_name = self._load_skill_module(skill_dir)
-        if module_name is None:
-            return False
-
-        module = sys.modules.get(module_name)
-        if module is None:
-            return False
-
-        # Extract commands
-        commands = self._extract_commands(module, skill_name)
-
-        if commands:
-            skill = Skill(
-                name=skill_name,
-                module_name=module_name,
-                commands=commands,
-                loaded=True,
-            )
-            self.skills[skill_name] = skill
-            logger.info(f"Reloaded skill: {skill_name} with {len(commands)} commands")
-            return True
-        else:
-            logger.warning(f"Skill {skill_name} has no commands after reload")
-            return False
+        # Reload
+        return self._register_skill(skill_dir) is not None
 
 
 # Global skill manager instance

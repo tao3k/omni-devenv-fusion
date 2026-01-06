@@ -44,43 +44,43 @@ def _load_skill_module_for_test(skill_name: str, test_file: str):
 
     # Get project root and skill path
     project_root = Path(test_file).resolve().parent.parent.parent.parent.parent.parent.parent
-    skill_tools_path = project_root / "agent" / "skills" / skill_name / "tools.py"
+    skill_tools_path = project_root / "assets" / "skills" / skill_name / "tools.py"
 
     if not skill_tools_path.exists():
         raise FileNotFoundError(f"Skill tools not found: {skill_tools_path}")
 
     # Pre-create parent packages in sys.modules for nested imports to work
-    # This allows 'from agent.skills.decorators import ...' to work
+    # This allows 'from assets.skills.decorators import ...' to work
     skills_path = skill_tools_path.parent
-    agent_path = skills_path.parent
+    assets_path = skills_path.parent
 
     # Reuse existing packages if they exist in sys.modules
     # This prevents breaking the import system when tests run in sequence
-    if "agent" in sys.modules:
-        agent_pkg = sys.modules["agent"]
+    if "assets" in sys.modules:
+        assets_pkg = sys.modules["assets"]
     else:
-        agent_pkg = types.ModuleType("agent")
-        agent_pkg.__path__ = [str(agent_path)]
-        agent_pkg.__file__ = str(agent_path / "__init__.py")
-        sys.modules["agent"] = agent_pkg
+        assets_pkg = types.ModuleType("assets")
+        assets_pkg.__path__ = [str(assets_path)]
+        assets_pkg.__file__ = str(assets_path / "__init__.py")
+        sys.modules["assets"] = assets_pkg
 
-    if "agent.skills" in sys.modules:
-        skills_pkg = sys.modules["agent.skills"]
+    if "assets.skills" in sys.modules:
+        skills_pkg = sys.modules["assets.skills"]
     else:
-        skills_pkg = types.ModuleType("agent.skills")
+        skills_pkg = types.ModuleType("assets.skills")
         skills_pkg.__path__ = [str(skills_path)]
         skills_pkg.__file__ = str(skills_path / "__init__.py")
-        sys.modules["agent.skills"] = skills_pkg
-        agent_pkg.skills = skills_pkg
+        sys.modules["assets.skills"] = skills_pkg
+        assets_pkg.skills = skills_pkg
 
     # Ensure decorators module is loaded
     decorators_path = skills_path / "decorators.py"
-    if decorators_path.exists() and "agent.skills.decorators" not in sys.modules:
+    if decorators_path.exists() and "assets.skills.decorators" not in sys.modules:
         decorators_spec = importlib.util.spec_from_file_location(
-            "agent.skills.decorators", decorators_path
+            "assets.skills.decorators", decorators_path
         )
         decorators_module = importlib.util.module_from_spec(decorators_spec)
-        sys.modules["agent.skills.decorators"] = decorators_module
+        sys.modules["assets.skills.decorators"] = decorators_module
         decorators_spec.loader.exec_module(decorators_module)
         skills_pkg.decorators = decorators_module
 
@@ -150,14 +150,14 @@ class TestSkillManifest:
             "version": "1.0.0",
             "description": "A test skill",
             "dependencies": ["git"],
-            "tools_module": "agent.skills.test.tools",
+            "tools_module": "assets.skills.test.tools",
             "guide_file": "guide.md",
         }
         manifest = SkillManifest(**data)
         assert manifest.name == "test_skill"
         assert manifest.version == "1.0.0"
         assert manifest.dependencies == ["git"]
-        assert manifest.tools_module == "agent.skills.test.tools"
+        assert manifest.tools_module == "assets.skills.test.tools"
 
     def test_minimal_manifest(self):
         """Test creating manifest with only required fields."""
@@ -165,7 +165,7 @@ class TestSkillManifest:
             "name": "minimal_skill",
             "version": "0.1.0",
             "description": "Minimal skill",
-            "tools_module": "agent.skills.minimal.tools",
+            "tools_module": "assets.skills.minimal.tools",
         }
         manifest = SkillManifest(**data)
         assert manifest.name == "minimal_skill"
@@ -178,7 +178,7 @@ class TestSkillManifest:
         data = {
             "version": "1.0.0",
             "description": "A test skill",
-            "tools_module": "agent.skills.test.tools",
+            "tools_module": "assets.skills.test.tools",
         }
         with pytest.raises(ValueError):
             SkillManifest(**data)
@@ -241,7 +241,7 @@ class TestSkillDiscovery:
         assert manifest is not None
         assert manifest.name == "filesystem"
         assert manifest.version == "1.0.0"
-        assert manifest.tools_module == "agent.skills.filesystem.tools"
+        assert manifest.tools_module == "assets.skills.filesystem.tools"
         assert manifest.guide_file == "guide.md"
 
 
@@ -283,7 +283,7 @@ class TestSpecBasedLoading:
         module = registry.module_cache["filesystem"]
 
         # Execute list_directory
-        result = asyncio.run(module.list_directory("agent/skills"))
+        result = asyncio.run(module.list_directory("assets/skills"))
         assert "filesystem" in result or "Directory Listing" in result
 
     def test_nonexistent_skill_fails(self, registry, real_mcp):
@@ -315,11 +315,11 @@ class TestHotReload:
 
         # Get original function result
         module1 = registry.module_cache["filesystem"]
-        original_result = asyncio.run(module1.list_directory("agent/skills"))
+        original_result = asyncio.run(module1.list_directory("assets/skills"))
         assert "[HOT-RELOADED]" not in original_result
 
         # Modify file content (simulate code change)
-        tools_path = Path("agent/skills/filesystem/tools.py")
+        tools_path = Path("assets/skills/filesystem/tools.py")
         original_content = tools_path.read_text()
 
         # Add a marker to the function (match the exact line including \n)
@@ -341,7 +341,7 @@ class TestHotReload:
 
             # Verify new content is loaded by executing the function
             module2 = registry.module_cache["filesystem"]
-            new_result = asyncio.run(module2.list_directory("agent/skills"))
+            new_result = asyncio.run(module2.list_directory("assets/skills"))
             assert "[HOT-RELOADED]" in new_result
 
         finally:
@@ -628,7 +628,7 @@ class TestFilesystemSkill:
         registry.load_skill("filesystem", real_mcp)
         module = registry.module_cache["filesystem"]
 
-        result = asyncio.run(module.list_directory("agent/skills"))
+        result = asyncio.run(module.list_directory("assets/skills"))
         assert "filesystem" in result or "_template" in result
 
     def test_read_file_operation(self, registry, real_mcp):
@@ -639,7 +639,7 @@ class TestFilesystemSkill:
         module = registry.module_cache["filesystem"]
 
         # Read the manifest file
-        result = asyncio.run(module.read_file("agent/skills/filesystem/manifest.json"))
+        result = asyncio.run(module.read_file("assets/skills/filesystem/manifest.json"))
         assert "filesystem" in result
         assert "version" in result
 
@@ -652,7 +652,7 @@ class TestFilesystemSkill:
         module = registry.module_cache["filesystem"]
 
         # Write to a temp file in agent directory
-        test_path = "agent/skills/test_write.txt"
+        test_path = "assets/skills/test_write.txt"
         try:
             result = asyncio.run(module.write_file(test_path, "test content 123"))
             assert "Successfully wrote" in result
@@ -673,7 +673,7 @@ class TestFilesystemSkill:
         module = registry.module_cache["filesystem"]
 
         # Search for manifest files
-        result = asyncio.run(module.search_files(pattern="*.json", path="agent/skills"))
+        result = asyncio.run(module.search_files(pattern="*.json", path="assets/skills"))
         assert "manifest.json" in result
 
     def test_get_file_info_operation(self, registry, real_mcp):
@@ -683,7 +683,7 @@ class TestFilesystemSkill:
         registry.load_skill("filesystem", real_mcp)
         module = registry.module_cache["filesystem"]
 
-        result = asyncio.run(module.get_file_info(path="agent/skills/filesystem/manifest.json"))
+        result = asyncio.run(module.get_file_info(path="assets/skills/filesystem/manifest.json"))
         assert "Size:" in result or "bytes" in result
 
 
@@ -704,7 +704,7 @@ class TestSkillEdgeCases:
                 "name": "test_missing",
                 "version": "1.0.0",
                 "description": "Test skill with missing source",
-                "tools_module": "agent.skills.nonexistent.tools",
+                "tools_module": "assets.skills.nonexistent.tools",
             }
             (skill_dir / "manifest.json").write_text(json.dumps(manifest))
 
@@ -871,7 +871,7 @@ class TestOneToolArchitecture:
         from agent.mcp_server import omni
 
         # filesystem.read -> read_file (no prefix since skill doesn't use prefix)
-        result = await omni("filesystem.read", {"path": "agent/skills/filesystem/manifest.json"})
+        result = await omni("filesystem.read", {"path": "assets/skills/filesystem/manifest.json"})
 
         assert isinstance(result, str)
         assert "filesystem" in result

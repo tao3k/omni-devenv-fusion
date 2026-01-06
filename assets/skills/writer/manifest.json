@@ -1,0 +1,22 @@
+{
+  "name": "writer",
+  "version": "1.0.0",
+  "description": "Writing quality tools for enforcing project writing standards.",
+  "routing_keywords": [
+    "writing",
+    "style",
+    "grammar",
+    "lint",
+    "polish",
+    "improve",
+    "rewrite",
+    "text",
+    "documentation style",
+    "voice",
+    "tone"
+  ],
+  "dependencies": [],
+  "tools_module": "assets.skills.writer.tools",
+  "guide_file": "guide.md",
+  "prompts_file": "prompts.md"
+}

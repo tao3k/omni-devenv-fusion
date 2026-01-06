@@ -38,7 +38,7 @@ from common.config_paths import get_project_root
 logger = structlog.get_logger()
 
 # Get skills directory from settings
-SKILLS_DIR = get_project_root() / get_setting("skills.path", "agent/skills")
+SKILLS_DIR = get_project_root() / get_setting("skills.path", "assets/skills")
 
 # Create MCP Server - Single tool only
 mcp = FastMCP("omni-agentic-os")
@@ -122,6 +122,13 @@ async def omni(
         cmd_name = cmd_without_prefix
     else:
         cmd_name = cmd_with_prefix
+
+    # Handle special "help" macro for individual skills
+    # e.g., @omni("git.help") returns Repomix-packed skill context
+    if command is None and raw_cmd == "help":
+        # This is the skill help macro
+        result = await manager.run(skill_name, "help", args)
+        return result
 
     if command is None:
         return f"Error: Command {skill_name}.{raw_cmd} not found"

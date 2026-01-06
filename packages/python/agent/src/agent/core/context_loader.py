@@ -87,11 +87,11 @@ class ContextLoader:
             Combined prompt string ready for MCP server initialization.
         """
         # 1. Load Core (The Constitution) - from settings.yaml
-        core_path = get_setting("prompts.core_path", "agent/prompts/system_core.md")
+        core_path = get_setting("prompts.core_path", "assets/prompts/system_core.md")
         core_content = self._read_file_safe(core_path)
 
         # 2. Load User Custom (The Preferences) - from settings.yaml
-        user_path = get_setting("prompts.user_custom_path", "agent/.cache/user_custom.md")
+        user_path = get_setting("prompts.user_custom_path", ".cache/user_custom.md")
         user_content = self._read_file_safe(user_path)
 
         # 3. [Phase 13.9] Inject Git Status (Context Injection)

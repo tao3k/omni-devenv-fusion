@@ -22,12 +22,12 @@ from agent.capabilities.knowledge_ingestor import (
 # Sample XML content matching repomix format
 SAMPLE_REPOMIX_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <files>
-  <file path="agent/knowledge/test-doc.md">
+  <file path="assets/knowledge/test-doc.md">
 # Test Document
 
 This is a test document for Phase 17.
   </file>
-  <file path="agent/knowledge/standards/test-standards.md">
+  <file path="assets/knowledge/standards/test-standards.md">
 # Test Standards
 
 Keywords: python, testing, standards
@@ -85,11 +85,11 @@ class TestRepomixIngestor:
         """Verify domain is correctly extracted from file path."""
         xml_content = """<?xml version="1.0" encoding="UTF-8"?>
 <files>
-  <file path="agent/skills/knowledge/standards/python.md">
+  <file path="assets/skills/knowledge/standards/python.md">
 # Python Standards
 Content
   </file>
-  <file path="agent/how-to/gitops.md">
+  <file path="assets/how-to/gitops.md">
 # GitOps Guide
 Content
   </file>
@@ -231,7 +231,7 @@ Content here.
         """Verify unique ID is generated from filename."""
         xml_content = """<?xml version="1.0" encoding="UTF-8"?>
 <files>
-  <file path="agent/knowledge/my-test-document.md">
+  <file path="assets/knowledge/my-test-document.md">
 # My Test
 Content
   </file>

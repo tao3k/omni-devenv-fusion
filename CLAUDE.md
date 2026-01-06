@@ -1,16 +1,9 @@
 # Omni-DevEnv Fusion
 
-> **Phase 25: One Tool Architecture** - Single Entry Point: `@omni("skill.command")`
+> **Phase 25.3: One Tool + Trinity Architecture**
+> Single Entry Point: `@omni("skill.command")`
 
----
-
-## Quick Reference
-
-| Resource                    | Purpose                                     |
-| --------------------------- | ------------------------------------------- |
-| `.claude/commands/*`        | Slash commands (e.g., `/commit`, `/hotfix`) |
-| `agent/skills/*/prompts.md` | Skill rules & routing                       |
-| `docs/skills.md`            | Skills documentation index                  |
+Quick Reference: `docs/explanation/trinity-architecture.md` | `docs/skills.md`
 
 ---
 
@@ -31,6 +24,7 @@
 
 ```
 .claude/commands/     # Slash command templates
-agent/skills/*/       # Skill implementations
-docs/                 # User documentation
+agent/skills/*/       # Skill implementations (tools.py + prompts.md)
+docs/                 # Documentation (see docs/skills.md for index)
+.cache/               # Repomix skill contexts (auto-generated)
 ```

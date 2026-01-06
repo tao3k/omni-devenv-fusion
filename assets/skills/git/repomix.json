@@ -1,0 +1,12 @@
+{
+  "output": {
+    "style": "xml",
+    "fileSummary": true,
+    "removeComments": false
+  },
+  "include": ["commit-workflow.md", "tools.py", "Backlog.md"],
+  "ignore": {
+    "patterns": [],
+    "characters": []
+  }
+}
