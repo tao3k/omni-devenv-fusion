@@ -470,21 +470,43 @@ version:
 bump-auto: validate
     @echo "Auto-bumping version..."
     @cog bump --auto
+    @just _sync-versions
 
 [group('version')]
 bump-patch: validate
     @echo "Bumping patch version..."
     @cog bump --patch
+    @just _sync-versions
 
 [group('version')]
 bump-minor: validate
     @echo "Bumping minor version..."
     @cog bump --minor
+    @just _sync-versions
 
 [group('version')]
 bump-major: validate
     @echo "Bumping major version..."
     @cog bump --major
+    @just _sync-versions
+
+# Sync versions across all packages from VERSION file
+# Internal helper - called by bump-*
+[private]
+_sync-versions:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    NEW_VERSION=$(cat VERSION)
+    echo "Syncing version $NEW_VERSION across all packages..."
+    # Update agent pyproject.toml
+    sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" packages/python/agent/pyproject.toml && rm -f packages/python/agent/pyproject.toml.bak
+    echo "  ✓ Agent: packages/python/agent/pyproject.toml"
+    # Update common pyproject.toml
+    sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" packages/python/common/pyproject.toml && rm -f packages/python/common/pyproject.toml.bak
+    echo "  ✓ Common: packages/python/common/pyproject.toml"
+    # Note: Root pyproject.toml uses dynamic version (hatch-vcs), no sync needed
+    echo ""
+    echo "All packages updated to version $NEW_VERSION!"
 
 [group('version')]
 bump-dry:
@@ -495,6 +517,24 @@ bump-dry:
 bump-pre type="alpha":
     @echo "Creating pre-release ({{type}})..."
     @cog bump --pre {{type}}
+
+# Set explicit version across all packages
+# Usage: just bump-set 0.3.0
+[group('version')]
+bump-set version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    NEW_VERSION="{{version}}"
+    echo "Setting version to $NEW_VERSION across all packages..."
+    # Update VERSION file
+    echo "$NEW_VERSION" > VERSION
+    # Sync to all pyproject.toml files
+    just _sync-versions
+    echo ""
+    echo "Next steps:"
+    echo "  1. Run: git add -A && git commit -m 'chore: bump version to $NEW_VERSION'"
+    echo "  2. Run: git tag v$NEW_VERSION"
+    echo "  3. Run: git push origin main v$NEW_VERSION"
 
 [group('version')]
 release-notes version="latest":

@@ -1,35 +1,52 @@
 [project]
 name = "omni-dev-fusion"
-version = "0.1.0"
 description = "Tri-MCP Agentic OS: orchestrator + executor + coder"
 readme = "README.md"
 requires-python = ">=3.12"
+dynamic = ["version"]
 
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 
-dependencies = [
-    # Install the orchestrator package from this workspace (pulls all transitive deps)
-    "omni-dev-fusion-agent",
-]
+[tool.hatch.version]
+source = "vcs"
 
-[project.optional-dependencies]
+
+[dependency-groups]
 dev = [
-    "ruff>=0.8.0",
+    "omni-dev-fusion-agent",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
+    "ruff>=0.14.10",
 ]
+
+
+[tool.uv.sources]
+omni-dev-fusion-agent = { workspace = true }
+omni-dev-fusion-common = { workspace = true }
+
+
+[tool.uv.workspace]
+members = ["packages/python/*"]
+
+
+[tool.hatch.build.targets.wheel]
+packages = []
+bypass-selection = true
+
 
 [tool.ruff]
 target-version = "py312"
 line-length = 100
 
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -41,22 +58,3 @@ python_functions = ["test_*"]
 filterwarnings = [
     "ignore::pytest.PytestReturnNotNoneWarning",
 ]
-
-[dependency-groups]
-dev = [
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.24.0",
-    "ruff>=0.14.10",
-]
-
-[tool.uv.sources]
-omni-dev-fusion-agent = { workspace = true }
-omni-dev-fusion-common = { workspace = true }
-
-# Workspace configuration
-[tool.uv.workspace]
-members = ["packages/python/*"]
-
-[tool.hatch.build.targets.wheel]
-packages = []
-bypass-selection = true

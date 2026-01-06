@@ -30,9 +30,13 @@ Problem-oriented. Recipes for solving specific tasks.
 
 Information-oriented. Technical details, API specs, and configuration options.
 
-| Document      | Description                  |
-| ------------- | ---------------------------- |
-| _Coming soon_ | Add your reference docs here |
+| Document                                                          | Description                                   |
+| ----------------------------------------------------------------- | --------------------------------------------- |
+| [Version Control](./reference/versioning.md)                      | Monorepo versioning with hatch-vcs + Justfile |
+| [MCP Orchestrator](./reference/mcp-orchestrator.md)               | Omni MCP tool configuration and usage         |
+| [MCP Best Practices](./reference/mcp-best-practices.md)           | MCP server design patterns and anti-patterns  |
+| [Documentation Standards](./reference/documentation-standards.md) | Doc guidelines for this project               |
+| [Skills](./skills.md)                                             | Skill architecture and development guide      |
 
 ---
 
