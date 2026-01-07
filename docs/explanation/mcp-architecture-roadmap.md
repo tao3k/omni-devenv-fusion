@@ -328,7 +328,7 @@ When running Omni as an MCP Server (integrated with Claude Desktop, Aider, etc.)
 | Mode       | Stdout Behavior             | TUI Compatible? |
 | ---------- | --------------------------- | --------------- |
 | MCP Server | JSON-RPC protocol stream    | ❌ No           |
-| CLI        | Interactive terminal (独占) | ✅ Yes          |
+| CLI        | Interactive terminal (exclusive use) | ✅ Yes          |
 
 **The Conflict:**
 
@@ -454,12 +454,12 @@ omni monitor
 
 ### Implementation Roadmap
 
-| Milestone             | Description                                          |
-| --------------------- | ---------------------------------------------------- |
-| **UXManager改造**     | Add event emission capability, headless mode support |
-| **Event Schema**      | Define `OmniEvent` model and event types             |
-| **omni monitor**      | Create new CLI entry point for TUI dashboard         |
-| **Session Isolation** | Add session_id to events, clear log on start         |
+| Milestone                 | Description                                          |
+| ------------------------- | ---------------------------------------------------- |
+| **UXManager Refactoring** | Add event emission capability, headless mode support |
+| **Event Schema**          | Define `OmniEvent` model and event types             |
+| **omni monitor**          | Create new CLI entry point for TUI dashboard         |
+| **Session Isolation**     | Add session_id to events, clear log on start         |
 
 ### File Changes
 
@@ -1006,12 +1006,12 @@ def start_background_tasks():
 
 When you register 100+ individual tools with an MCP server:
 
-| Problem              | Symptom                                                                |
-| -------------------- | ---------------------------------------------------------------------- |
-| **Context Bloat**    | Claude's system prompt becomes 50+ pages                               |
-| **Attention分散**    | Claude calls wrong tool (e.g., `git_checkout` instead of `git_status`) |
-| **Hallucination**    | Claude invokes tools that don't exist                                  |
-| **Maintenance Pain** | Adding a skill means updating MCP registration                         |
+| Problem                  | Symptom                                                                |
+| ------------------------ | ---------------------------------------------------------------------- |
+| **Context Bloat**        | Claude's system prompt becomes 50+ pages                               |
+| **Attention Divergence** | Claude calls wrong tool (e.g., `git_checkout` instead of `git_status`) |
+| **Hallucination**        | Claude invokes tools that don't exist                                  |
+| **Maintenance Pain**     | Adding a skill means updating MCP registration                         |
 
 ```
 ❌ Old Pattern (100+ tools):

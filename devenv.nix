@@ -78,8 +78,7 @@ in
     pkgs.just
     nixpkgs-latest.claude-code
     pkgs.secretspec
-    pkgs.vale # Prose linter for documentation quality
-    pkgs.fx
+    nixpkgs-latest.glow
   ];
 
   dotenv.enable = true;

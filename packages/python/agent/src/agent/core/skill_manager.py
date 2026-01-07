@@ -13,6 +13,11 @@ Architecture:
 - RepomixCache per skill for deep context injection
 - Single omni tool handles all operations
 
+Phase 28.1: Subprocess/Shim Architecture
+- Dual execution modes: "library" (default) and "subprocess"
+- Subprocess mode: Isolates heavy/conflicting dependencies
+- Shim pattern: tools.py runs in main process, implementation.py in subprocess
+
 Usage:
     manager = SkillManager()
     manager.load_skills()
@@ -22,7 +27,9 @@ Usage:
 import asyncio
 import importlib
 import importlib.util
+import json
 import logging
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -60,6 +67,9 @@ class Skill:
     commands: Dict[str, SkillCommand] = field(default_factory=dict)
     # Trinity: Context Cache for deep skill understanding
     context_cache: Optional[RepomixCache] = None
+    # Phase 28.1: Execution mode for subprocess isolation
+    execution_mode: str = "library"  # "library" or "subprocess"
+    manifest: Optional[Dict[str, Any]] = None  # For subprocess mode config
 
 
 class SkillManager:
@@ -93,6 +103,29 @@ class SkillManager:
 
         self.skills: Dict[str, Skill] = {}
         self._skills_loaded = False
+
+    def _load_manifest(self, skill_dir: Path) -> Optional[Dict[str, Any]]:
+        """
+        Load manifest.json for a skill.
+
+        Args:
+            skill_dir: Path to the skill directory
+
+        Returns:
+            Manifest dict if found, None otherwise
+        """
+        manifest_path = skill_dir / "manifest.json"
+        if not manifest_path.exists():
+            return None
+
+        try:
+            import json
+
+            with open(manifest_path) as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning(f"Failed to load manifest for {skill_dir.name}: {e}")
+            return None
 
     def _discover_skill_directories(self) -> List[Path]:
         """Discover all skill directories in the skills folder."""
@@ -304,6 +337,13 @@ class SkillManager:
         if not config_path.exists():
             config_path = None
 
+        # Phase 28.1: Load manifest for execution mode
+        manifest = self._load_manifest(skill_dir)
+        execution_mode = "library"
+        if manifest:
+            execution_mode = manifest.get("execution_mode", "library")
+            logger.debug(f"[{skill_name}] Execution mode: {execution_mode}")
+
         # Create or update skill
         skill = Skill(
             name=skill_name,
@@ -316,10 +356,13 @@ class SkillManager:
                 target_path=skill_dir,
                 config_path=config_path,
             ),
+            # Phase 28.1: Execution mode
+            execution_mode=execution_mode,
+            manifest=manifest,
         )
 
         self.skills[skill_name] = skill
-        logger.info(f"🧩 Skill Loaded: {skill_name} ({len(commands)} cmds)")
+        logger.info(f"🧩 Skill Loaded: {skill_name} ({len(commands)} cmds) [{execution_mode}]")
         return skill
 
     def _ensure_fresh(self, skill_name: str) -> bool:
@@ -461,6 +504,69 @@ class SkillManager:
         except Exception as e:
             logger.error(f"Error executing {skill_name}.{command_name}: {e}")
             return f"Error: {e}"
+
+    def _execute_in_subprocess(
+        self,
+        skill_name: str,
+        command_name: str,
+        args: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """
+        Phase 28.1: Execute a command in a subprocess (for subprocess mode skills).
+
+        Uses 'uv run' for cross-platform, self-healing environment management.
+
+        Args:
+            skill_name: Name of the skill
+            command_name: Name of the command to execute in subprocess
+            args: Arguments to pass to the command
+
+        Returns:
+            String result from the subprocess execution
+        """
+        skill_dir = self.skills_dir / skill_name
+        manifest = self._load_manifest(skill_dir)
+
+        if not manifest:
+            return f"Error: No manifest.json found for skill {skill_name}"
+
+        # Get entry point from manifest
+        entry_point = manifest.get("entry_point", "implementation.py")
+        entry_path = skill_dir / entry_point
+
+        if not entry_path.exists():
+            return f"Error: Entry point not found at {entry_path}\n\nTip: Run 'uv sync' in the skill directory first."
+
+        try:
+            # Build command: uv run --directory <skill_dir> -q python <entry_point> <command> <args_json>
+            cmd = [
+                "uv",
+                "run",
+                "--directory",
+                str(skill_dir),
+                "-q",  # Quiet mode
+                "python",
+                entry_point,
+                command_name,
+                json.dumps(args or {}),
+            ]
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=120,  # 2 minute timeout
+            )
+
+            return result.stdout.strip()
+
+        except subprocess.CalledProcessError as e:
+            return f"Error (Exit {e.returncode}):\n{e.stderr}"
+        except subprocess.TimeoutExpired:
+            return "Error: Command timed out after 120 seconds"
+        except FileNotFoundError:
+            return "Error: 'uv' not found. Please install uv: https://uv.sh"
 
     def _get_skill_context(self, skill_name: str) -> str:
         """

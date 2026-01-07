@@ -16,8 +16,14 @@ in
     __nixpkgs__.repomix
     __nixpkgs__.ast-grep
     __nixpkgs__.spec-kit
+    # __nixpkgs__.playwright-driver.browsers
   ]
   ++ lib.optionals (system != "aarch64-darwin") [
     __inputs__.llm-agents.packages.${system}.backlog-md
   ];
+
+  env = {
+    # PLAYWRIGHT_BROWSERS_PATH = "${__nixpkgs__.playwright-driver.browsers}";
+    # PLAYWRIGHT_LAUNCH_OPTIONS_EXECUTABLE_PATH  = "${__nixpkgs__.playwright-driver.browsers}/chromium-1194/chrome-mac/Chromium.app/Contents/MacOS/Chromium";
+  };
 }

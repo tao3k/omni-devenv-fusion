@@ -2037,6 +2037,7 @@ dependencies = [
     { name = "mcp" },
     { name = "pydantic-ai" },
     { name = "structlog" },
+    { name = "typer" },
 ]
 
 [package.dev-dependencies]
@@ -2059,6 +2060,7 @@ requires-dist = [
     { name = "mcp", specifier = ">=1.1.0" },
     { name = "pydantic-ai", specifier = ">=1.39.0" },
     { name = "structlog", specifier = ">=25.5.0" },
+    { name = "typer", specifier = ">=0.21.1" },
 ]
 
 [package.metadata.requires-dev]

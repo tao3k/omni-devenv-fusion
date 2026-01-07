@@ -172,7 +172,7 @@ The current architecture is **correct by design**:
 Reviewer as an Agent:
 
 - Has **independent thinking** (uses LLM)
-- Holds **QA Context** (公正的视角)
+- Holds **QA Context** (impartial perspective)
 - Uses **Skills** (`git`, `testing`, `linter`)
 - Enables **Feedback Loop** (self-correction retry)
 

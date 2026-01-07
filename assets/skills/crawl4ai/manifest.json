@@ -1,0 +1,13 @@
+{
+  "name": "crawl4ai",
+  "version": "1.0.0",
+  "description": "Web scraping and content extraction using crawl4ai",
+  "execution_mode": "subprocess",
+  "entry_point": "implementation.py",
+  "permissions": {
+    "network": true,
+    "filesystem": "read"
+  },
+  "keywords": ["web", "scraping", "crawl", "html", "markdown"],
+  "category": "data"
+}

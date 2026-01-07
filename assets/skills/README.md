@@ -333,6 +333,207 @@ security:
 # }
 ```
 
+## Phase 28.1: Subprocess/Shim Architecture
+
+> **Philosophy**: "Don't import what you can't isolate."
+
+For skills with heavy/conflicting dependencies (e.g., `crawl4ai` with `pydantic v1` vs Omni's `pydantic v2`), use **subprocess isolation** instead of library import.
+
+### Problem: Dependency Hell
+
+```
+Omni Agent: langchain → pydantic v2
+Skill: crawl4ai → pydantic v1  # CONFLICT!
+```
+
+If we import `crawl4ai` directly into the Agent's memory:
+
+- Version conflicts crash the Agent
+- Memory leaks in the skill affect the entire system
+- No user control over skill dependencies
+
+### Solution: Shim Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Omni Agent (Main Process)                    │
+│                                                                  │
+│  ┌─────────────┐     subprocess     ┌─────────────────────┐    │
+│  │ tools.py    │ ──────────────────▶ │ .venv/bin/python   │    │
+│  │ (Shim)      │                     │                     │    │
+│  │             │                     │ implementation.py   │    │
+│  └─────────────┘                     │ (Heavy deps here)   │    │
+│                                        └─────────────────────┘    │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Skill Directory Structure
+
+```
+assets/skills/{skill_name}/
+├── .venv/                      # Isolated Python environment
+│   └── bin/python
+├── manifest.json               # Execution mode declaration
+├── pyproject.toml              # Skill's own dependencies
+├── implementation.py           # Real business logic (heavy imports)
+└── tools.py                    # Lightweight shim (no heavy imports)
+```
+
+### Manifest Configuration
+
+```json
+{
+  "name": "crawl4ai",
+  "version": "1.0.0",
+  "execution_mode": "subprocess",
+  "entry_point": "implementation.py",
+  "permissions": {
+    "network": true,
+    "filesystem": "read"
+  }
+}
+```
+
+### Shim Pattern: tools.py
+
+**Key principle**: This file runs in Omni's main process. It MUST NOT import heavy dependencies.
+Uses `uv run --directory` for cross-platform, self-healing environment management.
+
+```python
+# assets/skills/{skill_name}/tools.py
+import subprocess
+import json
+import os
+from pathlib import Path
+from agent.skills.decorators import skill_command
+
+# Skill directory (computed at import time)
+SKILL_DIR = Path(__file__).parent
+IMPLEMENTATION_SCRIPT = "implementation.py"  # Relative path for uv run
+
+def _run_isolated(command: str, **kwargs) -> str:
+    """Execute command in skill's isolated Python environment using uv run.
+
+    uv run --directory automatically:
+    - Discovers the virtual environment in SKILL_DIR
+    - Creates .venv if missing (self-healing)
+    - Handles cross-platform paths (Windows/Linux/Mac)
+    """
+
+    # Build command: uv run --directory <skill_dir> python implementation.py <command> <json_args>
+    cmd = [
+        "uv", "run",
+        "--directory", str(SKILL_DIR),
+        "-q",  # Quiet mode, reduce uv's own output
+        "python",
+        IMPLEMENTATION_SCRIPT,
+        command,
+        json.dumps(kwargs),
+    ]
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=120,
+            env={**os.environ, "PLAYWRIGHT_BROWSERS_PATH": os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "")}
+        )
+        return result.stdout.strip()
+
+    except subprocess.CalledProcessError as e:
+        return f"Error (Exit {e.returncode}):\n{e.stderr}"
+
+@skill_command(name="crawl_webpage", description="Crawl a URL using crawl4ai.")
+def crawl_webpage(url: str, fit_markdown: bool = True) -> str:
+    """Crawl webpage - delegates to isolated subprocess."""
+    return _run_isolated("crawl", url=url, fit_markdown=fit_markdown)
+```
+
+### Testing the Shim Pattern
+
+To test if the Shim Pattern works (without LLM involvement):
+
+```bash
+# Test crawl4ai directly via omni skill run command
+uv run omni skill run crawl4ai.crawl_webpage '{"url": "https://example.com", "fit_markdown": true}'
+```
+
+This tests: `tools.py` → `uv run --directory` → `implementation.py` → crawl4ai
+
+### Implementation: implementation.py
+
+**Key principle**: This file runs in the subprocess. It CAN import anything.
+
+```python
+# assets/skills/{skill_name}/implementation.py
+import sys
+import json
+import asyncio
+from crawl4ai import AsyncWebCrawler
+
+async def crawl(url, fit_markdown):
+    async with AsyncWebCrawler() as crawler:
+        result = await crawler.arun(url)
+        return result.markdown.fit_markdown if fit_markdown else result.markdown.raw
+
+def main():
+    command = sys.argv[1]
+    args = json.loads(sys.argv[2])
+
+    if command == "crawl":
+        result = asyncio.run(crawl(args["url"], args.get("fit_markdown", True)))
+        print(result)
+    else:
+        raise ValueError(f"Unknown command: {command}")
+
+if __name__ == "__main__":
+    main()
+```
+
+### User Setup Workflow
+
+```bash
+# User sees error when trying to use crawl4ai (if no venv)
+@omni("crawl4ai.crawl_webpage", {"url": "https://example.com"})
+# → uv run auto-creates .venv if missing
+
+# Manual setup (optional, for faster first run)
+cd assets/skills/crawl4ai
+uv venv && uv sync  # Pre-install dependencies
+
+# Now it works
+@omni("crawl4ai.crawl_webpage", {"url": "https://example.com"})
+# → uv run implementation.py crawl '{"url": "..."}'
+```
+
+### Comparison: Library Mode vs Subprocess Mode
+
+| Aspect            | Library Mode      | Subprocess Mode (Shim) |
+| ----------------- | ----------------- | ---------------------- |
+| Dependencies      | Shared with Agent | Isolated in .venv      |
+| Version Conflicts | High risk         | Zero risk              |
+| Crash Impact      | Crashes Agent     | Isolated subprocess    |
+| User Control      | None              | Full (uv pip install)  |
+| Startup Time      | Fast (import)     | Slower (process spawn) |
+| Memory Usage      | Shared            | Extra process overhead |
+
+### When to Use Each Mode
+
+**Use Library Mode (Default) for:**
+
+- Skills with minimal dependencies
+- Skills that Omni already supports (git, filesystem)
+- Performance-critical operations
+
+**Use Subprocess Mode for:**
+
+- Skills with heavy/conflicting dependencies (crawl4ai, playwright)
+- Skills that might crash (untrusted code)
+- Skills requiring specific Python versions
+
 ## Related Documentation
 
 - [Phase 28 Spec](../specs/phase28-safe-ingestion.md) - Safe Ingestion specification
