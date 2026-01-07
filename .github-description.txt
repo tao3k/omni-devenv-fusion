@@ -1,3 +1,0 @@
-Exploring AI-assisted coding workflows with devenv, Nix ecosystem, and modern SDLC standards. Features Claude Code integration, automated changelog generation, conventional commits, and reproducible development environments.
-
-Topics: devenv, nix, claude-code, conventional-commits, cocogitto, lefthook, omnibus, justfile, sdlc, ai-coding, mcp-servers, reproducible-builds

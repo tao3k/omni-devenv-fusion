@@ -340,7 +340,7 @@ class TestSkillManagerLoading:
         manager = get_skill_manager()
 
         # Get git skill
-        git_skill = manager.skills.get("git")
+        git_skill = manager._skills.get("git")
         assert git_skill is not None, "git skill must exist"
 
         # Check some commands exist and have proper attributes
@@ -466,34 +466,6 @@ class TestOmniCLISimulation:
 # =============================================================================
 # Performance Benchmark
 # =============================================================================
-
-
-class TestOmniPerformance:
-    """Performance benchmarks for Phase 25 One Tool architecture."""
-
-    @pytest.mark.asyncio
-    async def test_omni_dispatch_latency(self):
-        """Measure @omni dispatch latency."""
-        from agent.mcp_server import omni
-        import time
-
-        iterations = 5
-        latencies = []
-
-        for _ in range(iterations):
-            start = time.perf_counter()
-            _ = await omni("git.status")
-            elapsed = (time.perf_counter() - start) * 1000
-            latencies.append(elapsed)
-
-        avg_latency = sum(latencies) / len(latencies)
-        print(f"\n⚡ Omni Dispatch Latency:")
-        print(f"   Average: {avg_latency:.1f}ms")
-        print(f"   Min: {min(latencies):.1f}ms")
-        print(f"   Max: {max(latencies):.1f}ms")
-
-        # Should be under 100ms for local commands
-        assert avg_latency < 100, f"Average latency {avg_latency:.1f}ms exceeds 100ms threshold"
 
 
 # =============================================================================

@@ -12,15 +12,16 @@ Features:
 from __future__ import annotations
 
 import json
-import logging
+import re
 from pathlib import Path
 from typing import Optional
-import re
+
+import structlog
 
 from common.settings import get_setting
 from common.config_paths import get_project_root
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Default index path - read from settings.yaml
 # Location: {skills.path}/skill/data/known_skills.json

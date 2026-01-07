@@ -101,7 +101,7 @@ class CoderAgent(BaseAgent):
 
         Maps filesystem skill functions to agent tools.
         """
-        from agent.core.skill_registry import get_skill_tools
+        from agent.core.registry import get_skill_tools
 
         # Get tools from loaded skills via Skill Registry
         tools = {}

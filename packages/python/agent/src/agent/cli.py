@@ -163,7 +163,7 @@ def skill_install(
     version: str = typer.Option("main", "--version", "-v", help="Git ref (default: main)"),
 ):
     """Install a skill from a remote repository."""
-    from agent.core.skill_registry import get_skill_registry
+    from agent.core.registry import get_skill_registry
 
     if not name:
         name = url.rstrip("/").split("/")[-1].replace("-skill", "")
@@ -181,7 +181,7 @@ def skill_install(
 @skill_app.command("list")
 def skill_list():
     """List installed skills."""
-    from agent.core.skill_registry import get_skill_registry
+    from agent.core.registry import get_skill_registry
 
     registry = get_skill_registry()
     skills = registry.list_available_skills()
@@ -217,7 +217,7 @@ def skill_info(
     name: str = typer.Argument(..., help="Skill name"),
 ):
     """Show detailed info about a skill."""
-    from agent.core.skill_registry import get_skill_registry
+    from agent.core.registry import get_skill_registry
 
     registry = get_skill_registry()
     info = registry.get_skill_info(name)
@@ -255,7 +255,7 @@ def skill_discover(
     limit: int = typer.Option(5, "--limit", "-l", help="Max results (default: 5)"),
 ):
     """Discover skills from the known index."""
-    from agent.core.skill_registry import discover_skills as registry_discover
+    from agent.core.registry import discover_skills as registry_discover
 
     result = registry_discover(query=query, limit=limit)
 
@@ -286,7 +286,7 @@ def skill_discover(
 # Backward-compatible function for tests
 def run_skill_discover(query: str = "", limit: int = 5):
     """Discover skills from the known index (backward-compatible)."""
-    from agent.core.skill_registry import discover_skills as registry_discover
+    from agent.core.registry import discover_skills as registry_discover
 
     result = registry_discover(query=query, limit=limit)
 
@@ -322,7 +322,7 @@ def skill_update(
     ),
 ):
     """Update an installed skill."""
-    from agent.core.skill_registry import get_skill_registry
+    from agent.core.registry import get_skill_registry
 
     registry = get_skill_registry()
     success, msg = registry.update_remote_skill(name, strategy)

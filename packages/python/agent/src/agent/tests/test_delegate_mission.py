@@ -516,6 +516,10 @@ class TestThreadSafety:
         """Test shutdown returns True when no thread is running."""
         from agent.core.bootstrap import shutdown_background_tasks
 
+        # First shutdown any existing background threads
+        shutdown_background_tasks(timeout=10.0)
+
+        # Now test with no thread running - should return True immediately
         result = shutdown_background_tasks(timeout=0.1)
 
         assert result is True

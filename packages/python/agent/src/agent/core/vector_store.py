@@ -368,7 +368,7 @@ async def ingest_preloaded_skill_prompts() -> None:
     - terminal: Command execution rules
     - testing_protocol: Testing workflow
     """
-    from agent.core.skill_registry import get_skill_registry
+    from agent.core.registry import get_skill_registry
 
     project_root = get_project_root()
     registry = get_skill_registry()

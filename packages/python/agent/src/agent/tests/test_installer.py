@@ -18,7 +18,7 @@ from pathlib import Path
 from git import Repo
 
 from agent.core.installer import SkillInstaller
-from agent.core.skill_registry import SkillRegistry, get_skill_registry
+from agent.core.registry import SkillRegistry, get_skill_registry
 
 
 @pytest.fixture

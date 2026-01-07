@@ -352,11 +352,9 @@ class TestSkillManagerExecutionMode(unittest.TestCase):
         self.skill_dir = Path(self.temp_dir) / "test_skill"
         self.skill_dir.mkdir()
 
-        # Create tools.py
+        # Create tools.py (without decorators for temp dir testing)
         tools_content = """
-from agent.skills.decorators import skill_command
-
-@skill_command(name="test_cmd", description="Test command")
+# Simple test command without decorators
 def test_cmd():
     return "test"
 """
@@ -378,9 +376,9 @@ def test_cmd():
         (self.skill_dir / "manifest.json").write_text(json.dumps(manifest))
 
         manager = SkillManager(skills_dir=self.temp_dir)
-        manager._register_skill(self.skill_dir)
+        manager.load_skill(self.skill_dir)
 
-        skill = manager.skills.get("test_skill")
+        skill = manager._skills.get("test_skill")
         self.assertIsNotNone(skill)
         self.assertEqual(skill.execution_mode, "library")
         self.assertEqual(skill.manifest.get("execution_mode"), "library")
@@ -397,9 +395,9 @@ def test_cmd():
         (self.skill_dir / "manifest.json").write_text(json.dumps(manifest))
 
         manager = SkillManager(skills_dir=self.temp_dir)
-        manager._register_skill(self.skill_dir)
+        manager.load_skill(self.skill_dir)
 
-        skill = manager.skills.get("test_skill")
+        skill = manager._skills.get("test_skill")
         self.assertIsNotNone(skill)
         self.assertEqual(skill.execution_mode, "subprocess")
         self.assertEqual(skill.manifest.get("execution_mode"), "subprocess")

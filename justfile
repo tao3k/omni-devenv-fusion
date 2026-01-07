@@ -361,8 +361,23 @@ lint:
 
 [group('validate')]
 test:
-    @echo "Running all tests..."
-    @uv run pytest packages/python/agent/src/agent/tests/ -v
+    @echo "Running all tests in parallel (4 workers)..."
+    @uv run pytest packages/python/agent/src/agent/tests/ -n 4 --ignore=packages/python/agent/src/agent/tests/stress_tests -v
+
+[group('validate')]
+test-sequential:
+    @echo "Running all tests sequentially (for debugging)..."
+    @uv run pytest packages/python/agent/src/agent/tests/ -v --ignore=packages/python/agent/src/agent/tests/stress_tests
+
+[group('validate')]
+test-skills-parallel:
+    @echo "Running skills tests in parallel..."
+    @uv run pytest packages/python/agent/src/agent/tests/test_skills_full.py -n auto -v
+
+[group('validate')]
+test-stress:
+    @echo "Running stress tests (slow)..."
+    @uv run pytest packages/python/agent/src/agent/tests/stress_tests/ -v
 
 # ==============================================================================
 # MCP/SKILL TESTS

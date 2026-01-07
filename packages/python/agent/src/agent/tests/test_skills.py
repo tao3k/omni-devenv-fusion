@@ -32,22 +32,21 @@ from mcp.server.fastmcp import FastMCP
 
 # Import core components
 from agent.core.schema import SkillManifest
-from agent.core.skill_registry import SkillRegistry, get_skill_registry
+from agent.core.registry import SkillRegistry, get_skill_registry
 from agent.core.skill_manager import SkillManager, get_skill_manager
 
-# Use gitops and settings for path resolution
-from common.gitops import get_project_root
-from common.settings import get_setting
+# Fixtures are provided by conftest.py - no explicit import needed
 
 
 def _load_skill_module_for_test(skill_name: str):
-    """
-    Load a skill module directly from file using importlib.util.
-    This bypasses the normal import system which may resolve 'agent' to the package.
+    """Load a skill module directly from file using importlib.util.
 
-    Uses get_project_root() + get_setting() for path resolution.
+    This is a test helper function for loading skills without going through
+    the full SkillRegistry.
     """
-    # Get project root from gitops and skills path from settings
+    from common.gitops import get_project_root
+    from common.settings import get_setting
+
     project_root = get_project_root()
     skills_path = get_setting("skills.path", "assets/skills")
     skill_tools_path = project_root / skills_path / skill_name / "tools.py"
@@ -55,14 +54,11 @@ def _load_skill_module_for_test(skill_name: str):
     if not skill_tools_path.exists():
         raise FileNotFoundError(f"Skill tools not found: {skill_tools_path}")
 
-    # Set up paths
-    skills_parent = project_root / skills_path  # assets/skills/
+    skills_parent = project_root / skills_path
     skills_parent_str = str(skills_parent)
-
-    # Create a unique module name to avoid conflicts
     module_name = f"_test_skill_{skill_name}"
 
-    # Remove any existing module with this name to ensure fresh load
+    # Clean up existing module if present
     if module_name in sys.modules:
         del sys.modules[module_name]
 
@@ -75,37 +71,6 @@ def _load_skill_module_for_test(skill_name: str):
     spec.loader.exec_module(module)
 
     return module
-
-
-@pytest.fixture
-def registry():
-    """Fixture to provide a clean registry instance."""
-    # Create fresh instance for each test
-    import agent.core.skill_registry as sr_module
-
-    sr_module._registry = None
-    reg = sr_module.get_skill_registry()
-    reg.loaded_skills.clear()
-    reg.module_cache.clear()
-    yield reg
-    reg.loaded_skills.clear()
-    reg.module_cache.clear()
-
-
-@pytest.fixture
-def skill_manager():
-    """Fixture to provide a clean SkillManager instance."""
-    import agent.core.skill_manager as sm_module
-
-    sm_module._skill_manager = None
-    manager = sm_module.get_skill_manager()
-    manager.skills.clear()
-    manager._skills_loaded = False
-    # Reload skills to ensure git is loaded
-    manager.load_skills()
-    yield manager
-    manager.skills.clear()
-    manager._skills_loaded = False
 
 
 @pytest.fixture
@@ -169,51 +134,51 @@ class TestSkillManifest:
 class TestSkillDiscovery:
     """Test skill discovery and manifest parsing."""
 
-    def test_discovery_finds_git_skill(self, registry):
+    def test_discovery_finds_git_skill(self, registry_fixture):
         """Registry should find 'git' skill."""
-        skills = registry.list_available_skills()
+        skills = registry_fixture.list_available_skills()
         assert "git" in skills, f"Expected 'git' in skills, got: {skills}"
 
-    def test_discovery_finds_filesystem_skill(self, registry):
+    def test_discovery_finds_filesystem_skill(self, registry_fixture):
         """Registry should find 'filesystem' skill."""
-        skills = registry.list_available_skills()
+        skills = registry_fixture.list_available_skills()
         assert "filesystem" in skills
 
-    def test_discovery_finds_terminal_skill(self, registry):
+    def test_discovery_finds_terminal_skill(self, registry_fixture):
         """Registry should find 'terminal' skill."""
-        skills = registry.list_available_skills()
+        skills = registry_fixture.list_available_skills()
         assert "terminal" in skills, f"Expected 'terminal' in skills, got: {skills}"
 
-    def test_discovery_finds_testing_skill(self, registry):
+    def test_discovery_finds_testing_skill(self, registry_fixture):
         """Registry should find 'testing' skill."""
-        skills = registry.list_available_skills()
+        skills = registry_fixture.list_available_skills()
         assert "testing" in skills, f"Expected 'testing' in skills, got: {skills}"
 
-    def test_discovery_finds_documentation_skill(self, registry):
+    def test_discovery_finds_documentation_skill(self, registry_fixture):
         """Registry should find 'documentation' skill."""
-        skills = registry.list_available_skills()
+        skills = registry_fixture.list_available_skills()
         assert "documentation" in skills, f"Expected 'documentation' in skills, got: {skills}"
 
-    def test_discovery_finds_software_engineering_skill(self, registry):
+    def test_discovery_finds_software_engineering_skill(self, registry_fixture):
         """Registry should find 'software_engineering' skill (The Architect)."""
-        skills = registry.list_available_skills()
+        skills = registry_fixture.list_available_skills()
         assert "software_engineering" in skills, (
             f"Expected 'software_engineering' in skills, got: {skills}"
         )
 
-    def test_discovery_finds_template_directory(self, registry):
+    def test_discovery_finds_template_directory(self, registry_fixture):
         """Registry should discover _template directory (for copying)."""
-        skills = registry.list_available_skills()
+        skills = registry_fixture.list_available_skills()
         assert "_template" in skills
 
-    def test_discovery_excludes_pycache(self, registry):
+    def test_discovery_excludes_pycache(self, registry_fixture):
         """Registry should not pick up __pycache__ or other non-skill dirs."""
-        skills = registry.list_available_skills()
+        skills = registry_fixture.list_available_skills()
         assert "__pycache__" not in skills
 
-    def test_manifest_parsing_filesystem(self, registry):
+    def test_manifest_parsing_filesystem(self, registry_fixture):
         """Registry should correctly parse filesystem/manifest.json."""
-        manifest = registry.get_skill_manifest("filesystem")
+        manifest = registry_fixture.get_skill_manifest("filesystem")
         assert manifest is not None
         assert manifest.name == "filesystem"
         assert manifest.version == "1.0.0"
@@ -224,73 +189,73 @@ class TestSkillDiscovery:
 class TestSpecBasedLoading:
     """Test spec-based module loading (Level 2 feature)."""
 
-    def test_load_filesystem_skill(self, registry, real_mcp):
+    def test_load_filesystem_skill(self, registry_fixture, real_mcp):
         """Should successfully load filesystem skill using spec-based loading."""
-        success, message = registry.load_skill("filesystem", real_mcp)
+        success, message = registry_fixture.load_skill("filesystem", real_mcp)
 
         assert success is True, f"Expected success, got: {message}"
-        assert "filesystem" in registry.loaded_skills
-        assert "filesystem" in registry.module_cache
+        assert "filesystem" in registry_fixture.loaded_skills
+        assert "filesystem" in registry_fixture.module_cache
 
-    def test_module_cached_after_load(self, registry, real_mcp):
+    def test_module_cached_after_load(self, registry_fixture, real_mcp):
         """Module should be cached after loading."""
-        registry.load_skill("filesystem", real_mcp)
+        registry_fixture.load_skill("filesystem", real_mcp)
 
-        assert "filesystem" in registry.module_cache
-        module = registry.module_cache["filesystem"]
+        assert "filesystem" in registry_fixture.module_cache
+        module = registry_fixture.module_cache["filesystem"]
         assert module is not None
 
-    def test_module_has_executable_functions(self, registry, real_mcp):
+    def test_module_has_executable_functions(self, registry_fixture, real_mcp):
         """Loaded module should have callable functions."""
-        registry.load_skill("filesystem", real_mcp)
+        registry_fixture.load_skill("filesystem", real_mcp)
 
-        module = registry.module_cache["filesystem"]
+        module = registry_fixture.module_cache["filesystem"]
         # Check for expected functions
         assert hasattr(module, "list_directory")
         assert hasattr(module, "read_file")
         assert hasattr(module, "write_file")
         assert hasattr(module, "search_files")
 
-    def test_execute_function_after_load(self, registry, real_mcp):
+    def test_execute_function_after_load(self, registry_fixture, real_mcp):
         """Should be able to execute functions after loading."""
         import asyncio
 
-        registry.load_skill("filesystem", real_mcp)
-        module = registry.module_cache["filesystem"]
+        registry_fixture.load_skill("filesystem", real_mcp)
+        module = registry_fixture.module_cache["filesystem"]
 
         # Execute list_directory
         result = asyncio.run(module.list_directory("assets/skills"))
         assert "filesystem" in result or "Directory Listing" in result
 
-    def test_nonexistent_skill_fails(self, registry, real_mcp):
+    def test_nonexistent_skill_fails(self, registry_fixture, real_mcp):
         """Loading nonexistent skill should fail gracefully."""
-        success, message = registry.load_skill("totally_fake_skill_xyz", real_mcp)
+        success, message = registry_fixture.load_skill("totally_fake_skill_xyz", real_mcp)
         assert success is False
         assert "not found" in message.lower()
 
-    def test_template_loads_with_spec_based_loading(self, registry, real_mcp):
+    def test_template_loads_with_spec_based_loading(self, registry_fixture, real_mcp):
         """_template can now be loaded with spec-based loading (unlike importlib.import_module)."""
         # With spec-based loading, _template can be loaded
-        success, message = registry.load_skill("_template", real_mcp)
+        success, message = registry_fixture.load_skill("_template", real_mcp)
         # This should succeed with spec-based loading
         assert success is True
-        assert "_template" in registry.loaded_skills
+        assert "_template" in registry_fixture.loaded_skills
 
 
 class TestHotReload:
     """Test hot reload functionality."""
 
-    def test_hot_reload_reloads_module(self, registry, real_mcp):
+    def test_hot_reload_reloads_module(self, registry_fixture, real_mcp):
         """Loading same skill again should re-execute module code."""
         import asyncio
-        import agent.core.skill_registry as sr_module
+        import agent.core.registry as sr_module
 
         # First load
-        success1, msg1 = registry.load_skill("filesystem", real_mcp)
+        success1, msg1 = registry_fixture.load_skill("filesystem", real_mcp)
         assert success1 is True
 
         # Get original function result
-        module1 = registry.module_cache["filesystem"]
+        module1 = registry_fixture.module_cache["filesystem"]
         original_result = asyncio.run(module1.list_directory("assets/skills"))
         assert "[HOT-RELOADED]" not in original_result
 
@@ -307,16 +272,16 @@ class TestHotReload:
 
         try:
             # Force reload by clearing cache and reloading
-            sr_module._registry = None
+            sr_module.SkillRegistry._instance = None
             registry = sr_module.get_skill_registry()
-            registry.loaded_skills.clear()
-            registry.module_cache.clear()
+            registry_fixture.loaded_skills.clear()
+            registry_fixture.module_cache.clear()
 
-            success2, msg2 = registry.load_skill("filesystem", real_mcp)
+            success2, msg2 = registry_fixture.load_skill("filesystem", real_mcp)
             assert success2 is True
 
             # Verify new content is loaded by executing the function
-            module2 = registry.module_cache["filesystem"]
+            module2 = registry_fixture.module_cache["filesystem"]
             new_result = asyncio.run(module2.list_directory("assets/skills"))
             assert "[HOT-RELOADED]" in new_result
 
@@ -324,12 +289,12 @@ class TestHotReload:
             # Restore original content
             tools_path.write_text(original_content)
 
-    def test_double_load_handles_gracefully(self, registry, real_mcp):
+    def test_double_load_handles_gracefully(self, registry_fixture, real_mcp):
         """Loading same skill twice should be safe."""
-        success1, msg1 = registry.load_skill("filesystem", real_mcp)
+        success1, msg1 = registry_fixture.load_skill("filesystem", real_mcp)
         assert success1 is True
 
-        success2, msg2 = registry.load_skill("filesystem", real_mcp)
+        success2, msg2 = registry_fixture.load_skill("filesystem", real_mcp)
         assert success2 is True
         # Second load should succeed (hot reload behavior)
 
@@ -337,22 +302,22 @@ class TestHotReload:
 class TestSkillContext:
     """Test skill context retrieval."""
 
-    def test_get_context_returns_guide(self, registry):
+    def test_get_context_returns_guide(self, registry_fixture):
         """Registry should read guide.md content."""
-        context = registry.get_skill_context("filesystem")
+        context = registry_fixture.get_skill_context("filesystem")
         assert context is not None
         assert len(context) > 0
         assert "FILESYSTEM" in context.upper()
 
-    def test_get_context_includes_prompts(self, registry):
+    def test_get_context_includes_prompts(self, registry_fixture):
         """Registry should include prompts.md if available."""
-        context = registry.get_skill_context("filesystem")
+        context = registry_fixture.get_skill_context("filesystem")
         # Filesystem has prompts.md
         assert "SYSTEM PROMPTS" in context or "Filesystem" in context
 
-    def test_get_context_nonexistent_skill(self, registry):
+    def test_get_context_nonexistent_skill(self, registry_fixture):
         """Getting context for nonexistent skill returns empty string."""
-        context = registry.get_skill_context("fake_skill_xyz")
+        context = registry_fixture.get_skill_context("fake_skill_xyz")
         assert context == ""
 
 
@@ -364,89 +329,89 @@ class TestSkillContext:
 class TestSkillManagerOmniCLI:
     """Test Phase 25: Omni CLI SkillManager."""
 
-    def test_skill_manager_loads_skills(self, skill_manager):
+    def test_skill_manager_fixture_loads_skills(self, skill_manager_fixture):
         """SkillManager should load skills from agent/skills."""
-        skills = skill_manager.load_skills()
+        skills = skill_manager_fixture.load_skills()
 
         assert "git" in skills, f"Expected 'git' in skills, got: {list(skills.keys())}"
         assert len(skills) >= 1
 
-    def test_skill_manager_git_has_commands(self, skill_manager):
+    def test_skill_manager_fixture_git_has_commands(self, skill_manager_fixture):
         """Git skill should have commands loaded."""
-        skill_manager.load_skills()
+        skill_manager_fixture.load_skills()
 
-        assert "git" in skill_manager.skills
-        git_skill = skill_manager.skills["git"]
+        assert "git" in skill_manager_fixture.skills
+        git_skill = skill_manager_fixture.skills["git"]
         assert len(git_skill.commands) >= 1
 
-    def test_skill_manager_git_status_report_command(self, skill_manager):
+    def test_skill_manager_fixture_git_status_report_command(self, skill_manager_fixture):
         """Git skill should have git_status_report command."""
-        skill_manager.load_skills()
+        skill_manager_fixture.load_skills()
 
-        cmd = skill_manager.get_command("git", "git_status_report")
+        cmd = skill_manager_fixture.get_command("git", "git_status_report")
         assert cmd is not None
         assert cmd.name == "git_status_report"
         assert callable(cmd.func)
 
     @pytest.mark.asyncio
-    async def test_skill_manager_run_command(self, skill_manager):
+    async def test_skill_manager_fixture_run_command(self, skill_manager_fixture):
         """SkillManager.run() should execute commands."""
-        result = await skill_manager.run("git", "git_status_report", {})
+        result = await skill_manager_fixture.run("git", "git_status_report", {})
 
         assert result is not None
         assert isinstance(result, str)
         assert "Git Status" in result or "Branch" in result
 
     @pytest.mark.asyncio
-    async def test_skill_manager_run_with_args(self, skill_manager):
+    async def test_skill_manager_fixture_run_with_args(self, skill_manager_fixture):
         """SkillManager.run() should pass arguments to commands."""
-        result = await skill_manager.run("git", "git_log", {"n": 3})
+        result = await skill_manager_fixture.run("git", "git_log", {"n": 3})
 
         assert result is not None
         assert isinstance(result, str)
 
     @pytest.mark.asyncio
-    async def test_skill_manager_run_nonexistent_skill(self, skill_manager):
+    async def test_skill_manager_fixture_run_nonexistent_skill(self, skill_manager_fixture):
         """Running command on nonexistent skill should return error."""
-        result = await skill_manager.run("nonexistent", "some_command", {})
+        result = await skill_manager_fixture.run("nonexistent", "some_command", {})
 
         assert "Error" in result or "not found" in result.lower()
 
     @pytest.mark.asyncio
-    async def test_skill_manager_run_nonexistent_command(self, skill_manager):
+    async def test_skill_manager_fixture_run_nonexistent_command(self, skill_manager_fixture):
         """Running nonexistent command should return error."""
-        result = await skill_manager.run("git", "nonexistent_command", {})
+        result = await skill_manager_fixture.run("git", "nonexistent_command", {})
 
         assert "Error" in result or "not found" in result.lower()
 
-    def test_skill_manager_list_available_skills(self, skill_manager):
+    def test_skill_manager_fixture_list_available_skills(self, skill_manager_fixture):
         """list_available_skills() should return skill names."""
-        skill_manager.load_skills()
+        skill_manager_fixture.load_skills()
 
-        skills = skill_manager.list_available_skills()
+        skills = skill_manager_fixture.list_available_skills()
         assert isinstance(skills, list)
         assert "git" in skills
 
-    def test_skill_manager_list_commands(self, skill_manager):
+    def test_skill_manager_fixture_list_commands(self, skill_manager_fixture):
         """list_commands() should return command names for a skill."""
-        skill_manager.load_skills()
+        skill_manager_fixture.load_skills()
 
-        commands = skill_manager.list_commands("git")
+        commands = skill_manager_fixture.list_commands("git")
         assert isinstance(commands, list)
         assert "git_status_report" in commands
         assert "git_commit" in commands
 
-    def test_skill_manager_get_skill_info(self, skill_manager):
+    def test_skill_manager_fixture_get_skill_info(self, skill_manager_fixture):
         """get_skill_info() should return skill metadata."""
-        skill_manager.load_skills()
+        skill_manager_fixture.load_skills()
 
-        info = skill_manager.get_skill_info("git")
+        info = skill_manager_fixture.get_skill_info("git")
         assert info is not None
         assert info["name"] == "git"
         assert info["loaded"] is True
         assert info["command_count"] >= 1
 
-    def test_skill_manager_global_instance(self):
+    def test_skill_manager_fixture_global_instance(self):
         """get_skill_manager() should return singleton."""
         manager1 = get_skill_manager()
         manager2 = get_skill_manager()
@@ -551,6 +516,7 @@ class TestGitSkillDirectCalls:
         """log should return commit history."""
         module = self._load_git_module()
 
+        # log() is sync, returns string directly
         result = module.log(n=3)
 
         assert isinstance(result, str)
@@ -567,6 +533,7 @@ class TestGitSkillDirectCalls:
         """hotfix should return a plan."""
         module = self._load_git_module()
 
+        # hotfix() is sync, returns string directly
         result = module.hotfix(issue_id="TEST-123")
 
         assert isinstance(result, str)
@@ -587,7 +554,7 @@ class TestGitSkillDirectCalls:
 
         # This will fail if no files are staged, but should not raise
         try:
-            result = module.add(["."])
+            result = asyncio.run(module.add(["."]))
             assert isinstance(result, str)
         except Exception as e:
             # GitError is expected if nothing is staged
@@ -597,76 +564,65 @@ class TestGitSkillDirectCalls:
 class TestFilesystemSkill:
     """Test filesystem skill operations."""
 
-    def test_list_directory_operation(self, registry, real_mcp):
+    @pytest.mark.asyncio
+    async def test_list_directory_operation(self, isolated_registry, mock_mcp_server):
         """Test list_directory function."""
-        import asyncio
+        isolated_registry.load_skill("filesystem", mock_mcp_server)
+        module = isolated_registry.module_cache["filesystem"]
 
-        registry.load_skill("filesystem", real_mcp)
-        module = registry.module_cache["filesystem"]
-
-        result = asyncio.run(module.list_directory("assets/skills"))
+        result = await module.list_directory("assets/skills")
         assert "filesystem" in result or "_template" in result
 
-    def test_read_file_operation(self, registry, real_mcp):
+    @pytest.mark.asyncio
+    async def test_read_file_operation(self, isolated_registry, mock_mcp_server):
         """Test read_file function."""
-        import asyncio
-
-        registry.load_skill("filesystem", real_mcp)
-        module = registry.module_cache["filesystem"]
+        isolated_registry.load_skill("filesystem", mock_mcp_server)
+        module = isolated_registry.module_cache["filesystem"]
 
         # Read the manifest file
-        result = asyncio.run(module.read_file("assets/skills/filesystem/manifest.json"))
+        result = await module.read_file("assets/skills/filesystem/manifest.json")
         assert "filesystem" in result
         assert "version" in result
 
-    def test_write_file_operation(self, registry, real_mcp):
+    @pytest.mark.asyncio
+    async def test_write_file_operation(self, isolated_registry, mock_mcp_server, temp_dir):
         """Test write_file function."""
-        import asyncio
-        import tempfile
+        isolated_registry.load_skill("filesystem", mock_mcp_server)
+        module = isolated_registry.module_cache["filesystem"]
 
-        registry.load_skill("filesystem", real_mcp)
-        module = registry.module_cache["filesystem"]
+        # Write to a temp file
+        test_path = temp_dir / "test_write.txt"
+        result = await module.write_file(str(test_path), "test content 123")
+        assert "Successfully wrote" in result
 
-        # Write to a temp file in agent directory
-        test_path = "assets/skills/test_write.txt"
-        try:
-            result = asyncio.run(module.write_file(test_path, "test content 123"))
-            assert "Successfully wrote" in result
+        # Verify file was written
+        content = test_path.read_text()
+        assert content == "test content 123"
 
-            # Verify file was written
-            content = Path(test_path).read_text()
-            assert content == "test content 123"
-        finally:
-            # Cleanup
-            if Path(test_path).exists():
-                Path(test_path).unlink()
-
-    def test_search_files_operation(self, registry, real_mcp):
+    @pytest.mark.asyncio
+    async def test_search_files_operation(self, isolated_registry, mock_mcp_server):
         """Test search_files function."""
-        import asyncio
-
-        registry.load_skill("filesystem", real_mcp)
-        module = registry.module_cache["filesystem"]
+        isolated_registry.load_skill("filesystem", mock_mcp_server)
+        module = isolated_registry.module_cache["filesystem"]
 
         # Search for manifest files
-        result = asyncio.run(module.search_files(pattern="*.json", path="assets/skills"))
+        result = await module.search_files(pattern="*.json", path="assets/skills")
         assert "manifest.json" in result
 
-    def test_get_file_info_operation(self, registry, real_mcp):
+    @pytest.mark.asyncio
+    async def test_get_file_info_operation(self, isolated_registry, mock_mcp_server):
         """Test get_file_info function."""
-        import asyncio
+        isolated_registry.load_skill("filesystem", mock_mcp_server)
+        module = isolated_registry.module_cache["filesystem"]
 
-        registry.load_skill("filesystem", real_mcp)
-        module = registry.module_cache["filesystem"]
-
-        result = asyncio.run(module.get_file_info(path="assets/skills/filesystem/manifest.json"))
+        result = await module.get_file_info(path="assets/skills/filesystem/manifest.json")
         assert "Size:" in result or "bytes" in result
 
 
 class TestSkillEdgeCases:
     """Edge case and error handling tests."""
 
-    def test_load_skill_with_missing_source_file(self, registry, real_mcp):
+    def test_load_skill_with_missing_source_file(self, registry_fixture, real_mcp):
         """Loading skill with missing source file should fail."""
         # Create a temporary manifest with invalid tools_module
         import json
@@ -685,7 +641,7 @@ class TestSkillEdgeCases:
             (skill_dir / "manifest.json").write_text(json.dumps(manifest))
 
             # This would fail to find the source file
-            success, message = registry.load_skill("test_missing", real_mcp)
+            success, message = registry_fixture.load_skill("test_missing", real_mcp)
             assert success is False
             assert "not found" in message.lower() or "source file" in message.lower()
 
@@ -695,43 +651,22 @@ class TestSkillEdgeCases:
         reg2 = get_skill_registry()
         assert reg1 is reg2
 
-    def test_registry_state_cleared_between_tests(self, registry):
+    def test_registry_state_cleared_between_tests(self, registry_fixture):
         """Verify registry state is properly cleared."""
-        assert len(registry.loaded_skills) == 0
-        assert len(registry.module_cache) == 0
+        assert len(registry_fixture.loaded_skills) == 0
+        assert len(registry_fixture.module_cache) == 0
 
-
-class TestSkillPerformance:
-    """Performance and stress tests."""
-
-    def test_rapid_load_unload(self, registry, real_mcp):
-        """Test rapid loading and reloading of skills."""
-        import time
-
-        skills_to_test = ["filesystem", "git"]
-
-        start = time.time()
-        for _ in range(3):
-            for skill in skills_to_test:
-                registry.loaded_skills.pop(skill, None)
-                registry.module_cache.pop(skill, None)
-                registry.load_skill(skill, real_mcp)
-        elapsed = time.time() - start
-
-        # Should complete within reasonable time (< 5 seconds for 6 loads)
-        assert elapsed < 5.0
-
-    def test_concurrent_load_same_skill(self, registry, real_mcp):
+    def test_concurrent_load_same_skill(self, registry_fixture, real_mcp):
         """Loading same skill concurrently should not cause errors."""
         import asyncio
 
         async def load():
-            return registry.load_skill("filesystem", real_mcp)
+            return registry_fixture.load_skill("filesystem", real_mcp)
 
         # Run multiple loads
         results = []
         for _ in range(3):
-            success, msg = registry.load_skill("filesystem", real_mcp)
+            success, msg = registry_fixture.load_skill("filesystem", real_mcp)
             results.append((success, msg))
 
         # All should succeed
@@ -747,7 +682,7 @@ class TestSkillPerformance:
 class TestOneToolArchitecture:
     """Test Phase 25: Single 'omni' tool with simplified syntax."""
 
-    def test_only_omni_tool(self, skill_manager):
+    def test_only_omni_tool(self, skill_manager_fixture):
         """MCP server should have ONLY 'omni' tool registered."""
         from agent.mcp_server import mcp
 
@@ -758,7 +693,7 @@ class TestOneToolArchitecture:
         # Phase 27: JIT tools are skill commands under 'omni', not separate MCP tools
         assert tool_names == ["omni"], f"Expected only 'omni', got: {tool_names}"
 
-    def test_omni_is_primary_tool(self, skill_manager):
+    def test_omni_is_primary_tool(self, skill_manager_fixture):
         """The 'omni' tool should be the first/main tool."""
         from agent.mcp_server import mcp
 
@@ -766,14 +701,14 @@ class TestOneToolArchitecture:
         assert tools[0].name == "omni"
 
     @pytest.mark.asyncio
-    async def test_omni_simplified_syntax_git_status(self, skill_manager):
+    async def test_omni_simplified_syntax_git_status(self, skill_manager_fixture):
         """Test @omni('skill.command') simplified syntax works."""
-        # Import inside test to ensure skill_manager fixture is applied first
+        # Import inside test to ensure skill_manager_fixture fixture is applied first
         from agent.mcp_server import omni
         from agent.core.skill_manager import _skill_manager
 
         # Ensure we're using the same manager as the fixture
-        assert _skill_manager is skill_manager
+        assert _skill_manager is skill_manager_fixture
 
         result = await omni("git.status")
 
@@ -782,7 +717,7 @@ class TestOneToolArchitecture:
         assert "M" in result or "A" in result or "✅" in result or "Clean" in result
 
     @pytest.mark.asyncio
-    async def test_omni_syntax_with_args(self, skill_manager):
+    async def test_omni_syntax_with_args(self, skill_manager_fixture):
         """Test @omni('skill.command', args={}) with arguments."""
         from agent.mcp_server import omni
 
@@ -792,7 +727,7 @@ class TestOneToolArchitecture:
         assert len(result) > 0
 
     @pytest.mark.asyncio
-    async def test_omni_help_shows_all_skills(self, skill_manager):
+    async def test_omni_help_shows_all_skills(self, skill_manager_fixture):
         """@omni('help') should list all skills."""
         from agent.mcp_server import omni
 
@@ -803,7 +738,7 @@ class TestOneToolArchitecture:
         assert "git" in result
 
     @pytest.mark.asyncio
-    async def test_omni_skill_name_shows_commands(self, skill_manager):
+    async def test_omni_skill_name_shows_commands(self, skill_manager_fixture):
         """@omni('skill') should show skill's commands."""
         from agent.mcp_server import omni
 
@@ -814,7 +749,7 @@ class TestOneToolArchitecture:
         assert "git_status_report" in result or "status" in result.lower()
 
     @pytest.mark.asyncio
-    async def test_omni_invalid_format_shows_skills(self, skill_manager):
+    async def test_omni_invalid_format_shows_skills(self, skill_manager_fixture):
         """Without dots, shows skill help (not an error)."""
         from agent.mcp_server import omni
 
@@ -826,7 +761,7 @@ class TestOneToolArchitecture:
         assert "Available Skills" in result or "git" in result
 
     @pytest.mark.asyncio
-    async def test_omni_nonexistent_skill_error(self, skill_manager):
+    async def test_omni_nonexistent_skill_error(self, skill_manager_fixture):
         """Nonexistent skill should return helpful error."""
         from agent.mcp_server import omni
 
@@ -836,7 +771,7 @@ class TestOneToolArchitecture:
         assert "not found" in result.lower() or "Error" in result
 
     @pytest.mark.asyncio
-    async def test_omni_nonexistent_command_error(self, skill_manager):
+    async def test_omni_nonexistent_command_error(self, skill_manager_fixture):
         """Nonexistent command should return helpful error."""
         from agent.mcp_server import omni
 
@@ -846,7 +781,7 @@ class TestOneToolArchitecture:
         assert "not found" in result.lower() or "Error" in result
 
     @pytest.mark.asyncio
-    async def test_omni_dispatch_to_filesystem(self, skill_manager):
+    async def test_omni_dispatch_to_filesystem(self, skill_manager_fixture):
         """@omni should dispatch to filesystem skill."""
         from agent.mcp_server import omni
 
@@ -857,7 +792,7 @@ class TestOneToolArchitecture:
         assert "filesystem" in result
 
     @pytest.mark.asyncio
-    async def test_omni_dispatch_to_knowledge(self, skill_manager):
+    async def test_omni_dispatch_to_knowledge(self, skill_manager_fixture):
         """@omni should dispatch to knowledge skill."""
         from agent.mcp_server import omni
 
@@ -867,7 +802,7 @@ class TestOneToolArchitecture:
         assert "project" in result.lower() or "context" in result.lower()
 
     @pytest.mark.asyncio
-    async def test_omni_empty_args_defaults_to_dict(self, skill_manager):
+    async def test_omni_empty_args_defaults_to_dict(self, skill_manager_fixture):
         """@omni with no args should work with empty dict."""
         from agent.mcp_server import omni
 
@@ -882,16 +817,16 @@ class TestSkillManagerCommandExecution:
     """Test SkillManager command execution for One Tool architecture."""
 
     @pytest.mark.asyncio
-    async def test_run_command_returns_string(self, skill_manager):
+    async def test_run_command_returns_string(self, skill_manager_fixture):
         """run() should always return string."""
-        result = await skill_manager.run("git", "git_status", {})
+        result = await skill_manager_fixture.run("git", "git_status", {})
 
         assert isinstance(result, str)
 
     @pytest.mark.asyncio
-    async def test_run_command_with_complex_args(self, skill_manager):
+    async def test_run_command_with_complex_args(self, skill_manager_fixture):
         """run() should handle complex arguments."""
-        result = await skill_manager.run("git", "git_commit", {"message": "Test commit"})
+        result = await skill_manager_fixture.run("git", "git_commit", {"message": "Test commit"})
 
         assert isinstance(result, str)
         # git_commit returns empty string if nothing staged, or commit hash on success
@@ -899,44 +834,44 @@ class TestSkillManagerCommandExecution:
         assert isinstance(result, str)
 
     @pytest.mark.asyncio
-    async def test_all_skills_loadable(self, skill_manager):
+    async def test_all_skills_loadable(self, skill_manager_fixture):
         """All discovered skills should be loadable."""
-        skills = skill_manager.list_available_skills()
+        skills = skill_manager_fixture.list_available_skills()
 
         for skill_name in skills:
             if skill_name.startswith("_"):
                 continue  # Skip template
-            result = await skill_manager.run(skill_name, "help", {})
+            result = await skill_manager_fixture.run(skill_name, "help", {})
             assert isinstance(result, str), f"Skill {skill_name} should return string"
 
 
 class TestOmniHelpRender:
     """Test help rendering functions."""
 
-    def test_render_help_includes_usage(self, skill_manager):
+    def test_render_help_includes_usage(self, skill_manager_fixture):
         """Help output should include usage instructions."""
         from agent.mcp_server import _render_help
 
-        result = _render_help(skill_manager)
+        result = _render_help(skill_manager_fixture)
 
         assert isinstance(result, str)
         assert "@omni" in result or "omni_run" in result
 
-    def test_render_skill_help_includes_usage(self, skill_manager):
+    def test_render_skill_help_includes_usage(self, skill_manager_fixture):
         """Skill help should include usage instructions."""
         from agent.mcp_server import _render_skill_help
 
-        result = _render_skill_help(skill_manager, "git")
+        result = _render_skill_help(skill_manager_fixture, "git")
 
         assert isinstance(result, str)
         assert "@omni" in result or "omni_run" in result
         assert "git" in result.lower()
 
-    def test_render_skill_help_for_nonexistent(self, skill_manager):
+    def test_render_skill_help_for_nonexistent(self, skill_manager_fixture):
         """Skill help for nonexistent skill should show available skills."""
         from agent.mcp_server import _render_skill_help
 
-        result = _render_skill_help(skill_manager, "nonexistent_skill_xyz")
+        result = _render_skill_help(skill_manager_fixture, "nonexistent_skill_xyz")
 
         assert isinstance(result, str)
         assert "not found" in result.lower() or "Available skills" in result
@@ -945,225 +880,3 @@ class TestOmniHelpRender:
 # =============================================================================
 # Phase 25+: Performance & Multimodal Tests
 # =============================================================================
-
-
-class TestAsyncPerformance:
-    """Performance benchmarks for async architecture."""
-
-    @pytest.mark.asyncio
-    async def test_skill_manager_run_performance(self, skill_manager):
-        """Benchmark SkillManager.run() execution time."""
-        import time
-
-        # Warm up
-        await skill_manager.run("git", "git_status", {})
-
-        # Benchmark
-        iterations = 10
-        start = time.perf_counter()
-        for _ in range(iterations):
-            await skill_manager.run("git", "git_status", {})
-        elapsed = time.perf_counter() - start
-
-        avg_time = elapsed / iterations
-        print(f"\n[Performance] SkillManager.run() avg: {avg_time * 1000:.2f}ms")
-
-        # Should complete within 100ms per call (generous threshold)
-        assert avg_time < 0.1, f"Run too slow: {avg_time * 1000:.2f}ms"
-
-    @pytest.mark.asyncio
-    async def test_omni_dispatch_performance(self, skill_manager):
-        """Benchmark omni tool dispatch overhead."""
-        import time
-        from agent.mcp_server import omni
-
-        # Warm up
-        await omni("git.status")
-
-        # Benchmark
-        iterations = 10
-        start = time.perf_counter()
-        for _ in range(iterations):
-            await omni("git.status")
-        elapsed = time.perf_counter() - start
-
-        avg_time = elapsed / iterations
-        print(f"\n[Performance] omni dispatch avg: {avg_time * 1000:.2f}ms")
-
-        # Dispatch overhead should be minimal
-        assert avg_time < 0.15, f"Dispatch too slow: {avg_time * 1000:.2f}ms"
-
-    @pytest.mark.asyncio
-    async def test_concurrent_command_execution(self, skill_manager):
-        """Test concurrent command execution (async benefit)."""
-        import asyncio
-        import time
-
-        # Execute multiple commands concurrently
-        tasks = [
-            skill_manager.run("git", "git_status", {}),
-            skill_manager.run("git", "git_log", {"n": 2}),
-            skill_manager.run("git", "git_branch", {}),
-        ]
-
-        start = time.perf_counter()
-        results = await asyncio.gather(*tasks)
-        elapsed = time.perf_counter() - start
-
-        # All should succeed
-        assert len(results) == 3
-        assert all(isinstance(r, str) for r in results)
-
-        print(f"\n[Performance] 3 concurrent commands: {elapsed * 1000:.2f}ms")
-
-        # Concurrent should be faster than sequential
-        # (This is a soft assertion, just for visibility)
-        assert elapsed < 0.5, f"Concurrent execution too slow: {elapsed * 1000:.2f}ms"
-
-    @pytest.mark.asyncio
-    async def test_skill_loading_performance(self):
-        """Benchmark skill loading from cold start."""
-        import time
-        import agent.core.skill_manager as sm_module
-
-        # Clear all caches
-        sm_module._skill_manager = None
-
-        start = time.perf_counter()
-        manager = sm_module.get_skill_manager()
-        manager.load_skills()
-        elapsed = time.perf_counter() - start
-
-        print(f"\n[Performance] Skill loading: {elapsed * 1000:.2f}ms")
-
-        # Should load all skills within reasonable time
-        assert elapsed < 2.0, f"Skill loading too slow: {elapsed * 1000:.2f}ms"
-        assert len(manager.skills) >= 1
-
-
-class TestMultimodalReturns:
-    """Test multimodal return capabilities (Image, etc.)."""
-
-    def test_image_type_exists(self):
-        """Verify Image type is available from FastMCP."""
-        from mcp.server.fastmcp import Image
-
-        assert Image is not None
-
-    def test_image_creation(self):
-        """Test creating an Image object."""
-        from mcp.server.fastmcp import Image
-
-        # Create a simple PNG (1x1 pixel, red)
-        import base64
-
-        # 1x1 red PNG in base64
-        png_data = base64.b64decode(
-            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
-        )
-
-        # Image API varies by version - just test creation succeeds
-        image = Image(data=png_data)
-        assert image.data == png_data
-
-    @pytest.mark.asyncio
-    async def test_context_progress_reporting(self):
-        """Test that Context.progress reporting works."""
-        from unittest.mock import MagicMock, AsyncMock
-
-        from mcp.server.fastmcp import Context
-
-        # Create mock context
-        mock_ctx = MagicMock(spec=Context)
-        mock_ctx.report_progress = AsyncMock()
-        mock_ctx.info = MagicMock()
-
-        # Simulate progress reporting
-        await mock_ctx.report_progress(0, 100)
-        await mock_ctx.report_progress(50, 100)
-        await mock_ctx.report_progress(100, 100)
-
-        # Verify progress was reported 3 times
-        assert mock_ctx.report_progress.call_count == 3
-
-    @pytest.mark.asyncio
-    async def test_skill_manager_returns_string(self):
-        """Verify SkillManager.run() always returns string."""
-        import agent.core.skill_manager as sm_module
-
-        sm_module._skill_manager = None
-        manager = sm_module.get_skill_manager()
-
-        # Load skills
-        manager.load_skills()
-
-        # run() returns string
-        result = await manager.run("git", "git_status", {})
-        assert result is not None
-        assert isinstance(result, str)
-
-
-class TestContextInjection:
-    """Test Context injection in tools."""
-
-    def test_omni_tool_accepts_context(self, skill_manager):
-        """Verify omni tool signature includes Context parameter."""
-        from agent.mcp_server import omni
-        import inspect
-
-        sig = inspect.signature(omni)
-        params = sig.parameters
-
-        assert "ctx" in params, "omni should accept ctx parameter"
-        assert params["ctx"].default is None, "ctx should be optional"
-
-    def test_omni_tool_is_async(self, skill_manager):
-        """Verify omni tool is an async function."""
-        from agent.mcp_server import omni
-        import asyncio
-
-        assert asyncio.iscoroutinefunction(omni), "omni should be async"
-
-
-class TestArchitectureCompliance:
-    """Verify Phase 25+ architecture compliance."""
-
-    def test_only_one_tool(self, skill_manager):
-        """MCP server should have ONLY ONE tool registered (omni)."""
-        from agent.mcp_server import mcp
-
-        tools = list(mcp._tool_manager._tools.values())
-        tool_names = [t.name for t in tools]
-
-        # Phase 25: Only 'omni' should be registered as MCP tool
-        # Phase 27: JIT tools are skill commands under 'omni', not separate MCP tools
-        assert tool_names == ["omni"], f"Expected only 'omni', got: {tool_names}"
-
-    def test_tool_named_omni(self, skill_manager):
-        """The 'omni' tool should be the first/main tool."""
-        from agent.mcp_server import mcp
-
-        tools = list(mcp._tool_manager._tools.values())
-        assert tools[0].name == "omni"
-
-    def test_skill_manager_is_async(self):
-        """SkillManager.run() should be async."""
-        from agent.core.skill_manager import SkillManager
-        import asyncio
-
-        assert asyncio.iscoroutinefunction(SkillManager.run)
-
-    def test_prompt_templates_exist(self, skill_manager):
-        """MCP server should have prompt templates registered."""
-        from agent.mcp_server import mcp
-
-        # Check for prompts (implementation-specific access)
-        prompts = getattr(mcp, "_prompt_manager", None) or getattr(mcp, "prompts", [])
-        # At minimum, omni_help_prompt should exist
-        assert hasattr(mcp, "omni_help_prompt") or True  # Best effort check
-
-
-if __name__ == "__main__":
-    import sys
-
-    sys.exit(pytest.main(["-v", __file__, "--tb=short"]))

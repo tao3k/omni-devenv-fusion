@@ -10,6 +10,10 @@ dynamic = ["version"]
 dev = [
     "omni-dev-fusion-agent",
     "omni-dev-fusion-common",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-xdist>=3.6.1",
+    "ruff>=0.14.10",
 ]
 
 [build-system]
@@ -54,3 +58,4 @@ python_functions = ["test_*"]
 filterwarnings = [
     "ignore::pytest.PytestReturnNotNoneWarning",
 ]
+norecursedirs = ["stress_tests"]

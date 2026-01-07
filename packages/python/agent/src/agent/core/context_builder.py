@@ -7,7 +7,7 @@ Provides utilities to assemble worker context with mission briefs.
 
 from typing import List, Dict, Any, Optional
 from agent.core.router import RoutingResult, get_router
-from agent.core.skill_registry import get_skill_registry
+from agent.core.registry import get_skill_registry
 
 
 def build_mission_injection(routing_result: RoutingResult) -> str:

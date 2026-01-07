@@ -4,15 +4,34 @@
 
 Omni-DevEnv Fusion uses a skill-based architecture where each skill is a self-contained module in the `assets/skills/` directory.
 
-## Trinity Architecture
+## Trinity Architecture (Phase 29)
 
-Skills are managed by the **Trinity Architecture** (Phase 25.3):
+Skills are managed by the **Trinity Architecture**:
 
-- **Code**: Hot-reloaded via mtime detection (`SkillManager`)
+- **Code**: Hot-reloaded via `ModuleLoader` and mtime detection (`SkillManager`)
 - **Context**: XML-packed via Repomix (`RepomixCache`)
-- **State**: Persistent registry (`SkillRegistry`)
+- **State**: Protocol-based registry (`SkillRegistry` in `agent/core/registry/`)
 
 See [Trinity Architecture](./explanation/trinity-architecture.md) for details.
+
+## Architecture (Phase 29)
+
+```
+agent/core/
+└── registry/              # Modular skill registry (Phase 29)
+    ├── __init__.py       # Unified exports + get_skill_tools()
+    ├── core.py           # SkillRegistry (singleton, discovery, manifest)
+    ├── loader.py         # SkillLoader (spec-based module loading)
+    ├── context.py        # ContextBuilder (guide.md + prompts.md)
+    ├── installer.py      # RemoteInstaller (Git-based installation)
+    ├── resolver.py       # VersionResolver (multi-strategy)
+    └── jit.py            # JIT skill acquisition
+
+agent/core/
+├── protocols.py           # ISkill, ISkillCommand protocols
+├── module_loader.py       # Clean hot-reload (no sys.modules pollution)
+└── skill_manager.py       # Trinity facade for @omni routing
+```
 
 ## Skill Structure
 
@@ -60,6 +79,22 @@ Call skills via the `@omni` MCP tool:
 2. Update `manifest.json` with skill metadata
 3. Add `@skill_command` decorated functions in `tools.py`
 4. (Optional) Add `repomix.json` for atomic context
+
+## Protocol-Based Design (Phase 29)
+
+The skill system uses Python Protocols for type safety and testability:
+
+```python
+from agent.core.protocols import ISkill, ISkillCommand
+
+# Skill implementations conform to these protocols
+@dataclass(slots=True)
+class SkillCommand(ISkillCommand):
+    name: str
+    func: Callable[..., Any]
+    description: str = ""
+    category: SkillCategory = SkillCategory.GENERAL
+```
 
 ## Related Documentation
 

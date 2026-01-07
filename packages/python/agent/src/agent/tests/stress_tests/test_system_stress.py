@@ -24,7 +24,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, AsyncMock, patch
 
 # Core Components
-from agent.core.skill_registry import get_skill_registry
+from agent.core.registry import get_skill_registry
 from agent.core.vector_store import get_vector_memory
 from agent.core.schema import HarvestedInsight, KnowledgeCategory
 from mcp.server.fastmcp import FastMCP

@@ -20,7 +20,7 @@ import structlog
 
 from common.mcp_core.inference import InferenceClient
 
-from agent.core.skill_registry import get_skill_registry
+from agent.core.registry import get_skill_registry
 from agent.core.vector_store import get_vector_memory
 
 from agent.core.router.models import RoutingResult

@@ -498,7 +498,7 @@ class Orchestrator:
         Returns:
             Dict of tool name -> callable function
         """
-        from agent.core.skill_registry import get_skill_tools
+        from agent.core.registry import get_skill_tools
 
         # Get tools from loaded skills via Skill Registry
         tools = {}
@@ -518,7 +518,7 @@ class Orchestrator:
 
         elif agent_name == "reviewer":
             # Reviewer gets git and testing tools from skill registry
-            from agent.core.skill_registry import get_skill_tools
+            from agent.core.registry import get_skill_tools
 
             git_tools = get_skill_tools("git")
             testing_tools = get_skill_tools("testing")

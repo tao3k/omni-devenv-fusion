@@ -385,14 +385,14 @@ class TestSkillRegistry:
 
     def test_skill_registry_exists(self):
         """Verify skill registry module exists."""
-        from agent.core.skill_registry import get_skill_registry, SkillRegistry
+        from agent.core.registry import get_skill_registry, SkillRegistry
 
         assert get_skill_registry is not None
         assert SkillRegistry is not None
 
     def test_get_preload_skills_from_config(self):
         """Verify preload skills are read from settings.yaml."""
-        from agent.core.skill_registry import get_skill_registry
+        from agent.core.registry import get_skill_registry
 
         registry = get_skill_registry()
         preload = registry.get_preload_skills()
@@ -406,7 +406,7 @@ class TestSkillRegistry:
 
     def test_list_available_skills(self):
         """Verify available skills are discovered from assets/skills/."""
-        from agent.core.skill_registry import get_skill_registry
+        from agent.core.registry import get_skill_registry
 
         registry = get_skill_registry()
         available = registry.list_available_skills()
@@ -420,7 +420,7 @@ class TestSkillRegistry:
 
     def test_list_loaded_skills_initially_empty(self):
         """Verify no skills are loaded initially (before boot)."""
-        from agent.core.skill_registry import get_skill_registry
+        from agent.core.registry import get_skill_registry
 
         registry = get_skill_registry()
         loaded = registry.list_loaded_skills()
@@ -430,7 +430,7 @@ class TestSkillRegistry:
 
     def test_get_skill_manifest(self):
         """Verify skill manifests can be read."""
-        from agent.core.skill_registry import get_skill_registry
+        from agent.core.registry import get_skill_registry
 
         registry = get_skill_registry()
         manifest = registry.get_skill_manifest("git")
@@ -441,7 +441,7 @@ class TestSkillRegistry:
 
     def test_get_nonexistent_skill_manifest(self):
         """Verify graceful handling of nonexistent skill."""
-        from agent.core.skill_registry import get_skill_registry
+        from agent.core.registry import get_skill_registry
 
         registry = get_skill_registry()
         manifest = registry.get_skill_manifest("nonexistent_skill_xyz")
@@ -470,7 +470,7 @@ class TestSkillRegistry:
 
     def test_knowledge_skill_manifest_valid(self):
         """Verify knowledge skill has valid manifest."""
-        from agent.core.skill_registry import get_skill_registry
+        from agent.core.registry import get_skill_registry
 
         registry = get_skill_registry()
         manifest = registry.get_skill_manifest("knowledge")
@@ -703,7 +703,7 @@ class TestMemorySkill:
 
     def test_memory_skill_manifest_valid(self):
         """Verify memory skill has valid manifest."""
-        from agent.core.skill_registry import get_skill_registry
+        from agent.core.registry import get_skill_registry
 
         registry = get_skill_registry()
         manifest = registry.get_skill_manifest("memory")

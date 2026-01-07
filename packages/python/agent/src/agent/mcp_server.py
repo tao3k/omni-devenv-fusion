@@ -1,41 +1,25 @@
 """
-src/agent/mcp_server.py
-Omni MCP Server - Phase 25.1 "One Tool" Architecture with Macro System.
+agent/mcp_server.py
+Phase 29: Omni MCP Server (Refactored)
 
-SINGLE ENTRY POINT PHILOSOPHY:
-- Only ONE tool registered with MCP: @omni
-- All skill operations go through this single gate
-- Claude's context stays clean and focused
-
-Phase 25.1 Features:
-- @skill_command decorator with DI support (inject_root, inject_settings)
-- Built-in help macro automatically reads guide.md
-- Context injection for logging and progress
-
-Architecture:
-- SkillManager: Scans skills, loads Python modules, builds command registry
-- omni: The only door Claude can see - dispatches to any skill
+Single Entry Point Architecture with clean protocol-based design.
 
 Usage:
-    # Start MCP Server
-    python -m agent.mcp_server
-
-    # In Claude CLI (SINGLE tool with @omni prefix):
-    @omni("git.status")                    # Execute git status
+    @omni("git.status")              # Execute git status
     @omni("git.commit", {"message": "..."})  # Execute with args
-    @omni("help")                          # Show all skills
-    @omni("git")                           # Show git commands
+    @omni("help")                    # Show all skills
+    @omni("git")                     # Show git commands
 """
 
-from mcp.server.fastmcp import FastMCP, Context, Image
-from typing import Optional, Dict, Any, Union
+from mcp.server.fastmcp import FastMCP, Context
+from typing import Optional, Dict, Any
+
 import structlog
-from pathlib import Path
 
 from common.settings import get_setting
 from common.config_paths import get_project_root
 
-logger = structlog.get_logger()
+logger = structlog.get_logger(__name__)
 
 # Get skills directory from settings
 SKILLS_DIR = get_project_root() / get_setting("skills.path", "assets/skills")
@@ -148,7 +132,7 @@ async def omni(
 
 def _render_help(manager) -> str:
     """Render help showing all available skills."""
-    skills = manager.list_available_skills()
+    skills = manager.list_loaded()
 
     if not skills:
         return "🛠️ **No skills available**"
@@ -156,18 +140,20 @@ def _render_help(manager) -> str:
     lines = ["# 🛠️ Available Skills", ""]
 
     for skill_name in sorted(skills):
-        info = manager.get_skill_info(skill_name)
+        info = manager.get_info(skill_name)
         if info:
             lines.append(f"## {skill_name}")
             lines.append(f"- **Commands**: {info['command_count']}")
             lines.append("")
 
-            # Show first few commands (info["commands"] is a list)
-            cmds = sorted(info["commands"])[:5]
-            for cmd in cmds:
+            # Get commands for this skill
+            cmds = manager.get_commands(skill_name)
+            # Show first few commands
+            sorted_cmds = sorted(cmds)[:5]
+            for cmd in sorted_cmds:
                 lines.append(f"  - `{skill_name}.{cmd}`")
-            if len(info["commands"]) > 5:
-                lines.append(f"  - ... and {len(info['commands']) - 5} more")
+            if len(cmds) > 5:
+                lines.append(f"  - ... and {len(cmds) - 5} more")
             lines.append("")
 
     lines.append("---")
@@ -179,19 +165,23 @@ def _render_help(manager) -> str:
 
 def _render_skill_help(manager, skill_name: str) -> str:
     """Render help for a specific skill."""
-    if skill_name not in manager.skills:
-        available = manager.list_available_skills()
+    if not manager._ensure_fresh(skill_name):
+        available = manager.list_loaded()
         if not available:
             return f"Skill '{skill_name}' not found. No skills available."
         return f"Skill '{skill_name}' not found.\n\n**Available skills:**\n- " + "\n- ".join(
             available
         )
 
-    skill_obj = manager.skills[skill_name]
+    skill = manager._skills.get(skill_name)
+    if skill is None:
+        return f"Skill '{skill_name}' not loaded"
 
     # Group commands by category
-    by_category: Dict[str, list] = {}
-    for cmd_name, cmd in skill_obj.commands.items():
+    from agent.core.protocols import SkillCategory
+
+    by_category: dict[SkillCategory, list] = {}
+    for cmd_name, cmd in skill.commands.items():
         cat = cmd.category
         if cat not in by_category:
             by_category[cat] = []
@@ -199,16 +189,26 @@ def _render_skill_help(manager, skill_name: str) -> str:
 
     lines = [f"# 🛠️ {skill_name}", ""]
 
-    for category in ["read", "view", "workflow", "write", "evolution", "general"]:
+    # Standard category order
+    category_order = [
+        SkillCategory.READ,
+        SkillCategory.VIEW,
+        SkillCategory.WORKFLOW,
+        SkillCategory.WRITE,
+        SkillCategory.EVOLUTION,
+        SkillCategory.GENERAL,
+    ]
+
+    for category in category_order:
         if category in by_category:
-            lines.append(f"## {category.upper()}")
+            lines.append(f"## {category.value.upper()}")
             for cmd_name, description in sorted(by_category[category]):
                 lines.append(f"- `{skill_name}.{cmd_name}`: {description}")
             lines.append("")
 
     lines.append("---")
     lines.append(f"**Usage**: `@omni('{skill_name}.<command>', args={{}})`")
-    lines.append(f"**Total**: {len(skill_obj.commands)} commands")
+    lines.append(f"**Total**: {len(skill.commands)} commands")
 
     return "\n".join(lines)
 
@@ -228,7 +228,7 @@ def omni_help_prompt() -> str:
     from agent.core.skill_manager import get_skill_manager
 
     manager = get_skill_manager()
-    skills = manager.list_available_skills()
+    skills = manager.list_loaded()
 
     lines = [
         "# Omni Agentic OS - Quick Reference",
@@ -240,9 +240,9 @@ def omni_help_prompt() -> str:
     ]
 
     for skill_name in sorted(skills):
-        info = manager.get_skill_info(skill_name)
+        info = manager.get_info(skill_name)
         if info:
-            lines.append(f"- **{skill_name}**: {info['command_count']} commands")
+            lines.append(f"- **{skill_name}**: {info.command_count} commands")
 
     lines.extend(
         [
@@ -271,12 +271,12 @@ def main():
     """Run the Omni MCP Server."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Omni Agentic OS - MCP Server (Phase 25)")
+    parser = argparse.ArgumentParser(description="Omni Agentic OS - MCP Server (Phase 29)")
     parser.add_argument("--port", type=int, default=None, help="Port to run on")
     parser.add_argument("--stdio", action="store_true", default=True, help="Use stdio transport")
     args = parser.parse_args()
 
-    logger.info("🚀 Starting Omni MCP Server (Phase 25: One Tool Architecture)")
+    logger.info("🚀 Starting Omni MCP Server (Phase 29: Protocol-based Architecture)")
     logger.info("📦 Single entry point: omni_run(command, args)")
 
     # Log available tools (should be exactly 1)

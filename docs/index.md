@@ -40,6 +40,16 @@ Information-oriented. Technical details, API specs, and configuration options.
 
 ---
 
+## Developer
+
+Internal documentation for Omni-Dev Fusion developers.
+
+| Document                                | Description                                  |
+| --------------------------------------- | -------------------------------------------- |
+| [Testing Guide](./developer/testing.md) | Test system architecture and developer guide |
+
+---
+
 ## Explanation
 
 Understanding-oriented. Deep dives into architecture and design philosophy.

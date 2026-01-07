@@ -1,10 +1,10 @@
 """
-src/agent/tests/test_phase13_stress.py
+src/agent/tests/test_kernel_stress.py
 Advanced Stress & Resilience Testing for Skill Kernel.
 
-Phase 25: Omni CLI Architecture
-- Skills use EXPOSED_COMMANDS dictionary instead of register()
-- SkillManager handles command execution
+Trinity Architecture (Phase 29):
+- Skills use @skill_command decorators
+- SkillManager handles command execution via Trinity
 
 Focus:
 1. Resilience: Ensuring 'Bad Skills' don't crash the Kernel.
@@ -16,12 +16,11 @@ import pytest
 import time
 import shutil
 import sys
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock
 from mcp.server.fastmcp import FastMCP
 
-from agent.core.skill_registry import get_skill_registry
+from agent.core.registry import get_skill_registry
 from agent.core.skill_manager import SkillManager, get_skill_manager
 
 
@@ -39,16 +38,16 @@ def registry():
 
 @pytest.fixture
 def skill_manager():
-    """Provide clean SkillManager for Phase 25 tests."""
+    """Provide clean SkillManager for Phase 29 tests."""
     import agent.core.skill_manager as sm_module
 
-    sm_module._skill_manager = None
+    sm_module._manager = None
     manager = sm_module.get_skill_manager()
-    manager.skills.clear()
-    manager._skills_loaded = False
+    manager._skills.clear()
+    manager._loaded = False
     yield manager
-    manager.skills.clear()
-    manager._skills_loaded = False
+    manager._skills.clear()
+    manager._loaded = False
 
 
 @pytest.fixture
@@ -59,101 +58,24 @@ def mock_mcp():
     return mcp
 
 
+from agent.tests.utils.fixtures import create_toxic_skill_factory
+
+
 @pytest.fixture
 def toxic_skill_factory(registry):
     """
-    Creates temporary 'toxic' skills to test error handling.
-    Phase 25: Skills use EXPOSED_COMMANDS instead of register().
+    Creates temporary 'toxic' skills for testing error handling.
+
+    Uses centralized TOXIC_SKILL_TEMPLATES dictionary - no if/elif chains.
+    Phase 25: Skills use @skill_command decorators instead of register().
     Skills are created in assets/skills/ so Python can import them.
     Cleans up after test.
     """
-    created_paths = []
-
-    def _create(name: str, toxic_type: str, tools_module_path: str = None):
-        """Create a toxic skill for testing.
-
-        Args:
-            name: Skill directory name (e.g., 'toxic_syntax')
-            toxic_type: Type of toxicity - 'syntax_error', 'import_error', 'runtime_error', 'missing_exposed'
-            tools_module_path: Custom tools module path (defaults to assets.skills.{name}.tools)
-        """
-        # Create in assets/skills/ so Python can import it (skills are in project root)
-        skill_dir = Path("assets/skills") / name
-        skill_dir.mkdir(parents=True, exist_ok=True)
-        created_paths.append(skill_dir)
-
-        # Determine tools module
-        module_name = tools_module_path or f"assets.skills.{name}.tools"
-
-        # 1. Manifest (in assets/skills/ for discovery)
-        manifest_dir = Path("assets/skills") / name
-        manifest_dir.mkdir(parents=True, exist_ok=True)
-        created_paths.append(manifest_dir)
-
-        manifest_content = f'''
-{{
-    "name": "{name}",
-    "version": "0.0.1",
-    "description": "A toxic skill for testing",
-    "tools_module": "{module_name}",
-    "guide_file": "guide.md"
-}}
-'''
-        (manifest_dir / "manifest.json").write_text(manifest_content.strip())
-
-        # 2. Guide
-        (manifest_dir / "guide.md").write_text("# Toxic Guide\n\nThis is a test skill.")
-
-        # 3. Tools in assets/skills/{name}/ (for import)
-        tools_file = skill_dir / "tools.py"
-
-        if toxic_type == "syntax_error":
-            tools_file.write_text(
-                "from agent.skills.decorators import skill_command\n\n@skill_command(category='test', description='test')\ndef dummy_command():\n    THIS IS NOT PYTHON CODE !!!\n"
-            )
-        elif toxic_type == "import_error":
-            tools_file.write_text(
-                "from agent.skills.decorators import skill_command\nimport non_existent_module_xyz_123\n\n@skill_command(category='test', description='test')\ndef dummy_command():\n    pass\n"
-            )
-        elif toxic_type == "runtime_error":
-            tools_file.write_text(
-                "from agent.skills.decorators import skill_command\n\n@skill_command(category='test', description='test')\ndef dummy_command():\n    raise ValueError('Boom! Toxic skill exploded!')\n"
-            )
-        elif toxic_type == "missing_exposed":
-            tools_file.write_text(
-                "# No @skill_command decorators!\ndef some_other_function():\n    pass\n"
-            )
-        elif toxic_type == "circular_import":
-            tools_file.write_text(
-                f"from agent.skills.decorators import skill_command\nfrom {name} import circular\n\n@skill_command(category='test', description='test')\ndef dummy_command():\n    pass\n"
-            )
-        elif toxic_type == "invalid_exposed_format":
-            tools_file.write_text(
-                "from agent.skills.decorators import skill_command\n\n# Invalid decorator usage\ndef dummy_command():\n    pass\n"
-            )
-
-        # Create __init__.py to make it a valid Python package
-        (skill_dir / "__init__.py").touch()
-        (manifest_dir / "__init__.py").touch()
-
-        return name, module_name
-
-    yield _create
-
-    # Cleanup all created paths
-    for path in created_paths:
-        try:
-            if path.exists():
-                shutil.rmtree(path)
-        except Exception:
-            pass
-
-    # Also cleanup any created modules from sys.modules
-    for path in created_paths:
-        if path.name.startswith("toxic_"):
-            module_name = f"assets.skills.{path.name}.tools"
-            if module_name in sys.modules:
-                del sys.modules[module_name]
+    factory = create_toxic_skill_factory(Path("assets/skills"))
+    yield factory
+    # Cleanup using attached cleanup method
+    if hasattr(factory, "cleanup"):
+        factory.cleanup()
 
 
 class TestKernelResilience:

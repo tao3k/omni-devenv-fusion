@@ -223,12 +223,11 @@ class TestHiveRouterCache:
 
         assert route1.target_agent == route2.target_agent
 
-    def test_clear_cache(self, router):
+    @pytest.mark.asyncio
+    async def test_clear_cache(self, router):
         """Test cache clearing."""
-        import asyncio
-
         # Populate cache
-        asyncio.run(router.route_to_agent("test"))
+        await router.route_to_agent("test")
 
         assert len(router._cache) > 0
 

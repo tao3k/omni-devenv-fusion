@@ -213,7 +213,7 @@ class TestDiscoverSkillsFunction:
 
     def test_discover_skills_with_query(self):
         """Test discover_skills function with query."""
-        from agent.core.skill_registry import discover_skills
+        from agent.core.registry import discover_skills
 
         result = discover_skills("docker", limit=3)
 
@@ -226,7 +226,7 @@ class TestDiscoverSkillsFunction:
 
     def test_discover_skills_empty_query(self):
         """Test discover_skills with empty query."""
-        from agent.core.skill_registry import discover_skills
+        from agent.core.registry import discover_skills
 
         result = discover_skills("", limit=5)
 
@@ -235,7 +235,7 @@ class TestDiscoverSkillsFunction:
 
     def test_discover_skills_ready_to_install(self):
         """Test that ready_to_install contains skill IDs."""
-        from agent.core.skill_registry import discover_skills
+        from agent.core.registry import discover_skills
 
         result = discover_skills("data", limit=5)
 
@@ -250,7 +250,7 @@ class TestSuggestSkillsForTaskFunction:
 
     def test_suggest_for_task(self):
         """Test suggest_skills_for_task function."""
-        from agent.core.skill_registry import suggest_skills_for_task
+        from agent.core.registry import suggest_skills_for_task
 
         result = suggest_skills_for_task("work with docker containers")
 
@@ -260,7 +260,7 @@ class TestSuggestSkillsForTaskFunction:
 
     def test_suggest_returns_empty_for_unknown(self):
         """Test that suggestions return empty for unknown tasks."""
-        from agent.core.skill_registry import suggest_skills_for_task
+        from agent.core.registry import suggest_skills_for_task
 
         result = suggest_skills_for_task("xyzabc123 unknown task")
 
@@ -273,7 +273,7 @@ class TestJitInstallSkillFunction:
 
     def test_jit_install_not_found(self):
         """Test JIT install for non-existent skill."""
-        from agent.core.skill_registry import jit_install_skill
+        from agent.core.registry import jit_install_skill
 
         result = jit_install_skill("non-existent-skill-xyz")
 
@@ -283,7 +283,7 @@ class TestJitInstallSkillFunction:
 
     def test_jit_install_already_exists(self):
         """Test JIT install for already installed skill."""
-        from agent.core.skill_registry import jit_install_skill
+        from agent.core.registry import jit_install_skill
 
         # Try to install a skill that doesn't exist (would fail at git clone)
         result = jit_install_skill("non-existent-skill-xyz")

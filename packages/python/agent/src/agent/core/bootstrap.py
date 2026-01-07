@@ -9,7 +9,7 @@ import asyncio
 import threading
 import structlog
 from mcp.server.fastmcp import FastMCP
-from agent.core.skill_registry import get_skill_registry
+from agent.core.registry import get_skill_registry
 from common.mcp_core import log_decision
 
 logger = structlog.get_logger(__name__)

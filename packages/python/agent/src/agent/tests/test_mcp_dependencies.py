@@ -20,7 +20,7 @@ class TestSkillArchitecture:
 
     def test_agent_core_imports(self):
         """agent.core modules should import successfully."""
-        from agent.core.skill_registry import SkillRegistry
+        from agent.core.registry import SkillRegistry
 
         assert SkillRegistry is not None
 
@@ -34,7 +34,7 @@ class TestSkillArchitecture:
 
     def test_skills_directory_exists(self):
         """assets/skills/ directory should exist with skill modules."""
-        from agent.core.skill_registry import get_skill_registry
+        from agent.core.registry import get_skill_registry
 
         registry = get_skill_registry()
         skills = registry.list_available_skills()
@@ -46,7 +46,7 @@ class TestSkillArchitecture:
 
     def test_skill_manifests_valid(self):
         """All skill manifest.json files should be valid JSON."""
-        from agent.core.skill_registry import get_skill_registry
+        from agent.core.registry import get_skill_registry
 
         registry = get_skill_registry()
         skills = registry.list_available_skills()
@@ -67,7 +67,7 @@ class TestSkillRegistry:
 
     def test_skill_registry_discovers_skills(self):
         """SkillRegistry should discover all skills in assets/skills/."""
-        from agent.core.skill_registry import get_skill_registry
+        from agent.core.registry import get_skill_registry
 
         registry = get_skill_registry()
         skills = registry.list_available_skills()
