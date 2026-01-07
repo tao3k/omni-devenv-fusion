@@ -55,8 +55,8 @@ Call the Omni tool to stage files and run quality checks:
 
 **Please confirm:** Reply Yes👍 to submit commit, or No👎 to cancel
 
-<!-- LLM only: Execute commit using this MCP call -->
-@mcp__orchestrator__omni("git.execute_commit", {"message": "YOUR_GENERATED_MESSAGE"})
+<!-- LLM only: invoke this @mcp.tool by MCP. Hidden in the user interface  -->
+@omni("git.execute_commit", {"message": "YOUR_GENERATED_MESSAGE"})
 
 ---
 

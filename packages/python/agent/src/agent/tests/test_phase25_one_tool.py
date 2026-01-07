@@ -260,8 +260,147 @@ class TestOmniRealLLMSession:
 
 
 # =============================================================================
-# Test: CLI Interactive Mode Simulation
+# Test: Skill Manager Loading (Critical Path)
 # =============================================================================
+
+
+class TestSkillManagerLoading:
+    """
+    Test skill manager loading and command extraction.
+
+    This is a CRITICAL path test - ensures skills load correctly with
+    decorators.py properly resolved from the agent source directory,
+    NOT from the assets/skills directory.
+
+    Regression test for: "No module named 'agent.skills.decorators'"
+    """
+
+    def test_all_skills_load_with_decorators(self):
+        """
+        Verify ALL skills load successfully with decorators.
+
+        This catches the bug where decorators.py path was calculated
+        incorrectly (assets/skills/decorators.py instead of
+        packages/python/agent/src/agent/skills/decorators.py).
+        """
+        import sys
+
+        # Clear any cached modules for fresh test
+        modules_to_clear = [k for k in sys.modules.keys() if k.startswith("agent.skills")]
+        for mod in modules_to_clear:
+            del sys.modules[mod]
+
+        # Create fresh skill manager
+        manager = SkillManager()
+
+        # Load all skills
+        skills = manager.load_skills()
+
+        # Should load many skills (at least git, filesystem, knowledge)
+        skill_names = list(skills.keys())
+        print(f"\n✅ Loaded {len(skill_names)} skills: {skill_names}")
+
+        # Critical assertions
+        assert len(skill_names) > 10, f"Expected >10 skills, got {len(skill_names)}"
+
+        # These must be present
+        assert "git" in skill_names, "git skill must load"
+        assert "filesystem" in skill_names, "filesystem skill must load"
+        assert "knowledge" in skill_names, "knowledge skill must load"
+
+    def test_git_skill_has_prepare_commit_command(self):
+        """Verify git skill has the prepare_commit command loaded."""
+        manager = get_skill_manager()
+
+        # Check git skill commands
+        commands = manager.list_commands("git")
+        print(f"\n📦 Git commands: {len(commands)}")
+
+        # Must have prepare_commit
+        assert "git_prepare_commit" in commands, "git_prepare_commit must exist"
+        assert "git_execute_commit" in commands, "git_execute_commit must exist"
+        assert "git_status" in commands, "git_status must exist"
+
+    def test_decorators_module_loaded(self):
+        """Verify decorators.py was loaded from correct location."""
+        import sys
+
+        # Check decorators module exists
+        assert "agent.skills.decorators" in sys.modules, "agent.skills.decorators must be loaded"
+
+        decorators_module = sys.modules["agent.skills.decorators"]
+
+        # Verify it has the skill_command decorator
+        assert hasattr(decorators_module, "skill_command"), (
+            "skill_command decorator must exist in decorators module"
+        )
+
+    def test_git_commands_are_skill_command_decorated(self):
+        """Verify git commands were properly extracted from decorated functions."""
+        manager = get_skill_manager()
+
+        # Get git skill
+        git_skill = manager.skills.get("git")
+        assert git_skill is not None, "git skill must exist"
+
+        # Check some commands exist and have proper attributes
+        prepare_commit = git_skill.commands.get("git_prepare_commit")
+        assert prepare_commit is not None, "git_prepare_commit command must exist"
+        assert prepare_commit.category == "workflow", (
+            "git_prepare_commit should be workflow category"
+        )
+        assert (
+            "lefthook" in prepare_commit.description.lower()
+            or "lefthook" in prepare_commit.description
+            or "pre-commit" in prepare_commit.description
+        ), "git_prepare_commit should mention lefthook or pre-commit"
+
+    def test_skill_command_decorator_works(self):
+        """Test that the skill_command decorator properly wraps functions."""
+        from agent.skills.decorators import skill_command
+
+        # Create a test function
+        @skill_command(
+            name="test_command",
+            category="test",
+            description="A test command",
+        )
+        def test_func():
+            return "test_result"
+
+        # Verify it has the marker
+        assert hasattr(test_func, "_is_skill_command"), (
+            "Decorated function must have _is_skill_command marker"
+        )
+        assert test_func._is_skill_command is True, "_is_skill_command must be True"
+
+        # Verify config is stored
+        assert hasattr(test_func, "_skill_config"), "Decorated function must have _skill_config"
+        assert test_func._skill_config["name"] == "test_command"
+        assert test_func._skill_config["category"] == "test"
+
+        # Verify function still works
+        assert test_func() == "test_result"
+
+    @pytest.mark.asyncio
+    async def test_prepare_commit_runs_successfully(self):
+        """Test that prepare_commit command actually works."""
+        from agent.mcp_server import omni
+
+        # Run prepare_commit - should not raise
+        result = await omni("git.prepare_commit")
+
+        # Should return a valid result (not an error)
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+        # Should contain expected output markers
+        assert (
+            "Git Commit Preparation" in result
+            or "Lefthook" in result
+            or "Staged" in result
+            or "commit" in result.lower()
+        ), f"prepare_commit result should contain commit-related content"
 
 
 class TestOmniCLISimulation:

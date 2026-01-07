@@ -128,27 +128,30 @@ class SkillManager:
 
         try:
             # Pre-create parent packages in sys.modules for nested imports to work
-            skills_path = skill_dir.parent
-            agent_path = skills_path.parent
+            skills_path = skill_dir.parent  # e.g., assets/skills
+
+            # Find the agent source root (packages/python/agent/src/agent)
+            # This is where decorators.py lives
+            project_root = get_project_root()
+            agent_src_path = project_root / "packages/python/agent/src/agent"
 
             # Create and register 'agent' package if not exists
             if "agent" not in sys.modules:
                 agent_pkg = types.ModuleType("agent")
-                agent_pkg.__path__ = [str(agent_path)]
-                agent_pkg.__file__ = str(agent_path / "__init__.py")
+                agent_pkg.__path__ = [str(agent_src_path)]
+                agent_pkg.__file__ = str(agent_src_path / "__init__.py")
                 sys.modules["agent"] = agent_pkg
 
             # Create and register 'agent.skills' package if not exists
             if "agent.skills" not in sys.modules:
                 skills_pkg = types.ModuleType("agent.skills")
-                skills_pkg.__path__ = [str(skills_path)]
+                skills_pkg.__path__ = [str(skills_path)]  # For finding skill modules
                 skills_pkg.__file__ = str(skills_path / "__init__.py")
                 sys.modules["agent.skills"] = skills_pkg
                 sys.modules["agent"].skills = skills_pkg
 
             # Create and register 'agent.skills.decorators' module if not exists
-            # decorators.py is now in src/agent/skills/ (Python package)
-            decorators_path = agent_path / "skills" / "decorators.py"
+            decorators_path = agent_src_path / "skills" / "decorators.py"
             if "agent.skills.decorators" not in sys.modules and decorators_path.exists():
                 decorators_spec = importlib.util.spec_from_file_location(
                     "agent.skills.decorators", decorators_path
