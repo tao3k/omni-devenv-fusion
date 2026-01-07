@@ -4,42 +4,25 @@ description = "Tri-MCP Agentic OS: orchestrator + executor + coder"
 readme = "README.md"
 requires-python = ">=3.12"
 dynamic = ["version"]
-dependencies = [
-    "anthropic>=0.75.0",
-    "chromadb>=1.4.0",
-    "gitpython>=3.1.46",
-    "langgraph>=1.0.5",
-    "langsmith>=0.6.0",
-    "libvcs>=0.38.1",
-    "mcp>=1.1.0",
-    "pydantic-ai>=1.39.0",
-    "structlog>=25.5.0",
-    "typer>=0.21.1",
-]
-
-
-[build-system]
-requires = ["hatchling", "hatch-vcs"]
-build-backend = "hatchling.build"
-
-
-[tool.hatch.version]
-source = "vcs"
 
 
 [dependency-groups]
 dev = [
     "omni-dev-fusion-agent",
-    "omni-dev-fusion-common", 
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.24.0",
-    "ruff>=0.14.10",
+    "omni-dev-fusion-common",
 ]
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
 
 
 [tool.uv.sources]
-omni-dev-fusion-agent = { workspace = true }
 omni-dev-fusion-common = { workspace = true }
+omni-dev-fusion-agent = { workspace = true }
 
 
 [tool.uv.workspace]

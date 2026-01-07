@@ -187,23 +187,20 @@ class TestSwarmEdgeCases:
 class TestSwarmIntegration:
     """Integration tests for swarm monitoring with real components."""
 
-    def test_swarm_status_tool_registration(self):
-        """Test that swarm_status tool is properly registered in router."""
-        # This verifies the tool can be imported and has correct signature
-        from agent.tools.router import register_router_tools
-        from mcp.server.fastmcp import FastMCP
+    def test_swarm_status_function_exists(self):
+        """Test that swarm_status function is available for @omni routing."""
+        from agent.tools.router import swarm_status
 
-        mcp = FastMCP("test")
+        # Function should be callable
+        assert callable(swarm_status)
 
-        # Should not raise an exception
-        try:
-            register_router_tools(mcp)
-        except Exception as e:
-            pytest.skip(f"Router tools registration failed: {e}")
+    @pytest.mark.asyncio
+    async def test_swarm_status_returns_string(self):
+        """Test that swarm_status returns a string result."""
+        from agent.tools.router import swarm_status
 
-        # Verify tool exists - use correct FastMCP API
-        tool_names = [t.name for t in mcp._tool_manager._tools.values()]
-        assert "swarm_status" in tool_names
+        result = await swarm_status()
+        assert isinstance(result, str)
 
 
 class TestSwarmMockScenarios:

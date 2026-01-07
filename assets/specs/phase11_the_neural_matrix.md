@@ -124,7 +124,7 @@ _How do we know it works? Matches `agent/standards/feature-lifecycle.md` require
 
 def test_spec_gap_analysis():
     """Verify spec gap analysis calculates score correctly."""
-    gap = _analyze_spec_gap("agent/specs/existing_spec.md")
+    gap = _analyze_spec_gap("assets/specs/existing_spec.md")
     assert gap["completeness_score"] >= 0
     assert gap["completeness_score"] <= 100
 

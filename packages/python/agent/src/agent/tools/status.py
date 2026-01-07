@@ -1,20 +1,20 @@
 """
 src/agent/tools/status.py
-System status and introspection tools.
+System status functions - One Tool compatible.
+
+All functions return strings and can be called directly or via @omni routing.
 """
 
-from mcp.server.fastmcp import FastMCP
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 
-def register_status_tool(mcp: FastMCP):
-    """Register the status inspection tool."""
-
-    @mcp.tool()
-    async def orchestrator_status() -> str:
-        """
-        Check Orchestrator server status and list available tool categories.
-        """
-        return """🧠 Omni Orchestrator Status
+async def orchestrator_status() -> str:
+    """
+    Check Orchestrator server status and list available tool categories.
+    """
+    return """🧠 Omni Orchestrator Status
 
 Role: The "Brain" - Planning, Routing, and Policy Enforcement
 Architecture: Bi-MCP (Orchestrator + Coder)
@@ -32,4 +32,4 @@ Available Capability Layers:
 """
 
 
-__all__ = ["register_status_tool"]
+__all__ = ["orchestrator_status"]

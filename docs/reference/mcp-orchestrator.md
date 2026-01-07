@@ -247,7 +247,7 @@ Call this tool FIRST when you judge the user is requesting new work:
 ```json
 {
   "status": "allowed",
-  "spec_path": "agent/specs/phase10_hive_architecture.md",
+  "spec_path": "assets/specs/phase10_hive_architecture.md",
   "message": "Legislation complete for 'Hive Architecture'. Ready for execution."
 }
 ```

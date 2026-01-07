@@ -56,9 +56,95 @@ python some_test.py
 ## 5. Dependencies
 
 ```bash
-uv add --package src/common structlog     # Add to package
-uv add --dev pytest pytest-asyncio       # Dev dependency
-uv sync                                   # Sync all
+uv add --package packages/python/common structlog     # Add to package
+uv add --dev pytest pytest-asyncio                    # Dev dependency
+uv sync                                              # Sync all
+```
+
+### 5.1 TOML Indentation Trap (Common Mistake)
+
+**❌ Wrong: dependencies placed under wrong table**
+
+```toml
+[project]
+name = "omni-dev-fusion-agent"
+version = "0.3.0-dev"
+requires-python = ">=3.12"
+
+[project.scripts]
+orchestrator = "agent.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent"]
+
+[tool.uv.sources]
+omni-dev-fusion-common = { workspace = true }
+
+# ❌ WRONG! dependencies placed under [tool.hatch.build.targets.wheel]
+[tool.hatch.build.targets.wheel]
+dependencies = [
+    "chromadb>=1.4.0",
+    "structlog>=24.0.0",
+]
+```
+
+**Result:** `uv sync` cannot recognize dependencies, structlog and other packages will NOT be installed.
+
+**✅ Correct: dependencies under `[project]` table**
+
+```toml
+[project]
+name = "omni-dev-fusion-agent"
+version = "0.3.0-dev"
+requires-python = ">=3.12"
+# ✅ dependencies MUST be under [project] table
+dependencies = [
+    "chromadb>=1.4.0",
+    "gitpython>=3.1.0",
+    "langgraph>=1.0.5",
+    "langsmith>=0.6.0",
+    "libvcs>=0.14.0",
+    "mcp>=1.1.0",
+    "pydantic-ai>=1.39.0",
+    "structlog>=24.0.0",
+    "typer>=0.15.0",
+    "omni-dev-fusion-common",
+]
+
+[project.scripts]
+orchestrator = "agent.main:main"
+omni = "agent.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent"]
+
+[tool.uv.sources]
+omni-dev-fusion-common = { workspace = true }
+```
+
+**After fix:**
+
+```bash
+uv sync
+```
+
+### 5.2 Adding Dependencies to Sub-packages
+
+```bash
+# Add dependency to specific sub-package
+uv add --package packages/python/agent structlog
+uv add --package packages/python/common anthropic
+
+# Dev dependencies
+uv add --dev --package packages/python/agent pytest pytest-asyncio
 ```
 
 ## 6. Commands

@@ -298,41 +298,35 @@ def get_skill_manifest(name: str) -> Optional[SkillManifest]:
 
 
 # =============================================================================
-# MCP Tool Registration
+# One Tool Compatible Functions (exported for @omni routing)
 # =============================================================================
 
 
-def register_skill_tools(mcp) -> None:
-    """Register all skill registry tools with the MCP server."""
+async def list_skills_tool() -> str:
+    """List all available skills in the registry."""
+    skills = list_skills()
+    if not skills:
+        return "📭 No skills found in the registry."
 
-    @mcp.tool(name="list_skills")
-    async def list_skills_tool() -> str:
-        """List all available skills in the registry."""
-        skills = list_skills()
-        if not skills:
-            return "📭 No skills found in the registry."
+    lines = ["# 🎯 Available Skills", ""]
+    for skill in skills:
+        lines.append(f"- **{skill.name}** v{skill.version}")
+        lines.append(f"  - {skill.description}")
+        lines.append(f"  - Category: `{skill.category.value}`")
+        lines.append(f"  - Tools: {', '.join(skill.tools)}")
+        lines.append("")
 
-        lines = ["# 🎯 Available Skills", ""]
-        for skill in skills:
-            lines.append(f"- **{skill.name}** v{skill.version}")
-            lines.append(f"  - {skill.description}")
-            lines.append(f"  - Category: `{skill.category.value}`")
-            lines.append(f"  - Tools: {', '.join(skill.tools)}")
-            lines.append("")
+    lines.append(f"Total: {len(skills)} skills")
+    return "\n".join(lines)
 
-        lines.append(f"Total: {len(skills)} skills")
-        return "\n".join(lines)
 
-    @mcp.tool(name="get_skill_manifest")
-    async def get_skill_manifest_tool(name: str) -> str:
-        """Get the manifest for a specific skill by name."""
-        import json
+async def get_skill_manifest_tool(name: str) -> str:
+    """Get the manifest for a specific skill by name."""
+    manifest = get_skill_manifest(name)
+    if not manifest:
+        return f"❌ Skill '{name}' not found."
 
-        manifest = get_skill_manifest(name)
-        if not manifest:
-            return f"❌ Skill '{name}' not found."
-
-        return f"""# 🎯 Skill Manifest: {manifest.name}
+    return f"""# 🎯 Skill Manifest: {manifest.name}
 
 **Version**: {manifest.version}
 **Category**: {manifest.category.value}
@@ -349,79 +343,80 @@ def register_skill_tools(mcp) -> None:
 {", ".join(manifest.dependencies) if manifest.dependencies else "None"}
 """
 
-    @mcp.tool(name="load_skill")
-    async def load_skill_tool(name: str) -> str:
-        """
-        Load a skill and its associated context (guide, tools, prompts).
 
-        When a skill is loaded, it provides:
-        1. MCP tools defined in its tools.py
-        2. Procedural knowledge from guide.md
-        3. System prompts from prompts.md
-        """
-        context = load_skill(name)
-        if not context:
-            return f"❌ Skill '{name}' not found."
+async def load_skill_tool(name: str) -> str:
+    """
+    Load a skill and its associated context (guide, tools, prompts).
 
-        lines = [f"# 🎯 Skill Loaded: {name}", ""]
-        lines.append(f"**Version**: {context.manifest.version}")
-        lines.append(f"**Description**: {context.manifest.description}")
+    When a skill is loaded, it provides:
+    1. MCP tools defined in its tools.py
+    2. Procedural knowledge from guide.md
+    3. System prompts from prompts.md
+    """
+    context = load_skill(name)
+    if not context:
+        return f"❌ Skill '{name}' not found."
+
+    lines = [f"# 🎯 Skill Loaded: {name}", ""]
+    lines.append(f"**Version**: {context.manifest.version}")
+    lines.append(f"**Description**: {context.manifest.description}")
+    lines.append("")
+    lines.append("## Tools Available")
+    for tool in context.manifest.tools:
+        lines.append(f"- `{tool}`")
+    lines.append("")
+
+    if context.guide_content:
+        lines.append("## Guide Available")
+        lines.append(f"(See `assets/skills/{name}/guide.md` for full content)")
         lines.append("")
-        lines.append("## Tools Available")
-        for tool in context.manifest.tools:
-            lines.append(f"- `{tool}`")
+
+    if context.prompts:
+        lines.append("## Prompts Loaded")
+        lines.append(f"{len(context.prompts)} prompt(s) loaded")
         lines.append("")
 
-        if context.guide_content:
-            lines.append("## Guide Available")
-            lines.append(f"(See `agent/skills/{name}/guide.md` for full content)")
-            lines.append("")
+    return "\n".join(lines)
 
-        if context.prompts:
-            lines.append("## Prompts Loaded")
-            lines.append(f"{len(context.prompts)} prompt(s) loaded")
-            lines.append("")
 
-        return "\n".join(lines)
+async def find_skills_for_task_tool(task_description: str) -> str:
+    """Recommend skills for a given task description."""
+    registry = get_skill_registry()
+    skills = registry.find_skills_for_task(task_description)
 
-    @mcp.tool(name="find_skills_for_task")
-    async def find_skills_for_task_tool(task_description: str) -> str:
-        """Recommend skills for a given task description."""
-        registry = get_skill_registry()
-        skills = registry.find_skills_for_task(task_description)
+    if not skills:
+        return "🤷 No specific skills found for this task. Using default capabilities."
 
-        if not skills:
-            return "🤷 No specific skills found for this task. Using default capabilities."
+    lines = ["# 🎯 Recommended Skills", ""]
+    for skill in skills:
+        lines.append(f"- **{skill.name}**: {skill.description}")
+        lines.append(f"  - Tools: {', '.join(skill.tools)}")
+        lines.append("")
 
-        lines = ["# 🎯 Recommended Skills", ""]
-        for skill in skills:
-            lines.append(f"- **{skill.name}**: {skill.description}")
-            lines.append(f"  - Tools: {', '.join(skill.tools)}")
-            lines.append("")
+    return "\n".join(lines)
 
-        return "\n".join(lines)
 
-    @mcp.tool(name="get_loaded_skills")
-    async def get_loaded_skills_tool() -> str:
-        """List all currently loaded skills."""
-        registry = get_skill_registry()
-        loaded = registry.get_loaded_skills()
+async def get_loaded_skills_tool() -> str:
+    """List all currently loaded skills."""
+    registry = get_skill_registry()
+    loaded = registry.get_loaded_skills()
 
-        if not loaded:
-            return "📭 No skills currently loaded."
+    if not loaded:
+        return "📭 No skills currently loaded."
 
-        lines = ["# 🎯 Loaded Skills", ""]
-        for ctx in loaded:
-            lines.append(f"- **{ctx.manifest.name}** v{ctx.manifest.version}")
-            if ctx.guide_content:
-                lines.append("  - Guide: loaded")
-            if ctx.prompts:
-                lines.append(f"  - Prompts: {len(ctx.prompts)}")
-            lines.append("")
+    lines = ["# 🎯 Loaded Skills", ""]
+    for ctx in loaded:
+        lines.append(f"- **{ctx.manifest.name}** v{ctx.manifest.version}")
+        if ctx.guide_content:
+            lines.append("  - Guide: loaded")
+        if ctx.prompts:
+            lines.append(f"  - Prompts: {len(ctx.prompts)}")
+        lines.append("")
 
-        return "\n".join(lines)
+    return "\n".join(lines)
 
-    logger.info("Skill Registry tools registered")
+
+logger.info("Skill Registry functions loaded (One Tool compatible)")
 
 
 __all__ = [
@@ -433,5 +428,10 @@ __all__ = [
     "load_skill",
     "get_skill_manifest",
     "get_skill_registry",
-    "register_skill_tools",
+    # One Tool compatible functions
+    "list_skills_tool",
+    "get_skill_manifest_tool",
+    "load_skill_tool",
+    "find_skills_for_task_tool",
+    "get_loaded_skills_tool",
 ]

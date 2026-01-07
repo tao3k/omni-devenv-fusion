@@ -1,10 +1,12 @@
 # agent/tools/context.py
 """
-Context Management Tools
+Context Management Functions
 
 Provides project memory and context management for the orchestrator.
 
-Tools:
+All functions are One Tool compatible - call directly or route via @omni.
+
+Functions:
 - manage_context: Read/update project context
 - get_project_instructions: Get project instructions
 """
@@ -12,7 +14,6 @@ Tools:
 import asyncio
 from typing import Any, Dict, Optional
 
-from mcp.server.fastmcp import FastMCP
 from common.mcp_core import (
     ProjectMemory,
     get_all_instructions_merged,
@@ -33,66 +34,52 @@ def log_decision(event: str, data: Dict[str, Any], _logger) -> None:
     _logger.info(event, **data)
 
 
-def register_context_tools(mcp: FastMCP) -> None:
-    """Register all context management tools."""
+async def manage_context(
+    action: str,
+    phase: Optional[str] = None,
+    focus: Optional[str] = None,
+    note: Optional[str] = None,
+) -> str:
+    """
+    Manage the Project's Active Context (Short-term Memory / RAM).
 
-    @mcp.tool()
-    async def manage_context(
-        action: str,
-        phase: Optional[str] = None,
-        focus: Optional[str] = None,
-        note: Optional[str] = None,
-    ) -> str:
-        """
-        Manage the Project's Active Context (Short-term Memory / RAM).
+    IMPORTANT: Call this FIRST at the start of every session.
+    This returns project rules, current status, and recent activity.
 
-        IMPORTANT: Call this FIRST at the start of every session.
-        This returns project rules, current status, and recent activity.
+    Args:
+        action: "read", "update_status", "add_note"
+        phase: Current phase (for update): Planning, Spec-Drafting, Coding, Testing
+        focus: What are you working on NOW? (for update)
+        note: A thought, error log, or partial result (for add_note)
 
-        Args:
-            action: "read", "update_status", "add_note"
-            phase: Current phase (for update): Planning, Spec-Drafting, Coding, Testing
-            focus: What are you working on NOW? (for update)
-            note: A thought, error log, or partial result (for add_note)
+    Returns:
+        Status or confirmation message
+    """
+    if action == "read":
+        # 1. Read instructions (cached by mcp_core.instructions module)
+        from common.mcp_core.instructions import get_instruction
 
-        Returns:
-            Status or confirmation message
+        instructions = get_all_instructions_merged()
 
-        Examples:
-            # At session start
-            manage_context(action="read")
+        # 2. Read macro status (returns string, not dict)
+        status_text = project_memory.get_status()
 
-            # When starting a new task
-            manage_context(action="update_status", phase="Coding", focus="Implement feature X")
+        logger.info("context.read")
 
-            # When you encounter an error
-            manage_context(action="add_note", note="Error: Connection timeout in module Y")
-        """
-        if action == "read":
-            # 1. Read instructions (cached by mcp_core.instructions module)
-            from common.mcp_core.instructions import get_instruction
+        # 3. Read recent flight recorder logs (Tail Scratchpad)
+        scratchpad_path = project_memory.active_dir / "SCRATCHPAD.md"
+        recent_logs = ""
+        if scratchpad_path.exists():
+            content = scratchpad_path.read_text(encoding="utf-8")
+            lines = content.split("\n")
+            # Show last 30 lines for context
+            recent_logs = "\n".join(lines[-30:])
+            if recent_logs:
+                recent_logs = (
+                    f"\n\nRecent Activity (last 30 lines of SCRATCHPAD.md):\n{recent_logs}"
+                )
 
-            instructions = get_all_instructions_merged()
-
-            # 2. Read macro status (returns string, not dict)
-            status_text = project_memory.get_status()
-
-            logger.info("context.read")
-
-            # 3. Read recent flight recorder logs (Tail Scratchpad)
-            scratchpad_path = project_memory.active_dir / "SCRATCHPAD.md"
-            recent_logs = ""
-            if scratchpad_path.exists():
-                content = scratchpad_path.read_text(encoding="utf-8")
-                lines = content.split("\n")
-                # Show last 30 lines for context
-                recent_logs = "\n".join(lines[-30:])
-                if recent_logs:
-                    recent_logs = (
-                        f"\n\nRecent Activity (last 30 lines of SCRATCHPAD.md):\n{recent_logs}"
-                    )
-
-            return f"""=== 📋 Omni-DevEnv Fusion - Active Context ===
+        return f"""=== 📋 Omni-DevEnv Fusion - Active Context ===
 
 {status_text}
 
@@ -104,73 +91,67 @@ def register_context_tools(mcp: FastMCP) -> None:
 
 === 📝 Quick Reference ===
 
-- Commit: Use @omni-orchestrator git_commit (NOT git commit via bash)
-- Push: Use @omni-orchestrator git_push
-- Test: Use @omni-orchestrator smart_test_runner
-- Route: Use @omni-orchestrator consult_router
-- Plan: Use @omni-orchestrator start_spec
+- Commit: Use @omni("git.commit") (NOT git commit via bash)
+- Push: Use @omni("git.push")
+- Test: Use @omni("testing.smart_test_runner")
+- Route: Use @omni("router.consult_router")
+- Plan: Use @omni("spec.start_spec")
 """
 
-        elif action == "update_status":
-            if not phase:
-                return "Error: phase is required for update_status action"
+    elif action == "update_status":
+        if not phase:
+            return "Error: phase is required for update_status action"
 
-            project_memory.update_status(phase=phase, focus=focus)
-            log_decision("context.status_updated", {"phase": phase, "focus": focus}, logger)
+        project_memory.update_status(phase=phase, focus=focus)
+        log_decision("context.status_updated", {"phase": phase, "focus": focus}, logger)
 
-            return f"✅ Context updated: Phase={phase}, Focus={focus}"
+        return f"✅ Context updated: Phase={phase}, Focus={focus}"
 
-        elif action == "add_note":
-            if not note:
-                return "Error: note is required for add_note action"
+    elif action == "add_note":
+        if not note:
+            return "Error: note is required for add_note action"
 
-            project_memory.log_scratchpad(note, source="Claude")
-            log_decision("context.note_added", {"note": note[:100]}, logger)
+        project_memory.log_scratchpad(note, source="Claude")
+        log_decision("context.note_added", {"note": note[:100]}, logger)
 
-            return f"✅ Note added to context: {note[:50]}..."
+        return f"✅ Note added to context: {note[:50]}..."
 
+    else:
+        return f"Error: Unknown action '{action}'. Use 'read', 'update_status', or 'add_note'."
+
+
+async def get_project_instructions(name: Optional[str] = None) -> str:
+    """
+    Get project instructions that are pre-loaded at session start.
+
+    These instructions from agent/instructions/ are loaded when the MCP server starts,
+    ensuring they're always available as default prompts for LLM sessions.
+
+    Args:
+        name: Specific instruction name (without .md), e.g., "project-conventions"
+              If empty, returns all instructions merged.
+
+    Returns:
+        Project instruction(s) content.
+    """
+    from common.mcp_core.instructions import get_instruction
+
+    if name:
+        content = get_instruction(name)
+        if content:
+            log_decision("get_project_instructions.single", {"name": name}, logger)
+            return f"=== {name} ===\n\n{content}"
         else:
-            return f"Error: Unknown action '{action}'. Use 'read', 'update_status', or 'add_note'."
+            available = list_instruction_names()
+            return f"Error: Instruction '{name}' not found.\nAvailable: {available}"
+    else:
+        all_instructions = get_all_instructions_merged()
+        if all_instructions:
+            log_decision(
+                "get_project_instructions.all", {"count": len(list_instruction_names())}, logger
+            )
+            return f"=== Project Instructions (All) ===\n\n{all_instructions}"
+        return "No project instructions available."
 
-    @mcp.tool()
-    async def get_project_instructions(name: Optional[str] = None) -> str:
-        """
-        Get project instructions that are pre-loaded at session start.
 
-        These instructions from agent/instructions/ are loaded when the MCP server starts,
-        ensuring they're always available as default prompts for LLM sessions.
-
-        Args:
-            name: Specific instruction name (without .md), e.g., "project-conventions"
-                  If empty, returns all instructions merged.
-
-        Returns:
-            Project instruction(s) content.
-
-        Examples:
-            # Get specific instruction
-            get_project_instructions(name="project-conventions")
-
-            # Get all instructions
-            get_project_instructions()
-        """
-        from common.mcp_core.instructions import get_instruction
-
-        if name:
-            content = get_instruction(name)
-            if content:
-                log_decision("get_project_instructions.single", {"name": name}, logger)
-                return f"=== {name} ===\n\n{content}"
-            else:
-                available = list_instruction_names()
-                return f"Error: Instruction '{name}' not found.\nAvailable: {available}"
-        else:
-            all_instructions = get_all_instructions_merged()
-            if all_instructions:
-                log_decision(
-                    "get_project_instructions.all", {"count": len(list_instruction_names())}, logger
-                )
-                return f"=== Project Instructions (All) ===\n\n{all_instructions}"
-            return "No project instructions available."
-
-    log_decision("context_tools.registered", {}, logger)
+log_decision("context_functions.loaded", {}, logger)

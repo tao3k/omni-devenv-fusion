@@ -827,7 +827,6 @@ def _get_checklist(level: str) -> list:
 # =============================================================================
 
 __all__ = [
-    "register_product_owner_tools",
     "COMPLEXITY_LEVELS",
     "TEST_REQUIREMENTS",
     "heuristic_complexity",
@@ -835,4 +834,10 @@ __all__ = [
     "start_spec",
     "_get_spec_path_from_name",
     "_analyze_spec_gap",
+    # One Tool compatible functions
+    "assess_feature_complexity",
+    "verify_design_alignment",
+    "get_feature_requirements",
+    "check_doc_sync",
+    "validate_prerequisites",
 ]

@@ -149,7 +149,7 @@ def check_api_key() -> bool:
 # =============================================================================
 
 
-class TestRealLLMSessionWithOmni:
+class RealLLMSessionWithOmni:
     """
     Test real LLM session with @omni commands.
 
@@ -160,6 +160,9 @@ class TestRealLLMSessionWithOmni:
     3. Command executed via omni tool
     4. Result returned to LLM
     5. LLM generates final response
+
+    Note: Renamed from TestRealLLMSessionWithOmni to avoid pytest collection
+    warning (classes with __init__ are not collected as test classes).
     """
 
     def __init__(self):

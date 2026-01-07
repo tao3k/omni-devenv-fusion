@@ -211,7 +211,7 @@ that uses ripgrep. Follow the full Agentic Workflow: spec, implement, review, te
 
 **See Also**:
 
-- `agent/specs/advanced_search_tool.md` - Example of a Phase 8 implementation spec
+- `assets/specs/advanced_search_tool.md` - Example of a Phase 8 implementation spec
 
 ## Phase 9: Code Intelligence (ast-grep Integration)
 
@@ -286,7 +286,7 @@ that uses ripgrep. Follow the full Agentic Workflow: spec, implement, review, te
 
 **See Also**:
 
-- `agent/specs/code_intelligence_phase9.md` - Phase 9 specification
+- `assets/specs/code_intelligence_phase9.md` - Phase 9 specification
 - `mcp-server/tests/stress/` - Modular stress test framework
 
 ## Phase 9+: Stress Test Framework
@@ -351,7 +351,7 @@ mcp-server/tests/stress/
 | ------------------ | -------------------------------------------------------- | --------------------- |
 | `agent/standards/` | **Public Standards** - Language/Framework agnostic specs | `consult_*` loads all |
 | `agent/knowledge/` | **Problem Solutions** - Symptom→Cause→Fix                | `consult_*` searches  |
-| `agent/specs/`     | **Feature Specs** - What to build                        | `draft_feature_spec`  |
+| `assets/specs/`    | **Feature Specs** - What to build                        | `draft_feature_spec`  |
 | `agent/how-to/`    | **How-to Guides** - How to do X                          | `execute_doc_action`  |
 | `design/`          | **Design Decisions** - Why we chose X                    | Human reference       |
 

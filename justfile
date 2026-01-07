@@ -199,7 +199,7 @@ agent-context:
 # ==============================================================================
 
 # Focus Mode: Load specific Spec and prepare for development
-# Usage: just agent-focus agent/specs/feature_name.md
+# Usage: just agent-focus assets/specs/feature_name.md
 agent-focus spec_path:
     @echo "🚀 Focusing Agent on Spec: {{spec_path}}..."
     @echo ""
@@ -222,16 +222,16 @@ agent-focus spec_path:
 # Usage: just spec-new "feature_name" "Feature description..."
 spec-new name description:
     @echo "🏗️ Scaffolding Spec: {{name}}..."
-    @cp agent/specs/template.md agent/specs/{{name}}.md
+    @cp assets/specs/template.md assets/specs/{{name}}.md
     @( \
         echo "=== 📝 TASK: DRAFT SPEC ==="; \
-        echo "Target File: agent/specs/{{name}}.md"; \
+        echo "Target File: assets/specs/{{name}}.md"; \
         echo "Feature Name: {{name}}"; \
         echo "User Description: {{description}}"; \
         echo ""; \
         echo "💡 INSTRUCTION: Read the 'Target File' template. Fill in Sections 1 (Context) and 2 (Architecture) based on the 'User Description'. Leave Section 3 (Plan) for later."; \
     ) | claude
-    @echo "✅ Spec draft created at agent/specs/{{name}}.md"
+    @echo "✅ Spec draft created at assets/specs/{{name}}.md"
 
 # Start Claude with automatic context injection
 agent-start:
@@ -854,13 +854,13 @@ examples:
 spec-list:
     @echo "Available Specs"
     @echo "================"
-    @ls -1 agent/specs/*.md 2>/dev/null | sed 's|^agent/specs/||' | sed 's/\.md$//' | sed 's/^/  - /' || echo "  No specs found"
+    @ls -1 assets/specs/*.md 2>/dev/null | sed 's|^assets/specs/||' | sed 's/\.md$//' | sed 's/^/  - /' || echo "  No specs found"
 
 [group('spec')]
 spec-template:
     @echo "Spec Template"
     @echo "============="
-    @cat agent/specs/TEMPLATE.md
+    @cat assets/specs/TEMPLATE.md
 
 [group('spec')]
 archive spec_path target_category="explanation":
@@ -868,7 +868,7 @@ archive spec_path target_category="explanation":
     set -euo pipefail
     if [ -z "{{spec_path}}" ]; then
         echo "Usage: just archive <spec-path> [category]"
-        echo "Example: just archive agent/specs/auth_module.md explanation"
+        echo "Example: just archive assets/specs/auth_module.md explanation"
         exit 1
     fi
     if [ ! -f "{{spec_path}}" ]; then

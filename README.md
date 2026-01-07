@@ -205,7 +205,7 @@ Any new feature or major change must start here.
 - **Gatekeeper**: Orchestrator calls `start_spec(name="...")`.
 - **Actions**:
   1. If spec doesn't exist, the system **blocks** direct coding, returns "blocked".
-  2. Call `draft_feature_spec` to write requirements (usually in `agent/specs/`).
+  2. Call `draft_feature_spec` to write requirements (usually in `assets/specs/`).
   3. Call `verify_spec_completeness` to verify the spec includes goals, architecture, test plan.
 
 - **Output**: An approved `.md` specification document.
@@ -329,7 +329,7 @@ just validate
 | Workflows      | `agent/skills/*/prompts.md`                     |
 | Slash Commands | `.claude/commands/*.md`                         |
 | Skill Docs     | `agent/skills/{skill}/commit-workflow.md`       |
-| Specs          | `agent/specs/*.md`                              |
+| Specs          | `assets/specs/*.md`                             |
 
 ## Skill Architecture
 

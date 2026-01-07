@@ -189,7 +189,7 @@ When user says "commit":
 
 **Style**: Reference-oriented, detailed but readable
 
-### agent/specs/ (Architecture Specs)
+### assets/specs/ (Architecture Specs)
 
 **Reader**: Architects, core contributors
 
@@ -254,7 +254,7 @@ Before updating a document:
 | Looking up API parameters        | `docs/reference/`           |
 | Understanding architecture       | `docs/explanation/`         |
 | Defining skill rules             | `agent/skills/*/prompts.md` |
-| Recording architecture decisions | `agent/specs/`              |
+| Recording architecture decisions | `assets/specs/`             |
 
 ---
 

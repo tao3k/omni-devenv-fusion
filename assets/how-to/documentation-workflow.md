@@ -21,7 +21,7 @@
 | If you modify...       | You must update...                                         |
 | ---------------------- | ---------------------------------------------------------- |
 | `agent/skills/*.py`    | Skill documentation in `agent/skills/*/guide.md`           |
-| `agent/specs/*.md`     | `agent/standards/feature-lifecycle.md` (workflow diagrams) |
+| `assets/specs/*.md`    | `agent/standards/feature-lifecycle.md` (workflow diagrams) |
 | `agent/standards/*.md` | Update the standard itself                                 |
 | `docs/*.md`            | User-facing guides (if breaking changes)                   |
 | `CLAUDE.md`            | Project conventions                                        |
@@ -134,21 +134,21 @@ Understand where to write documentation:
 | `agent/`          | LLM (Claude) | How-to guides, standards - context for AI behavior |
 | `docs/`           | Users        | Human-readable manuals, tutorials                  |
 | `agent/skills/*/` | LLM + Devs   | Skill documentation (guide.md, prompts.md)         |
-| `agent/specs/`    | LLM + Devs   | Feature specifications                             |
+| `assets/specs/`   | LLM + Devs   | Feature specifications                             |
 
 ---
 
 ## 6. When to Write Documentation
 
-| Scenario               | Write To                                                          |
-| ---------------------- | ----------------------------------------------------------------- |
-| New skill              | `agent/skills/{skill}/guide.md`                                   |
-| New workflow/process   | `agent/how-to/` (for LLM to follow)                               |
-| User-facing guide      | `docs/` (for humans)                                              |
-| Implementation details | `agent/skills/*/` (for contributors)                              |
-| Feature spec           | `agent/specs/` (contract between requirements and implementation) |
-| Project convention     | `CLAUDE.md` (quick reference)                                     |
-| Captured insight       | `agent/knowledge/harvested/` (Documentation Skill)                |
+| Scenario               | Write To                                                           |
+| ---------------------- | ------------------------------------------------------------------ |
+| New skill              | `agent/skills/{skill}/guide.md`                                    |
+| New workflow/process   | `agent/how-to/` (for LLM to follow)                                |
+| User-facing guide      | `docs/` (for humans)                                               |
+| Implementation details | `agent/skills/*/` (for contributors)                               |
+| Feature spec           | `assets/specs/` (contract between requirements and implementation) |
+| Project convention     | `CLAUDE.md` (quick reference)                                      |
+| Captured insight       | `agent/knowledge/harvested/` (Documentation Skill)                 |
 
 ---
 

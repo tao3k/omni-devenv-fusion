@@ -244,7 +244,7 @@ Run `/commit` to trigger the smart commit workflow with lefthook and cog integra
 | `.claude/commands/*.md`             | Slash command templates   | Claude Code |
 | `agent/how-to/`                     | Process guides (legacy)   | LLM         |
 | `agent/standards/`                  | Language conventions      | LLM         |
-| `agent/specs/`                      | Feature specifications    | LLM         |
+| `assets/specs/`                     | Feature specifications    | LLM         |
 | `docs/`                             | User-facing documentation | Users       |
 
 ---

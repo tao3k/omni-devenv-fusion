@@ -12,9 +12,9 @@
 # Spec Directory References
 # =============================================================================
 specs:
-  dir: "agent/specs"
-  template: "agent/specs/TEMPLATE.md"
-  archive: "agent/specs/archive"
+  dir: "assets/specs"
+  template: "assets/specs/TEMPLATE.md"
+  archive: "assets/specs/archive"
   description: "Feature specifications directory"
 
 # =============================================================================

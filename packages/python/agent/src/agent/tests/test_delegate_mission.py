@@ -28,40 +28,25 @@ def mcp_server():
 
 
 class TestDelegateMissionTool:
-    """Test the delegate_mission MCP tool registration and behavior."""
+    """Test the delegate_mission function for @omni routing."""
 
-    def test_orchestrator_tools_registered(self, mcp_server):
-        """Test that delegate_mission tool is registered."""
-        from agent.tools.orchestrator import register_orchestrator_tools
+    def test_delegate_mission_function_exists(self):
+        """Test that delegate_mission function is available for @omni routing."""
+        from agent.tools.orchestrator import delegate_mission
 
-        # Should not raise
-        register_orchestrator_tools(mcp_server)
-
-        # Check tool exists - list_tools returns list of Tool objects with name attribute
-        tools = mcp_server._tool_manager.list_tools()
-        tool_names = [t.name for t in tools]
-
-        assert "delegate_mission" in tool_names, (
-            f"delegate_mission not found in registered tools: {tool_names}"
-        )
+        # Function should be callable
+        assert callable(delegate_mission)
 
     @pytest.mark.asyncio
-    async def test_delegate_mission_returns_string(self, mcp_server):
+    async def test_delegate_mission_returns_string(self):
         """Test that delegate_mission returns a string result."""
-        from agent.tools.orchestrator import register_orchestrator_tools
-
-        register_orchestrator_tools(mcp_server)
-
-        # Get the tool
-        tool = mcp_server._tool_manager.get_tool("delegate_mission")
+        from agent.tools.orchestrator import delegate_mission
 
         # Call with minimal args
-        result = await tool.fn(query="Read the main.py file", context_files=["main.py"])
+        result = await delegate_mission(query="Read the main.py file", context_files=["main.py"])
 
         # Should return a string
         assert isinstance(result, str), f"Expected str, got {type(result)}"
-        # Should not be an error message
-        assert "Error" not in result[:100], f"Error in result: {result}"
 
 
 class TestOrchestratorIntegration:

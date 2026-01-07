@@ -337,37 +337,38 @@ def get_scratchpad_summary() -> str:
 
 
 # =============================================================================
-# MCP Tool Registration
+# =============================================================================
+# One Tool Compatible Functions (exported for @omni routing)
 # =============================================================================
 
 
-def register_harvester_tools(mcp) -> None:
-    """Register all harvester tools with the MCP server."""
+async def harvest_session_insight_tool(
+    context_summary: str,
+    files_changed: Optional[List[str]] = None,
+) -> str:
+    """[Evolution] Call this AFTER completing a complex task."""
+    return await harvest_session_insight(context_summary, files_changed)
 
-    @mcp.tool(name="harvest_session_insight")
-    async def harvest_session_insight_tool(
-        context_summary: str,
-        files_changed: Optional[List[str]] = None,
-    ) -> str:
-        """[Evolution] Call this AFTER completing a complex task."""
-        return await harvest_session_insight(context_summary, files_changed)
 
-    @mcp.tool(name="list_harvested_knowledge")
-    async def list_harvested_knowledge_tool() -> str:
-        """List all harvested knowledge entries."""
-        return list_harvested_knowledge()
+async def list_harvested_knowledge_tool() -> str:
+    """List all harvested knowledge entries."""
+    return list_harvested_knowledge()
 
-    @mcp.tool(name="get_scratchpad_summary")
-    async def get_scratchpad_summary_tool() -> str:
-        """Get a summary of the current session context from SCRATCHPAD.md."""
-        return get_scratchpad_summary()
 
-    logger.info("Harvester tools registered")
+async def get_scratchpad_summary_tool() -> str:
+    """Get a summary of the current session context from SCRATCHPAD.md."""
+    return get_scratchpad_summary()
+
+
+logger.info("Harvester functions loaded (One Tool compatible)")
 
 
 __all__ = [
-    "register_harvester_tools",
     "harvest_session_insight",
     "list_harvested_knowledge",
     "get_scratchpad_summary",
+    # One Tool compatible aliases
+    "harvest_session_insight_tool",
+    "list_harvested_knowledge_tool",
+    "get_scratchpad_summary_tool",
 ]
