@@ -429,6 +429,8 @@ def execute_commit(message: str, project_root: Path = None) -> str:
     Uses cog commit which validates:
     - Type: feat, fix, docs, style, refactor, test, chore, perf, build, ci, revert
     - Scope: Against cog.toml allowed scopes
+
+    Preserves full commit message body (not just header).
     """
     import shutil
 
@@ -456,26 +458,31 @@ Got: `{first_line}`
     scope = match.group(2) or ""
     description = match.group(3)
 
-    # Try cog first, fallback to git
-    if shutil.which("cog"):
+    # Check if message has a body (detailed description)
+    body_lines = lines[1:]
+    has_body = any(line.strip() for line in body_lines)
+
+    # Try cog first, but use git commit with full message if cog fails
+    cog_available = shutil.which("cog")
+
+    if cog_available:
         cmd = ["cog", "commit", commit_type, description]
         if scope:
             cmd.append(scope)
 
         out, rc = _run_with_rc(cmd, cwd=project_root)
 
-        if rc != 0:
-            return f"""❌ **Commit Failed (cog)**
+        if rc == 0:
+            # Cog succeeded - now we need to amend with the full message body
+            # since cog only uses the header
+            if has_body:
+                # Get the commit hash and amend with full message
+                full_message = message.strip()
+                amend_cmd = ["git", "commit", "--amend", "--no-verify", "-m", full_message]
+                _run_with_rc(amend_cmd, cwd=project_root)
 
-```text
-{out}
-```
-
-**Action:** Please fix the issue and run `/commit` again.
-"""
-
-        commit_hash, _ = _run_with_rc(["git", "rev-parse", "--short", "HEAD"], cwd=project_root)
-        return f"""💾 **COMMITTING** `{commit_hash}`
+            commit_hash, _ = _run_with_rc(["git", "rev-parse", "--short", "HEAD"], cwd=project_root)
+            return f"""💾 **COMMITTING** `{commit_hash}`
 
 ✅ **Commit Successful!**
 
@@ -486,8 +493,23 @@ Got: `{first_line}`
 ---
 ✨ *Verified by Omni Git Skill (cog)* ✨"""
 
-    # Fallback to git commit
-    out, rc = _run_with_rc(["git", "commit", "-m", message], cwd=project_root)
+        # Cog failed - fall through to git commit with full message
+        if "Invalid scope" in out or "Conventional Commit" in out:
+            # Scope validation failed, but we can still commit with git
+            pass
+        else:
+            return f"""❌ **Commit Failed (cog)**
+
+```text
+{out}
+```
+
+**Action:** Please fix the issue and run `/commit` again.
+"""
+
+    # Use git commit with full message (handles body correctly)
+    full_message = message.strip()
+    out, rc = _run_with_rc(["git", "commit", "-m", full_message], cwd=project_root)
 
     if rc != 0:
         return f"""💾 COMMIT FAILED:

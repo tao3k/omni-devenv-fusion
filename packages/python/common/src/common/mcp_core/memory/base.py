@@ -1,21 +1,8 @@
-# mcp-core/memory.py
+# memory/base.py
 """
-Project Memory Persistence Module
+Project Memory - Long-term memory storage using ADR pattern.
 
-Provides long-term memory storage for project context using file-based ADR pattern.
-This module wraps project memory operations for both orchestrator.py and coder.py.
-
-Features:
-- Architectural Decision Records (ADRs)
-- Task tracking (backlog-md compatible)
-- Context snapshots
-
-Follows numtide/prj-spec with .cache/<namespace>/.memory structure:
-    .cache/omni-dev-fusion/.memory/
-        decisions/      - ADRs
-        tasks/          - Task tracking
-        context/        - Project snapshots
-        active_context/ - Active context (The "RAM")
+Phase 30: Modularized.
 """
 
 import json
@@ -28,25 +15,11 @@ import structlog
 log = structlog.get_logger("mcp-core.memory")
 
 # Default memory directory (per prj-spec: .cache/<namespace>/.memory)
-# Using project identifier as namespace for isolation
 MEMORY_DIR = Path(".cache/omni-dev-fusion/.memory")
 
 
-# =============================================================================
-# Directory Management
-# =============================================================================
-
-
 def init_memory_dir(dir_path: Path = None) -> bool:
-    """
-    Initialize the memory directory structure.
-
-    Args:
-        dir_path: Custom memory directory path
-
-    Returns:
-        True if successful, False otherwise
-    """
+    """Initialize the memory directory structure."""
     if dir_path is None:
         dir_path = MEMORY_DIR
 
@@ -55,28 +28,15 @@ def init_memory_dir(dir_path: Path = None) -> bool:
         (dir_path / "decisions").mkdir(exist_ok=True)
         (dir_path / "tasks").mkdir(exist_ok=True)
         (dir_path / "context").mkdir(exist_ok=True)
-        (dir_path / "active_context").mkdir(exist_ok=True)  # NEW
+        (dir_path / "active_context").mkdir(exist_ok=True)
         return True
     except Exception as e:
         log.info("memory.init_failed", error=str(e))
         return False
 
 
-# =============================================================================
-# Decision Management (ADRs)
-# =============================================================================
-
-
 def format_decision(decision: Dict[str, Any]) -> str:
-    """
-    Format a decision for storage as Markdown ADR.
-
-    Args:
-        decision: Decision dict with keys: title, problem, solution, rationale, status, author, date
-
-    Returns:
-        Formatted Markdown string
-    """
+    """Format a decision for storage as Markdown ADR."""
     lines = [
         f"# Decision: {decision.get('title', 'Untitled')}",
         f"Date: {decision.get('date', datetime.now().isoformat())}",
@@ -98,15 +58,7 @@ def format_decision(decision: Dict[str, Any]) -> str:
 
 
 def parse_decision(content: str) -> Dict[str, Any]:
-    """
-    Parse a Markdown ADR back to a dict.
-
-    Args:
-        content: Markdown content
-
-    Returns:
-        Decision dict
-    """
+    """Parse a Markdown ADR back to a dict."""
     decision = {}
     lines = content.split("\n")
     current_section = None
@@ -126,47 +78,21 @@ def parse_decision(content: str) -> Dict[str, Any]:
     return decision
 
 
-# =============================================================================
-# ProjectMemory Class
-# =============================================================================
-
-
 class ProjectMemory:
-    """
-    Provides unified interface for project memory operations.
-
-    Ensures both orchestrator.py and coder.py use the same memory system.
-
-    Usage:
-        memory = ProjectMemory()
-        memory.add_decision(title="dual_mcp", content=...)
-        decisions = memory.list_decisions()
-        memory.add_task(title="Fix bug", content="...")
-    """
+    """Provides unified interface for project memory operations."""
 
     def __init__(self, dir_path: Path = None):
-        """
-        Initialize ProjectMemory.
-
-        Args:
-            dir_path: Custom memory directory path
-        """
+        """Initialize ProjectMemory."""
         self.dir_path = dir_path or MEMORY_DIR
         self.decisions_dir = self.dir_path / "decisions"
         self.tasks_dir = self.dir_path / "tasks"
         self.context_dir = self.dir_path / "context"
-
-        # NEW: Active Context Directory (The "RAM")
         self.active_dir = self.dir_path / "active_context"
 
-        # Ensure directories exist
         init_memory_dir(self.dir_path)
         self.active_dir.mkdir(exist_ok=True)
 
-    # =============================================================================
     # Decision Operations
-    # =============================================================================
-
     def add_decision(
         self,
         title: str,
@@ -176,24 +102,10 @@ class ProjectMemory:
         rationale: str = "",
         status: str = "open",
     ) -> Dict[str, Any]:
-        """
-        Add a new architectural decision.
-
-        Args:
-            title: Decision title
-            content: Raw content (JSON or markdown)
-            problem: Problem statement
-            solution: Solution description
-            rationale: Rationale explanation
-            status: Decision status
-
-        Returns:
-            Dict with keys: success (bool), file (Path), error (str)
-        """
+        """Add a new architectural decision."""
         if not title:
             return {"success": False, "file": None, "error": "Title is required"}
 
-        # Extract fields from content if it's JSON
         if content.startswith("{"):
             try:
                 data = json.loads(content)
@@ -220,42 +132,24 @@ class ProjectMemory:
         return {"success": True, "file": str(filename), "error": ""}
 
     def list_decisions(self) -> List[Dict[str, Any]]:
-        """
-        List all recorded decisions.
-
-        Returns:
-            List of decision dicts with keys: title, date, author, status
-        """
+        """List all recorded decisions."""
         decisions = []
         for f in self.decisions_dir.glob("*.md"):
             content = f.read_text(encoding="utf-8")
             parsed = parse_decision(content)
             parsed["file"] = str(f)
             decisions.append(parsed)
-
         return decisions
 
     def get_decision(self, title: str) -> Optional[Dict[str, Any]]:
-        """
-        Get a specific decision by title.
-
-        Args:
-            title: Decision title
-
-        Returns:
-            Decision dict or None if not found
-        """
+        """Get a specific decision by title."""
         filename = self.decisions_dir / f"{title.lower().replace(' ', '_')}.md"
         if not filename.exists():
             return None
-
         content = filename.read_text(encoding="utf-8")
         return parse_decision(content)
 
-    # =============================================================================
     # Task Operations
-    # =============================================================================
-
     def add_task(
         self,
         title: str,
@@ -263,18 +157,7 @@ class ProjectMemory:
         status: str = "pending",
         assignee: str = "Claude",
     ) -> Dict[str, Any]:
-        """
-        Add a new task to the backlog.
-
-        Args:
-            title: Task title
-            content: Task description
-            status: Task status
-            assignee: Task assignee
-
-        Returns:
-            Dict with keys: success (bool), file (Path), error (str)
-        """
+        """Add a new task to the backlog."""
         if not title:
             return {"success": False, "file": None, "error": "Title is required"}
 
@@ -291,15 +174,7 @@ class ProjectMemory:
         return {"success": True, "file": str(filename), "error": ""}
 
     def list_tasks(self, status: str = None) -> List[Dict[str, Any]]:
-        """
-        List all tasks, optionally filtered by status.
-
-        Args:
-            status: Filter by status (e.g., "pending", "completed")
-
-        Returns:
-            List of task dicts
-        """
+        """List all tasks, optionally filtered by status."""
         tasks = []
         for f in self.tasks_dir.glob("*.md"):
             content = f.read_text(encoding="utf-8")
@@ -314,23 +189,11 @@ class ProjectMemory:
 
             if status is None or task.get("status") == status:
                 tasks.append(task)
-
         return tasks
 
-    # =============================================================================
     # Context Operations
-    # =============================================================================
-
     def save_context(self, context_data: Dict[str, Any] = None) -> Dict[str, Any]:
-        """
-        Save a snapshot of current project context.
-
-        Args:
-            context_data: Custom context data
-
-        Returns:
-            Dict with keys: success (bool), file (Path), error (str)
-        """
+        """Save a snapshot of current project context."""
         if context_data is None:
             context_data = {}
 
@@ -349,26 +212,17 @@ class ProjectMemory:
         return {"success": True, "file": str(filename), "error": ""}
 
     def get_latest_context(self) -> Optional[Dict[str, Any]]:
-        """
-        Get the latest context snapshot.
-
-        Returns:
-            Context dict or None if no snapshots exist
-        """
+        """Get the latest context snapshot."""
         contexts = sorted(self.context_dir.glob("context_*.json"), key=lambda f: f.stat().st_mtime)
         if not contexts:
             return None
-
         latest = contexts[-1]
         try:
             return json.loads(latest.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             return None
 
-    # =============================================================================
-    # Formatting Methods (for MCP tool output)
-    # =============================================================================
-
+    # Formatting Methods
     def format_decisions_list(self) -> str:
         """Format decisions as a readable list."""
         decisions = self.list_decisions()
@@ -378,8 +232,8 @@ class ProjectMemory:
         lines = ["--- Architectural Decisions ---"]
         for d in decisions:
             status = d.get("status", "open")
-            lines.append(f"- {d.get('title', 'Untitled')} [{status}]")
-
+            title = d.get("title", "Untitled")
+            lines.append(f"- {title} [{status}]")
         return "\n".join(lines)
 
     def format_tasks_list(self, status: str = None) -> str:
@@ -393,30 +247,14 @@ class ProjectMemory:
             task_status = t.get("status", "pending")
             assignee = t.get("assignee", "unassigned")
             lines.append(f"- {t.get('title', 'Untitled')} [{task_status}] @{assignee}")
-
         return "\n".join(lines)
 
-    # =============================================================================
-    # NEW: Active Context Management (Backmark Core)
-    # =============================================================================
-
+    # Active Context Management
     def update_status(
         self, phase: str, focus: str, blockers: str = "None", sentiment: str = "Neutral"
     ) -> Dict[str, Any]:
-        """
-        Update the global project status (The 'RAM').
-
-        Args:
-            phase: Current lifecycle phase (Planning, Spec-Drafting, Coding, Testing, Review)
-            focus: The specific task/spec currently being worked on
-            blockers: Any issues preventing progress
-            sentiment: Subjective assessment of progress (On Track, Stuck, Confused)
-
-        Returns:
-            Dict with success status and file path
-        """
+        """Update the global project status (The 'RAM')."""
         status_file = self.active_dir / "STATUS.md"
-
         timestamp = datetime.now().isoformat()
 
         content = f"""# 🧠 Active Project Context
@@ -433,7 +271,6 @@ class ProjectMemory:
 """
         status_file.write_text(content, encoding="utf-8")
 
-        # Also append to a history log for auditability
         log_file = self.active_dir / "history.log"
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(f"[{timestamp}] [{phase}] {focus} (Blockers: {blockers})\n")
@@ -441,69 +278,35 @@ class ProjectMemory:
         return {"success": True, "file": str(status_file)}
 
     def get_status(self) -> str:
-        """
-        Read the current project status.
-        Orchestrator should call this FIRST upon waking up.
-
-        Returns:
-            Status content or "No active context" message
-        """
+        """Read the current project status."""
         status_file = self.active_dir / "STATUS.md"
         if not status_file.exists():
             return "No active context found. System is idle."
         return status_file.read_text(encoding="utf-8")
 
     def log_scratchpad(self, entry: str, source: str = "Note") -> Dict[str, Any]:
-        """
-        Append a thought, observation, or COMMAND LOG to the scratchpad.
-
-        Args:
-            entry: The content to log
-            source: Source of the entry ("Note", "System", "User")
-
-        Returns:
-            Dict with success status and file path
-        """
+        """Append a thought, observation, or COMMAND LOG to the scratchpad."""
         scratchpad_file = self.active_dir / "SCRATCHPAD.md"
         timestamp = datetime.now().strftime("%H:%M:%S")
 
-        # Auto-create file if it doesn't exist
         if not scratchpad_file.exists():
             scratchpad_file.write_text(
                 f"# 📝 Scratchpad (Session Log)\nStarted: {datetime.now()}\n\n", encoding="utf-8"
             )
 
-        # Format different types of logs
         if source == "System":
-            # Flight recorder format: compact, emphasize command and result
             entry_text = f"\n> `[{timestamp}]` **EXEC**: {entry}\n"
         else:
-            # Thought note format
             entry_text = f"\n### [{timestamp}] {source}\n{entry}\n"
 
-        # Append mode
         with open(scratchpad_file, "a", encoding="utf-8") as f:
             f.write(entry_text)
 
         return {"success": True, "file": str(scratchpad_file)}
 
-    # =============================================================================
-    # NEW: Spec Path Management (Legislation Workflow)
-    # =============================================================================
-
+    # Spec Path Management
     def set_spec_path(self, spec_path: str) -> Dict[str, Any]:
-        """
-        Store the current spec path for the legislation workflow.
-
-        Used by start_spec to save the path, and by verify_spec_completeness
-        to auto-detect the current spec without manual input.
-
-        Args:
-            spec_path: Path to the spec file
-
-        Returns:
-            Dict with success status and file path
-        """
+        """Store the current spec path for the legislation workflow."""
         spec_file = self.active_dir / "current_spec.json"
         data = {"spec_path": spec_path, "timestamp": datetime.now().isoformat()}
         spec_file.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -511,12 +314,7 @@ class ProjectMemory:
         return {"success": True, "file": str(spec_file)}
 
     def get_spec_path(self) -> Optional[str]:
-        """
-        Get the current spec path stored by start_spec.
-
-        Returns:
-            Spec path string or None if not set
-        """
+        """Get the current spec path stored by start_spec."""
         spec_file = self.active_dir / "current_spec.json"
         if not spec_file.exists():
             return None
@@ -525,3 +323,6 @@ class ProjectMemory:
             return data.get("spec_path")
         except (json.JSONDecodeError, IOError):
             return None
+
+
+__all__ = ["ProjectMemory", "MEMORY_DIR", "init_memory_dir", "format_decision", "parse_decision"]

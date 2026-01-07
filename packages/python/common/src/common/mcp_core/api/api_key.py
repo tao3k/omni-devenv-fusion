@@ -1,6 +1,8 @@
-# common/mcp_core/api_key.py
+# api_key.py
 """
 Unified API Key Management Module
+
+Phase 30: Modularized.
 
 Provides consistent API key loading from multiple sources:
 1. Environment variable (ANTHROPIC_API_KEY)
@@ -8,9 +10,9 @@ Provides consistent API key loading from multiple sources:
 3. .mcp.json (Claude Desktop format)
 
 Usage:
-    from common.mcp_core.api_key import get_anthropic_key
+    from common.mcp_core.api_key import get_anthropic_api_key
 
-    api_key = get_anthropic_key()  # Auto-loads from best available source
+    api_key = get_anthropic_api_key()  # Auto-loads from best available source
 """
 
 import json

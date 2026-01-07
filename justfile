@@ -391,17 +391,17 @@ test-mcp:
     @timeout 3 python -u packages/python/agent/src/agent/main.py 2>&1 || echo "Server startup: OK"
     @echo ""
     @echo "=== Skill Tests ==="
-    @uv run pytest packages/python/agent/src/agent/tests/test_phase13_skills.py packages/python/agent/src/agent/tests/test_mcp_dependencies.py -v
+    @uv run pytest packages/python/agent/src/agent/tests/test_skills_full.py packages/python/agent/src/agent/tests/test_mcp_dependencies.py -v
 
 [group('mcp')]
 test-skills:
     @echo "=== Skill Architecture Tests ==="
-    @uv run pytest packages/python/agent/src/agent/tests/test_phase13_skills.py -v
+    @uv run pytest packages/python/agent/src/agent/tests/test_skills_full.py -v
 
 [group('mcp')]
 test-skills-workflow:
     @echo "=== Skill Workflow Tests ==="
-    @uv run pytest packages/python/agent/src/agent/tests/test_phase13_skills.py::TestSkillManagerOmniCLI -v
+    @uv run pytest packages/python/agent/src/agent/tests/test_skills_full.py::TestSkillManagerOmniCLI -v
 
 [group('mcp')]
 test-git-security:

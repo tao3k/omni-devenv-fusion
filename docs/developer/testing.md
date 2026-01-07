@@ -605,6 +605,7 @@ result = await module.async_function()
 
 ## Related Documentation
 
+- [mcp_core Architecture](./mcp-core-architecture.md) - Shared library documentation
 - [Trinity Architecture](../explanation/trinity-architecture.md) - Core architecture
 - [Skills Documentation](../skills.md) - Skills system
 - [Justfile](../justfile) - Test commands

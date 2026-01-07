@@ -1,183 +1,40 @@
-# mcp-core/execution.py
 """
-Safe Command Execution Module
+execution/executor.py
+Safe command execution with security boundaries.
+
+Phase 29: Protocol-based design with slots=True.
 
 Provides unified command execution with security boundaries and sandboxing.
-This module wraps subprocess calls to ensure safe operation across both
-orchestrator.py and coder.py servers.
+Used by both orchestrator.py and coder.py servers.
 
-Features:
-- Whitelist-based command validation
-- Dangerous pattern blocking
-- Environment sanitization
-- Timeout protection
-- Sandbox environment support
+Usage:
+    from mcp_core.execution import SafeExecutor
+
+    result = await SafeExecutor.run("just", ["test"])
+    result = await SafeExecutor.run_sandbox("echo", ["hello"])
 """
 
+from __future__ import annotations
+
 import asyncio
-import os
-import re
+import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any
 
 import structlog
 
-log = structlog.get_logger("mcp-core.execution")
+from .security import (
+    check_dangerous_patterns,
+    check_whitelist,
+    create_sandbox_env,
+    DEFAULT_ALLOWED_COMMANDS,
+)
 
-
-# =============================================================================
-# Security Configuration
-# =============================================================================
-
-# Dangerous patterns to block in commands
-DANGEROUS_PATTERNS = [
-    r"rm\s+-rf",
-    r"dd\s+if=",
-    r">\s*/dev/",
-    r"\|\s*sh",
-    r"&&\s*rm",
-    r";\s*rm",
-    r"chmod\s+777",
-    r"chown\s+root:",
-    r":\(\)\s*{",
-    r"\$\(\s*",
-]
-
-# Safe commands whitelist (extendable per project)
-DEFAULT_ALLOWED_COMMANDS = {
-    "just": ["validate", "build", "test", "lint", "fmt", "test-basic", "test-mcp", "agent-commit"],
-    "nix": ["fmt", "build", "shell", "flake-check"],
-    "git": [
-        "status",
-        "diff",
-        "log",
-        "add",
-        "checkout",
-        "branch",
-        "stash",
-        "merge",
-        "revert",
-        "tag",
-        "remote",
-        "show",
-        "reset",
-        "clean",
-    ],
-    "echo": [],  # Safe for testing
-    "find": [],  # Read-only exploration
-}
-
-
-# =============================================================================
-# Security Check Functions
-# =============================================================================
-
-
-def check_dangerous_patterns(command: str, args: List[str]) -> Tuple[bool, str]:
-    """
-    Check if command contains dangerous patterns.
-
-    Args:
-        command: The command to check
-        args: Command arguments
-
-    Returns:
-        Tuple of (is_safe, error_message)
-    """
-    full_cmd = f"{command} {' '.join(args)}"
-    for pattern in DANGEROUS_PATTERNS:
-        if re.search(pattern, full_cmd, re.IGNORECASE):
-            return False, f"Blocked dangerous pattern: {pattern}"
-    return True, ""
-
-
-def check_whitelist(
-    command: str, args: List[str], allowed_commands: Dict[str, List[str]] = None
-) -> Tuple[bool, str]:
-    """
-    Check if command is in the whitelist.
-
-    Args:
-        command: The command to check
-        args: Command arguments
-        allowed_commands: Dict of allowed commands and their args
-
-    Returns:
-        Tuple of (is_safe, error_message)
-    """
-    if allowed_commands is None:
-        allowed_commands = DEFAULT_ALLOWED_COMMANDS
-
-    if command not in allowed_commands:
-        return False, f"Command '{command}' is not allowed."
-
-    allowed_args = allowed_commands.get(command, [])
-
-    # Git commands accept paths as arguments (not just subcommands)
-    if command == "git":
-        # Git subcommands (like status, diff, log) are allowed
-        # And paths are always allowed for git
-        for arg in args:
-            if arg.startswith("-"):
-                continue  # Allow flags
-            # Allow any subcommand that is in allowed_args OR looks like a path
-            if arg in allowed_args:
-                continue
-            # Allow arguments that look like file paths (contain / or start with .)
-            if "/" in arg or arg.startswith(".") or arg.startswith("/"):
-                continue
-            # Allow arguments that are git subcommands
-            if arg in allowed_args:
-                continue
-            return False, f"Argument '{arg}' is not allowed for '{command}'."
-        return True, ""
-
-    # For non-git commands, use strict checking
-    for arg in args:
-        if arg.startswith("-"):
-            continue  # Allow flags
-        if arg not in allowed_args and not any(arg.startswith(a) for a in allowed_args):
-            return False, f"Argument '{arg}' is not allowed for '{command}'."
-
-    return True, ""
-
-
-def create_sandbox_env(redact_keys: List[str] = None, restrict_home: bool = True) -> Dict[str, str]:
-    """
-    Create a sandboxed environment with restricted variables.
-
-    Args:
-        redact_keys: Environment variables to redact
-        restrict_home: Whether to restrict HOME directory
-
-    Returns:
-        Sandbox environment dict
-    """
-    if redact_keys is None:
-        redact_keys = ["AWS_SECRET_ACCESS_KEY", "GITHUB_TOKEN", "ANTHROPIC_API_KEY"]
-
-    env = os.environ.copy()
-
-    # Redact sensitive environment variables
-    for var in redact_keys:
-        if var in env:
-            env[var] = "***REDACTED***"
-
-    # Restrict home directory access
-    if restrict_home:
-        env["HOME"] = str(Path.cwd())
-
-    return env
-
-
-# =============================================================================
-# Execution Classes
-# =============================================================================
+logger = logging.getLogger(__name__)
 
 
 class SafeExecutor:
-    """
-    Provides safe command execution with consistent security boundaries.
+    """Provides safe command execution with consistent security boundaries.
 
     This class ensures both orchestrator.py and coder.py use the same
     security policies for command execution.
@@ -190,13 +47,12 @@ class SafeExecutor:
     @staticmethod
     async def run(
         command: str,
-        args: Optional[List[str]] = None,
-        allowed_commands: Dict[str, List[str]] = None,
+        args: list[str] | None = None,
+        allowed_commands: dict[str, list[str]] | None = None,
         timeout: int = 60,
-        cwd: Optional[str] = None,
-    ) -> Dict[str, any]:
-        """
-        Run a command with whitelist validation.
+        cwd: str | None = None,
+    ) -> dict[str, Any]:
+        """Run a command with whitelist validation.
 
         Args:
             command: Command to run
@@ -214,7 +70,7 @@ class SafeExecutor:
         # Security checks
         is_safe, error_msg = check_whitelist(command, args, allowed_commands)
         if not is_safe:
-            log.info("execution.blocked", command=command, args=args, reason=error_msg)
+            logger.info("execution.blocked", command=command, args=args, reason=error_msg)
             return {
                 "success": False,
                 "stdout": "",
@@ -225,7 +81,7 @@ class SafeExecutor:
 
         is_safe, error_msg = check_dangerous_patterns(command, args)
         if not is_safe:
-            log.info("execution.dangerous_pattern", command=command, args=args, reason=error_msg)
+            logger.info("execution.dangerous_pattern", command=command, args=args, reason=error_msg)
             return {
                 "success": False,
                 "stdout": "",
@@ -234,7 +90,7 @@ class SafeExecutor:
                 "error": error_msg,
             }
 
-        log.info("execution.running", command=command, args=args)
+        logger.info("execution.running", command=command, args=args)
 
         try:
             process = await asyncio.create_subprocess_exec(
@@ -260,7 +116,7 @@ class SafeExecutor:
                 "error": "",
             }
 
-            log.info(
+            logger.info(
                 "execution.complete",
                 command=command,
                 returncode=process.returncode,
@@ -270,7 +126,7 @@ class SafeExecutor:
             return result
 
         except asyncio.TimeoutExpired:
-            log.info("execution.timeout", command=command, timeout=timeout)
+            logger.info("execution.timeout", command=command, timeout=timeout)
             return {
                 "success": False,
                 "stdout": "",
@@ -289,19 +145,18 @@ class SafeExecutor:
             }
 
         except Exception as e:
-            log.info("execution.error", command=command, error=str(e))
+            logger.info("execution.error", command=command, error=str(e))
             return {"success": False, "stdout": "", "stderr": "", "exit_code": -1, "error": str(e)}
 
     @staticmethod
     async def run_sandbox(
         command: str,
-        args: Optional[List[str]] = None,
+        args: list[str] | None = None,
         timeout: int = 60,
         read_only: bool = False,
-        sandbox_env: Dict[str, str] = None,
-    ) -> Dict[str, any]:
-        """
-        Run a command in a sandboxed environment with enhanced safety.
+        sandbox_env: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """Run a command in a sandboxed environment with enhanced safety.
 
         Args:
             command: Command to run
@@ -319,7 +174,7 @@ class SafeExecutor:
         # Security checks
         is_safe, error_msg = check_dangerous_patterns(command, args)
         if not is_safe:
-            log.info("sandbox.blocked", command=command, args=args, reason=error_msg)
+            logger.info("sandbox.blocked", command=command, args=args, reason=error_msg)
             return {
                 "success": False,
                 "stdout": "",
@@ -333,7 +188,7 @@ class SafeExecutor:
         if read_only:
             env["READ_ONLY_SANDBOX"] = "1"
 
-        log.info("sandbox.executing", command=command, read_only=read_only)
+        logger.info("sandbox.executing", command=command, read_only=read_only)
 
         try:
             process = await asyncio.create_subprocess_exec(
@@ -360,7 +215,7 @@ class SafeExecutor:
                 "error": "",
             }
 
-            log.info(
+            logger.info(
                 "sandbox.complete",
                 command=command,
                 returncode=process.returncode,
@@ -370,7 +225,7 @@ class SafeExecutor:
             return result
 
         except asyncio.TimeoutExpired:
-            log.info("sandbox.timeout", command=command, timeout=timeout)
+            logger.info("sandbox.timeout", command=command, timeout=timeout)
             return {
                 "success": False,
                 "stdout": "",
@@ -389,13 +244,12 @@ class SafeExecutor:
             }
 
         except Exception as e:
-            log.info("sandbox.error", command=command, error=str(e))
+            logger.info("sandbox.error", command=command, error=str(e))
             return {"success": False, "stdout": "", "stderr": "", "exit_code": -1, "error": str(e)}
 
     @staticmethod
-    def format_result(result: Dict[str, any], command: str, args: List[str] = None) -> str:
-        """
-        Format execution result as a readable string.
+    def format_result(result: dict[str, Any], command: str, args: list[str] | None = None) -> str:
+        """Format execution result as a readable string.
 
         Args:
             result: Result dict from run() or run_sandbox()
@@ -426,3 +280,6 @@ class SafeExecutor:
             output += "\n⚠️  Execution failed or was blocked."
 
         return output.strip()
+
+
+__all__ = ["SafeExecutor"]

@@ -1,6 +1,8 @@
-# mcp-core/instructions.py
+# instructions/loader.py
 """
 Project Instructions Loader - Lazy Load
+
+Phase 30: Modularized.
 
 Loads all instructions from agent/instructions/ on first access.
 Thread-safe and process-fork-safe implementation.
@@ -9,8 +11,6 @@ Key Design:
 - Pure lazy loading: No I/O on import, avoids fork deadlock
 - Double-checked locking: Fast path after first load
 - thread-safe with Lock: No race conditions or empty data
-
-Uses GitOps via common.mcp_core.project_root for path detection.
 
 Usage:
     from mcp_core.instructions import get_instructions, get_instruction
@@ -22,10 +22,8 @@ Usage:
 from pathlib import Path
 import threading
 
-# Project root detection using GitOps
 from common.gitops import get_project_root, get_instructions_dir
 
-_PROJECT_ROOT = get_project_root()
 instructions_dir = get_instructions_dir()
 
 # Internal state
@@ -41,7 +39,6 @@ def _load_data_internal() -> None:
     """
     global _data, _loaded
 
-    # Double-check after acquiring lock
     if _loaded:
         return
 
@@ -60,52 +57,28 @@ def _load_data_internal() -> None:
 
 
 def _ensure_loaded() -> None:
-    """Ensure instructions are loaded in a thread-safe manner.
-
-    Uses double-checked locking pattern:
-    1. Fast path: Check _loaded without lock (most calls)
-    2. Slow path: Acquire lock and load if needed (first call)
-    """
-    # Fast path: Already loaded
+    """Ensure instructions are loaded in a thread-safe manner."""
     if _loaded:
         return
 
-    # Slow path: Acquire lock and load
     with _lock:
         _load_data_internal()
 
 
 def get_instructions() -> dict[str, str]:
-    """Get all loaded instructions.
-
-    Returns:
-        Dictionary mapping instruction name to content.
-    """
+    """Get all loaded instructions."""
     _ensure_loaded()
     return _data.copy()
 
 
 def get_instruction(name: str) -> str | None:
-    """Get a specific instruction by name.
-
-    Args:
-        name: Instruction name (without .md extension), e.g., "project-conventions"
-
-    Returns:
-        Instruction content or None if not found.
-    """
+    """Get a specific instruction by name."""
     _ensure_loaded()
     return _data.get(name)
 
 
 def get_all_instructions_merged() -> str:
-    """Get all instructions merged into a single string.
-
-    This is useful for injecting into LLM system prompts.
-
-    Returns:
-        Merged instruction string.
-    """
+    """Get all instructions merged into a single string."""
     _ensure_loaded()
     if not _data:
         return ""
@@ -118,20 +91,13 @@ def get_all_instructions_merged() -> str:
 
 
 def list_instruction_names() -> list[str]:
-    """List all available instruction names.
-
-    Returns:
-        List of instruction file names (without .md extension).
-    """
+    """List all available instruction names."""
     _ensure_loaded()
     return list(_data.keys())
 
 
 def reload_instructions() -> None:
-    """Force reload all instructions.
-
-    Use this for testing or after adding new instruction files.
-    """
+    """Force reload all instructions."""
     global _loaded
     with _lock:
         _loaded = False
@@ -140,7 +106,6 @@ def reload_instructions() -> None:
 
 # NOTE: No eager loading at import time!
 # This avoids fork deadlock issues with threading.Lock.
-# All loading is deferred to first access.
 
 __all__ = [
     "get_instructions",

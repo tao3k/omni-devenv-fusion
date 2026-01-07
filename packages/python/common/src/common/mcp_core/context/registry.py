@@ -1,149 +1,17 @@
-# mcp-core/project_context.py
 """
-Project-Specific Context Framework
+context/registry.py
+Context registry for project-specific contexts.
 
-A framework for providing project-specific coding context.
-Designed for extensibility - easy to add new languages and categories.
+Phase 29: Protocol-based design.
 
-Uses GitOps via common.mcp_core.gitops for path detection.
-
-Architecture:
-- ProjectContext: Base class for language contexts
-- ContextRegistry: Registry for all language contexts
-- get_project_context(): Main API for retrieving context
-
-Usage:
-    # Register a new language context
-    from mcp_core.project_context import ContextRegistry, ProjectContext
-
-    class GoContext(ProjectContext):
-        LANG_ID = "go"
-        CATEGORIES = ["tooling", "patterns", "architecture", "conventions"]
-
-        def _load_tooling(self) -> str:
-            return "## 🛠️ Go Tooling\n- Use `go mod` for dependencies..."
-
-    ContextRegistry.register(GoContext())
-
-    # Get context
-    from mcp_core.project_context import get_project_context
-    context = get_project_context("go", category="tooling")
+Manages registered language contexts and provides lookup.
 """
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import Any, Generic, TypeVar, Callable
+from typing import Any
 
-# Project root detection using GitOps
-from common.gitops import get_project_root
-
-_PROJECT_ROOT: Path | None = None
-
-
-def _get_project_root() -> Path:
-    """Get the project root directory (uses GitOps)."""
-    global _PROJECT_ROOT
-    if _PROJECT_ROOT is None:
-        _PROJECT_ROOT = get_project_root()
-    return _PROJECT_ROOT
-
-
-# =============================================================================
-# Framework: Base Classes
-# =============================================================================
-
-T = TypeVar("T", bound="ProjectContext")
-
-
-class ProjectContext(ABC):
-    """Base class for project-specific language context.
-
-    Subclass this to add support for a new language:
-
-    class PythonContext(ProjectContext):
-        LANG_ID = "python"
-        CATEGORIES = ["tooling", "patterns", "architecture", "conventions"]
-
-        def _load_tooling(self) -> str:
-            return "## 🛠️ Tooling\n- UV for dependency management..."
-
-        def _load_patterns(self) -> str:
-            return "## 🔄 Common Patterns\n- Singleton pattern..."
-
-    ContextRegistry.register(PythonContext())
-    """
-
-    # Override these in subclass
-    LANG_ID: str = ""
-    CATEGORIES: list[str] = ["tooling"]
-
-    def __init__(self) -> None:
-        """Initialize context cache."""
-        self._cache: dict[str, str] = {}
-        self._loaded: bool = False
-
-    def _ensure_loaded(self) -> None:
-        """Lazy load all categories."""
-        if self._loaded:
-            return
-        for cat in self.CATEGORIES:
-            loader = getattr(self, f"_load_{cat}", lambda: "")
-            self._cache[cat] = loader()
-        self._loaded = True
-
-    def get(self, category: str | None = None) -> str:
-        """Get context for a category or all categories.
-
-        Args:
-            category: Specific category, or None for all.
-
-        Returns:
-            Context string.
-        """
-        self._ensure_loaded()
-        if category:
-            return self._cache.get(category, "")
-        return "\n\n".join(self._cache.values())
-
-    def has_category(self, category: str) -> bool:
-        """Check if category exists.
-
-        Args:
-            category: Category name.
-
-        Returns:
-            True if category exists.
-        """
-        return category in self.CATEGORIES
-
-    @property
-    def lang_id(self) -> str:
-        """Get language ID."""
-        return self.LANG_ID
-
-    @property
-    def categories(self) -> list[str]:
-        """Get all category names."""
-        return self.CATEGORIES.copy()
-
-    # Override these in subclass for each category
-    def _load_tooling(self) -> str:
-        """Load tooling context."""
-        return ""
-
-    def _load_patterns(self) -> str:
-        """Load patterns context."""
-        return ""
-
-    def _load_architecture(self) -> str:
-        """Load architecture context."""
-        return ""
-
-    def _load_conventions(self) -> str:
-        """Load conventions context."""
-        return ""
+from .base import ProjectContext
 
 
 class ContextRegistry:
@@ -339,8 +207,8 @@ skill = SkillRegistry.load_skill("software_engineering")
 - `mcp_core/execution.py` - Safe command execution
 - `mcp_core/memory.py` - Project memory persistence
 - `mcp_core/inference.py` - LLM inference client
-- `mcp_core/lazy_cache.py` - Lazy-loading singleton caches
-- `mcp_core/project_context.py` - Project-specific contexts (this!)
+- `mcp_core/lazy_cache/` - Lazy-loading singleton caches
+- `mcp_core/context/` - Project-specific contexts
 - `mcp_core/gitops.py` - Git workflow integration
 
 ### Project Structure
@@ -395,7 +263,7 @@ def calculate_metrics(values: list[float]) -> dict[str, float]:
 | `except:` | Catches everything | `except ValueError:` |
 | `list(dict.keys())` | Verbose | `list(dict)` |
 | `type(x) == str` | Not duck-typed | `isinstance(x, str)` |
-| Mutable default args | Shared state bug | `def f(x=None): if x is None: x=[]` |
+| Mutable default args | Shared state bug | `def f(x=None): if x is None: x=[]`
 
 ### Commit Conventions (Conventional Commits)
 ```
@@ -485,117 +353,8 @@ ContextRegistry.register(PythonContext())
 ContextRegistry.register(NixContext())
 
 
-# =============================================================================
-# Public API
-# =============================================================================
-
-
-def get_project_context(
-    lang: str, category: str | None = None, include_builtins: bool = True
-) -> str:
-    """Get project-specific context for a language.
-
-    This is the main API for retrieving project context.
-
-    Args:
-        lang: Language ID (python, nix, etc.)
-        category: Optional category (tooling, patterns, architecture, conventions)
-                 If None, returns all categories merged.
-        include_builtins: Include built-in contexts (default: True)
-
-    Returns:
-        Project context string, or empty string if not found.
-
-    Examples:
-        # Get all Python context
-        context = get_project_context("python")
-
-        # Get specific category
-        tooling = get_project_context("python", category="tooling")
-
-        # Get with custom context
-        context = get_project_context("go") + get_custom_context()
-    """
-    context = ContextRegistry.get(lang)
-    if context is None:
-        return ""
-    return context.get(category)
-
-
-def get_all_project_contexts() -> dict[str, dict[str, str]]:
-    """Get all registered project contexts.
-
-    Returns:
-        Dictionary of lang_id -> {category -> content}.
-    """
-    result: dict[str, dict[str, str]] = {}
-    for lang_id in ContextRegistry.list_languages():
-        context = ContextRegistry.get(lang_id)
-        if context:
-            result[lang_id] = {cat: context.get(cat) for cat in context.categories}
-    return result
-
-
-def list_project_languages() -> list[str]:
-    """List all registered language IDs.
-
-    Returns:
-        List of language IDs.
-    """
-    return ContextRegistry.list_languages()
-
-
-def has_project_context(lang: str) -> bool:
-    """Check if context exists for a language.
-
-    Args:
-        lang: Language ID.
-
-    Returns:
-        True if context exists.
-    """
-    return ContextRegistry.has(lang)
-
-
-def register_project_context(context: ProjectContext) -> None:
-    """Register a custom project context.
-
-    Use this to add support for new languages:
-
-    class GoContext(ProjectContext):
-        LANG_ID = "go"
-        CATEGORIES = ["tooling", "patterns", "conventions"]
-
-        def _load_tooling(self) -> str:
-            return "## 🛠️ Go Tooling..."
-
-        def _load_patterns(self) -> str:
-            return "## 🔄 Go Patterns..."
-
-    register_project_context(GoContext())
-    """
-    ContextRegistry.register(context)
-
-
-def initialize_project_contexts() -> None:
-    """Initialize all project contexts (for MCP server startup).
-
-    Call this at MCP server startup to pre-load all contexts.
-    """
-    ContextRegistry.initialize_all()
-
-
-# Export
 __all__ = [
-    "ProjectContext",
     "ContextRegistry",
-    "get_project_context",
-    "get_all_project_contexts",
-    "list_project_languages",
-    "has_project_context",
-    "register_project_context",
-    "initialize_project_contexts",
-    # Built-in contexts
     "PythonContext",
     "NixContext",
 ]

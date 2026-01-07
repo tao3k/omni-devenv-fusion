@@ -2,42 +2,190 @@
 """
 Shared library providing common functionality for orchestrator.py and coder.py.
 
-Modules:
-- execution: Safe command execution (claudebox wrapper)
-- memory: Project memory persistence (backlog-md wrapper)
-- inference: LLM inference client (mistral-vibe wrapper)
-- utils: Common utilities (logging, path checking)
-- lazy_cache: Lazy-loading singleton caches for protocols and configs
-- project_context: Project-specific coding context framework
-- instructions: Eager-loaded project instructions (agent/instructions/)
+Phase 31: Optimized architecture with Protocol-based design.
 
-NOTE: Project root detection has moved to `common.gitops` for faster CLI imports.
-      Use `from common.gitops import get_project_root` instead of `from mcp_core import get_project_root`
+Modules:
+- protocols.py: Protocol definitions for type-safe, testable code
+- execution/: Safe command execution with security boundaries
+- lazy_cache/: Lazy-loading singleton caches for protocols and configs
+- utils/: Common utilities (logging, path checking)
+- context/: Project-specific coding context framework
+- inference/: LLM inference client
+- memory/: Project memory persistence
+- api/: API key management
+- instructions/: Eager-loaded project instructions
+- settings: Common settings (fast import from common.settings)
 
 Usage:
-    from mcp_core.execution import SafeExecutor
-    from mcp_core.memory import ProjectMemory
-    from mcp_core.inference import InferenceClient
-    from mcp_core.utils import setup_logging, is_safe_path
-    from mcp_core.lazy_cache import LazyCache, FileCache, ConfigCache
-    from mcp_core.project_context import get_project_context, ProjectContext, ContextRegistry
-    from mcp_core.instructions import get_instructions, get_all_instructions_merged
+    # Protocol-based design (for testing)
+    from mcp_core.protocols import ISafeExecutor, IInferenceClient
 
-    # Get all project instructions (eager loaded at session start)
-    instructions = get_all_instructions_merged()
+    # From modular subpackages
+    from mcp_core.execution import SafeExecutor, check_dangerous_patterns
+    from mcp_core.lazy_cache import FileCache, MarkdownCache, ConfigCache, RepomixCache
+    from common.settings import Settings, get_setting, get_commit_types  # Fast import
+    from mcp_core.utils import setup_logging, is_safe_path
+    from mcp_core.context import get_project_context, ProjectContext, ContextRegistry
+    from mcp_core.inference import InferenceClient, PERSONAS, build_persona_prompt
+    from mcp_core.memory import ProjectMemory
+    from mcp_core.api import get_anthropic_api_key
+    from mcp_core.instructions import get_instructions
 
     # For project root detection (faster):
     from common.gitops import get_project_root
 """
 
-__version__ = "1.2.0"
+from __future__ import annotations
 
-from .execution import SafeExecutor, check_dangerous_patterns
-from .memory import ProjectMemory
-from .inference import InferenceClient, PERSONAS, build_persona_prompt, _load_api_key_from_config
-from .utils import setup_logging, is_safe_path, log_decision, run_subprocess
-from .lazy_cache import LazyCache, FileCache, MarkdownCache, ConfigCache, CompositeCache
-from .project_context import (
+from typing import Any
+
+__version__ = "2.0.0"
+
+# =============================================================================
+# Protocols (Phase 29)
+# =============================================================================
+
+from .protocols import (
+    # Type aliases (import directly, not as strings)
+    ContextData,
+    CacheValue,
+    ConfigValue,
+    # Lazy Cache Protocols
+    ILazyCache,
+    IFileCache,
+    IConfigCache,
+    # Settings Protocols
+    ISettings,
+    # Execution Protocols
+    ISafeExecutor,
+    # Inference Protocols
+    IInferenceClient,
+    # Context Protocols
+    IProjectContext,
+    IContextRegistry,
+    # Base Dataclasses
+    ExecutionResult,
+    InferenceResult,
+    CacheEntry,
+    PathSafetyResult,
+    SettingsEntry,
+)
+
+# =============================================================================
+# Lazy Cache (backward compatible exports)
+# =============================================================================
+
+from .lazy_cache import (
+    LazyCacheBase as LazyCache,  # Backward compat alias
+    FileCache,
+    MarkdownCache,
+    ConfigCache,
+    RepomixCache,
+)
+
+# Re-export CompositeCache if it exists in base module
+try:
+    from .lazy_cache.base import CompositeCache  # type: ignore
+    from .lazy_cache.base import CompositeCache as CompositeCacheDirect
+
+    CompositeCache = CompositeCacheDirect
+    del CompositeCacheDirect
+except ImportError:
+    pass
+
+# =============================================================================
+# Execution
+# =============================================================================
+
+from .execution import (
+    SafeExecutor,
+    check_dangerous_patterns,
+    check_whitelist,
+    create_sandbox_env,
+    DANGEROUS_PATTERNS,
+    DEFAULT_ALLOWED_COMMANDS,
+)
+
+# =============================================================================
+# Settings (import from common.settings for faster imports)
+# =============================================================================
+
+from common.settings import (
+    Settings,
+    get_setting,
+    get_config_path,
+    get_commit_types,
+    get_commit_scopes,
+    get_commit_protocol,
+    has_setting,
+    list_setting_sections,
+    set_conf_dir,
+    get_conf_dir,
+)
+
+# =============================================================================
+# Utils
+# =============================================================================
+
+from .utils import (
+    setup_logging,
+    get_logger,
+    is_safe_path,
+    is_safe_command,
+    read_file_safely,
+    write_file_safely,
+    load_env_from_file,
+    get_env,
+)
+
+# Keep backward compatibility for log_decision and run_subprocess
+from .utils.logging import get_logger as _get_logger
+
+
+def log_decision(event: str, payload: dict[str, Any], logger=None) -> None:
+    """Log a decision/event with structured payload."""
+    if logger is None:
+        logger = _get_logger("decision")
+    logger.info(event, **payload)
+
+
+async def run_subprocess(
+    command: str,
+    args: list = None,
+    timeout: int = 60,
+    cwd: str = None,
+) -> tuple[int, str, str]:
+    """Simple subprocess runner with timeout."""
+    import asyncio
+    from pathlib import Path
+
+    if args is None:
+        args = []
+
+    try:
+        process = await asyncio.create_subprocess_exec(
+            command,
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=cwd or str(Path.cwd()),
+        )
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+        return (process.returncode, stdout.decode("utf-8"), stderr.decode("utf-8"))
+
+    except asyncio.TimeoutExpired:
+        return (-1, "", f"Timed out after {timeout}s")
+    except FileNotFoundError:
+        return (-1, "", f"Command '{command}' not found")
+    except Exception as e:
+        return (-1, "", str(e))
+
+
+# =============================================================================
+# Context
+# =============================================================================
+
+from .context import (
     ProjectContext,
     ContextRegistry,
     get_project_context,
@@ -49,6 +197,34 @@ from .project_context import (
     PythonContext,
     NixContext,
 )
+
+# =============================================================================
+# Inference (keep original imports)
+# =============================================================================
+
+from .inference import (
+    InferenceClient,
+    PERSONAS,
+    build_persona_prompt,
+    _load_api_key_from_config,
+    DEFAULT_MODEL,
+    DEFAULT_BASE_URL,
+    DEFAULT_TIMEOUT,
+    DEFAULT_MAX_TOKENS,
+)
+
+# =============================================================================
+# Memory (keep original imports)
+# =============================================================================
+
+from .memory import (
+    ProjectMemory,
+)
+
+# =============================================================================
+# Instructions (keep original imports)
+# =============================================================================
+
 from .instructions import (
     get_instructions,
     get_instruction,
@@ -56,25 +232,77 @@ from .instructions import (
     list_instruction_names,
     reload_instructions,
 )
-# Writing quality tools have been migrated to skills/writer/tools.py
-# Use: from agent.skills.writer.tools import lint_writing_style, polish_text
+
+# =============================================================================
+# API Key (keep original imports)
+# =============================================================================
+
+from .api import (
+    get_anthropic_api_key,
+    get_api_key,
+    ensure_api_key,
+)
+
+# =============================================================================
+# All Exports
+# =============================================================================
 
 __all__ = [
-    "SafeExecutor",
-    "check_dangerous_patterns",
-    "ProjectMemory",
-    "InferenceClient",
-    "PERSONAS",
-    "build_persona_prompt",
-    "setup_logging",
-    "is_safe_path",
-    "log_decision",
-    "run_subprocess",
+    # Version
+    "__version__",
+    # Protocols
+    "ContextData",
+    "CacheValue",
+    "ConfigValue",
+    "ILazyCache",
+    "IFileCache",
+    "IConfigCache",
+    "ISettings",
+    "ISafeExecutor",
+    "IInferenceClient",
+    "IProjectContext",
+    "IContextRegistry",
+    "ExecutionResult",
+    "InferenceResult",
+    "CacheEntry",
+    "PathSafetyResult",
+    "SettingsEntry",
+    # Lazy Cache
     "LazyCache",
     "FileCache",
     "MarkdownCache",
     "ConfigCache",
-    "CompositeCache",
+    "RepomixCache",
+    # Execution
+    "SafeExecutor",
+    "check_dangerous_patterns",
+    "check_whitelist",
+    "create_sandbox_env",
+    "DANGEROUS_PATTERNS",
+    "DEFAULT_ALLOWED_COMMANDS",
+    # Settings
+    "Settings",
+    "get_setting",
+    "get_config_path",
+    "get_commit_types",
+    "get_commit_scopes",
+    "get_commit_protocol",
+    "has_setting",
+    "list_setting_sections",
+    "set_conf_dir",
+    "get_conf_dir",
+    # Utils
+    "setup_logging",
+    "get_logger",
+    "is_safe_path",
+    "is_safe_command",
+    "read_file_safely",
+    "write_file_safely",
+    "load_env_from_file",
+    "get_env",
+    "log_decision",
+    "run_subprocess",
+    # Context
     "ProjectContext",
     "ContextRegistry",
     "get_project_context",
@@ -85,10 +313,25 @@ __all__ = [
     "initialize_project_contexts",
     "PythonContext",
     "NixContext",
+    # Inference
+    "InferenceClient",
+    "PERSONAS",
+    "build_persona_prompt",
+    "_load_api_key_from_config",
+    "DEFAULT_MODEL",
+    "DEFAULT_BASE_URL",
+    "DEFAULT_TIMEOUT",
+    "DEFAULT_MAX_TOKENS",
+    # Memory
+    "ProjectMemory",
     # Instructions
     "get_instructions",
     "get_instruction",
     "get_all_instructions_merged",
     "list_instruction_names",
     "reload_instructions",
+    # API Key
+    "get_anthropic_api_key",
+    "get_api_key",
+    "ensure_api_key",
 ]
