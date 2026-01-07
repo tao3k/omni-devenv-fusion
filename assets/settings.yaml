@@ -210,3 +210,30 @@ post_mortem:
 
   # Confidence threshold: audits below this are flagged for manual review
   confidence_threshold: 0.8
+
+# =============================================================================
+# Phase 28: Safe Ingestion / Immune System
+# =============================================================================
+# Security layer for downloading and executing third-party skills
+
+security:
+  # Enable/disable security scanning (default: true)
+  enabled: true
+
+  # Thresholds for security decisions (0-100)
+  # Score >= block_threshold: BLOCK the skill
+  # Score >= warn_threshold: WARN user but allow
+  block_threshold: 30
+  warn_threshold: 10
+
+  # Trusted sources (skip security scan for these)
+  # Format: "github.com/username" or full repository URL patterns
+  trusted_sources:
+    - "github.com/omni-dev"
+    - "github.com/trusted-org"
+
+  # Sandbox configuration (future enhancement)
+  sandbox:
+    enabled: false
+    timeout_seconds: 30
+    memory_limit_mb: 128

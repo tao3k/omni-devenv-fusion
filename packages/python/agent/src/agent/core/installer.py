@@ -117,6 +117,14 @@ class SkillInstaller:
             if subpath:
                 self._configure_sparse_checkout(target_dir, subpath, refresh=True)
 
+            # Phase 28: Security scan before continuing
+            security_result = self._security_scan(target_dir, repo_url)
+            if not security_result["passed"]:
+                raise SkillInstallError(
+                    f"Security scan failed: {security_result['error']}",
+                    hint="The skill failed security checks. Use --trust to bypass for trusted sources.",
+                )
+
             # Get revision info
             revision = self.get_revision(target_dir)
 
@@ -464,6 +472,67 @@ class SkillInstaller:
 
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    def _security_scan(self, target_dir: Path, repo_url: str) -> dict:
+        """
+        Phase 28: Security scan for newly installed skill.
+
+        Args:
+            target_dir: Directory of the installed skill
+            repo_url: Repository URL for trusted source check
+
+        Returns:
+            dict with scan result: {"passed": bool, "error": str or None, "report": dict}
+        """
+        from common.settings import get_setting
+
+        # Check if security is enabled
+        if not get_setting("security.enabled", True):
+            return {"passed": True, "error": None, "report": {}}
+
+        try:
+            from agent.core.security.immune_system import ImmuneSystem, Decision
+
+            immune = ImmuneSystem()
+            assessment = immune.assess(target_dir)
+
+            # Check if skill is from trusted source
+            is_trusted, _ = immune._check_trusted(target_dir, assessment.scanner_report)
+
+            # Prepare report
+            report = assessment.to_dict()
+
+            # Make decision
+            if assessment.decision == Decision.BLOCK:
+                logger.warning(f"Skill blocked by security scan: {target_dir.name}")
+                return {
+                    "passed": False,
+                    "error": f"Security concerns detected (score: {assessment.scanner_report.total_score})",
+                    "report": report,
+                }
+            elif assessment.decision == Decision.WARN:
+                logger.info(f"Skill has security warnings: {target_dir.name}")
+                return {
+                    "passed": True,
+                    "error": None,
+                    "report": report,
+                }
+            else:
+                logger.info(f"Skill passed security scan: {target_dir.name}")
+                return {
+                    "passed": True,
+                    "error": None,
+                    "report": report,
+                }
+
+        except Exception as e:
+            logger.error(f"Security scan error: {e}")
+            # Fail open - don't block installation on scan error
+            return {
+                "passed": True,
+                "error": str(e),
+                "report": {"error": str(e)},
+            }
 
 
 class SkillInstallError(Exception):

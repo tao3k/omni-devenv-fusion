@@ -1,5 +1,26 @@
 # Skills Directory
 
+> **Phase 28: Safe Ingestion / Immune System** (2026-01-06)
+>
+> Security layer for downloading and executing third-party skills from Git repositories.
+>
+> - Code pattern scanning (eval, exec, os.system, subprocess shell=True)
+> - Manifest permission validation
+> - Decision engine: SAFE / WARN / SANDBOX / BLOCK
+
+> **Phase 27: JIT Skill Acquisition** (2025-12)
+>
+> Just-in-time skill installation from known skills index.
+>
+> - `omni("skill.jit_install", {"skill_id": "..."})` - Auto-download on demand
+> - `omni("skill.discover", {"query": "..."})` - Search skills index
+> - `omni("skill.suggest", {"task": "..."})` - AI-powered skill recommendations
+
+> **Phase 25: One Tool Architecture**
+>
+> Single entry point: `@omni("skill.command")`
+> Brain (prompts.md) -> Muscle (tools.py) -> Guardrails (lefthook)
+
 > **Phase 24: The MiniMax Shift**
 >
 > Direct tool registration for native CLI experience.
@@ -218,8 +239,105 @@ def apply_file_changes(changes: List[FileOperation]) -> str:
     return summary_report
 ```
 
+## Phase 27: JIT Skill Acquisition
+
+### MCP Tools
+
+| Tool                | Description                        |
+| ------------------- | ---------------------------------- |
+| `skill.jit_install` | Install skill from index on demand |
+| `skill.discover`    | Search skills index                |
+| `skill.suggest`     | Get AI recommendations             |
+| `skill.list_index`  | List all known skills              |
+
+### Usage
+
+```python
+# Install a skill on demand
+@omni("skill.jit_install", {"skill_id": "pandas-expert"})
+
+# Search for skills
+@omni("skill.discover", {"query": "data analysis"})
+
+# Get suggestions for task
+@omni("skill.suggest", {"task": "analyze csv file"})
+```
+
+### Known Skills Index
+
+Skills are discovered from `assets/skills_index/known_skills.json`:
+
+```json
+[
+  {
+    "id": "pandas-expert",
+    "name": "Pandas Expert",
+    "url": "https://github.com/omni-dev/skill-pandas",
+    "version": "1.0.0",
+    "keywords": ["python", "data", "analysis", "pandas"]
+  }
+]
+```
+
+## Phase 28: Safe Ingestion / Immune System
+
+### Security Scanner
+
+All remote skills are scanned before loading:
+
+```python
+# Security checks performed:
+# 1. Code Pattern Detection
+#    - Critical (+50): os.system, subprocess(shell=True), eval, exec, __import__
+#    - High (+30): File write, network requests, socket.connect
+#    - Medium (+10): File read, subprocess, os.popen
+#    - Low (+5): System access, path operations
+
+# 2. Manifest Permission Audit
+#    - Checks for dangerous permissions: exec, shell, filesystem=write
+
+# 3. Trusted Source Bypass
+#    - Configured in assets/settings.yaml
+```
+
+### Security Thresholds
+
+| Threshold | Score Range | Action             |
+| --------- | ----------- | ------------------ |
+| BLOCK     | >= 30       | Reject skill       |
+| WARN      | 10-29       | Allow with warning |
+| SAFE      | < 10        | Load normally      |
+
+### Configuration
+
+```yaml
+# assets/settings.yaml
+security:
+  enabled: true
+  block_threshold: 30
+  warn_threshold: 10
+  trusted_sources:
+    - "github.com/omni-dev"
+```
+
+### Security Assessment Output
+
+```python
+@omni("skill.jit_install", {"skill_id": "external-skill"})
+# Result includes:
+# {
+#   "decision": "SAFE|WARN|BLOCK",
+#   "score": 15,
+#   "findings": [...],
+#   "warnings": [...]
+# }
+```
+
 ## Related Documentation
 
+- [Phase 28 Spec](../specs/phase28-safe-ingestion.md) - Safe Ingestion specification
+- [Phase 27 Spec](./skills_index/README.md) - JIT Acquisition specification
+- [Phase 26 Spec](../specs/phase26-skill-network.md) - Skill Network specification
 - [Phase 24 Spec](../specs/phase-24-living-skill-architecture.md) - MiniMax Shift specification
 - [Phase 13 Spec](../specs/phase13_skill_architecture.md) - Original specification
 - [Git Operations Skill](./git/guide.md) - Example skill with Phase 24 patterns

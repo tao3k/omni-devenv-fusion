@@ -763,6 +763,16 @@ def jit_install_skill(skill_id: str, auto_load: bool = True) -> dict:
     if not success:
         return {"success": False, "error": msg}
 
+    # Phase 28: Security scan before loading
+    security_result = _security_scan_skill(target_dir, repo_url)
+    if not security_result["passed"]:
+        return {
+            "success": False,
+            "error": f"Security scan failed: {security_result['error']}",
+            "path": str(target_dir),
+            "security_report": security_result.get("report", {}),
+        }
+
     # Optionally load the skill
     loaded = False
     load_msg = ""
@@ -786,6 +796,55 @@ def jit_install_skill(skill_id: str, auto_load: bool = True) -> dict:
         "load_message": load_msg if loaded else f"Load skipped or failed: {load_msg}",
         "ready_to_use": True,
     }
+
+
+def _security_scan_skill(target_dir: Path, repo_url: str) -> dict:
+    """
+    Phase 28: Security scan for JIT installed skill.
+
+    Args:
+        target_dir: Directory of the installed skill
+        repo_url: Repository URL
+
+    Returns:
+        Dict with scan result: {"passed": bool, "error": str or None, "report": dict}
+    """
+    from common.settings import get_setting
+
+    # Check if security is enabled
+    if not get_setting("security.enabled", True):
+        return {"passed": True, "error": None, "report": {}}
+
+    try:
+        from agent.core.security.immune_system import ImmuneSystem, Decision
+
+        immune = ImmuneSystem()
+        assessment = immune.assess(target_dir)
+
+        report = assessment.to_dict()
+
+        if assessment.decision == Decision.BLOCK:
+            return {
+                "passed": False,
+                "error": f"Security concerns detected (score: {assessment.scanner_report.total_score})",
+                "report": report,
+            }
+        elif assessment.decision == Decision.WARN:
+            return {
+                "passed": True,
+                "error": None,
+                "report": report,
+            }
+        else:
+            return {
+                "passed": True,
+                "error": None,
+                "report": report,
+            }
+
+    except Exception as e:
+        # Fail open
+        return {"passed": True, "error": str(e), "report": {"error": str(e)}}
 
 
 def discover_skills(query: str = "", limit: int = 5) -> dict:

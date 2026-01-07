@@ -45,6 +45,7 @@ def add_log_level_with_brackets(logger, method_name, event_dict):
 
 
 # Configure structlog with Rich console renderer
+# Use stdlib LoggerFactory to avoid AttributeError with filter_by_level
 structlog.configure(
     processors=[
         structlog.stdlib.filter_by_level,
@@ -58,7 +59,7 @@ structlog.configure(
         ConsoleRenderer(colors=True),
     ],
     wrapper_class=structlog.make_filtering_bound_logger("INFO"),
-    logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
+    logger_factory=structlog.stdlib.LoggerFactory(),
     cache_logger_on_first_use=False,
 )
 

@@ -43,6 +43,11 @@ def setup_logging(
     """
     log_level = getattr(logging, level.upper(), logging.INFO)
 
+    # Use stdlib logger factory with a standard logger that has 'disabled' attribute
+    # This avoids AttributeError with PrintLogger in test environments
+    stdlib_logger = logging.getLogger("structlog")
+    stdlib_logger.setLevel(log_level)
+
     if log_format == "json":
         structlog.configure(
             processors=[
@@ -53,9 +58,9 @@ def setup_logging(
                 structlog.processors.UnicodeDecoder(),
                 structlog.processors.JSONRenderer(),
             ],
-            wrapper_class=structlog.make_filtering_bound_logger(log_level),
+            wrapper_class=structlog.stdlib.ProxyLogger,
             context_class=dict,
-            logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
+            logger_factory=structlog.stdlib.LoggerFactory(),
             cache_logger_on_first_use=False,
         )
     else:
@@ -68,9 +73,9 @@ def setup_logging(
                 structlog.processors.UnicodeDecoder(),
                 structlog.dev.ConsoleRenderer(),
             ],
-            wrapper_class=structlog.make_filtering_bound_logger(log_level),
+            wrapper_class=structlog.stdlib.ProxyLogger,
             context_class=dict,
-            logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
+            logger_factory=structlog.stdlib.LoggerFactory(),
             cache_logger_on_first_use=False,
         )
 
