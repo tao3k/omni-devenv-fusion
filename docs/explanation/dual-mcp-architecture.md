@@ -78,15 +78,15 @@ main.py (87 lines)
 - **Extensibility**: Add new capabilities without modifying main.py
 - **Hot Reload**: Skills load dynamically via `skill()` tool
 
-### Skill System (Phase 13)
+### Skill System (Phase 13 → Phase 33)
 
 Skills are dynamically-loaded modules in `agent/skills/`:
 
 ```
 agent/skills/
 ├── git/
-│   ├── manifest.json      # Skill metadata
-│   ├── tools.py           # Tool implementations
+│   ├── SKILL.yaml         # Skill metadata (YAML Frontmatter)
+│   ├── tools.py           # Tool implementations with @skill_command
 │   ├── guide.md           # Procedural knowledge
 │   └── prompts.md         # System prompts
 ├── filesystem/
@@ -101,6 +101,8 @@ agent/skills/
 - `git` - Version control
 - `terminal` - Command execution
 - `testing_protocol` - Test runner
+
+> **Note**: Phase 33 migrated from `manifest.json` to `SKILL.yaml` with YAML Frontmatter format.
 
 ## The Cortex (Phase 6: Tool Router)
 

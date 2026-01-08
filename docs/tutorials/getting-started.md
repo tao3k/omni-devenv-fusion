@@ -1,8 +1,8 @@
 # Tutorial: Getting Started with Omni-DevEnv
 
-> **Duration**: 15 minutes | **Goal**: Run your first MCP server
+> **Duration**: 15 minutes | **Goal**: Run the Omni Agent
 
-This tutorial gets you from zero to a working MCP environment. We assume you know basic terminal commands.
+This tutorial gets you from zero to a working Omni agent. We assume you know basic terminal commands.
 
 ---
 
@@ -11,8 +11,8 @@ This tutorial gets you from zero to a working MCP environment. We assume you kno
 In this tutorial, you will:
 
 1. Enter the development environment
-2. Verify the MCP servers work
-3. Run your first consultaion with a persona
+2. Run the Omni MCP server
+3. Execute your first skill command
 
 ---
 
@@ -51,64 +51,71 @@ You now have all tools (Python, uv, ast-grep, vale) in your PATH.
 uv sync
 
 # Expected output:
-Using Python 3.12
+Using Python 3.13
 Resolved 15 packages in 23ms
 ```
 
 ---
 
-## Step 3: Verify MCP Servers Start
+## Step 3: Run the Omni Agent (Trinity Architecture)
 
-Open two terminal windows.
+Omni uses a single `omni` tool that dispatches to skills via the Skill Registry.
 
-**Terminal 1 (Orchestrator):**
-
-```bash
-python -u mcp-server/orchestrator.py
-
-# Expected output:
-🚀 Orchestrator Server (Async) starting...
-```
-
-**Terminal 2 (Coder):**
+**Terminal 1 (Start the Omni MCP Server):**
 
 ```bash
-python -u mcp-server/coder.py
+cd packages/python/agent
+python -m agent.mcp_server
 
 # Expected output:
-🦈 Coder Server (Async) starting...
+🚀 Omni MCP Server started
+📦 Skill Registry initialized with {N} skills
+🎯 Ready to accept commands via omni("skill.command")
 ```
-
-Both servers print their startup messages. They are ready to accept connections.
 
 ---
 
-## Step 4: Test with Claude Code
+## Step 4: Execute Your First Skill
 
-The MCP servers register with Claude Code automatically via `~/.config/claude/claude_desktop_config.json`.
+With Claude Desktop connected to Omni, try:
 
-1. Restart Claude Code
-2. Run `/mcp` to verify both servers appear:
+```
+> @omni("git.status")
+```
+
+This dispatches to the git skill's `git_status` command.
+
+---
+
+## Step 4: Test with Claude Desktop
+
+The Omni MCP server registers with Claude Desktop automatically.
+
+1. Restart Claude Desktop
+2. Run `/mcp` to verify the server appears:
 
 ```
 Available MCP Servers:
-- omni-orchestrator (connected)
-- omni-coder (connected)
+- omni (connected)
 ```
 
 ---
 
-## Step 5: Consult a Specialist
+## Step 5: Execute a Skill Command
 
-Try your first persona consultation:
+Try your first skill command:
 
 ```
-> Ask the architect: Should I split mcp-server/orchestrator.py into multiple files?
+> @omni("git.status")
 ```
 
 **Expected Response:**
 
-The Architect persona considers your module boundaries and suggests a split strategy based on the project's ADR records.
+```
+On branch main
+Changes to be committed:
+  M   docs/README.md
+```
 
 ---
 
@@ -117,26 +124,21 @@ The Architect persona considers your module boundaries and suggests a split stra
 Run the validation suite to confirm everything works:
 
 ```bash
-just test-mcp
+just test
 
 # Expected output:
-test_orchestrator_tools ... ok
-test_coder_tools ... ok
-test_all_tools ... ok
-
-Ran 3 tests in 5.234s
-OK
+577 passed, 1 skipped in 25.82s
 ```
 
 ---
 
 ## Next Steps
 
-| If you want to...        | Go to...                                                           |
-| ------------------------ | ------------------------------------------------------------------ |
-| Learn why we built this  | [Explanation: Why Omni-DevEnv?](../explanation/why-omni-devenv.md) |
-| Solve a specific problem | [How-to Guides](../how-to/)                                        |
-| Browse API commands      | [Reference](../reference/)                                         |
+| If you want to...      | Go to...                                                       |
+| ---------------------- | -------------------------------------------------------------- |
+| Learn the architecture | [Trinity Architecture](../explanation/trinity-architecture.md) |
+| Create a new skill     | [Skills Guide](../skills.md)                                   |
+| Browse API commands    | [Reference](../reference/)                                     |
 
 ---
 

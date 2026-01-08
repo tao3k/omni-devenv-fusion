@@ -334,11 +334,20 @@ def _run_with_rc(cmd: list[str], cwd: Optional[Path] = None) -> tuple[str, int]:
     description="Stage files, run lefthook, return diff for analysis",
     inject_root=True,
 )
-def prepare_commit(project_root: Path = None) -> str:
-    """[Phase 1] Prepare for commit: stage, lefthook, re-stage, return diff."""
+def prepare_commit(project_root: Path = None, message: str = None) -> str:
+    """[Phase 1] Prepare for commit: stage, lefthook, re-stage, return diff.
+
+    Args:
+        project_root: Project root path (auto-injected via inject_root)
+        message: Optional commit message prefix for display purposes
+    """
     import shutil
 
     results = ["🔍 **Git Commit Preparation**"]
+
+    if message:
+        results.append(f"_Message: {message}_")
+
     lefthook_report = ""
 
     # 0. Check if there are staged files (even if working tree is clean)

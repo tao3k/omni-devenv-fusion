@@ -142,7 +142,7 @@ agent/skills/
 ├── testing/
 └── audit_standards/          # Optional: Review standards as a "skill"
     ├── prompts.md            # Defines quality criteria
-    └── manifest.json
+    └── SKILL.yaml            # Skill metadata (Phase 33)
 ```
 
 ReviewerAgent loads `audit_standards` just like any other skill.

@@ -1,27 +1,14 @@
 """
-src/agent/tools/orchestrator.py
-Orchestrator Functions - One Tool Compatible
+agent/tools/orchestrator/core.py
+Core delegation functionality.
 
-Allows the agent to delegate complex tasks to the internal Agentic OS.
-
-Functions:
-- delegate_mission: DELEGATE a complex multi-step task to Omni-Agentic OS
+DELEGATE a complex multi-step task to the Omni-Agentic OS.
 """
 
 from typing import Dict, Any, List
-from agent.core.orchestrator import Orchestrator
 
-# Global instance for state retention
-_orchestrator: Orchestrator | None = None
-
-
-def get_orchestrator() -> Orchestrator:
-    """Get or create the global Orchestrator instance."""
-    global _orchestrator
-    if _orchestrator is None:
-        # Initialize with Sidecar/Headless support enabled by default in Server mode
-        _orchestrator = Orchestrator()
-    return _orchestrator
+from .state import get_orchestrator
+from .types import MissionContext
 
 
 async def delegate_mission(
@@ -44,16 +31,23 @@ async def delegate_mission(
         query: The mission description (e.g., "Fix the threading bug in main.py")
         context_files: Optional list of files relevant to the task
         history: Optional conversation history
+
+    Returns:
+        The result of the mission execution as a string.
     """
     orchestrator = get_orchestrator()
 
     # Build context dict
-    context = {"relevant_files": context_files or []}
+    context: MissionContext = {"relevant_files": context_files or []}
 
     # Dispatch! This triggers the whole Phase 18 TUI flow internally
-    result = await orchestrator.dispatch(user_query=query, history=history or [], context=context)
+    result = await orchestrator.dispatch(
+        user_query=query,
+        history=history or [],
+        context=context,
+    )
 
     return result
 
 
-__all__ = ["delegate_mission", "get_orchestrator"]
+__all__ = ["delegate_mission"]

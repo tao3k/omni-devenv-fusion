@@ -303,7 +303,8 @@ print(result)
 
 - `agent/core/agents/base.py` - Added `__init__()`, `_run_react_loop()`, `_parse_tool_call()`
 - `agent/core/agents/coder.py` - Added `__init__()`, `_load_skill_tools()`, ReAct integration
-- `agent/core/orchestrator.py` - Added auto inference creation, `_get_tools_for_agent()`
+- `agent/core/orchestrator/orchestrator.py` - Deprecated: Split to atomic modules (Phase 34)
+- `agent/core/orchestrator/tools.py` - Added `get_tools_for_agent()` function
 - `agent/core/skill_registry.py` - Added `get_skill_tools()` for tool retrieval
 - `common/mcp_core/inference.py` - Added `get_tool_schema()` for LLM tool definitions
 
@@ -679,7 +680,7 @@ Aider records what was _said_. The Black Box records:
 
 - `agent/core/telemetry.py` - New: TokenUsage, CostEstimator, SessionTelemetry
 - `agent/core/session.py` - New: SessionManager, SessionEvent, SessionState
-- `agent/core/orchestrator.py` - Added SessionManager integration
+- `agent/core/orchestrator/` - Added SessionManager integration (atomic modules, Phase 34)
 - `agent/main.py` - Added `--resume`, `--new`, `--list-sessions` CLI args
 - `agent/tests/test_phase19_blackbox.py` - 30 tests
 
@@ -788,9 +789,9 @@ Each skill in `agent/skills/{skill}/` now has a `Backlog.md` that serves as its 
 agent/skills/
 ├── git/
 │   ├── Backlog.md      # Product backlog for git skill
-│   ├── manifest.json   # Skill metadata
+│   ├── SKILL.yaml      # Skill metadata (Phase 33 YAML Frontmatter)
 │   ├── prompts.md      # Router rules
-│   └── tools.py        # Implementation
+│   └── tools.py        # Implementation with @skill_command
 └── ...
 ```
 

@@ -274,9 +274,9 @@ A Skill is a self-contained package of capability:
 ```
 
 agent/skills/{skill_name}/
-├── manifest.json # Metadata: name, version, tools, dependencies
+├── SKILL.yaml # YAML Frontmatter: name, version, routing_keywords, execution_mode
 ├── guide.md # Procedural knowledge (LLM's "manual")
-├── tools.py # Executable tools ("hands")
+├── tools.py # Executable tools with @skill_command decorator
 ├── prompts.md # Context injection when active
 └── tests/ # Self-contained tests
 
@@ -890,14 +890,15 @@ def start_background_tasks():
 
 ### Key Files
 
-| File                                   | Change                         |
-| -------------------------------------- | ------------------------------ |
-| `agent/core/agents/base.py`            | Added `_run_react_loop()`, DI  |
-| `agent/core/agents/coder.py`           | Added `_load_skill_tools()`    |
-| `agent/core/orchestrator.py`           | Added `_get_tools_for_agent()` |
-| `agent/core/skill_registry.py`         | Added `get_skill_tools()`      |
-| `common/mcp_core/inference.py`         | Added `get_tool_schema()`      |
-| `agent/tests/test_delegate_mission.py` | 33 test cases                  |
+| File                                      | Change                              |
+| ----------------------------------------- | ----------------------------------- |
+| `agent/core/agents/base.py`               | Added `_run_react_loop()`, DI       |
+| `agent/core/agents/coder.py`              | Added `_load_skill_tools()`         |
+| `agent/core/orchestrator/orchestrator.py` | Deprecated: Split to atomic modules |
+| `agent/core/orchestrator/tools.py`        | Added `get_tools_for_agent()`       |
+| `agent/core/skill_registry.py`            | Added `get_skill_tools()`           |
+| `common/mcp_core/inference.py`            | Added `get_tool_schema()`           |
+| `agent/tests/test_delegate_mission.py`    | 33 test cases                       |
 
 ### Before vs After
 
@@ -1084,12 +1085,12 @@ Claude's inner monologue:
 
 ### Key Changes from Phase 24
 
-| Aspect               | Phase 24                      | Phase 25                |
-| -------------------- | ----------------------------- | ----------------------- |
-| **Tools Registered** | 100+ individual tools         | 1 tool: `omni`          |
-| **Tool Names**       | `git_status()`, `file_read()` | `omni("git.status")`    |
-| **Skill Pattern**    | `register(mcp)` + decorators  | `EXPOSED_COMMANDS` dict |
-| **Invocation**       | Direct function call          | `omni("skill.command")` |
+| Aspect               | Phase 24                      | Phase 33+                               |
+| -------------------- | ----------------------------- | --------------------------------------- |
+| **Tools Registered** | 100+ individual tools         | 1 tool: `omni`                          |
+| **Tool Names**       | `git_status()`, `file_read()` | `omni("git.status")`                    |
+| **Skill Pattern**    | `register(mcp)` + decorators  | `@skill_command` decorator + SKILL.yaml |
+| **Invocation**       | Direct function call          | `omni("skill.command")`                 |
 
 ---
 
@@ -1128,38 +1129,53 @@ Claude's inner monologue:
 
 ---
 
-### Skill File Structure (Phase 25)
+### Skill File Structure (Phase 33+)
 
 ```python
 # agent/skills/git/tools.py
 
+from agent.skills.decorators import skill_command
+
 # NO @mcp.tool() decorators
 # NO register(mcp) function
-# ONLY passive functions + EXPOSED_COMMANDS
+# Use @skill_command decorator with SKILL.yaml metadata
 
+@skill_command(
+    name="git_status",
+    category="read",
+    routing_keywords=["git", "status", "repo"]
+)
 async def git_status() -> str:
     """Get the current git status."""
     return _run_git(["status", "--short"])
 
+@skill_command(
+    name="git_commit",
+    category="write",
+    routing_keywords=["git", "commit", "push"],
+)
 async def git_commit(message: str) -> str:
     """Commit staged changes."""
     ...
 
-# EXPOSED_COMMANDS - The ONLY interface
-EXPOSED_COMMANDS = {
-    "git_status": {
-        "func": git_status,
-        "description": "Get git status",
-        "category": "read",
-    },
-    "git_commit": {
-        "func": git_commit,
-        "description": "Commit staged changes",
-        "category": "write",
-    },
-}
+__all__ = ["git_status", "git_commit"]
+```
 
-__all__ = ["EXPOSED_COMMANDS"]
+**SKILL.yaml (Phase 33):**
+
+```yaml
+---
+name: git
+version: 1.0.0
+routing_keywords:
+  - git
+  - commit
+  - branch
+execution_mode: library
+commands:
+  - git_status
+  - git_commit
+  - git_branch
 ```
 
 ---
@@ -1209,13 +1225,13 @@ python scripts/test_router.py --omni-test
 
 ### File Changes (Phase 25)
 
-| File                            | Change                                       |
-| ------------------------------- | -------------------------------------------- |
-| `agent/mcp_server.py`           | Single `omni` tool with dispatch logic       |
-| `agent/core/skill_manager.py`   | Command registry and `run()` method          |
-| `agent/skills/*/tools.py`       | Removed decorators, added `EXPOSED_COMMANDS` |
-| `test_phase25_one_tool.py`      | New: One Tool architecture tests             |
-| `test_actual_session_skills.py` | New: Real LLM session tests                  |
+| File                            | Change                                  |
+| ------------------------------- | --------------------------------------- |
+| `agent/mcp_server.py`           | Single `omni` tool with dispatch logic  |
+| `agent/core/skill_manager.py`   | Command registry and `run()` method     |
+| `agent/skills/*/tools.py`       | `@skill_command` decorator + SKILL.yaml |
+| `test_phase25_one_tool.py`      | New: One Tool architecture tests        |
+| `test_actual_session_skills.py` | New: Real LLM session tests             |
 
 ---
 

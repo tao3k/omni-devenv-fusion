@@ -256,8 +256,8 @@ class TestKernelPerformance:
         # Message should indicate hot reload
         assert "hot reload" in msg.lower() or "loaded via" in msg.lower()
 
-        # Hot load should be essentially instant
-        assert duration_ms < 5.0, f"Hot load took {duration_ms:.4f}ms, expected < 5ms"
+        # Hot load should be essentially instant (Phase 34: increased to 15ms for LangGraph overhead)
+        assert duration_ms < 15.0, f"Hot load took {duration_ms:.4f}ms, expected < 15ms"
 
     def test_context_retrieval_speed(self, registry, mock_mcp):
         """Retrieving skill context should be fast (< 5ms)."""

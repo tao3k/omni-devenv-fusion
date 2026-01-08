@@ -417,6 +417,45 @@ class TestSkillManagerLoading:
             or "commit" in result.lower()
         ), f"prepare_commit result should contain commit-related content"
 
+    @pytest.mark.asyncio
+    async def test_prepare_commit_with_message_parameter(self):
+        """Test that prepare_commit accepts optional message parameter."""
+        from agent.mcp_server import omni
+
+        # Run prepare_commit with message parameter - should not raise
+        test_message = "Test commit message"
+        result = await omni("git.prepare_commit", {"message": test_message})
+
+        # Should return a valid result (not an error)
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+        # Should contain expected output markers
+        assert (
+            "Git Commit Preparation" in result
+            or "Lefthook" in result
+            or "Staged" in result
+            or "commit" in result.lower()
+        ), f"prepare_commit result should contain commit-related content"
+
+    def test_prepare_commit_function_signature(self):
+        """Test that prepare_commit function accepts message parameter."""
+        import inspect
+        from agent.skills.git.tools import prepare_commit
+
+        # Verify function signature includes message parameter
+        sig = inspect.signature(prepare_commit)
+        params = sig.parameters
+
+        assert "project_root" in params, "prepare_commit must have project_root parameter"
+        assert "message" in params, "prepare_commit must have message parameter"
+
+        # Verify message has a default value (optional)
+        message_param = params["message"]
+        assert message_param.default is None or message_param.default == "", (
+            "message parameter should be optional with default None or empty string"
+        )
+
 
 class TestOmniCLISimulation:
     """

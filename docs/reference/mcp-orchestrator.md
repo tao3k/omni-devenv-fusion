@@ -1,15 +1,30 @@
 # Orchestrator MCP Server
 
-> Route complex queries to expert personas and tools. Get architectural, platform, DevOps, or SRE guidance without leaving your IDE.
+> **Phase 33: Trinity Architecture** - Single `omni` tool with skill dispatch
 
-This server exposes three tool categories:
+The Orchestrator MCP server provides a unified interface to all Omni capabilities via a single `@omni` tool.
 
-| Tool                 | Purpose                                                                     |
-| -------------------- | --------------------------------------------------------------------------- |
-| `list_personas`      | Advertises available roles with use cases                                   |
-| `consult_specialist` | Routes questions to specialized personas                                    |
-| `consult_router`     | [Cortex] Routes queries to Tool Domains (GitOps, ProductOwner, Coder, etc.) |
-| `start_spec`         | [Legislation Gate] Enforces spec exists before coding new work              |
+## The `omni` Tool
+
+All operations are accessed through the single `omni` tool:
+
+```json
+{
+  "tool": "omni",
+  "arguments": {
+    "input": "git.status"
+  }
+}
+```
+
+**Tool Categories:**
+
+| Pattern         | Example              | Purpose                      |
+| --------------- | -------------------- | ---------------------------- |
+| `skill.command` | `omni("git.status")` | Execute skill command        |
+| `skill help`    | `omni("git.help")`   | Show skill help and commands |
+| `skill`         | `omni("git")`        | Show all skill commands      |
+| `help`          | `omni("help")`       | Show all available skills    |
 
 ## The Problem It Solves
 
@@ -46,66 +61,49 @@ The Orchestrator solves this by routing your query to a persona that understands
 3. Start the server:
 
    ```bash
-   python -u mcp-server/orchestrator.py
+   cd packages/python/agent
+   python -m agent.mcp_server
    ```
 
 Expected output:
 
 ```
-🚀 Orchestrator Server (Async) starting...
+🚀 Omni MCP Server started
+📦 Skill Registry initialized with {N} skills
+🎯 Ready to accept commands via omni("skill.command")
 ```
 
 ---
 
-## Architecture: Bi-MCP
+## Trinity Architecture
+
+Omni uses the **Trinity Architecture** for unified skill management:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                                                                 │
-│   Claude Desktop                                               │
-│        │                                                       │
-│        ├── 🧠 orchestrator (The Brain - HERE)                  │
-│        │      └── Planning, Routing, Skills, Reviewing         │
-│        │                                                         │
-│        └── 📝 coder (File Operations)                          │
-│               └── Read/Write/Search files                      │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    SkillManager (Facade)                     │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │    Code     │  │   Context   │  │       State         │  │
+│  │ (Hot-Load)  │  │ (Repomix)   │  │     (Registry)      │  │
+│  │ ModuleLoader│  │ RepomixCache│  │  Protocol-based     │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-The Orchestrator (`main.py`) is the **Brain** of the system:
+| Component   | Implementation           | Purpose                            |
+| ----------- | ------------------------ | ---------------------------------- |
+| **Code**    | `mtime`-based hot-reload | <1ms response, auto-reload on edit |
+| **Context** | `RepomixCache` per skill | XML-packed context for LLM         |
+| **State**   | `Skill` registry         | Metadata, commands, mtime          |
 
-- **Planning**: `start_spec`, `draft_feature_spec`, `verify_spec_completeness`
-- **Routing**: `consult_router` (decides which tool to use)
-- **Skills**: `skill()` (access git, terminal, testing, etc.)
-- **Reviewing**: `review_staged_changes` (quality gate)
-- **Context**: `manage_context`
+### Available Skills
 
-It **never** accesses files directly. Those are handled by `coder`.
-
-### Phase 13.9: Modular Entrypoint
-
-The Orchestrator follows the **Composition Root** pattern:
-
-```
-main.py (87 lines)
-    │
-    ├── 1. Core Infrastructure
-    │   ├── bootstrap.py → boot_core_skills(), start_background_tasks()
-    │   └── context_loader.py → load_system_context()
-    │
-    ├── 2. Capabilities (Domain Logic)
-    │   ├── product_owner, lang_expert, librarian
-    │   ├── harvester, skill_manager, reviewer
-    │
-    ├── 3. Core Tools (Operational)
-    │   ├── context, spec, router, execution, status
-    │
-    └── 4. Skills (Dynamic)
-            └── filesystem, git, terminal, testing_protocol (auto-boot)
-```
-
-### Skill System (Phase 25.3: Trinity Architecture)
+| Skill              | Example Commands                             |
+| ------------------ | -------------------------------------------- |
+| `git`              | status, commit, log, branch, checkout, stash |
+| `filesystem`       | read, write, list, search                    |
+| `testing_protocol` | run, test                                    |
+| `knowledge`        | get_context, load_development_context        |
 
 Operations (git, terminal, testing, etc.) are accessed via the `omni` tool:
 
