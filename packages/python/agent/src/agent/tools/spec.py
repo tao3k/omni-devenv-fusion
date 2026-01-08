@@ -19,7 +19,7 @@ from typing import Any, Dict, Optional
 
 from common.mcp_core import log_decision
 from common.gitops import get_project_root
-from common.settings import get_setting
+from common.config.settings import get_setting
 import structlog
 
 logger = structlog.get_logger(__name__)

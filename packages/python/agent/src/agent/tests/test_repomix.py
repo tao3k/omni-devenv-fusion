@@ -13,7 +13,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
 
-from agent.capabilities.knowledge_ingestor import (
+from agent.capabilities.knowledge.ingestor import (
     ingest_from_repomix_xml,
     REPOMIX_XML_PATH,
 )
@@ -46,7 +46,7 @@ class TestRepomixIngestor:
     @pytest.mark.asyncio
     async def test_ingest_from_repomix_xml_missing_file(self):
         """Verify error when XML file doesn't exist."""
-        with patch("agent.capabilities.knowledge_ingestor.get_vector_memory") as mock_vm:
+        with patch("agent.capabilities.knowledge.ingestor.get_vector_memory") as mock_vm:
             mock_vm.return_value.client = MagicMock()
 
             result = await ingest_from_repomix_xml("/nonexistent/path.xml")
@@ -65,7 +65,7 @@ class TestRepomixIngestor:
             temp_path = f.name
 
         try:
-            with patch("agent.capabilities.knowledge_ingestor.get_vector_memory") as mock_vm:
+            with patch("agent.capabilities.knowledge.ingestor.get_vector_memory") as mock_vm:
                 mock_vm.return_value.add = AsyncMock(return_value=True)
 
                 result = await ingest_from_repomix_xml(temp_path)
@@ -107,7 +107,7 @@ Content
             temp_path = f.name
 
         try:
-            with patch("agent.capabilities.knowledge_ingestor.get_vector_memory") as mock_vm:
+            with patch("agent.capabilities.knowledge.ingestor.get_vector_memory") as mock_vm:
                 mock_vm.return_value.add = AsyncMock(return_value=True)
 
                 result = await ingest_from_repomix_xml(temp_path)
@@ -143,7 +143,7 @@ Some content here.
             temp_path = f.name
 
         try:
-            with patch("agent.capabilities.knowledge_ingestor.get_vector_memory") as mock_vm:
+            with patch("agent.capabilities.knowledge.ingestor.get_vector_memory") as mock_vm:
                 mock_vm.return_value.add = AsyncMock(return_value=True)
 
                 result = await ingest_from_repomix_xml(temp_path)
@@ -178,7 +178,7 @@ Content here.
             temp_path = f.name
 
         try:
-            with patch("agent.capabilities.knowledge_ingestor.get_vector_memory") as mock_vm:
+            with patch("agent.capabilities.knowledge.ingestor.get_vector_memory") as mock_vm:
                 mock_vm.return_value.add = AsyncMock(return_value=True)
 
                 result = await ingest_from_repomix_xml(temp_path)
@@ -214,7 +214,7 @@ Content here.
             temp_path = f.name
 
         try:
-            with patch("agent.capabilities.knowledge_ingestor.get_vector_memory") as mock_vm:
+            with patch("agent.capabilities.knowledge.ingestor.get_vector_memory") as mock_vm:
                 mock_vm.return_value.add = AsyncMock(return_value=True)
 
                 result = await ingest_from_repomix_xml(temp_path)
@@ -245,7 +245,7 @@ Content
             temp_path = f.name
 
         try:
-            with patch("agent.capabilities.knowledge_ingestor.get_vector_memory") as mock_vm:
+            with patch("agent.capabilities.knowledge.ingestor.get_vector_memory") as mock_vm:
                 mock_vm.return_value.add = AsyncMock(return_value=True)
 
                 result = await ingest_from_repomix_xml(temp_path)
@@ -262,7 +262,7 @@ Content
     async def test_default_xml_path(self):
         """Verify default REPOMIX_XML_PATH is used when none specified."""
         # Mock the project root to return a temp directory
-        with patch("agent.capabilities.knowledge_ingestor.get_project_root") as mock_root:
+        with patch("agent.capabilities.knowledge.ingestor.get_project_root") as mock_root:
             mock_root.return_value = Path("/nonexistent")
 
             result = await ingest_from_repomix_xml()

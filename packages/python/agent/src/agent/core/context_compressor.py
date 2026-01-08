@@ -11,7 +11,7 @@ Configuration:
 - Reads from settings.yaml: context_compression.method
 """
 
-from common.settings import get_setting
+from common.config.settings import get_setting
 
 # Default settings (fallbacks when settings.yaml not available)
 DEFAULT_MAX_CONTEXT_TOKENS = 4000

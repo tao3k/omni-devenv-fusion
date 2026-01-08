@@ -20,9 +20,10 @@ from rich.table import Table
 from rich.text import Text
 from rich.json import JSON
 from typing import Optional
+from pathlib import Path
 
 from common.gitops import get_project_root
-from common.settings import get_setting
+from common.skills_path import SKILLS_DIR
 
 app = typer.Typer(
     name="omni",
@@ -74,9 +75,7 @@ def run_skills(commands):
     skill_name = parts[0]
     cmd_name = "_".join(parts[1:])
 
-    skill_path = (
-        PROJECT_ROOT / get_setting("skills.path", "assets/skills") / f"{skill_name}/tools.py"
-    )
+    skill_path = SKILLS_DIR(skill=skill_name, filename="tools.py")
     if not skill_path.exists():
         console.print(Panel(f"Skill not found: {skill_name}", title="❌ Error", style="red"))
         raise typer.Exit(1)
@@ -332,6 +331,73 @@ def skill_update(
     else:
         console.print(Panel(msg, title="❌ Failed", style="red"))
         raise typer.Exit(1)
+
+
+@skill_app.command("create")
+def skill_create(
+    name: str = typer.Argument(..., help="Skill name (e.g., 'my-skill')"),
+    description: str = typer.Argument(..., help="Brief description of the skill"),
+    author: str = typer.Option("omni-dev", "--author", "-a", help="Author name"),
+    keyword: list[str] = typer.Option(
+        [], "--keyword", "-k", help="Additional routing keywords (can be repeated)"
+    ),
+):
+    """Create a new skill from templates."""
+    from agent.core.skill_generator import SkillGenerator
+
+    # Validate skill name (alphanumeric, hyphens, underscores)
+    import re
+
+    if not re.match(r"^[a-zA-Z][a-zA-Z0-9_-]*$", name):
+        console.print(
+            Panel(
+                "Skill name must start with a letter and contain only letters, numbers, hyphens, and underscores.",
+                title="❌ Invalid Name",
+                style="red",
+            )
+        )
+        raise typer.Exit(1)
+
+    # Generate the skill
+    generator = SkillGenerator()
+    skills_dir = Path("assets/skills")
+
+    try:
+        skill_dir = generator.generate(
+            skill_name=name,
+            description=description,
+            output_dir=skills_dir,
+            author=author,
+            keywords=keyword if keyword else None,
+        )
+    except FileExistsError:
+        console.print(
+            Panel(
+                f"Skill '{name}' already exists at {skills_dir / name}",
+                title="❌ Exists",
+                style="red",
+            )
+        )
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(Panel(str(e), title="❌ Error", style="red"))
+        raise typer.Exit(1)
+
+    console.print(
+        Panel(
+            f"✅ Created skill '{name}' at {skill_dir}\n\n"
+            f"Files:\n"
+            f"  - {skill_dir / 'SKILL.md'}\n"
+            f"  - {skill_dir / 'tools.py'}\n"
+            f"  - {skill_dir / 'guide.md'}\n\n"
+            f"Next steps:\n"
+            f"  1. Add your commands to tools.py\n"
+            f"  2. Update guide.md with usage examples\n"
+            f"  3. Restart MCP server to load the new skill",
+            title="✨ Skill Created",
+            style="green",
+        )
+    )
 
 
 # Add skill_app as a subcommand of main app

@@ -1,0 +1,74 @@
+# {{ skill_name | replace('-', ' ') | title }}
+
+## Overview
+
+Brief description of what this skill does and its primary use cases.
+
+**Description:** {{ description }}
+
+## Trinity Architecture
+
+This skill operates within the **Trinity Architecture**:
+
+| Component   | File            | Purpose                       |
+| ----------- | --------------- | ----------------------------- |
+| **Code**    | `tools.py`      | Hot-reloaded via ModuleLoader |
+| **Context** | `SKILL.md`      | LLM behavior guidelines       |
+| **State**   | `SKILL.md`      | Metadata and configuration    |
+
+## Usage
+
+### When to use
+
+- Scenario 1 where this skill excels
+- Scenario 2 for complex workflows
+- Scenario 3 for automation
+
+### Examples
+
+```bash
+# Run a command
+@omni("{{ skill_name }}.example", {"param": "value"})
+
+# Get skill context
+@omni("{{ skill_name }}.help")
+
+# List available commands
+@omni("{{ skill_name }}")
+```
+
+## Commands
+
+| Command   | Category | Description                                 |
+| --------- | -------- | ------------------------------------------- |
+| `example` | read     | Brief description of what this command does |
+| `help`    | view     | Show full skill context and guidelines      |
+
+## ODF-EP Compliance
+
+This skill template follows the **"Python Zenith" Engineering Protocol**:
+
+```python
+# tools.py - @skill_command decorator pattern
+from agent.skills.decorators import skill_command
+
+@skill_command(
+    name="example",
+    category="read",
+    description="Brief description",
+)
+async def example(param: str) -> str:
+    """Detailed docstring explaining the command."""
+    return "result"
+```
+
+## Performance Notes
+
+- **Import time:** Uses lazy initialization for fast loading
+- **Execution:** O(1) command lookup via SkillManager cache
+- **Hot reload:** Automatically reloads when `tools.py` is modified
+
+## Related
+
+- [Skills Documentation](../../docs/skills.md) - Comprehensive guide
+- [ODF-EP Planning Prompt](../../.claude/plans/odf-ep-v6-planning-prompt.md)

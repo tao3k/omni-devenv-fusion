@@ -55,7 +55,7 @@ Call the Omni tool to stage files and run quality checks:
 
 **Please confirm:** Reply Yes👍 to submit commit, or No👎 to cancel
 
-<!-- LLM only: invoke @omni("git.execute_commit", {"message": "YOUR_GENERATED_MESSAGE"}) - hidden from user -->
+<!-- LLM read only: invoke @omni("git.execute_commit", {"message": "YOUR_GENERATED_MESSAGE"}) - DON'T PRINT -->
 
 
 ---

@@ -14,19 +14,174 @@ Usage:
 
 import json
 import time
-from typing import Dict, List, Optional
-
-import structlog
-
-from common.mcp_core.inference import InferenceClient
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from agent.core.registry import get_skill_registry
-from agent.core.vector_store import get_vector_memory
 
 from agent.core.router.models import RoutingResult
-from agent.core.router.cache import HiveMindCache
 
-logger = structlog.get_logger(__name__)
+if TYPE_CHECKING:
+    from common.mcp_core.inference.client import InferenceClient
+
+# Lazy imports to avoid slow initialization
+_cached_inference_client: Any = None
+_cached_cache: Any = None
+_cached_cortex: Any = None
+
+# Lazy logger - defer structlog.get_logger() to avoid ~100ms import cost
+_cached_logger: Any = None
+
+
+def _get_logger() -> Any:
+    """Get logger lazily to avoid import-time overhead."""
+    global _cached_logger
+    if _cached_logger is None:
+        import structlog
+
+        _cached_logger = structlog.get_logger(__name__)
+    return _cached_logger
+
+
+def _get_inference_client() -> Any:
+    """Get InferenceClient lazily to avoid loading anthropic SDK at init."""
+    global _cached_inference_client
+    if _cached_inference_client is None:
+        from common.mcp_core.inference.client import InferenceClient
+
+        _cached_inference_client = InferenceClient()
+    return _cached_inference_client
+
+
+def _get_cache(cache_size: int = 1000, cache_ttl: int = 3600) -> Any:
+    """Get HiveMindCache lazily."""
+    global _cached_cache
+    cache_key = (cache_size, cache_ttl)
+    if not hasattr(_cached_cache, "_cache_keys"):
+        _cached_cache = {"_cache_keys": {}}
+    if cache_key not in _cached_cache["_cache_keys"]:
+        from agent.core.router.cache import HiveMindCache
+
+        _cached_cache["_cache_keys"][cache_key] = HiveMindCache(
+            max_size=cache_size, ttl_seconds=cache_ttl
+        )
+    return _cached_cache["_cache_keys"][cache_key]
+
+
+def _get_semantic_cortex() -> Any:
+    """Get SemanticCortex lazily."""
+    global _cached_cortex
+    if _cached_cortex is None:
+        _cached_cortex = _LazySemanticCortex()
+    return _cached_cortex
+
+
+class _LazySemanticCortex:
+    """Lazy wrapper for SemanticCortex - defers vector_store initialization."""
+
+    COLLECTION_NAME = "routing_experience"
+    DEFAULT_SIMILARITY_THRESHOLD = 0.75
+    DEFAULT_TTL_SECONDS = 7 * 24 * 60 * 60
+
+    def __init__(
+        self,
+        similarity_threshold: float = None,
+        ttl_seconds: int = None,
+    ):
+        self.similarity_threshold = similarity_threshold or self.DEFAULT_SIMILARITY_THRESHOLD
+        self.ttl_seconds = ttl_seconds or self.DEFAULT_TTL_SECONDS
+        self._vector_store = None
+
+    @property
+    def vector_store(self) -> Any:
+        """Lazy vector_store accessor."""
+        if self._vector_store is None:
+            from agent.core.vector_store import get_vector_memory
+
+            try:
+                self._vector_store = get_vector_memory()
+            except Exception as e:
+                _get_logger().warning("Could not initialize vector store", error=str(e))
+                self._vector_store = None
+        return self._vector_store
+
+    @vector_store.setter
+    def vector_store(self, value: Any) -> None:
+        """Setter for backward compatibility with tests."""
+        self._vector_store = value
+
+    def _similarity_to_score(self, distance: float) -> float:
+        return 1.0 - distance
+
+    def _is_expired(self, timestamp_str: str) -> bool:
+        try:
+            timestamp = float(timestamp_str)
+            return (time.time() - timestamp) > self.ttl_seconds
+        except (ValueError, TypeError):
+            return False
+
+    async def recall(self, query: str) -> Optional[RoutingResult]:
+        if not self.vector_store:
+            return None
+
+        try:
+            results = await self.vector_store.search(
+                query=query, n_results=1, collection=self.COLLECTION_NAME
+            )
+
+            if not results:
+                return None
+
+            best = results[0]
+            similarity = self._similarity_to_score(best.distance)
+
+            metadata = best.metadata
+            if "timestamp" in metadata and self._is_expired(metadata["timestamp"]):
+                return None
+
+            if similarity >= self.similarity_threshold:
+                if "routing_result_json" in metadata:
+                    data = json.loads(metadata["routing_result_json"])
+                    return RoutingResult(
+                        selected_skills=data.get("skills", []),
+                        mission_brief=data.get("mission_brief", ""),
+                        reasoning=data.get("reasoning", ""),
+                        confidence=data.get("confidence", 0.5),
+                        from_cache=True,
+                        timestamp=data.get("timestamp", time.time()),
+                    )
+
+            return None
+
+        except Exception as e:
+            _get_logger().warning("Semantic recall failed", error=str(e))
+            return None
+
+    async def learn(self, query: str, result: RoutingResult):
+        if not self.vector_store:
+            return
+
+        try:
+            import uuid
+
+            doc_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, query))
+
+            await self.vector_store.add(
+                documents=[query],
+                ids=[doc_id],
+                collection=self.COLLECTION_NAME,
+                metadatas=[
+                    {
+                        "routing_result_json": json.dumps(result.to_dict()),
+                        "timestamp": str(result.timestamp),
+                    }
+                ],
+            )
+        except Exception as e:
+            _get_logger().warning("Semantic learning failed", error=str(e))
+
+
+# Backward compatibility alias
+SemanticCortex = _LazySemanticCortex
 
 
 class SemanticRouter:
@@ -46,22 +201,58 @@ class SemanticRouter:
 
     def __init__(
         self,
-        inference_client: InferenceClient = None,
+        inference_client: "InferenceClient | None" = None,
         cache_size: int = 1000,
         cache_ttl: int = 3600,
         use_semantic_cache: bool = True,
     ):
         self.registry = get_skill_registry()
-        self.inference = inference_client or InferenceClient()
-        self.cache = HiveMindCache(max_size=cache_size, ttl_seconds=cache_ttl)
+        self._inference = inference_client
+        self._cache = None
+        self._cache_config = (cache_size, cache_ttl)
+        self._use_semantic_cache = use_semantic_cache
 
-        # Phase 14.5: Semantic Cortex for fuzzy matching
-        self.semantic_cortex = None
-        if use_semantic_cache:
-            try:
-                self.semantic_cortex = SemanticCortex()
-            except Exception:
-                pass  # Cortex unavailable, continue without it
+    @property
+    def inference(self) -> Any:
+        """Lazy inference client accessor."""
+        if self._inference is None:
+            self._inference = _get_inference_client()
+        return self._inference
+
+    @inference.setter
+    def inference(self, value: Any) -> None:
+        """Setter for backward compatibility with tests."""
+        self._inference = value
+
+    @property
+    def cache(self) -> Any:
+        """Lazy cache accessor."""
+        if self._cache is None:
+            self._cache = _get_cache(*self._cache_config)
+        return self._cache
+
+    @cache.setter
+    def cache(self, value: Any) -> None:
+        """Setter for backward compatibility with tests."""
+        self._cache = value
+
+    @property
+    def semantic_cortex(self) -> Any:
+        """Lazy semantic cortex accessor."""
+        # Check if explicitly set (for tests)
+        global _cached_cortex
+        if _cached_cortex is not None:
+            return _cached_cortex
+        if not self._use_semantic_cache:
+            return None
+        return _get_semantic_cortex()
+
+    @semantic_cortex.setter
+    def semantic_cortex(self, value: Any) -> None:
+        """Setter for backward compatibility with tests."""
+        # Store in global cache to persist across property access
+        global _cached_cortex
+        _cached_cortex = value
 
     def _build_routing_menu(self) -> str:
         """Build routing menu from Skill Registry manifests (Data-Driven)."""
@@ -229,127 +420,6 @@ Route this request and provide a mission brief."""
 
         except (json.JSONDecodeError, KeyError):
             return fallback
-
-
-# =============================================================================
-# Semantic Cortex (Phase 14.5) - Moved here for organization
-# =============================================================================
-
-
-class SemanticCortex:
-    """
-    Vector-based semantic memory for routing decisions.
-
-    Features:
-    - Stores routing decisions as semantic embeddings
-    - Fuzzy matching: "Fix bug" ≈ "Fix the bug"
-    - Similarity threshold: Only return cached result if similarity > threshold
-    - TTL support: Routing decisions expire after 7 days
-    - Persistent storage across sessions
-
-    Usage:
-    1. Query: "Fix the bug in main.py"
-    2. Search: Find similar historical queries
-    3. If similarity > threshold: Return cached routing result
-    4. If new: Store decision after LLM routing
-    """
-
-    COLLECTION_NAME = "routing_experience"
-    DEFAULT_SIMILARITY_THRESHOLD = 0.75
-    DEFAULT_TTL_SECONDS = 7 * 24 * 60 * 60
-
-    def __init__(
-        self,
-        similarity_threshold: float = None,
-        ttl_seconds: int = None,
-    ):
-        self.similarity_threshold = similarity_threshold or self.DEFAULT_SIMILARITY_THRESHOLD
-        self.ttl_seconds = ttl_seconds or self.DEFAULT_TTL_SECONDS
-        self.vector_store = None
-        self._init_vector_store()
-
-    def _init_vector_store(self):
-        """Initialize vector store connection."""
-        try:
-            self.vector_store = get_vector_memory()
-        except Exception as e:
-            logger.warning("Could not initialize vector store", error=str(e))
-            self.vector_store = None
-
-    def _similarity_to_score(self, distance: float) -> float:
-        """Convert ChromaDB distance (0-1, lower is better) to similarity score (0-1, higher is better)."""
-        return 1.0 - distance
-
-    def _is_expired(self, timestamp_str: str) -> bool:
-        """Check if a routing decision has expired based on its timestamp."""
-        try:
-            timestamp = float(timestamp_str)
-            return (time.time() - timestamp) > self.ttl_seconds
-        except (ValueError, TypeError):
-            return False
-
-    async def recall(self, query: str) -> Optional[RoutingResult]:
-        """Recall similar routing decisions from semantic memory."""
-        if not self.vector_store:
-            return None
-
-        try:
-            results = await self.vector_store.search(
-                query=query, n_results=1, collection=self.COLLECTION_NAME
-            )
-
-            if not results:
-                return None
-
-            best = results[0]
-            similarity = self._similarity_to_score(best.distance)
-
-            # Check if entry is expired
-            metadata = best.metadata
-            if "timestamp" in metadata and self._is_expired(metadata["timestamp"]):
-                return None
-
-            if similarity >= self.similarity_threshold:
-                if "routing_result_json" in metadata:
-                    data = json.loads(metadata["routing_result_json"])
-                    return RoutingResult(
-                        selected_skills=data.get("skills", []),
-                        mission_brief=data.get("mission_brief", ""),
-                        reasoning=data.get("reasoning", ""),
-                        confidence=data.get("confidence", 0.5),
-                        from_cache=True,
-                        timestamp=data.get("timestamp", time.time()),
-                    )
-
-            return None
-
-        except Exception as e:
-            logger.warning("Semantic recall failed", error=str(e))
-            return None
-
-    async def learn(self, query: str, result: RoutingResult):
-        """Store a routing decision in semantic memory."""
-        if not self.vector_store:
-            return
-
-        try:
-            import uuid
-
-            doc_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, query))
-
-            await self.vector_store.add(
-                documents=[query],
-                ids=[doc_id],
-                collection=self.COLLECTION_NAME,
-                metadatas=[
-                    {
-                        "routing_result_json": json.dumps(result.to_dict()),
-                        "timestamp": str(result.timestamp),
-                    }
-                ],
-            )
-        except Exception as e:
-            logger.warning("Semantic learning failed", error=str(e))
 
 
 # =============================================================================

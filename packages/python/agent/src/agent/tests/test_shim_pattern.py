@@ -3,31 +3,33 @@ test_phase28_1_shim_pattern.py
 Phase 28.1: Subprocess/Shim Pattern Tests
 
 Tests for subprocess mode skill execution, including:
-- Manifest parsing for execution_mode
+- SKILL.md parsing for execution_mode
 - Subprocess execution via SkillManager._execute_in_subprocess
 - Shim pattern tools.py implementation
 """
 
-import json
 import os
 import subprocess
 import tempfile
 import unittest
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-# Use absolute imports from agent package
-from agent.core.skill_manager import SkillManager, Skill
+# Use common.skills_path and common.gitops instead of common.lib
+from common.skills_path import SKILLS_DIR
+from common.gitops import get_project_root
 
-# Get project root for file checks
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent.parent
+PROJECT_ROOT = get_project_root()
+
+from agent.core.skill_manager import SkillManager, Skill
 
 
 class TestShimPatternManifest(unittest.TestCase):
     """Test manifest loading and execution mode detection."""
 
     def setUp(self):
-        """Create a temporary skill directory with manifest."""
+        """Create a temporary skill directory with SKILL.md."""
         self.temp_dir = tempfile.mkdtemp()
         self.skill_dir = Path(self.temp_dir) / "test_skill"
         self.skill_dir.mkdir()
@@ -40,13 +42,13 @@ class TestShimPatternManifest(unittest.TestCase):
 
     def test_load_manifest_library_mode(self):
         """Test loading manifest with library execution mode."""
-        manifest = {
-            "name": "test-skill",
-            "version": "1.0.0",
-            "execution_mode": "library",
-        }
-        manifest_path = self.skill_dir / "manifest.json"
-        manifest_path.write_text(json.dumps(manifest))
+        skill_md = """---
+name: "test-skill"
+version: "1.0.0"
+execution_mode: "library"
+---
+"""
+        (self.skill_dir / "SKILL.md").write_text(skill_md)
 
         manager = SkillManager(skills_dir=self.temp_dir)
         loaded_manifest = manager._load_manifest(self.skill_dir)
@@ -56,23 +58,19 @@ class TestShimPatternManifest(unittest.TestCase):
 
     def test_load_manifest_subprocess_mode(self):
         """Test loading manifest with subprocess execution mode."""
-        manifest = {
-            "name": "test-skill",
-            "version": "1.0.0",
-            "execution_mode": "subprocess",
-            "python_path": ".venv/bin/python",
-            "entry_point": "implementation.py",
-        }
-        manifest_path = self.skill_dir / "manifest.json"
-        manifest_path.write_text(json.dumps(manifest))
+        skill_md = """---
+name: "test-skill"
+version: "1.0.0"
+execution_mode: "subprocess"
+---
+"""
+        (self.skill_dir / "SKILL.md").write_text(skill_md)
 
         manager = SkillManager(skills_dir=self.temp_dir)
         loaded_manifest = manager._load_manifest(self.skill_dir)
 
         self.assertIsNotNone(loaded_manifest)
         self.assertEqual(loaded_manifest.get("execution_mode"), "subprocess")
-        self.assertEqual(loaded_manifest.get("python_path"), ".venv/bin/python")
-        self.assertEqual(loaded_manifest.get("entry_point"), "implementation.py")
 
     def test_load_manifest_missing(self):
         """Test loading manifest when it doesn't exist."""
@@ -81,10 +79,9 @@ class TestShimPatternManifest(unittest.TestCase):
 
         self.assertIsNone(loaded_manifest)
 
-    def test_load_manifest_invalid_json(self):
-        """Test loading manifest with invalid JSON."""
-        manifest_path = self.skill_dir / "manifest.json"
-        manifest_path.write_text("not valid json")
+    def test_load_manifest_invalid_format(self):
+        """Test loading manifest with invalid format."""
+        (self.skill_dir / "SKILL.md").write_text("not valid yaml frontmatter")
 
         manager = SkillManager(skills_dir=self.temp_dir)
         loaded_manifest = manager._load_manifest(self.skill_dir)
@@ -93,12 +90,13 @@ class TestShimPatternManifest(unittest.TestCase):
 
     def test_default_execution_mode_library(self):
         """Test that default execution mode is 'library' when not specified."""
-        manifest = {
-            "name": "test-skill",
-            "version": "1.0.0",
-        }
-        manifest_path = self.skill_dir / "manifest.json"
-        manifest_path.write_text(json.dumps(manifest))
+        skill_md = """---
+name: "test-skill"
+version: "1.0.0"
+description: "Test skill"
+---
+"""
+        (self.skill_dir / "SKILL.md").write_text(skill_md)
 
         manager = SkillManager(skills_dir=self.temp_dir)
         loaded_manifest = manager._load_manifest(self.skill_dir)
@@ -116,16 +114,16 @@ class TestShimPatternSubprocessExecution(unittest.TestCase):
         self.skill_dir = Path(self.temp_dir) / "test_skill"
         self.skill_dir.mkdir()
 
-        # Create manifest
-        manifest = {
-            "name": "test-skill",
-            "version": "1.0.0",
-            "execution_mode": "subprocess",
-            "python_path": "python",
-            "entry_point": "implementation.py",
-        }
-        manifest_path = self.skill_dir / "manifest.json"
-        manifest_path.write_text(json.dumps(manifest))
+        # Create SKILL.md
+        skill_md = """---
+name: "test-skill"
+version: "1.0.0"
+execution_mode: "subprocess"
+python_path: "python"
+entry_point: "implementation.py"
+---
+"""
+        (self.skill_dir / "SKILL.md").write_text(skill_md)
 
     def tearDown(self):
         """Clean up temporary directory."""
@@ -135,14 +133,14 @@ class TestShimPatternSubprocessExecution(unittest.TestCase):
 
     def test_execute_subprocess_missing_manifest(self):
         """Test subprocess execution when manifest is missing."""
-        # Remove manifest
-        (self.skill_dir / "manifest.json").unlink()
+        # Remove SKILL.md
+        (self.skill_dir / "SKILL.md").unlink()
 
         manager = SkillManager(skills_dir=self.temp_dir)
         result = manager._execute_in_subprocess("test_skill", "echo", {"message": "hello"})
 
         self.assertIn("Error", result)
-        self.assertIn("No manifest.json", result)
+        self.assertIn("No SKILL.md", result)
 
     def test_execute_subprocess_missing_python(self):
         """Test subprocess execution when uv is missing (FileNotFoundError)."""
@@ -182,14 +180,15 @@ class TestShimPatternSubprocessExecution(unittest.TestCase):
             '    print("echo: " + args.get("message", ""))\n'
         )
 
-        # Create manifest (uv run doesn't need python_path)
-        manifest = {
-            "name": "test-skill",
-            "version": "1.0.0",
-            "execution_mode": "subprocess",
-            "entry_point": "implementation.py",
-        }
-        (self.skill_dir / "manifest.json").write_text(json.dumps(manifest))
+        # Create SKILL.md (uv run doesn't need python_path)
+        skill_md = """---
+name: "test-skill"
+version: "1.0.0"
+execution_mode: "subprocess"
+entry_point: "implementation.py"
+---
+"""
+        (self.skill_dir / "SKILL.md").write_text(skill_md)
 
         manager = SkillManager(skills_dir=self.temp_dir)
         result = manager._execute_in_subprocess("test_skill", "echo", {"message": "hello world"})
@@ -207,14 +206,15 @@ class TestShimPatternSubprocessExecution(unittest.TestCase):
             "sys.exit(1)\n"
         )
 
-        # Create manifest
-        manifest = {
-            "name": "test-skill",
-            "version": "1.0.0",
-            "execution_mode": "subprocess",
-            "entry_point": "implementation.py",
-        }
-        (self.skill_dir / "manifest.json").write_text(json.dumps(manifest))
+        # Create SKILL.md
+        skill_md = """---
+name: "test-skill"
+version: "1.0.0"
+execution_mode: "subprocess"
+entry_point: "implementation.py"
+---
+"""
+        (self.skill_dir / "SKILL.md").write_text(skill_md)
 
         manager = SkillManager(skills_dir=self.temp_dir)
         result = manager._execute_in_subprocess("test_skill", "echo", {})
@@ -285,13 +285,16 @@ class TestCrawl4aiSkillStructure(unittest.TestCase):
         if not crawl4ai_dir.exists():
             self.skipTest("crawl4ai skill not found")
 
-        manifest_path = crawl4ai_dir / "manifest.json"
-        self.assertTrue(manifest_path.exists(), "manifest.json should exist")
+        skill_md_path = crawl4ai_dir / "SKILL.md"
+        self.assertTrue(skill_md_path.exists(), "SKILL.md should exist")
 
-        manifest = json.loads(manifest_path.read_text())
+        import frontmatter
+
+        with open(skill_md_path) as f:
+            post = frontmatter.load(f)
+        manifest = post.metadata
         self.assertEqual(manifest.get("execution_mode"), "subprocess")
-        self.assertEqual(manifest.get("python_path"), ".venv/bin/python")
-        self.assertEqual(manifest.get("entry_point"), "implementation.py")
+        # entry_point is not required in SKILL.md - defaults to implementation.py
 
     def test_crawl4ai_tools_py_exists(self):
         """Test that crawl4ai skill has tools.py shim."""
@@ -338,9 +341,10 @@ class TestCrawl4aiSkillStructure(unittest.TestCase):
         self.assertTrue(pyproject_path.exists(), "pyproject.toml should exist for uv")
 
         content = pyproject_path.read_text()
-        pyproject = json.loads(content.replace("\n", ""))
-        self.assertIn("dependencies", pyproject.get("project", {}))
-        self.assertTrue(len(pyproject["project"]["dependencies"]) > 0)
+        # pyproject.toml is TOML, check it has project.dependencies
+        self.assertIn("[project]", content)
+        self.assertIn("dependencies", content)
+        self.assertTrue(content.count("dependencies") > 0)
 
 
 class TestSkillManagerExecutionMode(unittest.TestCase):
@@ -368,12 +372,13 @@ def test_cmd():
 
     def test_skill_execution_mode_library(self):
         """Test skill with library mode."""
-        manifest = {
-            "name": "test-skill",
-            "version": "1.0.0",
-            "execution_mode": "library",
-        }
-        (self.skill_dir / "manifest.json").write_text(json.dumps(manifest))
+        skill_md = """---
+name: "test-skill"
+version: "1.0.0"
+execution_mode: "library"
+---
+"""
+        (self.skill_dir / "SKILL.md").write_text(skill_md)
 
         manager = SkillManager(skills_dir=self.temp_dir)
         manager.load_skill(self.skill_dir)
@@ -385,14 +390,14 @@ def test_cmd():
 
     def test_skill_execution_mode_subprocess(self):
         """Test skill with subprocess mode."""
-        manifest = {
-            "name": "test-skill",
-            "version": "1.0.0",
-            "execution_mode": "subprocess",
-            "python_path": ".venv/bin/python",
-            "entry_point": "implementation.py",
-        }
-        (self.skill_dir / "manifest.json").write_text(json.dumps(manifest))
+        skill_md = """---
+name: "test-skill"
+version: "1.0.0"
+execution_mode: "subprocess"
+entry_point: "implementation.py"
+---
+"""
+        (self.skill_dir / "SKILL.md").write_text(skill_md)
 
         manager = SkillManager(skills_dir=self.temp_dir)
         manager.load_skill(self.skill_dir)
@@ -401,16 +406,16 @@ def test_cmd():
         self.assertIsNotNone(skill)
         self.assertEqual(skill.execution_mode, "subprocess")
         self.assertEqual(skill.manifest.get("execution_mode"), "subprocess")
-        self.assertEqual(skill.manifest.get("python_path"), ".venv/bin/python")
 
     def test_skill_info_includes_execution_mode(self):
         """Test that get_skill_info includes execution mode."""
-        manifest = {
-            "name": "test-skill",
-            "version": "1.0.0",
-            "execution_mode": "subprocess",
-        }
-        (self.skill_dir / "manifest.json").write_text(json.dumps(manifest))
+        skill_md = """---
+name: "test-skill"
+version: "1.0.0"
+execution_mode: "subprocess"
+---
+"""
+        (self.skill_dir / "SKILL.md").write_text(skill_md)
 
         manager = SkillManager(skills_dir=self.temp_dir)
         manager._register_skill(self.skill_dir)

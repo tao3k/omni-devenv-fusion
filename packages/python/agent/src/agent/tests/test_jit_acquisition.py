@@ -10,46 +10,8 @@ Tests cover:
 
 import pytest
 from pathlib import Path
-import importlib.util
-import sys
 
-from common.gitops import get_project_root
-from common.settings import get_setting
-
-
-def _load_skill_module_for_test(skill_name: str):
-    """
-    Load a skill module directly from file using importlib.util.
-    This bypasses the normal import system which may resolve 'agent' to the package.
-    """
-    # Get project root from gitops and skills path from settings
-    project_root = get_project_root()
-    skills_path = get_setting("skills.path", "assets/skills")
-    skill_tools_path = project_root / skills_path / skill_name / "tools.py"
-
-    if not skill_tools_path.exists():
-        raise FileNotFoundError(f"Skill tools not found: {skill_tools_path}")
-
-    # Set up paths
-    skills_parent = project_root / skills_path
-    skills_parent_str = str(skills_parent)
-
-    # Create a unique module name to avoid conflicts
-    module_name = f"_test_skill_{skill_name}"
-
-    # Remove any existing module with this name to ensure fresh load
-    if module_name in sys.modules:
-        del sys.modules[module_name]
-
-    # Load the module from file
-    spec = importlib.util.spec_from_file_location(
-        module_name, skill_tools_path, submodule_search_locations=[skills_parent_str]
-    )
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-
-    return module
+from common.skills_path import SKILLS_DIR, load_skill_module
 
 
 class TestSkillDiscovery:
@@ -317,39 +279,39 @@ class TestSkillCommands:
     def test_skill_discover_registered(self):
         """Test that skill.discover command function exists and is callable."""
         # Load skill module from assets directory
-        module = _load_skill_module_for_test("skill")
+        module = load_skill_module("skill")
         assert hasattr(module, "discover"), "skill.discover should exist"
         assert callable(module.discover), "skill.discover should be callable"
 
     def test_skill_suggest_registered(self):
         """Test that skill.suggest command function exists and is callable."""
-        module = _load_skill_module_for_test("skill")
+        module = load_skill_module("skill")
         assert hasattr(module, "suggest"), "skill.suggest should exist"
         assert callable(module.suggest), "skill.suggest should be callable"
 
     def test_skill_jit_install_registered(self):
         """Test that skill.jit_install command function exists and is callable."""
-        module = _load_skill_module_for_test("skill")
+        module = load_skill_module("skill")
         assert hasattr(module, "jit_install"), "skill.jit_install should exist"
         assert callable(module.jit_install), "skill.jit_install should be callable"
 
     def test_skill_list_index_registered(self):
         """Test that skill.list_index command function exists and is callable."""
-        module = _load_skill_module_for_test("skill")
+        module = load_skill_module("skill")
         assert hasattr(module, "list_index"), "skill.list_index should exist"
         assert callable(module.list_index), "skill.list_index should be callable"
 
     def test_skill_manifest_exists(self):
-        """Test that skill manifest exists and is valid."""
-        import json
-        from common.settings import get_setting
+        """Test that skill SKILL.md exists and is valid."""
+        import frontmatter
+        from common.skills_path import SKILLS_DIR
 
-        project_root = get_project_root()
-        skills_path = get_setting("skills.path", "assets/skills")
-        manifest_path = project_root / skills_path / "skill" / "manifest.json"
-        assert manifest_path.exists(), "skill manifest should exist"
+        skill_md_path = SKILLS_DIR(skill="skill", filename="SKILL.md")
+        assert skill_md_path.exists(), "skill SKILL.md should exist"
 
-        manifest = json.loads(manifest_path.read_text())
+        with open(skill_md_path) as f:
+            post = frontmatter.load(f)
+        manifest = post.metadata
         assert manifest["name"] == "Skill Manager"
         # Check for key routing keywords
         assert "skill" in manifest["routing_keywords"]

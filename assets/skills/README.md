@@ -1,545 +1,281 @@
 # Skills Directory
 
-> **Phase 28: Safe Ingestion / Immune System** (2026-01-06)
->
-> Security layer for downloading and executing third-party skills from Git repositories.
->
-> - Code pattern scanning (eval, exec, os.system, subprocess shell=True)
-> - Manifest permission validation
-> - Decision engine: SAFE / WARN / SANDBOX / BLOCK
+> **Phase 33: ODF-EP v6.0 Core Refactoring** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
 
-> **Phase 27: JIT Skill Acquisition** (2025-12)
->
-> Just-in-time skill installation from known skills index.
->
-> - `omni("skill.jit_install", {"skill_id": "..."})` - Auto-download on demand
-> - `omni("skill.discover", {"query": "..."})` - Search skills index
-> - `omni("skill.suggest", {"task": "..."})` - AI-powered skill recommendations
+This directory contains **Skills** - composable, self-contained packages that provide specific capabilities to the Omni Agent.
 
-> **Phase 25: One Tool Architecture**
->
-> Single entry point: `@omni("skill.command")`
-> Brain (prompts.md) -> Muscle (tools.py) -> Guardrails (lefthook)
+## Quick Reference
 
-> **Phase 24: The MiniMax Shift**
->
-> Direct tool registration for native CLI experience.
-> No `invoke_skill` middleware - tools are registered directly.
+| Topic             | Documentation                                  |
+| ----------------- | ---------------------------------------------- |
+| Creating a skill  | [Creating a New Skill](#creating-a-new-skill)  |
+| Execution modes   | [Library vs Subprocess Mode](#execution-modes) |
+| Architecture      | [Trinity Architecture](#trinity-architecture)  |
+| Command reference | See individual skill `guide.md` files          |
 
-This directory contains **Skills** - composable, self-contained packages that provide specific capabilities.
+## Trinity Architecture
 
-## Architecture Overview
+Each skill operates within the **Trinity Architecture**:
 
 ```
-agent/
-├── skills/              # Skill-centric knowledge (THIS DIRECTORY)
-│   ├── {skill_name}/
-│   │   ├── manifest.json    # Skill metadata
-│   │   ├── guide.md         # Procedural knowledge
-│   │   ├── tools.py         # MCP tool definitions (Phase 24: Direct registration)
-│   │   └── prompts.md       # Skill-specific prompts
-│   └── README.md            # This file
-│
-├── how-to/              # Cross-skill workflow guides (RETAINED)
-│   ├── documentation-workflow.md
-│   ├── testing-workflows.md
-│   ├── release-process.md
-│   └── rag-usage.md
-│
-└── instructions/        # LLM behavior standards (RETAINED)
-    ├── project-conventions.md
-    ├── problem-solving.md
-    └── documentation-standards.md
+┌─────────────────────────────────────────────────────────────┐
+│                     SkillManager                            │
+├─────────────────────────────────────────────────────────────┤
+│  Code          │  Context           │  State                │
+│  tools.py      │  prompts.md        │  manifest.json        │
+│  (hot-reload)  │  (Repomix XML)     │  (metadata)           │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Design Principles
-
-### Skills (in `skills/`)
-
-**Purpose**: Provide self-contained, skill-specific knowledge and tools.
-
-**Contents**:
-
-- `manifest.json` - Skill metadata (name, version, tools, dependencies)
-- `guide.md` - How-to procedures specific to this skill
-- `tools.py` - MCP tool definitions for this skill
-- `prompts.md` - Skill-specific system prompts
-
-**When to use**:
-
-- User needs task-specific guidance (e.g., "How do I commit?")
-- LLM needs skill-specific context and tools
-- Looking for validation rules within a domain
-
-### How-To Guides (in `how-to/`)
-
-**Purpose**: Document cross-skill workflows that involve multiple skills.
-
-**When to use**:
-
-- Workflow spans multiple skills (e.g., "Write docs" → involves writer + filesystem + git)
-- High-level process guidance
-- Integration patterns between skills
-
-**Retained files**:
-
-- `documentation-workflow.md` - Writer + FileSystem + Git integration
-- `testing-workflows.md` - Pytest + Python Engineering + Git integration
-- `release-process.md` - Multi-skill release workflow
-- `rag-usage.md` - Librarian + Knowledge integration
-
-### Instructions (in `instructions/`)
-
-**Purpose**: Define LLM behavior standards and conventions.
-
-**When to use**:
-
-- Project-wide conventions
-- Problem-solving patterns
-- Documentation standards
-
-## Migration Guide
-
-### Old Structure
-
-```
-agent/how-to/git-workflow.md    # Git knowledge (DUPLICATED)
-agent/skills/git_operations/guide.md  # Git knowledge (DUPLICATED)
-```
-
-### New Structure
-
-```
-agent/skills/git_operations/guide.md  # SINGLE source of truth for Git
-agent/how-to/documentation-workflow.md # Cross-skill workflow
-```
-
-**Rule of thumb**: If knowledge is specific to one skill, put it in the skill. If it spans multiple skills, keep it in `how-to/`.
-
-## Creating a New Skill
-
-1. Create directory: `agent/skills/{skill_name}/`
-2. Add `manifest.json` with skill metadata
-3. Add `guide.md` with procedural knowledge
-4. Add `tools.py` with MCP tool definitions (optional)
-5. Add `prompts.md` with skill-specific prompts (optional)
-6. Skill is automatically discovered by SkillRegistry
-
-## Example Skill Structure
-
-```
-agent/skills/my_new_skill/
-├── manifest.json
-├── guide.md
-├── tools.py
-└── prompts.md
-```
-
-## Skill Registry
-
-The `SkillRegistry` class (in `src/agent/capabilities/skill_registry.py`) provides:
-
-- `list_skills()` - Discover all available skills
-- `get_skill_manifest(name)` - Get skill metadata
-- `load_skill(name)` - Load skill context (guide, tools, prompts)
-- `find_skills_for_task(task_description)` - Recommend skills for a task
-
-## Phase 24: The MiniMax Shift
-
-### Key Changes
-
-| Aspect          | Before (Phase 13)             | After (Phase 24)              |
-| --------------- | ----------------------------- | ----------------------------- |
-| Tool Names      | Descriptive text              | `snake_case` function names   |
-| Registration    | Via `invoke_skill` middleware | Direct: `tools.register(mcp)` |
-| Return Type     | `dict`                        | `str` (FastMCP auto-wraps)    |
-| Operation Model | Atomic                        | Batch operations supported    |
-
-### Direct Tool Registration Pattern
-
-```python
-# tools.py
-from mcp.server.fastmcp import FastMCP
-
-def git_status() -> str:
-    """Get the current status of the git repository."""
-    # Implementation
-    return status_report
-
-def git_status_report() -> str:
-    """[VIEW] Returns a formatted git status report with icons."""
-    # Implementation
-    return formatted_report
-
-def register(mcp: FastMCP) -> None:
-    """Register all git tools with the MCP server."""
-    mcp.add_tool(git_status, description="Get git status.")
-    mcp.add_tool(git_status_report, description="Formatted status report.")
-```
-
-### MCP Protocol Compliance
-
-All tools must return `str`. FastMCP auto-wraps into proper MCP format:
-
-```python
-def git_read_backlog() -> str:
-    """Read the Git Skill's own backlog."""
-    content = read_file("Backlog.md")
-    # FastMCP auto-converts to:
-    # CallToolResult(content=[TextContent(type="text", text=content)])
-    return content
-```
-
-**Result in Claude CLI:**
-
-```json
-[
-  {
-    "type": "text",
-    "text": "# Git Skill Backlog\n..."
-  }
-]
-```
-
-### View-Enhanced Tools (Director Pattern)
-
-For complex UI rendering, use the View pattern:
-
-```python
-# views.py
-def render_status_report(branch: str, staged: list, unstaged: list) -> str:
-    """Generate Claude-friendly Markdown report."""
-    # Return formatted string with icons and "Run" hints
-
-# tools.py
-from .views import render_status_report
-
-def git_status_report() -> str:
-    """[VIEW] Get formatted git status report."""
-    branch, staged, unstaged = _get_status_details()
-    return render_status_report(branch, staged, unstaged)
-```
-
-### Batch Operations
-
-For multi-file operations, use Pydantic models:
-
-```python
-from pydantic import BaseModel
-from typing import List, Literal
-
-class FileOperation(BaseModel):
-    action: Literal["write", "append"]
-    path: str
-    content: str
-
-def apply_file_changes(changes: List[FileOperation]) -> str:
-    """[BATCH] Efficiently apply changes to multiple files."""
-    # Process all changes
-    return summary_report
-```
-
-## Phase 27: JIT Skill Acquisition
-
-### MCP Tools
-
-| Tool                | Description                        |
-| ------------------- | ---------------------------------- |
-| `skill.jit_install` | Install skill from index on demand |
-| `skill.discover`    | Search skills index                |
-| `skill.suggest`     | Get AI recommendations             |
-| `skill.list_index`  | List all known skills              |
-
-### Usage
-
-```python
-# Install a skill on demand
-@omni("skill.jit_install", {"skill_id": "pandas-expert"})
-
-# Search for skills
-@omni("skill.discover", {"query": "data analysis"})
-
-# Get suggestions for task
-@omni("skill.suggest", {"task": "analyze csv file"})
-```
-
-### Known Skills Index
-
-Skills are discovered from `assets/skills_index/known_skills.json`:
-
-```json
-[
-  {
-    "id": "pandas-expert",
-    "name": "Pandas Expert",
-    "url": "https://github.com/omni-dev/skill-pandas",
-    "version": "1.0.0",
-    "keywords": ["python", "data", "analysis", "pandas"]
-  }
-]
-```
-
-## Phase 28: Safe Ingestion / Immune System
-
-### Security Scanner
-
-All remote skills are scanned before loading:
-
-```python
-# Security checks performed:
-# 1. Code Pattern Detection
-#    - Critical (+50): os.system, subprocess(shell=True), eval, exec, __import__
-#    - High (+30): File write, network requests, socket.connect
-#    - Medium (+10): File read, subprocess, os.popen
-#    - Low (+5): System access, path operations
-
-# 2. Manifest Permission Audit
-#    - Checks for dangerous permissions: exec, shell, filesystem=write
-
-# 3. Trusted Source Bypass
-#    - Configured in assets/settings.yaml
-```
-
-### Security Thresholds
-
-| Threshold | Score Range | Action             |
-| --------- | ----------- | ------------------ |
-| BLOCK     | >= 30       | Reject skill       |
-| WARN      | 10-29       | Allow with warning |
-| SAFE      | < 10        | Load normally      |
-
-### Configuration
-
-```yaml
-# assets/settings.yaml
-security:
-  enabled: true
-  block_threshold: 30
-  warn_threshold: 10
-  trusted_sources:
-    - "github.com/omni-dev"
-```
-
-### Security Assessment Output
-
-```python
-@omni("skill.jit_install", {"skill_id": "external-skill"})
-# Result includes:
-# {
-#   "decision": "SAFE|WARN|BLOCK",
-#   "score": 15,
-#   "findings": [...],
-#   "warnings": [...]
-# }
-```
-
-## Phase 28.1: Subprocess/Shim Architecture
-
-> **Philosophy**: "Don't import what you can't isolate."
-
-For skills with heavy/conflicting dependencies (e.g., `crawl4ai` with `pydantic v1` vs Omni's `pydantic v2`), use **subprocess isolation** instead of library import.
-
-### Problem: Dependency Hell
-
-```
-Omni Agent: langchain → pydantic v2
-Skill: crawl4ai → pydantic v1  # CONFLICT!
-```
-
-If we import `crawl4ai` directly into the Agent's memory:
-
-- Version conflicts crash the Agent
-- Memory leaks in the skill affect the entire system
-- No user control over skill dependencies
-
-### Solution: Shim Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Omni Agent (Main Process)                    │
-│                                                                  │
-│  ┌─────────────┐     subprocess     ┌─────────────────────┐    │
-│  │ tools.py    │ ──────────────────▶ │ .venv/bin/python   │    │
-│  │ (Shim)      │                     │                     │    │
-│  │             │                     │ implementation.py   │    │
-│  └─────────────┘                     │ (Heavy deps here)   │    │
-│                                        └─────────────────────┘    │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Skill Directory Structure
+| Component   | File            | Purpose                           |
+| ----------- | --------------- | --------------------------------- |
+| **Code**    | `tools.py`      | Hot-reloaded MCP tool definitions |
+| **Context** | `prompts.md`    | LLM behavior guidelines           |
+| **State**   | `manifest.json` | Skill metadata and configuration  |
+
+## Skill Structure
 
 ```
 assets/skills/{skill_name}/
-├── .venv/                      # Isolated Python environment
-│   └── bin/python
-├── manifest.json               # Execution mode declaration
-├── pyproject.toml              # Skill's own dependencies
-├── implementation.py           # Real business logic (heavy imports)
-└── tools.py                    # Lightweight shim (no heavy imports)
+├── tools.py           # @skill_command decorated functions
+├── prompts.md         # LLM context and guidelines
+├── guide.md           # Developer documentation
+├── manifest.json      # Skill metadata
+├── pyproject.toml     # Dependencies (subprocess mode)
+├── uv.lock            # Locked dependencies
+└── repomix.json       # Atomic context config (optional)
 ```
 
-### Manifest Configuration
+## Creating a New Skill
+
+### 1. Copy the Template
+
+```bash
+cp -r assets/skills/_template assets/skills/my_new_skill
+```
+
+### 2. Update manifest.json
 
 ```json
 {
-  "name": "crawl4ai",
+  "name": "my_new_skill",
   "version": "1.0.0",
-  "execution_mode": "subprocess",
-  "entry_point": "implementation.py",
+  "description": "Brief description of the skill",
+  "execution_mode": "library",
+  "category": "general",
+  "keywords": ["tag1", "tag2"],
   "permissions": {
-    "network": true,
+    "network": false,
     "filesystem": "read"
   }
 }
 ```
 
-### Shim Pattern: tools.py
-
-**Key principle**: This file runs in Omni's main process. It MUST NOT import heavy dependencies.
-Uses `uv run --directory` for cross-platform, self-healing environment management.
+### 3. Add Commands in tools.py
 
 ```python
-# assets/skills/{skill_name}/tools.py
-import subprocess
-import json
-import os
-from pathlib import Path
 from agent.skills.decorators import skill_command
 
-# Skill directory (computed at import time)
-SKILL_DIR = Path(__file__).parent
-IMPLEMENTATION_SCRIPT = "implementation.py"  # Relative path for uv run
-
-def _run_isolated(command: str, **kwargs) -> str:
-    """Execute command in skill's isolated Python environment using uv run.
-
-    uv run --directory automatically:
-    - Discovers the virtual environment in SKILL_DIR
-    - Creates .venv if missing (self-healing)
-    - Handles cross-platform paths (Windows/Linux/Mac)
-    """
-
-    # Build command: uv run --directory <skill_dir> python implementation.py <command> <json_args>
-    cmd = [
-        "uv", "run",
-        "--directory", str(SKILL_DIR),
-        "-q",  # Quiet mode, reduce uv's own output
-        "python",
-        IMPLEMENTATION_SCRIPT,
-        command,
-        json.dumps(kwargs),
-    ]
-
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=120,
-            env={**os.environ, "PLAYWRIGHT_BROWSERS_PATH": os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "")}
-        )
-        return result.stdout.strip()
-
-    except subprocess.CalledProcessError as e:
-        return f"Error (Exit {e.returncode}):\n{e.stderr}"
-
-@skill_command(name="crawl_webpage", description="Crawl a URL using crawl4ai.")
-def crawl_webpage(url: str, fit_markdown: bool = True) -> str:
-    """Crawl webpage - delegates to isolated subprocess."""
-    return _run_isolated("crawl", url=url, fit_markdown=fit_markdown)
+@skill_command(
+    name="my_command",
+    category="read",
+    description="Brief description of what this command does",
+)
+async def my_command(param: str) -> str:
+    """Detailed docstring explaining the command behavior."""
+    # Implementation
+    return "result"
 ```
 
-### Testing the Shim Pattern
+### 4. Add LLM Context in prompts.md
 
-To test if the Shim Pattern works (without LLM involvement):
+```markdown
+# My New Skill Prompts
+
+When using this skill, the LLM should:
+
+- Consider using `my_new_skill.my_command` for [specific tasks]
+- Remember to [relevant considerations]
+```
+
+### 5. Update guide.md
+
+````markdown
+# My New Skill Guide
+
+## Overview
+
+Brief description of what this skill does.
+
+## Usage
+
+### When to use
+
+- Scenario 1
+- Scenario 2
+
+### Examples
 
 ```bash
-# Test crawl4ai directly via omni skill run command
-uv run omni skill run crawl4ai.crawl_webpage '{"url": "https://example.com", "fit_markdown": true}'
+@omni("my_new_skill.my_command", {"param": "value"})
+```
+````
+
+## Commands
+
+| Command      | Description            |
+| ------------ | ---------------------- |
+| `my_command` | What this command does |
+
 ```
 
-This tests: `tools.py` → `uv run --directory` → `implementation.py` → crawl4ai
+## Execution Modes
 
-### Implementation: implementation.py
+### Library Mode (Default)
 
-**Key principle**: This file runs in the subprocess. It CAN import anything.
+Commands run directly in the Agent's main process. Use for skills with minimal dependencies.
+
+**Use when:**
+- No external dependencies (or already in main environment)
+- Fast execution is critical
+- No version conflicts possible
+
+### Subprocess Mode (Phase 28.1)
+
+Commands run in an isolated subprocess with own `.venv`. Use for skills with heavy/conflicting dependencies.
+
+**Structure:**
+```
+
+assets/skills/{skill_name}/
+├── .venv/ # Isolated Python environment
+├── pyproject.toml # Skill's own dependencies
+├── implementation.py # Business logic (heavy imports)
+└── tools.py # Lightweight shim (no heavy imports)
+
+````
+
+**Implementation pattern:**
 
 ```python
-# assets/skills/{skill_name}/implementation.py
-import sys
+# tools.py - Runs in main process (no heavy imports)
+import subprocess
 import json
-import asyncio
-from crawl4ai import AsyncWebCrawler
+from pathlib import Path
 
-async def crawl(url, fit_markdown):
-    async with AsyncWebCrawler() as crawler:
-        result = await crawler.arun(url)
-        return result.markdown.fit_markdown if fit_markdown else result.markdown.raw
+SKILL_DIR = Path(__file__).parent
 
-def main():
-    command = sys.argv[1]
-    args = json.loads(sys.argv[2])
+def _run_isolated(command: str, **kwargs) -> str:
+    cmd = [
+        "uv", "run", "-q",
+        "python", str(SKILL_DIR / "implementation.py"),
+        command, json.dumps(kwargs)
+    ]
+    result = subprocess.run(cmd, cwd=str(SKILL_DIR), capture_output=True, text=True)
+    return result.stdout.strip()
 
-    if command == "crawl":
-        result = asyncio.run(crawl(args["url"], args.get("fit_markdown", True)))
-        print(result)
-    else:
-        raise ValueError(f"Unknown command: {command}")
+@skill_command(name="heavy_op", description="Heavy operation")
+def heavy_op(param: str) -> str:
+    return _run_isolated("heavy_op", param=param)
+````
 
-if __name__ == "__main__":
-    main()
+```python
+# implementation.py - Runs in subprocess (heavy imports ok)
+import heavy_library
+
+def heavy_op(param: str) -> str:
+    return heavy_library.do_something(param)
 ```
 
-### User Setup Workflow
+**Use when:**
 
-```bash
-# User sees error when trying to use crawl4ai (if no venv)
-@omni("crawl4ai.crawl_webpage", {"url": "https://example.com"})
-# → uv run auto-creates .venv if missing
+- Dependencies conflict with Agent's (e.g., pydantic v1 vs v2)
+- Skill might crash and should be isolated
+- Requires specific package versions
 
-# Manual setup (optional, for faster first run)
-cd assets/skills/crawl4ai
-uv venv && uv sync  # Pre-install dependencies
+## Skill Command Categories
 
-# Now it works
-@omni("crawl4ai.crawl_webpage", {"url": "https://example.com"})
-# → uv run implementation.py crawl '{"url": "..."}'
+| Category    | Use Case                                      |
+| ----------- | --------------------------------------------- |
+| `read`      | Read/retrieve data (files, git status, etc.)  |
+| `view`      | Visualize or display data (formatted reports) |
+| `write`     | Create or modify data (write files, commit)   |
+| `workflow`  | Multi-step operations (complex tasks)         |
+| `evolution` | Refactoring/code evolution tasks              |
+| `general`   | Miscellaneous commands                        |
+
+## Command Decorator
+
+The `@skill_command` decorator registers functions as MCP tools:
+
+```python
+@skill_command(
+    name="command_name",       # Tool name (required)
+    category="read",           # Category from SkillCategory enum
+    description="Brief desc",  # Tool description for LLM
+    inject_root=False,         # Inject project_root argument
+    inject_settings=()         # Inject setting values
+)
+async def command_name(param: str) -> str:
+    """Function docstring becomes detailed description."""
+    return "result"
 ```
 
-### Comparison: Library Mode vs Subprocess Mode
+## ODF-EP v6.0 Compliance
 
-| Aspect            | Library Mode      | Subprocess Mode (Shim) |
-| ----------------- | ----------------- | ---------------------- |
-| Dependencies      | Shared with Agent | Isolated in .venv      |
-| Version Conflicts | High risk         | Zero risk              |
-| Crash Impact      | Crashes Agent     | Isolated subprocess    |
-| User Control      | None              | Full (uv pip install)  |
-| Startup Time      | Fast (import)     | Slower (process spawn) |
-| Memory Usage      | Shared            | Extra process overhead |
+All core skill modules follow the **"Python Zenith" Engineering Protocol**:
 
-### When to Use Each Mode
+| Pillar                             | Implementation                        |
+| ---------------------------------- | ------------------------------------- |
+| **A: Pydantic Shield**             | `ConfigDict(frozen=True)` on all DTOs |
+| **B: Protocol-Oriented Design**    | `typing.Protocol` for testability     |
+| **C: Tenacity Pattern**            | `@retry` for resilient I/O            |
+| **D: Context-Aware Observability** | `logger.bind()` for structured logs   |
 
-**Use Library Mode (Default) for:**
+## Performance
 
-- Skills with minimal dependencies
-- Skills that Omni already supports (git, filesystem)
-- Performance-critical operations
+### Fast Import (Phase 32)
 
-**Use Subprocess Mode for:**
+Skill modules use lazy initialization to avoid import-time overhead:
 
-- Skills with heavy/conflicting dependencies (crawl4ai, playwright)
-- Skills that might crash (untrusted code)
-- Skills requiring specific Python versions
+```python
+# Lazy logger - only created on first use
+_cached_logger = None
+
+def _get_logger() -> Any:
+    global _cached_logger
+    if _cached_logger is None:
+        import structlog
+        _cached_logger = structlog.get_logger(__name__)
+    return _cached_logger
+```
+
+### O(1) Command Lookup
+
+SkillManager maintains a command cache for instant lookups:
+
+```python
+# Both formats work:
+manager.get_command("git", "status")      # O(1) lookup
+manager.run("git", "status", {})           # Via cache
+```
+
+### Hot Reload
+
+Skills are automatically reloaded when `tools.py` is modified. Mtime checks are throttled to once per 100ms.
+
+## Example Skills
+
+| Skill                                           | Features                          |
+| ----------------------------------------------- | --------------------------------- |
+| [Git](./git/guide.md)                           | Status, commit, branch management |
+| [Filesystem](./filesystem/guide.md)             | Read, write, search files         |
+| [Terminal](./terminal/guide.md)                 | Shell command execution           |
+| [Testing Protocol](./testing_protocol/guide.md) | Test runner integration           |
 
 ## Related Documentation
 
-- [Phase 28 Spec](../specs/phase28-safe-ingestion.md) - Safe Ingestion specification
-- [Phase 27 Spec](./skills_index/README.md) - JIT Acquisition specification
-- [Phase 26 Spec](../specs/phase26-skill-network.md) - Skill Network specification
-- [Phase 24 Spec](../specs/phase-24-living-skill-architecture.md) - MiniMax Shift specification
-- [Phase 13 Spec](../specs/phase13_skill_architecture.md) - Original specification
-- [Git Operations Skill](./git/guide.md) - Example skill with Phase 24 patterns
-- [Project Conventions](../instructions/project-conventions.md) - LLM behavior standards
+- [Skills Documentation](../../docs/skills.md) - Comprehensive skills guide
+- [Trinity Architecture](../../docs/explanation/trinity-architecture.md) - Technical deep dive
+- [ODF-EP v6.0 Planning Prompt](../../.claude/plans/odf-ep-v6-planning-prompt.md) - Refactoring guide
+- [mcp-core-architecture](../../docs/developer/mcp-core-architecture.md) - Shared library patterns

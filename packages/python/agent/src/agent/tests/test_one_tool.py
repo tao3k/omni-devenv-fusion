@@ -22,6 +22,13 @@ from pathlib import Path
 
 from agent.core.skill_manager import get_skill_manager, SkillManager
 from agent.core.router import SemanticRouter, clear_routing_cache
+from agent.skills.decorators import skill_command
+
+# Import helper for unwrapping CommandResult
+import sys
+
+sys.path.insert(0, str(Path(__file__).parent))
+from test_skills import unwrap_command_result
 
 
 # =============================================================================
@@ -33,6 +40,9 @@ from agent.core.router import SemanticRouter, clear_routing_cache
 def real_skill_manager():
     """Create a real skill manager with all skills loaded."""
     manager = get_skill_manager()
+    # Ensure all skills are loaded before tests run
+    if not manager.skills:
+        manager.load_all()
     return manager
 
 
@@ -125,7 +135,7 @@ class TestOmniDispatch:
         """Test @omni('filesystem.read') dispatch."""
         from agent.mcp_server import omni
 
-        result = await omni("filesystem.read", {"path": "assets/skills/filesystem/manifest.json"})
+        result = await omni("filesystem.read", {"path": "assets/skills/filesystem/SKILL.md"})
 
         assert isinstance(result, str)
         assert "filesystem" in result or "manifest" in result
@@ -285,8 +295,12 @@ class TestSkillManagerLoading:
         """
         import sys
 
-        # Clear any cached modules for fresh test
-        modules_to_clear = [k for k in sys.modules.keys() if k.startswith("agent.skills")]
+        # Clear any cached modules for fresh test (but preserve agent.skills.core)
+        modules_to_clear = [
+            k
+            for k in sys.modules.keys()
+            if k.startswith("agent.skills") and k != "agent.skills.core"
+        ]
         for mod in modules_to_clear:
             del sys.modules[mod]
 
@@ -379,8 +393,9 @@ class TestSkillManagerLoading:
         assert test_func._skill_config["name"] == "test_command"
         assert test_func._skill_config["category"] == "test"
 
-        # Verify function still works
-        assert test_func() == "test_result"
+        # Verify function still works (now returns CommandResult)
+        result = unwrap_command_result(test_func())
+        assert result == "test_result"
 
     @pytest.mark.asyncio
     async def test_prepare_commit_runs_successfully(self):
@@ -503,6 +518,239 @@ async def run_real_session_test():
 
     print("\n" + "=" * 60)
     print("✅ Real Session Test Complete")
+
+
+# =============================================================================
+# Test: Git Commit Scope Validation (Phase 32)
+# =============================================================================
+
+
+class TestGitCommitScopeValidation:
+    """Test scope validation and auto-fix against cog.toml.
+
+    These tests demonstrate the simplified pattern using common.skills_path:
+
+    OLD PATTERN (verbose):
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "assets/skills/git"))
+        from tools import _get_cog_scopes
+
+    NEW PATTERN (simplified):
+        from common.skills_path import SKILLS_DIR, load_skill_module
+        from common.gitops import get_project_root
+
+        # SKILLS_DIR uses keyword args - reads assets.skills_dir from settings.yaml
+        git_tools = load_skill_module("git")
+        git_path = SKILLS_DIR(skill="git")                         # -> Path("assets/skills/git")
+        git_tools_path = SKILLS_DIR(skill="git", filename="tools.py")  # -> Path("assets/skills/git/tools.py")
+
+    Project root is detected via `git rev-parse --show-toplevel`.
+    """
+
+    def test_get_cog_scopes_reads_from_config(self):
+        """Verify _get_cog_scopes reads valid scopes from cog.toml."""
+        from common.skills_path import load_skill_module
+        from common.gitops import get_project_root
+
+        root = get_project_root()
+        git_tools = load_skill_module("git", root)
+
+        scopes = git_tools._get_cog_scopes(root)
+
+        # Verify we got a list of scopes
+        assert isinstance(scopes, list), "Should return a list"
+        assert len(scopes) > 0, "Should have at least one scope"
+
+        # Verify expected scopes exist
+        assert "docs" in scopes, "docs scope should be in cog.toml"
+        assert "agent" in scopes, "agent scope should be in cog.toml"
+        assert "core" in scopes, "core scope should be in cog.toml"
+
+    def test_validate_and_fix_scope_with_valid_scope(self):
+        """Test that valid scopes pass through without warnings."""
+        from common.skills_path import load_skill_module
+        from common.gitops import get_project_root
+
+        root = get_project_root()
+        git_tools = load_skill_module("git", root)
+
+        commit_type, scope, warnings = git_tools._validate_and_fix_scope("docs", "docs", root)
+
+        assert commit_type == "docs"
+        assert scope == "docs"
+        assert warnings == [], f"No warnings for valid scope, got: {warnings}"
+
+    def test_validate_and_fix_scope_with_invalid_scope(self):
+        """Test that invalid scopes are auto-fixed with warnings."""
+        from common.skills_path import load_skill_module
+        from common.gitops import get_project_root
+
+        root = get_project_root()
+        git_tools = load_skill_module("git", root)
+
+        # "project" is not in cog.toml
+        commit_type, scope, warnings = git_tools._validate_and_fix_scope("docs", "project", root)
+
+        assert commit_type == "docs"
+        assert scope != "project", "Scope should be changed"
+        assert len(warnings) > 0, "Should have warnings for invalid scope"
+        # Verify warning mentions the issue
+        assert any("project" in w for w in warnings), "Warning should mention 'project'"
+        assert any("not in cog.toml" in w for w in warnings), "Should mention cog.toml"
+
+    def test_validate_and_fix_scope_with_no_scope(self):
+        """Test that missing scope gets auto-filled with first valid scope."""
+        from common.skills_path import load_skill_module
+        from common.gitops import get_project_root
+
+        root = get_project_root()
+        git_tools = load_skill_module("git", root)
+
+        commit_type, scope, warnings = git_tools._validate_and_fix_scope("feat", "", root)
+
+        assert commit_type == "feat"
+        assert scope != "", "Scope should be auto-filled"
+        assert len(warnings) > 0, "Should have info message"
+        assert any("No scope provided" in w for w in warnings), "Should mention no scope"
+
+    def test_execute_commit_reconstructs_header(self):
+        """Test that execute_commit properly reconstructs header with fixed scope."""
+        import re
+        from common.skills_path import load_skill_module
+        from common.gitops import get_project_root
+
+        root = get_project_root()
+        git_tools = load_skill_module("git", root)
+
+        # Test case: docs(project) -> docs(nix)
+        message = "docs(project): Update CLAUDE.md path guidelines\n\n- Added path handling"
+        lines = message.strip().split("\n")
+        first_line = lines[0]
+
+        match = re.match(r"^(\w+)(?:\(([^)]+)\))?:\s*(.+)$", first_line)
+        commit_type = match.group(1)
+        scope = match.group(2) or ""
+        description = match.group(3)
+
+        commit_type, scope, warnings = git_tools._validate_and_fix_scope(commit_type, scope, root)
+
+        # Reconstruct like execute_commit does
+        if scope:
+            fixed_header = f"{commit_type}({scope}): {description}"
+        else:
+            fixed_header = f"{commit_type}: {description}"
+
+        # Verify the header is properly reconstructed
+        assert "docs(" in fixed_header, "Should have type(scope)"
+        assert "Update CLAUDE.md" in fixed_header, "Should have description"
+        assert "project" not in fixed_header, "Should not have original invalid scope"
+        assert "nix" in fixed_header or scope in ["docs", "core"], "Should have valid scope"
+
+    def test_commit_message_with_complex_body(self):
+        """Test parsing commit message with multi-line body (from Phase 32 big cleanup)."""
+        import re
+        from common.skills_path import load_skill_module
+        from common.gitops import get_project_root
+
+        root = get_project_root()
+        git_tools = load_skill_module("git", root)
+
+        # Real commit message from Phase 32: Big Cleanup
+        # Note: scope "common.skills_path" is not in cog.toml, so it gets auto-fixed to first valid scope
+        message = """refactor(common.skills_path): Implement SKILLS_DIR with keyword args API
+
+- SKILLS_DIR now uses keyword arguments (skill=, filename=, path=)
+- Replaces verbose path patterns across all files
+- Updated settings to use assets.skills_dir from settings.yaml
+- Added load_skill_module() convenience function
+- Migrated: skill_discovery.py, loader.py, registry/core.py"""
+
+        lines = message.strip().split("\n")
+        first_line = lines[0]
+
+        match = re.match(r"^(\w+)(?:\(([^)]+)\))?:\s*(.+)$", first_line)
+        assert match is not None, "Should parse valid conventional commit format"
+
+        commit_type = match.group(1)
+        scope = match.group(2)
+        description = match.group(3)
+
+        # Verify the structure
+        assert commit_type == "refactor", f"Expected 'refactor', got '{commit_type}'"
+        assert scope == "common.skills_path", f"Expected 'common.skills_path', got '{scope}'"
+        assert "keyword args" in description, "Description should mention keyword args"
+
+        # Validate and fix scope (invalid scope will be auto-fixed)
+        commit_type, fixed_scope, warnings = git_tools._validate_and_fix_scope(
+            commit_type, scope, root
+        )
+
+        # The scope "common.skills_path" is NOT in cog.toml scopes, so it gets auto-fixed
+        # This demonstrates the auto-fix behavior for invalid scopes
+        assert fixed_scope in ["nix", "core", "docs"], f"Expected valid scope, got '{fixed_scope}'"
+        assert len(warnings) > 0, "Invalid scope should produce warnings"
+
+
+# =============================================================================
+# Demo: SKILLS_DIR Attribute Access (for reference)
+# =============================================================================
+
+
+class TestSkillPathUtilities:
+    """Demonstrate SKILLS_DIR callable using settings.yaml via git toplevel."""
+
+    def test_skills_dir_callable(self):
+        """Verify SKILLS_DIR(skill="git") returns correct path from settings.yaml using git toplevel."""
+        from common.skills_path import SKILLS_DIR
+        from common.gitops import get_project_root
+
+        root = get_project_root()
+        expected_git_path = root / "assets" / "skills" / "git"
+
+        # Callable access with keyword args
+        assert SKILLS_DIR(skill="git") == expected_git_path
+
+        # With filename
+        expected_tools_path = expected_git_path / "tools.py"
+        assert SKILLS_DIR(skill="git", filename="tools.py") == expected_tools_path
+
+        # Verify the path exists
+        assert (SKILLS_DIR(skill="git", filename="tools.py")).exists()
+
+    def test_skills_dir_base_path(self):
+        """Verify SKILLS_DIR() returns base skills path from settings.yaml."""
+        from common.skills_path import SKILLS_DIR
+        from common.gitops import get_project_root
+
+        root = get_project_root()
+        expected_base = root / "assets" / "skills"
+
+        assert SKILLS_DIR() == expected_base
+
+    def test_gitops_get_project_root(self):
+        """Verify common.gitops.get_project_root() uses git toplevel."""
+        from common.gitops import get_project_root
+
+        root = get_project_root()
+
+        # Should have .git indicator
+        assert (root / ".git").exists()
+        # Should have pyproject.toml
+        assert (root / "pyproject.toml").exists()
+
+    def test_skill_path_builder(self):
+        """Demonstrate SkillPathBuilder convenience methods."""
+        from common.skills_path import SkillPathBuilder
+        from common.gitops import get_project_root
+
+        root = get_project_root()
+        builder = SkillPathBuilder()
+
+        # Convenience methods
+        assert builder.git == root / "assets/skills/git"
+        assert builder.skill("git") == root / "assets/skills/git"
+        assert builder.tools("git") == root / "assets/skills/git/tools.py"
+        assert builder.manifest("git") == root / "assets/skills/git/SKILL.md"
+        assert builder.guide("git") == root / "assets/skills/git/guide.md"
 
 
 if __name__ == "__main__":

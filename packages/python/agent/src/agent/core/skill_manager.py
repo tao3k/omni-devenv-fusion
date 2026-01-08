@@ -12,6 +12,8 @@ Key improvements:
 - Slots on all DTOs
 - Consistent structlog logging
 - Clean separation of concerns
+- O(1) command lookup with caching
+- Lazy hot-reload checking
 """
 
 from __future__ import annotations
@@ -20,12 +22,13 @@ import asyncio
 import json
 import logging
 import sys
+import time
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
-import structlog
-from common.mcp_core.lazy_cache import RepomixCache
+from common.mcp_core.lazy_cache.repomix_cache import RepomixCache
 
 from .protocols import (
     ExecutionMode,
@@ -37,10 +40,34 @@ from .protocols import (
 )
 from .module_loader import ModuleLoader, module_loader
 
+from ..skills.core.skill_manifest_loader import (
+    SkillManifestLoader,
+    get_manifest_loader,
+)
+from ..skills.core.skill_manifest import (
+    SkillMetadata,
+)
+from .registry.adapter import (
+    UnifiedManifestAdapter,
+    get_unified_adapter,
+)
+
 if TYPE_CHECKING:
     from .protocols import SkillManifest
 
-logger = structlog.get_logger(__name__)
+# Lazy logger - defer structlog.get_logger() to avoid ~100ms import cost
+_cached_logger: Any = None
+
+
+def _get_logger() -> Any:
+    """Get logger lazily to avoid import-time overhead."""
+    global _cached_logger
+    if _cached_logger is None:
+        import structlog
+
+        _cached_logger = structlog.get_logger(__name__)
+    return _cached_logger
+
 
 # Default skills directory
 SKILLS_DIR_PATH: str = "assets/skills"
@@ -71,7 +98,13 @@ class SkillCommand:
             object.__setattr__(self, "category", SkillCategory(self.category))
 
     async def execute(self, args: dict[str, Any]) -> ExecutionResult:
-        """Execute the command with arguments."""
+        """
+        Execute the command with arguments.
+
+        Handles both:
+        - Legacy: Raw return values (converted to ExecutionResult)
+        - Enhanced: CommandResult from @skill_command decorator
+        """
         import time
 
         t0 = time.perf_counter()
@@ -81,17 +114,30 @@ class SkillCommand:
             else:
                 result = self.func(**args)
 
+            # Check if result is already a CommandResult (enhanced decorator)
+            if hasattr(result, "success") and hasattr(result, "data"):
+                # Enhanced: Use CommandResult fields
+                return ExecutionResult(
+                    success=result.success,
+                    output=str(result.data),
+                    error=result.error,
+                    duration_ms=result.metadata.get("duration_ms", 0.0),
+                )
+
+            # Legacy: Raw return value
             return ExecutionResult(
                 success=True,
                 output=str(result),
                 duration_ms=(time.perf_counter() - t0) * 1000,
             )
+
         except Exception as e:
+            duration_ms = (time.perf_counter() - t0) * 1000
             return ExecutionResult(
                 success=False,
                 output="",
                 error=str(e),
-                duration_ms=(time.perf_counter() - t0) * 1000,
+                duration_ms=duration_ms,
             )
 
 
@@ -115,12 +161,20 @@ class Skill(ISkill):
     path: Path | None = None
     mtime: float = 0.0
     execution_mode: ExecutionMode = ExecutionMode.LIBRARY
-    context_cache: RepomixCache | None = None
+    _context_cache: RepomixCache | None = None  # Lazy loaded
+    _context_path: Path | None = None  # Store path for lazy creation
     _module: Any = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         if isinstance(self.execution_mode, str):
             self.execution_mode = ExecutionMode(self.execution_mode)
+
+    @property
+    def context_cache(self) -> RepomixCache | None:
+        """Lazily create RepomixCache only when needed."""
+        if self._context_cache is None and self._context_path is not None:
+            self._context_cache = RepomixCache(target_path=self._context_path)
+        return self._context_cache
 
     def get_command(self, name: str) -> ISkillCommand | None:
         """Get a specific command by name."""
@@ -155,6 +209,7 @@ class SkillManager:
     - Protocol-based for testability
     - Uses ModuleLoader for clean imports
     - Slots on all internal state
+    - O(1) command lookup with caching
     """
 
     __slots__ = (
@@ -163,6 +218,10 @@ class SkillManager:
         "_module_loader",
         "_loaded",
         "_preload_done",
+        "_command_cache",  # O(1) command lookup cache
+        "_mtime_cache",  # Lazy mtime checking
+        "_last_mtime_check",  # Throttle mtime checks
+        "_manifest_loader",  # Skill manifest loader
     )
 
     # Registry marker for @skill_command decorated functions
@@ -175,13 +234,10 @@ class SkillManager:
         Args:
             skills_dir: Path to skills directory (default: assets/skills)
         """
-        from common.config_paths import get_project_root
-        from common.settings import get_setting
+        from common.skills_path import SKILLS_DIR
 
         if skills_dir is None:
-            base = get_project_root()
-            skills_path = get_setting("skills.path", SKILLS_DIR_PATH)
-            self.skills_dir = base / skills_path
+            self.skills_dir = SKILLS_DIR()
         else:
             self.skills_dir = Path(skills_dir)
 
@@ -189,6 +245,18 @@ class SkillManager:
         self._module_loader: ModuleLoader | None = None
         self._loaded = False
         self._preload_done = False
+
+        # O(1) command lookup cache: "skill.command" -> SkillCommand
+        self._command_cache: dict[str, "SkillCommand"] = {}
+
+        # Lazy mtime checking: skill_name -> mtime
+        self._mtime_cache: dict[str, float] = {}
+
+        # Throttle mtime checks to once per 100ms
+        self._last_mtime_check: float = 0.0
+
+        # Unified manifest loader (SKILL.md + manifest.json)
+        self._manifest_loader: UnifiedManifestAdapter = get_unified_adapter()
 
     # =========================================================================
     # Properties (for backward compatibility with tests)
@@ -204,27 +272,33 @@ class SkillManager:
     # =========================================================================
 
     def discover(self) -> list[Path]:
-        """Discover all skill directories in the skills folder."""
+        """Discover all skill directories with SKILL.md."""
         if not self.skills_dir.exists():
-            logger.warning("Skills directory not found", path=str(self.skills_dir))
+            _get_logger().warning("Skills directory not found", path=str(self.skills_dir))
             return []
 
         skills: list[Path] = []
         for entry in self.skills_dir.iterdir():
-            if entry.is_dir() and (entry / "manifest.json").exists():
-                tools_path = entry / "tools.py"
-                if tools_path.exists():
-                    skills.append(entry)
-                else:
-                    logger.debug("Skipping - no tools.py", skill=entry.name)
+            if not entry.is_dir():
+                continue
 
-        logger.info("Discovered skills", count=len(skills))
+            # Check for SKILL.md
+            if not self._manifest_loader.skill_file_exists(entry):
+                continue
+
+            tools_path = entry / "tools.py"
+            if tools_path.exists():
+                skills.append(entry)
+            else:
+                _get_logger().debug("Skipping - no tools.py", skill=entry.name)
+
+        _get_logger().info("Discovered skills", count=len(skills))
         return skills
 
     def _discover_single(self, skill_name: str) -> Path | None:
         """Discover a single skill by name."""
         skill_path = self.skills_dir / skill_name
-        if skill_path.exists() and (skill_path / "manifest.json").exists():
+        if skill_path.exists() and self._manifest_loader.skill_file_exists(skill_path):
             return skill_path
         return None
 
@@ -257,47 +331,52 @@ class SkillManager:
         if not reload and skill_name in self._skills:
             return self._skills[skill_name]
 
-        # Load manifest
-        manifest = self._load_manifest(skill_path)
-        if manifest is None:
-            logger.error("No manifest found", skill=skill_name)
+        # Load manifest from SKILL.md
+        import asyncio
+        import concurrent.futures
+
+        loader = self._manifest_loader
+
+        # Run in thread to avoid event loop conflicts with async tests
+        def _load():
+            return asyncio.run(loader.load_metadata(skill_path))
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            metadata = executor.submit(_load).result()
+
+        if metadata is None:
+            _get_logger().error("No SKILL.md found", skill=skill_name)
             return None
 
+        # Build manifest dict for compatibility
+        manifest = metadata.to_dict()
+
         # Check execution mode
-        execution_mode = manifest.get("execution_mode", "library")
-        if isinstance(execution_mode, str):
-            execution_mode = ExecutionMode(execution_mode)
+        execution_mode = metadata.execution_mode
 
         # Load module
         tools_path = skill_path / "tools.py"
         module_name = f"agent.skills.{skill_name}.tools"
 
         try:
-            # Use ModuleLoader directly
-            loader = ModuleLoader(self.skills_dir)
-            loader._ensure_parent_packages()
-            # Preload decorators for @skill_command support (if available)
-            loader._preload_decorators()
+            # Use cached module loader (only initializes once)
+            loader = self._get_module_loader()
             module = loader.load_module(module_name, tools_path, reload=reload)
         except Exception as e:
-            logger.error("Failed to load module", skill=skill_name, error=str(e))
+            _get_logger().error("Failed to load module", skill=skill_name, error=str(e))
             return None
 
         # Extract commands
         commands = self._extract_commands(module, skill_name)
         if not commands:
-            logger.warning("No commands found in skill", skill=skill_name)
+            _get_logger().warning("No commands found in skill", skill=skill_name)
             # Not an error - some skills might be pure data
 
-        # Create context cache
+        # Store context path for lazy creation (avoids get_project_root() call during load)
         config_path = skill_path / "repomix.json"
         if not config_path.exists():
             config_path = None
-
-        context_cache = RepomixCache(
-            target_path=skill_path,
-            config_path=config_path,
-        )
+        context_path = skill_path if config_path else None
 
         # Get mtime for hot-reload
         try:
@@ -305,7 +384,7 @@ class SkillManager:
         except FileNotFoundError:
             mtime = 0.0
 
-        # Create skill
+        # Create skill with lazy context cache
         skill = Skill(
             name=skill_name,
             manifest=manifest,
@@ -314,12 +393,19 @@ class SkillManager:
             path=tools_path,
             mtime=mtime,
             execution_mode=execution_mode,
-            context_cache=context_cache,
+            _context_path=context_path,  # Lazy loaded
             _module=module,
         )
 
         self._skills[skill_name] = skill
-        logger.info(
+
+        # Update mtime cache
+        self._mtime_cache[skill_name] = mtime
+
+        # Rebuild command cache for this skill
+        self._rebuild_command_cache(skill_name, commands)
+
+        _get_logger().info(
             "Skill loaded",
             skill=skill_name,
             commands=len(commands),
@@ -328,17 +414,36 @@ class SkillManager:
 
         return skill
 
-    def _load_manifest(self, skill_path: Path) -> dict[str, Any] | None:
-        """Load manifest.json for a skill."""
-        manifest_path = skill_path / "manifest.json"
-        if not manifest_path.exists():
-            return None
+    def _rebuild_command_cache(self, skill_name: str, commands: dict[str, "SkillCommand"]) -> None:
+        """Rebuild command cache for a skill (O(n) but only on load)."""
+        for cmd_name, cmd in commands.items():
+            # Register both "skill.command" and "command" formats
+            full_name = f"{skill_name}.{cmd_name}"
+            self._command_cache[full_name] = cmd
 
-        try:
-            return json.loads(manifest_path.read_text())
-        except json.JSONDecodeError as e:
-            logger.error("Invalid manifest", skill=skill_path.name, error=str(e))
+            # Also register without skill prefix (e.g., "read_file" from "file.read")
+            self._command_cache[cmd_name] = cmd
+
+    def _load_manifest(self, skill_path: Path) -> dict[str, Any] | None:
+        """Load manifest from SKILL.md.
+
+        This method is kept for compatibility with existing code.
+        """
+        import asyncio
+        import concurrent.futures
+
+        loader = self._manifest_loader
+
+        # Run in thread to avoid event loop conflicts with async tests
+        def _load():
+            return asyncio.run(loader.load_metadata(skill_path))
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            metadata = executor.submit(_load).result()
+
+        if metadata is None:
             return None
+        return metadata.to_dict()
 
     def _extract_commands(self, module: Any, skill_name: str) -> dict[str, SkillCommand]:
         """Extract @skill_command decorated functions from a module."""
@@ -377,18 +482,31 @@ class SkillManager:
         return ""
 
     # =========================================================================
-    # Hot Reload
+    # Hot Reload (Optimized with lazy checking)
     # =========================================================================
 
     def _ensure_fresh(self, skill_name: str) -> bool:
-        """Check and reload skill if modified (hot-reload)."""
+        """
+        Check and reload skill if modified (hot-reload).
+
+        Optimizations:
+        - Throttle mtime checks to once per 100ms
+        - Only check if skill is actually used
+        - Clear command cache on reload
+        """
         skill_path = self._discover_single(skill_name)
         if skill_path is None:
-            logger.debug("Skill not found on disk", skill=skill_name)
+            _get_logger().debug("Skill not found on disk", skill=skill_name)
             return False
 
         if skill_name not in self._skills:
             return self.load_skill(skill_path) is not None
+
+        # Throttle mtime checks
+        now = time.perf_counter()
+        if now - self._last_mtime_check < 0.1:  # 100ms throttle
+            return True
+        self._last_mtime_check = now
 
         skill = self._skills[skill_name]
         tools_path = skill_path / "tools.py"
@@ -396,15 +514,21 @@ class SkillManager:
         try:
             current_mtime = tools_path.stat().st_mtime
             if current_mtime > skill.mtime:
-                logger.info("Hot-reloading skill", skill=skill_name)
+                _get_logger().info("Hot-reloading skill", skill=skill_name)
+
+                # Clear stale cache entries for this skill
+                keys_to_remove = [k for k in self._command_cache if k.startswith(f"{skill_name}.")]
+                for key in keys_to_remove:
+                    del self._command_cache[key]
+
                 return self.load_skill(skill_path, reload=True) is not None
         except FileNotFoundError:
-            logger.warning("Skill file deleted", skill=skill_name)
+            _get_logger().warning("Skill file deleted", skill=skill_name)
 
         return True
 
     # =========================================================================
-    # Execution
+    # Execution (Optimized with O(1) command lookup)
     # =========================================================================
 
     async def run(
@@ -415,6 +539,11 @@ class SkillManager:
     ) -> str:
         """
         Execute a skill command.
+
+        Optimizations:
+        - O(1) command lookup via cache
+        - Try cache first, then fallback to direct lookup
+        - Lazy skill loading only when command is invoked
 
         Args:
             skill_name: Name of the skill
@@ -428,24 +557,29 @@ class SkillManager:
         if command_name == "help":
             return self._get_skill_context(skill_name)
 
-        # Ensure skill is fresh
-        if not self._ensure_fresh(skill_name):
-            return f"Error: Skill '{skill_name}' not found"
+        # Try O(1) cache lookup first
+        cache_key = f"{skill_name}.{command_name}"
+        command = self._command_cache.get(cache_key)
 
-        skill = self._skills.get(skill_name)
-        if skill is None:
-            return f"Error: Skill '{skill_name}' not loaded"
-
-        # Get command
-        command = skill.commands.get(command_name)
+        # Ensure skill is fresh for cache validation
         if command is None:
-            # Try alternate naming (skill_command vs just command)
-            alt_name = f"{skill_name}_{command_name}"
-            command = skill.commands.get(alt_name)
+            if not self._ensure_fresh(skill_name):
+                return f"Error: Skill '{skill_name}' not found"
 
-        if command is None:
-            available = list(skill.commands.keys())
-            return f"Error: Command '{command_name}' not found in '{skill_name}'. Available: {available}"
+            skill = self._skills.get(skill_name)
+            if skill is None:
+                return f"Error: Skill '{skill_name}' not loaded"
+
+            # Fallback to direct lookup (also populates cache)
+            command = skill.commands.get(command_name)
+            if command is None:
+                # Try alternate naming (skill_command vs just command)
+                alt_name = f"{skill_name}_{command_name}"
+                command = skill.commands.get(alt_name)
+
+            if command is None:
+                available = list(skill.commands.keys())
+                return f"Error: Command '{command_name}' not found in '{skill_name}'. Available: {available}"
 
         # Execute
         args = args or {}
@@ -550,7 +684,7 @@ class SkillManager:
             Dictionary of loaded skills
         """
         if self._loaded:
-            logger.debug("Skills already loaded")
+            _get_logger().debug("Skills already loaded")
             return self._skills
 
         skill_paths = self.discover()
@@ -558,7 +692,7 @@ class SkillManager:
             self.load_skill(path)
 
         self._loaded = True
-        logger.info("All skills loaded", count=len(self._skills))
+        _get_logger().info("All skills loaded", count=len(self._skills))
         return self._skills
 
     # Alias for backward compatibility with tests
@@ -582,7 +716,7 @@ class SkillManager:
         manifest = self._load_manifest(skill_dir)
 
         if not manifest:
-            return f"Error: No manifest.json found for skill {skill_name}"
+            return f"Error: No SKILL.md found for skill {skill_name}"
 
         # Get entry point from manifest
         entry_point = manifest.get("entry_point", "implementation.py")
@@ -628,11 +762,19 @@ class SkillManager:
         if skill is None:
             return False
 
+        # Clear command cache entries for this skill
+        keys_to_remove = [k for k in self._command_cache if k.startswith(f"{skill_name}.")]
+        for key in keys_to_remove:
+            del self._command_cache[key]
+
+        # Clear mtime cache
+        self._mtime_cache.pop(skill_name, None)
+
         # Clear from sys.modules
         if self._module_loader:
             self._module_loader.unload_module(skill.module_name)
 
-        logger.info("Skill unloaded", skill=skill_name)
+        _get_logger().info("Skill unloaded", skill=skill_name)
         return True
 
     def reload(self, skill_name: str) -> Skill | None:

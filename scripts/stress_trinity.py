@@ -18,23 +18,41 @@ import shutil
 import logging
 from pathlib import Path
 
-# Setup paths
-PROJECT_ROOT = Path(__file__).parent.parent
-
-# Use the actual SKILLS_DIR from settings
 import sys
+
+# Try to import from common.gitops and common.skills_path (standalone modules)
+try:
+    from common.gitops import get_project_root
+    from common.skills_path import SKILLS_DIR
+except ImportError:
+    # Fallback for when common package isn't in sys.path yet
+    def get_project_root() -> Path:
+        return Path(__file__).resolve().parent.parent.parent
+
+    class _SKILLS_DIR:
+        def __call__(self, *args):
+            base = Path("assets/skills")
+            return base / Path(*args) if args else base
+
+    SKILLS_DIR = _SKILLS_DIR()
+
+# Setup paths
+PROJECT_ROOT = get_project_root()
 
 # Add project root so "assets" can be imported as a module
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(PROJECT_ROOT / "packages" / "python" / "common" / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "packages" / "python" / "agent" / "src"))
 
-from common.settings import get_setting
-from common.config_paths import get_project_root
+# Now import again (should work after path setup)
+try:
+    from common.skills_path import SKILLS_DIR as _SKILLS_DIR
 
-PROJECT_ROOT = get_project_root()
-SKILLS_DIR = PROJECT_ROOT / get_setting("skills.path", "assets/skills")
-TARGET_SKILL_DIR = SKILLS_DIR / "stress_test_skill"
+    SKILLS_DIR = _SKILLS_DIR()
+except ImportError:
+    pass
+
+TARGET_SKILL_DIR = SKILLS_DIR("stress_test_skill")
 TOOLS_FILE = TARGET_SKILL_DIR / "tools.py"
 REPOMIX_FILE = TARGET_SKILL_DIR / "repomix.json"
 

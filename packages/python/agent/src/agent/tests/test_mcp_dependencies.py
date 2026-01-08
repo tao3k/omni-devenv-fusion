@@ -11,7 +11,6 @@ In uv workspace, packages are installed and can be imported directly.
 """
 
 import pytest
-import json
 from pathlib import Path
 
 
@@ -45,21 +44,20 @@ class TestSkillArchitecture:
             assert skill in skills, f"Missing skill: {skill}"
 
     def test_skill_manifests_valid(self):
-        """All skill manifest.json files should be valid JSON."""
+        """All skill SKILL.md files should be valid YAML frontmatter."""
         from agent.core.registry import get_skill_registry
+        import frontmatter
 
         registry = get_skill_registry()
         skills = registry.list_available_skills()
 
         for skill_name in skills:
-            skill_dir = Path.cwd() / "agent" / "skills" / skill_name
-            manifest_path = skill_dir / "manifest.json"
-            if manifest_path.exists():
-                with open(manifest_path) as f:
-                    data = json.load(f)
-                assert "name" in data, f"{skill_name} manifest missing 'name'"
-                has_tools = "tools_module" in data or "tools" in data
-                assert has_tools, f"{skill_name} manifest missing 'tools_module' or 'tools'"
+            skill_dir = Path.cwd() / "assets" / "skills" / skill_name
+            skill_md_path = skill_dir / "SKILL.md"
+            if skill_md_path.exists():
+                with open(skill_md_path) as f:
+                    data = frontmatter.load(f)
+                assert "name" in data.metadata, f"{skill_name} SKILL.md missing 'name'"
 
 
 class TestSkillRegistry:

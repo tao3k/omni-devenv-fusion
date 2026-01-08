@@ -18,9 +18,11 @@ import os
 import sys
 from pathlib import Path
 
-# Add parent paths for imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-sys.path.insert(0, str(Path(__file__).parent))
+# Auto-setup import paths via PROJECT (uses git toplevel)
+from common.gitops import PROJECT
+
+# Add agent and common to sys.path
+PROJECT.add_to_path("agent", "common")
 
 from rich.console import Console
 from agent.core.ux import UXManager, EVENT_LOG_PATH

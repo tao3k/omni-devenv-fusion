@@ -1,7 +1,7 @@
 # Omni-Dev Fusion Testing System - Developer Guide
 
 > Test system architecture, patterns, and maintenance guidelines.
-> Last Updated: 2026-01-07
+> Last Updated: 2026-01-08 (Phase 33)
 
 ---
 
@@ -102,7 +102,7 @@ TOXIC_SKILL_TEMPLATES = {
 
 # Factory function for creating toxic skills in tests
 factory = create_toxic_skill_factory(Path("assets/skills"))
-name, module = factory("toxic_syntax", "syntax_error")
+name, module = factory("toxic_skill", "syntax_error")
 ```
 
 ### Skill Loader Utility
@@ -406,6 +406,74 @@ uv run pytest packages/python/agent/src/agent/tests/ -v --durations=10
 | `test_performance_omni.py`   | Omni tool dispatch latency          |
 | `test_performance_cortex.py` | Semantic Cortex performance         |
 
+### Standalone Benchmark Scripts
+
+```bash
+# Full module import benchmark
+python scripts/benchmark_full.py
+
+# @omni command invocation benchmark
+python scripts/benchmark_omni.py
+
+# Reports saved to .data/ directory
+cat .data/benchmark_full_report.txt
+cat .data/benchmark_omni_report.txt
+```
+
+### @omni Performance Metrics (Phase 32)
+
+| Scenario                      | Time   | Notes                      |
+| ----------------------------- | ------ | -------------------------- |
+| Cold start (first invocation) | ~65ms  | Includes skill loading     |
+| Warm calls (cached skill)     | ~15ms  | Command lookup + execution |
+| Command lookup (O(1) cache)   | ~1ms   | Via `_command_cache`       |
+| Help commands                 | ~0.2ms | Listing operations         |
+| Cross-skill invocation        | ~1.5ms | Different skill            |
+
+**Benchmark Output Example:**
+
+```
+=== @omni Performance Benchmark ===
+
+  git.status (cold):     64.4ms
+  git.status (warm#1):   15.2ms
+  git.status (warm#2):   15.1ms
+  git.log:               0.2ms
+  git.diff:              10.5ms
+
+  --- Help Commands ---
+  omni help:             0.3ms
+  omni git:              0.1ms
+
+  --- Cross-Skill ---
+  terminal.run:          1.5ms
+
+==================================================
+SUMMARY
+==================================================
+Cold start:  avg=64.4ms
+Warm calls:  avg=13.5ms, min=0.2ms, max=18.8ms
+Help calls:  avg=0.2ms
+Cross-skill: 1.5ms
+```
+
+### Import Performance Metrics (Phase 32)
+
+| Module                     | Before | After | Speedup  |
+| -------------------------- | ------ | ----- | -------- |
+| `agent.core.schema`        | 421ms  | 3.6ms | **117x** |
+| `agent.core.skill_manager` | 200ms  | 3.5ms | **57x**  |
+| `agent.core.bootstrap`     | 169ms  | 0.8ms | **211x** |
+| `agent.mcp_server`         | 156ms  | 0.8ms | **195x** |
+| `agent.core.registry`      | 51ms   | 40ms  | 1.3x     |
+
+**Key Optimizations:**
+
+- Lazy structlog initialization (`_get_logger()` pattern)
+- Schema `__getattr__` lazy loading
+- RepomixCache on-demand creation
+- ModuleLoader cached initialization
+
 ### Adding New Performance Tests
 
 ```python
@@ -441,7 +509,7 @@ class TestNewFeaturePerformance:
 | Cold load latency        | < 200ms   | First skill load             |
 | Hot reload latency       | < 5ms     | Already loaded skill         |
 | Context retrieval        | < 5ms     | Skill context XML generation |
-| Manifest parsing         | < 1ms     | JSON parse + validation      |
+| Manifest parsing         | < 1ms     | YAML Frontmatter parse       |
 | Context switching        | < 5ms     | Rapid skill cycling          |
 | RAG retrieval (500 docs) | < 150ms   | Vector search under load     |
 
@@ -580,6 +648,32 @@ result = await module.async_function()
 
 ## Refactoring History
 
+### 2026-01-08 (Phase 33 - SKILL.md Unified Format)
+
+| Change             | Description                                                       |
+| ------------------ | ----------------------------------------------------------------- |
+| SKILL.md Migration | Replaced manifest.json with YAML Frontmatter in SKILL.md          |
+| Test Fixtures      | Updated test fixtures to create SKILL.md instead of manifest.json |
+| Manifest Cleanup   | Removed dependencies/permissions from SKILL.md frontmatter        |
+
+### 2026-01-07 (Phase 32 - Import & Performance Optimization)
+
+| Change                     | Description                                              |
+| -------------------------- | -------------------------------------------------------- |
+| Lazy Logger Pattern        | `_get_logger()` avoids import-time structlog overhead    |
+| Schema Lazy Loading        | `__getattr__` for on-demand Pydantic model loading       |
+| RepomixCache Lazy Creation | `@property` defers cache creation until accessed         |
+| ModuleLoader Caching       | `_get_module_loader()` reuses single instance            |
+| Benchmark Scripts          | `scripts/benchmark_full.py`, `scripts/benchmark_omni.py` |
+| Core Skills Preload        | `boot_core_skills(mcp)` called at MCP startup            |
+
+**Performance Improvements:**
+
+- Schema import: 421ms → 3.6ms (117x)
+- SkillManager import: 200ms → 3.5ms (57x)
+- Bootstrap import: 169ms → 0.8ms (211x)
+- MCP server import: 156ms → 0.8ms (195x)
+
 ### 2026-01-07 (Phase 29 - Refactoring)
 
 | Change                          | Description                                                |
@@ -600,6 +694,163 @@ result = await module.async_function()
 | New fakes/              | FakeVectorStore, FakeMCPServer, FakeInference, FakeSkillRegistry |
 | Speed Improvement       | 95s → 9s (parallel)                                              |
 | File Renaming           | `test_phase*.py` → `test_*.py`                                   |
+
+---
+
+## Debugging Session Log
+
+### 2026-01-08: Parallel Testing Event Loop Issue
+
+**Problem**: 20 tests failed with `asyncio.run() cannot be called from a running event loop`
+
+**Root Cause**: `get_skill_manifest()` in `agent/core/registry/core.py` used `asyncio.run()` which conflicts with pytest-asyncio's running event loop in parallel tests.
+
+**Failed Tests**:
+
+```
+test_delegate_mission.py::TestCoderAgent::test_coder_agent_run_does_not_raise
+test_neural_bridge.py::TestActiveRAG::* (9 tests)
+test_skills.py::TestFilesystemSkill::* (5 tests)
+test_system_stress.py::TestSystemEndurance::* (2 tests)
+test_agent_handoff.py::TestCoderAgent/ReviewerAgent (2 tests)
+```
+
+**Solution**:
+
+1. Run async code in ThreadPoolExecutor to isolate event loops:
+
+```python
+import asyncio
+import concurrent.futures
+
+def _load():
+    return asyncio.run(loader.load_metadata(skill_path))
+
+with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+    metadata = executor.submit(_load).result()
+```
+
+2. Updated performance thresholds:
+   - `test_manifest_cache_stress`: 0.5ms → 0.8ms (ThreadPoolExecutor overhead)
+
+**Files Modified**:
+
+- `packages/python/agent/src/agent/core/registry/core.py` - `get_skill_manifest()`
+- `packages/python/agent/src/agent/tests/stress_tests/test_system_stress.py` - Threshold update
+
+### 2026-01-08: toxic_skill_factory Path Issue
+
+**Problem**: `toxic_skill_factory` used `Path("assets/skills")` which doesn't resolve correctly when skills are in a different directory.
+
+**Solution**:
+
+```python
+# Before
+factory = create_toxic_skill_factory(Path("assets/skills"))
+
+# After
+from common.skills_path import SKILLS_DIR
+factory = create_toxic_skill_factory(SKILLS_DIR())
+```
+
+**Files Modified**:
+
+- `packages/python/agent/src/agent/tests/stress_tests/test_kernel_stress.py`
+
+### 2026-01-08: --cache-clear Ineffectiveness
+
+**Problem**: `--cache-clear` in justfile was believed to fix parallel test issues, but it only clears pytest cache, not Python module cache.
+
+**Solution**: Removed `--cache-clear` from `just test` command.
+
+**Files Modified**:
+
+- `justfile`
+
+### 2026-01-08: Module Clearing in test_one_tool.py
+
+**Problem**: `test_all_skills_load_with_decorators` cleared ALL `agent.skills.*` modules including `agent.skills.core` (the newly created core module).
+
+**Solution**: Added exclusion for `agent.skills.core`:
+
+```python
+modules_to_clear = [
+    k for k in sys.modules.keys()
+    if k.startswith("agent.skills") and k != "agent.skills.core"
+]
+```
+
+**Files Modified**:
+
+- `packages/python/agent/src/agent/tests/test_one_tool.py`
+
+---
+
+### 2026-01-08: Phase 34 - CommandResult and StateCheckpointer
+
+**Changes**:
+
+1. `@skill_command` decorator now returns `CommandResult` instead of raw data
+2. Added `StateCheckpointer` for cross-session state persistence
+3. `SkillMetadata` uses `@dataclass(slots=True)` which has no `__dict__`
+
+**Failed Tests**:
+
+```
+test_one_tool.py::TestSkillManagerLoading::test_skill_command_decorator_works
+test_shim_pattern.py::TestShimPatternManifest::test_default_execution_mode_library
+test_telemetry.py::TestOrchestratorSessionIntegration::*
+```
+
+**Solutions**:
+
+1. **Use `unwrap_command_result()` helper for tests**:
+
+```python
+from agent.skills.decorators import skill_command
+
+@skill_command(name="test", category="test")
+def test_func():
+    return "result"
+
+# Tests should unwrap the result
+result = unwrap_command_result(test_func())
+assert result == "result"
+```
+
+2. **Use direct field access for `SkillMetadata`** (no `__dict__`):
+
+```python
+# Before (fails with slots=True)
+new_metadata = SkillMetadata(**metadata.__dict__)
+
+# After (correct)
+new_metadata = SkillMetadata(
+    name=metadata.name,
+    version=metadata.version,
+    routing_keywords=new_keywords,
+    ...
+)
+```
+
+3. **Mock `get_checkpointer` in Orchestrator tests**:
+
+```python
+with patch("agent.core.orchestrator.SessionManager") as mock_session:
+    with patch("agent.core.orchestrator.get_checkpointer") as mock_checkpointer:
+        mock_session.return_value = MagicMock()
+        mock_checkpointer.return_value = MagicMock()
+        orchestrator = Orchestrator()
+```
+
+**Files Modified**:
+
+- `packages/python/agent/src/agent/core/registry/adapter.py` - `_inject_omni_defaults()`
+- `packages/python/agent/src/agent/core/skill_manager.py` - ThreadPoolExecutor pattern
+- `packages/python/agent/src/agent/core/state.py` - New StateCheckpointer
+- `packages/python/agent/src/agent/tests/test_skills.py` - `unwrap_command_result()` helper
+- `packages/python/agent/src/agent/tests/test_one_tool.py` - Updated tests
+- `packages/python/agent/src/agent/tests/test_telemetry.py` - Mock checkpointer
 
 ---
 

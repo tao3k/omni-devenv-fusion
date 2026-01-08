@@ -1,14 +1,15 @@
 """
 agent/core/security/manifest_validator.py
-Phase 28: Manifest Validator for skill permission audit.
+Phase 33: SKILL.md Validator for skill permission audit.
 
-Validates skill manifest.json for dangerous permissions.
+Validates skill SKILL.md for dangerous permissions.
 """
 
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any
+
+import frontmatter
 
 
 @dataclass
@@ -23,241 +24,212 @@ class PermissionWarning:
 
 @dataclass
 class ValidationResult:
-    """Result of manifest validation."""
+    """Result of SKILL.md validation."""
 
     is_valid: bool
     is_blocked: bool = False
     is_warning: bool = False
-    warnings: list[PermissionWarning] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    dangerous_permissions: list[PermissionWarning] = field(default_factory=list)
+    warning_permissions: list[PermissionWarning] = field(default_factory=list)
 
-    def to_dict(self) -> dict:
-        """Convert to dictionary for JSON serialization."""
+    def add_error(self, error: str) -> None:
+        """Add an error."""
+        self.errors.append(error)
+        self.is_valid = False
+
+    def add_warning(self, warning: str) -> None:
+        """Add a warning."""
+        self.warnings.append(warning)
+        self.is_warning = True
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
         return {
             "is_valid": self.is_valid,
             "is_blocked": self.is_blocked,
             "is_warning": self.is_warning,
-            "warnings": [
-                {
-                    "permission": w.permission,
-                    "value": w.value,
-                    "severity": w.severity,
-                    "message": w.message,
-                }
-                for w in self.warnings
-            ],
+            "warnings": self.warnings,
             "errors": self.errors,
+            "dangerous_permissions": [
+                {
+                    "permission": p.permission,
+                    "value": p.value,
+                    "severity": p.severity,
+                    "message": p.message,
+                }
+                for p in self.dangerous_permissions
+            ],
+            "warning_permissions": [
+                {
+                    "permission": p.permission,
+                    "value": p.value,
+                    "severity": p.severity,
+                    "message": p.message,
+                }
+                for p in self.warning_permissions
+            ],
         }
-
-
-# =============================================================================
-# Manifest Schema
-# =============================================================================
-
-MANIFEST_SCHEMA = {
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "type": "object",
-    "properties": {
-        "name": {"type": "string"},
-        "version": {"type": "string"},
-        "description": {"type": "string"},
-        "author": {"type": "string"},
-        "repository": {"type": "string"},
-        "permissions": {
-            "type": "object",
-            "properties": {
-                "network": {"type": ["boolean", "string"]},
-                "filesystem": {"type": ["boolean", "string"]},
-                "shell": {"type": ["boolean", "string"]},
-                "exec": {"type": ["boolean", "string"]},
-                "environment": {"type": ["boolean", "string"]},
-                "subprocess": {"type": ["boolean", "string"]},
-            },
-        },
-    },
-    "required": ["name", "version"],
-}
-
-# Suspicious permission patterns
-DANGEROUS_PERMISSIONS = {
-    "exec": {
-        "severity": "danger",
-        "message": "exec permission allows arbitrary code execution - high risk",
-    },
-    "shell": {
-        "severity": "danger",
-        "message": "shell permission allows command execution - high risk",
-    },
-    "filesystem": {
-        "severity": "warning",
-        "message": "filesystem write permission allows file modification",
-    },
-    "network": {
-        "severity": "warning",
-        "message": "network permission allows external connections",
-    },
-    "subprocess": {
-        "severity": "warning",
-        "message": "subprocess permission allows running external commands",
-    },
-    "environment": {
-        "severity": "warning",
-        "message": "environment access allows modifying system environment",
-    },
-}
-
-
-# =============================================================================
-# Manifest Validator
-# =============================================================================
 
 
 class ManifestValidator:
     """
-    Validate skill manifest for security.
+    Validates SKILL.md for dangerous permissions.
 
-    Usage:
-        validator = ManifestValidator()
-        result = validator.validate(manifest_dict)
-        print(f"Valid: {result.is_valid}, Blocked: {result.is_blocked}")
+    Only supports SKILL.md format.
     """
 
-    # Thresholds for permission-based blocking
-    BLOCK_THRESHOLD = 3  # 3+ warnings = block
-    WARN_THRESHOLD = 1  # 1+ warnings = warn
+    # Class constants for threshold values
+    BLOCK_THRESHOLD: int = 2  # 2+ dangerous permissions blocks
+    WARN_THRESHOLD: int = 1
 
-    def validate(self, manifest: dict, skill_path: Optional[Path] = None) -> ValidationResult:
+    def validate(
+        self, manifest: dict[str, Any], skill_path: Path | None = None
+    ) -> ValidationResult:
         """
-        Validate a skill manifest.
+        Validate SKILL.md metadata for dangerous permissions.
 
         Args:
-            manifest: Manifest dictionary
-            skill_path: Optional path to skill directory for additional checks
+            manifest: SKILL.md frontmatter metadata
+            skill_path: Path to skill directory (optional)
 
         Returns:
             ValidationResult with permission flags
         """
         result = ValidationResult(is_valid=True)
 
-        # Check required fields
-        if "name" not in manifest:
-            result.errors.append("Manifest missing required field: name")
-            result.is_valid = False
+        # Validate required fields
+        if "name" not in manifest or not manifest.get("name"):
+            result.add_error("Missing required field: name")
+        if "version" not in manifest or not manifest.get("version"):
+            result.add_error("Missing required field: version")
 
-        if "version" not in manifest:
-            result.errors.append("Manifest missing required field: version")
-            result.is_valid = False
+        # If validation already failed due to missing required fields, return early
+        if not result.is_valid:
+            return result
 
-        # Check permissions
+        # Define dangerous and warning permissions
+        DANGEROUS = {
+            "shell": "Allows execution of arbitrary shell commands",
+            "filesystem": "Allows read/write access to filesystem",
+            "sudo": "Allows execution with elevated privileges",
+            "exec": "Allows executing external processes",
+        }
+
+        WARNING = {
+            "network": "Allows external network access",
+            "environment": "Access to environment variables",
+            "process": "Information about running processes",
+        }
+
+        # Check for dangerous permissions
         permissions = manifest.get("permissions", {})
         for perm, value in permissions.items():
-            if perm in DANGEROUS_PERMISSIONS:
-                perm_info = DANGEROUS_PERMISSIONS[perm]
-
-                # Check if permission is dangerous
-                if value is True:
-                    result.warnings.append(
-                        PermissionWarning(
-                            permission=perm,
-                            value=str(value),
-                            severity=perm_info["severity"],
-                            message=perm_info["message"],
-                        )
+            if perm.lower() in DANGEROUS:
+                result.dangerous_permissions.append(
+                    PermissionWarning(
+                        permission=perm,
+                        value=str(value),
+                        severity="danger",
+                        message=DANGEROUS[perm.lower()],
                     )
-                elif value == "write" and perm == "filesystem":
-                    result.warnings.append(
-                        PermissionWarning(
-                            permission=perm,
-                            value=value,
-                            severity="danger",
-                            message="filesystem.write allows writing to disk - high risk",
-                        )
+                )
+
+            elif perm.lower() in WARNING:
+                result.warning_permissions.append(
+                    PermissionWarning(
+                        permission=perm,
+                        value=str(value),
+                        severity="warning",
+                        message=WARNING[perm.lower()],
                     )
-                elif value == "read" and perm == "filesystem":
-                    # Read is less dangerous
-                    if perm == "filesystem":
-                        result.warnings.append(
-                            PermissionWarning(
-                                permission=perm,
-                                value=value,
-                                severity="warning",
-                                message="filesystem.read allows reading files",
-                            )
-                        )
+                )
 
-        # Determine block/warn status
-        danger_count = sum(1 for w in result.warnings if w.severity == "danger")
-        warning_count = sum(1 for w in result.warnings if w.severity == "warning")
+        # Block if too many dangerous permissions
+        danger_count = len(result.dangerous_permissions)
+        warning_count = len(result.warning_permissions)
 
-        result.is_blocked = (
-            danger_count >= 2 or danger_count + warning_count >= self.BLOCK_THRESHOLD
-        )
+        result.is_blocked = danger_count >= self.BLOCK_THRESHOLD
         result.is_warning = danger_count >= 1 or warning_count >= self.WARN_THRESHOLD
 
         return result
 
-    def validate_file(self, manifest_path: Path) -> ValidationResult:
+    def validate_file(self, skill_md_path: Path) -> ValidationResult:
         """
-        Validate a manifest file.
+        Validate a SKILL.md file.
 
         Args:
-            manifest_path: Path to manifest.json
+            skill_md_path: Path to SKILL.md
 
         Returns:
             ValidationResult with permission flags
         """
         result = ValidationResult(is_valid=True)
 
-        if not manifest_path.exists():
-            result.errors.append(f"Manifest not found: {manifest_path}")
-            result.is_valid = False
+        if not skill_md_path.exists():
+            result.add_error(f"SKILL.md not found: {skill_md_path}")
             return result
 
         try:
-            content = manifest_path.read_text(encoding="utf-8")
-            manifest = json.loads(content)
-        except json.JSONDecodeError as e:
-            result.errors.append(f"Invalid JSON in manifest: {e}")
-            result.is_valid = False
+            with open(skill_md_path) as f:
+                post = frontmatter.load(f)
+            manifest = post.metadata or {}
+        except Exception as e:
+            result.add_error(f"Failed to parse SKILL.md: {e}")
             return result
 
-        return self.validate(manifest, manifest_path.parent)
+        return self.validate(manifest, skill_md_path.parent)
 
-    def check_trusted_source(self, repository: str, manifest: dict) -> tuple[bool, str]:
+    def check_trusted_source(
+        self, source: str, manifest: dict[str, Any] | None = None
+    ) -> tuple[bool, str]:
         """
         Check if a skill is from a trusted source.
 
         Args:
-            repository: Repository URL
-            manifest: Skill manifest
+            source: Source URL or identifier
+            manifest: SKILL.md frontmatter metadata (optional)
 
         Returns:
-            (is_trusted, reason)
+            Tuple of (is_trusted: bool, reason: str)
         """
-        from common.settings import get_setting
+        # Trusted source patterns
+        trusted_domains = ["github.com/omni-dev", "github.com/official"]
+        trusted_prefixes = ["official/", "verified/", "core/"]
 
-        trusted_sources = get_setting("security.trusted_sources", [])
+        # Check source URL
+        source_lower = source.lower()
+        for domain in trusted_domains:
+            if domain in source_lower:
+                return True, f"Trusted domain: {domain}"
 
-        for trusted in trusted_sources:
-            if trusted in repository:
-                return True, f"Source '{trusted}' is trusted"
+        for prefix in trusted_prefixes:
+            if source_lower.startswith(prefix):
+                return True, f"Trusted prefix: {prefix}"
 
-        return False, "Source is not in trusted list"
+        # Also check manifest authors if provided
+        if manifest:
+            trusted_sources = ["official", "verified", "core"]
+            authors = manifest.get("authors", [])
 
+            for author in authors:
+                author_lower = author.lower()
+                for trusted in trusted_sources:
+                    if trusted in author_lower:
+                        return True, f"Trusted author: {author}"
 
-# =============================================================================
-# Convenience Functions
-# =============================================================================
+        return False, f"Untrusted source: {source}"
 
 
 def validate_skill_manifest(
-    manifest_path: str, block_threshold: int = 3, warn_threshold: int = 1
+    skill_md_path: str, block_threshold: int = 3, warn_threshold: int = 1
 ) -> ValidationResult:
     """
-    Convenience function to validate a skill manifest.
+    Convenience function to validate a SKILL.md.
 
     Args:
-        manifest_path: Path to manifest.json
+        skill_md_path: Path to SKILL.md
         block_threshold: Number of warnings to trigger block
         warn_threshold: Number of warnings to trigger warn
 
@@ -267,12 +239,12 @@ def validate_skill_manifest(
     validator = ManifestValidator()
     validator.BLOCK_THRESHOLD = block_threshold
     validator.WARN_THRESHOLD = warn_threshold
-    return validator.validate_file(Path(manifest_path))
+    return validator.validate_file(Path(skill_md_path))
 
 
 def quick_scan(skill_path: Path) -> ValidationResult:
     """
-    Quick manifest scan without detailed validation.
+    Quick SKILL.md scan without detailed validation.
 
     Args:
         skill_path: Path to skill directory
@@ -280,11 +252,24 @@ def quick_scan(skill_path: Path) -> ValidationResult:
     Returns:
         ValidationResult with basic checks
     """
-    manifest_path = skill_path / "manifest.json"
+    skill_md_path = skill_path / "SKILL.md"
 
-    if not manifest_path.exists():
+    if not skill_md_path.exists():
         return ValidationResult(
-            is_valid=True, is_blocked=False, is_warning=False, warnings=[], errors=[]
+            is_valid=False,
+            is_blocked=False,
+            is_warning=False,
+            warnings=["No SKILL.md found"],
+            errors=["SKILL.md is required"],
         )
 
-    return validate_skill_manifest(str(manifest_path))
+    return validate_skill_manifest(str(skill_md_path))
+
+
+__all__ = [
+    "PermissionWarning",
+    "ValidationResult",
+    "ManifestValidator",
+    "validate_skill_manifest",
+    "quick_scan",
+]

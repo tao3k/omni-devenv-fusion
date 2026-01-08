@@ -22,7 +22,7 @@ class VersionResolver:
     Resolve skill versions using multiple strategies:
 
     1. .omni-lock.json (Omni Managed)
-    2. manifest.json (Static version)
+    2. SKILL.md frontmatter (Static version)
     3. git rev-parse HEAD (Dev Mode)
     """
 
@@ -42,13 +42,17 @@ class VersionResolver:
             except Exception:
                 pass
 
-        # Strategy 2: Manifest
-        manifest_path = skill_path / "manifest.json"
-        if manifest_path.exists():
+        # Strategy 2: SKILL.md
+        import frontmatter
+
+        skill_md_path = skill_path / "SKILL.md"
+        if skill_md_path.exists():
             try:
-                data = json.loads(manifest_path.read_text())
-                if "version" in data:
-                    return data["version"]
+                with open(skill_md_path) as f:
+                    post = frontmatter.load(f)
+                meta = post.metadata or {}
+                if "version" in meta:
+                    return meta["version"]
             except Exception:
                 pass
 

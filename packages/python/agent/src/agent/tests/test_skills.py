@@ -7,6 +7,8 @@ Phase 25.1: Macro System with @skill_command Decorators
 - SkillManager scans skills and builds registry from decorated functions
 - Single omni() tool handles all operations
 
+Phase 34: CommandResult wrapper for structured output
+
 Covers:
 1. SkillRegistry (Discovery, Loading, Context, Spec-based Loading)
 2. SkillManager (Phase 25: Omni CLI single entry point)
@@ -24,51 +26,71 @@ import sys
 import asyncio
 import os
 import time
-import importlib.util
 import types
 from pathlib import Path
 from unittest.mock import MagicMock, patch, AsyncMock
 from mcp.server.fastmcp import FastMCP
+
+
+# =============================================================================
+# Test Helper: Handle CommandResult from @skill_command decorator
+# =============================================================================
+
+
+def unwrap_command_result(result):
+    """
+    Unwrap CommandResult from @skill_command decorated functions.
+
+    Phase 34: @skill_command now returns CommandResult for structured output.
+    Tests should use this helper to extract the actual data.
+    """
+    from agent.skills.decorators import CommandResult
+
+    if isinstance(result, CommandResult):
+        if result.success:
+            return result.data
+        else:
+            raise AssertionError(f"Command failed: {result.error}")
+    return result
+
+
+def async_unwrap_command_result(coro):
+    """Async wrapper for unwrap_command_result."""
+
+    async def wrapper():
+        result = await coro
+        return unwrap_command_result(result)
+
+    return wrapper()
+
 
 # Import core components
 from agent.core.schema import SkillManifest
 from agent.core.registry import SkillRegistry, get_skill_registry
 from agent.core.skill_manager import SkillManager, get_skill_manager
 
-# Fixtures are provided by conftest.py - no explicit import needed
+# Use new SKILLS_DIR API from common.skills_path
+from common.skills_path import SKILLS_DIR, load_skill_module
 
 
 def _load_skill_module_for_test(skill_name: str):
-    """Load a skill module directly from file using importlib.util.
+    """Load a skill module using module_loader for proper import setup.
 
-    This is a test helper function for loading skills without going through
-    the full SkillRegistry.
+    This is optimized for tests - uses module_loader context manager
+    which pre-loads decorators and handles parent packages.
     """
-    from common.gitops import get_project_root
-    from common.settings import get_setting
+    from agent.core.module_loader import module_loader
 
-    project_root = get_project_root()
-    skills_path = get_setting("skills.path", "assets/skills")
-    skill_tools_path = project_root / skills_path / skill_name / "tools.py"
+    skill_tools_path = SKILLS_DIR(skill=skill_name, filename="tools.py")
 
     if not skill_tools_path.exists():
         raise FileNotFoundError(f"Skill tools not found: {skill_tools_path}")
 
-    skills_parent = project_root / skills_path
-    skills_parent_str = str(skills_parent)
-    module_name = f"_test_skill_{skill_name}"
+    module_name = f"agent.skills.{skill_name}.tools"
 
-    # Clean up existing module if present
-    if module_name in sys.modules:
-        del sys.modules[module_name]
-
-    # Load the module from file
-    spec = importlib.util.spec_from_file_location(
-        module_name, skill_tools_path, submodule_search_locations=[skills_parent_str]
-    )
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
+    # Use module_loader context manager for proper import setup (pre-loads decorators)
+    with module_loader(SKILLS_DIR()) as loader:
+        module = loader.load_module(module_name, skill_tools_path)
 
     return module
 
@@ -177,12 +199,12 @@ class TestSkillDiscovery:
         assert "__pycache__" not in skills
 
     def test_manifest_parsing_filesystem(self, registry_fixture):
-        """Registry should correctly parse filesystem/manifest.json."""
+        """Registry should correctly parse filesystem/SKILL.md."""
         manifest = registry_fixture.get_skill_manifest("filesystem")
         assert manifest is not None
         assert manifest.name == "filesystem"
         assert manifest.version == "1.0.0"
-        assert manifest.tools_module == "assets.skills.filesystem.tools"
+        assert manifest.tools_module == "agent.skills.filesystem.tools"
         assert manifest.guide_file == "guide.md"
 
 
@@ -225,7 +247,16 @@ class TestSpecBasedLoading:
 
         # Execute list_directory
         result = asyncio.run(module.list_directory("assets/skills"))
-        assert "filesystem" in result or "Directory Listing" in result
+
+        # @skill_command now returns CommandResult
+        from agent.skills.decorators import CommandResult
+
+        if isinstance(result, CommandResult):
+            result_str = result.data if result.success else result.error
+        else:
+            result_str = result
+
+        assert "filesystem" in result_str or "Directory Listing" in result_str
 
     def test_nonexistent_skill_fails(self, registry_fixture, real_mcp):
         """Loading nonexistent skill should fail gracefully."""
@@ -249,6 +280,7 @@ class TestHotReload:
         """Loading same skill again should re-execute module code."""
         import asyncio
         import agent.core.registry as sr_module
+        from common.skills_path import SKILLS_DIR
 
         # First load
         success1, msg1 = registry_fixture.load_skill("filesystem", real_mcp)
@@ -256,11 +288,13 @@ class TestHotReload:
 
         # Get original function result
         module1 = registry_fixture.module_cache["filesystem"]
-        original_result = asyncio.run(module1.list_directory("assets/skills"))
+        original_result = unwrap_command_result(
+            asyncio.run(module1.list_directory("assets/skills"))
+        )
         assert "[HOT-RELOADED]" not in original_result
 
         # Modify file content (simulate code change)
-        tools_path = Path("assets/skills/filesystem/tools.py")
+        tools_path = SKILLS_DIR(skill="filesystem", filename="tools.py")
         original_content = tools_path.read_text()
 
         # Add a marker to the function (match the exact line including \n)
@@ -282,7 +316,7 @@ class TestHotReload:
 
             # Verify new content is loaded by executing the function
             module2 = registry_fixture.module_cache["filesystem"]
-            new_result = asyncio.run(module2.list_directory("assets/skills"))
+            new_result = unwrap_command_result(asyncio.run(module2.list_directory("assets/skills")))
             assert "[HOT-RELOADED]" in new_result
 
         finally:
@@ -424,7 +458,7 @@ class TestGitSkillDecorators:
 
     def _load_git_module(self):
         """Load git skill module for testing."""
-        return _load_skill_module_for_test("git")
+        return load_skill_module("git")
 
     def test_git_functions_have_skill_command_marker(self):
         """Git functions should have _is_skill_command marker."""
@@ -493,13 +527,13 @@ class TestGitSkillDirectCalls:
 
     def _load_git_module(self):
         """Load git skill module for testing."""
-        return _load_skill_module_for_test("git")
+        return load_skill_module("git")
 
     def test_git_status_report_returns_markdown(self):
         """status_report should return formatted markdown."""
         module = self._load_git_module()
 
-        result = module.status_report()
+        result = unwrap_command_result(module.status_report())
 
         assert isinstance(result, str)
         assert "Branch" in result
@@ -508,7 +542,7 @@ class TestGitSkillDirectCalls:
         """status should return status output."""
         module = self._load_git_module()
 
-        result = module.status()
+        result = unwrap_command_result(module.status())
 
         assert isinstance(result, str)
 
@@ -517,7 +551,7 @@ class TestGitSkillDirectCalls:
         module = self._load_git_module()
 
         # log() is sync, returns string directly
-        result = module.log(n=3)
+        result = unwrap_command_result(module.log(n=3))
 
         assert isinstance(result, str)
 
@@ -525,7 +559,7 @@ class TestGitSkillDirectCalls:
         """branch should return branch list."""
         module = self._load_git_module()
 
-        result = module.branch()
+        result = unwrap_command_result(module.branch())
 
         assert isinstance(result, str)
 
@@ -534,7 +568,7 @@ class TestGitSkillDirectCalls:
         module = self._load_git_module()
 
         # hotfix() is sync, returns string directly
-        result = module.hotfix(issue_id="TEST-123")
+        result = unwrap_command_result(module.hotfix(issue_id="TEST-123"))
 
         assert isinstance(result, str)
         assert "TEST-123" in result or "Hotfix" in result
@@ -543,7 +577,7 @@ class TestGitSkillDirectCalls:
         """read_backlog should return backlog content."""
         module = self._load_git_module()
 
-        result = module.read_backlog()
+        result = unwrap_command_result(module.read_backlog())
 
         assert isinstance(result, str)
         assert "Git Skill Backlog" in result or "Backlog" in result
@@ -571,6 +605,7 @@ class TestFilesystemSkill:
         module = isolated_registry.module_cache["filesystem"]
 
         result = await module.list_directory("assets/skills")
+        result = unwrap_command_result(result)
         assert "filesystem" in result or "_template" in result
 
     @pytest.mark.asyncio
@@ -579,8 +614,9 @@ class TestFilesystemSkill:
         isolated_registry.load_skill("filesystem", mock_mcp_server)
         module = isolated_registry.module_cache["filesystem"]
 
-        # Read the manifest file
-        result = await module.read_file("assets/skills/filesystem/manifest.json")
+        # Read the SKILL.md file
+        result = await module.read_file("assets/skills/filesystem/SKILL.md")
+        result = unwrap_command_result(result)
         assert "filesystem" in result
         assert "version" in result
 
@@ -593,6 +629,7 @@ class TestFilesystemSkill:
         # Write to a temp file
         test_path = temp_dir / "test_write.txt"
         result = await module.write_file(str(test_path), "test content 123")
+        result = unwrap_command_result(result)
         assert "Successfully wrote" in result
 
         # Verify file was written
@@ -605,9 +642,10 @@ class TestFilesystemSkill:
         isolated_registry.load_skill("filesystem", mock_mcp_server)
         module = isolated_registry.module_cache["filesystem"]
 
-        # Search for manifest files
-        result = await module.search_files(pattern="*.json", path="assets/skills")
-        assert "manifest.json" in result
+        # Search for SKILL.md files
+        result = await module.search_files(pattern="SKILL.md", path="assets/skills")
+        result = unwrap_command_result(result)
+        assert "SKILL.md" in result
 
     @pytest.mark.asyncio
     async def test_get_file_info_operation(self, isolated_registry, mock_mcp_server):
@@ -615,7 +653,8 @@ class TestFilesystemSkill:
         isolated_registry.load_skill("filesystem", mock_mcp_server)
         module = isolated_registry.module_cache["filesystem"]
 
-        result = await module.get_file_info(path="assets/skills/filesystem/manifest.json")
+        result = await module.get_file_info(path="assets/skills/filesystem/SKILL.md")
+        result = unwrap_command_result(result)
         assert "Size:" in result or "bytes" in result
 
 
@@ -624,21 +663,21 @@ class TestSkillEdgeCases:
 
     def test_load_skill_with_missing_source_file(self, registry_fixture, real_mcp):
         """Loading skill with missing source file should fail."""
-        # Create a temporary manifest with invalid tools_module
-        import json
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
             skill_dir = Path(tmpdir) / "test_missing"
             skill_dir.mkdir()
 
-            manifest = {
-                "name": "test_missing",
-                "version": "1.0.0",
-                "description": "Test skill with missing source",
-                "tools_module": "assets.skills.nonexistent.tools",
-            }
-            (skill_dir / "manifest.json").write_text(json.dumps(manifest))
+            # Create SKILL.md instead of manifest.json
+            skill_md = """\
+---
+name: "test_missing"
+version: "1.0.0"
+description: "Test skill with missing source"
+routing_keywords: ["test"]
+"""
+            (skill_dir / "SKILL.md").write_text(skill_md)
 
             # This would fail to find the source file
             success, message = registry_fixture.load_skill("test_missing", real_mcp)
@@ -786,7 +825,7 @@ class TestOneToolArchitecture:
         from agent.mcp_server import omni
 
         # filesystem.read -> read_file (no prefix since skill doesn't use prefix)
-        result = await omni("filesystem.read", {"path": "assets/skills/filesystem/manifest.json"})
+        result = await omni("filesystem.read", {"path": "assets/skills/filesystem/SKILL.md"})
 
         assert isinstance(result, str)
         assert "filesystem" in result

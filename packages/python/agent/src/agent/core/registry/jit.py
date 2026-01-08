@@ -8,13 +8,26 @@ Just-in-Time skill installation and discovery.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-import structlog
+from common.config.settings import get_setting
 
-from common.settings import get_setting
+# Lazy logger - defer structlog.get_logger() to avoid import-time overhead
+_cached_logger: Any = None
 
-logger = structlog.get_logger(__name__)
+
+def _get_logger() -> Any:
+    """Get logger lazily."""
+    global _cached_logger
+    if _cached_logger is None:
+        import structlog
+
+        _cached_logger = structlog.get_logger(__name__)
+    return _cached_logger
+
+
+if TYPE_CHECKING:
+    import structlog
 
 
 def jit_install_skill(

@@ -1,6 +1,6 @@
 # mcp_core Architecture
 
-> **Phase 30: Modular Architecture** | **Phase 31: Performance Optimization**
+> **Phase 30: Modular Architecture** | **Phase 31: Performance Optimization** | **Phase 32: Import Optimization**
 
 Shared library providing common functionality for orchestrator and coder MCP servers.
 
@@ -215,6 +215,51 @@ from mcp_core import get_setting
 - `--conf` flag support for custom config directory
 - YAML with fallback to simple parsing
 
+## Path Utilities (common.skills_path)
+
+A centralized module for skill path handling (Phase 32):
+
+```python
+from common.skills_path import SKILLS_DIR, load_skill_module
+from common.gitops import get_project_root
+
+# Get base skills directory from settings.yaml
+base = SKILLS_DIR()  # -> Path("assets/skills")
+
+# Get skill directory
+git_dir = SKILLS_DIR(skill="git")  # -> Path("assets/skills/git")
+
+# Get skill file with keyword args
+git_tools = SKILLS_DIR(skill="git", filename="tools.py")
+
+# Get nested path (e.g., known_skills.json index)
+known_skills = SKILLS_DIR(skill="skill", path="data/known_skills.json")
+
+# Load skill module directly
+git_tools = load_skill_module("git")
+```
+
+**Configuration** (`settings.yaml`):
+
+```yaml
+assets:
+  skills_dir: "assets/skills" # Read by SKILLS_DIR
+```
+
+**Benefits:**
+
+- Single source of truth for skills path
+- GitOps-aware project root detection (via `git rev-parse --show-toplevel`)
+- Replaces verbose `Path(__file__).resolve().parent.parent.parent` patterns
+- Cached for performance
+
+**Replaced Patterns:**
+
+| Old Pattern                                                            | New Pattern                                    |
+| ---------------------------------------------------------------------- | ---------------------------------------------- |
+| `get_project_root() / get_setting("skills.path") / "git" / "tools.py"` | `SKILLS_DIR(skill="git", filename="tools.py")` |
+| `importlib.util.spec_from_file_location(...)`                          | `load_skill_module("git")`                     |
+
 ## Import Guidelines
 
 ### For Fastest Import (Recommended)
@@ -240,6 +285,69 @@ from mcp_core.inference import InferenceClient
 ```
 
 ## Performance Optimizations
+
+### Phase 32: Import Optimizations
+
+**Key Optimizations:**
+
+| Module                     | Before | After | Speedup  |
+| -------------------------- | ------ | ----- | -------- |
+| `agent.core.schema`        | 421ms  | 3.6ms | **117x** |
+| `agent.core.skill_manager` | 200ms  | 3.5ms | **57x**  |
+| `agent.core.bootstrap`     | 169ms  | 0.8ms | **211x** |
+| `agent.mcp_server`         | 156ms  | 0.8ms | **195x** |
+
+**Techniques Applied:**
+
+1. **Lazy Logger Initialization**
+
+   ```python
+   # Before: Eager import
+   import structlog
+   logger = structlog.get_logger(__name__)
+
+   # After: Lazy initialization
+   _cached_logger = None
+
+   def _get_logger():
+       global _cached_logger
+       if _cached_logger is None:
+           import structlog
+           _cached_logger = structlog.get_logger(__name__)
+       return _cached_logger
+   ```
+
+2. **Schema Lazy Loading**
+
+   ```python
+   # Before: All schemas loaded at import
+   from agent.core.schema import SkillManifest, ComplexityLevel, ...
+
+   # After: On-demand loading
+   def __getattr__(name):
+       if name in _loaded_schemas:
+           return _loaded_schemas[name]
+       mod = _schema_registry.get(name)
+       if mod:
+           schema_module = import_module(mod, package=__name__)
+           obj = getattr(schema_module, name)
+           _loaded_schemas[name] = obj
+           return obj
+   ```
+
+3. **RepomixCache Lazy Creation**
+
+   ```python
+   # Before: Created immediately
+   context_cache = RepomixCache(target_path=skill_path)
+
+   # After: Created only when accessed
+   @property
+   def context_cache(self):
+       if self._context_cache is None and self._context_path is not None:
+           self._context_cache = RepomixCache(target_path=self._context_path)
+       return self._context_cache
+   ```
 
 ### Phase 31: Pre-compiled Regex
 
@@ -271,11 +379,13 @@ Per ODEP 80/20 matrix:
 
 ## Version History
 
-| Version | Date       | Changes                              |
-| ------- | ---------- | ------------------------------------ |
-| 2.0.0   | 2026-01-07 | Phase 30: Fully modular architecture |
-| 2.1.0   | 2026-01-07 | Phase 31: Performance optimizations  |
-| 1.0.0   | Earlier    | Monolithic single-file modules       |
+| Version | Date       | Changes                                      |
+| ------- | ---------- | -------------------------------------------- |
+| 2.3.0   | 2026-01-07 | Phase 32: Path utilities (SKILLS_DIR)        |
+| 2.2.0   | 2026-01-07 | Phase 32: Import optimizations (117x faster) |
+| 2.1.0   | 2026-01-07 | Phase 31: Performance optimizations          |
+| 2.0.0   | 2026-01-07 | Phase 30: Fully modular architecture         |
+| 1.0.0   | Earlier    | Monolithic single-file modules               |
 
 ## Testing
 

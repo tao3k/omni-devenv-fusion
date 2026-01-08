@@ -119,3 +119,73 @@ def is_project_root(path: Path | None = None) -> bool:
         "Cargo.toml",
     ]
     return any((path / indicator).exists() for indicator in indicators)
+
+
+# =============================================================================
+# Project Paths Helper (Phase 32)
+# =============================================================================
+
+
+class ProjectPaths:
+    """Convenience class for accessing project package paths.
+
+    Usage:
+        from common.gitops import PROJECT
+
+        agent_src = PROJECT.agent.src      # packages/python/agent/src
+        common_src = PROJECT.common.src    # packages/python/common/src
+        agent_pkg = PROJECT.agent          # packages/python/agent
+        common_pkg = PROJECT.common        # packages/python/common
+
+        # Add to sys.path
+        PROJECT.add_to_path("agent", "common")
+    """
+
+    def __init__(self, project_root: Optional[Path] = None):
+        self._root = project_root or get_project_root()
+        self._packages = self._root / "packages" / "python"
+
+    @property
+    def project_root(self) -> Path:
+        return self._root
+
+    @property
+    def packages(self) -> Path:
+        return self._packages
+
+    @property
+    def agent(self) -> Path:
+        return self._packages / "agent"
+
+    @property
+    def common(self) -> Path:
+        return self._packages / "common"
+
+    @property
+    def agent_src(self) -> Path:
+        return self.agent / "src"
+
+    @property
+    def common_src(self) -> Path:
+        return self.common / "src"
+
+    def __getattr__(self, name: str) -> Path:
+        """Access package directories via attributes."""
+        pkg_path = self._packages / name
+        if pkg_path.exists():
+            return pkg_path
+        raise AttributeError(f"Package '{name}' not found in packages/")
+
+    def add_to_path(self, *paths: str) -> None:
+        """Add project paths to sys.path."""
+        import sys
+
+        for path in paths:
+            if path == "agent":
+                sys.path.insert(0, str(self.agent_src))
+            elif path == "common":
+                sys.path.insert(0, str(self.common_src))
+
+
+# Singleton instance for convenience
+PROJECT = ProjectPaths()

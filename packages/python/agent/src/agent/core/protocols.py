@@ -1,15 +1,21 @@
 """
 agent/core/protocols.py
 Phase 29: Unified Skill Protocols
+Phase 33: ODF-EP v6.0 Core Refactoring
 
 Provides type-safe abstractions for the skill system.
 All skill components implement these protocols for interchangeability.
+
+ODF-EP v6.0 Pillars:
+- Pillar A: Pydantic Shield (ConfigDict(frozen=True))
+- Pillar B: Protocol-Oriented Design (typing.Protocol)
+- Pillar C: Tenacity Pattern (@retry for resilience)
+- Pillar D: Context-Aware Observability (logger.bind())
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import (
@@ -23,8 +29,27 @@ from typing import (
     runtime_checkable,
 )
 
+from dataclasses import field
+from pydantic import BaseModel, ConfigDict
+
 if TYPE_CHECKING:
     from agent.core.schemas import SkillManifest
+
+# =============================================================================
+# Lazy Logger Initialization (Phase 32 Import Optimization)
+# =============================================================================
+
+_cached_logger = None
+
+
+def _get_logger() -> Any:
+    """Lazy logger initialization for fast imports."""
+    global _cached_logger
+    if _cached_logger is None:
+        import structlog
+
+        _cached_logger = structlog.get_logger(__name__)
+    return _cached_logger
 
 
 # =============================================================================
@@ -61,14 +86,14 @@ class ExecutionMode(str, Enum):
 
 
 # =============================================================================
-# Data Transfer Objects (Slots-optimized)
+# Data Transfer Objects (Pydantic Shield - Pillar A)
 # =============================================================================
 
 
-@dataclass(slots=True)
-class SkillCommandConfig:
+class SkillCommandConfig(BaseModel):
     """Configuration for a skill command."""
 
+    model_config = ConfigDict(frozen=True)
     name: str
     func: Callable[..., Any]
     description: str = ""
@@ -77,10 +102,10 @@ class SkillCommandConfig:
     inject_settings: tuple[str, ...] = ()
 
 
-@dataclass(slots=True)
-class SkillInfo:
+class SkillInfo(BaseModel):
     """Lightweight skill metadata for listing."""
 
+    model_config = ConfigDict(frozen=True)
     name: str
     version: str
     description: str
@@ -89,10 +114,10 @@ class SkillInfo:
     execution_mode: ExecutionMode = ExecutionMode.LIBRARY
 
 
-@dataclass(slots=True)
-class ExecutionResult:
+class ExecutionResult(BaseModel):
     """Result of command execution."""
 
+    model_config = ConfigDict(frozen=True)
     success: bool
     output: str
     error: str | None = None
@@ -241,16 +266,42 @@ class SecurityDecision(str, Enum):
     BLOCK = "block"
 
 
-@dataclass(slots=True)
-class SecurityAssessment:
+class SecurityAssessment(BaseModel):
     """Complete security assessment result."""
 
+    model_config = ConfigDict(frozen=True)
     decision: SecurityDecision
     score: int
     findings_count: int
     is_trusted: bool = False
     reason: str = ""
     details: dict = field(default_factory=dict)
+
+
+# =============================================================================
+# Context-Aware Logging Helpers (Pillar D)
+# =============================================================================
+
+
+def _log_protocols_loaded(skill_count: int, command_count: int) -> None:
+    """Log protocols loaded with context binding."""
+    logger = _get_logger()
+    logger.info(
+        "skill_protocols_loaded",
+        skill_count=skill_count,
+        command_count=command_count,
+        component="protocols",
+    )
+
+
+def _log_security_assessment(assessment: SecurityAssessment, skill_path: str) -> None:
+    """Log security assessment result with context."""
+    logger = _get_logger()
+    logger.bind(
+        skill_path=skill_path,
+        security_decision=assessment.decision.value,
+        security_score=assessment.score,
+    ).info("security_assessment_completed")
 
 
 # =============================================================================

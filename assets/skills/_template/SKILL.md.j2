@@ -1,0 +1,53 @@
+---
+name: "{{ skill_name }}"
+version: "1.0.0"
+description: "{{ description }}"
+authors: ["{{ author | default('omni-dev') }}"]
+execution_mode: "library"
+routing_strategy: "keyword"
+routing_keywords:
+  - "{{ skill_name }}"
+{% if keywords %}
+{% for keyword in keywords %}
+{% if keyword != skill_name %}
+  - "{{ keyword }}"
+{% endif %}
+{% endfor %}
+{% endif %}
+intents: []
+---
+
+# {{ skill_name | replace('-', ' ') | title }}
+
+## Overview
+
+{{ description }}
+
+## Trinity Architecture Context
+
+This skill operates within the **Trinity Architecture**:
+
+| Component   | Description                                                      |
+| ----------- | ---------------------------------------------------------------- |
+| **Code**    | `tools.py` - Hot-reloaded via ModuleLoader on `tools.py` changes |
+| **Context** | `@omni("{{ skill_name }}.help")` - Full skill context via Repomix XML |
+| **State**   | `SKILL.md` - Skill metadata in YAML Frontmatter                  |
+
+## Usage
+
+### Run a command
+
+```bash
+@omni("{{ skill_name }}.example", {"param": "value"})
+```
+
+### Get skill context
+
+```bash
+@omni("{{ skill_name }}.help")
+```
+
+## Related Documentation
+
+- [Skills Documentation](../../docs/skills.md) - Comprehensive guide
+- [mcp-core-architecture](../../docs/developer/mcp-core-architecture.md)

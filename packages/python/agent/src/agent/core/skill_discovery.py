@@ -18,15 +18,13 @@ from typing import Optional
 
 import structlog
 
-from common.settings import get_setting
-from common.config_paths import get_project_root
+from common.skills_path import SKILLS_DIR
 
 logger = structlog.get_logger(__name__)
 
-# Default index path - read from settings.yaml
-# Location: {skills.path}/skill/data/known_skills.json
-_SKILLS_PATH = get_setting("skills.path", "assets/skills")
-KNOWN_SKILLS_INDEX = get_project_root() / _SKILLS_PATH / "skill" / "data" / "known_skills.json"
+# Default index path - read from settings.yaml via SKILLS_DIR
+# Location: {assets.skills_dir}/skill/data/known_skills.json
+KNOWN_SKILLS_INDEX = SKILLS_DIR(skill="skill", path="data/known_skills.json")
 
 
 class SkillDiscovery:

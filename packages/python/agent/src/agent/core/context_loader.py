@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 import structlog
 
-from common.settings import get_setting
+from common.config.settings import get_setting
 from common.gitops import get_project_root
 
 logger = structlog.get_logger(__name__)

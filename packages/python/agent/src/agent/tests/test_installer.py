@@ -4,16 +4,17 @@ Test Suite for Phase 26: Skill Network & Installer
 
 Tests cover:
 - Fresh install from remote repository
-- Manifest version reading
+- SKILL.md version reading
 - Dirty state detection and handling
 - Update strategy with stash/pop
 - Lockfile generation
 - Dependency cycle detection
 """
 
-import json
 import pytest
+import json
 import subprocess
+import frontmatter
 from pathlib import Path
 from git import Repo
 
@@ -30,24 +31,15 @@ def mock_remote_repo(tmp_path):
     # Initialize git
     repo = Repo.init(remote_dir)
 
-    # Create manifest.json
-    manifest = {
-        "manifest_version": "2.0.0",
-        "type": "skill",
-        "name": "test-skill",
-        "version": "1.0.0",
-        "description": "A test skill for Phase 26",
-        "author": "test",
-        "license": "Apache-2.0",
-        "routing_keywords": ["test"],
-        "tools_module": "assets.skills.test.tools",
-        "guide_file": "guide.md",
-        "dependencies": {
-            "skills": {},
-            "python": {},
-        },
-    }
-    (remote_dir / "manifest.json").write_text(json.dumps(manifest))
+    # Create SKILL.md (unified manifest format)
+    skill_md = """---
+name: "test-skill"
+version: "1.0.0"
+description: "A test skill for Phase 26"
+routing_keywords: ["test"]
+---
+"""
+    (remote_dir / "SKILL.md").write_text(skill_md)
 
     # Create tools.py with @skill_command decorator
     (remote_dir / "tools.py").write_text(
@@ -70,7 +62,7 @@ def test_version() -> str:
     (remote_dir / "guide.md").write_text("# Test Skill\n\nA test skill.")
 
     # Commit
-    repo.index.add(["manifest.json", "tools.py", "guide.md"])
+    repo.index.add(["SKILL.md", "tools.py", "guide.md"])
     repo.index.commit("Initial commit v1.0.0")
 
     return str(remote_dir)
@@ -101,7 +93,7 @@ class TestSkillInstaller:
 
         # Verify
         assert result["success"] is True
-        assert (install_dir / "manifest.json").exists()
+        assert (install_dir / "SKILL.md").exists()
         assert (install_dir / "tools.py").exists()
         assert (install_dir / "guide.md").exists()
         assert result["revision"] is not None
@@ -140,8 +132,10 @@ class TestSkillInstaller:
             version="main",
         )
 
-        # Read manifest version
-        manifest = json.loads((install_dir / "manifest.json").read_text())
+        # Read SKILL.md version
+        with open(install_dir / "SKILL.md") as f:
+            post = frontmatter.load(f)
+        manifest = post.metadata
         assert manifest["version"] == "1.0.0"
 
     def test_dirty_state_detection(self, mock_remote_repo, skill_install_dir):
@@ -204,24 +198,15 @@ def test_version() -> str:
     return "2.0.0"
 '''
         )
-        (Path(mock_remote_repo) / "manifest.json").write_text(
-            json.dumps(
-                {
-                    "manifest_version": "2.0.0",
-                    "type": "skill",
-                    "name": "test-skill",
-                    "version": "2.0.0",  # Updated version
-                    "description": "A test skill v2",
-                    "author": "test",
-                    "license": "Apache-2.0",
-                    "routing_keywords": ["test"],
-                    "tools_module": "assets.skills.test.tools",
-                    "guide_file": "guide.md",
-                    "dependencies": {"skills": {}, "python": {}},
-                }
-            )
-        )
-        remote_repo.index.add(["tools.py", "manifest.json"])
+        skill_md_v2 = """\
+---
+name: "test-skill"
+version: "2.0.0"
+description: "A test skill v2"
+routing_keywords: ["test"]
+"""
+        (Path(mock_remote_repo) / "SKILL.md").write_text(skill_md_v2)
+        remote_repo.index.add(["tools.py", "SKILL.md"])
         remote_repo.index.commit("Update to v2.0.0")
 
         # 4. Update skill (this handles dirty state with stash strategy)
@@ -408,24 +393,15 @@ class TestPythonDependencies:
         install_dir = skill_install_dir / "test-skill"
         install_dir.mkdir()
 
-        # Create manifest with Python deps
-        manifest = {
-            "manifest_version": "2.0.0",
-            "type": "skill",
-            "name": "test-skill",
-            "version": "1.0.0",
-            "description": "Test",
-            "author": "test",
-            "license": "Apache-2.0",
-            "routing_keywords": ["test"],
-            "tools_module": "assets.skills.test.tools",
-            "guide_file": "guide.md",
-            "dependencies": {
-                "skills": {},
-                "python": {"requests": ">=2.28.0"},
-            },
-        }
-        (install_dir / "manifest.json").write_text(json.dumps(manifest))
+        # Create SKILL.md with Python deps
+        skill_md = """\
+---
+name: "test-skill"
+version: "1.0.0"
+description: "Test"
+routing_keywords: ["test"]
+"""
+        (install_dir / "SKILL.md").write_text(skill_md)
 
         installer = SkillInstaller()
         result = installer.install_python_deps(install_dir)

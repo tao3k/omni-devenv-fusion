@@ -10,5 +10,5 @@ inputs:
 allowUnfree: true
 secretspec:
   enable: true
-  profile: development
+  profile: default
   provider: dotenv

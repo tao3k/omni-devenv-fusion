@@ -5,6 +5,8 @@ devenv.local.nix
 # direnv
 .direnv
 *.bak
+# rucola cache
+/.html 
 # pre-commit
 .pre-commit-config.yaml
 

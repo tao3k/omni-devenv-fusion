@@ -35,11 +35,40 @@ from dataclasses import dataclass
 # In uv workspace, 'common' package is available directly
 from common.gitops import get_project_root
 
-import chromadb
-from chromadb.config import Settings
-import structlog
+# Lazy imports to avoid slow module loading
+_cached_chromadb: Any = None
+_cached_settings: Any = None
+_cached_logger: Any = None
 
-logger = structlog.get_logger(__name__)
+
+def _get_chromadb() -> Any:
+    """Get chromadb lazily to avoid slow import."""
+    global _cached_chromadb
+    if _cached_chromadb is None:
+        import chromadb
+
+        _cached_chromadb = chromadb
+    return _cached_chromadb
+
+
+def _get_chroma_settings() -> Any:
+    """Get chromadb Settings lazily."""
+    global _cached_settings
+    if _cached_settings is None:
+        from chromadb.config import Settings
+
+        _cached_settings = Settings
+    return _cached_settings
+
+
+def _get_logger() -> Any:
+    """Get logger lazily to avoid import-time overhead."""
+    global _cached_logger
+    if _cached_logger is None:
+        import structlog
+
+        _cached_logger = structlog.get_logger(__name__)
+    return _cached_logger
 
 
 @dataclass
@@ -69,56 +98,69 @@ class VectorMemory:
     """
 
     _instance: Optional["VectorMemory"] = None
-    _client: chromadb.PersistentClient | None = None
+    _client: Any = None  # chromadb.PersistentClient, lazy loaded
+    _cache_path: Optional[Path] = None
 
     def __new__(cls) -> "VectorMemory":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
+            cls._instance._client = None
+            cls._instance._cache_path = None
         return cls._instance
 
     def __init__(self) -> None:
         if self._initialized:
             return
 
-        # Create ChromaDB client with persistent storage
-        # Following prj-spec: store in .cache/ at git toplevel
-        project_root = get_project_root()  # Uses: git rev-parse --show-toplevel
-        cache_path = project_root / ".cache" / "chromadb"
-        cache_path.mkdir(parents=True, exist_ok=True)
-
-        try:
-            self._client = chromadb.PersistentClient(
-                path=str(cache_path), settings=Settings(anonymized_telemetry=False)
-            )
-            logger.info("Vector memory initialized", db_path=str(cache_path))
-        except Exception as e:
-            logger.error("Failed to initialize vector memory", error=str(e))
-            self._client = None
+        # Defer ChromaDB client creation - only compute path
+        project_root = get_project_root()
+        self._cache_path = project_root / ".cache" / "chromadb"
+        self._cache_path.mkdir(parents=True, exist_ok=True)
 
         self._initialized = True
         self._default_collection = "project_knowledge"
 
-    @property
-    def client(self) -> chromadb.PersistentClient | None:
-        """Get the ChromaDB client."""
+    def _ensure_client(self) -> Any:
+        """Lazily create ChromaDB client only when needed."""
+        if self._client is None and self._cache_path is not None:
+            try:
+                chromadb = _get_chromadb()
+                Settings = _get_chroma_settings()
+                self._client = chromadb.PersistentClient(
+                    path=str(self._cache_path), settings=Settings(anonymized_telemetry=False)
+                )
+                _get_logger().info("Vector memory initialized", db_path=str(self._cache_path))
+            except Exception as e:
+                _get_logger().error("Failed to initialize vector memory", error=str(e))
+                self._client = None
         return self._client
 
-    def _get_or_create_collection(self, name: str | None = None) -> chromadb.Collection | None:
+    @property
+    def client(self) -> Any:  # chromadb.PersistentClient | None
+        """Get the ChromaDB client (lazy)."""
+        return self._ensure_client()
+
+    def _get_or_create_collection(
+        self, name: str | None = None
+    ) -> Any:  # chromadb.Collection | None
         """Get or create a collection by name."""
-        if not self._client:
-            logger.warning("Vector memory not available")
+        client = self._ensure_client()
+        if not client:
+            _get_logger().warning("Vector memory not available")
             return None
 
         collection_name = name or self._default_collection
 
         try:
-            return self._client.get_or_create_collection(
+            return client.get_or_create_collection(
                 name=collection_name,
                 metadata={"description": f"Project knowledge base: {collection_name}"},
             )
         except Exception as e:
-            logger.error("Failed to get collection", collection=collection_name, error=str(e))
+            _get_logger().error(
+                "Failed to get collection", collection=collection_name, error=str(e)
+            )
             return None
 
     async def search(
@@ -140,8 +182,9 @@ class VectorMemory:
         Returns:
             List of SearchResult objects sorted by similarity
         """
-        if not self._client:
-            logger.warning("Vector memory not available for search")
+        client = self._ensure_client()
+        if not client:
+            _get_logger().warning("Vector memory not available for search")
             return []
 
         chroma_collection = self._get_or_create_collection(collection)
@@ -174,12 +217,14 @@ class VectorMemory:
                     )
                 )
 
-            logger.info("Vector search completed", query=query[:50], results=len(search_results))
+            _get_logger().info(
+                "Vector search completed", query=query[:50], results=len(search_results)
+            )
 
             return search_results
 
         except Exception as e:
-            logger.error("Search failed", error=str(e))
+            _get_logger().error("Search failed", error=str(e))
             return []
 
     async def add(
@@ -201,8 +246,9 @@ class VectorMemory:
         Returns:
             True if successful
         """
-        if not self._client:
-            logger.warning("Vector memory not available for add")
+        client = self._ensure_client()
+        if not client:
+            _get_logger().warning("Vector memory not available for add")
             return False
 
         chroma_collection = self._get_or_create_collection(collection)
@@ -212,7 +258,7 @@ class VectorMemory:
         try:
             chroma_collection.add(documents=documents, ids=ids, metadatas=metadatas)
 
-            logger.info(
+            _get_logger().info(
                 "Documents added to vector store",
                 count=len(documents),
                 collection=collection or self._default_collection,
@@ -220,12 +266,13 @@ class VectorMemory:
             return True
 
         except Exception as e:
-            logger.error("Failed to add documents", error=str(e))
+            _get_logger().error("Failed to add documents", error=str(e))
             return False
 
     async def delete(self, ids: list[str], collection: str | None = None) -> bool:
         """Delete documents by IDs."""
-        if not self._client:
+        client = self._ensure_client()
+        if not client:
             return False
 
         chroma_collection = self._get_or_create_collection(collection)
@@ -236,12 +283,13 @@ class VectorMemory:
             chroma_collection.delete(ids=ids)
             return True
         except Exception as e:
-            logger.error("Failed to delete documents", error=str(e))
+            _get_logger().error("Failed to delete documents", error=str(e))
             return False
 
     async def count(self, collection: str | None = None) -> int:
         """Get the number of documents in a collection."""
-        if not self._client:
+        client = self._ensure_client()
+        if not client:
             return 0
 
         chroma_collection = self._get_or_create_collection(collection)
@@ -252,14 +300,15 @@ class VectorMemory:
 
     async def list_collections(self) -> list[str]:
         """List all collection names."""
-        if not self._client:
+        client = self._ensure_client()
+        if not client:
             return []
 
         try:
-            collections = self._client.list_collections()
+            collections = client.list_collections()
             return [c.name for c in collections]
         except Exception as e:
-            logger.error("Failed to list collections", error=str(e))
+            _get_logger().error("Failed to list collections", error=str(e))
             return []
 
 
@@ -350,7 +399,7 @@ async def bootstrap_knowledge_base() -> None:
     # Also ingest preloaded skill prompts.md files
     await ingest_preloaded_skill_prompts()
 
-    logger.info("Knowledge base bootstrapped", docs=len(bootstrap_docs))
+    _get_logger().info("Knowledge base bootstrapped", docs=len(bootstrap_docs))
 
 
 async def ingest_preloaded_skill_prompts() -> None:
@@ -375,7 +424,7 @@ async def ingest_preloaded_skill_prompts() -> None:
     preload_skills = registry.get_preload_skills()
 
     if not preload_skills:
-        logger.info("No preload skills configured")
+        _get_logger().info("No preload skills configured")
         return
 
     vm = get_vector_memory()
@@ -385,7 +434,7 @@ async def ingest_preloaded_skill_prompts() -> None:
         prompts_path = project_root / "agent" / "skills" / skill_name / "prompts.md"
 
         if not prompts_path.exists():
-            logger.debug(f"Skill {skill_name} has no prompts.md")
+            _get_logger().debug(f"Skill {skill_name} has no prompts.md")
             continue
 
         try:
@@ -407,12 +456,12 @@ async def ingest_preloaded_skill_prompts() -> None:
 
             if success:
                 skills_ingested += 1
-                logger.info(f"Ingested prompts.md for skill: {skill_name}")
+                _get_logger().info(f"Ingested prompts.md for skill: {skill_name}")
 
         except Exception as e:
-            logger.error(f"Failed to ingest prompts.md for skill {skill_name}: {e}")
+            _get_logger().error(f"Failed to ingest prompts.md for skill {skill_name}: {e}")
 
-    logger.info(f"Preloaded skill prompts ingested: {skills_ingested}/{len(preload_skills)}")
+    _get_logger().info(f"Preloaded skill prompts ingested: {skills_ingested}/{len(preload_skills)}")
 
 
 __all__ = [

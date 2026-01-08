@@ -8,14 +8,15 @@ import sys
 import asyncio
 import threading
 import structlog
-from mcp.server.fastmcp import FastMCP
-from agent.core.registry import get_skill_registry
-from common.mcp_core import log_decision
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from mcp.server.fastmcp import FastMCP
 
 logger = structlog.get_logger(__name__)
 
 
-def boot_core_skills(mcp: FastMCP):
+def boot_core_skills(mcp: "FastMCP"):
     """
     [Kernel Boot] Auto-load skills from settings.yaml.
     Fixes the 'Lobotomized Agent' issue by ensuring tools are ready.
@@ -24,6 +25,10 @@ def boot_core_skills(mcp: FastMCP):
     - skills.preload: Skills loaded at startup
     - skills.on_demand: Skills available but not loaded until requested
     """
+    # Lazy imports to avoid import-time overhead
+    from agent.core.registry import get_skill_registry
+    from common.mcp_core import log_decision
+
     registry = get_skill_registry()
 
     logger.info("Booting Omni-DevEnv Kernel...")

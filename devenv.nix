@@ -76,7 +76,6 @@ in
   packages = [
     pkgs.git
     pkgs.just
-    nixpkgs-latest.claude-code
     pkgs.secretspec
     nixpkgs-latest.glow
   ];

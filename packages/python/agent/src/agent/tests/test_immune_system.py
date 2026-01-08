@@ -10,7 +10,6 @@ Tests cover:
 """
 
 import pytest
-import json
 import tempfile
 from pathlib import Path
 
@@ -75,18 +74,19 @@ class TestImmuneSystemTrustedSource:
         """Test that trusted sources bypass most checks."""
         immune = ImmuneSystem()
 
-        # Create a skill with manifest from trusted source
+        # Create a skill with SKILL.md from trusted source
         with tempfile.TemporaryDirectory() as tmpdir:
             skill_dir = Path(tmpdir) / "trusted_skill"
             skill_dir.mkdir()
 
-            # Create manifest with trusted repository
-            manifest = {
-                "name": "trusted-skill",
-                "version": "1.0.0",
-                "repository": "https://github.com/omni-dev/test",
-            }
-            (skill_dir / "manifest.json").write_text(json.dumps(manifest))
+            # Create SKILL.md with trusted repository
+            skill_md = """---
+name: "trusted-skill"
+version: "1.0.0"
+repository: "https://github.com/omni-dev/test"
+---
+"""
+            (skill_dir / "SKILL.md").write_text(skill_md)
 
             # Create some medium-risk code
             (skill_dir / "main.py").write_text('print("hello")')
@@ -108,12 +108,13 @@ class TestImmuneSystemCombinedAssessment:
             skill_dir = Path(tmpdir) / "test_skill"
             skill_dir.mkdir()
 
-            # Create manifest
-            manifest = {
-                "name": "test-skill",
-                "version": "1.0.0",
-            }
-            (skill_dir / "manifest.json").write_text(json.dumps(manifest))
+            # Create SKILL.md
+            skill_md = """---
+name: "test-skill"
+version: "1.0.0"
+---
+"""
+            (skill_dir / "SKILL.md").write_text(skill_md)
 
             assessment = immune.assess(skill_dir)
 

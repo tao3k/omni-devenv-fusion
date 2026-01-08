@@ -439,13 +439,17 @@ class SkillInstaller:
         Returns:
             dict with installation results
         """
-        manifest_path = target_dir / "manifest.json"
-        if not manifest_path.exists():
-            return {"success": True, "message": "No manifest found"}
+        import frontmatter
+
+        skill_md_path = target_dir / "SKILL.md"
+        if not skill_md_path.exists():
+            return {"success": True, "message": "No SKILL.md found"}
 
         try:
-            manifest = json.loads(manifest_path.read_text())
-            python_deps = manifest.get("dependencies", {}).get("python", {})
+            with open(skill_md_path) as f:
+                post = frontmatter.load(f)
+            meta = post.metadata or {}
+            python_deps = meta.get("dependencies", {}).get("python", {})
 
             if not python_deps:
                 return {"success": True, "message": "No Python dependencies"}
@@ -484,7 +488,7 @@ class SkillInstaller:
         Returns:
             dict with scan result: {"passed": bool, "error": str or None, "report": dict}
         """
-        from common.settings import get_setting
+        from common.config.settings import get_setting
 
         # Check if security is enabled
         if not get_setting("security.enabled", True):

@@ -38,7 +38,7 @@ class LoaderConfig:
     """Configuration for skill loading pipeline."""
 
     # Discovery options
-    discover_patterns: tuple[str, ...] = ("manifest.json",)
+    discover_patterns: tuple[str, ...] = ("SKILL.md",)
 
     # Security options
     security_enabled: bool = True
@@ -112,11 +112,11 @@ class DiscoveryStage:
                 continue
 
             # Check for required files
-            has_manifest = (entry / "manifest.json").exists()
+            has_skill_md = (entry / "SKILL.md").exists()
             has_tools = (entry / "tools.py").exists()
 
-            if self.config.require_manifest and not has_manifest:
-                logger.debug("Skipping - no manifest", skill=entry.name)
+            if self.config.require_manifest and not has_skill_md:
+                logger.debug("Skipping - no SKILL.md", skill=entry.name)
                 continue
 
             if self.config.require_tools and not has_tools:
@@ -130,7 +130,7 @@ class DiscoveryStage:
 
 
 class ValidationStage:
-    """Stage 2: Validate skill manifests and structure."""
+    """Stage 2: Validate skill SKILL.md and structure."""
 
     __slots__ = ("config",)
 
@@ -144,20 +144,24 @@ class ValidationStage:
         Returns:
             (is_valid, error_message)
         """
-        # Check manifest exists
-        manifest_path = skill_path / "manifest.json"
-        if not manifest_path.exists():
-            return False, f"manifest.json not found at {manifest_path}"
+        import frontmatter
 
-        # Validate manifest structure
+        # Check SKILL.md exists
+        skill_md_path = skill_path / "SKILL.md"
+        if not skill_md_path.exists():
+            return False, f"SKILL.md not found at {skill_md_path}"
+
+        # Validate SKILL.md frontmatter
         try:
-            manifest = json.loads(manifest_path.read_text())
+            with open(skill_md_path) as f:
+                post = frontmatter.load(f)
+            manifest = post.metadata or {}
 
             # Required fields
             required = ["name", "version", "description"]
             for field in required:
                 if field not in manifest:
-                    return False, f"Required field '{field}' missing from manifest"
+                    return False, f"Required field '{field}' missing from SKILL.md"
 
             # Validate name
             name = manifest.get("name", "")
@@ -533,14 +537,10 @@ def quick_load(skill_name: str, skills_dir: Path | None = None) -> LoadResult:
             print(f"Loaded {result.skill_name}")
     """
     from agent.core.skill_manager import SkillManager
+    from common.skills_path import SKILLS_DIR
 
     if skills_dir is None:
-        from common.config_paths import get_project_root
-        from common.settings import get_setting
-
-        base = get_project_root()
-        skills_path = get_setting("skills.path", "assets/skills")
-        skills_dir = base / skills_path
+        skills_dir = SKILLS_DIR()
 
     skill_path = skills_dir / skill_name
     if not skill_path.exists():

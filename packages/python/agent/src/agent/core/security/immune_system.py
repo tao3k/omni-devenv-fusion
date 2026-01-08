@@ -15,7 +15,7 @@ from agent.core.security.manifest_validator import (
     ManifestValidator,
     ValidationResult,
 )
-from common.settings import get_setting
+from common.config.settings import get_setting
 
 
 class Decision(Enum):
@@ -126,12 +126,13 @@ class ImmuneSystem:
         # Run security scanner
         scanner_report = self.scanner.scan(skill_path)
 
-        # Validate manifest
-        manifest_path = skill_path / "manifest.json"
-        if manifest_path.exists():
-            validator_result = self.validator.validate_file(manifest_path)
+        # Validate SKILL.md
+        skill_md_path = skill_path / "SKILL.md"
+
+        if skill_md_path.exists():
+            validator_result = self.validator.validate_file(skill_md_path)
         else:
-            validator_result = ValidationResult(is_valid=True)
+            validator_result = ValidationResult(is_valid=False, errors=["No SKILL.md found"])
 
         # Check trusted sources
         is_trusted, trust_reason = self._check_trusted(skill_path, scanner_report)
@@ -190,21 +191,24 @@ class ImmuneSystem:
 
     def _check_trusted(self, skill_path: Path, scanner_report: SecurityReport) -> tuple[bool, str]:
         """Check if skill is from a trusted source."""
-        # Check manifest for repository
-        manifest_path = skill_path / "manifest.json"
+        # Check SKILL.md for repository and authors
+        skill_md_path = skill_path / "SKILL.md"
         repository = ""
+        manifest = {}
 
-        if manifest_path.exists():
-            import json
+        import frontmatter
 
+        if skill_md_path.exists():
             try:
-                manifest = json.loads(manifest_path.read_text())
-                repository = manifest.get("repository", "")
+                with open(skill_md_path) as f:
+                    post = frontmatter.load(f)
+                repository = post.metadata.get("repository", "") if post.metadata else ""
+                manifest = post.metadata if post.metadata else {}
             except Exception:
                 pass
 
         # Use validator to check trusted sources
-        is_trusted, reason = self.validator.check_trusted_source(repository, manifest_path)
+        is_trusted, reason = self.validator.check_trusted_source(repository, manifest)
         return is_trusted, reason
 
     def _make_decision(

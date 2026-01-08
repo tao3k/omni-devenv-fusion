@@ -108,17 +108,20 @@ def create_toxic_skill_factory(skills_dir: Path) -> Callable[[str, str], tuple[s
         # Determine module name
         module_name = tools_module_path or f"assets.skills.{name}.tools"
 
-        # Write manifest.json
-        manifest_content = f'''\
-{{
-    "name": "{name}",
-    "version": "0.0.1",
-    "description": "A toxic skill for testing",
-    "tools_module": "{module_name}",
-    "guide_file": "guide.md"
-}}
+        # Write SKILL.md (unified manifest format)
+        skill_md_content = f'''\
+---
+name: "{name}"
+version: "0.0.1"
+description: "A toxic skill for testing"
+routing_keywords: ["test"]
+---
+
+# Toxic Guide
+
+This is a test skill.
 '''
-        (manifest_dir / "manifest.json").write_text(manifest_content.strip())
+        (manifest_dir / "SKILL.md").write_text(skill_md_content)
 
         # Write guide.md
         (manifest_dir / "guide.md").write_text("# Toxic Guide\n\nThis is a test skill.")
@@ -161,17 +164,19 @@ def create_toxic_skill_factory(skills_dir: Path) -> Callable[[str, str], tuple[s
 
 
 # =============================================================================
-# Skill Loader Utilities
+# Skill Loader Utilities (Using common.skills_path)
 # =============================================================================
 
+# Use load_skill_module from common.skills_path instead of manual implementation
+# This handles path resolution from settings.yaml and module loading automatically
 
-def load_skill_module_for_test(skill_name: str, skills_path: Path):
+
+def load_skill_module(skill_name: str):
     """
-    Load a skill module directly from file using importlib.util.
+    Load a skill module using common.skills_path.
 
     Args:
         skill_name: Name of the skill to load
-        skills_path: Base path to skills directory
 
     Returns:
         The loaded module
@@ -179,34 +184,9 @@ def load_skill_module_for_test(skill_name: str, skills_path: Path):
     Raises:
         FileNotFoundError: If skill tools.py not found
     """
-    import importlib.util
-    import sys
+    from common.skills_path import load_skill_module as _load
 
-    skill_tools_path = skills_path / skill_name / "tools.py"
-
-    if not skill_tools_path.exists():
-        raise FileNotFoundError(f"Skill tools not found: {skill_tools_path}")
-
-    skills_parent = skills_path
-    skills_parent_str = str(skills_parent)
-    module_name = f"_test_skill_{skill_name}"
-
-    # Clean up existing module if present
-    if module_name in sys.modules:
-        del sys.modules[module_name]
-
-    # Load the module from file
-    spec = importlib.util.spec_from_file_location(
-        module_name, skill_tools_path, submodule_search_locations=[skills_parent_str]
-    )
-    if spec is None:
-        raise ImportError(f"Cannot load spec for {skill_tools_path}")
-
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-
-    return module
+    return _load(skill_name)
 
 
 # =============================================================================

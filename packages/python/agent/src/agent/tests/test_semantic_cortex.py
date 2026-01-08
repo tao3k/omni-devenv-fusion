@@ -174,7 +174,7 @@ class TestSemanticRouter:
                 )
             )
             router = SemanticRouter(use_semantic_cache=False)
-            router.inference = MagicMock()
+            router.inference = AsyncMock()
             router.semantic_cortex = mock_cortex
             router.cache.cache.clear()  # Clear exact cache
             return router

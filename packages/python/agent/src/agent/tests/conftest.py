@@ -23,22 +23,20 @@ Categories:
 
 import pytest
 import asyncio
-import sys
 import os
 import importlib.util
 from pathlib import Path
 from typing import Generator, Any, Callable, Optional
+
+
 from unittest.mock import MagicMock, AsyncMock
 
-# Ensure project root is in path for imports
-_PROJECT_ROOT = Path(__file__).parent.parent.parent.parent.parent
-_AGENT_SRC = _PROJECT_ROOT / "packages" / "python" / "agent" / "src"
-_COMMON_SRC = _PROJECT_ROOT / "packages" / "python" / "common" / "src"
 
-if str(_AGENT_SRC) not in sys.path:
-    sys.path.insert(0, str(_AGENT_SRC))
-if str(_COMMON_SRC) not in sys.path:
-    sys.path.insert(0, str(_COMMON_SRC))
+# Use common.skills_path for skills directory (replaces common.lib pattern)
+from common.skills_path import SKILLS_DIR, load_skill_module
+from common.gitops import get_project_root
+
+_PROJECT_ROOT = get_project_root()
 
 
 # =============================================================================
@@ -51,9 +49,7 @@ def project_paths() -> dict:
     """Session-scoped paths - computed once per test session."""
     return {
         "root": _PROJECT_ROOT,
-        "agent_src": _AGENT_SRC,
-        "common_src": _COMMON_SRC,
-        "skills": _PROJECT_ROOT / "assets" / "skills",
+        "skills": SKILLS_DIR(),  # From settings.yaml -> assets.skills_dir
     }
 
 
@@ -81,53 +77,11 @@ def temp_dir(tmp_path: Path) -> Path:
 
 
 # =============================================================================
-# Skill Loading Utilities
+# Skill Loading Utilities (Using common.skills_path)
 # =============================================================================
 
-
-def _load_skill_module_for_test(skill_name: str, skills_path: Path):
-    """
-    Load a skill module directly from file using importlib.util.
-
-    This function is used by skill_loader fixture and should be called
-    within a test context where import paths are properly set up.
-
-    Args:
-        skill_name: Name of the skill to load
-        skills_path: Base path to skills directory
-
-    Returns:
-        The loaded module
-
-    Raises:
-        FileNotFoundError: If skill tools.py not found
-    """
-    skill_tools_path = skills_path / skill_name / "tools.py"
-
-    if not skill_tools_path.exists():
-        raise FileNotFoundError(f"Skill tools not found: {skill_tools_path}")
-
-    skills_parent = skills_path
-    skills_parent_str = str(skills_parent)
-    module_name = f"_test_skill_{skill_name}"
-
-    # Clean up existing module if present
-    if module_name in sys.modules:
-        del sys.modules[module_name]
-
-    # Load the module from file
-    spec = importlib.util.spec_from_file_location(
-        module_name, skill_tools_path, submodule_search_locations=[skills_parent_str]
-    )
-    if spec is None:
-        raise ImportError(f"Cannot load spec for {skill_tools_path}")
-
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-
-    return module
-
+# load_skill_module is now imported from common.skills_path
+# It handles path resolution and module loading automatically
 
 # =============================================================================
 # Registry Fixtures
@@ -211,27 +165,27 @@ def skill_manager_fixture():
 
 
 @pytest.fixture
-def loaded_git_skill(registry_fixture, skills_path):
+def loaded_git_skill(registry_fixture):
     """Fixture that loads the git skill and yields the module."""
-    module = _load_skill_module_for_test("git", skills_path)
+    module = load_skill_module("git")
     registry_fixture.loaded_skills["git"] = module
     return module
 
 
 @pytest.fixture
-def loaded_filesystem_skill(registry_fixture, skills_path):
+def loaded_filesystem_skill(registry_fixture):
     """Fixture that loads the filesystem skill and yields the module."""
-    module = _load_skill_module_for_test("filesystem", skills_path)
+    module = load_skill_module("filesystem")
     registry_fixture.loaded_skills["filesystem"] = module
     return module
 
 
 @pytest.fixture
-def skill_loader(skills_path) -> Callable[[str], Any]:
-    """Provide a function to load skill modules in tests."""
+def skill_loader() -> Callable[[str], Any]:
+    """Provide a function to load skill modules in tests using common.skills_path."""
 
     def _loader(skill_name: str):
-        return _load_skill_module_for_test(skill_name, skills_path)
+        return load_skill_module(skill_name)
 
     return _loader
 

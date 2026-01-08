@@ -156,9 +156,6 @@ memory:
 # Phase 13.10: Dynamic Skill Loading
 # =============================================================================
 skills:
-  # Skills directory path (relative to project root)
-  path: "assets/skills"
-
   # Skills to preload at server startup (loaded into context immediately)
   preload:
     - knowledge # Project Cortex - Load FIRST

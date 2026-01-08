@@ -68,10 +68,12 @@ def toxic_skill_factory(registry):
 
     Uses centralized TOXIC_SKILL_TEMPLATES dictionary - no if/elif chains.
     Phase 25: Skills use @skill_command decorators instead of register().
-    Skills are created in assets/skills/ so Python can import them.
+    Skills are created in the actual skills directory so Python can import them.
     Cleans up after test.
     """
-    factory = create_toxic_skill_factory(Path("assets/skills"))
+    from common.skills_path import SKILLS_DIR
+
+    factory = create_toxic_skill_factory(SKILLS_DIR())
     yield factory
     # Cleanup using attached cleanup method
     if hasattr(factory, "cleanup"):
@@ -288,8 +290,8 @@ class TestKernelPerformance:
         total_ms = (end_time - start_time) * 1000
         avg_ms = total_ms / iterations
 
-        # Manifest parsing is simple JSON + Pydantic validation
-        assert avg_ms < 1.0, f"Average manifest parsing took {avg_ms:.4f}ms"
+        # Manifest parsing is simple YAML + Pydantic validation
+        assert avg_ms < 1.5, f"Average manifest parsing took {avg_ms:.4f}ms"
 
 
 class TestKernelStability:
@@ -391,8 +393,8 @@ class TestKernelEdgeCases:
         skill_dir.mkdir(exist_ok=True)
 
         try:
-            # Create empty manifest
-            (skill_dir / "manifest.json").write_text("")
+            # Create empty SKILL.md
+            (skill_dir / "SKILL.md").write_text("")
 
             success, message = registry.load_skill("empty_manifest", mock_mcp)
 

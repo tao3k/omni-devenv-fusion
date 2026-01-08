@@ -1,4 +1,4 @@
-# mcp-core/config_paths.py
+# config_paths.py
 """
 Unified Configuration Paths Manager
 
@@ -14,7 +14,7 @@ Philosophy:
 - Support dynamic configuration updates
 
 Usage:
-    from common.mcp_core.config_paths import (
+    from common.config_paths import (
         get_api_key,
         get_mcp_config_path,
         get_anthropic_settings_path,

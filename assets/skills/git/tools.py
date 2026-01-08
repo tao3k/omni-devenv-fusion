@@ -23,6 +23,59 @@ def _run(cmd: list[str], cwd: Optional[Path] = None) -> str:
     return result.stdout.strip()
 
 
+def _get_cog_scopes(project_root: Optional[Path] = None) -> list[str]:
+    """Read allowed scopes from cog.toml."""
+    try:
+        from common.config.settings import get_setting
+
+        cog_path_str = get_setting("tools.cog.config_path")
+        if not cog_path_str:
+            # Try default location
+            cog_path = (project_root or Path.cwd()) / "cog.toml"
+        else:
+            cog_path = Path(cog_path_str)
+
+        if cog_path.exists():
+            content = cog_path.read_text()
+            # Parse scopes from [scopes] section
+            import re
+
+            match = re.search(r"scopes\s*=\s*\[([^\]]+)\]", content, re.DOTALL)
+            if match:
+                scopes_str = match.group(1)
+                # Extract quoted strings
+                scopes = re.findall(r'"([^"]+)"', scopes_str)
+                return scopes
+    except Exception:
+        pass
+    return []
+
+
+def _validate_and_fix_scope(
+    commit_type: str, scope: str, project_root: Optional[Path] = None
+) -> tuple[str, str, list[str]]:
+    """Validate scope against cog.toml, return (type, fixed_scope, warnings)."""
+    warnings = []
+    valid_scopes = _get_cog_scopes(project_root)
+
+    if not valid_scopes:
+        return commit_type, scope, warnings
+
+    if scope and scope not in valid_scopes:
+        warnings.append(f"⚠️  Scope '{scope}' not in cog.toml allowed scopes")
+        # Use first valid scope as fallback
+        if valid_scopes:
+            scope = valid_scopes[0]
+            warnings.append(f"🔄 Auto-switched to scope '{scope}'")
+    elif not scope:
+        # No scope provided, use first valid scope
+        if valid_scopes:
+            scope = valid_scopes[0]
+            warnings.append(f"ℹ️  No scope provided, using '{scope}'")
+
+    return commit_type, scope, warnings
+
+
 def _check_sensitive_files(staged_files: list[str]) -> list[str]:
     """Check for potentially sensitive files in staged changes."""
     import glob
@@ -428,7 +481,7 @@ def execute_commit(message: str, project_root: Path = None) -> str:
 
     Uses cog commit which validates:
     - Type: feat, fix, docs, style, refactor, test, chore, perf, build, ci, revert
-    - Scope: Against cog.toml allowed scopes
+    - Scope: Against cog.toml allowed scopes (auto-fixed if not valid)
 
     Preserves full commit message body (not just header).
     """
@@ -458,9 +511,23 @@ Got: `{first_line}`
     scope = match.group(2) or ""
     description = match.group(3)
 
+    # Validate scope against cog.toml and auto-fix if needed
+    commit_type, scope, scope_warnings = _validate_and_fix_scope(commit_type, scope, project_root)
+
+    # Reconstruct header with fixed scope
+    if scope:
+        fixed_header = f"{commit_type}({scope}): {description}"
+    else:
+        fixed_header = f"{commit_type}: {description}"
+
     # Check if message has a body (detailed description)
     body_lines = lines[1:]
     has_body = any(line.strip() for line in body_lines)
+
+    # Show scope warnings
+    warning_msg = ""
+    if scope_warnings:
+        warning_msg = "\n".join(scope_warnings) + "\n\n"
 
     # Try cog first, but use git commit with full message if cog fails
     cog_available = shutil.which("cog")
@@ -484,31 +551,84 @@ Got: `{first_line}`
             commit_hash, _ = _run_with_rc(["git", "rev-parse", "--short", "HEAD"], cwd=project_root)
             return f"""💾 **COMMITTING** `{commit_hash}`
 
-✅ **Commit Successful!**
+{warning_msg}✅ **Commit Successful!**
 
 ```
-{first_line}
+{fixed_header}
 ```
 
 ---
 ✨ *Verified by Omni Git Skill (cog)* ✨"""
 
-        # Cog failed - fall through to git commit with full message
+        # Cog failed - check if scope was the issue
         if "Invalid scope" in out or "Conventional Commit" in out:
-            # Scope validation failed, but we can still commit with git
-            pass
-        else:
-            return f"""❌ **Commit Failed (cog)**
+            # Scope validation failed - try with a valid scope
+            valid_scopes = _get_cog_scopes(project_root)
+            if valid_scopes:
+                # Use 'project' as fallback scope
+                scope = "project"
+                fixed_header = f"{commit_type}({scope}): {description}"
+                warning_msg += f"🔄 Retrying with scope '{scope}'\n\n"
 
-```text
+                cmd = ["cog", "commit", commit_type, description, scope]
+                out, rc = _run_with_rc(cmd, cwd=project_root)
+
+                if rc == 0:
+                    if has_body:
+                        full_message = message.strip()
+                        # Replace scope in message body
+                        import re as re_mod
+
+                        full_message = re_mod.sub(
+                            r"^(\w+)\([^)]+\):",
+                            fixed_header.split(":")[0] + ":",
+                            full_message,
+                            count=1,
+                        )
+                        amend_cmd = ["git", "commit", "--amend", "--no-verify", "-m", full_message]
+                        _run_with_rc(amend_cmd, cwd=project_root)
+
+                    commit_hash, _ = _run_with_rc(
+                        ["git", "rev-parse", "--short", "HEAD"], cwd=project_root
+                    )
+                    return f"""💾 **COMMITTING** `{commit_hash}`
+
+{warning_msg}✅ **Commit Successful!**
+
+```
+{fixed_header}
+```
+
+---
+✨ *Verified by Omni Git Skill (cog)* ✨"""
+
+        # Cog failed with other error
+        return f"""❌ **Commit Failed (cog)**
+
+{warning_msg}```text
 {out}
 ```
 
 **Action:** Please fix the issue and run `/commit` again.
 """
 
-    # Use git commit with full message (handles body correctly)
+    # No cog available - use git commit directly
     full_message = message.strip()
+    # Replace scope in message if needed
+    if scope and scope != (match.group(2) or ""):
+        import re as re_mod
+
+        old_scope = match.group(2) or ""
+        if old_scope:
+            full_message = re_mod.sub(
+                rf"^{commit_type}\({re_mod.escape(old_scope)}\):",
+                fixed_header.split(":")[0] + ":",
+                full_message,
+                count=1,
+            )
+        else:
+            full_message = f"{fixed_header}\n\n{full_message[len(first_line) :].lstrip()}"
+
     out, rc = _run_with_rc(["git", "commit", "-m", full_message], cwd=project_root)
 
     if rc != 0:

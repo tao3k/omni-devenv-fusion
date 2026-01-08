@@ -3,6 +3,8 @@ src/agent/core/session.py
 Session Manager - The Black Box Recorder.
 
 Phase 19: The Black Box
+Phase 33: ODF-EP v6.0 Core Refactoring
+
 Handles persistence of the agent's stream of consciousness.
 
 Features:
@@ -17,6 +19,12 @@ Event Types:
 - "agent_action": Agent execution result
 - "tool": Tool execution
 - "error": Error event
+
+ODF-EP v6.0 Pillars:
+- Pillar A: Pydantic Shield (ConfigDict(frozen=True))
+- Pillar B: Protocol-Oriented Design (typing.Protocol)
+- Pillar C: Tenacity Pattern (@retry for resilience)
+- Pillar D: Context-Aware Observability (logger.bind())
 
 Usage:
     from agent.core.session import SessionManager, SessionEvent
@@ -36,14 +44,58 @@ import uuid
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-import structlog
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from common.gitops import get_project_root
 from agent.core.telemetry import TokenUsage, SessionTelemetry
 
-logger = structlog.get_logger()
+# =============================================================================
+# Lazy Logger Initialization (Phase 32 Import Optimization)
+# =============================================================================
+
+_cached_logger = None
+
+
+def _get_logger() -> Any:
+    """Lazy logger initialization for fast imports."""
+    global _cached_logger
+    if _cached_logger is None:
+        import structlog
+
+        _cached_logger = structlog.get_logger(__name__)
+    return _cached_logger
+
+
+# =============================================================================
+# Pydantic Shield DTOs (Pillar A)
+# =============================================================================
+
+
+class SessionEvent(BaseModel):
+    """A single event in the session stream."""
+
+    model_config = ConfigDict(frozen=True)
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    timestamp: float = Field(default_factory=time.time)
+    type: str  # "user", "router", "agent_action", "tool", "error"
+    source: str  # "user", "hive_router", "coder", "reviewer"
+    content: Any
+    usage: Optional[TokenUsage] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class SessionState(BaseModel):
+    """Complete state snapshot for session resumption."""
+
+    model_config = ConfigDict(frozen=True)
+    session_id: str
+    mission_id: Optional[str] = None
+    current_agent: Optional[str] = None
+    attempt_number: int = 1
+    history: List[Dict[str, Any]] = Field(default_factory=list)
+    telemetry: TokenUsage = Field(default_factory=TokenUsage)
 
 
 def get_agent_storage_dir() -> Path:
@@ -128,10 +180,11 @@ class SessionManager:
         self.state = SessionState(session_id=self.session_id, mission_id=mission_id)
 
         # If resuming, load from disk
+        logger = _get_logger()
         if self.file_path.exists():
             self._replay_history()
         else:
-            logger.info("📼 New session started", session_id=self.session_id)
+            logger.bind(session_id=self.session_id).info("session_started")
 
         # Write latest session symlink
         self._update_latest_session()
@@ -181,13 +234,28 @@ class SessionManager:
 
         return event
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=0.1, min=0.1, max=1.0),
+        retry=retry_if_exception_type((IOError, OSError)),
+        reraise=True,
+    )
     def _append_to_file(self, event: SessionEvent) -> None:
-        """Append event to JSONL file."""
+        """Append event to JSONL file with tenacity resilience."""
+        logger = _get_logger()
         try:
             with open(self.file_path, "a", encoding="utf-8") as f:
                 f.write(event.model_dump_json() + "\n")
+            logger.bind(
+                session_id=self.session_id,
+                event_type=event.type,
+                event_id=event.id,
+            ).debug("session_event_written")
         except Exception as e:
-            logger.error("Failed to write session event", error=str(e))
+            logger.bind(
+                session_id=self.session_id,
+                error=str(e),
+            ).error("session_event_write_failed")
 
     def _update_history(self, type: str, source: str, content: Any) -> None:
         """Update conversation history for LLM context."""
@@ -214,7 +282,8 @@ class SessionManager:
 
     def _replay_history(self) -> None:
         """Replay session history from disk for resumption."""
-        logger.info("🔄 Resuming session", session_id=self.session_id)
+        logger = _get_logger()
+        logger.bind(session_id=self.session_id).info("session_resuming")
 
         try:
             with open(self.file_path, "r", encoding="utf-8") as f:
@@ -237,14 +306,16 @@ class SessionManager:
 
                     self.events.append(data)
 
-            logger.info(
-                "✅ Session replayed",
+            logger.bind(
                 session_id=self.session_id,
-                events=len(self.events),
+                event_count=len(self.events),
                 cost_usd=self.telemetry.total_usage.cost_usd,
-            )
+            ).info("session_replayed")
         except Exception as e:
-            logger.error("Failed to replay session", error=str(e))
+            logger.bind(
+                session_id=self.session_id,
+                error=str(e),
+            ).error("session_replay_failed")
 
     def _update_latest_session(self) -> None:
         """Update the latest session symlink."""

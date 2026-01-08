@@ -16,6 +16,9 @@ in
     __nixpkgs__.repomix
     __nixpkgs__.ast-grep
     __nixpkgs__.spec-kit
+    __inputs__.packages.rucola
+    __nixpkgs__.zk
+    __nixpkgs__.claude-code
     # __nixpkgs__.playwright-driver.browsers
   ]
   ++ lib.optionals (system != "aarch64-darwin") [

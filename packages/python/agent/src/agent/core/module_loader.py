@@ -129,6 +129,10 @@ class ModuleLoader:
         """
         import importlib.util
 
+        # Ensure parent packages and preload decorators (even when not using context manager)
+        self._ensure_parent_packages()
+        self._preload_decorators()
+
         # Clear existing module for hot-reload
         if reload and module_name in sys.modules:
             del sys.modules[module_name]

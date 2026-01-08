@@ -1,8 +1,7 @@
 """
-agent/skills/_template/tools.py
+_template/tools.py
 Template Skill - Scaffold for creating new skills.
 
-Phase 25: Omni CLI Architecture
 Skill implementation with @skill_command decorators.
 """
 

@@ -169,7 +169,7 @@ class TestContextLoader:
 
     def test_settings_prompts_config_exists(self):
         """Verify settings.yaml has prompts configuration."""
-        from common.settings import get_setting
+        from common.config.settings import get_setting
 
         core_path = get_setting("prompts.core_path")
         user_path = get_setting("prompts.user_custom_path")
@@ -217,7 +217,10 @@ class TestGitStatusInjection:
 # Phase 13.10: Git Skill Tests (Simplified)
 # =============================================================================
 
-_SKILLS_ROOT = Path.cwd() / "assets" / "skills"
+# Use common.skills_path for skills directory (works from any working directory)
+from common.skills_path import SKILLS_DIR
+
+_SKILLS_ROOT = SKILLS_DIR()
 
 
 class TestGitSkill:
@@ -437,7 +440,7 @@ class TestSkillRegistry:
 
         assert manifest is not None
         assert manifest.name == "git"
-        assert manifest.tools_module == "assets.skills.git.tools"
+        assert manifest.tools_module == "agent.skills.git.tools"
 
     def test_get_nonexistent_skill_manifest(self):
         """Verify graceful handling of nonexistent skill."""
@@ -450,7 +453,7 @@ class TestSkillRegistry:
 
     def test_settings_yaml_has_skills_config(self):
         """Verify settings.yaml has skills configuration."""
-        from common.settings import get_setting
+        from common.config.settings import get_setting
 
         preload = get_setting("skills.preload")
         reload_enabled = get_setting("skills.reload.enabled")
@@ -461,7 +464,7 @@ class TestSkillRegistry:
 
     def test_knowledge_skill_in_preload(self):
         """Verify knowledge skill is in preload list."""
-        from common.settings import get_setting
+        from common.config.settings import get_setting
 
         preload = get_setting("skills.preload", [])
 
@@ -714,7 +717,7 @@ class TestMemorySkill:
 
     def test_memory_skill_in_preload(self):
         """Verify memory skill is in preload list."""
-        from common.settings import get_setting
+        from common.config.settings import get_setting
 
         preload = get_setting("skills.preload", [])
         assert "memory" in preload, "memory skill should be preloaded"

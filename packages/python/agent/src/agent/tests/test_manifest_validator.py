@@ -10,7 +10,6 @@ Tests cover:
 """
 
 import pytest
-import json
 import tempfile
 from pathlib import Path
 
@@ -84,10 +83,10 @@ class TestManifestValidatorPermissions:
         result = validator.validate(manifest)
 
         assert result.is_valid
-        assert len(result.warnings) >= 1
+        assert len(result.dangerous_permissions) >= 1
 
         # Check for exec warning
-        exec_warnings = [w for w in result.warnings if w.permission == "exec"]
+        exec_warnings = [w for w in result.dangerous_permissions if w.permission == "exec"]
         assert len(exec_warnings) >= 1
         assert exec_warnings[0].severity == "danger"
 
@@ -105,8 +104,8 @@ class TestManifestValidatorPermissions:
 
         result = validator.validate(manifest)
 
-        assert len(result.warnings) >= 1
-        assert any(w.permission == "shell" for w in result.warnings)
+        assert len(result.dangerous_permissions) >= 1
+        assert any(w.permission == "shell" for w in result.dangerous_permissions)
 
     def test_filesystem_write_permission(self):
         """Test detection of filesystem write permission."""
@@ -123,7 +122,7 @@ class TestManifestValidatorPermissions:
         result = validator.validate(manifest)
 
         assert result.is_warning
-        assert any(w.permission == "filesystem" for w in result.warnings)
+        assert any(w.permission == "filesystem" for w in result.dangerous_permissions)
 
     def test_filesystem_read_permission(self):
         """Test detection of filesystem read permission."""
@@ -140,8 +139,8 @@ class TestManifestValidatorPermissions:
         result = validator.validate(manifest)
 
         # Read permission is less severe
-        assert len(result.warnings) >= 1
-        assert any(w.permission == "filesystem" for w in result.warnings)
+        assert len(result.dangerous_permissions) >= 1
+        assert any(w.permission == "filesystem" for w in result.dangerous_permissions)
 
     def test_network_permission_warning(self):
         """Test network permission generates warning."""
@@ -158,7 +157,7 @@ class TestManifestValidatorPermissions:
         result = validator.validate(manifest)
 
         assert result.is_warning
-        assert any(w.permission == "network" for w in result.warnings)
+        assert any(w.permission == "network" for w in result.warning_permissions)
 
     def test_no_permissions(self):
         """Test manifest with no permissions field."""
@@ -177,48 +176,53 @@ class TestManifestValidatorPermissions:
 
 
 class TestManifestValidatorFile:
-    """Test validating manifest files."""
+    """Test validating SKILL.md files."""
 
-    def test_validate_manifest_file(self):
-        """Test validating a manifest.json file."""
+    def test_validate_skill_md_file(self):
+        """Test validating a SKILL.md file."""
         validator = ManifestValidator()
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            manifest_path = Path(tmpdir) / "manifest.json"
-            manifest_path.write_text(
-                json.dumps(
-                    {
-                        "name": "test-skill",
-                        "version": "1.0.0",
-                    }
-                )
+            skill_md_path = Path(tmpdir) / "SKILL.md"
+            skill_md_path.write_text(
+                """---
+name: test-skill
+version: 1.0.0
+---
+
+# Test Skill
+"""
             )
 
-            result = validator.validate_file(manifest_path)
+            result = validator.validate_file(skill_md_path)
 
             assert result.is_valid
 
-    def test_missing_manifest_file(self):
-        """Test handling of missing manifest file."""
+    def test_missing_skill_md_file(self):
+        """Test handling of missing SKILL.md file."""
         validator = ManifestValidator()
 
-        result = validator.validate_file(Path("/nonexistent/manifest.json"))
+        result = validator.validate_file(Path("/nonexistent/SKILL.md"))
 
         assert not result.is_valid
         assert any("not found" in e.lower() for e in result.errors)
 
-    def test_invalid_json(self):
-        """Test handling of invalid JSON."""
+    def test_invalid_yaml_frontmatter(self):
+        """Test handling of invalid YAML frontmatter."""
         validator = ManifestValidator()
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            manifest_path = Path(tmpdir) / "manifest.json"
-            manifest_path.write_text("{ invalid json }")
+            skill_md_path = Path(tmpdir) / "SKILL.md"
+            skill_md_path.write_text("""---
+invalid: [[[
+---
 
-            result = validator.validate_file(manifest_path)
+# Content
+""")
+
+            result = validator.validate_file(skill_md_path)
 
             assert not result.is_valid
-            assert any("json" in e.lower() for e in result.errors)
 
 
 class TestManifestValidatorTrustedSource:
@@ -246,7 +250,7 @@ class TestManifestValidatorTrustedSource:
         )
 
         assert not is_trusted
-        assert "not in trusted list" in reason
+        assert "Untrusted source" in reason
 
 
 class TestValidationResult:
@@ -320,7 +324,7 @@ class TestManifestValidatorThresholds:
     """Test permission threshold behavior."""
 
     def test_danger_count_blocks(self):
-        """Test that 2+ danger permissions triggers block."""
+        """Test that 3+ danger permissions triggers block."""
         validator = ManifestValidator()
         validator.BLOCK_THRESHOLD = 3
 
@@ -330,6 +334,7 @@ class TestManifestValidatorThresholds:
             "permissions": {
                 "exec": True,  # danger
                 "shell": True,  # danger
+                "filesystem": True,  # danger
             },
         }
 

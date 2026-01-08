@@ -335,7 +335,7 @@ class SecurityScanner:
         report.total_score = sum(f.score for f in report.findings)
 
         # Determine block/warn status (configurable thresholds)
-        from common.settings import get_setting
+        from common.config.settings import get_setting
 
         block_threshold = get_setting("security.block_threshold", 30)
         warn_threshold = get_setting("security.warn_threshold", 10)
@@ -422,7 +422,7 @@ class SecurityScanner:
         report.findings = findings
         report.total_score = sum(f.score for f in findings)
 
-        from common.settings import get_setting
+        from common.config.settings import get_setting
 
         block_threshold = get_setting("security.block_threshold", 30)
         warn_threshold = get_setting("security.warn_threshold", 10)

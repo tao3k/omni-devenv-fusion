@@ -14,15 +14,25 @@ import types
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import structlog
-
 from common.gitops import get_project_root
-from common.settings import get_setting
+from common.config.settings import get_setting
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
 
-logger = structlog.get_logger(__name__)
+# Lazy logger - defer structlog.get_logger() to avoid ~100ms import cost
+_cached_logger: Any = None
+
+
+def _get_logger() -> Any:
+    """Get logger lazily to avoid import-time overhead."""
+    global _cached_logger
+    if _cached_logger is None:
+        import structlog
+
+        _cached_logger = structlog.get_logger(__name__)
+    return _cached_logger
+
 
 # Marker attribute for @skill_command decorated functions
 _SKILL_COMMAND_MARKER = "_is_skill_command"
@@ -60,16 +70,17 @@ class SkillRegistry:
         if self._initialized:
             return
 
+        from common.skills_path import SKILLS_DIR
+
         self.project_root = get_project_root()
-        skills_path = get_setting("skills.path", "assets/skills")
-        self.skills_dir = self.project_root / skills_path
+        self.skills_dir = SKILLS_DIR()
         self.loaded_skills: dict[str, Any] = {}
         self.module_cache: dict[str, types.ModuleType] = {}
         self.skill_tools: dict[str, list[str]] = {}
         self._initialized = True
 
         self.skills_dir.mkdir(parents=True, exist_ok=True)
-        logger.debug("SkillRegistry initialized", path=str(self.skills_dir))
+        _get_logger().debug("SkillRegistry initialized", path=str(self.skills_dir))
 
     # =========================================================================
     # Discovery
@@ -83,7 +94,7 @@ class SkillRegistry:
         skills = [
             item.name
             for item in self.skills_dir.iterdir()
-            if item.is_dir() and (item / "manifest.json").exists()
+            if item.is_dir() and (item / "SKILL.md").exists()
         ]
         return sorted(skills)
 
@@ -100,19 +111,40 @@ class SkillRegistry:
     # =========================================================================
 
     def get_skill_manifest(self, skill_name: str) -> "SkillManifest | None":
-        """Read and parse a skill's manifest."""
-        from agent.core.schema import SkillManifest
+        """Read and parse a skill's manifest from SKILL.md."""
+        from agent.core.schema import SkillManifest, SkillDependencies
+        from agent.skills.core.skill_manifest_loader import get_manifest_loader
 
-        manifest_path = self.skills_dir / skill_name / "manifest.json"
-        if not manifest_path.exists():
+        skill_path = self.skills_dir / skill_name
+        if not skill_path.exists():
             return None
 
-        try:
-            data = json.loads(manifest_path.read_text(encoding="utf-8"))
-            return SkillManifest(**data)
-        except Exception as e:
-            logger.error("Failed to parse manifest", skill=skill_name, error=str(e))
+        import asyncio
+        import concurrent.futures
+
+        loader = get_manifest_loader()
+
+        # Run in thread to avoid event loop conflicts with async tests
+        def _load():
+            return asyncio.run(loader.load_metadata(skill_path))
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            metadata = executor.submit(_load).result()
+
+        if metadata is None:
             return None
+
+        # Convert SkillMetadata to SkillManifest
+        return SkillManifest(
+            name=metadata.name,
+            version=metadata.version,
+            description=metadata.description,
+            author=metadata.authors[0] if metadata.authors else "unknown",
+            routing_keywords=metadata.routing_keywords,
+            intents=metadata.intents,
+            dependencies=SkillDependencies(python=metadata.dependencies.get("python", {})),
+            tools_module=f"agent.skills.{skill_name}.tools",
+        )
 
     # =========================================================================
     # Module Management
@@ -181,10 +213,10 @@ class SkillRegistry:
             success, msg = loader.load_skill(skill, mcp)
             if success:
                 loaded.append(skill)
-                logger.info("Preloaded skill", skill=skill)
+                _get_logger().info("Preloaded skill", skill=skill)
             else:
                 failed.append(skill)
-                logger.warning("Failed to preload", skill=skill, error=msg)
+                _get_logger().warning("Failed to preload", skill=skill, error=msg)
 
         return len(loaded), loaded
 
@@ -270,11 +302,11 @@ class SkillRegistry:
             if success and install_deps:
                 installer.install_python_deps(target_dir)
 
-            logger.info("Installed remote skill", skill=skill_name, url=repo_url)
+            _get_logger().info("Installed remote skill", skill=skill_name, url=repo_url)
             return success, msg
 
         except Exception as e:
-            logger.error("Failed to install remote skill", skill=skill_name, error=str(e))
+            _get_logger().error("Failed to install remote skill", skill=skill_name, error=str(e))
             return False, f"Installation failed: {e}"
 
     def update_remote_skill(
@@ -293,11 +325,11 @@ class SkillRegistry:
 
         try:
             success, msg = installer.update(target_dir, strategy)
-            logger.info("Updated skill", skill=skill_name)
+            _get_logger().info("Updated skill", skill=skill_name)
             return success, msg
 
         except Exception as e:
-            logger.error("Failed to update skill", skill=skill_name, error=str(e))
+            _get_logger().error("Failed to update skill", skill=skill_name, error=str(e))
             return False, f"Update failed: {e}"
 
     # =========================================================================
@@ -347,11 +379,15 @@ class SkillRegistry:
             "is_dirty": is_dirty,
         }
 
-        # Read manifest
-        manifest_path = target_dir / "manifest.json"
-        if manifest_path.exists():
+        # Read SKILL.md
+        skill_md_path = target_dir / "SKILL.md"
+        if skill_md_path.exists():
             try:
-                info["manifest"] = json.loads(manifest_path.read_text())
+                import frontmatter
+
+                with open(skill_md_path) as f:
+                    post = frontmatter.load(f)
+                info["manifest"] = post.metadata or {}
             except Exception as e:
                 info["manifest_error"] = str(e)
 

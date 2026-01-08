@@ -31,18 +31,15 @@ from pathlib import Path
 from unittest.mock import MagicMock, AsyncMock
 import sys
 
-# Ensure proper import paths
-_PROJECT_ROOT = Path(__file__).parent.parent.parent.parent.parent
-_AGENT_SRC = _PROJECT_ROOT / "packages" / "python" / "agent" / "src"
-_COMMON_SRC = _PROJECT_ROOT / "packages" / "python" / "common" / "src"
+# Auto-setup import paths via common.lib (replaces ugly Path(__file__).resolve().parents[4])
+from common.lib import common_src, agent_src, project_root
 
-if str(_AGENT_SRC) not in sys.path:
-    sys.path.insert(0, str(_AGENT_SRC))
-if str(_COMMON_SRC) not in sys.path:
-    sys.path.insert(0, str(_COMMON_SRC))
+_AGENT_SRC = agent_src()
+_COMMON_SRC = common_src()
+_PROJECT_ROOT = project_root()
 
 from common.gitops import get_project_root
-from common.settings import get_setting
+from common.config.settings import get_setting
 
 
 class TestSkillManifestSchema:
@@ -50,10 +47,10 @@ class TestSkillManifestSchema:
 
     @pytest.fixture
     def skills_path(self) -> Path:
-        """Get the skills directory path."""
-        project_root = get_project_root()
-        skills_path = get_setting("skills.path", "assets/skills")
-        return project_root / skills_path
+        """Get the skills directory path using SKILLS_DIR."""
+        from common.skills_path import SKILLS_DIR
+
+        return SKILLS_DIR()
 
     @pytest.fixture
     def manifest_schema(self):
@@ -63,52 +60,59 @@ class TestSkillManifestSchema:
         return SkillManifest
 
     def test_all_skills_have_valid_manifests(self, skills_path, manifest_schema):
-        """Every skill must have a valid manifest.json."""
-        manifest_path = skills_path / "manifest.json"
+        """Every skill must have a valid SKILL.md."""
+        skill_md_path = skills_path / "SKILL.md"
 
         # Skip known incomplete/internal skills
         skip_skills = {"crawl4ai", "stress_test_skill", "skill"}
 
-        # If there's a root manifest.json, check individual skill manifests
+        # Check individual skill SKILL.md files
         for skill_dir in skills_path.iterdir():
             if skill_dir.is_dir() and skill_dir.name not in skip_skills:
-                skill_manifest = skill_dir / "manifest.json"
-                if skill_manifest.exists():
-                    # Try to parse the manifest
-                    import json
+                skill_md = skill_dir / "SKILL.md"
+                if skill_md.exists():
+                    # Parse SKILL.md frontmatter
+                    import frontmatter
 
-                    with open(skill_manifest) as f:
-                        data = json.load(f)
+                    with open(skill_md) as f:
+                        post = frontmatter.load(f)
+                    data = post.metadata or {}
+
+                    # Add required fields that SKILL.md doesn't have
+                    data["tools_module"] = f"agent.skills.{skill_dir.name}.tools"
+
                     # Validate it creates a valid SkillManifest
                     manifest = manifest_schema(**data)
                     assert manifest.name == skill_dir.name, (
-                        f"Manifest name mismatch for {skill_dir.name}"
+                        f"SKILL.md name mismatch for {skill_dir.name}"
                     )
 
     def test_manifest_has_required_fields(self, skills_path):
-        """Manifest must have required fields: name, version, description."""
+        """SKILL.md must have required fields: name, version, description."""
+        import frontmatter
+
         for skill_dir in skills_path.iterdir():
             if skill_dir.is_dir() and not skill_dir.name.startswith("_"):
-                skill_manifest = skill_dir / "manifest.json"
-                if skill_manifest.exists():
-                    import json
-
-                    with open(skill_manifest) as f:
-                        data = json.load(f)
+                skill_md = skill_dir / "SKILL.md"
+                if skill_md.exists():
+                    with open(skill_md) as f:
+                        post = frontmatter.load(f)
+                    data = post.metadata or {}
                     assert "name" in data
                     assert "version" in data
                     assert "description" in data
 
     def test_manifest_version_format(self, skills_path):
-        """Manifest version should follow semver format."""
+        """SKILL.md version should follow semver format."""
+        import frontmatter
+
         for skill_dir in skills_path.iterdir():
             if skill_dir.is_dir() and not skill_dir.name.startswith("_"):
-                skill_manifest = skill_dir / "manifest.json"
-                if skill_manifest.exists():
-                    import json
-
-                    with open(skill_manifest) as f:
-                        data = json.load(f)
+                skill_md = skill_dir / "SKILL.md"
+                if skill_md.exists():
+                    with open(skill_md) as f:
+                        post = frontmatter.load(f)
+                    data = post.metadata or {}
                     version = data.get("version", "")
                     # Basic semver check (x.y.z)
                     parts = version.split(".")
@@ -120,10 +124,10 @@ class TestSkillStructure:
 
     @pytest.fixture
     def skills_path(self) -> Path:
-        """Get the skills directory path."""
-        project_root = get_project_root()
-        skills_path = get_setting("skills.path", "assets/skills")
-        return project_root / skills_path
+        """Get the skills directory path using SKILLS_DIR."""
+        from common.skills_path import SKILLS_DIR
+
+        return SKILLS_DIR()
 
     def test_skill_has_tools_py(self, skills_path):
         """Every skill must have a tools.py file."""
@@ -161,10 +165,10 @@ class TestSkillCodeQuality:
 
     @pytest.fixture
     def skills_path(self) -> Path:
-        """Get the skills directory path."""
-        project_root = get_project_root()
-        skills_path = get_setting("skills.path", "assets/skills")
-        return project_root / skills_path
+        """Get the skills directory path using SKILLS_DIR."""
+        from common.skills_path import SKILLS_DIR
+
+        return SKILLS_DIR()
 
     def test_tools_py_is_valid_python(self, skills_path):
         """tools.py files should be valid Python."""
@@ -205,7 +209,7 @@ class TestSharedUtilities:
 
     def test_settings_module_exists(self):
         """common.settings module should be importable."""
-        from common.settings import get_setting
+        from common.config.settings import get_setting
 
         # Should be able to get a setting
         path = get_setting("skills.path", "assets/skills")
@@ -213,7 +217,7 @@ class TestSharedUtilities:
 
     def test_settings_yaml_loaded(self):
         """settings.yaml should be loaded."""
-        from common.settings import get_setting
+        from common.config.settings import get_setting
 
         # If we can get a setting, yaml is loaded
         path = get_setting("skills.path", "default_skills")

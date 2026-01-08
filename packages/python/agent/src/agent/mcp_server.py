@@ -9,20 +9,30 @@ Usage:
     @omni("git.commit", {"message": "..."})  # Execute with args
     @omni("help")                    # Show all skills
     @omni("git")                     # Show git commands
+
+Performance Optimizations:
+- Lazy skill loading (only load when command invoked)
+- O(1) command lookup via SkillManager._command_cache
+- Throttled mtime checks (100ms) for hot-reload
+- Lazy logger initialization
 """
 
 from mcp.server.fastmcp import FastMCP, Context
 from typing import Optional, Dict, Any
 
-import structlog
+# Lazy logger - defer structlog.get_logger() to avoid import-time overhead
+_cached_logger: Any = None
 
-from common.settings import get_setting
-from common.config_paths import get_project_root
 
-logger = structlog.get_logger(__name__)
+def _get_logger() -> Any:
+    """Get logger lazily."""
+    global _cached_logger
+    if _cached_logger is None:
+        import structlog
 
-# Get skills directory from settings
-SKILLS_DIR = get_project_root() / get_setting("skills.path", "assets/skills")
+        _cached_logger = structlog.get_logger(__name__)
+    return _cached_logger
+
 
 # Create MCP Server - Single tool only
 mcp = FastMCP("omni-agentic-os")
@@ -71,7 +81,7 @@ async def omni(
     input = input.strip()
     args = args or {}
 
-    # Log dispatch info to Claude
+    # Log dispatch info to Claude (lazy logger)
     if ctx:
         ctx.info(f"Omni Dispatch: {input} | Args: {len(args)}")
 
@@ -276,6 +286,7 @@ def main():
     parser.add_argument("--stdio", action="store_true", default=True, help="Use stdio transport")
     args = parser.parse_args()
 
+    logger = _get_logger()
     logger.info("🚀 Starting Omni MCP Server (Phase 29: Protocol-based Architecture)")
     logger.info("📦 Single entry point: omni_run(command, args)")
 
@@ -284,6 +295,15 @@ def main():
     logger.info(f"📋 Available tools: {len(tools)} (expected: 1)")
     for tool in tools:
         logger.info(f"  - {tool.name}")
+
+    # Preload core skills at startup for faster first invocation
+    try:
+        from agent.core.bootstrap import boot_core_skills
+
+        boot_core_skills(mcp)
+        logger.info("✅ Core skills preloaded")
+    except Exception as e:
+        logger.warning(f"⚠️  Failed to preload skills: {e}")
 
     if args.stdio:
         # Run with stdio transport (for Claude Desktop)
