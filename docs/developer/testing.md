@@ -1,7 +1,7 @@
 # Omni-Dev Fusion Testing System - Developer Guide
 
 > Test system architecture, patterns, and maintenance guidelines.
-> Last Updated: 2026-01-08 (Phase 35.1)
+> Last Updated: 2026-01-09 (Phase 35.2)
 
 ---
 
@@ -51,7 +51,7 @@ packages/python/agent/src/agent/tests/
 
 | Suite        | Count | Execution Time | Parallel |
 | ------------ | ----- | -------------- | -------- |
-| Main Tests   | 539   | ~108s          | `-n 4`   |
+| Main Tests   | 605   | ~25s           | `-n 4`   |
 | Stress Tests | 22+   | ~2s            | -        |
 
 ---
@@ -681,14 +681,14 @@ class TestNewFeaturePerformance:
 
 ### Performance Benchmarks
 
-| Test                     | Threshold | Description                  |
-| ------------------------ | --------- | ---------------------------- |
-| Cold load latency        | < 200ms   | First skill load             |
-| Hot reload latency       | < 5ms     | Already loaded skill         |
-| Context retrieval        | < 5ms     | Skill context XML generation |
-| Manifest parsing         | < 1ms     | YAML Frontmatter parse       |
-| Context switching        | < 5ms     | Rapid skill cycling          |
-| RAG retrieval (500 docs) | < 150ms   | Vector search under load     |
+| Test                  | Threshold | Description                  |
+| --------------------- | --------- | ---------------------------- |
+| Cold load latency     | < 200ms   | First skill load             |
+| Hot reload latency    | < 5ms     | Already loaded skill         |
+| Context retrieval     | < 5ms     | Skill context XML generation |
+| Manifest parsing      | < 2.5ms   | YAML Frontmatter parse       |
+| Manifest cache access | < 1.2ms   | Cached manifest access       |
+| Context switching     | < 5ms     | Rapid skill cycling          |
 
 ---
 
@@ -824,6 +824,23 @@ result = await module.async_function()
 ---
 
 ## Refactoring History
+
+### 2026-01-09 (Phase 35.2 - Cascading Templates & Module Loader Fixes)
+
+| Change                   | Description                                                      |
+| ------------------------ | ---------------------------------------------------------------- |
+| prepare_commit Migration | Complete `prepare_commit` implementation in `scripts/prepare.py` |
+| Cascading Templates      | Created `prepare_result.j2` for structured output                |
+| Module Loader Fix        | Added `_ensure_skill_package()` for subpackage imports           |
+| Test Framework Fix       | Updated `load_skill_module` with proper package context setup    |
+| Test Count               | 539 → 604 tests                                                  |
+
+**Key Files**:
+
+- `assets/skills/git/scripts/prepare.py` - Complete prepare_commit workflow
+- `assets/skills/git/templates/prepare_result.j2` - Cascading template
+- `packages/python/agent/src/agent/core/module_loader.py` - Module loading fixes
+- `packages/python/agent/src/agent/tests/test_decorators.py` - Package context setup
 
 ### 2026-01-08 (Phase 35.1 - Zero-Configuration Test Framework)
 
@@ -1072,6 +1089,176 @@ with patch("agent.core.orchestrator.SessionManager") as mock_session:
 - `packages/python/agent/src/agent/tests/test_skills.py` - `unwrap_command_result()` helper
 - `packages/python/agent/src/agent/tests/test_one_tool.py` - Updated tests
 - `packages/python/agent/src/agent/tests/test_telemetry.py` - Mock checkpointer
+
+---
+
+## 2026-01-09 Debugging Session Log
+
+### 2026-01-09: ModuleNotFoundError for agent.skills.git During Test Execution
+
+**Problem**: Tests failed with `ModuleNotFoundError: No module named 'agent.skills.git'` when executing commands like `status_report` that import from `agent.skills.git.scripts`.
+
+**Root Cause**: The module loader was deleting parent packages during hot-reload, breaking the import chain for subpackage imports like `from agent.skills.git.scripts import xxx`.
+
+**Failed Tests**:
+
+```
+packages/python/agent/src/agent/tests/test_decorators.py::TestSkillDirectCalls::test_git_hotfix_returns_plan
+packages/python/agent/src/agent/tests/test_one_tool.py::TestOmniDispatch::test_dispatch_git_status
+packages/python/agent/src/agent/tests/test_one_tool.py::TestSkillManagerLoading::test_git_skill_has_prepare_commit_command
+packages/python/agent/src/agent/tests/test_one_tool.py::TestSkillManagerLoading::test_git_commands_are_skill_command_decorated
+packages/python/agent/src/agent/tests/test_pydantic_schema.py::TestGitSkill::test_git_skill_has_error_class
+packages/python/agent/src/agent/tests/test_skills.py::TestSkillManagerOmniCLI::test_skill_manager_fixture_run_command
+```
+
+**Solutions**:
+
+1. **Fixed `load_skill_module` in `test_decorators.py`**:
+
+```python
+def _setup_skill_package_context(skill_name: str, skills_root: Path):
+    """Set up package context for skill module loading."""
+    from importlib import util
+    from common.gitops import get_project_root
+
+    project_root = get_project_root()
+
+    # Ensure 'agent' package exists
+    if "agent" not in sys.modules:
+        agent_src = project_root / "packages/python/agent/src/agent"
+        agent_pkg = types.ModuleType("agent")
+        agent_pkg.__path__ = [str(agent_src)]
+        agent_pkg.__file__ = str(agent_src / "__init__.py")
+        sys.modules["agent"] = agent_pkg
+
+    # Ensure 'agent.skills' package exists
+    if "agent.skills" not in sys.modules:
+        skills_pkg = types.ModuleType("agent.skills")
+        skills_pkg.__path__ = [str(skills_root)]
+        skills_pkg.__file__ = str(skills_root / "__init__.py")
+        sys.modules["agent.skills"] = skills_pkg
+        sys.modules["agent"].skills = skills_pkg
+
+    # Pre-load decorators module (required for @skill_command)
+    if "agent.skills.decorators" not in sys.modules:
+        decorators_path = project_root / "packages/python/agent/src/agent/skills/decorators.py"
+        if decorators_path.exists():
+            spec = util.spec_from_file_location("agent.skills.decorators", decorators_path)
+            if spec and spec.loader:
+                module = util.module_from_spec(spec)
+                sys.modules["agent.skills.decorators"] = module
+                sys.modules["agent.skills"].decorators = module
+                spec.loader.exec_module(module)
+
+    # Ensure 'agent.skills.{skill_name}' package exists
+    skill_pkg_name = f"agent.skills.{skill_name}"
+    if skill_pkg_name not in sys.modules:
+        skill_pkg = types.ModuleType(skill_pkg_name)
+        skill_pkg.__path__ = [str(skills_root / skill_name)]
+        skill_pkg.__file__ = str(skills_root / skill_name / "__init__.py")
+        sys.modules[skill_pkg_name] = skill_pkg
+```
+
+2. **Fixed module loader in `core/module_loader.py`**:
+
+```python
+def _ensure_skill_package(self, skill_name: str) -> None:
+    """Ensure skill-specific package exists (needed for subpackage imports)."""
+    skill_pkg_name = f"agent.skills.{skill_name}"
+    if skill_pkg_name in sys.modules:
+        return
+
+    skill_pkg_path = self.skills_dir / skill_name
+    if not skill_pkg_path.exists():
+        return
+
+    skill_pkg = types.ModuleType(skill_pkg_name)
+    skill_pkg.__path__ = [str(skill_pkg_path)]
+    skill_pkg.__file__ = str(skill_pkg_path / "__init__.py")
+    sys.modules[skill_pkg_name] = skill_pkg
+
+    # Also set as attribute on parent
+    parent_pkg = sys.modules.get("agent.skills")
+    if parent_pkg:
+        setattr(parent_pkg, skill_name, skill_pkg)
+```
+
+3. **Removed parent package deletion in `load_module()`**:
+
+```python
+# Before (problematic)
+if parent_name and parent_name in sys.modules:
+    del sys.modules[parent_name]
+
+# After (fixed - keep parent package for subpackage imports)
+# NOTE: Do NOT clear parent package - it's needed for subpackage imports
+# The parent package (e.g., '') must exist for
+# imports like 'from agent.skagent.skills.gitills.git.scripts import xxx' to work
+```
+
+4. **Updated test expectations**:
+   - `test_one_tool.py`: Changed assertion from `execute_commit` to `commit`
+   - `test_pydantic_schema.py`: Updated error class test to check scripts/ directory for result dict pattern
+
+5. **Added missing `current_branch` function** in `scripts/status.py`:
+
+```python
+def current_branch(project_root: Path = None) -> str:
+    """Get current branch name."""
+    branch, rc = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=project_root)
+    return branch if rc == 0 else ""
+```
+
+**Files Modified**:
+
+- `packages/python/agent/src/agent/tests/test_decorators.py` - Fixed `load_skill_module` and added `_setup_skill_package_context`
+- `packages/python/agent/src/agent/tests/test_one_tool.py` - Updated test assertions
+- `packages/python/agent/src/agent/tests/test_pydantic_schema.py` - Updated error class test
+- `packages/python/agent/src/agent/core/module_loader.py` - Added `_ensure_skill_package`, fixed parent package handling
+- `assets/skills/git/scripts/status.py` - Added `current_branch` function
+- `assets/skills/git/scripts/prepare.py` - Complete `prepare_commit` implementation with cascading templates
+
+**Test Results**:
+
+```
+605 passed, 2 skipped (RAG tests require persistent ChromaDB)
+```
+
+### 2026-01-09: prepare_commit Migration to Phase 35.2 Architecture
+
+**Changes**:
+
+1. **Migrated `prepare_commit` from `tools.py` to `scripts/prepare.py`**:
+   - Added `inject_root=True` decorator parameter
+   - Implemented complete workflow: stage → lefthook → re-stage → diff
+   - Added scope validation against `cog.toml` with auto-fix
+   - Added security scan for sensitive files
+   - Created cascading template output via `render_workflow_result`
+
+2. **Created `templates/prepare_result.j2`**:
+   - Structured XML output for LLM parsing
+   - Supports user overrides in `assets/templates/git/`
+
+3. **Updated `tools.py` router**:
+
+```python
+@skill_command(
+    name="prepare_commit",
+    category="workflow",
+    description="Prepare commit: stage all, run checks, return staged diff.",
+    inject_root=True,
+)
+def prepare_commit(project_root: Path = None, message: str = None) -> str:
+    from agent.skills.git.scripts import prepare as prepare_mod
+    result = prepare_mod.prepare_commit(project_root=project_root, message=message)
+    return prepare_mod.format_prepare_result(result)
+```
+
+**Files Modified**:
+
+- `assets/skills/git/tools.py` - Updated `prepare_commit` with `inject_root=True`
+- `assets/skills/git/scripts/prepare.py` - Complete implementation
+- `assets/skills/git/templates/prepare_result.j2` - New template
 
 ---
 

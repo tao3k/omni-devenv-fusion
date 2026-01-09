@@ -73,7 +73,7 @@ class ModuleLoader:
             sys.modules["agent"] = agent_pkg
             logger.debug("Created 'agent' package in sys.modules")
 
-        # Ensure 'agent.skills' package exists
+        # Ensure 'agent.skills' package exists (namespace package)
         if "agent.skills" not in sys.modules:
             skills_pkg = types.ModuleType("agent.skills")
             skills_pkg.__path__ = [str(self.skills_dir)]
@@ -81,6 +81,28 @@ class ModuleLoader:
             sys.modules["agent.skills"] = skills_pkg
             sys.modules["agent"].skills = skills_pkg
             logger.debug("Created 'agent.skills' package in sys.modules")
+
+    def _ensure_skill_package(self, skill_name: str) -> None:
+        """Ensure skill-specific package exists (needed for subpackage imports)."""
+        skill_pkg_name = f"agent.skills.{skill_name}"
+        if skill_pkg_name in sys.modules:
+            return
+
+        skill_pkg_path = self.skills_dir / skill_name
+        if not skill_pkg_path.exists():
+            return
+
+        skill_pkg = types.ModuleType(skill_pkg_name)
+        skill_pkg.__path__ = [str(skill_pkg_path)]
+        skill_pkg.__file__ = str(skill_pkg_path / "__init__.py")
+        sys.modules[skill_pkg_name] = skill_pkg
+
+        # Also set as attribute on parent
+        parent_pkg = sys.modules.get("agent.skills")
+        if parent_pkg:
+            setattr(parent_pkg, skill_name, skill_pkg)
+
+        logger.debug("Created skill package", package=skill_pkg_name)
 
     def _preload_decorators(self) -> None:
         """Pre-load the decorators module for @skill_command support."""
@@ -129,18 +151,22 @@ class ModuleLoader:
         """
         import importlib.util
 
-        # Ensure parent packages and preload decorators (even when not using context manager)
+        # Extract skill name from module name (e.g., 'git' from 'agent.skills.git.tools')
+        skill_name = module_name.split(".")[2] if module_name.startswith("agent.skills.") else ""
+
+        # Ensure parent packages and skill package exist (needed for subpackage imports)
         self._ensure_parent_packages()
+        if skill_name:
+            self._ensure_skill_package(skill_name)
         self._preload_decorators()
 
         # Clear existing module for hot-reload
         if reload and module_name in sys.modules:
             del sys.modules[module_name]
 
-        # Clear parent package too
-        parent_name = module_name.rsplit(".", 1)[0] if "." in module_name else ""
-        if parent_name and parent_name in sys.modules:
-            del sys.modules[parent_name]
+        # NOTE: Do NOT clear parent package - it's needed for subpackage imports
+        # The parent package (e.g., 'agent.skills.git') must exist for
+        # imports like 'from agent.skills.git.scripts import xxx' to work
 
         # Create spec and module
         spec = importlib.util.spec_from_file_location(module_name, file_path)

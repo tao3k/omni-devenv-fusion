@@ -19,9 +19,67 @@ Usage:
 
 import pytest
 import sys
+import types
 import importlib.util
 from pathlib import Path
 from common.skills_path import SKILLS_DIR
+
+
+def _setup_skill_package_context(skill_name: str, skills_root: Path) -> None:
+    """
+    Set up the package hierarchy in sys.modules for a skill.
+
+    This enables absolute imports like:
+        from agent.skills.git.scripts import status
+
+    Without this, relative imports would fail with:
+        "ImportError: attempted relative import with no known parent package"
+    """
+    project_root = skills_root.parent.parent  # assets/skills -> project_root
+
+    # Ensure 'agent' package exists
+    if "agent" not in sys.modules:
+        agent_src = project_root / "packages/python/agent/src/agent"
+        agent_pkg = types.ModuleType("agent")
+        agent_pkg.__path__ = [str(agent_src)]
+        agent_pkg.__file__ = str(agent_src / "__init__.py")
+        sys.modules["agent"] = agent_pkg
+
+    # Ensure 'agent.skills' package exists
+    if "agent.skills" not in sys.modules:
+        skills_pkg = types.ModuleType("agent.skills")
+        skills_pkg.__path__ = [str(skills_root)]
+        skills_pkg.__file__ = str(skills_root / "__init__.py")
+        sys.modules["agent.skills"] = skills_pkg
+
+    # Ensure 'agent.skills.<skill_name>' package exists
+    skill_pkg_name = f"agent.skills.{skill_name}"
+    if skill_pkg_name not in sys.modules:
+        skill_dir = skills_root / skill_name
+        skill_pkg = types.ModuleType(skill_pkg_name)
+        skill_pkg.__path__ = [str(skill_dir)]
+        skill_pkg.__file__ = str(skill_dir / "__init__.py")
+        sys.modules[skill_pkg_name] = skill_pkg
+
+    # Ensure 'agent.skills.<skill_name>.scripts' package exists
+    scripts_pkg_name = f"agent.skills.{skill_name}.scripts"
+    if scripts_pkg_name not in sys.modules:
+        scripts_dir = skills_root / skill_name / "scripts"
+        scripts_pkg = types.ModuleType(scripts_pkg_name)
+        scripts_pkg.__path__ = [str(scripts_dir)]
+        scripts_pkg.__file__ = str(scripts_dir / "__init__.py")
+        sys.modules[scripts_pkg_name] = scripts_pkg
+
+    # Pre-load decorators module for @skill_command support
+    decorators_name = "agent.skills.decorators"
+    if decorators_name not in sys.modules:
+        decorators_path = project_root / "packages/python/agent/src/agent/skills/decorators.py"
+        if decorators_path.exists():
+            spec = importlib.util.spec_from_file_location(decorators_name, str(decorators_path))
+            if spec and spec.loader:
+                decorators_mod = importlib.util.module_from_spec(spec)
+                sys.modules[decorators_name] = decorators_mod
+                spec.loader.exec_module(decorators_mod)
 
 
 def pytest_configure(config):
@@ -78,6 +136,9 @@ def _register_skill_fixture(skill_name: str, skills_root: Path):
         if not tools_path.exists():
             pytest.skip(f"Skill '{skill_name}' missing tools.py")
 
+        # Set up package context BEFORE loading (enables agent.skills.git.scripts imports)
+        _setup_skill_package_context(skill_name, skills_root)
+
         module_name = f"_skill_{skill_name}_module"
         spec = importlib.util.spec_from_file_location(module_name, str(tools_path))
         if spec is None or spec.loader is None:
@@ -89,6 +150,8 @@ def _register_skill_fixture(skill_name: str, skills_root: Path):
 
         # Load and cache
         module = importlib.util.module_from_spec(spec)
+        # Set __package__ for proper import resolution
+        module.__package__ = f"agent.skills.{skill_name}"
         sys.modules[module_name] = module
         spec.loader.exec_module(module)
         return module

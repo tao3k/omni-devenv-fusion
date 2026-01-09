@@ -1,0 +1,21 @@
+"""
+{{ skill_name }}/scripts/ - Isolated implementation module
+
+This package contains atomic script implementations for the {{ skill_name }} skill.
+Each script is isolated via relative imports, preventing namespace conflicts
+with other skills (e.g., docker/scripts/status.py).
+
+Architecture:
+    tools.py  -> Router (just dispatches)
+    scripts/  -> Controllers (actual implementation)
+
+Usage in tools.py:
+    from .scripts import my_command
+"""
+
+# Import all implementations for direct access
+from . import example
+
+__all__ = [
+    "example",
+]

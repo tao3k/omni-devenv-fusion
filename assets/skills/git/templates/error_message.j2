@@ -1,0 +1,15 @@
+{#
+# git/error_message.j2 - Error Message Template
+#
+# Renders error messages with structured output for LLM parsing.
+#
+#}
+
+<error>
+    <type>{{ error_type }}</type>
+    <message>{{ message }}</message>
+    <timestamp>{{ timestamp }}</timestamp>
+{%- if suggestion %}
+    <suggestion>{{ suggestion }}</suggestion>
+{%- endif %}
+</error>

@@ -7,6 +7,17 @@ Quick Reference: `docs/explanation/trinity-architecture.md` | `docs/skills.md`
 
 ---
 
+## ODF-EP Protocol (MANDATORY READ)
+
+**All LLMs MUST read and follow `docs/reference/odf-ep-protocol.md`**
+
+This is the complete engineering protocol for this project:
+
+- **SSOT**: Use `SKILLS_DIR()` and `get_setting()` - NEVER `__file__` or hardcoded paths
+- **Code Style**: Type hints, async-first, Google docstrings
+- **Skill Structure**: SKILL.md + tools.py + scripts/ pattern
+- **Naming**: kebab-case (skills), snake_case (commands/functions)
+
 ## ⛔ Critical: Git Commit
 
 **Use `/commit` slash command** - Never `git commit` via terminal.

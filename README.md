@@ -63,6 +63,56 @@ omni skill info pandas-expert
 4. **Lockfile**: Generates `.omni-lock.json` for reproducible installs
 5. **Dirty Handling**: Stashes local changes, pulls, then pops (stash strategy)
 
+## Phase 35.2: Cascading Templates & Skill Structure Validation
+
+Omni supports **cascading templates** with "User Overrides > Skill Defaults" pattern:
+
+```bash
+# Check skill structure
+omni skill check                 # Check all skills
+omni skill check git             # Check specific skill
+omni skill check git --examples  # With structure examples
+
+# Manage templates (cascading pattern)
+omni skill templates list git              # List templates with source
+omni skill templates eject git commit_message.j2  # Copy default to user dir
+omni skill templates info git commit_message.j2   # Show template content
+
+# Create new skill from template
+omni skill create my-skill --description "My new skill"
+```
+
+### Cascading Template Pattern
+
+```
+# Priority 1: User Overrides (assets/templates/{skill}/)
+assets/templates/git/
+├── commit_message.j2     # Custom template (highest priority)
+
+# Priority 2: Skill Defaults (assets/skills/{skill}/templates/)
+assets/skills/git/templates/
+├── commit_message.j2     # Skill default (fallback)
+├── workflow_result.j2
+└── error_message.j2
+```
+
+### Skill Structure Validation
+
+```
+🔍 git
+
+✅ Valid: True
+📊 Score: 100.0%
+📁 Location: assets/skills/git
+
+## 📁 Structure
+├── SKILL.md              # Required
+├── tools.py              # Required
+├── templates/            # Optional (cascading)
+├── scripts/              # Optional (isolated)
+└── tests/                # Optional (zero-config)
+```
+
 ## Phase 27: JIT Skill Acquisition
 
 Omni can **dynamically discover and install skills** when you need capabilities not currently loaded:

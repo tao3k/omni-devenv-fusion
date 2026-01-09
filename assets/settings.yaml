@@ -29,6 +29,10 @@ assets:
   # Skills directory
   skills_dir: "assets/skills"
 
+  # Templates directory (Phase 35.2: Cascading template loading)
+  # User overrides > Skill defaults pattern
+  templates_dir: "assets/templates"
+
   # Knowledge base (RAG documents)
   knowledge_dir: "assets/knowledge"
 
@@ -209,6 +213,10 @@ skills:
           description: "Standalone executables (Python workflows, state management)"
           type: "dir"
 
+        - path: "templates/"
+          description: "Jinja2 templates for skill output (Phase 35.2: Cascading loader)"
+          type: "dir"
+
         - path: "references/"
           description: "Markdown documentation for RAG ingestion"
           type: "dir"
@@ -232,6 +240,39 @@ skills:
         - path: "README.md"
           description: "Developer documentation (human-readable, not for LLM)"
           type: "file"
+
+      # Optional structure examples (for documentation and validation)
+      # These show common patterns but are not required
+      optional:
+        # Example: Cascading template structure (Phase 35.2)
+        - path: "templates/"
+          description: "Skill-local Jinja2 templates (defaults)"
+          example: |
+            assets/skills/git/templates/
+            ├── commit_message.j2
+            ├── workflow_result.j2
+            └── error_message.j2
+          validation: "Optional - if present, enables cascading template loading"
+
+        # Example: Scripts directory with atomic implementations
+        - path: "scripts/"
+          description: "Atomic implementations (Router-Controller pattern)"
+          example: |
+            assets/skills/git/scripts/
+            ├── __init__.py
+            ├── rendering.py    # Template rendering layer
+            ├── workflow.py     # Git workflow logic
+            └── status.py       # Git status implementation
+          validation: "Optional - recommended for complex skills"
+
+        # Example: User template overrides directory
+        - path: "assets/templates/{skill}/"
+          description: "User-level template overrides (cascading pattern)"
+          example: |
+            assets/templates/git/
+            ├── commit_message.j2  # Overrides skill default
+            └── workflow_result.j2
+          validation: "Optional - if exists, takes precedence over skill defaults"
 
     # Jinja2 template configuration
     templates:

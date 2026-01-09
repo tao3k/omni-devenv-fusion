@@ -1,0 +1,15 @@
+{#
+# {{ skill_name }}/error.j2 - Error Template
+#
+# Structured error output for LLM parsing.
+#
+#}
+
+<error>
+    <type>{{ error_type }}</type>
+    <message>{{ message }}</message>
+{%- if suggestion %}
+    <suggestion>{{ suggestion }}</suggestion>
+{%- endif %}
+    <timestamp>{{ timestamp }}</timestamp>
+</error>

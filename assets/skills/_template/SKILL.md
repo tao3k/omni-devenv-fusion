@@ -2,7 +2,7 @@
 # === Omni-Dev Fusion Skill Manifest ===
 name: _template
 version: 1.0.0
-description: Template skill for new capabilities
+description: Template skill for new capabilities - demonstrates Trinity Architecture with Isolated Sandbox
 authors: ["omni-dev-fusion"]
 license: Apache-2.0
 execution_mode: library
@@ -22,20 +22,45 @@ When this skill is active, add these guidelines to the LLM context:
 
 When working with the Template skill:
 
-- Consider using `template.example` for [specific tasks]
-- Remember to [relevant considerations]
-- Follow the skill's defined workflow for best results
+- Use `template.example` for basic operations
+- Use `template.process_data` for data processing tasks
+- Remember to follow the Router-Controller pattern
+- All implementation lives in scripts/ directory
 ```
 
-## Trinity Architecture Context
+## Trinity Architecture Context (Phase 35.2)
 
-This skill operates within the **Trinity Architecture**:
+This skill operates within the **Trinity Architecture** with **Isolated Sandbox + Explicit Routing**:
 
-| Component   | Description                                                      |
-| ----------- | ---------------------------------------------------------------- |
-| **Code**    | `tools.py` - Hot-reloaded via ModuleLoader on `tools.py` changes |
-| **Context** | `@omni("template.help")` - Full skill context via Repomix XML    |
-| **State**   | `SKILL.md` - Skill metadata in YAML Frontmatter                  |
+```
+_template/
+├── SKILL.md           # Metadata + System Prompts
+├── tools.py           # Router (dispatch only)
+└── scripts/           # Controllers (isolated implementation)
+    ├── __init__.py    # Package marker (required!)
+    ├── example.py     # Atomic implementations
+    └── ...
+```
+
+| Component   | Description                                                   |
+| ----------- | ------------------------------------------------------------- |
+| **Code**    | `tools.py` + `scripts/` - Hot-reloaded via ModuleLoader       |
+| **Context** | `@omni("template.help")` - Full skill context via Repomix XML |
+| **State**   | `SKILL.md` - Skill metadata in YAML Frontmatter               |
+
+## Why Isolated Sandbox?
+
+For large-scale deployments (100+ skills), namespace conflicts are inevitable:
+
+- `git/scripts/utils.py` vs `docker/scripts/utils.py`
+- `python/scripts/status.py` vs `docker/scripts/status.py`
+
+**Solution**: Each skill's `scripts/` is an isolated Python package:
+
+- `agent.skills.git.scripts.status` ← Git's status
+- `agent.skills.docker.scripts.status` ← Docker's status
+
+These are **completely different objects** in memory.
 
 ## ODF-EP Protocol Awareness
 
@@ -58,24 +83,58 @@ Use `_template` as a scaffold for new skills:
 cp -r assets/skills/_template assets/skills/my_new_skill
 ```
 
-### 2. Add Commands (`tools.py`)
+### 2. Update SKILL.md
+
+Edit the frontmatter:
+
+```yaml
+---
+name: my_new_skill
+version: 1.0.0
+description: My new skill description
+routing_keywords: ["keyword1", "keyword2"]
+---
+```
+
+### 3. Add Commands (`tools.py` - Router Layer)
 
 ```python
 from agent.skills.decorators import skill_command
 
 @skill_command(
-    name="my_command",
+    name="my_new_skill.my_command",
     category="read",
     description="Brief description",
 )
-async def my_command(param: str) -> str:
+def my_command(param: str) -> str:
     """Detailed docstring."""
-    return "result"
+    from agent.skills.my_new_skill.scripts import example as example_mod
+    return example_mod.my_implementation(param)
 ```
 
-### 3. (Optional) Subprocess Mode
+**Naming Convention**: Use `skill.command` format (e.g., `my_new_skill.my_command`)
 
-For heavy/conflicting dependencies, use the shim pattern:
+### 4. Add Implementation (`scripts/example.py`)
+
+```python
+# scripts/example.py
+def my_implementation(param: str) -> str:
+    """Actual implementation."""
+    return f"Result: {param}"
+```
+
+### 5. (Optional) Add Jinja2 Templates
+
+For structured output:
+
+```bash
+mkdir -p assets/templates/my_new_skill/
+# Add *.j2 template files
+```
+
+### 6. (Optional) Subprocess Mode
+
+For heavy/conflicting dependencies:
 
 ```python
 # tools.py - Lightweight shim
@@ -88,32 +147,17 @@ def _run_isolated(command: str, **kwargs):
     cmd = ["uv", "run", "-q", "python", str(SKILL_DIR / "implementation.py"), command, json.dumps(kwargs)]
     result = subprocess.run(cmd, cwd=str(SKILL_DIR), capture_output=True, text=True)
     return result.stdout.strip()
-
-@skill_command(name="heavy_op", description="Heavy operation")
-def heavy_op(param: str) -> str:
-    return _run_isolated("heavy_op", param=param)
 ```
 
-```python
-# implementation.py - Business logic
-import heavy_library
-# Implementation with heavy imports
-```
+## Quick Reference
 
-### 4. (Optional) Add `repomix.json` for atomic context
-
-```json
-{
-  "output": { "style": "xml", "fileSummary": true },
-  "include": ["SKILL.md", "tools.py", "guide.md"],
-  "ignore": { "patterns": [], "characters": [] }
-}
-```
-
-### 5. Update `SKILL.md` with skill-specific guidelines
+| Command            | Category | Description             |
+| ------------------ | -------- | ----------------------- |
+| `template.example` | read     | Example command         |
+| `template.help`    | view     | Show full skill context |
 
 ## Related Documentation
 
 - [Skills Documentation](../../docs/skills.md) - Comprehensive guide
+- [Trinity Architecture](../../docs/explanation/trinity-architecture.md)
 - [ODF-EP Planning Prompt](../../.claude/plans/odf-ep-v6-planning-prompt.md)
-- [mcp-core-architecture](../../docs/developer/mcp-core-architecture.md)

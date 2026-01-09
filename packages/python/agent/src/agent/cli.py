@@ -553,6 +553,219 @@ def skill_test(
             raise typer.Exit(1)
 
 
+# =============================================================================
+# Skill Check Command (Phase 35.2)
+# =============================================================================
+
+
+@skill_app.command("check")
+def skill_check(
+    skill_name: str = typer.Argument(None, help="Skill name to check (default: all skills)"),
+    show_examples: bool = typer.Option(
+        False, "--examples", "-e", help="Show optional structure examples"
+    ),
+):
+    """
+    Validate skill structure against settings.yaml configuration.
+
+    Examples:
+        omni skill check                 # Check all skills
+        omni skill check git             # Check specific skill
+        omni skill check git --examples  # Check with structure examples
+    """
+    from agent.core.security.structure_validator import SkillStructureValidator
+
+    validator = SkillStructureValidator()
+
+    if skill_name:
+        # Check specific skill
+        result = validator.validate_skill(skill_name)
+        skill_dir = validator.skills_dir / skill_name
+
+        # Build structure tree
+        if skill_dir.exists():
+            tree = []
+            for item in sorted(skill_dir.iterdir()):
+                if item.name.startswith(".") or item.name == "__pycache__":
+                    continue
+                if item.is_dir():
+                    tree.append(f"{item.name}/")
+                else:
+                    tree.append(item.name)
+
+        console.print()
+        console.print(Panel(f"# 🔍 {skill_name}", style="bold blue"))
+        console.print()
+
+        # Status
+        status_emoji = "✅" if result.valid else "❌"
+        console.print(f"{status_emoji} **Valid**: {result.valid}")
+        console.print(f"📊 **Score**: {result.score:.1f}%")
+        console.print(f"📁 **Location**: {skill_dir}")
+        console.print()
+
+        # Show structure
+        if skill_dir.exists():
+            console.print("## 📁 Structure")
+            console.print("```")
+            for item in sorted(skill_dir.iterdir()):
+                if item.name.startswith(".") or item.name == "__pycache__":
+                    continue
+                if item.is_dir():
+                    console.print(f"├── {item.name}/")
+                else:
+                    console.print(f"├── {item.name}")
+            console.print("```")
+            console.print()
+
+        # Issues
+        if result.missing_required:
+            console.print("## ❌ Missing Required")
+            for f in result.missing_required:
+                console.print(f"  - {f}")
+            console.print()
+
+        if result.disallowed_files:
+            console.print("## 🚫 Disallowed (MUST DELETE)")
+            for f in result.disallowed_files:
+                console.print(f"  - {f}")
+            console.print()
+
+        if result.ghost_files:
+            console.print("## ⚠️ Ghost Files")
+            for f in result.ghost_files:
+                console.print(f"  - {f}")
+            console.print()
+
+        if show_examples:
+            console.print("## 📚 Optional Structure Examples")
+            config = validator.config
+            optional = config.get("structure", {}).get("optional", [])
+            for spec in optional:
+                console.print(f"\n### `{spec['path']}`")
+                console.print(f"_{spec.get('description', '')}_")
+                if spec.get("example"):
+                    console.print("```")
+                    console.print(spec["example"].strip())
+                    console.print("```")
+    else:
+        # Check all skills
+        report = validator.get_validation_report()
+        summary = report["summary"]
+
+        console.print()
+        console.print(Panel("# 🔍 Skill Structure Report", style="bold blue"))
+        console.print()
+
+        console.print(f"**Config**: {summary['config_version']}")
+        console.print(f"**Total**: {summary['total_skills']}")
+        console.print(
+            f"**Valid**: {summary['valid_skills']} ✅ | **Invalid**: {summary['invalid_skills']} ❌"
+        )
+        console.print(f"**Average Score**: {summary['average_score']:.1f}%")
+        console.print()
+
+        # Invalid skills
+        invalid_skills = [s for s in report["skills"] if not s["valid"]]
+        if invalid_skills:
+            console.print("## ❌ Invalid Skills")
+            for skill in invalid_skills:
+                console.print(f"### {skill['skill']}")
+                console.print(f"  Score: {skill['score']:.1f}%")
+                if skill["missing_required"]:
+                    console.print(f"  Missing: {', '.join(skill['missing_required'])}")
+                if skill.get("disallowed_files"):
+                    console.print(f"  Disallowed: {', '.join(skill['disallowed_files'])}")
+            console.print()
+
+        # Valid skills
+        valid_skills = [s for s in report["skills"] if s["valid"]]
+        if valid_skills:
+            console.print("## ✅ Valid Skills")
+            console.print(", ".join(f"`{s['skill']}`" for s in valid_skills))
+            console.print()
+
+
+# =============================================================================
+# Skill Templates Command (Phase 35.2)
+# =============================================================================
+
+
+templates_app = typer.Typer(help="Manage skill templates (cascading pattern)")
+
+
+@templates_app.callback()
+def templates_callback():
+    """Template management for skills with cascading overrides."""
+    pass
+
+
+@templates_app.command("list")
+def templates_list(
+    skill_name: str = typer.Argument(..., help="Skill name (e.g., git)"),
+):
+    """List templates for a skill with their source (user/skill)."""
+    import importlib.util
+    from common.skills_path import SKILLS_DIR
+
+    # Load templates module dynamically
+    skill_scripts_dir = SKILLS_DIR("skill", path="scripts")
+    templates_file = skill_scripts_dir / "templates.py"
+
+    spec = importlib.util.spec_from_file_location("templates_mod", templates_file)
+    templates_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(templates_mod)
+
+    output = templates_mod.format_template_list(skill_name)
+    console.print(output)
+
+
+@templates_app.command("eject")
+def templates_eject(
+    skill_name: str = typer.Argument(..., help="Skill name"),
+    template_name: str = typer.Argument(..., help="Template name (e.g., commit_message.j2)"),
+):
+    """Copy a skill default template to user override directory."""
+    import importlib.util
+    from common.skills_path import SKILLS_DIR
+
+    # Load templates module dynamically
+    skill_scripts_dir = SKILLS_DIR("skill", path="scripts")
+    templates_file = skill_scripts_dir / "templates.py"
+
+    spec = importlib.util.spec_from_file_location("templates_mod", templates_file)
+    templates_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(templates_mod)
+
+    output = templates_mod.format_eject_result(skill_name, template_name)
+    console.print(output)
+
+
+@templates_app.command("info")
+def templates_info(
+    skill_name: str = typer.Argument(..., help="Skill name"),
+    template_name: str = typer.Argument(..., help="Template name"),
+):
+    """Show template content and source location."""
+    import importlib.util
+    from common.skills_path import SKILLS_DIR
+
+    # Load templates module dynamically
+    skill_scripts_dir = SKILLS_DIR("skill", path="scripts")
+    templates_file = skill_scripts_dir / "templates.py"
+
+    spec = importlib.util.spec_from_file_location("templates_mod", templates_file)
+    templates_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(templates_mod)
+
+    output = templates_mod.format_info_result(skill_name, template_name)
+    console.print(output)
+
+
+# Add templates as subcommand of skill
+skill_app.add_typer(templates_app, name="templates")
+
+
 # Add skill_app as a subcommand of main app
 app.add_typer(skill_app, name="skill", invoke_without_command=True)
 

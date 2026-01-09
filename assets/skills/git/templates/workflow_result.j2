@@ -1,0 +1,22 @@
+{#
+# git/workflow_result.j2 - Workflow Result Template
+#
+# Renders workflow execution results with structured output.
+#
+#}
+
+<workflow_result>
+    <intent>{{ intent }}</intent>
+    <success>{{ 'true' if success else 'false' }}</success>
+    <timestamp>{{ timestamp }}</timestamp>
+{%- if message %}
+    <message>{{ message }}</message>
+{%- endif %}
+{%- if details %}
+    <details>
+{% for key, value in details.items() -%}
+        <{{ key }}>{{ value }}</{{ key }}>
+{% endfor -%}
+    </details>
+{%- endif %}
+</workflow_result>

@@ -13,20 +13,70 @@ Usage:
 
 import pytest
 import inspect
+import sys
+import types
 from pathlib import Path
 
 
+def _setup_skill_package_context(skill_name: str, skills_root: Path):
+    """Set up package context for skill module loading."""
+    from importlib import util
+    from common.gitops import get_project_root
+
+    project_root = get_project_root()
+
+    # Ensure 'agent' package exists
+    if "agent" not in sys.modules:
+        agent_src = project_root / "packages/python/agent/src/agent"
+        agent_pkg = types.ModuleType("agent")
+        agent_pkg.__path__ = [str(agent_src)]
+        agent_pkg.__file__ = str(agent_src / "__init__.py")
+        sys.modules["agent"] = agent_pkg
+
+    # Ensure 'agent.skills' package exists
+    if "agent.skills" not in sys.modules:
+        skills_pkg = types.ModuleType("agent.skills")
+        skills_pkg.__path__ = [str(skills_root)]
+        skills_pkg.__file__ = str(skills_root / "__init__.py")
+        sys.modules["agent.skills"] = skills_pkg
+        sys.modules["agent"].skills = skills_pkg
+
+    # Pre-load decorators module (required for @skill_command)
+    if "agent.skills.decorators" not in sys.modules:
+        decorators_path = project_root / "packages/python/agent/src/agent/skills/decorators.py"
+        if decorators_path.exists():
+            spec = util.spec_from_file_location("agent.skills.decorators", decorators_path)
+            if spec and spec.loader:
+                module = util.module_from_spec(spec)
+                sys.modules["agent.skills.decorators"] = module
+                sys.modules["agent.skills"].decorators = module
+                spec.loader.exec_module(module)
+
+    # Ensure 'agent.skills.{skill_name}' package exists
+    skill_pkg_name = f"agent.skills.{skill_name}"
+    if skill_pkg_name not in sys.modules:
+        skill_pkg = types.ModuleType(skill_pkg_name)
+        skill_pkg.__path__ = [str(skills_root / skill_name)]
+        skill_pkg.__file__ = str(skills_root / skill_name / "__init__.py")
+        sys.modules[skill_pkg_name] = skill_pkg
+
+
 def load_skill_module(skill_name: str):
-    """Load a skill module for testing."""
+    """Load a skill module for testing with proper package context."""
     from common.skills_path import SKILLS_DIR
 
     skills_dir = SKILLS_DIR()
     tools_path = skills_dir / skill_name / "tools.py"
 
+    # Set up package context BEFORE loading (enables agent.skills.git.scripts imports)
+    _setup_skill_package_context(skill_name, skills_dir)
+
     import importlib.util
 
     spec = importlib.util.spec_from_file_location(f"{skill_name}_tools", str(tools_path))
     module = importlib.util.module_from_spec(spec)
+    # Set __package__ for proper import resolution
+    module.__package__ = f"agent.skills.{skill_name}"
     spec.loader.exec_module(module)
     return module
 
@@ -53,15 +103,15 @@ class TestGitSkillDecorators:
         return load_skill_module("git")
 
     def test_git_commands_registered(self):
-        """Git commands should be registered without skill prefix."""
+        """Git commands should be registered with skill prefix for clarity."""
         commands = get_command_names("git")
-        # Git uses new naming convention (no prefix)
-        assert "status" in commands, f"status not in {commands}"
-        assert "branch" in commands
-        assert "commit" in commands
-        assert "log" in commands
-        assert "diff" in commands
-        assert "add" in commands
+        # Git uses naming convention with "git." prefix
+        assert "git.status" in commands, f"git.status not in {commands}"
+        assert "git.branch" in commands
+        assert "git.commit" in commands
+        assert "git.log" in commands
+        assert "git.diff" in commands
+        assert "git.add" in commands
 
     def test_git_status_has_marker(self, git_module):
         """status should have _is_skill_command marker."""
@@ -72,41 +122,41 @@ class TestGitSkillDecorators:
         """status should have _skill_config."""
         assert hasattr(git_module.status, "_skill_config")
         config = git_module.status._skill_config
-        assert config["name"] == "status"
+        assert config["name"] == "git.status"
         assert config["category"] == "read"
 
     def test_git_branch_has_config(self, git_module):
         """branch should have _skill_config."""
         assert hasattr(git_module.branch, "_skill_config")
         config = git_module.branch._skill_config
-        assert config["name"] == "branch"
+        assert config["name"] == "git.branch"
 
     def test_git_commit_has_config(self, git_module):
         """commit should have _skill_config."""
         assert hasattr(git_module.commit, "_skill_config")
         config = git_module.commit._skill_config
-        assert config["name"] == "commit"
+        assert config["name"] == "git.commit"
         assert config["category"] == "write"
 
     def test_git_status_report_has_view_category(self, git_module):
         """status_report should have view category."""
         assert hasattr(git_module.status_report, "_skill_config")
         config = git_module.status_report._skill_config
-        assert config["name"] == "status_report"
+        assert config["name"] == "git.status_report"
         assert config["category"] == "view"
 
     def test_git_hotfix_has_workflow_category(self, git_module):
         """hotfix should have workflow category."""
         assert hasattr(git_module.hotfix, "_skill_config")
         config = git_module.hotfix._skill_config
-        assert config["name"] == "hotfix"
+        assert config["name"] == "git.hotfix"
         assert config["category"] == "workflow"
 
     def test_git_read_backlog_has_evolution_category(self, git_module):
         """read_backlog should have evolution category."""
         assert hasattr(git_module.read_backlog, "_skill_config")
         config = git_module.read_backlog._skill_config
-        assert config["name"] == "read_backlog"
+        assert config["name"] == "git.read_backlog"
         assert config["category"] == "evolution"
 
 

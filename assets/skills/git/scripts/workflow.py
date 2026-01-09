@@ -1,32 +1,28 @@
 """
-agent/skills/git/workflow.py
-Git Skill Workflow - Phase 24: Living Skill Architecture
+git/scripts/workflow.py - Git workflow orchestration (LangGraph)
 
-Implements LangGraph-based workflow orchestration for Git operations.
-This is the "Brain" layer of the Omni Skill Standard (OSS).
+This module implements LangGraph-based workflow orchestration for Git operations.
+Uses relative imports to stay isolated within git/scripts namespace.
 
-Usage:
-    from agent.skills.git.workflow import app, GitWorkflowState
-
-    state = GitWorkflowState(intent="hotfix", target_branch="hotfix/v1.2.3")
-    result = app.invoke(state)
+Architecture:
+    scripts/workflow.py -> Node functions and workflow definition
+    scripts/state.py    -> State definitions (GitWorkflowState)
+    scripts/status.py   -> Git status operations
+    scripts/branch.py   -> Git branch operations
+    scripts/rendering.py-> Jinja2 templates for output
 """
 
 from typing import Dict, Any, Optional
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
-from agent.skills.git.state import GitWorkflowState, WorkflowStep
-from agent.skills.git.tools import (
-    git_status,
-    git_branch,
-    git_stash_save,
-    git_stash_pop,
-    git_checkout,
-    git_add,
-    git_commit,
-    GitError,
-)
+from .state import GitWorkflowState, WorkflowStep
+from .status import git_status as _git_status
+from .branch import list_branches as _git_branch, create_branch as _git_checkout
+from . import stash
+from . import add
+from . import commit
+from .rendering import render_workflow_result, render_error
 
 
 # ==============================================================================
@@ -432,33 +428,28 @@ async def run_git_workflow(
 
 def format_workflow_result(state: GitWorkflowState) -> str:
     """
-    Format the workflow result for human-readable output.
+    Format the workflow result using Jinja2 template.
 
     Args:
         state: The final GitWorkflowState
 
     Returns:
-        Formatted result string
+        Formatted result string from template
     """
-    lines = [
-        "=" * 40,
-        "Git Workflow Result",
-        "=" * 40,
-        f"Intent: {state.intent}",
-        f"Target Branch: {state.target_branch or '(not specified)'}",
-        f"Status: {'✓ Success' if state.success else '✗ Failed'}",
-    ]
-
     if state.error_message:
-        lines.append(f"\nError: {state.error_message}")
+        return render_error(
+            error_type="workflow_error",
+            message=state.error_message,
+            suggestion=f"Workflow '{state.intent}' failed at step '{state.current_step}'",
+        )
 
-    if state.result_message:
-        lines.append(f"\nResult:\n{state.result_message}")
-
-    if state.commit_hash:
-        lines.append(f"\nCommit: {state.commit_hash}")
-
-    if state.stashed_hash:
-        lines.append(f"\nStashed: {state.stashed_hash}")
-
-    return "\n".join(lines)
+    return render_workflow_result(
+        intent=state.intent,
+        success=state.success,
+        message=state.result_message or "",
+        details={
+            "target_branch": state.target_branch or "(not specified)",
+            "commit_hash": state.commit_hash or "(none)",
+            "stashed_hash": state.stashed_hash or "(none)",
+        },
+    )

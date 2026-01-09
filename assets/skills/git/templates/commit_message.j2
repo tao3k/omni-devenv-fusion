@@ -1,0 +1,45 @@
+{#
+# git/commit_message.j2 - Commit Message Template
+#
+# Structured output for LLM-friendly parsing.
+# Uses XML-like tags for clear semantic boundaries.
+#
+# Usage:
+#     from .rendering import render_commit_message
+#     result = render_commit_message(subject, body, verified=True)
+#
+#}
+
+{%- if status %}
+<git_commit_context>
+    <status>{{ status }}</status>
+    <timestamp>{{ timestamp }}</timestamp>
+{% endif -%}
+
+{% if subject -%}
+</commit_message>
+# {{ subject }}
+{% else %}
+</commit_message>
+# No subject provided
+{%- endif %}
+
+{%- if body %}
+{{ body }}
+{%- endif %}
+
+---
+{% if verified %}
+<verification_badge>
+    <tool>Omni Git Skill</tool>
+    <status>Verified</status>
+{% if checks %}
+    <checks>
+{% for check in checks -%}
+        - [x] {{ check }}
+{% endfor -%}
+    </checks>
+{% endif %}
+    <signature>✨ Verified by Omni Git Skill (cog) ✨</signature>
+</verification_badge>
+{% endif %}

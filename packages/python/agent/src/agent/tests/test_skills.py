@@ -382,15 +382,15 @@ class TestSkillManagerOmniCLI:
         """Git skill should have status_report command."""
         skill_manager_fixture.load_skills()
 
-        cmd = skill_manager_fixture.get_command("git", "status_report")
+        cmd = skill_manager_fixture.get_command("git", "git.status_report")
         assert cmd is not None
-        assert cmd.name == "status_report"
+        assert cmd.name == "git.status_report"
         assert callable(cmd.func)
 
     @pytest.mark.asyncio
     async def test_skill_manager_fixture_run_command(self, skill_manager_fixture):
         """SkillManager.run() should execute commands."""
-        result = await skill_manager_fixture.run("git", "status_report", {})
+        result = await skill_manager_fixture.run("git", "git.status_report", {})
 
         assert result is not None
         assert isinstance(result, str)
@@ -399,7 +399,7 @@ class TestSkillManagerOmniCLI:
     @pytest.mark.asyncio
     async def test_skill_manager_fixture_run_with_args(self, skill_manager_fixture):
         """SkillManager.run() should pass arguments to commands."""
-        result = await skill_manager_fixture.run("git", "log", {"n": 3})
+        result = await skill_manager_fixture.run("git", "git.log", {"n": 3})
 
         assert result is not None
         assert isinstance(result, str)
@@ -432,8 +432,8 @@ class TestSkillManagerOmniCLI:
 
         commands = skill_manager_fixture.list_commands("git")
         assert isinstance(commands, list)
-        assert "status_report" in commands
-        assert "commit" in commands
+        assert "git.status_report" in commands
+        assert "git.commit" in commands
 
     def test_skill_manager_fixture_get_skill_info(self, skill_manager_fixture):
         """get_skill_info() should return skill metadata."""

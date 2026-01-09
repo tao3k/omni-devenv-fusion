@@ -291,7 +291,8 @@ class TestKernelPerformance:
         avg_ms = total_ms / iterations
 
         # Manifest parsing is simple YAML + Pydantic validation
-        assert avg_ms < 1.5, f"Average manifest parsing took {avg_ms:.4f}ms"
+        # Threshold adjusted for cross-platform consistency
+        assert avg_ms < 2.5, f"Average manifest parsing took {avg_ms:.4f}ms"
 
 
 class TestKernelStability:

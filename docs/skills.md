@@ -1,12 +1,59 @@
 # Skills Documentation
 
-> **Phase 35.1: Simplified Test Framework** | **Phase 34: Cognitive System** | **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
+> **Phase 35.2: Cascading Templates & Router-Controller** | **Phase 35.1: Simplified Test Framework** | **Phase 34: Cognitive System** | **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
 
 ## Overview
 
 Omni-DevEnv Fusion uses a skill-based architecture where each skill is a self-contained module in the `assets/skills/` directory. Skills are accessed via the single `@omni` MCP tool.
 
 All skill metadata is unified in `SKILL.md` using YAML Frontmatter, following the Anthropic Agent Skills standard.
+
+## Phase 35.2: Cascading Templates & Router-Controller
+
+### Template Structure (Cascading Pattern)
+
+Skills support **cascading template loading** with "User Overrides > Skill Defaults" pattern:
+
+```
+assets/skills/git/                    # Skill Directory
+├── templates/                         # [新增] Skill defaults (Fallback)
+│   ├── commit_message.j2
+│   ├── workflow_result.j2
+│   └── error_message.j2
+└── scripts/
+    ├── __init__.py                   # Package marker (required!)
+    └── rendering.py                   # Template rendering layer
+
+assets/templates/                      # User overrides (Priority)
+└── git/
+    ├── commit_message.j2              # Overrides skill default
+    └── workflow_result.j2
+```
+
+**Template Resolution Order:**
+
+1. `assets/templates/{skill}/` - User customizations (highest priority)
+2. `assets/skills/{skill}/templates/` - Skill defaults (fallback)
+
+### Router-Controller Pattern (Isolated Sandbox)
+
+Complex skills use **Router-Controller** architecture for namespace isolation:
+
+```
+assets/skills/git/
+├── tools.py           # Router Layer (dispatches only)
+└── scripts/           # Controller Layer (isolated implementations)
+    ├── __init__.py    # Package marker (required!)
+    ├── rendering.py   # Template rendering
+    ├── workflow.py    # Git workflow logic
+    └── status.py      # Git status implementation
+```
+
+**Why Isolated Sandbox?**
+
+- Prevents namespace conflicts when scaling to 100+ skills
+- `agent.skills.git.scripts.status` ≠ `agent.skills.docker.scripts.status`
+- Each `scripts/` is a separate Python package
 
 ## Trinity Architecture (Phase 29)
 
@@ -115,17 +162,54 @@ entry_point: "implementation.py"
 
 ## Skill Structure
 
+### Complete Structure (Phase 35.2)
+
 ```
 assets/skills/<skill_name>/
 ├── SKILL.md           # Unified manifest + documentation (YAML Frontmatter)
-├── tools.py           # @skill_command decorated functions
-├── prompts.md         # Skill rules (LLM context) - deprecated, use SKILL.md
+├── tools.py           # @skill_command decorated functions (Router Layer)
 ├── guide.md           # Developer documentation
+├── templates/         # Skill default templates (Phase 35.2 - Cascading)
+│   ├── commit_message.j2
+│   ├── workflow_result.j2
+│   └── error_message.j2
+├── scripts/           # Atomic implementations (Phase 35.2 - Isolated Sandbox)
+│   ├── __init__.py    # Package marker (required!)
+│   ├── rendering.py   # Template rendering layer
+│   └── <command>.py   # Command implementations
+├── references/        # Markdown documentation for RAG
+├── assets/            # Static resources
+├── data/              # Data files (JSON, CSV)
+├── tests/             # Skill tests (Phase 35.1 - zero config!)
+│   └── test_*.py      # Pure pytest, fixtures auto-injected
 ├── pyproject.toml     # Dependencies (subprocess mode only)
-├── uv.lock            # Locked dependencies
-├── implementation.py  # Heavy imports (subprocess mode only)
-└── tests/             # Skill tests (Phase 35.1 - zero configuration!)
-    └── test_*.py      # Pure pytest, fixtures auto-injected
+└── uv.lock            # Locked dependencies
+```
+
+### Directory Specifications
+
+| Path          | Required | Description                                 |
+| ------------- | -------- | ------------------------------------------- |
+| `SKILL.md`    | ✅ Yes   | Skill metadata and LLM context              |
+| `tools.py`    | ✅ Yes   | @skill_command decorated functions          |
+| `templates/`  | ❌ No    | Jinja2 templates (enables cascading)        |
+| `scripts/`    | ❌ No    | Atomic implementations (isolated namespace) |
+| `references/` | ❌ No    | RAG documentation                           |
+| `tests/`      | ❌ No    | Pytest tests (zero-config)                  |
+
+### Cascading Template Structure
+
+```
+# Skill Defaults (Fallback)
+assets/skills/git/templates/
+├── commit_message.j2
+├── workflow_result.j2
+└── error_message.j2
+
+# User Overrides (Priority - if exists, takes precedence)
+assets/templates/git/
+├── commit_message.j2    # Overrides skill default
+└── workflow_result.j2
 ```
 
 ## Available Skills
@@ -401,6 +485,57 @@ omni skill run <command>
 # Run skill tests (Phase 35.1)
 omni skill test <skill_name>     # Test specific skill
 omni skill test --all            # Test all skills with tests/
+
+# Validate skill structure (Phase 35.2)
+omni skill check                 # Check all skills
+omni skill check git             # Check specific skill
+omni skill check git --examples  # Check with structure examples
+
+# Manage skill templates (Phase 35.2)
+omni skill templates git --list          # List templates
+omni skill templates git --eject commit_message.j2  # Copy default to user dir
+omni skill templates git --info commit_message.j2   # Show template content
+
+# Create a new skill from template (Phase 35.2)
+omni skill create my-skill --description "My new skill"
+```
+
+### Skill Check Command (Phase 35.2)
+
+Validate skill structure against `settings.yaml` configuration:
+
+```python
+@omni("skill.check")                       # Check all skills
+@omni("skill.check", {"skill_name": "git"})  # Check specific skill
+@omni("skill.check", {"skill_name": "git", "show_examples": true})  # With examples
+```
+
+**Output includes:**
+
+- Valid/Invalid status
+- Score (0-100%)
+- Current directory structure
+- Missing required files
+- Disallowed files
+- Ghost files (non-standard)
+- Optional structure examples (with `--examples`)
+
+### Template Management Commands (Phase 35.2)
+
+Manage cascading templates with "User Overrides > Skill Defaults" pattern:
+
+```python
+@omni("skill.templates", {"skill_name": "git", "action": "list"})
+# Output:
+# # 📄 Skill Templates: git
+# 🟢 `commit_message.j2` (User Override)
+# ⚪ `workflow_result.j2` (Skill Default)
+
+@omni("skill.templates", {"skill_name": "git", "action": "eject", "template_name": "commit_message.j2"})
+# Copies skill default to user override directory
+
+@omni("skill.templates", {"skill_name": "git", "action": "info", "template_name": "commit_message.j2"})
+# Shows template content and source location
 ```
 
 ## Phase 34: Cognitive System Enhancements

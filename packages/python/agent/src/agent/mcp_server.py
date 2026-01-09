@@ -95,30 +95,30 @@ async def omni(
         return _render_skill_help(manager, skill_name)
 
     # Parse skill.command
-    # Format: "skill.command" -> skill_name="git", cmd_name="git_status"
+    # Format: "skill.command" -> skill_name="git", cmd_name="git.status"
     if "." not in input:
         return f"Invalid format: '{input}'. Use '@omni(\"skill.command\")'"
 
     parts = input.split(".")
     skill_name = parts[0]
-    # Command name: skill.command -> command (without skill prefix)
-    # e.g., "git.status" -> "status", "file.read" -> "read"
-    raw_cmd = "_".join(parts[1:])
+    # Command name: skill.command -> command (with skill prefix)
+    # e.g., "git.status" -> "git.status", "file.read" -> "file.read"
+    cmd_name = ".".join(parts[1:])
 
-    # Use raw_cmd directly (skill.command format maps to command name directly)
-    # LLM调用 "@omni('git.status')" -> 查找命令 "status"
-    cmd_name = raw_cmd
+    # Use cmd_name directly (skill.command format maps to command name directly)
+    # LLM calls "@omni('git.status')" -> lookup command "git.status"
+    cmd_name = input  # Use full input as command name
     command = manager.get_command(skill_name, cmd_name)
 
     # Handle special "help" macro for individual skills
     # e.g., @omni("git.help") returns Repomix-packed skill context
-    if command is None and raw_cmd == "help":
+    if command is None and cmd_name == "help":
         # This is the skill help macro
         result = await manager.run(skill_name, "help", args)
         return result
 
     if command is None:
-        return f"Error: Command {skill_name}.{raw_cmd} not found"
+        return f"Error: Command {cmd_name} not found"
 
     # Report progress for potentially long operations
     if ctx:

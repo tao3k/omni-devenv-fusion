@@ -369,12 +369,24 @@ class TestGitSkill:
                 has_error_class = True
                 break
 
-        # New Trinity Architecture: error handling may use inline patterns
-        # This test passes if either error class exists OR functions have error handling
-        has_return_error_pattern = "return f" in content and "FAILED" in content
+        # New Trinity Architecture: error handling uses result dict pattern
+        # Check for error handling in scripts/ directory
+        scripts_dir = _SKILLS_ROOT / "git" / "scripts"
+        has_script_error_handling = False
+        if scripts_dir.exists():
+            for script_file in scripts_dir.glob("*.py"):
+                script_content = script_file.read_text()
+                # Check for error handling patterns
+                if '"success": False' in script_content or "'success': False" in script_content:
+                    has_script_error_handling = True
+                    break
+                if "result[" in script_content and "error" in script_content.lower():
+                    has_script_error_handling = True
+                    break
 
-        assert has_error_class or has_return_error_pattern, (
-            "git skill should have error handling (class or inline pattern)"
+        # Test passes if error class exists OR scripts have error handling
+        assert has_error_class or has_script_error_handling, (
+            "git skill should have error handling (class or result dict pattern)"
         )
 
 

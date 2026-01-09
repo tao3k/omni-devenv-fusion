@@ -1,0 +1,24 @@
+{#
+# {{ skill_name }}/result.j2 - Result Template
+#
+# Structured output for LLM-friendly parsing.
+#
+#}
+
+<result>
+{%- if verified %}
+    <verified>true</verified>
+{%- endif %}
+    <timestamp>{{ timestamp }}</timestamp>
+</result>
+
+# {{ subject }}
+
+{% if body -%}
+{{ body }}
+{%- endif %}
+
+{% if verified %}
+---
+<signature>✨ Verified by {{ skill_name | title }} Skill ✨</signature>
+{% endif %}
