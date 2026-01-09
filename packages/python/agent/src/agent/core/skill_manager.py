@@ -493,6 +493,7 @@ class SkillManager:
         - Throttle mtime checks to once per 100ms
         - Only check if skill is actually used
         - Clear command cache on reload
+        - Check both tools.py and scripts/* for modifications
         """
         skill_path = self._discover_single(skill_name)
         if skill_path is None:
@@ -510,11 +511,31 @@ class SkillManager:
 
         skill = self._skills[skill_name]
         tools_path = skill_path / "tools.py"
+        scripts_path = skill_path / "scripts"
 
         try:
+            # Check tools.py mtime
             current_mtime = tools_path.stat().st_mtime
-            if current_mtime > skill.mtime:
-                _get_logger().info("Hot-reloading skill", skill=skill_name)
+
+            # Also check scripts/* directory for modifications
+            scripts_mtime = 0.0
+            if scripts_path.exists() and scripts_path.is_dir():
+                for script_file in scripts_path.glob("*.py"):
+                    if script_file.name.startswith("_"):
+                        continue  # Skip __init__.py and private modules
+                    try:
+                        scripts_mtime = max(scripts_mtime, script_file.stat().st_mtime)
+                    except (FileNotFoundError, OSError):
+                        pass
+
+            # Trigger reload if any file was modified
+            if current_mtime > skill.mtime or scripts_mtime > skill.mtime:
+                modified = []
+                if current_mtime > skill.mtime:
+                    modified.append("tools.py")
+                if scripts_mtime > skill.mtime:
+                    modified.append("scripts/*")
+                _get_logger().info("Hot-reloading skill", skill=skill_name, modified=modified)
 
                 # Clear stale cache entries for this skill
                 keys_to_remove = [k for k in self._command_cache if k.startswith(f"{skill_name}.")]

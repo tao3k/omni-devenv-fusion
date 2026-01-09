@@ -164,6 +164,20 @@ class ModuleLoader:
         if reload and module_name in sys.modules:
             del sys.modules[module_name]
 
+        # Clear scripts/* submodules when reloading skill.tools
+        # This ensures fresh code is loaded for scripts/* changes
+        if reload and skill_name:
+            scripts_prefix = f"agent.skills.{skill_name}.scripts."
+            scripts_modules = [k for k in sys.modules if k.startswith(scripts_prefix)]
+            for mod in scripts_modules:
+                del sys.modules[mod]
+            if scripts_modules:
+                logger.debug(
+                    "Cleared scripts modules for hot-reload",
+                    skill=skill_name,
+                    count=len(scripts_modules),
+                )
+
         # NOTE: Do NOT clear parent package - it's needed for subpackage imports
         # The parent package (e.g., 'agent.skills.git') must exist for
         # imports like 'from agent.skills.git.scripts import xxx' to work

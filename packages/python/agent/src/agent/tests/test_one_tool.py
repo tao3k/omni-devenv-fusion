@@ -729,6 +729,196 @@ class TestGitCommitScopeValidation:
 
 
 # =============================================================================
+# Hot Reload Tests (Phase 35.2)
+# =============================================================================
+
+
+class TestSkillManagerHotReload:
+    """Test SkillManager hot reload functionality for tools.py and scripts/*."""
+
+    @pytest.fixture
+    def fresh_manager(self):
+        """Get a fresh SkillManager for testing."""
+        from agent.core.skill_manager import get_skill_manager
+
+        # Get/create the manager (this initializes _skill_manager)
+        manager = get_skill_manager()
+
+        # Clear the manager state
+        manager._skills.clear()
+        manager._command_cache.clear()
+
+        # Clear sys.modules for clean test
+        import sys
+
+        modules_to_remove = [k for k in sys.modules if k.startswith("agent.skills.")]
+        for mod in modules_to_remove:
+            del sys.modules[mod]
+
+        yield manager
+
+        # Cleanup after test
+        manager._skills.clear()
+        manager._command_cache.clear()
+
+    def test_ensure_fresh_detects_tools_py_changes(self, fresh_manager):
+        """_ensure_fresh should detect when tools.py is modified."""
+        from common.skills_path import SKILLS_DIR
+        import time
+
+        skill_path = SKILLS_DIR(skill="git")
+        tools_path = skill_path / "tools.py"
+
+        # Load git skill first
+        fresh_manager.load_skill(skill_path)
+        original_skill = fresh_manager._skills["git"]
+
+        # Touch tools.py to update mtime
+        time.sleep(0.05)
+        tools_path.touch()
+        time.sleep(0.05)
+
+        # _ensure_fresh should detect the change
+        result = fresh_manager._ensure_fresh("git")
+
+        assert result is True
+        # Skill object should be different (reloaded)
+        reloaded_skill = fresh_manager._skills["git"]
+        assert original_skill is not reloaded_skill, (
+            "Skill should be reloaded when tools.py changes"
+        )
+
+    def test_ensure_fresh_detects_scripts_changes(self, fresh_manager, capsys):
+        """_ensure_fresh should detect when scripts/* files are modified."""
+        from common.skills_path import SKILLS_DIR
+        import time
+
+        skill_path = SKILLS_DIR(skill="git")
+        scripts_path = skill_path / "scripts"
+        status_script = scripts_path / "status.py"
+
+        # Skip if scripts don't exist (not all skills have scripts)
+        if not status_script.exists():
+            pytest.skip("git/scripts/status.py does not exist")
+
+        # Load git skill first
+        fresh_manager.load_skill(skill_path)
+        original_skill = fresh_manager._skills["git"]
+
+        # Wait and touch scripts file
+        time.sleep(0.05)
+        status_script.touch()
+        time.sleep(0.05)
+
+        # _ensure_fresh should detect the scripts change
+        result = fresh_manager._ensure_fresh("git")
+
+        assert result is True
+        reloaded_skill = fresh_manager._skills["git"]
+
+        # Skill object should be different (reloaded)
+        assert original_skill is not reloaded_skill, (
+            "Skill should be reloaded when scripts/* changes"
+        )
+
+    def test_module_loader_clears_scripts_on_reload(self, fresh_manager):
+        """module_loader should clear scripts/* modules when reloading tools."""
+        import sys
+        from agent.core.module_loader import ModuleLoader
+        from common.skills_path import SKILLS_DIR
+
+        skill_path = SKILLS_DIR(skill="git")
+        tools_path = skill_path / "tools.py"
+        scripts_path = skill_path / "scripts"
+        status_script = scripts_path / "status.py"
+
+        # Skip if scripts don't exist
+        if not status_script.exists():
+            pytest.skip("git/scripts/* does not exist")
+
+        # First load
+        loader = ModuleLoader(SKILLS_DIR())
+        loader._ensure_parent_packages()
+        loader._ensure_skill_package("git")
+        loader._preload_decorators()
+
+        module1 = loader.load_module("agent.skills.git.tools", tools_path)
+
+        # Simulate importing a script (this is what happens when a command runs)
+        from agent.skills.git.scripts import status as status_mod1
+
+        # Verify script module was imported
+        scripts_modules = [k for k in sys.modules if k.startswith("agent.skills.git.scripts.")]
+        assert len(scripts_modules) > 0, "scripts modules should be loaded after import"
+
+        # Reload (simulate hot reload)
+        module2 = loader.load_module("agent.skills.git.tools", tools_path, reload=True)
+
+        # Verify scripts modules were cleared
+        scripts_after = [k for k in sys.modules if k.startswith("agent.skills.git.scripts.")]
+        assert len(scripts_after) == 0, "scripts modules should be cleared after reload"
+        assert module1 is not module2, "New module should be returned"
+
+    def test_hot_reload_preserves_skill_commands(self, fresh_manager):
+        """Hot reload should preserve skill commands after reload."""
+        from common.skills_path import SKILLS_DIR
+
+        skill_path = SKILLS_DIR(skill="git")
+
+        # Load skill
+        fresh_manager.load_skill(skill_path)
+        assert "git" in fresh_manager._skills
+
+        # Get original command
+        original_cmd = fresh_manager.get_command("git", "git.status")
+        assert original_cmd is not None
+
+        # Trigger hot reload by touching tools.py
+        tools_path = skill_path / "tools.py"
+        import time
+
+        time.sleep(0.01)
+        tools_path.touch()
+
+        # Force fresh check
+        fresh_manager._ensure_fresh("git")
+
+        # Command should still exist after reload
+        reloaded_cmd = fresh_manager.get_command("git", "git.status")
+        assert reloaded_cmd is not None, "Command should exist after hot reload"
+
+    def test_hot_reload_with_both_tools_and_scripts(self, fresh_manager):
+        """Hot reload should work when both tools.py and scripts/* are modified."""
+        from common.skills_path import SKILLS_DIR
+        import time
+
+        skill_path = SKILLS_DIR(skill="git")
+        tools_path = skill_path / "tools.py"
+        scripts_path = skill_path / "scripts"
+        status_script = scripts_path / "status.py"
+
+        # Skip if scripts don't exist
+        if not status_script.exists():
+            pytest.skip("git/scripts/status.py does not exist")
+
+        # Load skill
+        fresh_manager.load_skill(skill_path)
+
+        # Modify both files
+        time.sleep(0.01)
+        tools_path.touch()
+        status_script.touch()
+
+        # Trigger reload
+        result = fresh_manager._ensure_fresh("git")
+
+        assert result is True
+        # Skill should still be functional
+        cmd = fresh_manager.get_command("git", "git.status")
+        assert cmd is not None
+
+
+# =============================================================================
 # Demo: SKILLS_DIR Attribute Access (for reference)
 # =============================================================================
 
