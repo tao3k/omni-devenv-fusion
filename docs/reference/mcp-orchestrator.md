@@ -536,7 +536,9 @@ The Orchestrator includes **Code Intelligence** capabilities using `ast-grep` fo
 
 ---
 
-## Stress Test Framework
+## Stress Test Framework (Legacy)
+
+> **Note**: This section describes the legacy mcp-server stress test framework (Phase 9). For the new **Phase 35.1 skill test framework**, see [Testing Guide](../developer/testing.md) or [Skills Documentation](../skills.md).
 
 A modular, systematic stress testing framework for Phase 9+.
 

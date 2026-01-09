@@ -11,6 +11,26 @@ from typing import Optional
 
 from agent.skills.decorators import skill_command
 
+# =============================================================================
+# Test Scripts (Phase 35.1)
+# =============================================================================
+# Declared test scripts for this skill. These are automatically discovered
+# by `omni skill test git` and run via pytest.
+#
+# Usage:
+#   omni skill test git          # Run all declared test scripts
+#   python -m pytest assets/skills/git/tests/ -v
+#
+# Each test script has access to:
+#   - git fixture: The skill's tools module
+#   - project_root fixture: Project root path
+#   - skill_structure fixture: ODF-EP v7.0 structure from settings.yaml
+
+test_scripts = [
+    "test_git_commands.py",  # Macro consistency tests
+    "test_git_status.py",  # Sample test script with simplified API
+]
+
 
 # ==============================================================================
 # Helper (private)
@@ -113,7 +133,7 @@ def _check_sensitive_files(staged_files: list[str]) -> list[str]:
 
 
 @skill_command(
-    name="git_status",
+    name="status",
     category="read",
     description="Get git status",
     inject_root=True,
@@ -123,19 +143,19 @@ def status(project_root: Path = None) -> str:
     return _run(["git", "status", "--short"], cwd=project_root) or "✅ Clean"
 
 
-@skill_command(name="git_branch", category="read", description="List git branches.")
+@skill_command(name="branch", category="read", description="List git branches.")
 def branch() -> str:
     """List all branches."""
     return _run(["git", "branch", "-a"])
 
 
-@skill_command(name="git_log", category="read", description="Show recent commits.")
+@skill_command(name="log", category="read", description="Show recent commits.")
 def log(n: int = 5) -> str:
     """Show recent commit history."""
     return _run(["git", "log", f"-n{n}", "--oneline"])
 
 
-@skill_command(name="git_diff", category="read", description="Show changes.")
+@skill_command(name="diff", category="read", description="Show changes.")
 def diff(staged: bool = False, filename: Optional[str] = None) -> str:
     """Show working directory or staged changes."""
     cmd = ["git", "diff"]
@@ -146,13 +166,13 @@ def diff(staged: bool = False, filename: Optional[str] = None) -> str:
     return _run(cmd)
 
 
-@skill_command(name="git_remote", category="read", description="Show remotes.")
+@skill_command(name="remote", category="read", description="Show remotes.")
 def remote() -> str:
     """Show remote repositories."""
     return _run(["git", "remote", "-v"])
 
 
-@skill_command(name="git_tag_list", category="read", description="List tags.")
+@skill_command(name="tag_list", category="read", description="List tags.")
 def tag_list() -> str:
     """List all git tags."""
     return _run(["git", "tag", "-l"])
@@ -163,7 +183,7 @@ def tag_list() -> str:
 # ==============================================================================
 
 
-@skill_command(name="git_status_report", category="view", description="Formatted status report.")
+@skill_command(name="status_report", category="view", description="Formatted status report.")
 def status_report() -> str:
     """Get a nice formatted status report."""
     branch = _run(["git", "branch", "--show-current"]) or "unknown"
@@ -181,7 +201,7 @@ def status_report() -> str:
     return "\n".join(lines)
 
 
-@skill_command(name="git_smart_diff", category="view", description="Instructions for native diff.")
+@skill_command(name="smart_diff", category="view", description="Instructions for native diff.")
 def smart_diff(filename: str, context: int = 3) -> str:
     """Show how to view diff natively."""
     return f"Run: `git diff -U{context} {filename}`"
@@ -192,7 +212,7 @@ def smart_diff(filename: str, context: int = 3) -> str:
 # ==============================================================================
 
 
-@skill_command(name="git_plan_hotfix", category="workflow", description="Generate hotfix plan.")
+@skill_command(name="hotfix", category="workflow", description="Generate hotfix plan.")
 def hotfix(issue_id: str, base: str = "main") -> str:
     """Generate a hotfix execution plan."""
     plan = [
@@ -208,13 +228,13 @@ def hotfix(issue_id: str, base: str = "main") -> str:
 # ==============================================================================
 
 
-@skill_command(name="git_add", category="write", description="Stage files.")
+@skill_command(name="add", category="write", description="Stage files.")
 def add(files: list[str]) -> str:
     """Stage files for commit."""
     return _run(["git", "add"] + files)
 
 
-@skill_command(name="git_stage_all", category="write", description="Stage all changes.")
+@skill_command(name="stage_all", category="write", description="Stage all changes.")
 def stage_all(scan: bool = True) -> str:
     """Stage all changes with optional security scan."""
     if scan:
@@ -230,13 +250,13 @@ def stage_all(scan: bool = True) -> str:
     return _run(["git", "add", "."])
 
 
-@skill_command(name="git_commit", category="write", description="Commit changes.")
+@skill_command(name="commit", category="write", description="Commit changes.")
 def commit(message: str) -> str:
     """Commit staged changes."""
     return _run(["git", "commit", "-m", message])
 
 
-@skill_command(name="git_checkout", category="write", description="Switch branch.")
+@skill_command(name="checkout", category="write", description="Switch branch.")
 def checkout(branch: str, create: bool = False) -> str:
     """Switch to a branch."""
     cmd = ["git", "checkout"]
@@ -246,7 +266,7 @@ def checkout(branch: str, create: bool = False) -> str:
     return _run(cmd)
 
 
-@skill_command(name="git_stash_save", category="write", description="Stash changes.")
+@skill_command(name="stash_save", category="write", description="Stash changes.")
 def stash_save(msg: Optional[str] = None) -> str:
     """Stash working directory changes."""
     cmd = ["git", "stash", "push"]
@@ -255,19 +275,19 @@ def stash_save(msg: Optional[str] = None) -> str:
     return _run(cmd)
 
 
-@skill_command(name="git_stash_pop", category="write", description="Pop stash.")
+@skill_command(name="stash_pop", category="write", description="Pop stash.")
 def stash_pop() -> str:
     """Apply and remove last stash."""
     return _run(["git", "stash", "pop"])
 
 
-@skill_command(name="git_stash_list", category="write", description="List stashes.")
+@skill_command(name="stash_list", category="write", description="List stashes.")
 def stash_list() -> str:
     """List all stashes."""
     return _run(["git", "stash", "list"])
 
 
-@skill_command(name="git_reset", category="write", description="Reset HEAD.")
+@skill_command(name="reset", category="write", description="Reset HEAD.")
 def reset(soft: bool = False, commit: Optional[str] = None) -> str:
     """Reset HEAD to a commit."""
     cmd = ["git", "reset"]
@@ -278,7 +298,7 @@ def reset(soft: bool = False, commit: Optional[str] = None) -> str:
     return _run(cmd)
 
 
-@skill_command(name="git_merge", category="write", description="Merge branch.")
+@skill_command(name="merge", category="write", description="Merge branch.")
 def merge(branch: str, no_ff: bool = True) -> str:
     """Merge a branch."""
     cmd = ["git", "merge"]
@@ -288,7 +308,7 @@ def merge(branch: str, no_ff: bool = True) -> str:
     return _run(cmd)
 
 
-@skill_command(name="git_tag_create", category="write", description="Create tag.")
+@skill_command(name="tag_create", category="write", description="Create tag.")
 def tag_create(name: str, msg: Optional[str] = None) -> str:
     """Create an annotated tag."""
     cmd = ["git", "tag"]
@@ -298,7 +318,7 @@ def tag_create(name: str, msg: Optional[str] = None) -> str:
     return _run(cmd)
 
 
-@skill_command(name="git_revert", category="write", description="Revert commit.")
+@skill_command(name="revert", category="write", description="Revert commit.")
 def revert(commit: str, no_commit: bool = False) -> str:
     """Revert a specific commit."""
     cmd = ["git", "revert"]
@@ -308,7 +328,7 @@ def revert(commit: str, no_commit: bool = False) -> str:
     return _run(cmd)
 
 
-@skill_command(name="git_submodule_update", category="write", description="Update submodules.")
+@skill_command(name="submodule_update", category="write", description="Update submodules.")
 def submodule_update(init: bool = False) -> str:
     """Update git submodules."""
     cmd = ["git", "submodule", "update", "--recursive"]
@@ -329,7 +349,7 @@ def _run_with_rc(cmd: list[str], cwd: Optional[Path] = None) -> tuple[str, int]:
 
 
 @skill_command(
-    name="git_prepare_commit",
+    name="prepare_commit",
     category="workflow",
     description="Stage files, run lefthook, return diff for analysis",
     inject_root=True,
@@ -339,13 +359,26 @@ def prepare_commit(project_root: Path = None, message: str = None) -> str:
 
     Args:
         project_root: Project root path (auto-injected via inject_root)
-        message: Optional commit message prefix for display purposes
+        message: Optional commit message for scope validation
     """
     import shutil
+    import re
 
     results = ["🔍 **Git Commit Preparation**"]
 
+    # Validate scope if message is provided
+    scope_warning = ""
     if message:
+        # Parse "type(scope): description" from message
+        match = re.match(r"^(\w+)(?:\(([^)]+)\))?:", message.strip())
+        if match:
+            commit_type = match.group(1)
+            scope = match.group(2) or ""
+            if scope:
+                _, fixed_scope, warnings = _validate_and_fix_scope(commit_type, scope, project_root)
+                if warnings:
+                    scope_warning = "\n" + "\n".join(warnings) + "\n"
+
         results.append(f"_Message: {message}_")
 
     lefthook_report = ""
@@ -441,6 +474,7 @@ If unsure, press `No` and run `git reset <file>` to unstage.
 {staged_list}
 
 {lefthook_report}
+{scope_warning}
 {security_warning}
 **Please confirm:** Press `Yes` to submit commit, or `No` to cancel.
 """
@@ -457,6 +491,7 @@ If unsure, press `No` and run `git reset <file>` to unstage.
 ✅ **Ready for Analysis**
 
 {lefthook_report}
+{scope_warning}
 {security_warning}
 **Staged Changes:**
 
@@ -476,7 +511,7 @@ If unsure, press `No` and run `git reset <file>` to unstage.
 
 
 @skill_command(
-    name="git_execute_commit",
+    name="execute_commit",
     category="workflow",
     description="Execute the commit using cog (validates scope automatically)",
     inject_root=True,
@@ -666,8 +701,10 @@ Got: `{first_line}`
 # ==============================================================================
 
 
-@skill_command(name="git_read_backlog", category="evolution", description="Read skill backlog.")
+@skill_command(name="read_backlog", category="evolution", description="Read skill backlog.")
 def read_backlog() -> str:
     """Read the Git Skill's own backlog."""
-    backlog = Path(__file__).parent / "Backlog.md"
+    from common.skill_utils import skill_path
+
+    backlog = skill_path("assets/Backlog.md")
     return backlog.read_text() if backlog.exists() else "No backlog found"

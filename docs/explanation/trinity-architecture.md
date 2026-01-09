@@ -1,6 +1,17 @@
 # Trinity Architecture (Phase 29)
 
 > Unified skill management: Code (Hot-Reloading), Context (Repomix), and State (Registry).
+> **Phase 35.1**: Zero-configuration test framework with auto-discovered fixtures.
+
+## Quick Reference
+
+| Phase | Key Change                                          |
+| ----- | --------------------------------------------------- |
+| 35.1  | Zero-configuration test framework (pytest plugin)   |
+| 34    | Cognitive system (CommandResult, StateCheckpointer) |
+| 33    | SKILL.md unified format                             |
+| 32    | Import optimization                                 |
+| 29    | Trinity Architecture + Protocols                    |
 
 ## Overview
 

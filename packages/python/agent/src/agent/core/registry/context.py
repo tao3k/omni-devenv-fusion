@@ -40,19 +40,18 @@ class ContextBuilder:
         self.skills_dir = registry.skills_dir
 
     def build(self, use_diff: bool = False) -> str:
-        """Build complete context for a skill."""
+        """
+        Build complete context for a skill.
+
+        Context is read from SKILL.md (the system prompt for LLM).
+        README.md is for developers and NOT included in LLM context.
+        """
         content = ""
 
-        # Get guide content
-        guide_file = self.manifest.get("guide_file", "guide.md")
-        guide_path = self.skills_dir / self.skill_name / guide_file
-        content += self._get_file_content(guide_path, "GUIDE", use_diff)
-
-        # Get prompts content
-        prompts_file = self.manifest.get("prompts_file")
-        if prompts_file:
-            prompts_path = self.skills_dir / self.skill_name / prompts_file
-            content += self._get_file_content(prompts_path, "SYSTEM PROMPTS", use_diff)
+        # Get LLM context from SKILL.md (system prompt)
+        skill_md_path = self.skills_dir / self.skill_name / "SKILL.md"
+        if skill_md_path.exists():
+            content += self._get_file_content(skill_md_path, "SKILL CONTEXT", use_diff)
 
         return content
 

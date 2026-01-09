@@ -101,21 +101,14 @@ async def omni(
 
     parts = input.split(".")
     skill_name = parts[0]
-    # Build command name: skill.command -> skill_command (or just command)
-    # e.g., "git.status" -> "git_status", "file.read" -> "read_file"
+    # Command name: skill.command -> command (without skill prefix)
+    # e.g., "git.status" -> "status", "file.read" -> "read"
     raw_cmd = "_".join(parts[1:])
 
-    # Try both with and without skill prefix
-    cmd_with_prefix = f"{skill_name}_{raw_cmd}" if raw_cmd else raw_cmd
-    cmd_without_prefix = raw_cmd
-
-    # First try with prefix (e.g., git_status), then without (e.g., read_file)
-    command = manager.get_command(skill_name, cmd_with_prefix)
-    if command is None:
-        command = manager.get_command(skill_name, cmd_without_prefix)
-        cmd_name = cmd_without_prefix
-    else:
-        cmd_name = cmd_with_prefix
+    # Use raw_cmd directly (skill.command format maps to command name directly)
+    # LLM调用 "@omni('git.status')" -> 查找命令 "status"
+    cmd_name = raw_cmd
+    command = manager.get_command(skill_name, cmd_name)
 
     # Handle special "help" macro for individual skills
     # e.g., @omni("git.help") returns Repomix-packed skill context

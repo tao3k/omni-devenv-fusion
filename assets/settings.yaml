@@ -175,6 +175,91 @@ skills:
     # Default to false - require explicit confirmation
     auto_confirm: false
 
+  # =============================================================================
+  # Phase 34: Skill Architecture Standards (ODF-EP v7.0)
+  # =============================================================================
+  # Defines the canonical structure for all Omni skills.
+  # Aligned with Anthropic's Skill Standard but extended for Omni's MCP features.
+  # Used by StructureValidator to enforce skill structure integrity.
+
+  architecture:
+    version: "v2.0"
+
+    # Source of truth for skill definition
+    definition_file: "SKILL.md"
+
+    # Directory structure specification
+    structure:
+      # Required files for every skill (ODF-EP v7.0 Core)
+      required:
+        # Core definition (Trinity: State)
+        - path: "SKILL.md"
+          description: "Skill metadata (YAML frontmatter) and system prompts"
+          type: "file"
+
+        # Core implementation (Trinity: Code)
+        - path: "tools.py"
+          description: "Omni-native Python MCP tools (@skill_command decorators)"
+          type: "file"
+
+      # Default files/directories (auto-generated if not exists)
+      # Validation ignores these - they can exist or not
+      default:
+        - path: "scripts/"
+          description: "Standalone executables (Python workflows, state management)"
+          type: "dir"
+
+        - path: "references/"
+          description: "Markdown documentation for RAG ingestion"
+          type: "dir"
+
+        - path: "assets/"
+          description: "Static resources, templates, guides"
+          type: "dir"
+
+        - path: "data/"
+          description: "Data files (JSON, CSV, etc.) for skill operations"
+          type: "dir"
+
+        - path: "tests/"
+          description: "Pytest tests specifically for this skill"
+          type: "dir"
+
+        - path: "repomix.json"
+          description: "Repomix configuration (auto-generated if missing)"
+          type: "file"
+
+        - path: "README.md"
+          description: "Developer documentation (human-readable, not for LLM)"
+          type: "file"
+
+    # Jinja2 template configuration
+    templates:
+      # Centralized templates directory
+      source_dir: "assets/templates/skill"
+
+      # Auto-generate templates
+      auto_generate:
+        - source: "SKILL.md.j2"
+          target: "SKILL.md"
+        - source: "tools.py.j2"
+          target: "tools.py"
+        - source: "guide.md.j2"
+          target: "README.md"
+
+    # Validation rules
+    validation:
+      # Block commit if skill structure is invalid
+      block_on_invalid: true
+
+      # Allow non-standard files (warning only)
+      allow_ghost_files: false
+
+      # Disallowed files (must not exist - causes LLM confusion)
+      disallowed_files:
+        - "manifest.json" # Redundant - metadata in SKILL.md YAML frontmatter
+        - "prompts.md" # Redundant - prompts in SKILL.md body
+
 # =============================================================================
 # Phase 19.7: Claude Code Symbiosis - Context Compression
 # =============================================================================

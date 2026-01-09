@@ -1,6 +1,6 @@
 # Skills Documentation
 
-> **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
+> **Phase 35.1: Simplified Test Framework** | **Phase 34: Cognitive System** | **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
 
 ## Overview
 
@@ -123,7 +123,9 @@ assets/skills/<skill_name>/
 ├── guide.md           # Developer documentation
 ├── pyproject.toml     # Dependencies (subprocess mode only)
 ├── uv.lock            # Locked dependencies
-└── implementation.py  # Heavy imports (subprocess mode only)
+├── implementation.py  # Heavy imports (subprocess mode only)
+└── tests/             # Skill tests (Phase 35.1 - zero configuration!)
+    └── test_*.py      # Pure pytest, fixtures auto-injected
 ```
 
 ## Available Skills
@@ -218,7 +220,44 @@ When to use this command:
 
 ````
 
-### 5. (Optional) Subprocess Mode
+### 5. Add Tests (Phase 35.1)
+
+Create a `tests/` directory with pure pytest test files - **no imports, no decorators needed**:
+
+```bash
+mkdir -p assets/skills/my_skill/tests
+```
+
+```python
+# assets/skills/my_skill/tests/test_my_skill_commands.py
+
+# No imports needed! Fixtures are auto-injected.
+def test_my_command_exists(my_skill):
+    """Verify my_command is available."""
+    assert hasattr(my_skill, "my_command")
+    assert callable(my_skill.my_command)
+
+
+def test_my_command_executes(my_skill):
+    """Verify my_command executes successfully."""
+    result = my_skill.my_command("test_value")
+    assert result.success
+
+
+# Cross-skill tests work too!
+def test_integration(my_skill, git):
+    """Test interaction between skills."""
+    my_skill.prepare()
+    assert git.status().success
+```
+
+**How it works:**
+- Pytest plugin (`agent.testing.plugin`) auto-loads via `pyproject.toml`
+- All skills in `assets/skills/` are automatically discovered
+- Fixtures like `git`, `my_skill`, `knowledge` are auto-injected
+- No `conftest.py` needed in skill directories
+
+### 6. (Optional) Subprocess Mode
 
 If the skill needs isolated dependencies:
 
@@ -358,6 +397,10 @@ omni skill update <name>
 
 # Run a skill command
 omni skill run <command>
+
+# Run skill tests (Phase 35.1)
+omni skill test <skill_name>     # Test specific skill
+omni skill test --all            # Test all skills with tests/
 ```
 
 ## Phase 34: Cognitive System Enhancements
@@ -420,6 +463,113 @@ checkpointer.put("session_123", state)
 saved = checkpointer.get("session_123")
 if saved:
     state = saved  # Resume conversation
+```
+
+## Phase 35.1: Zero-Configuration Test Framework
+
+Zero-configuration testing for skill commands with auto-discovered fixtures.
+
+### How It Works
+
+The test framework is implemented as a **first-class Pytest plugin** that:
+
+1. Auto-discovers all skills in `assets/skills/`
+2. Registers each skill as a pytest fixture
+3. Loads via `pyproject.toml` - no per-file configuration needed
+
+```toml
+# pyproject.toml
+[tool.pytest.ini_options]
+addopts = "-p agent.testing.plugin --tb=short"
+```
+
+### Directory Structure
+
+```
+assets/skills/
+├── git/
+│   ├── tools.py             # @skill_command decorated functions
+│   └── tests/
+│       ├── test_git_commands.py   # Pure pytest - no imports!
+│       └── test_git_status.py     # Pure pytest - no imports!
+└── knowledge/
+    ├── tools.py
+    └── tests/
+        └── test_knowledge_commands.py  # Pure pytest - no imports!
+
+packages/python/agent/src/agent/testing/
+└── plugin.py                # Pytest plugin (auto-fixture registration)
+```
+
+### Writing Tests
+
+```python
+# assets/skills/git/tests/test_git_commands.py
+
+# No imports needed! 'git' fixture is auto-injected.
+def test_status_exists(git):
+    """Git status command should exist."""
+    assert hasattr(git, "status")
+    assert callable(git.status)
+
+
+# Cross-skill tests work too!
+def test_integration(git, knowledge):
+    """Test interaction between skills."""
+    assert git.status().success
+    assert knowledge.get_development_context().success
+```
+
+### Available Fixtures
+
+All skill fixtures are auto-registered:
+
+| Fixture        | Description                      |
+| -------------- | -------------------------------- |
+| `git`          | Git skill module                 |
+| `knowledge`    | Knowledge skill module           |
+| `filesystem`   | Filesystem skill module          |
+| `<skill_name>` | Any skill in assets/skills/      |
+| `skills_root`  | Skills directory (assets/skills) |
+| `project_root` | Project root directory           |
+
+### Running Skill Tests
+
+```bash
+# Test all skills
+uv run omni skill test --all
+
+# Test specific skill
+uv run omni skill test git
+
+# Run directly with pytest
+uv run pytest assets/skills/ -v
+```
+
+### Non-Intrusive Design
+
+The plugin is **opt-in** - fixtures are only injected when explicitly requested:
+
+```python
+# This uses skill fixture - plugin provides 'git'
+def test_git_status(git):
+    assert git.status().success
+
+# This is completely independent - plugin is transparent!
+def test_math_logic():
+    assert 1 + 1 == 2
+```
+
+### Legacy Support
+
+The `@test` decorator from `agent.skills.core.test_framework` is still available for backward compatibility:
+
+```python
+from agent.skills.core.test_framework import test
+
+@test
+def test_with_decorator(git):
+    assert git.status().success
 ```
 
 ## Related Documentation

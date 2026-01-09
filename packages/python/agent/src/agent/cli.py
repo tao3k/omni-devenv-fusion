@@ -389,15 +389,168 @@ def skill_create(
             f"Files:\n"
             f"  - {skill_dir / 'SKILL.md'}\n"
             f"  - {skill_dir / 'tools.py'}\n"
-            f"  - {skill_dir / 'guide.md'}\n\n"
+            f"  - {skill_dir / 'README.md'}\n\n"
             f"Next steps:\n"
             f"  1. Add your commands to tools.py\n"
-            f"  2. Update guide.md with usage examples\n"
+            f"  2. Update README.md with usage examples\n"
             f"  3. Restart MCP server to load the new skill",
             title="✨ Skill Created",
             style="green",
         )
     )
+
+
+@skill_app.command("test")
+def skill_test(
+    skill_name: str = typer.Argument(
+        None, help="Skill name to test (default: all skills with tests)"
+    ),
+    all_skills: bool = typer.Option(
+        False, "--all", "-a", help="Test all skills with tests directory"
+    ),
+    skills_dir: str = typer.Option(
+        None, "--skills-dir", "-s", help="Skills directory path (default: from settings.yaml)"
+    ),
+):
+    """
+    Run tests for a skill.
+
+    Each skill can have its own tests in skills/<name>/tests/ directory.
+
+    Examples:
+        omni skill test                   # Test all skills with tests/
+        omni skill test git               # Test specific skill
+        omni skill test --all             # Same as above
+        omni skill test --skills-dir ./   # Use custom skills directory
+    """
+    import subprocess
+    import os
+    from pathlib import Path
+
+    # Use provided skills_dir or get from settings
+    if skills_dir:
+        skills_path = Path(skills_dir)
+    else:
+        skills_path = Path(SKILLS_DIR())
+
+    if not skills_path.exists():
+        console.print(
+            Panel(
+                f"Skills directory not found: {skills_path}",
+                title="❌ Invalid Path",
+                style="red",
+            )
+        )
+        raise typer.Exit(1)
+
+    if skill_name:
+        # Test specific skill
+        skill_path = skills_path / skill_name
+        test_path = skill_path / "tests"
+
+        if not test_path.exists():
+            console.print(
+                Panel(
+                    f"No tests directory found at `{test_path}`\n\n"
+                    f"To add tests, create:\n"
+                    f"  - {skill_path}/tests/\n"
+                    f"  - {skill_path}/tests/test_*.py",
+                    title="❌ No Tests",
+                    style="red",
+                )
+            )
+            raise typer.Exit(1)
+
+        console.print(f"## Testing: {skill_name}")
+        console.print(f"Path: {test_path}")
+        console.print()
+
+        # Run pytest with testing plugin (auto-discovers skill fixtures)
+        result = subprocess.run(
+            [
+                "python",
+                "-m",
+                "pytest",
+                str(test_path),
+                "-v",
+                "--tb=short",
+                "-p",
+                "agent.testing.plugin",
+            ],
+            cwd=str(skills_path.parent),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+        console.print(result.stdout)
+        if result.stderr:
+            console.print(result.stderr, style="dim")
+
+        if result.returncode == 0:
+            console.print(Panel("✅ All tests passed!", title="Success", style="green"))
+        else:
+            console.print(Panel("❌ Some tests failed", title="Failed", style="red"))
+            raise typer.Exit(1)
+
+    else:
+        # Test all skills with tests
+        results = []
+        for sdir in sorted(skills_path.iterdir()):
+            if not sdir.is_dir():
+                continue
+            test_path = sdir / "tests"
+            if test_path.exists():
+                results.append(sdir.name)
+
+        if not results:
+            console.print(
+                Panel(
+                    "No skills with tests found.\n\nSkills with tests/ directory will appear here.",
+                    title="🧪 Skill Tests",
+                    style="yellow",
+                )
+            )
+            return
+
+        console.print("## Testing All Skills")
+        console.print(f"Skills with tests: {len(results)}")
+        console.print(", ".join(f"`{r}`" for r in results))
+        console.print()
+
+        # Run all skill tests with testing plugin
+        skill_tests = [str(skills_path / r / "tests") for r in results]
+        result = subprocess.run(
+            [
+                "python",
+                "-m",
+                "pytest",
+                "-v",
+                "--tb=short",
+                "-q",
+                "-p",
+                "agent.testing.plugin",
+            ]
+            + skill_tests,
+            cwd=str(skills_path.parent),
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+
+        console.print(result.stdout)
+        if result.stderr:
+            console.print(result.stderr, style="dim")
+
+        # Count results
+        passed = result.stdout.count(" passed")
+        failed = result.stdout.count(" failed")
+
+        if result.returncode == 0:
+            console.print(Panel(f"✅ All tests passed! ({passed})", title="Success", style="green"))
+        else:
+            console.print(Panel(f"❌ {failed} tests failed", title="Failed", style="red"))
+            raise typer.Exit(1)
 
 
 # Add skill_app as a subcommand of main app

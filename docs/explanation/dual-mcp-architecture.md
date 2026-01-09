@@ -78,20 +78,20 @@ main.py (87 lines)
 - **Extensibility**: Add new capabilities without modifying main.py
 - **Hot Reload**: Skills load dynamically via `skill()` tool
 
-### Skill System (Phase 13 → Phase 33)
+### Skill System (Phase 13 → Phase 33 → Phase 35)
 
-Skills are dynamically-loaded modules in `agent/skills/`:
+Skills are dynamically-loaded modules in `assets/skills/`:
 
 ```
-agent/skills/
+assets/skills/
 ├── git/
-│   ├── SKILL.yaml         # Skill metadata (YAML Frontmatter)
+│   ├── SKILL.md           # Skill metadata (YAML Frontmatter)
 │   ├── tools.py           # Tool implementations with @skill_command
 │   ├── guide.md           # Procedural knowledge
-│   └── prompts.md         # System prompts
+│   └── tests/             # Zero-configuration tests
 ├── filesystem/
 ├── terminal/
-├── testing_protocol/
+├── knowledge/
 └── writer/
 ```
 
@@ -100,9 +100,10 @@ agent/skills/
 - `filesystem` - File operations
 - `git` - Version control
 - `terminal` - Command execution
-- `testing_protocol` - Test runner
+- `knowledge` - Project context & RAG
 
-> **Note**: Phase 33 migrated from `manifest.json` to `SKILL.yaml` with YAML Frontmatter format.
+> **Note**: Phase 33 migrated from `manifest.json` to `SKILL.md` with YAML Frontmatter format.
+> **Phase 35.1**: Tests are now zero-configuration via pytest plugin.
 
 ## The Cortex (Phase 6: Tool Router)
 

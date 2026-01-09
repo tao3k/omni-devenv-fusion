@@ -314,38 +314,6 @@ class TestCrawl4aiSkillStructure(unittest.TestCase):
         # Verify _run_isolated function exists
         self.assertIn("_run_isolated", content)
 
-    def test_crawl4ai_implementation_py_exists(self):
-        """Test that crawl4ai skill has implementation.py."""
-        skills_dir = PROJECT_ROOT / "assets/skills"
-        crawl4ai_dir = skills_dir / "crawl4ai"
-
-        if not crawl4ai_dir.exists():
-            self.skipTest("crawl4ai skill not found")
-
-        impl_path = crawl4ai_dir / "implementation.py"
-        self.assertTrue(impl_path.exists(), "implementation.py should exist")
-
-        content = impl_path.read_text()
-        # Verify heavy imports are in implementation.py
-        self.assertIn("from crawl4ai", content)
-
-    def test_crawl4ai_pyproject_toml_exists(self):
-        """Test that crawl4ai skill has pyproject.toml for uv."""
-        skills_dir = PROJECT_ROOT / "assets/skills"
-        crawl4ai_dir = skills_dir / "crawl4ai"
-
-        if not crawl4ai_dir.exists():
-            self.skipTest("crawl4ai skill not found")
-
-        pyproject_path = crawl4ai_dir / "pyproject.toml"
-        self.assertTrue(pyproject_path.exists(), "pyproject.toml should exist for uv")
-
-        content = pyproject_path.read_text()
-        # pyproject.toml is TOML, check it has project.dependencies
-        self.assertIn("[project]", content)
-        self.assertIn("dependencies", content)
-        self.assertTrue(content.count("dependencies") > 0)
-
 
 class TestSkillManagerExecutionMode(unittest.TestCase):
     """Test SkillManager execution mode handling."""

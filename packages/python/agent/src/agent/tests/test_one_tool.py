@@ -330,10 +330,10 @@ class TestSkillManagerLoading:
         commands = manager.list_commands("git")
         print(f"\n📦 Git commands: {len(commands)}")
 
-        # Must have prepare_commit
-        assert "git_prepare_commit" in commands, "git_prepare_commit must exist"
-        assert "git_execute_commit" in commands, "git_execute_commit must exist"
-        assert "git_status" in commands, "git_status must exist"
+        # Must have prepare_commit (name from decorator, not prefixed)
+        assert "prepare_commit" in commands, "prepare_commit must exist"
+        assert "execute_commit" in commands, "execute_commit must exist"
+        assert "status" in commands, "status must exist"
 
     def test_decorators_module_loaded(self):
         """Verify decorators.py was loaded from correct location."""
@@ -358,16 +358,14 @@ class TestSkillManagerLoading:
         assert git_skill is not None, "git skill must exist"
 
         # Check some commands exist and have proper attributes
-        prepare_commit = git_skill.commands.get("git_prepare_commit")
-        assert prepare_commit is not None, "git_prepare_commit command must exist"
-        assert prepare_commit.category == "workflow", (
-            "git_prepare_commit should be workflow category"
-        )
+        prepare_commit = git_skill.commands.get("prepare_commit")
+        assert prepare_commit is not None, "prepare_commit command must exist"
+        assert prepare_commit.category == "workflow", "prepare_commit should be workflow category"
         assert (
             "lefthook" in prepare_commit.description.lower()
             or "lefthook" in prepare_commit.description
             or "pre-commit" in prepare_commit.description
-        ), "git_prepare_commit should mention lefthook or pre-commit"
+        ), "prepare_commit should mention lefthook or pre-commit"
 
     def test_skill_command_decorator_works(self):
         """Test that the skill_command decorator properly wraps functions."""

@@ -23,4 +23,18 @@ def __getattr__(name: str):
     """Lazy module attributes - defer expensive lookups."""
     if name == "__version__":
         return _get_version()
+
+    # Lazy load skill_utils to avoid circular imports
+    if name in (
+        "current_skill_dir",
+        "skill_path",
+        "skill_asset",
+        "skill_script",
+        "skill_reference",
+        "skill_data",
+    ):
+        from . import skill_utils
+
+        return getattr(skill_utils, name)
+
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -1,7 +1,7 @@
 # Omni-Dev Fusion Testing System - Developer Guide
 
 > Test system architecture, patterns, and maintenance guidelines.
-> Last Updated: 2026-01-08 (Phase 33)
+> Last Updated: 2026-01-08 (Phase 35.1)
 
 ---
 
@@ -9,6 +9,7 @@
 
 - [Overview](#overview)
 - [Test Structure](#test-structure)
+- [Skill Tests (Phase 35.1)](#skill-tests-phase-351)
 - [Utilities](#utilities)
 - [Fixtures Reference](#fixtures-reference)
 - [Fake Implementations](#fake-implementations)
@@ -75,6 +76,182 @@ packages/python/agent/src/agent/tests/
 | Performance | `Test*Performance`     | Performance benchmarks      |
 | Stress      | `Test*Stress`          | Load and stability tests    |
 | Resilience  | `TestKernelResilience` | Error handling and recovery |
+
+---
+
+## Skill Tests (Phase 35.1)
+
+Zero-configuration testing for skill commands with auto-discovered fixtures.
+
+### Directory Structure
+
+```
+assets/skills/
+├── git/
+│   ├── tools.py             # Skill commands with @skill_command decorator
+│   └── tests/
+│       ├── test_git_commands.py   # Pure pytest, no imports!
+│       └── test_git_status.py     # Pure pytest, no imports!
+└── knowledge/
+    ├── tools.py
+    └── tests/
+        └── test_knowledge_commands.py  # Pure pytest, no imports!
+
+packages/python/agent/src/agent/testing/
+└── plugin.py              # Pytest plugin (auto-loads fixtures)
+```
+
+### How It Works
+
+The plugin auto-discovers skills and registers fixtures in `pyproject.toml`:
+
+```toml
+# pyproject.toml
+[tool.pytest.ini_options]
+addopts = "-p agent.testing.plugin --tb=short"
+```
+
+This means **no conftest.py, no imports, no configuration** in skill test files.
+
+### Writing Tests (Zero Configuration)
+
+```python
+# assets/skills/git/tests/test_git_commands.py
+
+# No imports needed! 'git' fixture is auto-injected.
+def test_status_exists(git):
+    """Git status command should exist."""
+    assert hasattr(git, "status")
+    assert callable(git.status)
+
+# Cross-skill tests work too!
+def test_integration(git, knowledge):
+    assert git.status().success
+    assert knowledge.get_development_context().success
+```
+
+### Available Fixtures
+
+All skill fixtures are auto-registered:
+
+| Fixture        | Description                      |
+| -------------- | -------------------------------- |
+| `git`          | Git skill module                 |
+| `knowledge`    | Knowledge skill module           |
+| `filesystem`   | Filesystem skill module          |
+| `<skill_name>` | Any skill in assets/skills/      |
+| `skills_root`  | Skills directory (assets/skills) |
+| `project_root` | Project root directory           |
+
+### Running Skill Tests
+
+```bash
+# Test all skills
+uv run omni skill test --all
+
+# Test specific skill
+uv run omni skill test git
+
+# Run directly with pytest
+uv run pytest assets/skills/ -v
+```
+
+---
+
+## Non-Intrusive Design (Framework as Fixture)
+
+The plugin follows the **"Framework as Fixture"** philosophy from Prefect/Django - fixtures are **opt-in**, not forced.
+
+### How It Works
+
+The plugin only injects fixtures when a test explicitly requests them:
+
+```python
+# This test uses skill fixtures - plugin provides 'git'
+def test_git_status(git):
+    assert git.status().success
+
+# This test is completely independent - plugin is transparent!
+def test_math_logic():
+    assert 1 + 1 == 2
+```
+
+### Key Principles
+
+1. **No Interference**: Tests that don't request skill fixtures run normally
+2. **Hybrid Support**: Mix skill tests with pure unit tests in the same file
+3. **Local Override**: Users can define local fixtures to override plugin ones
+
+### Scenario 1: Pure Unit Tests
+
+```python
+# assets/skills/my_tool/tests/test_internal_logic.py
+from ..utils import helper_math_function
+
+def test_math_logic():
+    """No skill fixtures requested - runs independently."""
+    assert helper_math_function(1, 1) == 2
+```
+
+**System behavior**: Pytest runs this directly. Our plugin is loaded but doesn't介入.
+
+### Scenario 2: Mixed Tests
+
+```python
+# assets/skills/my_tool/tests/test_mixed.py
+
+def test_pure_logic():
+    """No fixture needed."""
+    assert calculate() == 42
+
+def test_with_skill(my_tool):
+    """Uses skill fixture."""
+    assert my_tool.run().success
+
+def test_cross_skill(my_tool, git):
+    """Multiple skills in one test."""
+    my_tool.sync()
+    assert git.status().success
+```
+
+### Scenario 3: Local Fixture Override
+
+Users can mock skill fixtures locally:
+
+```python
+# assets/skills/git/tests/test_custom.py
+import pytest
+
+@pytest.fixture
+def git():
+    """Local fixture overrides plugin's 'git'."""
+    return MockGit()
+
+def test_with_mock(git):
+    """Uses local mock, not real skill."""
+    assert git.status() == "mocked"
+```
+
+**Pytest scope rule**: Local > Plugin, so mocks take precedence.
+
+---
+
+## Test Structure Best Practices
+
+Recommended (not required) directory structure for skills:
+
+```
+assets/skills/my_skill/
+├── tools.py
+└── tests/
+    ├── unit/              # Pure logic tests (no skill fixtures)
+    │   ├── test_parsers.py
+    │   └── test_utils.py
+    └── integration/       # Integration tests (use skill fixtures)
+        └── test_commands.py
+```
+
+This is just a recommendation - you can organize tests any way you prefer.
 
 ---
 
@@ -647,6 +824,50 @@ result = await module.async_function()
 ---
 
 ## Refactoring History
+
+### 2026-01-08 (Phase 35.1 - Zero-Configuration Test Framework)
+
+| Change         | Description                                                     |
+| -------------- | --------------------------------------------------------------- |
+| Pytest Plugin  | Created `agent/testing/plugin.py` for auto-fixture registration |
+| No conftest.py | Completely eliminated `assets/skills/conftest.py`               |
+| Auto-load      | Plugin auto-loaded via `pyproject.toml` `addopts`               |
+| Non-intrusive  | Fixtures are opt-in, not forced                                 |
+
+**Key Files:**
+
+- `packages/python/agent/src/agent/testing/plugin.py` - Pytest plugin (auto-discovers skills, registers fixtures)
+- `pyproject.toml` - Auto-loads plugin via `addopts = "-p agent.testing.plugin"`
+- `assets/skills/git/tests/test_git_commands.py` - Pure pytest, no imports
+- `assets/skills/knowledge/tests/test_knowledge_commands.py` - Pure pytest, no imports
+
+**Test Results:**
+
+```
+23 tests passed (git: 13, knowledge: 10)
+uv run pytest assets/skills/ -v  ✅
+uv run omni skill test --all    ✅
+```
+
+**Example Test File (Before):**
+
+```python
+# Old approach - required imports and conftest.py
+from agent.skills.core.test_framework import test
+pytest_plugins = ["agent.testing.plugin"]
+
+@test
+def test_status_exists(git):
+    assert git.status().success
+```
+
+**Example Test File (After):**
+
+```python
+# New approach - zero configuration!
+def test_status_exists(git):  # 'git' fixture auto-injected
+    assert git.status().success
+```
 
 ### 2026-01-08 (Phase 33 - SKILL.md Unified Format)
 

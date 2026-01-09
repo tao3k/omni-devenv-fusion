@@ -379,18 +379,18 @@ class TestSkillManagerOmniCLI:
         assert len(git_skill.commands) >= 1
 
     def test_skill_manager_fixture_git_status_report_command(self, skill_manager_fixture):
-        """Git skill should have git_status_report command."""
+        """Git skill should have status_report command."""
         skill_manager_fixture.load_skills()
 
-        cmd = skill_manager_fixture.get_command("git", "git_status_report")
+        cmd = skill_manager_fixture.get_command("git", "status_report")
         assert cmd is not None
-        assert cmd.name == "git_status_report"
+        assert cmd.name == "status_report"
         assert callable(cmd.func)
 
     @pytest.mark.asyncio
     async def test_skill_manager_fixture_run_command(self, skill_manager_fixture):
         """SkillManager.run() should execute commands."""
-        result = await skill_manager_fixture.run("git", "git_status_report", {})
+        result = await skill_manager_fixture.run("git", "status_report", {})
 
         assert result is not None
         assert isinstance(result, str)
@@ -399,7 +399,7 @@ class TestSkillManagerOmniCLI:
     @pytest.mark.asyncio
     async def test_skill_manager_fixture_run_with_args(self, skill_manager_fixture):
         """SkillManager.run() should pass arguments to commands."""
-        result = await skill_manager_fixture.run("git", "git_log", {"n": 3})
+        result = await skill_manager_fixture.run("git", "log", {"n": 3})
 
         assert result is not None
         assert isinstance(result, str)
@@ -432,8 +432,8 @@ class TestSkillManagerOmniCLI:
 
         commands = skill_manager_fixture.list_commands("git")
         assert isinstance(commands, list)
-        assert "git_status_report" in commands
-        assert "git_commit" in commands
+        assert "status_report" in commands
+        assert "commit" in commands
 
     def test_skill_manager_fixture_get_skill_info(self, skill_manager_fixture):
         """get_skill_info() should return skill metadata."""
@@ -453,146 +453,12 @@ class TestSkillManagerOmniCLI:
         assert manager1 is manager2
 
 
-class TestGitSkillDecorators:
-    """Test Phase 25.1: Git skill with @skill_command decorators."""
-
-    def _load_git_module(self):
-        """Load git skill module for testing."""
-        return load_skill_module("git")
-
-    def test_git_functions_have_skill_command_marker(self):
-        """Git functions should have _is_skill_command marker."""
-        module = self._load_git_module()
-
-        assert hasattr(module.status, "_is_skill_command")
-        assert module.status._is_skill_command is True
-
-        assert hasattr(module.branch, "_is_skill_command")
-        assert module.branch._is_skill_command is True
-
-        assert hasattr(module.commit, "_is_skill_command")
-        assert module.commit._is_skill_command is True
-
-    def test_git_functions_have_skill_config(self):
-        """Git functions should have _skill_config with metadata."""
-        module = self._load_git_module()
-
-        # Check status has correct config
-        assert hasattr(module.status, "_skill_config")
-        config = module.status._skill_config
-        assert config["name"] == "git_status"
-        assert config["category"] == "read"
-
-        # Check branch has correct config
-        assert hasattr(module.branch, "_skill_config")
-        config = module.branch._skill_config
-        assert config["name"] == "git_branch"
-
-        # Check commit has correct config
-        assert hasattr(module.commit, "_skill_config")
-        config = module.commit._skill_config
-        assert config["name"] == "git_commit"
-        assert config["category"] == "write"
-
-    def test_git_status_report_has_view_category(self):
-        """git_status_report should have view category."""
-        module = self._load_git_module()
-
-        assert hasattr(module.status_report, "_skill_config")
-        config = module.status_report._skill_config
-        assert config["name"] == "git_status_report"
-        assert config["category"] == "view"
-
-    def test_git_plan_hotfix_has_workflow_category(self):
-        """git_plan_hotfix should have workflow category."""
-        module = self._load_git_module()
-
-        assert hasattr(module.hotfix, "_skill_config")
-        config = module.hotfix._skill_config
-        assert config["name"] == "git_plan_hotfix"
-        assert config["category"] == "workflow"
-
-    def test_git_read_backlog_has_evolution_category(self):
-        """git_read_backlog should have evolution category."""
-        module = self._load_git_module()
-
-        assert hasattr(module.read_backlog, "_skill_config")
-        config = module.read_backlog._skill_config
-        assert config["name"] == "git_read_backlog"
-        assert config["category"] == "evolution"
-
-
-class TestGitSkillDirectCalls:
-    """Test git skill functions directly (without MCP registration)."""
-
-    def _load_git_module(self):
-        """Load git skill module for testing."""
-        return load_skill_module("git")
-
-    def test_git_status_report_returns_markdown(self):
-        """status_report should return formatted markdown."""
-        module = self._load_git_module()
-
-        result = unwrap_command_result(module.status_report())
-
-        assert isinstance(result, str)
-        assert "Branch" in result
-
-    def test_git_status_returns_output(self):
-        """status should return status output."""
-        module = self._load_git_module()
-
-        result = unwrap_command_result(module.status())
-
-        assert isinstance(result, str)
-
-    def test_git_log_returns_output(self):
-        """log should return commit history."""
-        module = self._load_git_module()
-
-        # log() is sync, returns string directly
-        result = unwrap_command_result(module.log(n=3))
-
-        assert isinstance(result, str)
-
-    def test_git_branch_returns_output(self):
-        """branch should return branch list."""
-        module = self._load_git_module()
-
-        result = unwrap_command_result(module.branch())
-
-        assert isinstance(result, str)
-
-    def test_git_plan_hotfix_returns_plan(self):
-        """hotfix should return a plan."""
-        module = self._load_git_module()
-
-        # hotfix() is sync, returns string directly
-        result = unwrap_command_result(module.hotfix(issue_id="TEST-123"))
-
-        assert isinstance(result, str)
-        assert "TEST-123" in result or "Hotfix" in result
-
-    def test_git_read_backlog_returns_content(self):
-        """read_backlog should return backlog content."""
-        module = self._load_git_module()
-
-        result = unwrap_command_result(module.read_backlog())
-
-        assert isinstance(result, str)
-        assert "Git Skill Backlog" in result or "Backlog" in result
-
-    def test_git_add_with_files(self):
-        """add should accept file list."""
-        module = self._load_git_module()
-
-        # This will fail if no files are staged, but should not raise
-        try:
-            result = asyncio.run(module.add(["."]))
-            assert isinstance(result, str)
-        except Exception as e:
-            # GitError is expected if nothing is staged
-            assert "nothing to commit" in str(e).lower() or isinstance(e, Exception)
+# Import decorator tests from common test library (Phase 35.1)
+from agent.tests.test_decorators import (
+    TestGitSkillDecorators,
+    TestSkillDirectCalls,
+    TestFilesystemSkillDecorators,
+)
 
 
 class TestFilesystemSkill:

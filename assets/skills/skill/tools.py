@@ -174,3 +174,96 @@ def list_index() -> str:
     lines.append("```")
 
     return "\n".join(lines)
+
+
+@skill_command(category="workflow")
+def check(skill_name: str | None = None) -> str:
+    """
+    Validate skill structure against ODF-EP v7.0 standards.
+
+    Use this to check if a skill conforms to the canonical structure defined in
+    assets/settings.yaml (skills.architecture).
+
+    Args:
+        skill_name: Optional specific skill to check (default: all skills)
+
+    Returns:
+        Validation report with score, missing files, and recommendations
+    """
+    from agent.core.security.structure_validator import SkillStructureValidator
+
+    validator = SkillStructureValidator()
+
+    if skill_name:
+        result = validator.validate_skill(skill_name)
+        lines = [
+            f"# 🔍 Skill Structure Validation: {skill_name}",
+            "",
+            f"**Valid**: {'✅' if result.valid else '❌'}",
+            f"**Score**: {result.score:.1f}%",
+            "",
+        ]
+
+        if result.missing_required:
+            lines.append("## ❌ Missing Required Files")
+            for f in result.missing_required:
+                lines.append(f"- `{f}`")
+            lines.append("")
+
+        if result.disallowed_files:
+            lines.append("## 🚫 Disallowed Files (MUST DELETE)")
+            for f in result.disallowed_files:
+                lines.append(f"- `{f}`")
+            lines.append("_These files cause LLM context confusion._")
+            lines.append("")
+
+        if result.ghost_files:
+            lines.append("## ⚠️ Ghost Files (Non-standard)")
+            for f in result.ghost_files:
+                lines.append(f"- `{f}`")
+            lines.append("")
+
+        if result.warnings:
+            lines.append("## ⚡ Warnings")
+            for w in result.warnings:
+                lines.append(f"- {w}")
+            lines.append("")
+
+        if result.valid:
+            lines.append("✅ **Skill structure is valid!**")
+    else:
+        report = validator.get_validation_report()
+        summary = report["summary"]
+
+        lines = [
+            "# 🔍 Skill Structure Validation Report",
+            "",
+            f"**Config Version**: {summary['config_version']}",
+            f"**Total Skills**: {summary['total_skills']}",
+            f"**Valid**: {summary['valid_skills']} ✅ | **Invalid**: {summary['invalid_skills']} ❌",
+            f"**Average Score**: {summary['average_score']:.1f}%",
+            "",
+        ]
+
+        # List invalid skills with details
+        invalid_skills = [s for s in report["skills"] if not s["valid"]]
+        if invalid_skills:
+            lines.append("## ❌ Invalid Skills")
+            for skill in invalid_skills:
+                lines.append(f"### {skill['skill']}")
+                lines.append(f"**Score**: {skill['score']:.1f}%")
+                if skill["missing_required"]:
+                    lines.append(f"**Missing**: {', '.join(skill['missing_required'])}")
+                if skill.get("disallowed_files"):
+                    lines.append(f"**🚫 Disallowed**: {', '.join(skill['disallowed_files'])}")
+                if skill["ghost_files"]:
+                    lines.append(f"**Ghost**: {', '.join(skill['ghost_files'])}")
+                lines.append("")
+
+        # List valid skills
+        valid_skills = [s for s in report["skills"] if s["valid"]]
+        if valid_skills:
+            lines.append("## ✅ Valid Skills")
+            lines.append(", ".join(f"`{s['skill']}`" for s in valid_skills))
+
+    return "\n".join(lines)
