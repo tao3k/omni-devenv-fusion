@@ -2,6 +2,32 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.3.0](https://github.com/tao3k/omni-dev-fusion/compare/2156b92cfb35018cf690bf3d40bc1512de70a30a..v0.3.0) - 2026-01-10
+#### Features
+- (**agent**) Implement Phase 28.1 Subprocess/Shim Architecture - ([deb3fa3](https://github.com/tao3k/omni-dev-fusion/commit/deb3fa39835952b00f88faf82b8528cd54dd7b43)) - guangtao
+- (**agent**) Implement Phase 28 Safe Ingestion / Immune System - ([1bbcbd1](https://github.com/tao3k/omni-dev-fusion/commit/1bbcbd17823ddb2f8775abb3bb66249ee64765c5)) - guangtao
+- (**core**) Phase 34 - Cognitive System Enhancements - ([d95de38](https://github.com/tao3k/omni-dev-fusion/commit/d95de388b3a8e558d5ad05489490185c40738a88)) - guangtao
+- (**core**) implement Phase 27 JIT Skill Acquisition and Phase 28 Safe Ingestion - ([29f4308](https://github.com/tao3k/omni-dev-fusion/commit/29f43081eb4605683585fdf9dddeabdd7586be1f)) - guangtao
+- (**core**) implement Phase 26 Skill Network with Git installer - ([1349d88](https://github.com/tao3k/omni-dev-fusion/commit/1349d8897fda20ad272fb45b9a32b22ca9a5ea0e)) - guangtao
+#### Documentation
+- (**agent**) Phase 35.1 skill testing framework updates - ([28d0b00](https://github.com/tao3k/omni-dev-fusion/commit/28d0b001ec22bf860f6a5f1843e4012afea0b729)) - guangtao
+- (**version**) Add monorepo versioning documentation - ([6504513](https://github.com/tao3k/omni-dev-fusion/commit/65045136900500bca96d17c4aa98357c197d8395)) - guangtao
+#### Tests
+- (**agent**) Remove migrated skill tests from old test files - ([c17adcb](https://github.com/tao3k/omni-dev-fusion/commit/c17adcb19546f98552817d935992328919e6c767)) - guangtao
+- (**agent**) Add skill loading regression tests - ([a963802](https://github.com/tao3k/omni-dev-fusion/commit/a963802780b907365237424268a944bdf766dc46)) - guangtao
+#### Refactoring
+- (**agent**) Sidecar Execution Pattern with CLI modularization - ([9fff6fd](https://github.com/tao3k/omni-dev-fusion/commit/9fff6fd4b344dd229a934e99e71868d368628575)) - guangtao
+- (**agent**) Phase 35.2 - Hot reload support for scripts/* - ([de73511](https://github.com/tao3k/omni-dev-fusion/commit/de735117efd8c1fc7d0ad58bec64bc1fce00548f)) - guangtao
+- (**agent**) rename phase-based test files to feature-based naming - ([a2c057f](https://github.com/tao3k/omni-dev-fusion/commit/a2c057fb34aab8ce847be87d92b9be665c769e37)) - guangtao
+- (**git-ops**) Phase 35.2 - Unified skill.command naming convention - ([9649612](https://github.com/tao3k/omni-dev-fusion/commit/96496129f121b465949584930e47173af726cc0f)) - guangtao
+- (**mcp**) Modularize mcp_core with performance optimizations - ([0b221c4](https://github.com/tao3k/omni-dev-fusion/commit/0b221c4e8f983f96df86ca00e06bce2d0fa504bd)) - guangtao
+- (**mcp**) Implement One Tool Architecture - Remove @mcp.tool decorators - ([e3ab459](https://github.com/tao3k/omni-dev-fusion/commit/e3ab4598d05c2bc02e22733c5fcee6791d91b45a)) - guangtao
+- (**orchestrator**) Refactor into atomic module structure - ([ad489e8](https://github.com/tao3k/omni-dev-fusion/commit/ad489e834889717f0985a1e7532d5307319dddb8)) - guangtao
+#### Miscellaneous Chores
+- sync with release - ([2156b92](https://github.com/tao3k/omni-dev-fusion/commit/2156b92cfb35018cf690bf3d40bc1512de70a30a)) - guangtao
+
+- - -
+
 ## [v0.2.0](https://github.com/tao3k/omni-dev-fusion/compare/1c9c93cb0409380bf4e75a8ba32704ebc9b1b267..v0.2.0) - 2026-01-06
 #### Documentation
 - Update Phase 25 documentation - ([1690dae](https://github.com/tao3k/omni-dev-fusion/commit/1690dae41d55b5513896e254b8323d0928315475)) - guangtao
