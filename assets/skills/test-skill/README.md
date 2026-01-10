@@ -2,69 +2,37 @@
 
 ## Overview
 
-Template skill demonstrating **Trinity Architecture** with **Router-Controller** pattern.
+Template skill demonstrating **Trinity Architecture** with **Isolated Sandbox + Explicit Routing** pattern.
 
-## Development Workflow
+## Architecture (Phase 35.2)
 
 ```
-1. _template/                    # Start: Copy this template
-   │
-2. tools.py                     # Step 1: ROUTER (just dispatches)
-   │
-3. scripts/                     # Step 2: CONTROLLER (actual logic)
-   ├── __init__.py
-   ├── command.py               # Command implementations
-   └── rendering.py             # Template rendering (optional)
-   │
-4. tests/                       # Step 3: TESTS (zero-config pytest)
-   └── test_commands.py
-   │
-5. README.md                    # Step 4: User documentation
-   │
-6. SKILL.md                     # Step 5: LLM context & manifest
+_template/
+├── SKILL.md           # Metadata + System Prompts
+├── tools.py           # Router (dispatch only)
+└── scripts/           # Controllers (isolated implementation)
+    ├── __init__.py    # Package marker (required!)
+    └── example.py     # Atomic implementations
 ```
 
-### Step 1: ROUTER (`tools.py`)
+| Component   | File                    | Purpose                       |
+| ----------- | ----------------------- | ----------------------------- |
+| **Code**    | `tools.py` + `scripts/` | Hot-reloaded via ModuleLoader |
+| **Context** | `SKILL.md`              | LLM behavior guidelines       |
+| **State**   | `SKILL.md` Frontmatter  | Metadata and configuration    |
 
-Lightweight dispatcher - only imports from scripts:
+## Why Isolated Sandbox?
 
-```python
-from agent.skills.decorators import skill_command
+For 100+ skills, namespace conflicts are inevitable:
 
-@skill_command(name="example", category="read", description="Brief desc")
-def example(param: str = "default") -> str:
-    """Detailed docstring."""
-    from agent.skills._template.scripts import example as mod
-    return mod.example_command(param)
+```text
+git/scripts/status.py      ← Git's status
+docker/scripts/status.py   ← Docker's status
 ```
 
-### Step 2: CONTROLLER (`scripts/`)
+Each `scripts/` is a **separate Python package**:
 
-Actual implementation - fully isolated namespace:
-
-```python
-# scripts/example.py
-def example_command(param: str = "default") -> str:
-    """Actual implementation."""
-    return f"Result: {param}"
-```
-
-### Step 3: TESTS (`tests/`)
-
-Pure pytest - fixtures auto-injected:
-
-```python
-def test_example_exists(my_skill):
-    assert hasattr(my_skill, "example")
-```
-
-### Step 4: User Docs (`README.md`)
-
-Update with usage examples and command reference.
-
-### Step 5: LLM Context (`SKILL.md`)
-
-Update frontmatter and system prompts for LLM context.
+- `agent.skills.git.scripts.status` ≠ `agent.skills.docker.scripts.status`
 
 ## Usage
 
@@ -275,7 +243,7 @@ omni skill test my_skill
 omni skill test --all
 ```
 
-### Best Practices
+### Bes Practices
 
 1. **Test existence first**: `test_*_exists()` for each command
 2. **Test metadata**: Verify `@skill_command` decorators are present

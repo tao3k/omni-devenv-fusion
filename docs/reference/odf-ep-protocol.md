@@ -314,11 +314,11 @@ assets/skills/{skill_name}/
 ├── templates/            # Optional: Jinja2 templates
 │   └── template.j2
 ├── references/           # Optional: RAG documentation
-│   └── guide.md
+│   └── README.md
 ├── assets/               # Optional: Static resources
 ├── data/                 # Optional: Data files
 ├── tests/                # Optional: Pytest tests
-└── README.md             # Optional: Developer docs
+└── README.md             # Optional: Developer docs (alternative location)
 ```
 
 ### SKILL.md Template

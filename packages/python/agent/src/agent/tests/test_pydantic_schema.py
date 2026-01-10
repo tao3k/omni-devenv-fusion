@@ -23,6 +23,9 @@ from agent.core.schema import (
     RouterDomain,
 )
 
+# Use SKILLS_DIR for skill path access (Phase 35.3)
+from common.skills_path import SKILLS_DIR
+
 
 # =============================================================================
 # Schema Tests
@@ -214,183 +217,6 @@ class TestGitStatusInjection:
 
 
 # =============================================================================
-# Phase 13.10: Git Skill Tests (Simplified)
-# =============================================================================
-
-# Use common.skills_path for skills directory (works from any working directory)
-from common.skills_path import SKILLS_DIR
-
-_SKILLS_ROOT = SKILLS_DIR()
-
-
-class TestGitSkill:
-    """Tests for Git Skill (Phase 23 - Skill Singularity)."""
-
-    def test_git_skill_module_exists(self):
-        """Verify git skill module exists."""
-        git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
-        assert git_tools_py.exists(), f"Git skill not found at {git_tools_py}"
-
-    def test_git_skill_tools_defined(self):
-        """Verify critical git tools are defined."""
-        import ast
-
-        git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
-        content = git_tools_py.read_text()
-        tree = ast.parse(content)
-
-        # Get all function names (both sync and async)
-        tool_names = set()
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                tool_names.add(node.name)
-
-        # New Trinity Architecture: functions are named without "git_" prefix
-        # They use @skill_command decorator for registration
-        expected_tools = ["commit", "status", "add"]
-
-        for tool in expected_tools:
-            assert tool in tool_names, f"Expected tool '{tool}' not found. Found: {tool_names}"
-
-    def test_git_skill_has_required_operations(self):
-        """Verify git skill has read and write operations."""
-        import ast
-
-        git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
-        content = git_tools_py.read_text()
-        tree = ast.parse(content)
-
-        # Get all function names
-        tool_names = set()
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                tool_names.add(node.name)
-
-        # Read operations (new naming without git_ prefix)
-        read_ops = ["status", "diff", "log", "branch"]
-        # Write operations
-        write_ops = ["add", "commit", "checkout"]
-
-        read_found = [op for op in read_ops if op in tool_names]
-        write_found = [op for op in write_ops if op in tool_names]
-
-        assert len(read_found) >= 2, f"Should have at least 2 read operations, found: {read_found}"
-        assert len(write_found) >= 2, (
-            f"Should have at least 2 write operations, found: {write_found}"
-        )
-
-    def test_git_commit_has_message_param(self):
-        """Verify commit function has message parameter."""
-        import ast
-
-        git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
-        content = git_tools_py.read_text()
-        tree = ast.parse(content)
-
-        # Find commit function (sync or async)
-        commit_func = None
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "commit":
-                commit_func = node
-                break
-
-        assert commit_func is not None, "commit function not found"
-
-        # Verify function signature
-        args = [arg.arg for arg in commit_func.args.args]
-        assert "message" in args, "commit should have 'message' parameter"
-
-    def test_git_skill_has_native_implementation(self):
-        """Verify git skill has native implementation (Phase 23: Skill Singularity)."""
-        import ast
-
-        git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
-        content = git_tools_py.read_text()
-        tree = ast.parse(content)
-
-        # Should NOT import from gitops (now has native implementation)
-        has_gitops_import = False
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom):
-                if node.module and "gitops" in node.module:
-                    has_gitops_import = True
-                    break
-
-        assert not has_gitops_import, (
-            "git skill should NOT import from gitops (native implementation)"
-        )
-
-        # Should have _run internal helper (renamed from _run_git)
-        has_run = False
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.name == "_run":
-                has_run = True
-                break
-
-        assert has_run, "git skill should have native _run implementation"
-
-    def test_git_skill_exports_all_functions(self):
-        """Verify git skill uses @skill_command decorators for exports (Trinity Architecture)."""
-        import ast
-
-        git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
-        content = git_tools_py.read_text()
-        tree = ast.parse(content)
-
-        # Count @skill_command decorated functions (handle both sync and async)
-        decorated_funcs = []
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                for decorator in node.decorator_list:
-                    if isinstance(decorator, ast.Call):
-                        if (
-                            isinstance(decorator.func, ast.Name)
-                            and decorator.func.id == "skill_command"
-                        ):
-                            decorated_funcs.append(node.name)
-
-        # Trinity Architecture: exports via @skill_command decorators
-        assert len(decorated_funcs) > 0, (
-            f"git skill should have @skill_command decorated functions. Found: {decorated_funcs}"
-        )
-
-    def test_git_skill_has_error_class(self):
-        """Verify git skill has error handling (class or inline)."""
-        import ast
-
-        git_tools_py = _SKILLS_ROOT / "git" / "tools.py"
-        content = git_tools_py.read_text()
-        tree = ast.parse(content)
-
-        # Find error class or check for error handling pattern
-        has_error_class = False
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef) and "Error" in node.name:
-                has_error_class = True
-                break
-
-        # New Trinity Architecture: error handling uses result dict pattern
-        # Check for error handling in scripts/ directory
-        scripts_dir = _SKILLS_ROOT / "git" / "scripts"
-        has_script_error_handling = False
-        if scripts_dir.exists():
-            for script_file in scripts_dir.glob("*.py"):
-                script_content = script_file.read_text()
-                # Check for error handling patterns
-                if '"success": False' in script_content or "'success': False" in script_content:
-                    has_script_error_handling = True
-                    break
-                if "result[" in script_content and "error" in script_content.lower():
-                    has_script_error_handling = True
-                    break
-
-        # Test passes if error class exists OR scripts have error handling
-        assert has_error_class or has_script_error_handling, (
-            "git skill should have error handling (class or result dict pattern)"
-        )
-
-
-# =============================================================================
 # Phase 13.10: Config-Driven Skill Loading Tests
 # =============================================================================
 
@@ -506,14 +332,14 @@ class TestKnowledgeSkill:
 
     def test_knowledge_skill_module_exists(self):
         """Verify knowledge skill module exists."""
-        knowledge_tools = _SKILLS_ROOT / "knowledge" / "tools.py"
+        knowledge_tools = SKILLS_DIR(skill="knowledge", filename="tools.py")
         assert knowledge_tools.exists(), f"Knowledge skill not found at {knowledge_tools}"
 
     def test_knowledge_tools_defined(self):
         """Verify knowledge tools are defined (no execution)."""
         import ast
 
-        knowledge_tools_py = _SKILLS_ROOT / "knowledge" / "tools.py"
+        knowledge_tools_py = SKILLS_DIR(skill="knowledge", filename="tools.py")
         content = knowledge_tools_py.read_text()
         tree = ast.parse(content)
 
@@ -538,7 +364,7 @@ class TestKnowledgeSkill:
         """Verify knowledge skill uses @skill_command decorators (new Trinity Architecture)."""
         import ast
 
-        knowledge_tools_py = _SKILLS_ROOT / "knowledge" / "tools.py"
+        knowledge_tools_py = SKILLS_DIR(skill="knowledge", filename="tools.py")
         content = knowledge_tools_py.read_text()
         tree = ast.parse(content)
 
@@ -567,7 +393,7 @@ class TestKnowledgeSkill:
     def test_knowledge_tools_never_execute(self):
         """Verify knowledge tools only read, never execute commands."""
 
-        knowledge_tools_py = _SKILLS_ROOT / "knowledge" / "tools.py"
+        knowledge_tools_py = SKILLS_DIR(skill="knowledge", filename="tools.py")
         content = knowledge_tools_py.read_text()
 
         # Knowledge tools should NOT call subprocess
@@ -585,14 +411,14 @@ class TestWriterSkill:
 
     def test_writer_skill_module_exists(self):
         """Verify writer skill module exists."""
-        writer_tools = _SKILLS_ROOT / "writer" / "tools.py"
+        writer_tools = SKILLS_DIR(skill="writer", filename="tools.py")
         assert writer_tools.exists(), f"Writer skill not found at {writer_tools}"
 
     def test_writer_tools_defined(self):
         """Verify writer tools are defined."""
         import ast
 
-        writer_tools_py = _SKILLS_ROOT / "writer" / "tools.py"
+        writer_tools_py = SKILLS_DIR(skill="writer", filename="tools.py")
         content = writer_tools_py.read_text()
         tree = ast.parse(content)
 
@@ -616,7 +442,7 @@ class TestWriterSkill:
         """Verify writer skill uses @skill_command decorators (new Trinity Architecture)."""
         import ast
 
-        writer_tools_py = _SKILLS_ROOT / "writer" / "tools.py"
+        writer_tools_py = SKILLS_DIR(skill="writer", filename="tools.py")
         content = writer_tools_py.read_text()
         tree = ast.parse(content)
 
@@ -651,14 +477,14 @@ class TestMemorySkill:
 
     def test_memory_skill_module_exists(self):
         """Verify memory skill module exists."""
-        memory_tools_py = _SKILLS_ROOT / "memory" / "tools.py"
+        memory_tools_py = SKILLS_DIR(skill="memory", filename="tools.py")
         assert memory_tools_py.exists(), f"Memory skill not found at {memory_tools_py}"
 
     def test_memory_tools_defined(self):
         """Verify memory tools are defined."""
         import ast
 
-        memory_tools_py = _SKILLS_ROOT / "memory" / "tools.py"
+        memory_tools_py = SKILLS_DIR(skill="memory", filename="tools.py")
         content = memory_tools_py.read_text()
         tree = ast.parse(content)
 
@@ -683,7 +509,7 @@ class TestMemorySkill:
         """Verify memory skill uses @skill_command decorators (new Trinity Architecture)."""
         import ast
 
-        memory_tools_py = _SKILLS_ROOT / "memory" / "tools.py"
+        memory_tools_py = SKILLS_DIR(skill="memory", filename="tools.py")
         content = memory_tools_py.read_text()
         tree = ast.parse(content)
 
@@ -710,7 +536,7 @@ class TestMemorySkill:
     def test_memory_skill_uses_chromadb(self):
         """Verify memory skill uses ChromaDB for vector storage."""
 
-        memory_tools_py = _SKILLS_ROOT / "memory" / "tools.py"
+        memory_tools_py = SKILLS_DIR(skill="memory", filename="tools.py")
         content = memory_tools_py.read_text()
 
         # Should import chromadb

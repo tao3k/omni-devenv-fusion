@@ -58,11 +58,11 @@ def test_version() -> str:
 '''
     )
 
-    # Create guide.md
-    (remote_dir / "guide.md").write_text("# Test Skill\n\nA test skill.")
+    # Create README.md
+    (remote_dir / "README.md").write_text("# Test Skill\n\nA test skill.")
 
     # Commit
-    repo.index.add(["SKILL.md", "tools.py", "guide.md"])
+    repo.index.add(["SKILL.md", "tools.py", "README.md"])
     repo.index.commit("Initial commit v1.0.0")
 
     return str(remote_dir)
@@ -95,7 +95,7 @@ class TestSkillInstaller:
         assert result["success"] is True
         assert (install_dir / "SKILL.md").exists()
         assert (install_dir / "tools.py").exists()
-        assert (install_dir / "guide.md").exists()
+        assert (install_dir / "README.md").exists()
         assert result["revision"] is not None
         assert len(result["revision"]) == 40  # Full SHA
 

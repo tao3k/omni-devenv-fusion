@@ -1,8 +1,8 @@
 """
 agent/core/registry/context.py
-Phase 29: Context Builder
+Phase 35.3: Context Builder
 
-Build skill context (guide.md + prompts.md) with diff support.
+Build skill context from SKILL.md (definition file) with diff support.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ logger = structlog.get_logger(__name__)
 
 class ContextBuilder:
     """
-    Build skill context from guide.md and prompts.md.
+    Build skill context from SKILL.md (definition file).
 
     Supports:
     - Full content retrieval
@@ -100,10 +100,10 @@ class ContextBuilder:
 
 def get_combined_context(registry: "SkillRegistry") -> str:
     """
-    Aggregate prompts.md from all loaded skills into a single context.
+    Aggregate SKILL.md (definition file) from all loaded skills into a single context.
     """
     if not registry.loaded_skills:
-        return "# No skills loaded\n\nActive skills will have their prompts.md aggregated here."
+        return "# No skills loaded\n\nActive skills will have their definition aggregated here."
 
     combined = ["# 🧠 Active Skill Policies & Routing Rules"]
     combined.append(
@@ -111,18 +111,14 @@ def get_combined_context(registry: "SkillRegistry") -> str:
     )
 
     for skill_name in sorted(registry.loaded_skills.keys()):
-        manifest = registry.loaded_skills[skill_name]
-        prompts_file = (
-            manifest.get("prompts_file")
-            if isinstance(manifest, dict)
-            else getattr(manifest, "prompts_file", None)
-        )
+        # Get definition file from settings.yaml (default: SKILL.md)
+        from common.skills_path import SKILLS_DIR
 
-        if prompts_file:
-            prompts_path = registry.skills_dir / skill_name / prompts_file
-            if prompts_path.exists():
-                combined.append(f"\n## 📦 Skill: {skill_name.upper()}")
-                combined.append(prompts_path.read_text(encoding="utf-8"))
-                combined.append("\n---\n")
+        definition_path = SKILLS_DIR.definition_file(skill_name)
+
+        if definition_path.exists():
+            combined.append(f"\n## 📦 Skill: {skill_name.upper()}")
+            combined.append(definition_path.read_text(encoding="utf-8"))
+            combined.append("\n---\n")
 
     return "\n".join(combined)

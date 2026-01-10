@@ -290,7 +290,7 @@ skills:
           target: "SKILL.md"
         - source: "tools.py.j2"
           target: "tools.py"
-        - source: "guide.md.j2"
+        - source: "RAEDME.md.j2"
           target: "README.md"
 
     # Validation rules

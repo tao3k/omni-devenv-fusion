@@ -258,23 +258,12 @@ class TestJitInstallSkillFunction:
 class TestSkillCommands:
     """Test that skill commands are properly registered via One Tool."""
 
-    def test_only_one_mcp_tool(self):
-        """MCP server should only have ONE tool registered (omni)."""
-        from agent.mcp_server import mcp
+    def test_omni_function_exists(self):
+        """omni function should be importable from test_skills."""
+        # omni is now imported from test_skills (Phase 35.3)
+        from test_skills import omni
 
-        tools = list(mcp._tool_manager._tools.values())
-        tool_names = [t.name for t in tools]
-
-        # Phase 25: Only 'omni' should be registered as MCP tool
-        assert tool_names == ["omni"], f"Expected only 'omni', got: {tool_names}"
-
-    def test_omni_is_primary(self):
-        """The omni tool should be the only registered tool."""
-        from agent.mcp_server import mcp
-
-        tools = list(mcp._tool_manager._tools.values())
-        assert len(tools) == 1
-        assert tools[0].name == "omni"
+        assert callable(omni), "omni should be callable"
 
     def test_skill_discover_registered(self):
         """Test that skill.discover command function exists and is callable."""
@@ -373,28 +362,37 @@ class TestKnownSkillsIndex:
 class TestCliCommands:
     """Test CLI commands for skill discovery."""
 
-    def test_skill_discover_parser_exists(self):
-        """Test that 'omni skill discover' subcommand exists."""
-        import argparse
-        from agent.cli import main
+    def test_skill_discover_command_exists(self):
+        """Test that 'omni skill discover' command is registered."""
+        from agent.cli.commands.skill import skill_discover
 
-        # This would normally require mocking sys.argv
-        # For now, we just verify the function exists
-        assert callable(run_skill_discover)
+        # Verify the typer command function exists
+        assert callable(skill_discover)
 
     def test_discover_with_query(self):
-        """Test CLI discover with query."""
-        from agent.cli import run_skill_discover
+        """Test CLI discover with query using jit.discover_skills."""
+        from agent.core.registry.jit import discover_skills
 
         # Should not raise exception
-        run_skill_discover("docker", limit=3)
+        result = discover_skills("docker", limit=3)
+
+        # Verify results structure
+        assert "query" in result
+        assert "skills" in result
+        assert "count" in result
+        assert "ready_to_install" in result
 
     def test_discover_without_query(self):
-        """Test CLI discover without query."""
-        from agent.cli import run_skill_discover
+        """Test CLI discover without query using jit.discover_skills."""
+        from agent.core.registry.jit import discover_skills
 
-        # Should return all skills
-        run_skill_discover("", limit=5)
+        # Should return skills
+        result = discover_skills("", limit=5)
+
+        # Verify results structure
+        assert "query" in result
+        assert "skills" in result
+        assert len(result["skills"]) <= 5
 
 
 class TestIntegration:
@@ -436,11 +434,3 @@ class TestIntegration:
             search_ids = [s["id"] for s in search_results]
 
             assert "pandas-expert" in search_ids
-
-
-# Helper function for CLI tests
-def run_skill_discover(query: str = "", limit: int = 5):
-    """Helper to run skill discover (imported from cli.py for testing)."""
-    from agent.cli import run_skill_discover as _run
-
-    _run(query, limit)

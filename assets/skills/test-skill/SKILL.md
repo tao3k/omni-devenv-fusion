@@ -77,67 +77,13 @@ All core skill modules follow the **"Python Zenith" Engineering Protocol**:
 
 Use `_template` as a scaffold for new skills:
 
-### Development Workflow (Phase 35.3)
-
-```
-1. _template/                    # Start: Copy this template
-   │
-2. tools.py                     # Step 1: ROUTER (dispatch only)
-   │
-3. scripts/                     # Step 2: CONTROLLER (actual logic)
-   │
-4. tests/                       # Step 3: TESTS (zero-config)
-   │
-5. README.md                    # Step 4: User documentation
-   │
-6. SKILL.md                     # Step 5: LLM context & manifest
-```
-
-### Step 1: Copy Template
+### 1. Copy Template
 
 ```bash
 cp -r assets/skills/_template assets/skills/my_new_skill
 ```
 
-### Step 2: Add Commands (`tools.py` - Router Layer)
-
-```python
-from agent.skills.decorators import skill_command
-
-@skill_command(
-    name="my_command",
-    category="read",
-    description="Brief description",
-)
-def my_command(param: str) -> str:
-    """Detailed docstring."""
-    from agent.skills.my_new_skill.scripts import example as example_mod
-    return example_mod.my_implementation(param)
-```
-
-**Note:** Command name is just `my_command`, not `my_new_skill.my_command`. MCP Server auto-prefixes.
-
-### Step 3: Add Implementation (`scripts/example.py` - Controller Layer)
-
-```python
-# scripts/example.py
-def my_implementation(param: str) -> str:
-    """Actual implementation."""
-    return f"Result: {param}"
-```
-
-### Step 4: Add Tests (`tests/test_*.py`)
-
-```python
-def test_my_command_exists(my_new_skill):
-    assert hasattr(my_new_skill, "my_command")
-```
-
-### Step 5: Update Documentation (`README.md`)
-
-Add usage examples and command reference.
-
-### Step 6: Update Manifest (`SKILL.md`)
+### 2. Update SKILL.md
 
 Edit the frontmatter:
 
@@ -150,7 +96,34 @@ routing_keywords: ["keyword1", "keyword2"]
 ---
 ```
 
-### Step 7: (Optional) Add Jinja2 Templates
+### 3. Add Commands (`tools.py` - Router Layer)
+
+```python
+from agent.skills.decorators import skill_command
+
+@skill_command(
+    name="my_new_skill.my_command",
+    category="read",
+    description="Brief description",
+)
+def my_command(param: str) -> str:
+    """Detailed docstring."""
+    from agent.skills.my_new_skill.scripts import example as example_mod
+    return example_mod.my_implementation(param)
+```
+
+**Naming Convention**: Use `skill.command` format (e.g., `my_new_skill.my_command`)
+
+### 4. Add Implementation (`scripts/example.py`)
+
+```python
+# scripts/example.py
+def my_implementation(param: str) -> str:
+    """Actual implementation."""
+    return f"Result: {param}"
+```
+
+### 5. (Optional) Add Jinja2 Templates
 
 For structured output:
 

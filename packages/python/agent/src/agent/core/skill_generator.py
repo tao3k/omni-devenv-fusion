@@ -15,9 +15,9 @@ class SkillGenerator:
     Generate new skills from Jinja2 templates.
 
     Templates are located in `assets/skills/_template/`:
-    - SKILL.md.j2 -> SKILL.md
-    - tools.py.j2 -> tools.py
-    - guide.md.j2 -> guide.md
+    - SKILL.md -> SKILL.md (SKILL.md.j2 also supported)
+    - tools.py -> tools.py (tools.py.j2 also supported)
+    - guide.md -> guide.md (guide.md.j2 also supported)
     """
 
     def __init__(self, template_dir: Optional[Path] = None):
@@ -41,6 +41,15 @@ class SkillGenerator:
             trim_blocks=True,
             lstrip_blocks=True,
         )
+
+    def _find_template(self, name: str) -> str:
+        """Find template file, checking both .j2 and plain extensions."""
+        # Try .j2 first, then fall back to plain name
+        if Path(self.template_dir / f"{name}.j2").exists():
+            return f"{name}.j2"
+        if Path(self.template_dir / name).exists():
+            return name
+        raise FileNotFoundError(f"Template '{name}' not found in {self.template_dir}")
 
     def generate(
         self,
@@ -74,10 +83,14 @@ class SkillGenerator:
             "keywords": keywords or [],
         }
 
-        # Render templates
-        self._render_template("SKILL.md.j2", skill_dir / "SKILL.md", vars)
-        self._render_template("tools.py.j2", skill_dir / "tools.py", vars)
-        self._render_template("guide.md.j2", skill_dir / "guide.md", vars)
+        # Render templates (optional ones that may not exist)
+        self._render_template(self._find_template("SKILL.md"), skill_dir / "SKILL.md", vars)
+        self._render_template(self._find_template("tools.py"), skill_dir / "tools.py", vars)
+        # README.md is optional
+        try:
+            self._render_template(self._find_template("README.md"), skill_dir / "README.md", vars)
+        except FileNotFoundError:
+            pass  # README.md is optional
 
         return skill_dir
 

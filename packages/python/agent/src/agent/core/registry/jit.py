@@ -104,11 +104,11 @@ def jit_install_skill(
     load_msg = ""
     if auto_load:
         try:
-            from agent.mcp_server import mcp
             from agent.core.registry.loader import SkillLoader
 
             loader = SkillLoader(registry)
-            success, load_msg = loader.load_skill(skill_name, mcp)
+            # Phase 35.3: No MCP server needed for loading
+            success, load_msg = loader.load_skill(skill_name, mcp=None)
             loaded = success
         except Exception as e:
             load_msg = str(e)

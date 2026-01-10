@@ -747,10 +747,10 @@ The MCP Server exposes Omni's internal capabilities to external clients (Claude 
 
 ### Files Changed
 
-| File                    | Changes                        |
-| ----------------------- | ------------------------------ |
-| `agent/mcp_server.py`   | FastMCP server with Omni tools |
-| `agent/core/session.py` | Session tracking for Black Box |
+| File                    | Changes                                         |
+| ----------------------- | ----------------------------------------------- |
+| `agent/mcp_server.py`   | Pure MCP Server (Phase 35.3: mcp.server.Server) |
+| `agent/core/session.py` | Session tracking for Black Box                  |
 
 ### Usage
 
@@ -827,11 +827,11 @@ await omni_scan_skill_backlogs("git")
 
 ### Files Changed
 
-| File                          | Changes                           |
-| ----------------------------- | --------------------------------- |
-| `agent/skills/git/Backlog.md` | New: Git skill product backlog    |
-| `agent/mcp_server.py`         | Added `omni_scan_skill_backlogs`  |
-| `agent/settings.yaml`         | Added `skills.path` configuration |
+| File                          | Changes                             |
+| ----------------------------- | ----------------------------------- |
+| `agent/skills/git/Backlog.md` | New: Git skill product backlog      |
+| `agent/mcp_server.py`         | Pure MCP Server with skill commands |
+| `agent/settings.yaml`         | Added `skills.path` configuration   |
 
 ### Why This Matters
 

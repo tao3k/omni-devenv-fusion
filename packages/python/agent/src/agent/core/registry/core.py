@@ -1,8 +1,9 @@
 """
 agent/core/registry/core.py
-Phase 29: SkillRegistry Core
+Phase 35.3: SkillRegistry Core
 
 Core registry class - handles initialization, discovery, and state management.
+Pure MCP Server compatible (no FastMCP dependency).
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from common.config.settings import get_setting
 import agent.skills.core  # noqa: F401
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server import Server
 
 # Lazy logger - defer structlog.get_logger() to avoid ~100ms import cost
 _cached_logger: Any = None
@@ -243,7 +244,7 @@ class SkillRegistry:
 
         return len(loaded), loaded
 
-    def load_skill(self, skill_name: str, mcp: "FastMCP") -> tuple[bool, str]:
+    def load_skill(self, skill_name: str, mcp: "FastMCP | None" = None) -> tuple[bool, str]:
         """
         Load a skill (convenience method - delegates to SkillLoader).
 
@@ -260,7 +261,7 @@ class SkillRegistry:
     # =========================================================================
 
     def get_skill_context(self, skill_name: str, use_diff: bool = False) -> str:
-        """Get procedural knowledge (guide.md + prompts.md) for a skill."""
+        """Get skill definition (SKILL.md) for a skill."""
         from agent.core.registry.context import ContextBuilder
 
         manifest = self.loaded_skills.get(skill_name)

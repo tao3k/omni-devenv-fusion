@@ -1,12 +1,25 @@
 {#
 # git/commit_message.j2 - Commit Message Template
 #
-# Structured output for LLM-friendly parsing.
-# Uses XML-like tags for clear semantic boundaries.
+# Renders commit message as Markdown with XML tags for structured parsing.
 #
-# Usage:
-#     from .rendering import render_commit_message
-#     result = render_commit_message(subject, body, verified=True)
+# LLM Instructions:
+# - This output combines Markdown (human-readable) with XML tags (machine-readable)
+# - Parse <status>, <timestamp>, <security_guard> tags for metadata
+# - Display commit message in Markdown format (# subject, body, ---)
+# - Show security guard status and verification badge if present
+#
+# Example display:
+#   🛡️ Security Guard Detection - Passed
+#
+#   # feat(git): add new feature
+#
+#   Description here...
+#
+#   ---
+#   ✅ Verified by Omni Git Skill
+#   - [x] lefthook passed
+#   - [x] scope validated
 #
 #}
 
@@ -15,6 +28,13 @@
     <status>{{ status }}</status>
     <timestamp>{{ timestamp }}</timestamp>
 {% endif -%}
+
+{%- if security_warning %}
+<security_guard>
+    <passed>{{ 'true' if security_passed else 'false' }}</passed>
+    <message>{{ security_warning }}</message>
+</security_guard>
+{%- endif %}
 
 {% if subject -%}
 </commit_message>

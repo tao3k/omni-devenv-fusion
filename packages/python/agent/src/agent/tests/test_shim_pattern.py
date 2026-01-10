@@ -311,8 +311,9 @@ class TestCrawl4aiSkillStructure(unittest.TestCase):
         # Verify shim pattern: no heavy imports
         self.assertNotIn("from crawl4ai", content)
         self.assertNotIn("import crawl4ai", content)
-        # Verify _run_isolated function exists
-        self.assertIn("_run_isolated", content)
+        # Verify sidecar execution pattern using swarm
+        self.assertIn("get_swarm", content)
+        self.assertIn("execute_skill", content)
 
 
 class TestSkillManagerExecutionMode(unittest.TestCase):

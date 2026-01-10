@@ -401,7 +401,7 @@ test-skills:
 [group('mcp')]
 test-skills-workflow:
     @echo "=== Skill Workflow Tests ==="
-    @uv run pytest packages/python/agent/src/agent/tests/test_skills_full.py::TestSkillManagerOmniCLI -v
+    @uv run pytest packages/python/agent/src/agent/tests/test_skills.py::TestSkillManagerOmniCLI -v
 
 [group('mcp')]
 test-git-security:

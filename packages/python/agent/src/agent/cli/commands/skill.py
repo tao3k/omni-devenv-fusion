@@ -80,18 +80,22 @@ def skill_list():
 @skill_app.command("discover")
 def skill_discover(query: str = typer.Argument(..., help="Search query")):
     """Discover skills from remote index."""
-    from agent.core.registry import get_skill_registry
+    from agent.core.registry.jit import discover_skills
 
-    registry = get_skill_registry()
-    results = registry.discover_remote_skills(query)
+    result = discover_skills(query, limit=20)
+    skills = result.get("skills", [])
 
-    if results:
+    if skills:
         table = Table(title=f"🔍 Search Results for '{query}'", show_header=True)
         table.add_column("Name")
         table.add_column("Description")
+        table.add_column("ID")
 
-        for name, desc in results[:20]:
-            table.add_row(name, desc[:60] + "..." if len(desc) > 60 else desc)
+        for skill in skills:
+            name = skill.get("name", skill.get("id", ""))
+            desc = skill.get("description", "")[:60]
+            skill_id = skill.get("id", "")
+            table.add_row(name, desc + "..." if len(desc) > 60 else desc, skill_id)
 
         err_console.print(table)
     else:
@@ -183,8 +187,9 @@ def skill_test(
         results = ctx.run_all_tests()
         ctx.print_summary(results)
     elif skill_name:
-        results = ctx.run_skill_tests(skill_name)
-        ctx.print_summary(results)
+        result = ctx.run_skill_tests(skill_name)
+        # Wrap single result in dict for print_summary
+        ctx.print_summary({skill_name: result})
     else:
         err_console.print(
             Panel(
@@ -227,6 +232,21 @@ def skill_check(
 # =============================================================================
 
 
+def _load_templates_module():
+    """Load templates module directly from file."""
+    import importlib.util
+    from pathlib import Path
+
+    templates_path = Path("assets/skills/skill/scripts/templates.py")
+    if not templates_path.exists():
+        return None
+
+    spec = importlib.util.spec_from_file_location("templates", templates_path)
+    templates = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(templates)
+    return templates
+
+
 @skill_app.command("templates")
 def skill_templates(
     skill_name: str = typer.Argument(..., help="Skill name"),
@@ -237,16 +257,21 @@ def skill_templates(
     info: Optional[str] = typer.Option(None, "--info", "-i", help="Show template content"),
 ):
     """Manage skill templates."""
-    from agent.testing.context import TestContext
+    templates = _load_templates_module()
 
-    ctx = TestContext()
+    if templates is None:
+        err_console.print(Panel("Templates module not found", title="❌ Error", style="red"))
+        return
 
     if list_templates:
-        ctx.list_templates(skill_name)
+        result = templates.format_template_list(skill_name)
+        err_console.print(Panel(result, title=f"📋 Templates: {skill_name}", expand=False))
     elif eject:
-        ctx.eject_template(skill_name, eject)
+        result = templates.format_eject_result(skill_name, eject)
+        err_console.print(Panel(result, title="✅ Eject Result", expand=False))
     elif info:
-        ctx.show_template_info(skill_name, info)
+        result = templates.format_info_result(skill_name, info)
+        err_console.print(Panel(result, title=f"📄 Template Info", expand=False))
     else:
         err_console.print(
             Panel(

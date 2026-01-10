@@ -57,7 +57,7 @@ class SkillManifest(BaseModel):
         None, description="State module path for skills with persistent state"
     )
     guide_file: str = Field(
-        default="guide.md", description="Path to the markdown guide file (relative to skill dir)"
+        default="README.md", description="Path to the markdown guide file (relative to skill dir)"
     )
     prompts_file: Optional[str] = Field(
         None, description="Path to system prompts file (relative to skill dir)"

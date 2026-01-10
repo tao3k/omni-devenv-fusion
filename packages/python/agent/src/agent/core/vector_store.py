@@ -345,7 +345,7 @@ async def bootstrap_knowledge_base() -> None:
     - Git workflow rules
     - Coding standards
     - Architecture decisions
-    - Preloaded skill prompts.md (git, knowledge, writer, etc.)
+    - Preloaded skill definitions (SKILL.md)
     """
     from common.gitops import get_project_root
 
@@ -396,20 +396,20 @@ async def bootstrap_knowledge_base() -> None:
             documents=[doc["content"].strip()], ids=[doc["id"]], metadatas=[doc["metadata"]]
         )
 
-    # Also ingest preloaded skill prompts.md files
-    await ingest_preloaded_skill_prompts()
+    # Also ingest preloaded skill definitions (SKILL.md)
+    await ingest_preloaded_skill_definitions()
 
     _get_logger().info("Knowledge base bootstrapped", docs=len(bootstrap_docs))
 
 
-async def ingest_preloaded_skill_prompts() -> None:
+async def ingest_preloaded_skill_definitions() -> None:
     """
-    Ingest prompts.md from all preloaded skills into the knowledge base.
+    Ingest SKILL.md (definition file) from all preloaded skills into the knowledge base.
 
     This ensures that when Claude processes user requests, it has access to
     the skill rules even if not explicitly loading the skill.
 
-    The following skills are preloaded and their prompts.md will be ingested:
+    The following skills are preloaded and their definitions will be ingested:
     - git: Commit authorization protocol
     - knowledge: Project rules and scopes
     - writer: Writing quality standards
@@ -418,8 +418,8 @@ async def ingest_preloaded_skill_prompts() -> None:
     - testing_protocol: Testing workflow
     """
     from agent.core.registry import get_skill_registry
+    from common.skills_path import SKILLS_DIR
 
-    project_root = get_project_root()
     registry = get_skill_registry()
     preload_skills = registry.get_preload_skills()
 
@@ -431,37 +431,39 @@ async def ingest_preloaded_skill_prompts() -> None:
     skills_ingested = 0
 
     for skill_name in preload_skills:
-        prompts_path = project_root / "agent" / "skills" / skill_name / "prompts.md"
+        definition_path = SKILLS_DIR.definition_file(skill_name)
 
-        if not prompts_path.exists():
-            _get_logger().debug(f"Skill {skill_name} has no prompts.md")
+        if not definition_path.exists():
+            _get_logger().debug(f"Skill {skill_name} has no definition file")
             continue
 
         try:
-            content = prompts_path.read_text(encoding="utf-8")
+            content = definition_path.read_text(encoding="utf-8")
 
             # Ingest with skill name as domain for filtering
             success = await vm.add(
                 documents=[content],
-                ids=[f"skill-{skill_name}-prompts"],
+                ids=[f"skill-{skill_name}-definition"],
                 metadatas=[
                     {
                         "domain": "skill",
                         "skill": skill_name,
                         "priority": "high",
-                        "source_file": str(prompts_path),
+                        "source_file": str(definition_path),
                     }
                 ],
             )
 
             if success:
                 skills_ingested += 1
-                _get_logger().info(f"Ingested prompts.md for skill: {skill_name}")
+                _get_logger().info(f"Ingested definition for skill: {skill_name}")
 
         except Exception as e:
-            _get_logger().error(f"Failed to ingest prompts.md for skill {skill_name}: {e}")
+            _get_logger().error(f"Failed to ingest definition for skill {skill_name}: {e}")
 
-    _get_logger().info(f"Preloaded skill prompts ingested: {skills_ingested}/{len(preload_skills)}")
+    _get_logger().info(
+        f"Preloaded skill definitions ingested: {skills_ingested}/{len(preload_skills)}"
+    )
 
 
 __all__ = [
@@ -471,5 +473,5 @@ __all__ = [
     "search_knowledge",
     "ingest_knowledge",
     "bootstrap_knowledge_base",
-    "ingest_preloaded_skill_prompts",
+    "ingest_preloaded_skill_definitions",
 ]

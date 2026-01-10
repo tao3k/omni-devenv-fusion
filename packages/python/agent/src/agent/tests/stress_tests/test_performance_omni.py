@@ -12,6 +12,12 @@ Usage:
 
 import pytest
 import time
+import sys
+from pathlib import Path
+
+# Import omni helper (Phase 35.3)
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from test_skills import omni
 
 
 class TestOmniPerformance:
@@ -20,8 +26,6 @@ class TestOmniPerformance:
     @pytest.mark.asyncio
     async def test_omni_dispatch_latency(self):
         """Measure @omni dispatch latency."""
-        from agent.mcp_server import omni
-
         iterations = 5
         latencies = []
 

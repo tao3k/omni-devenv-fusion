@@ -220,7 +220,6 @@ class SkillManager:
         "_preload_done",
         "_command_cache",  # O(1) command lookup cache
         "_mtime_cache",  # Lazy mtime checking
-        "_last_mtime_check",  # Throttle mtime checks
         "_manifest_loader",  # Skill manifest loader
     )
 
@@ -251,9 +250,6 @@ class SkillManager:
 
         # Lazy mtime checking: skill_name -> mtime
         self._mtime_cache: dict[str, float] = {}
-
-        # Throttle mtime checks to once per 100ms
-        self._last_mtime_check: float = 0.0
 
         # Unified manifest loader (SKILL.md + manifest.json)
         self._manifest_loader: UnifiedManifestAdapter = get_unified_adapter()
@@ -490,10 +486,8 @@ class SkillManager:
         Check and reload skill if modified (hot-reload).
 
         Optimizations:
-        - Throttle mtime checks to once per 100ms
-        - Only check if skill is actually used
-        - Clear command cache on reload
         - Check both tools.py and scripts/* for modifications
+        - Clear command cache on reload
         """
         skill_path = self._discover_single(skill_name)
         if skill_path is None:
@@ -502,12 +496,6 @@ class SkillManager:
 
         if skill_name not in self._skills:
             return self.load_skill(skill_path) is not None
-
-        # Throttle mtime checks
-        now = time.perf_counter()
-        if now - self._last_mtime_check < 0.1:  # 100ms throttle
-            return True
-        self._last_mtime_check = now
 
         skill = self._skills[skill_name]
         tools_path = skill_path / "tools.py"
@@ -519,17 +507,32 @@ class SkillManager:
 
             # Also check scripts/* directory for modifications
             scripts_mtime = 0.0
+            scripts_files = []
             if scripts_path.exists() and scripts_path.is_dir():
                 for script_file in scripts_path.glob("*.py"):
                     if script_file.name.startswith("_"):
                         continue  # Skip __init__.py and private modules
                     try:
-                        scripts_mtime = max(scripts_mtime, script_file.stat().st_mtime)
+                        file_mtime = script_file.stat().st_mtime
+                        scripts_mtime = max(scripts_mtime, file_mtime)
+                        scripts_files.append(f"{script_file.name}:{file_mtime}")
                     except (FileNotFoundError, OSError):
                         pass
 
+            # DEBUG: Log mtime comparison
+            should_reload = current_mtime > skill.mtime or scripts_mtime > skill.mtime
+            _get_logger().debug(
+                "Hot-reload check",
+                skill=skill_name,
+                skill_mtime=skill.mtime,
+                tools_mtime=current_mtime,
+                scripts_mtime=scripts_mtime,
+                should_reload=should_reload,
+                scripts=scripts_files[:3],  # First 3 for logging
+            )
+
             # Trigger reload if any file was modified
-            if current_mtime > skill.mtime or scripts_mtime > skill.mtime:
+            if should_reload:
                 modified = []
                 if current_mtime > skill.mtime:
                     modified.append("tools.py")
@@ -578,15 +581,22 @@ class SkillManager:
         if command_name == "help":
             return self._get_skill_context(skill_name)
 
-        # Try O(1) cache lookup first
+        # HOT RELOAD FIX: Always check mtime before execution
+        # This ensures code changes are picked up on every call
+        if not self._ensure_fresh(skill_name):
+            return f"Error: Skill '{skill_name}' not found"
+
+        # HOT RELOAD FIX: Clear command cache to get fresh function references
+        # Even if mtime hasn't changed, cache may have stale function objects
         cache_key = f"{skill_name}.{command_name}"
+        if cache_key in self._command_cache:
+            del self._command_cache[cache_key]
+
+        # Try O(1) cache lookup first
         command = self._command_cache.get(cache_key)
 
-        # Ensure skill is fresh for cache validation
+        # If not in cache, look up directly
         if command is None:
-            if not self._ensure_fresh(skill_name):
-                return f"Error: Skill '{skill_name}' not found"
-
             skill = self._skills.get(skill_name)
             if skill is None:
                 return f"Error: Skill '{skill_name}' not loaded"

@@ -23,7 +23,8 @@ Usage:
 Settings:
     Reads from settings.yaml:
         assets:
-          skills_dir: "assets/skills"  (relative to project root)
+          skills_dir: "assets/skills"        # Skills base directory
+          definition_file: "SKILL.md"         # Skill definition file (default: SKILL.md)
 """
 
 import importlib.util
@@ -36,12 +37,14 @@ class _SkillDirCallable:
     """Callable that returns skill paths based on settings.yaml config.
 
     Usage:
-        SKILLS_DIR("git")              # -> Path("assets/skills/git")
-        SKILLS_DIR("git", "tools.py")  # -> Path("assets/skills/git/tools.py")
-        SKILLS_DIR()                   # -> Path("assets/skills") (base path)
+        SKILLS_DIR("git")                    # -> Path("assets/skills/git")
+        SKILLS_DIR("git", "tools.py")        # -> Path("assets/skills/git/tools.py")
+        SKILLS_DIR()                         # -> Path("assets/skills") (base path)
+        SKILLS_DIR.definition_file("git")    # -> Path("assets/skills/git/SKILL.md")
     """
 
     _cached_base_path: Optional[Path] = None
+    _cached_definition_file: Optional[str] = None
 
     def _get_base_path(self) -> Path:
         """Get the base skills path from settings.yaml (assets.skills_dir)."""
@@ -62,6 +65,26 @@ class _SkillDirCallable:
         # Fallback: use default "assets/skills"
         self._cached_base_path = Path("assets/skills")
         return self._cached_base_path
+
+    def _get_definition_file(self) -> str:
+        """Get the definition file name from settings.yaml (assets.definition_file)."""
+        if self._cached_definition_file is not None:
+            return self._cached_definition_file
+
+        try:
+            from common.settings import get_setting
+
+            # Read from settings.yaml -> assets.definition_file
+            definition_file = get_setting("assets.definition_file")
+            if definition_file:
+                self._cached_definition_file = definition_file
+                return self._cached_definition_file
+        except Exception:
+            pass
+
+        # Fallback: use default "SKILL.md"
+        self._cached_definition_file = "SKILL.md"
+        return self._cached_definition_file
 
     def _resolve_with_root(self, path: Path) -> Path:
         """Resolve path relative to project root using git toplevel."""
@@ -119,6 +142,28 @@ class _SkillDirCallable:
             SKILLS_DIR.git  # -> Path("assets/skills/git")
         """
         return self(name)
+
+    def definition_file(self, skill: str | None = None) -> Path:
+        """Get the definition file path for a skill (from settings.yaml assets.definition_file).
+
+        Args:
+            skill: Optional skill name. If None, returns just the definition filename.
+
+        Returns:
+            Path to the definition file, or just the filename if skill is None
+
+        Usage:
+            SKILLS_DIR.definition_file()           # -> "SKILL.md"
+            SKILLS_DIR.definition_file("git")      # -> Path("assets/skills/git/SKILL.md")
+        """
+        definition = self._get_definition_file()
+
+        if skill is None:
+            return Path(definition)
+
+        base = self._get_base_path()
+        base = self._resolve_with_root(base)
+        return base / skill / definition
 
 
 # Global instance
@@ -217,7 +262,7 @@ class SkillPathBuilder:
     Usage:
         builder = SkillPathBuilder()
         builder.git / "tools.py"
-        builder.git / "prompts.md"
+        builder.definition("git")  # Uses settings.yaml definition_file
     """
 
     def __init__(self, project_root: Optional[Path] = None):
@@ -246,21 +291,17 @@ class SkillPathBuilder:
         """Get a specific file within a skill directory."""
         return self._skills_base / skill_name / filename
 
-    def manifest(self, skill_name: str) -> Path:
-        """Get the SKILL.md for a skill."""
-        return self._skills_base / skill_name / "SKILL.md"
+    def definition(self, skill_name: str) -> Path:
+        """Get the definition file for a skill (uses settings.yaml definition_file)."""
+        return self._skills_base / skill_name / SKILLS_DIR.definition_file()
 
-    def guide(self, skill_name: str) -> Path:
-        """Get the guide.md for a skill."""
-        return self._skills_base / skill_name / "guide.md"
+    def manifest(self, skill_name: str) -> Path:
+        """Get the SKILL.md for a skill (legacy alias for definition())."""
+        return self._skills_base / skill_name / "SKILL.md"
 
     def tools(self, skill_name: str) -> Path:
         """Get the tools.py for a skill."""
         return self._skills_base / skill_name / "tools.py"
-
-    def prompts(self, skill_name: str) -> Path:
-        """Get the prompts.md for a skill."""
-        return self._skills_base / skill_name / "prompts.md"
 
 
 # =============================================================================

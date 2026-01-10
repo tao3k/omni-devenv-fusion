@@ -67,8 +67,8 @@ def _get_cog_scopes(project_root: Optional[Path] = None) -> List[str]:
 
         if cog_path.exists():
             content = cog_path.read_text()
-            # Parse allowed_scopes = [...] format
-            match = re.search(r"allowed_scopes\s*=\s*\[([^\]]+)\]", content)
+            # Parse scopes = [...] format (cog.toml standard)
+            match = re.search(r"scopes\s*=\s*\[([^\]]+)\]", content, re.DOTALL)
             if match:
                 scopes_str = match.group(1)
                 # Extract quoted strings
@@ -257,19 +257,28 @@ Please fix the errors above and run /commit again."""
     sensitive_files = _check_sensitive_files(result["staged_files"])
     result["sensitive_files"] = sensitive_files
     if sensitive_files:
-        sensitive_display = "\n".join([f"  {f}" for f in sensitive_files])
-        result["security_warning"] = f"""Security Check
+        # Use cascading template for security warning
+        try:
+            from .rendering import _get_jinja_env
 
-Detected {len(sensitive_files)} potentially sensitive file(s):
-
-{sensitive_display}
-
-LLM Advisory: Please verify these files are safe to commit.
-- Are they intentional additions (not accidentally staged)?
-- Do they contain secrets, keys, or credentials?
-- Should they be in .gitignore?
-
-If unsure, press No and run git reset <file> to unstage."""
+            env = _get_jinja_env()
+            template = env.get_template("security_warning.j2")
+            result["security_warning"] = template.render(
+                file_count=len(sensitive_files),
+                files=sensitive_files,
+            )
+        except Exception:
+            # Fallback to plain text if template fails
+            sensitive_display = "\n".join([f"  ⚠️ {f}" for f in sensitive_files])
+            result["security_warning"] = (
+                f"\n⚠️ **Security Guard Detection**\n\nDetected {len(sensitive_files)} sensitive files:\n{sensitive_display}\n\nLLM: Please verify these files are safe to commit."
+            )
+    else:
+        # No sensitive files - provide confirmation to LLM
+        result["security_passed"] = True
+        result["security_warning"] = (
+            "\n🛡️ **Security Guard Detection** - No sensitive files detected. Safe to proceed."
+        )
 
     # 6. Get diff for analysis
     if result["has_staged"] and not result["has_unstaged"]:
@@ -292,36 +301,74 @@ If unsure, press No and run git reset <file> to unstage."""
 
 def format_prepare_result(prep_result: Dict[str, Any]) -> str:
     """
-    Format the prepare_commit result using cascading template.
+    Format the prepare_commit result for LLM consumption.
 
-    Uses the cascading template pattern for output rendering:
-    - User Override: assets/templates/git/prepare_result.j2
-    - Skill Default: assets/skills/git/templates/prepare_result.j2
+    Constructs complete output including security status in Controller Layer.
+    LLM should always see security feedback (passed or warning).
 
     Args:
         prep_result: Result from prepare_commit()
 
     Returns:
-        Formatted output using cascading Jinja2 template
+        Formatted output with security status visible to LLM
     """
-    try:
-        from .rendering import render_workflow_result
+    lines = []
 
-        # Use render_workflow_result for the workflow output
-        return render_workflow_result(
-            intent="prepare_commit",
-            success=prep_result["success"] and prep_result["checks_passed"],
-            message="Commit preparation completed",
-            details={
-                "has_staged": str(prep_result["has_staged"]),
-                "staged_file_count": str(prep_result["staged_file_count"]),
-                "checks_passed": str(prep_result["checks_passed"]),
-                "scope_valid": str(prep_result.get("scope_valid", True)),
-            },
+    # Header: Status
+    if prep_result["success"] and prep_result["checks_passed"]:
+        lines.append("## ✅ Commit Preparation Passed")
+    else:
+        lines.append("## ❌ Commit Preparation Failed")
+        if prep_result.get("results"):
+            lines.extend(prep_result["results"])
+        return "\n".join(lines)
+
+    # Security Guard Detection - ALWAYS show to LLM
+    security_passed = prep_result.get("security_passed", False)
+    security_warning = prep_result.get("security_warning", "")
+    sensitive_files = prep_result.get("sensitive_files", [])
+
+    if security_passed:
+        lines.append(security_warning)
+    elif sensitive_files:
+        lines.append(security_warning)
+    else:
+        lines.append(
+            "\n🛡️ **Security Guard Detection** - No sensitive files detected. Safe to proceed."
         )
-    except Exception:
-        # Fallback to legacy string formatting if template fails
-        return _legacy_format_result(prep_result)
+
+    # Lefthook Report
+    lefthook_report = prep_result.get("lefthook_report", "")
+    if lefthook_report:
+        lines.append(f"\n{lefthook_report}")
+
+    # Scope Validation
+    scope_warning = prep_result.get("scope_warning", "")
+    if scope_warning:
+        lines.append(f"\n{scope_warning}")
+
+    # Staged Files Summary
+    has_staged = prep_result["has_staged"]
+    staged_count = prep_result["staged_file_count"]
+    has_unstaged = prep_result.get("has_unstaged", False)
+
+    if has_staged and not has_unstaged:
+        lines.append(f"\n### 📁 {staged_count} Staged Files Ready")
+        for f in prep_result.get("staged_files", [])[:10]:  # Limit to 10 files
+            if f:
+                lines.append(f"  - {f}")
+        if staged_count > 10:
+            lines.append(f"  ... and {staged_count - 10} more files")
+    elif has_staged:
+        lines.append(f"\n### 📁 {staged_count} Staged Files")
+        staged_diff = prep_result.get("staged_diff_stats", "")
+        if staged_diff:
+            lines.append(f"\n{staged_diff}")
+
+    # Final confirmation
+    lines.append("\n---\n**Please confirm:** Reply Yes to proceed to commit, or No to cancel.")
+
+    return "\n".join(lines)
 
 
 def _legacy_format_result(prep_result: Dict[str, Any]) -> str:

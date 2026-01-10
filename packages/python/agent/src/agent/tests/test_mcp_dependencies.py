@@ -2,16 +2,47 @@
 packages/python/agent/src/agent/tests/test_mcp_dependencies.py
 Tests to verify skill architecture dependencies are properly configured.
 
+Phase 35.3: Pure MCP Server Architecture
+- Uses mcp.server.Server (no FastMCP)
+- Tools listed dynamically via handle_list_tools
+- Tool execution via handle_call_tool -> SkillManager
+
 These tests catch issues like:
 - Skill modules failing to import
 - Skill registry not discovering skills
 - Skills not loading correctly
-
-In uv workspace, packages are installed and can be imported directly.
+- MCP Server not properly configured
 """
 
 import pytest
 from pathlib import Path
+
+
+class TestMcpServerArchitecture:
+    """Test pure MCP Server architecture (Phase 35.3)."""
+
+    def test_mcp_server_import(self):
+        """mcp.server should import successfully (no FastMCP)."""
+        from mcp.server import Server
+        from mcp.server.stdio import stdio_server
+        from mcp.server.sse import SseServerTransport
+
+        assert Server is not None
+        assert stdio_server is not None
+        assert SseServerTransport is not None
+
+    def test_omni_server_instance(self):
+        """Omni MCP Server instance should be created correctly."""
+        from agent.mcp_server import server
+
+        assert server is not None
+        assert server.name == "omni-agent"
+
+    def test_run_mcp_server_import(self):
+        """run_mcp_server function should be importable."""
+        from agent.mcp_server import run_mcp_server
+
+        assert callable(run_mcp_server)
 
 
 class TestSkillArchitecture:
@@ -73,3 +104,39 @@ class TestSkillRegistry:
         required = ["filesystem", "git", "terminal", "testing"]
         for s in required:
             assert s in skills, f"Missing skill: {s}"
+
+
+class TestSkillBootstrap:
+    """Test skill bootstrap with pure MCP Server."""
+
+    def test_boot_core_skills_no_mcp(self):
+        """boot_core_skills should work without MCP parameter."""
+        from agent.core.bootstrap import boot_core_skills
+
+        # Should not raise, mcp parameter is optional
+        boot_core_skills()
+
+    def test_skill_manager_has_tools(self):
+        """SkillManager should list tools for MCP Server."""
+        from agent.core.skill_manager import get_skill_manager
+
+        manager = get_skill_manager()
+        loaded_skills = manager.list_loaded()
+
+        # After bootstrap, skills should be loaded
+        assert len(loaded_skills) > 0
+
+    def test_tools_convertible_to_mcp_format(self):
+        """Skills should be convertible to MCP Tool format."""
+        from agent.core.skill_manager import get_skill_manager
+
+        manager = get_skill_manager()
+        loaded_skills = manager.list_loaded()
+
+        for skill_name in loaded_skills:
+            commands = manager.get_commands(skill_name)
+            for cmd_name in commands:
+                tool_name = f"{skill_name}.{cmd_name}"
+                # Should be valid format for MCP tool name
+                assert "." in tool_name
+                assert len(tool_name) > 1

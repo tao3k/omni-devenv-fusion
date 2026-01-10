@@ -61,5 +61,5 @@ def help() -> str:
     from repomix import repomix
 
     skill_dir = SKILLS_DIR(skill="{{ skill_name }}")
-    output = repomix(skill_dir, style="xml", include=["SKILL.md", "tools.py", "guide.md"])
+    output = repomix(skill_dir, style="xml", include=["SKILL.md", "tools.py", "README.md"])
     return output

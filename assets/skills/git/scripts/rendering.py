@@ -94,6 +94,8 @@ def render_commit_message(
     verified: bool = True,
     checks: Optional[List[str]] = None,
     status: str = "ready",
+    security_passed: bool = True,
+    security_warning: str = "",
 ) -> str:
     """
     Render commit message using cascading Jinja2 template.
@@ -108,6 +110,8 @@ def render_commit_message(
         verified: Whether the commit is verified
         checks: List of verification checks passed
         status: Commit status (ready, draft, etc.)
+        security_passed: Whether security guard check passed
+        security_warning: Security warning message if any sensitive files detected
 
     Returns:
         Formatted commit message with verification badge
@@ -126,6 +130,8 @@ def render_commit_message(
         checks=checks,
         status=status,
         timestamp=datetime.now().isoformat(),
+        security_passed=security_passed,
+        security_warning=security_warning,
     )
 
 

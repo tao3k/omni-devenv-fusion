@@ -1,8 +1,9 @@
 """
 agent/core/registry/loader.py
-Phase 29: Skill Loader
+Phase 35.3: Skill Loader
 
 Module loading with spec-based loading and hot-reload support.
+Pure MCP Server compatible (no FastMCP dependency).
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ import structlog
 from agent.core.module_loader import ModuleLoader
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server import Server
 
 logger = structlog.get_logger(__name__)
 
@@ -42,7 +43,7 @@ class SkillLoader:
     def __init__(self, registry: "SkillRegistry") -> None:
         self.registry = registry
 
-    def load_skill(self, skill_name: str, mcp: FastMCP) -> tuple[bool, str]:
+    def load_skill(self, skill_name: str, mcp: FastMCP | None = None) -> tuple[bool, str]:
         """
         Dynamically load a skill into the MCP server.
         Supports HOT RELOAD.
@@ -103,7 +104,9 @@ class SkillLoader:
             logger.error("Failed to load skill", skill=skill_name, error=str(e))
             return False, f"Load Error: {e}"
 
-    def _resolve_dependencies(self, manifest: dict[str, Any], mcp: FastMCP) -> tuple[bool, str]:
+    def _resolve_dependencies(
+        self, manifest: dict[str, Any], mcp: FastMCP | None
+    ) -> tuple[bool, str]:
         """Resolve skill dependencies."""
         # Convert to dict if needed
         if hasattr(manifest, "model_dump"):

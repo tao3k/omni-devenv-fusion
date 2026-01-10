@@ -1,5 +1,8 @@
 """
 git/scripts/commit.py - Git commit operations
+
+This is the CONTROLLER layer - contains all commit logic.
+tools.py is the ROUTER layer - only dispatches to this module.
 """
 
 import subprocess

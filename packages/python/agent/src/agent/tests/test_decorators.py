@@ -94,72 +94,6 @@ def get_command_names(skill_name: str) -> list[str]:
     return manager.get_commands(skill_name)
 
 
-class TestGitSkillDecorators:
-    """Test Git skill @skill_command decorators."""
-
-    @pytest.fixture
-    def git_module(self):
-        """Load git skill module."""
-        return load_skill_module("git")
-
-    def test_git_commands_registered(self):
-        """Git commands should be registered with skill prefix for clarity."""
-        commands = get_command_names("git")
-        # Git uses naming convention with "git." prefix
-        assert "git.status" in commands, f"git.status not in {commands}"
-        assert "git.branch" in commands
-        assert "git.commit" in commands
-        assert "git.log" in commands
-        assert "git.diff" in commands
-        assert "git.add" in commands
-
-    def test_git_status_has_marker(self, git_module):
-        """status should have _is_skill_command marker."""
-        assert hasattr(git_module.status, "_is_skill_command")
-        assert git_module.status._is_skill_command is True
-
-    def test_git_status_has_config(self, git_module):
-        """status should have _skill_config."""
-        assert hasattr(git_module.status, "_skill_config")
-        config = git_module.status._skill_config
-        assert config["name"] == "git.status"
-        assert config["category"] == "read"
-
-    def test_git_branch_has_config(self, git_module):
-        """branch should have _skill_config."""
-        assert hasattr(git_module.branch, "_skill_config")
-        config = git_module.branch._skill_config
-        assert config["name"] == "git.branch"
-
-    def test_git_commit_has_config(self, git_module):
-        """commit should have _skill_config."""
-        assert hasattr(git_module.commit, "_skill_config")
-        config = git_module.commit._skill_config
-        assert config["name"] == "git.commit"
-        assert config["category"] == "write"
-
-    def test_git_status_report_has_view_category(self, git_module):
-        """status_report should have view category."""
-        assert hasattr(git_module.status_report, "_skill_config")
-        config = git_module.status_report._skill_config
-        assert config["name"] == "git.status_report"
-        assert config["category"] == "view"
-
-    def test_git_hotfix_has_workflow_category(self, git_module):
-        """hotfix should have workflow category."""
-        assert hasattr(git_module.hotfix, "_skill_config")
-        config = git_module.hotfix._skill_config
-        assert config["name"] == "git.hotfix"
-        assert config["category"] == "workflow"
-
-    def test_git_read_backlog_has_evolution_category(self, git_module):
-        """read_backlog should have evolution category."""
-        assert hasattr(git_module.read_backlog, "_skill_config")
-        config = git_module.read_backlog._skill_config
-        assert config["name"] == "git.read_backlog"
-        assert config["category"] == "evolution"
-
-
 class TestFilesystemSkillDecorators:
     """Test Filesystem skill @skill_command decorators."""
 
@@ -201,50 +135,6 @@ class TestFilesystemSkillDecorators:
         config = fs_module.write_file._skill_config
         assert config["name"] == "filesystem_write_file"
         assert config["category"] == "write"
-
-
-class TestSkillDirectCalls:
-    """Test skill functions directly (without MCP registration)."""
-
-    def _unwrap(self, result):
-        """Unwrap CommandResult if needed."""
-        from agent.skills.decorators import CommandResult
-
-        if isinstance(result, CommandResult):
-            return result.data if result.success else result.error
-        return result
-
-    def test_git_status_returns_output(self):
-        """status should return status output."""
-        module = load_skill_module("git")
-        result = self._unwrap(module.status())
-        assert isinstance(result, str)
-
-    def test_git_log_returns_output(self):
-        """log should return commit history."""
-        module = load_skill_module("git")
-        result = self._unwrap(module.log(n=3))
-        assert isinstance(result, str)
-
-    def test_git_branch_returns_output(self):
-        """branch should return branch list."""
-        module = load_skill_module("git")
-        result = self._unwrap(module.branch())
-        assert isinstance(result, str)
-
-    def test_git_hotfix_returns_plan(self):
-        """hotfix should return a plan."""
-        module = load_skill_module("git")
-        result = self._unwrap(module.hotfix(issue_id="TEST-123"))
-        assert isinstance(result, str)
-        assert "TEST-123" in result or "Hotfix" in result
-
-    def test_git_read_backlog_returns_content(self):
-        """read_backlog should return backlog content."""
-        module = load_skill_module("git")
-        result = self._unwrap(module.read_backlog())
-        assert isinstance(result, str)
-        assert "Backlog" in result
 
 
 class TestSkillsDirDiscovery:

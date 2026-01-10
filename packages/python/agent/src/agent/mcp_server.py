@@ -1,338 +1,315 @@
 """
 agent/mcp_server.py
-Phase 29: Omni MCP Server (Refactored)
+Phase 35.3: High-Performance MCP Server (Official SDK)
 
-Single Entry Point Architecture with clean protocol-based design.
+Architecture:
+- Pure mcp.server.Server (no FastMCP overhead)
+- Stdio mode: Minimal, reliable, no background tasks
+- SSE mode: uvloop + orjson for high performance
+- Skill execution via Swarm Engine
 
 Usage:
-    @omni("git.status")              # Execute git status
-    @omni("git.commit", {"message": "..."})  # Execute with args
-    @omni("help")                    # Show all skills
-    @omni("git")                     # Show git commands
-
-Performance Optimizations:
-- Lazy skill loading (only load when command invoked)
-- O(1) command lookup via SkillManager._command_cache
-- Throttled mtime checks (100ms) for hot-reload
-- Lazy logger initialization
+    omni mcp --transport stdio      # Claude Desktop
+    omni mcp --transport sse        # Claude Code CLI
 """
 
-from mcp.server.fastmcp import FastMCP, Context
-from typing import Optional, Dict, Any
+from __future__ import annotations
 
-# Lazy logger - defer structlog.get_logger() to avoid import-time overhead
-_cached_logger: Any = None
+import asyncio
+import json
+import logging
+import sys
+from contextlib import asynccontextmanager
+from typing import Any, Optional
+
+# Performance Libraries
+try:
+    import uvloop
+
+    _HAS_UVLOOP = True
+except ImportError:
+    _HAS_UVLOOP = False
+    uvloop = None
+
+try:
+    import orjson
+
+    _HAS_ORJSON = True
+except ImportError:
+    _HAS_ORJSON = False
+    orjson = None
+
+# MCP Core
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+from mcp.server.sse import SseServerTransport
+from mcp.types import Tool, TextContent
+
+# Web Server (For SSE)
+from starlette.applications import Starlette
+from starlette.routing import Route
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
+import uvicorn
+
+# Configure logging (stderr for UNIX philosophy, stdout reserved for data)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    stream=sys.stderr,
+)
+logger = logging.getLogger("omni.mcp")
+
+# --- Performance Helpers ---
 
 
-def _get_logger() -> Any:
-    """Get logger lazily."""
-    global _cached_logger
-    if _cached_logger is None:
-        import structlog
-
-        _cached_logger = structlog.get_logger(__name__)
-    return _cached_logger
+def json_dumps(obj: Any) -> str:
+    """Fast JSON serialization using orjson if available."""
+    if _HAS_ORJSON:
+        return orjson.dumps(obj).decode("utf-8")
+    return json.dumps(obj, ensure_ascii=False)
 
 
-# Create MCP Server - Single tool only
-mcp = FastMCP("omni-agentic-os")
+def json_loads(data: str | bytes) -> Any:
+    """Fast JSON parsing using orjson if available."""
+    if _HAS_ORJSON:
+        return orjson.loads(data)
+    return json.loads(data)
 
 
-# =============================================================================
-# Omni CLI - The ONE Entry Point Tool
-# =============================================================================
+# --- Server Instance ---
+server = Server("omni-agent")
 
 
-@mcp.tool(name="omni")
-async def omni(
-    input: str,
-    args: Optional[Dict[str, Any]] = None,
-    ctx: Context = None,
-) -> str:
+# --- Lifecycle Management --
+
+
+@asynccontextmanager
+async def server_lifespan():
+    """Global lifecycle manager for resources."""
+    logger.info("🚀 [Lifecycle] Starting Omni Agent Runtime...")
+
+    # Load all skills synchronously (safe for stdio mode startup)
+    from agent.core.bootstrap import boot_core_skills
+
+    try:
+        boot_core_skills(server)
+        logger.info("✅ [Lifecycle] Skills preloaded")
+    except Exception as e:
+        logger.warning(f"⚠️  [Lifecycle] Skill preload failed: {e}")
+        # Continue - skills can be loaded on-demand
+
+    logger.info("✅ [Lifecycle] Server ready")
+
+    try:
+        yield
+    finally:
+        logger.info("🛑 [Lifecycle] Shutting down...")
+
+
+# --- Tool Call Handler ---
+
+
+@server.list_tools()
+async def handle_list_tools() -> list[Tool]:
+    """List all available tools from loaded skills."""
+    from agent.core.skill_manager import get_skill_manager
+
+    manager = get_skill_manager()
+    tools = []
+
+    # Get all loaded skills and their commands
+    for skill_name in manager.list_loaded():
+        skill_info = manager.get_info(skill_name)
+        if not skill_info:
+            continue
+
+        # Get commands for this skill
+        commands = manager.get_commands(skill_name)
+        for cmd_name in commands:
+            cmd = manager.get_command(skill_name, cmd_name)
+            if cmd is None:
+                continue
+
+            # Convert to MCP Tool
+            tool_name = f"{skill_name}.{cmd_name}"
+
+            # Parse input schema from command config
+            input_schema = {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            }
+
+            tools.append(
+                Tool(
+                    name=tool_name,
+                    description=cmd.description or f"Execute {skill_name}.{cmd_name}",
+                    inputSchema=input_schema,
+                )
+            )
+
+    logger.info(f"📋 [Tools] Listed {len(tools)} tools")
+    return tools
+
+
+@server.call_tool()
+async def handle_call_tool(name: str, arguments: dict | None) -> list[TextContent]:
+    """Execute a tool via SkillManager."""
+    from agent.core.skill_manager import get_skill_manager
+
+    args = arguments or {}
+    logger.info(f"🔨 [Tool] Executing: {name}")
+
+    try:
+        # Parse skill.command format
+        if "." in name:
+            parts = name.split(".", 1)
+            skill_name = parts[0]
+            command_name = parts[1]
+        else:
+            return [
+                TextContent(
+                    type="text", text=f"❌ Invalid tool name: {name}. Use 'skill.command' format."
+                )
+            ]
+
+        # Execute via SkillManager
+        manager = get_skill_manager()
+        result = await manager.run(skill_name, command_name, args)
+
+        # Return result
+        return [TextContent(type="text", text=result)]
+
+    except Exception as e:
+        logger.exception(f"❌ [Tool] Execution failed: {name}")
+        return [TextContent(type="text", text=f"🔥 Error executing {name}: {str(e)}")]
+
+
+# --- Server Entry Points ---
+
+
+async def run_mcp_server(
+    transport: str = "stdio",
+    host: str = "127.0.0.1",
+    port: int = 3000,
+    keepalive_interval: int = 15,
+):
     """
-    Execute any skill command or get help.
-
-    This is THE ONLY tool registered with MCP. All operations go through this gate.
-    Use @omni in Claude to invoke.
-
-    Usage:
-        # Execute a command: @omni("skill.command")
-        @omni("git.status")
-        @omni("git.commit", {"message": "Fix bug"})
-        @omni("file.read", {"path": "README.md"})
-
-        # Get help
-        @omni("help")           # List all skills
-        @omni("git")            # Show git commands
+    Start the MCP server with specified transport.
 
     Args:
-        input: Command like "skill.command", "skill", or "help"
-        args: Optional arguments for the command (dict)
-        ctx: MCP Context for logging and progress reporting
-
-    Returns:
-        Command result as string (formatted Markdown)
+        transport: "stdio" for Claude Desktop, "sse" for Claude Code CLI
+        host: Host to bind (SSE only)
+        port: Port to listen (SSE only)
+        keepalive_interval: SSE keep-alive heartbeat in seconds
     """
-    from agent.core.skill_manager import get_skill_manager
-
-    manager = get_skill_manager()
-
-    # Normalize input
-    input = input.strip()
-    args = args or {}
-
-    # Log dispatch info to Claude (lazy logger)
-    if ctx:
-        ctx.info(f"Omni Dispatch: {input} | Args: {len(args)}")
-
-    # Handle help cases
-    if input == "help" or input == "?":
-        return _render_help(manager)
-
-    # Show skill commands if just skill name (no dot)
-    if "." not in input:
-        skill_name = input
-        return _render_skill_help(manager, skill_name)
-
-    # Parse skill.command
-    # Format: "skill.command" -> skill_name="git", cmd_name="git.status"
-    if "." not in input:
-        return f"Invalid format: '{input}'. Use '@omni(\"skill.command\")'"
-
-    parts = input.split(".")
-    skill_name = parts[0]
-    # Command name: skill.command -> command (with skill prefix)
-    # e.g., "git.status" -> "git.status", "file.read" -> "file.read"
-    cmd_name = ".".join(parts[1:])
-
-    # Use cmd_name directly (skill.command format maps to command name directly)
-    # LLM calls "@omni('git.status')" -> lookup command "git.status"
-    cmd_name = input  # Use full input as command name
-    command = manager.get_command(skill_name, cmd_name)
-
-    # Handle special "help" macro for individual skills
-    # e.g., @omni("git.help") returns Repomix-packed skill context
-    if command is None and cmd_name == "help":
-        # This is the skill help macro
-        result = await manager.run(skill_name, "help", args)
-        return result
-
-    if command is None:
-        return f"Error: Command {cmd_name} not found"
-
-    # Report progress for potentially long operations
-    if ctx:
-        await ctx.report_progress(0, 100)
-
-    # Execute the command (async native)
-    result = await manager.run(skill_name, cmd_name, args)
-
-    if ctx:
-        await ctx.report_progress(100, 100)
-
-    return result
-
-
-def _render_help(manager) -> str:
-    """Render help showing all available skills."""
-    skills = manager.list_loaded()
-
-    if not skills:
-        return "🛠️ **No skills available**"
-
-    lines = ["# 🛠️ Available Skills", ""]
-
-    for skill_name in sorted(skills):
-        info = manager.get_info(skill_name)
-        if info:
-            lines.append(f"## {skill_name}")
-            lines.append(f"- **Commands**: {info['command_count']}")
-            lines.append("")
-
-            # Get commands for this skill
-            cmds = manager.get_commands(skill_name)
-            # Show first few commands
-            sorted_cmds = sorted(cmds)[:5]
-            for cmd in sorted_cmds:
-                lines.append(f"  - `{skill_name}.{cmd}`")
-            if len(cmds) > 5:
-                lines.append(f"  - ... and {len(cmds) - 5} more")
-            lines.append("")
-
-    lines.append("---")
-    lines.append("**Usage**: `@omni('skill.command', args={})`")
-    lines.append("**Help**: `@omni('skill')` or `@omni('help')`")
-
-    return "\n".join(lines)
-
-
-def _render_skill_help(manager, skill_name: str) -> str:
-    """Render help for a specific skill."""
-    if not manager._ensure_fresh(skill_name):
-        available = manager.list_loaded()
-        if not available:
-            return f"Skill '{skill_name}' not found. No skills available."
-        return f"Skill '{skill_name}' not found.\n\n**Available skills:**\n- " + "\n- ".join(
-            available
-        )
-
-    skill = manager._skills.get(skill_name)
-    if skill is None:
-        return f"Skill '{skill_name}' not loaded"
-
-    # Group commands by category
-    from agent.core.protocols import SkillCategory
-
-    by_category: dict[SkillCategory, list] = {}
-    for cmd_name, cmd in skill.commands.items():
-        cat = cmd.category
-        if cat not in by_category:
-            by_category[cat] = []
-        by_category[cat].append((cmd_name, cmd.description))
-
-    lines = [f"# 🛠️ {skill_name}", ""]
-
-    # Standard category order
-    category_order = [
-        SkillCategory.READ,
-        SkillCategory.VIEW,
-        SkillCategory.WORKFLOW,
-        SkillCategory.WRITE,
-        SkillCategory.EVOLUTION,
-        SkillCategory.GENERAL,
-    ]
-
-    for category in category_order:
-        if category in by_category:
-            lines.append(f"## {category.value.upper()}")
-            for cmd_name, description in sorted(by_category[category]):
-                lines.append(f"- `{skill_name}.{cmd_name}`: {description}")
-            lines.append("")
-
-    lines.append("---")
-    lines.append(f"**Usage**: `@omni('{skill_name}.<command>', args={{}})`")
-    lines.append(f"**Total**: {len(skill.commands)} commands")
-
-    return "\n".join(lines)
-
-
-# =============================================================================
-# Prompt Templates
-# =============================================================================
-
-
-@mcp.prompt()
-def omni_help_prompt() -> str:
-    """
-    Returns the manual for Omni CLI.
-
-    This prompt is automatically available to Claude when using the Omni MCP Server.
-    """
-    from agent.core.skill_manager import get_skill_manager
-
-    manager = get_skill_manager()
-    skills = manager.list_loaded()
-
-    lines = [
-        "# Omni Agentic OS - Quick Reference",
-        "",
-        "## Single Entry Point",
-        "All capabilities are accessed via the SINGLE tool: `omni`.",
-        "",
-        "## Available Skills:",
-    ]
-
-    for skill_name in sorted(skills):
-        info = manager.get_info(skill_name)
-        if info:
-            lines.append(f"- **{skill_name}**: {info['command_count']} commands")
-
-    lines.extend(
-        [
-            "",
-            "## Usage Examples:",
-            '- `@omni("git.status")` - Check git status',
-            '- `@omni("file.read", path="README.md")` - Read a file',
-            '- `@omni("help")` - Show all skills',
-            '- `@omni("git")` - Show git commands',
-            "",
-            "## Key Principle",
-            "Code is Mechanism, Prompt is Policy.",
-            "Brain (prompts.md) -> Muscle (tools.py) -> Guardrails (lefthook).",
-        ]
+    # Performance info
+    logger.info(f"🚀 Starting Omni MCP Server ({transport.upper()})")
+    logger.info(
+        f"📊 Performance: uvloop={'✅' if _HAS_UVLOOP else '❌'}, "
+        f"orjson={'✅' if _HAS_ORJSON else '❌'}"
     )
 
-    return "\n".join(lines)
-
-
-# =============================================================================
-# Server Runner with Transport Support
-# =============================================================================
-
-
-async def run_mcp_server(transport: str = "stdio", host: str = "127.0.0.1", port: int = 3000):
-    """
-    Start the MCP server with the specified transport mode.
-
-    Args:
-        transport: Transport mode - "stdio" for Claude Desktop, "sse" for Claude Code CLI
-        host: Host to bind to (SSE only, defaults to 127.0.0.1 for security)
-        port: Port to listen on (only for SSE mode, use 0 for random available port)
-    """
-    logger = _get_logger()
-    logger.info(f"🚀 Starting Omni MCP Server in {transport.upper()} mode")
-
-    # Log available tools
-    tools = list(mcp._tool_manager._tools.values())
-    logger.info(f"📋 Available tools: {len(tools)}")
-    for tool in tools:
-        logger.info(f"  - {tool.name}")
-
-    # Preload core skills at startup
-    try:
-        from agent.core.bootstrap import boot_core_skills
-
-        boot_core_skills(mcp)
-        logger.info("✅ Core skills preloaded")
-    except Exception as e:
-        logger.warning(f"⚠️  Failed to preload skills: {e}")
-
     if transport == "stdio":
-        # Stdio mode (Claude Desktop)
-        logger.info("📡 Running in stdio mode (Claude Desktop)")
-        await mcp.run_stdio_async()
+        logger.info("📡 Mode: STDIO (Claude Desktop)")
+        await _run_stdio()
+
     elif transport == "sse":
-        # SSE mode (Claude Code CLI / debugging)
-        logger.info(f"📡 Running in SSE mode on {host}:{port}")
-        from mcp.server.sse import SseServerTransport
-        from starlette.applications import Starlette
-        from starlette.routing import Route
-        from starlette.requests import Request
-        import uvicorn
+        logger.info(f"📡 Mode: SSE (http://{host}:{port})")
 
-        sse = SseServerTransport("/sse")
+        # Enable uvloop for SSE mode
+        if _HAS_UVLOOP:
+            uvloop.install()
+            logger.info("⚡️ uvloop enabled for SSE")
 
-        async def handle_sse(request: Request):
-            async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
-                await mcp.run(
-                    streams[0],
-                    streams[1],
-                    mcp.create_initialization_options(),
+        await _run_sse(host, port, keepalive_interval)
+
+    else:
+        raise ValueError(f"Unknown transport: {transport}. Use 'stdio' or 'sse'.")
+
+
+async def _run_stdio():
+    """Run server in stdio mode for Claude Desktop."""
+    async with server_lifespan():
+        async with stdio_server() as (read_stream, write_stream):
+            try:
+                await server.run(
+                    read_stream,
+                    write_stream,
+                    server.create_initialization_options(),
                 )
+            except Exception as e:
+                logger.critical(f"💥 Stdio server crashed: {e}", exc_info=True)
+                raise
 
-        async def handle_messages(request: Request):
-            await sse.handle_post_message(request.scope, request.receive, request._send)
 
-        app = Starlette(
-            debug=True,
-            routes=[
-                Route("/sse", endpoint=handle_sse),
-                Route("/messages", endpoint=handle_messages, methods=["POST"]),
-            ],
+async def _run_sse(host: str, port: int, keepalive_interval: int):
+    """Run server in SSE mode for Claude Code CLI."""
+    sse = SseServerTransport("/sse")
+
+    async def handle_sse(request: Request):
+        """Handle SSE connection."""
+        async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
+            await server.run(
+                streams[0],
+                streams[1],
+                server.create_initialization_options(),
+            )
+
+    async def handle_messages(request: Request):
+        """Handle POST messages for SSE."""
+        await sse.handle_post_message(request.scope, request.receive, request._send)
+
+    async def handle_health(request: Request):
+        """Health check endpoint."""
+        return Response(content="OK", media_type="text/plain")
+
+    async def handle_ready(request: Request):
+        """Readiness check."""
+        from agent.core.skill_manager import get_skill_manager
+
+        manager = get_skill_manager()
+        skills_count = len(manager.list_loaded())
+
+        status = {
+            "status": "ready",
+            "skills_loaded": skills_count,
+            "performance": {
+                "uvloop": _HAS_UVLOOP,
+                "orjson": _HAS_ORJSON,
+            },
+        }
+        return Response(
+            content=json_dumps(status),
+            media_type="application/json",
         )
 
-        config = uvicorn.Config(app, host=host, port=port, log_level="info")
-        server = uvicorn.Server(config)
-        await server.serve()
-    else:
-        raise ValueError(f"Unknown transport mode: {transport}. Use 'stdio' or 'sse'.")
+    app = Starlette(
+        debug=False,
+        routes=[
+            Route("/sse", endpoint=handle_sse),
+            Route("/messages", endpoint=handle_messages, methods=["POST"]),
+            Route("/health", endpoint=handle_health),
+            Route("/ready", endpoint=handle_ready),
+        ],
+        lifespan=lambda _: server_lifespan(),
+    )
+
+    config = uvicorn.Config(
+        app,
+        host=host,
+        port=port,
+        log_level="error",
+        loop="uvloop" if _HAS_UVLOOP else "auto",
+        timeout_keep_alive=keepalive_interval if keepalive_interval > 0 else None,
+    )
+    server_instance = uvicorn.Server(config)
+    await server_instance.serve()
+
+
+# --- Exports ---
+__all__ = [
+    "server",
+    "run_mcp_server",
+]

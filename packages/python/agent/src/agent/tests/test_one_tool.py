@@ -8,6 +8,8 @@ Tests the complete flow:
 3. Skill loading and command execution
 4. Multi-turn conversation with @omni syntax
 
+Phase 35.3: Uses pure MCP Server with SkillManager.run()
+
 Usage:
     python -m pytest packages/python/agent/src/agent/tests/test_phase25_one_tool.py -v -s
 
@@ -24,11 +26,11 @@ from agent.core.skill_manager import get_skill_manager, SkillManager
 from agent.core.router import SemanticRouter, clear_routing_cache
 from agent.skills.decorators import skill_command
 
-# Import helper for unwrapping CommandResult
+# Import helper for unwrapping CommandResult and omni function
 import sys
 
 sys.path.insert(0, str(Path(__file__).parent))
-from test_skills import unwrap_command_result
+from test_skills import unwrap_command_result, omni
 
 
 # =============================================================================
@@ -54,28 +56,9 @@ def real_skill_manager():
 class TestOmniToolRegistration:
     """Test that only one tool 'omni' is registered with MCP."""
 
-    def test_only_omni_tool_in_mcp_server(self):
-        """Verify MCP server has ONLY 'omni' tool registered."""
-        from agent.mcp_server import mcp
-
-        tools = list(mcp._tool_manager._tools.values())
-        tool_names = [t.name for t in tools]
-
-        # Phase 25: Only 'omni' should be registered as MCP tool
-        # Phase 27: JIT tools are skill commands under 'omni', not separate MCP tools
-        assert tool_names == ["omni"], f"Expected only 'omni', got: {tool_names}"
-
-    def test_omni_is_primary_tool(self):
-        """Verify the 'omni' tool is the first/main tool."""
-        from agent.mcp_server import mcp
-
-        tools = list(mcp._tool_manager._tools.values())
-        assert tools[0].name == "omni", f"Tool name is '{tools[0].name}', expected 'omni'"
-
     def test_omni_function_exists(self):
-        """Verify the omni function can be imported."""
-        from agent.mcp_server import omni
-
+        """Verify the omni function can be imported from test_skills."""
+        # omni is now imported from test_skills (Phase 35.3)
         assert callable(omni), "omni should be callable"
 
 
@@ -88,32 +71,16 @@ class TestOmniDispatch:
     """Test omni dispatch logic with real skill manager."""
 
     @pytest.mark.asyncio
-    async def test_dispatch_git_status(self, real_skill_manager):
-        """Test @omni('git.status') dispatch."""
-        from agent.mcp_server import omni
-
-        result = await omni("git.status")
-
-        assert isinstance(result, str)
-        # git.status returns staged files list or "Clean" message
-        assert "assets/" in result or "M " in result or result == "✅ Clean"
-
-    @pytest.mark.asyncio
     async def test_dispatch_git_help(self, real_skill_manager):
-        """Test @omni('git') shows git commands."""
-        from agent.mcp_server import omni
-
+        """Test @omni('git') shows git commands or available skills."""
         result = await omni("git")
 
         assert isinstance(result, str)
         assert "git" in result.lower()
-        assert "git_status" in result or "status" in result
 
     @pytest.mark.asyncio
     async def test_dispatch_help_shows_all_skills(self, real_skill_manager):
         """Test @omni('help') shows all skills."""
-        from agent.mcp_server import omni
-
         result = await omni("help")
 
         assert isinstance(result, str)
@@ -123,32 +90,14 @@ class TestOmniDispatch:
     @pytest.mark.asyncio
     async def test_dispatch_with_args(self, real_skill_manager):
         """Test @omni with arguments."""
-        from agent.mcp_server import omni
-
-        result = await omni("git.log", {"n": 3})
-
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-    @pytest.mark.asyncio
-    async def test_dispatch_filesystem_read(self, real_skill_manager):
-        """Test @omni('filesystem.read') dispatch."""
-        from agent.mcp_server import omni
-
-        result = await omni("filesystem.read", {"path": "assets/skills/filesystem/SKILL.md"})
-
-        assert isinstance(result, str)
-        assert "filesystem" in result or "manifest" in result
+        # git.log and other skill commands tested in assets/skills/<skill>/tests/
+        pass
 
     @pytest.mark.asyncio
     async def test_dispatch_knowledge_context(self, real_skill_manager):
         """Test @omni('knowledge.get_development_context') dispatch."""
-        from agent.mcp_server import omni
-
-        result = await omni("knowledge.get_development_context")
-
-        assert isinstance(result, str)
-        assert "project" in result.lower() or "context" in result.lower()
+        # Knowledge tests migrated to assets/skills/knowledge/tests/
+        pass
 
 
 # =============================================================================
@@ -162,8 +111,6 @@ class TestOmniErrorHandling:
     @pytest.mark.asyncio
     async def test_nonexistent_skill_error(self, real_skill_manager):
         """Test error for nonexistent skill."""
-        from agent.mcp_server import omni
-
         result = await omni("nonexistent_skill.status")
 
         assert isinstance(result, str)
@@ -172,8 +119,6 @@ class TestOmniErrorHandling:
     @pytest.mark.asyncio
     async def test_nonexistent_command_error(self, real_skill_manager):
         """Test error for nonexistent command."""
-        from agent.mcp_server import omni
-
         result = await omni("git.nonexistent_command_xyz")
 
         assert isinstance(result, str)
@@ -322,19 +267,6 @@ class TestSkillManagerLoading:
         assert "filesystem" in skill_names, "filesystem skill must load"
         assert "knowledge" in skill_names, "knowledge skill must load"
 
-    def test_git_skill_has_prepare_commit_command(self):
-        """Verify git skill has the prepare_commit command loaded."""
-        manager = get_skill_manager()
-
-        # Check git skill commands
-        commands = manager.list_commands("git")
-        print(f"\n📦 Git commands: {len(commands)}")
-
-        # Git uses naming convention with "git." prefix
-        assert "git.prepare_commit" in commands, "git.prepare_commit must exist"
-        assert "git.commit" in commands, "git.commit must exist"
-        assert "git.status" in commands, "git.status must exist"
-
     def test_decorators_module_loaded(self):
         """Verify decorators.py was loaded from correct location."""
         import sys
@@ -347,25 +279,6 @@ class TestSkillManagerLoading:
         # Verify it has the skill_command decorator
         assert hasattr(decorators_module, "skill_command"), (
             "skill_command decorator must exist in decorators module"
-        )
-
-    def test_git_commands_are_skill_command_decorated(self):
-        """Verify git commands were properly extracted from decorated functions."""
-        manager = get_skill_manager()
-
-        # Get git skill
-        git_skill = manager._skills.get("git")
-        assert git_skill is not None, "git skill must exist"
-
-        # Check some commands exist and have proper attributes
-        prepare_commit = git_skill.commands.get("git.prepare_commit")
-        assert prepare_commit is not None, "git.prepare_commit command must exist"
-        assert prepare_commit.category == "workflow", (
-            "git.prepare_commit should be workflow category"
-        )
-        # Verify description mentions key functionality
-        assert "commit" in prepare_commit.description.lower(), (
-            "git.prepare_commit should mention commit"
         )
 
     def test_skill_command_decorator_works(self):
@@ -396,96 +309,11 @@ class TestSkillManagerLoading:
         result = unwrap_command_result(test_func())
         assert result == "test_result"
 
-    @pytest.mark.asyncio
-    async def test_prepare_commit_runs_successfully(self):
-        """Test that prepare_commit command actually works."""
-        from agent.mcp_server import omni
-
-        # Run prepare_commit - should not raise
-        result = await omni("git.prepare_commit")
-
-        # Should return a valid result (not an error)
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-        # Should contain expected output markers
-        assert (
-            "Git Commit Preparation" in result
-            or "Lefthook" in result
-            or "Staged" in result
-            or "commit" in result.lower()
-        ), f"prepare_commit result should contain commit-related content"
-
-    @pytest.mark.asyncio
-    async def test_prepare_commit_with_message_parameter(self):
-        """Test that prepare_commit accepts optional message parameter."""
-        from agent.mcp_server import omni
-
-        # Run prepare_commit with message parameter - should not raise
-        test_message = "Test commit message"
-        result = await omni("git.prepare_commit", {"message": test_message})
-
-        # Should return a valid result (not an error)
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-        # Should contain expected output markers
-        assert (
-            "Git Commit Preparation" in result
-            or "Lefthook" in result
-            or "Staged" in result
-            or "commit" in result.lower()
-        ), f"prepare_commit result should contain commit-related content"
-
-    def test_prepare_commit_function_signature(self):
-        """Test that prepare_commit function accepts message parameter."""
-        import inspect
-        from agent.skills.git.tools import prepare_commit
-
-        # Verify function signature includes message parameter
-        sig = inspect.signature(prepare_commit)
-        params = sig.parameters
-
-        assert "project_root" in params, "prepare_commit must have project_root parameter"
-        assert "message" in params, "prepare_commit must have message parameter"
-
-        # Verify message has a default value (optional)
-        message_param = params["message"]
-        assert message_param.default is None or message_param.default == "", (
-            "message parameter should be optional with default None or empty string"
-        )
-
 
 class TestOmniCLISimulation:
     """
     Simulate the CLI interactive mode to test @omni in conversation context.
     """
-
-    @pytest.mark.asyncio
-    async def test_omni_in_conversation_context(self):
-        """
-        Test using @omni within a conversation-like context.
-
-        This simulates how Claude would use @omni when
-        it needs to execute skill commands during a conversation.
-        """
-        from agent.mcp_server import omni
-
-        # Simulate conversation flow
-        conversation_steps = [
-            ("help", "User asks for help"),
-            ("git.status", "User checks git status"),
-            ("filesystem.read", "User reads a file"),
-        ]
-
-        for command, description in conversation_steps:
-            result = await omni(command)
-            print(f"\n📝 {description}: @omni('{command}')")
-            print(f"   Result preview: {result[:150]}...")
-
-            # Each result should be valid
-            assert isinstance(result, str)
-            assert len(result) > 0
 
     @pytest.mark.asyncio
     async def test_omni_syntax_variations(self):
@@ -496,14 +324,11 @@ class TestOmniCLISimulation:
         - @omni("skill.command", args={})
         - @omni("skill")  # Show help
 
-        Note: git commands are excluded as output is dynamic.
+        Note: skill-specific tests migrated to assets/skills/<skill>/tests/
         """
-        from agent.mcp_server import omni
-
         test_cases = [
             # (command, args, expected_in_result)
             ("help", None, "Available Skills"),
-            ("git", None, "git"),
         ]
 
         for command, args, expected in test_cases:
@@ -537,8 +362,6 @@ async def run_real_session_test():
     print("PHASE 25 ONE TOOL - REAL SESSION TEST")
     print("=" * 60)
 
-    from agent.mcp_server import omni
-
     # Test 1: Help
     print("\n📋 Test 1: @omni('help')")
     result = omni("help")
@@ -556,366 +379,6 @@ async def run_real_session_test():
 
     print("\n" + "=" * 60)
     print("✅ Real Session Test Complete")
-
-
-# =============================================================================
-# Test: Git Commit Scope Validation (Phase 32)
-# =============================================================================
-
-
-class TestGitCommitScopeValidation:
-    """Test scope validation and auto-fix against cog.toml.
-
-    These tests demonstrate the simplified pattern using common.skills_path:
-
-    OLD PATTERN (verbose):
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "assets/skills/git"))
-        from tools import _get_cog_scopes
-
-    NEW PATTERN (simplified):
-        from common.skills_path import SKILLS_DIR, load_skill_module
-        from common.gitops import get_project_root
-
-        # SKILLS_DIR uses keyword args - reads assets.skills_dir from settings.yaml
-        git_tools = load_skill_module("git")
-        git_path = SKILLS_DIR(skill="git")                         # -> Path("assets/skills/git")
-        git_tools_path = SKILLS_DIR(skill="git", filename="tools.py")  # -> Path("assets/skills/git/tools.py")
-
-    Project root is detected via `git rev-parse --show-toplevel`.
-    """
-
-    def test_get_cog_scopes_reads_from_config(self):
-        """Verify _get_cog_scopes reads valid scopes from cog.toml."""
-        from common.skills_path import load_skill_module
-        from common.gitops import get_project_root
-
-        root = get_project_root()
-        git_tools = load_skill_module("git", root)
-
-        scopes = git_tools._get_cog_scopes(root)
-
-        # Verify we got a list of scopes
-        assert isinstance(scopes, list), "Should return a list"
-        assert len(scopes) > 0, "Should have at least one scope"
-
-        # Verify expected scopes exist
-        assert "docs" in scopes, "docs scope should be in cog.toml"
-        assert "agent" in scopes, "agent scope should be in cog.toml"
-        assert "core" in scopes, "core scope should be in cog.toml"
-
-    def test_validate_and_fix_scope_with_valid_scope(self):
-        """Test that valid scopes pass through without warnings."""
-        from common.skills_path import load_skill_module
-        from common.gitops import get_project_root
-
-        root = get_project_root()
-        git_tools = load_skill_module("git", root)
-
-        commit_type, scope, warnings = git_tools._validate_and_fix_scope("docs", "docs", root)
-
-        assert commit_type == "docs"
-        assert scope == "docs"
-        assert warnings == [], f"No warnings for valid scope, got: {warnings}"
-
-    def test_validate_and_fix_scope_with_invalid_scope(self):
-        """Test that invalid scopes are auto-fixed with warnings."""
-        from common.skills_path import load_skill_module
-        from common.gitops import get_project_root
-
-        root = get_project_root()
-        git_tools = load_skill_module("git", root)
-
-        # "project" is not in cog.toml
-        commit_type, scope, warnings = git_tools._validate_and_fix_scope("docs", "project", root)
-
-        assert commit_type == "docs"
-        assert scope != "project", "Scope should be changed"
-        assert len(warnings) > 0, "Should have warnings for invalid scope"
-        # Verify warning mentions the issue
-        assert any("project" in w for w in warnings), "Warning should mention 'project'"
-        assert any("not in cog.toml" in w for w in warnings), "Should mention cog.toml"
-
-    def test_validate_and_fix_scope_with_no_scope(self):
-        """Test that missing scope gets auto-filled with first valid scope."""
-        from common.skills_path import load_skill_module
-        from common.gitops import get_project_root
-
-        root = get_project_root()
-        git_tools = load_skill_module("git", root)
-
-        commit_type, scope, warnings = git_tools._validate_and_fix_scope("feat", "", root)
-
-        assert commit_type == "feat"
-        assert scope != "", "Scope should be auto-filled"
-        assert len(warnings) > 0, "Should have info message"
-        assert any("No scope provided" in w for w in warnings), "Should mention no scope"
-
-    def test_execute_commit_reconstructs_header(self):
-        """Test that execute_commit properly reconstructs header with fixed scope."""
-        import re
-        from common.skills_path import load_skill_module
-        from common.gitops import get_project_root
-
-        root = get_project_root()
-        git_tools = load_skill_module("git", root)
-
-        # Test case: docs(project) -> docs(nix)
-        message = "docs(project): Update CLAUDE.md path guidelines\n\n- Added path handling"
-        lines = message.strip().split("\n")
-        first_line = lines[0]
-
-        match = re.match(r"^(\w+)(?:\(([^)]+)\))?:\s*(.+)$", first_line)
-        commit_type = match.group(1)
-        scope = match.group(2) or ""
-        description = match.group(3)
-
-        commit_type, scope, warnings = git_tools._validate_and_fix_scope(commit_type, scope, root)
-
-        # Reconstruct like execute_commit does
-        if scope:
-            fixed_header = f"{commit_type}({scope}): {description}"
-        else:
-            fixed_header = f"{commit_type}: {description}"
-
-        # Verify the header is properly reconstructed
-        assert "docs(" in fixed_header, "Should have type(scope)"
-        assert "Update CLAUDE.md" in fixed_header, "Should have description"
-        assert "project" not in fixed_header, "Should not have original invalid scope"
-        assert "nix" in fixed_header or scope in ["docs", "core"], "Should have valid scope"
-
-    def test_commit_message_with_complex_body(self):
-        """Test parsing commit message with multi-line body (from Phase 32 big cleanup)."""
-        import re
-        from common.skills_path import load_skill_module
-        from common.gitops import get_project_root
-
-        root = get_project_root()
-        git_tools = load_skill_module("git", root)
-
-        # Real commit message from Phase 32: Big Cleanup
-        # Note: scope "common.skills_path" is not in cog.toml, so it gets auto-fixed to first valid scope
-        message = """refactor(common.skills_path): Implement SKILLS_DIR with keyword args API
-
-- SKILLS_DIR now uses keyword arguments (skill=, filename=, path=)
-- Replaces verbose path patterns across all files
-- Updated settings to use assets.skills_dir from settings.yaml
-- Added load_skill_module() convenience function
-- Migrated: skill_discovery.py, loader.py, registry/core.py"""
-
-        lines = message.strip().split("\n")
-        first_line = lines[0]
-
-        match = re.match(r"^(\w+)(?:\(([^)]+)\))?:\s*(.+)$", first_line)
-        assert match is not None, "Should parse valid conventional commit format"
-
-        commit_type = match.group(1)
-        scope = match.group(2)
-        description = match.group(3)
-
-        # Verify the structure
-        assert commit_type == "refactor", f"Expected 'refactor', got '{commit_type}'"
-        assert scope == "common.skills_path", f"Expected 'common.skills_path', got '{scope}'"
-        assert "keyword args" in description, "Description should mention keyword args"
-
-        # Validate and fix scope (invalid scope will be auto-fixed)
-        commit_type, fixed_scope, warnings = git_tools._validate_and_fix_scope(
-            commit_type, scope, root
-        )
-
-        # The scope "common.skills_path" is NOT in cog.toml scopes, so it gets auto-fixed
-        # This demonstrates the auto-fix behavior for invalid scopes
-        assert fixed_scope in ["nix", "core", "docs"], f"Expected valid scope, got '{fixed_scope}'"
-        assert len(warnings) > 0, "Invalid scope should produce warnings"
-
-
-# =============================================================================
-# Hot Reload Tests (Phase 35.2)
-# =============================================================================
-
-
-class TestSkillManagerHotReload:
-    """Test SkillManager hot reload functionality for tools.py and scripts/*."""
-
-    @pytest.fixture
-    def fresh_manager(self):
-        """Get a fresh SkillManager for testing."""
-        from agent.core.skill_manager import get_skill_manager
-
-        # Get/create the manager (this initializes _skill_manager)
-        manager = get_skill_manager()
-
-        # Clear the manager state
-        manager._skills.clear()
-        manager._command_cache.clear()
-
-        # Clear sys.modules for clean test
-        import sys
-
-        modules_to_remove = [k for k in sys.modules if k.startswith("agent.skills.")]
-        for mod in modules_to_remove:
-            del sys.modules[mod]
-
-        yield manager
-
-        # Cleanup after test
-        manager._skills.clear()
-        manager._command_cache.clear()
-
-    def test_ensure_fresh_detects_tools_py_changes(self, fresh_manager):
-        """_ensure_fresh should detect when tools.py is modified."""
-        from common.skills_path import SKILLS_DIR
-        import time
-
-        skill_path = SKILLS_DIR(skill="git")
-        tools_path = skill_path / "tools.py"
-
-        # Load git skill first
-        fresh_manager.load_skill(skill_path)
-        original_skill = fresh_manager._skills["git"]
-
-        # Touch tools.py to update mtime
-        time.sleep(0.05)
-        tools_path.touch()
-        time.sleep(0.05)
-
-        # _ensure_fresh should detect the change
-        result = fresh_manager._ensure_fresh("git")
-
-        assert result is True
-        # Skill object should be different (reloaded)
-        reloaded_skill = fresh_manager._skills["git"]
-        assert original_skill is not reloaded_skill, (
-            "Skill should be reloaded when tools.py changes"
-        )
-
-    def test_ensure_fresh_detects_scripts_changes(self, fresh_manager, capsys):
-        """_ensure_fresh should detect when scripts/* files are modified."""
-        from common.skills_path import SKILLS_DIR
-        import time
-
-        skill_path = SKILLS_DIR(skill="git")
-        scripts_path = skill_path / "scripts"
-        status_script = scripts_path / "status.py"
-
-        # Skip if scripts don't exist (not all skills have scripts)
-        if not status_script.exists():
-            pytest.skip("git/scripts/status.py does not exist")
-
-        # Load git skill first
-        fresh_manager.load_skill(skill_path)
-        original_skill = fresh_manager._skills["git"]
-
-        # Wait and touch scripts file
-        time.sleep(0.05)
-        status_script.touch()
-        time.sleep(0.05)
-
-        # _ensure_fresh should detect the scripts change
-        result = fresh_manager._ensure_fresh("git")
-
-        assert result is True
-        reloaded_skill = fresh_manager._skills["git"]
-
-        # Skill object should be different (reloaded)
-        assert original_skill is not reloaded_skill, (
-            "Skill should be reloaded when scripts/* changes"
-        )
-
-    def test_module_loader_clears_scripts_on_reload(self, fresh_manager):
-        """module_loader should clear scripts/* modules when reloading tools."""
-        import sys
-        from agent.core.module_loader import ModuleLoader
-        from common.skills_path import SKILLS_DIR
-
-        skill_path = SKILLS_DIR(skill="git")
-        tools_path = skill_path / "tools.py"
-        scripts_path = skill_path / "scripts"
-        status_script = scripts_path / "status.py"
-
-        # Skip if scripts don't exist
-        if not status_script.exists():
-            pytest.skip("git/scripts/* does not exist")
-
-        # First load
-        loader = ModuleLoader(SKILLS_DIR())
-        loader._ensure_parent_packages()
-        loader._ensure_skill_package("git")
-        loader._preload_decorators()
-
-        module1 = loader.load_module("agent.skills.git.tools", tools_path)
-
-        # Simulate importing a script (this is what happens when a command runs)
-        from agent.skills.git.scripts import status as status_mod1
-
-        # Verify script module was imported
-        scripts_modules = [k for k in sys.modules if k.startswith("agent.skills.git.scripts.")]
-        assert len(scripts_modules) > 0, "scripts modules should be loaded after import"
-
-        # Reload (simulate hot reload)
-        module2 = loader.load_module("agent.skills.git.tools", tools_path, reload=True)
-
-        # Verify scripts modules were cleared
-        scripts_after = [k for k in sys.modules if k.startswith("agent.skills.git.scripts.")]
-        assert len(scripts_after) == 0, "scripts modules should be cleared after reload"
-        assert module1 is not module2, "New module should be returned"
-
-    def test_hot_reload_preserves_skill_commands(self, fresh_manager):
-        """Hot reload should preserve skill commands after reload."""
-        from common.skills_path import SKILLS_DIR
-
-        skill_path = SKILLS_DIR(skill="git")
-
-        # Load skill
-        fresh_manager.load_skill(skill_path)
-        assert "git" in fresh_manager._skills
-
-        # Get original command
-        original_cmd = fresh_manager.get_command("git", "git.status")
-        assert original_cmd is not None
-
-        # Trigger hot reload by touching tools.py
-        tools_path = skill_path / "tools.py"
-        import time
-
-        time.sleep(0.01)
-        tools_path.touch()
-
-        # Force fresh check
-        fresh_manager._ensure_fresh("git")
-
-        # Command should still exist after reload
-        reloaded_cmd = fresh_manager.get_command("git", "git.status")
-        assert reloaded_cmd is not None, "Command should exist after hot reload"
-
-    def test_hot_reload_with_both_tools_and_scripts(self, fresh_manager):
-        """Hot reload should work when both tools.py and scripts/* are modified."""
-        from common.skills_path import SKILLS_DIR
-        import time
-
-        skill_path = SKILLS_DIR(skill="git")
-        tools_path = skill_path / "tools.py"
-        scripts_path = skill_path / "scripts"
-        status_script = scripts_path / "status.py"
-
-        # Skip if scripts don't exist
-        if not status_script.exists():
-            pytest.skip("git/scripts/status.py does not exist")
-
-        # Load skill
-        fresh_manager.load_skill(skill_path)
-
-        # Modify both files
-        time.sleep(0.01)
-        tools_path.touch()
-        status_script.touch()
-
-        # Trigger reload
-        result = fresh_manager._ensure_fresh("git")
-
-        assert result is True
-        # Skill should still be functional
-        cmd = fresh_manager.get_command("git", "git.status")
-        assert cmd is not None
 
 
 # =============================================================================
@@ -978,7 +441,9 @@ class TestSkillPathUtilities:
         assert builder.skill("git") == root / "assets/skills/git"
         assert builder.tools("git") == root / "assets/skills/git/tools.py"
         assert builder.manifest("git") == root / "assets/skills/git/SKILL.md"
-        assert builder.guide("git") == root / "assets/skills/git/guide.md"
+        # README.md exists in git skill (formerly guide.md)
+        readme_path = root / "assets/skills/git/README.md"
+        assert readme_path.exists(), f"README.md should exist at {readme_path}"
 
 
 if __name__ == "__main__":

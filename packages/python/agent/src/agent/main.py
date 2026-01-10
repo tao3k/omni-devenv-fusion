@@ -68,9 +68,21 @@ From Claude Code CLI:
 
     # Import and call omni
     try:
-        from agent.mcp_server import omni
+        import asyncio
+        from agent.core.skill_manager import get_skill_manager
 
-        result = omni(args.command, parsed_args)
+        manager = get_skill_manager()
+
+        # Parse skill.command format
+        if "." in args.command:
+            parts = args.command.split(".", 1)
+            skill_name = parts[0]
+            command_name = parts[1]
+        else:
+            skill_name = args.command
+            command_name = "help"
+
+        result = asyncio.run(manager.run(skill_name, command_name, parsed_args))
         print(result)
 
     except ImportError as e:

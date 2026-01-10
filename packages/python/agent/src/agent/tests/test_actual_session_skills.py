@@ -35,6 +35,9 @@ sys.path.insert(
     + "/packages/python/common/src",
 )
 
+# Import omni helper (Phase 35.3)
+from test_skills import omni
+
 # Check for Anthropic SDK
 try:
     from anthropic import Anthropic
@@ -245,8 +248,6 @@ and give examples of useful commands."""
         print("=" * 60)
 
         # First, get actual git status via omni
-        from agent.mcp_server import omni
-
         actual_status = omni("git.status")
 
         system_prompt = """You are analyzing git status for the user.
@@ -284,8 +285,6 @@ Use @omni("git.status") to get the current git status."""
         print("\n" + "=" * 60)
         print("🧪 Test: Multiple Omni Skills")
         print("=" * 60)
-
-        from agent.mcp_server import omni
 
         # Get help for different skills
         git_help = omni("git")
@@ -333,8 +332,6 @@ Given information about git and knowledge skills, explain what each can do."""
         print("\n" + "=" * 60)
         print("🧪 Test: Complete Conversation Flow")
         print("=" * 60)
-
-        from agent.mcp_server import omni
 
         # Simulated conversation
         conversation_history = [

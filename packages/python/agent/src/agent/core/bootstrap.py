@@ -1,7 +1,7 @@
 """
 src/agent/core/bootstrap.py
 System boot sequence and background task initialization.
-Phase 13.10: Config-driven skill preloading.
+Phase 35.3: Config-driven skill preloading for pure MCP Server.
 """
 
 import sys
@@ -11,15 +11,18 @@ import structlog
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server import Server
 
 logger = structlog.get_logger(__name__)
 
 
-def boot_core_skills(mcp: "FastMCP"):
+def boot_core_skills(mcp: "Server" = None):
     """
     [Kernel Boot] Auto-load skills from settings.yaml.
     Fixes the 'Lobotomized Agent' issue by ensuring tools are ready.
+
+    Note: With pure MCP Server, tools are listed dynamically via handle_list_tools.
+    This function pre-loads skills into SkillManager for faster first-run.
 
     Loading mode is controlled by settings.yaml:
     - skills.preload: Skills loaded at startup
@@ -45,6 +48,8 @@ def boot_core_skills(mcp: "FastMCP"):
         try:
             # Check if skill exists before trying to load
             if registry.get_skill_manifest(skill):
+                # Load skill (mcp parameter is ignored in pure MCP mode,
+                # but kept for API compatibility)
                 success, msg = registry.load_skill(skill, mcp)
                 if success:
                     logger.info("Preloaded skill", skill=skill)

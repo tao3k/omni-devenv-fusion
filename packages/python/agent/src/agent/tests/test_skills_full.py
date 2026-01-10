@@ -64,7 +64,7 @@ class TestSkillManifestSchema:
         skill_md_path = skills_path / "SKILL.md"
 
         # Skip known incomplete/internal skills
-        skip_skills = {"crawl4ai", "stress_test_skill", "skill"}
+        skip_skills = {"crawl4ai", "stress_test_skill", "skill", "test-skill"}
 
         # Check individual skill SKILL.md files
         for skill_dir in skills_path.iterdir():
@@ -136,21 +136,21 @@ class TestSkillStructure:
                 tools_file = skill_dir / "tools.py"
                 assert tools_file.exists(), f"{skill_dir.name} missing tools.py"
 
-    def test_skill_has_guide_md(self, skills_path):
-        """Most skills should have a guide.md file (soft assertion)."""
-        missing_guides = []
+    def test_skill_has_readme_md(self, skills_path):
+        """Most skills should have a README.md file (soft assertion)."""
+        missing_readmes = []
         for skill_dir in skills_path.iterdir():
             if skill_dir.is_dir() and not skill_dir.name.startswith("_"):
-                guide_file = skill_dir / "guide.md"
+                readme_file = skill_dir / "README.md"
                 skill_file = skill_dir / "SKILL.md"
-                if not guide_file.exists() and not skill_file.exists():
-                    missing_guides.append(skill_dir.name)
-        # Allow some skills to not have guides (e.g., internal/utility skills)
-        if missing_guides:
-            # Just warn, don't fail - guides are recommended but not required
+                if not readme_file.exists() and not skill_file.exists():
+                    missing_readmes.append(skill_dir.name)
+        # Allow some skills to not have READMEs (e.g., internal/utility skills)
+        if missing_readmes:
+            # Just warn, don't fail - READMEs are recommended but not required
             import warnings
 
-            warnings.warn(f"Skills missing guide.md: {missing_guides}")
+            warnings.warn(f"Skills missing README.md: {missing_readmes}")
 
     def test_skill_directory_not_empty(self, skills_path):
         """Skill directory should not be empty."""

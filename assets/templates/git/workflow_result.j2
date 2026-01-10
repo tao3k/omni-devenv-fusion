@@ -1,7 +1,19 @@
 {#
 # git/workflow_result.j2 - Workflow Result Template
 #
-# Renders workflow execution results with structured output.
+# Renders workflow execution results as XML for LLM consumption.
+#
+# LLM Instructions:
+# - This output is XML format for structured data extraction
+# - Parse <intent>, <success>, <message>, <details> tags
+# - Display to user in human-readable format:
+#   ✅ <intent> - <message> (if success=true)
+#   ❌ <intent> - <message> (if success=false)
+#   Show details if present
+#
+# Example display:
+#   ✅ prepare_commit - Commit preparation completed
+#   Details: has_staged=True, staged_file_count=5
 #
 #}
 

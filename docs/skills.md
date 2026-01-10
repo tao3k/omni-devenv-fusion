@@ -1,12 +1,37 @@
 # Skills Documentation
 
-> **Phase 35.2: Cascading Templates & Router-Controller** | **Phase 35.1: Simplified Test Framework** | **Phase 34: Cognitive System** | **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
+> **Phase 35.3: Pure MCP Server** | **Phase 35.2: Cascading Templates & Router-Controller** | **Phase 35.1: Simplified Test Framework** | **Phase 34: Cognitive System** | **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
 
 ## Overview
 
 Omni-DevEnv Fusion uses a skill-based architecture where each skill is a self-contained module in the `assets/skills/` directory. Skills are accessed via the single `@omni` MCP tool.
 
 All skill metadata is unified in `SKILL.md` using YAML Frontmatter, following the Anthropic Agent Skills standard.
+
+## Phase 35.3: Pure MCP Server
+
+Starting with Phase 35.3, Omni uses **pure `mcp.server.Server`** instead of FastMCP for better control and performance:
+
+```python
+# mcp_server.py - Pure MCP Server (no FastMCP)
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+
+server = Server("omni-agent")
+
+@server.list_tools()
+async def list_tools(): ...
+
+@server.call_tool()
+async def call_tool(name, arguments): ...
+```
+
+**Benefits:**
+
+- Direct control over tool listing/execution
+- Explicit error handling for TaskGroup
+- Optional uvloop (SSE mode) + orjson for performance
+- No FastMCP dependency overhead
 
 ## Phase 35.2: Cascading Templates & Router-Controller
 
@@ -16,7 +41,7 @@ Skills support **cascading template loading** with "User Overrides > Skill Defau
 
 ```
 assets/skills/git/                    # Skill Directory
-├── templates/                         # [新增] Skill defaults (Fallback)
+├── templates/                         # Skill defaults (Fallback)
 │   ├── commit_message.j2
 │   ├── workflow_result.j2
 │   └── error_message.j2
@@ -162,14 +187,14 @@ entry_point: "implementation.py"
 
 ## Skill Structure
 
-### Complete Structure (Phase 35.2)
+### Complete Structure (Phase 35.3)
 
 ```
 assets/skills/<skill_name>/
-├── SKILL.md           # Unified manifest + documentation (YAML Frontmatter)
+├── SKILL.md           # Unified manifest + rules (definition file, configurable)
 ├── tools.py           # @skill_command decorated functions (Router Layer)
-├── guide.md           # Developer documentation
-├── templates/         # Skill default templates (Phase 35.2 - Cascading)
+├── README.md          # Developer documentation
+├── templates/         # Jinja2 templates (Phase 35.2 - Cascading)
 │   ├── commit_message.j2
 │   ├── workflow_result.j2
 │   └── error_message.j2
@@ -182,7 +207,7 @@ assets/skills/<skill_name>/
 ├── data/              # Data files (JSON, CSV)
 ├── tests/             # Skill tests (Phase 35.1 - zero config!)
 │   └── test_*.py      # Pure pytest, fixtures auto-injected
-├── pyproject.toml     # Dependencies (subprocess mode only)
+├── pyproject.toml     # Dependencies (subprocess/sidecar mode)
 └── uv.lock            # Locked dependencies
 ```
 
@@ -192,10 +217,11 @@ assets/skills/<skill_name>/
 | ------------- | -------- | ------------------------------------------- |
 | `SKILL.md`    | ✅ Yes   | Skill metadata and LLM context              |
 | `tools.py`    | ✅ Yes   | @skill_command decorated functions          |
-| `templates/`  | ❌ No    | Jinja2 templates (enables cascading)        |
-| `scripts/`    | ❌ No    | Atomic implementations (isolated namespace) |
-| `references/` | ❌ No    | RAG documentation                           |
-| `tests/`      | ❌ No    | Pytest tests (zero-config)                  |
+| `README.md`   | No       | Developer documentation                     |
+| `templates/`  | No       | Jinja2 templates (enables cascading)        |
+| `scripts/`    | No       | Atomic implementations (isolated namespace) |
+| `references/` | No       | RAG documentation                           |
+| `tests/`      | No       | Pytest tests (zero-config)                  |
 
 ### Cascading Template Structure
 
@@ -283,22 +309,36 @@ async def my_command(param: str) -> str:
     return "result"
 ```
 
-### 4. Add Documentation (`guide.md`)
+### 4. Add Documentation (`README.md`)
 
 ````markdown
-# My Skill Guide
+# My Skill
+
+## Overview
+
+Brief description of what this skill does.
 
 ## Usage
 
-When to use this command:
+When to use this skill:
 
 - Use `my_skill.my_command` for [specific tasks]
 - Remember to [relevant considerations]
 
-## Examples
+## Commands
+
+### my_command
+
+Brief description.
+
+**Parameters:**
+
+- `param`: Description
+
+**Example:**
 
 ```bash
-# Example usage
+
 ```
 ````
 
@@ -424,7 +464,7 @@ Mtime checks are throttled to once per 100ms to avoid excessive filesystem I/O.
 
 Loggers are created on first use, not at import time (~100ms saved per module).
 
-## Path Utilities (Phase 32)
+## Path Utilities (Phase 32/35.3)
 
 Use `common.skills_path` for simplified skill path handling:
 
@@ -444,6 +484,10 @@ git_tools = SKILLS_DIR(skill="git", filename="tools.py")  # -> Path("assets/skil
 # Get nested path
 known_skills = SKILLS_DIR(skill="skill", path="data/known_skills.json")
 
+# Get definition file (configurable via settings.yaml)
+definition = SKILLS_DIR.definition_file()           # -> "SKILL.md"
+git_definition = SKILLS_DIR.definition_file("git")  # -> Path("assets/skills/git/SKILL.md")
+
 # Load skill module directly
 git_tools = load_skill_module("git")
 ```
@@ -452,13 +496,15 @@ git_tools = load_skill_module("git")
 
 ```yaml
 assets:
-  skills_dir: "assets/skills" # Read by SKILLS_DIR
+  skills_dir: "assets/skills" # Skills base directory
+  definition_file: "SKILL.md" # Skill definition file (default: SKILL.md)
 ```
 
 **Benefits:**
 
 - Single source of truth for skills path
 - GitOps-aware project root detection
+- Configurable definition file for flexibility
 - Replaces verbose `Path(__file__).resolve().parent.parent.parent` patterns
 
 ## CLI Commands
@@ -789,8 +835,7 @@ assets/skills/crawl4ai/
 ├── tools.py              # Lightweight interface (uses agent.core.swarm)
 ├── scripts/
 │   └── engine.py         # Heavy implementation (imports crawl4ai)
-├── SKILL.md              # Skill documentation
-└── prompts.md            # Routing prompts
+└── SKILL.md              # Skill documentation + rules
 ```
 
 **Usage:**

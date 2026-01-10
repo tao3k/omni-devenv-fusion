@@ -63,13 +63,11 @@ in
       };
     };
 
-    omni-devenv-fusion = {
+    omni = {
       type = "stdio";
       # url = "http://0.0.0.0:3002/sse";
-      command = "uv";
+      command = "omni";
       args = [
-        "run"
-        "omni"
         "mcp"
         "--transport"
         "stdio"

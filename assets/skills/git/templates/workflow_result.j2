@@ -1,22 +1,18 @@
 {#
 # git/workflow_result.j2 - Workflow Result Template
 #
-# Renders workflow execution results with structured output.
+# Renders workflow execution results as JSON for LLM consumption.
 #
 #}
-
-<workflow_result>
-    <intent>{{ intent }}</intent>
-    <success>{{ 'true' if success else 'false' }}</success>
-    <timestamp>{{ timestamp }}</timestamp>
-{%- if message %}
-    <message>{{ message }}</message>
-{%- endif %}
-{%- if details %}
-    <details>
+{
+    "intent": "{{ intent }}",
+    "success": {{ 'true' if success else 'false' }},
+    "timestamp": "{{ timestamp }}",
+    "message": "{{ message }}"{%- if details %},
+    "details": {
 {% for key, value in details.items() -%}
-        <{{ key }}>{{ value }}</{{ key }}>
+        "{{ key }}": "{{ value }}"{% if not loop.last %},{% endif %}
 {% endfor -%}
-    </details>
+    }
 {%- endif %}
-</workflow_result>
+}

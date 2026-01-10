@@ -123,8 +123,8 @@ This is a test skill.
 '''
         (manifest_dir / "SKILL.md").write_text(skill_md_content)
 
-        # Write guide.md
-        (manifest_dir / "guide.md").write_text("# Toxic Guide\n\nThis is a test skill.")
+        # Write README.md
+        (manifest_dir / "README.md").write_text("# Toxic Guide\n\nThis is a test skill.")
 
         # Write tools.py with template
         tools_file = skill_dir / "tools.py"

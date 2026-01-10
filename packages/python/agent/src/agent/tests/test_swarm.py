@@ -22,7 +22,7 @@ from agent.core.swarm import (
     get_swarm_health,
     get_simple_swarm_health,
     get_async_swarm_health,
-    _check_server_health,
+    get_swarm,
 )
 
 
@@ -85,7 +85,8 @@ class TestSwarmHealthAsync:
     @pytest.mark.asyncio
     async def test_check_server_health_returns_structure(self):
         """Test that _check_server_health returns proper structure."""
-        result = await _check_server_health("orchestrator")
+        swarm = get_swarm()
+        result = await swarm._check_server_health("orchestrator")
 
         assert "status" in result
         assert "description" in result
@@ -95,7 +96,8 @@ class TestSwarmHealthAsync:
     @pytest.mark.asyncio
     async def test_check_server_health_unknown_server(self):
         """Test that _check_server_health handles unknown servers."""
-        result = await _check_server_health("unknown_server")
+        swarm = get_swarm()
+        result = await swarm._check_server_health("unknown_server")
 
         assert result["status"] == "unknown"
 
@@ -209,8 +211,9 @@ class TestSwarmMockScenarios:
     @pytest.mark.asyncio
     async def test_async_check_with_mocked_response(self):
         """Test async health check with mocked server status."""
+        swarm = get_swarm()
         # Mock the _check_server_health to simulate a down server
-        original_check = _check_server_health
+        original_check = swarm._check_server_health
 
         async def mock_check(name):
             if name == "executor":
@@ -223,7 +226,7 @@ class TestSwarmMockScenarios:
                 }
             return await original_check(name)
 
-        with patch("agent.core.swarm._check_server_health", side_effect=mock_check):
+        with patch.object(swarm, "_check_server_health", side_effect=mock_check):
             result = await get_async_swarm_health()
 
             # With one server down, healthy should be False

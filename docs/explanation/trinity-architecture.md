@@ -1,12 +1,13 @@
-# Trinity Architecture (Phase 35.2)
+# Trinity Architecture (Phase 35.3)
 
 > Unified skill management: Code (Hot-Reloading), Context (Repomix), and State (Registry).
-> **Phase 35.2**: Isolated Sandbox + Sidecar Execution Pattern for heavy dependencies.
+> **Phase 35.3**: Pure MCP Server (no FastMCP) - High-Performance with uvloop + orjson
 
 ## Quick Reference
 
 | Phase | Key Change                                                  |
 | ----- | ----------------------------------------------------------- |
+| 35.3  | Pure MCP Server (mcp.server.Server, no FastMCP)             |
 | 35.2  | Sidecar Execution Pattern (uv isolation for crawl4ai, etc.) |
 | 35.1  | Zero-configuration test framework (pytest plugin)           |
 | 34    | Cognitive system (CommandResult, StateCheckpointer)         |
@@ -165,10 +166,9 @@ packages/python/common/src/common/
     └── skill_<name>_repomix.xml  # Cached contexts
 
 assets/skills/<skill>/
-├── SKILL.md              # Skill manifest (YAML Frontmatter)
+├── SKILL.md              # Skill manifest + rules (definition file)
 ├── tools.py              # Skill interface (lightweight)
-├── prompts.md            # Skill rules (LLM reads)
-├── guide.md              # Reference docs
+├── README.md             # Reference docs
 ├── scripts/              # Atomic implementations (Phase 35.2)
 │   └── *.py              # Heavy imports allowed here
 ├── pyproject.toml        # Skill dependencies (for subprocess mode)
@@ -177,15 +177,17 @@ assets/skills/<skill>/
 
 ## Phase 25 → Phase 29 Evolution
 
-| Aspect                 | Phase 25.3                 | Phase 35.2                                            |
+| Aspect                 | Phase 25.3                 | Phase 35.3                                            |
 | ---------------------- | -------------------------- | ----------------------------------------------------- |
-| **Architecture**       | Trinity                    | Trinity + Protocols + Sidecar Pattern                 |
+| **Architecture**       | Trinity                    | Trinity + Protocols + Pure MCP Server                 |
+| **MCP Server**         | FastMCP                    | `mcp.server.Server` (no FastMCP)                      |
 | **Registry**           | Monolithic (887 lines)     | Modular (6 files, ~676 lines)                         |
 | **Code Loading**       | `sys.modules` manipulation | `ModuleLoader` context manager                        |
 | **State Management**   | Dict-based                 | Protocol-based (ISkill, ISkillCommand)                |
 | **Data Classes**       | Standard dataclass         | `@dataclass(slots=True)`                              |
 | **Skill Structure**    | `tools.py` only            | `tools.py` + `scripts/` (atomic implementations)      |
 | **Heavy Dependencies** | N/A                        | Sidecar Pattern (uv isolation via `common.isolation`) |
+| **Performance**        | Standard asyncio           | uvloop (SSE) + orjson                                 |
 | **Testing**            | Manual fixtures            | Zero-config pytest plugin (auto-discovers fixtures)   |
 
 ## Phase 35.2: Sidecar Execution Pattern
@@ -222,8 +224,7 @@ assets/skills/crawl4ai/
 ├── tools.py              # Lightweight interface (uses common.isolation)
 ├── scripts/
 │   └── engine.py         # Heavy implementation (imports crawl4ai)
-├── SKILL.md              # Skill documentation
-└── prompts.md            # Routing prompts
+└── SKILL.md              # Skill documentation + rules
 ```
 
 **tools.py** (lightweight):
@@ -260,18 +261,35 @@ async def crawl(url: str):
 
 ## Integration Points
 
-### With MCP Server (`mcp_server.py`)
+### With Pure MCP Server (`mcp_server.py`, Phase 35.3)
 
 ```python
+from mcp.server import Server
 from agent.core.skill_manager import get_skill_manager
 
-@mcp.tool(name="omni")
-async def omni(input: str, args: Dict = None) -> str:
-    """Single entry point - dispatches to Trinity."""
+# Create pure MCP Server (no FastMCP)
+server = Server("omni-agent")
+
+@server.list_tools()
+async def handle_list_tools() -> list[Tool]:
+    """Dynamic tool discovery from SkillManager."""
     manager = get_skill_manager()
-    # ... parses skill.command ...
-    result = await manager.run(skill_name, command_name, args)
-    return result
+    tools = []
+    for skill_name in manager.list_loaded():
+        for cmd_name in manager.get_commands(skill_name):
+            tools.append(Tool(
+                name=f"{skill_name}.{cmd_name}",
+                description=...
+            ))
+    return tools
+
+@server.call_tool()
+async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
+    """Execute via SkillManager."""
+    manager = get_skill_manager()
+    skill_name, cmd_name = name.split(".", 1)
+    result = await manager.run(skill_name, cmd_name, arguments)
+    return [TextContent(type="text", text=result)]
 ```
 
 ### With Skill Registry (`agent/core/registry/`)
@@ -291,7 +309,7 @@ Each skill can optionally define `repomix.json` for atomic context:
 ```json
 {
   "output": { "style": "xml", "fileSummary": true },
-  "include": ["tools.py", "prompts.md", "guide.md", "*.md"],
+  "include": ["SKILL.md", "tools.py", "README.md", "*.md"],
   "ignore": { "patterns": ["**/__pycache__/**"], "characters": [] }
 }
 ```

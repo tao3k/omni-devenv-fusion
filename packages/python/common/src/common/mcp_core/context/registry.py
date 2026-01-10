@@ -189,7 +189,7 @@ except ValueError as e:
 Skills are self-contained units with:
 - `manifest.json` - Skill metadata and dependencies
 - `tools.py` - MCP tool implementations
-- `guide.md` - LLM guidance for the skill
+- `README.md` - LLM guidance for the skill
 - `prompts.md` - Persona and behavior prompts
 
 ### Skill Discovery
@@ -239,7 +239,7 @@ src/
 agent/skills/<skill_name>/
 ├── manifest.json   # Skill metadata
 ├── tools.py        # MCP tool implementations
-├── guide.md        # LLM guidance
+├── README.md       # LLM guidance
 └── prompts.md      # Persona prompts
 ```
 

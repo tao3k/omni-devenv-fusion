@@ -20,10 +20,26 @@ Usage:
 from __future__ import annotations
 
 import subprocess
-import json
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+# High-performance JSON parsing (orjson is ~3x faster than stdlib json)
+try:
+    import orjson
+
+    _HAS_ORJSON = True
+except ImportError:
+    _HAS_ORJSON = False
+
+
+def _json_loads(data: str | bytes) -> Any:
+    """Fast JSON parsing using orjson if available."""
+    if _HAS_ORJSON:
+        return orjson.loads(data)
+    import json
+
+    return json.loads(data)
 
 
 def run_skill_script(
@@ -99,9 +115,7 @@ def run_skill_script(
             env=env,
         )
 
-        # Parse new output format:
-        # 1. Find the JSON metadata line (may be after logs)
-        # 2. Everything after is raw content (markdown) - for direct rendering
+        # Parse stdout only (stderr contains crawler logs)
         stdout = result.stdout.strip()
 
         if not stdout:
@@ -116,14 +130,17 @@ def run_skill_script(
         content_start_idx = 0
 
         for idx, line in enumerate(lines):
+            line = line.strip()
+            if not line:
+                continue
             try:
-                potential = json.loads(line)
+                potential = _json_loads(line)
                 # Check if this looks like metadata (has success/url)
                 if "success" in potential or "url" in potential:
                     metadata = potential
                     content_start_idx = idx + 1
                     break
-            except json.JSONDecodeError:
+            except (ValueError, TypeError):
                 continue
 
         if metadata:
@@ -159,7 +176,7 @@ def run_skill_script(
             "error": f"Script failed (exit code {e.returncode})",
             "stderr": e.stderr.strip() if e.stderr else None,
         }
-    except json.JSONDecodeError as e:
+    except (ValueError, TypeError) as e:
         return {
             "success": False,
             "error": f"Failed to parse JSON output: {str(e)}",
@@ -211,8 +228,8 @@ def _extract_json(text: str) -> Optional[Dict[str, Any]]:
 
     json_str = text[start : end + 1]
     try:
-        return json.loads(json_str)
-    except json.JSONDecodeError:
+        return _json_loads(json_str)
+    except (ValueError, TypeError):
         # Try to be more lenient - maybe there's nested JSON
         # Return None to trigger fallback handling
         return None

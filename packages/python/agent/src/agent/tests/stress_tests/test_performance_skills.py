@@ -12,8 +12,13 @@ Usage:
 
 import pytest
 import time
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch, AsyncMock
+
+# Import omni helper (Phase 35.3)
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from test_skills import omni
 
 
 class TestSkillPerformance:
@@ -75,8 +80,6 @@ class TestAsyncPerformance:
     @pytest.mark.asyncio
     async def test_omni_dispatch_performance(self, skill_manager_fixture):
         """Benchmark omni tool dispatch overhead."""
-        from agent.mcp_server import omni
-
         # Warm up
         await omni("git.status")
 

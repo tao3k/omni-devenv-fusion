@@ -1,0 +1,29 @@
+{#
+# git/security_warning.j2 - Security Guard Detection Template
+#
+# Used when sensitive files are detected in staged changes.
+# Prompts LLM to make independent judgment.
+#}
+<security_warning>
+    <file_count>{{ file_count }}</file_count>
+{% for file in files %}
+    <file>{{ file }}</file>
+{% endfor %}
+    <llm_instructions>
+As an LLM, you must make an independent judgment on these files:
+
+1. **Read the file content** - Verify what's actually staged
+2. **Assess risk level**:
+   - ✅ Safe: Templates, placeholders, documentation
+   - ⚠️ Unsafe: Actual secrets, API keys, credentials, tokens
+3. **Provide your assessment**:
+   - "✅ Safe to commit: template with placeholder values"
+   - "⚠️ Unsafe: contains actual secrets - recommend unstaging"
+4. **Wait for user confirmation** before proceeding
+
+Your response should include:
+- Which files you reviewed
+- Your safety assessment for each
+- Clear recommendation (commit or unstage)
+    </llm_instructions>
+</security_warning>

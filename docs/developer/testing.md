@@ -1079,22 +1079,19 @@ elif toxic_type == "import_error":
 
 **Symptom**: `RuntimeError: asyncio.run() cannot be called from a running event loop`
 
-**Cause**: Using `FastMCP.run()` which internally calls `anyio.run()` while an event loop already exists
+**Cause**: Using `asyncio.run()` while an event loop already exists
 
-**Solution**: Use async methods directly:
+**Solution**: Use native async/await:
 
 ```python
-# BAD - FastMCP.run() is synchronous, uses anyio.run() internally
-await mcp.run()  # This will fail if called from an async context
+# BAD - asyncio.run() creates a new event loop
+await asyncio.run(module.async_function())
 
-# GOOD - Use async methods directly
-await mcp.run_stdio_async()  # For stdio transport
-await mcp.run_sse_async(mount_path)  # For SSE transport
+# GOOD - Use native await
+result = await module.async_function()
 ```
 
-**Files Modified**:
-
-- `packages/python/agent/src/agent/mcp_server.py` - Changed `await mcp.run()` to `await mcp.run_stdio_async()`
+**Note**: With Phase 35.3 Pure MCP Server, this is handled automatically by `server.run()`.
 
 ### Issue: asyncio.run() Error - "a coroutine was expected"
 

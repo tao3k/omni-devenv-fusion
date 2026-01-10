@@ -35,11 +35,11 @@ This is the complete engineering protocol for this project:
 
 ### Preferred Pattern: `$PRJ_ROOT` + Relative Path
 
-Always use **relative paths** from current location combined with `$PRJ_ROOT`:
+Always use **relative paths** from current location combined with `"$PRJ_ROOT"`:
 
 ```bash
-# GOOD - Relative to current location
-$PRJ_ROOT/packages/python/agent/src/agent/core/skill_manager.py
+# GOOD - Always quote $PRJ_ROOT (required for paths with spaces)
+"$PRJ_ROOT/packages/python/agent/src/agent/core/skill_manager.py"
 
 # GOOD - Using environment variable
 echo $PRJ_ROOT/.data/benchmark_report.txt
