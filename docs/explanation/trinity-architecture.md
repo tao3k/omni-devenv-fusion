@@ -1,17 +1,18 @@
-# Trinity Architecture (Phase 29)
+# Trinity Architecture (Phase 35.2)
 
 > Unified skill management: Code (Hot-Reloading), Context (Repomix), and State (Registry).
-> **Phase 35.1**: Zero-configuration test framework with auto-discovered fixtures.
+> **Phase 35.2**: Isolated Sandbox + Sidecar Execution Pattern for heavy dependencies.
 
 ## Quick Reference
 
-| Phase | Key Change                                          |
-| ----- | --------------------------------------------------- |
-| 35.1  | Zero-configuration test framework (pytest plugin)   |
-| 34    | Cognitive system (CommandResult, StateCheckpointer) |
-| 33    | SKILL.md unified format                             |
-| 32    | Import optimization                                 |
-| 29    | Trinity Architecture + Protocols                    |
+| Phase | Key Change                                                  |
+| ----- | ----------------------------------------------------------- |
+| 35.2  | Sidecar Execution Pattern (uv isolation for crawl4ai, etc.) |
+| 35.1  | Zero-configuration test framework (pytest plugin)           |
+| 34    | Cognitive system (CommandResult, StateCheckpointer)         |
+| 33    | SKILL.md unified format                                     |
+| 32    | Import optimization                                         |
+| 29    | Trinity Architecture + Protocols                            |
 
 ## Overview
 
@@ -138,7 +139,7 @@ Execute command function
 | First `@omni("skill.help")` | ~100-500ms | Repomix execution               |
 | Subsequent help calls       | <1ms       | Cache read                      |
 
-## File Structure (Phase 29)
+## File Structure (Phase 35.2)
 
 ```
 packages/python/agent/src/agent/core/
@@ -154,32 +155,108 @@ packages/python/agent/src/agent/core/
 ├── module_loader.py       # Clean hot-reload (no sys.modules pollution)
 └── skill_manager.py       # Trinity facade for @omni routing
 
-packages/python/common/src/common/mcp_core/
-└── lazy_cache.py          # RepomixCache class
+packages/python/common/src/common/
+├── isolation.py           # Sidecar Execution Pattern (Phase 35.2)
+├── lazy_cache.py          # RepomixCache class
+└── skills_path.py         # Skills directory resolution
 
 .cache/
 └── <project>/
     └── skill_<name>_repomix.xml  # Cached contexts
 
 assets/skills/<skill>/
-├── tools.py              # Skill implementation
+├── SKILL.md              # Skill manifest (YAML Frontmatter)
+├── tools.py              # Skill interface (lightweight)
 ├── prompts.md            # Skill rules (LLM reads)
 ├── guide.md              # Reference docs
+├── scripts/              # Atomic implementations (Phase 35.2)
+│   └── *.py              # Heavy imports allowed here
+├── pyproject.toml        # Skill dependencies (for subprocess mode)
 └── repomix.json          # Atomic context config (optional)
 ```
 
 ## Phase 25 → Phase 29 Evolution
 
-| Aspect               | Phase 25.3                 | Phase 29                               |
-| -------------------- | -------------------------- | -------------------------------------- |
-| **Architecture**     | Trinity                    | Trinity + Protocols                    |
-| **Registry**         | Monolithic (887 lines)     | Modular (6 files, ~676 lines)          |
-| **Code Loading**     | `sys.modules` manipulation | `ModuleLoader` context manager         |
-| **State Management** | Dict-based                 | Protocol-based (ISkill, ISkillCommand) |
-| **Data Classes**     | Standard dataclass         | `@dataclass(slots=True)`               |
-| **Logging**          | Mixed                      | Unified `structlog`                    |
-| **Memory**           | Standard                   | 3x less (slots=True)                   |
-| **Testability**      | Low                        | High (Protocols for mocking)           |
+| Aspect                 | Phase 25.3                 | Phase 35.2                                            |
+| ---------------------- | -------------------------- | ----------------------------------------------------- |
+| **Architecture**       | Trinity                    | Trinity + Protocols + Sidecar Pattern                 |
+| **Registry**           | Monolithic (887 lines)     | Modular (6 files, ~676 lines)                         |
+| **Code Loading**       | `sys.modules` manipulation | `ModuleLoader` context manager                        |
+| **State Management**   | Dict-based                 | Protocol-based (ISkill, ISkillCommand)                |
+| **Data Classes**       | Standard dataclass         | `@dataclass(slots=True)`                              |
+| **Skill Structure**    | `tools.py` only            | `tools.py` + `scripts/` (atomic implementations)      |
+| **Heavy Dependencies** | N/A                        | Sidecar Pattern (uv isolation via `common.isolation`) |
+| **Testing**            | Manual fixtures            | Zero-config pytest plugin (auto-discovers fixtures)   |
+
+## Phase 35.2: Sidecar Execution Pattern
+
+For skills with heavy dependencies (e.g., `crawl4ai`, `playwright`), use the **Sidecar Execution Pattern**:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Omni Core (Main Agent)                   │
+│                                                             │
+│  tools.py (lightweight) ──────┐                             │
+│  - imports only from common   │                             │
+│  - no heavy dependencies      │                             │
+│                              ↓                              │
+│                      uv run --directory skill/              │
+│                      python scripts/engine.py               │
+│                              ↓                              │
+│              ┌──────────────────────────────┐               │
+│              │    Skill Isolated Env        │               │
+│              │    (Independent .venv)       │               │
+│              │                              │               │
+│              │  scripts/engine.py           │               │
+│              │  - crawl4ai                  │               │
+│              │  - playwright                 │               │
+│              └──────────────────────────────┘               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Example: crawl4ai Skill
+
+```
+assets/skills/crawl4ai/
+├── pyproject.toml        # Skill dependencies (crawl4ai, fire, pydantic)
+├── tools.py              # Lightweight interface (uses common.isolation)
+├── scripts/
+│   └── engine.py         # Heavy implementation (imports crawl4ai)
+├── SKILL.md              # Skill documentation
+└── prompts.md            # Routing prompts
+```
+
+**tools.py** (lightweight):
+
+```python
+from common.isolation import run_skill_script
+
+@skill_command
+def crawl_webpage(url: str):
+    return run_skill_script(
+        skill_dir=Path(__file__).parent,
+        script_name="engine.py",
+        args={"url": url},
+    )
+```
+
+**scripts/engine.py** (heavy):
+
+```python
+from crawl4ai import AsyncWebCrawler
+
+async def crawl(url: str):
+    async with AsyncWebCrawler() as crawler:
+        result = await crawler.arun(url=url)
+        print(json.dumps({"success": result.success, "markdown": result.markdown}))
+```
+
+### Benefits
+
+1. **Zero Pollution**: Main agent doesn't install heavy dependencies
+2. **Version Isolation**: Each skill can use different library versions
+3. **Hot Swappable**: Add/remove skills without restarting
+4. **Security**: Limited blast radius for compromised code
 
 ## Integration Points
 
@@ -285,15 +362,15 @@ Production-ready for high-concurrency environments with:
 ### Running the Tests
 
 ```bash
-# Run skill-related tests
-uv run pytest packages/python/agent/src/agent/tests/test_phase13_skills.py -v
+# Run all agent tests (including stress tests)
+uv run pytest packages/python/agent/src/agent/tests/ -n 3 -v
 
-# Run all agent tests
-uv run pytest packages/python/agent/src/agent/tests/ -v
+# Run stress tests only
+uv run pytest packages/python/agent/src/agent/tests/stress_tests/ -v
 ```
 
 Expected output:
 
 ```
-======================== 549 passed, 5 skipped, 1 warning ========================
+======================== 610 passed, 2 skipped in 25.0s ========================
 ```

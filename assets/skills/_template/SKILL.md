@@ -132,22 +132,68 @@ mkdir -p assets/templates/my_new_skill/
 # Add *.j2 template files
 ```
 
-### 6. (Optional) Subprocess Mode
+### 6. (Optional) Subprocess Mode - Sidecar Execution Pattern
 
-For heavy/conflicting dependencies:
+For heavy/conflicting dependencies (e.g., `crawl4ai`, `playwright`), use the **Sidecar Pattern**:
+
+```
+assets/skills/my_skill/
+├── pyproject.toml        # Skill dependencies (uv isolation)
+├── tools.py              # Lightweight shim (no heavy imports!)
+└── scripts/
+    └── engine.py         # Heavy implementation (imports OK here!)
+```
+
+**Step A: Create `pyproject.toml`** (copied from `_template/pyproject.toml`)
+
+**Step B: Write lightweight `tools.py` shim**
 
 ```python
-# tools.py - Lightweight shim
-import subprocess
+# tools.py - Router (lightweight, no heavy imports!)
 from pathlib import Path
+from agent.skills.decorators import skill_command
+from common.isolation import run_skill_script
 
-SKILL_DIR = Path(__file__).parent
+def _get_skill_dir() -> Path:
+    return Path(__file__).parent
 
-def _run_isolated(command: str, **kwargs):
-    cmd = ["uv", "run", "-q", "python", str(SKILL_DIR / "implementation.py"), command, json.dumps(kwargs)]
-    result = subprocess.run(cmd, cwd=str(SKILL_DIR), capture_output=True, text=True)
-    return result.stdout.strip()
+@skill_command
+def my_command(param: str) -> dict:
+    """
+    My command description.
+    """
+    return run_skill_script(
+        skill_dir=_get_skill_dir(),
+        script_name="engine.py",
+        args={"param": param},
+        timeout=60,
+    )
 ```
+
+**Step C: Write heavy `scripts/engine.py`** (imports OK here!)
+
+```python
+# scripts/engine.py - Controller (heavy imports allowed!)
+import json
+from heavy_lib import do_work  # This works!
+
+def main(param: str):
+    result = do_work(param)
+    # Print JSON to stdout for the shim to capture
+    print(json.dumps({"success": True, "result": result}))
+
+if __name__ == "__main__":
+    import sys
+    main(sys.argv[1] if sys.argv[1:] else "")
+```
+
+**Why This Pattern?**
+
+| Layer               | What                 | Why                    |
+| ------------------- | -------------------- | ---------------------- |
+| `tools.py`          | Lightweight shim     | Main agent stays clean |
+| `scripts/engine.py` | Heavy implementation | Can import anything    |
+| `pyproject.toml`    | Dependencies         | uv manages isolation   |
 
 ## Quick Reference
 

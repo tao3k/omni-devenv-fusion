@@ -208,12 +208,88 @@ from .scripts.rendering import render_template
 
 ### Module Boundaries
 
-| Layer                              | Purpose                | Examples                                     |
-| ---------------------------------- | ---------------------- | -------------------------------------------- |
-| `common/`                          | Shared utilities, SSOT | `gitops.py`, `skills_path.py`, `settings.py` |
-| `agent/skills/{skill}/`            | Skill implementation   | `git/`, `filesystem/`, `skill/`              |
-| `agent/core/`                      | Core agent logic       | `skill_manager.py`, `orchestrator.py`        |
-| `packages/python/agent/src/agent/` | Agent packages         | `cli.py`, `tests/`                           |
+| Layer                              | Purpose                | Examples                                          |
+| ---------------------------------- | ---------------------- | ------------------------------------------------- |
+| `common/`                          | Shared utilities, SSOT | `gitops.py`, `skills_path.py`, `settings.py`      |
+| `agent/skills/{skill}/`            | Skill implementation   | `git/`, `filesystem/`, `skill/`                   |
+| `agent/core/`                      | Core agent logic       | `skill_manager.py`, `orchestrator.py`, `swarm.py` |
+| `packages/python/agent/src/agent/` | Agent packages         | `cli.py`, `tests/`                                |
+
+### Agent Runtime Swarm (ARS)
+
+The **Swarm** is the execution layer (Muscle) of the Trinity Architecture. It manages **how** skills are executed.
+
+#### Core Responsibilities
+
+| Responsibility               | Description                                                   |
+| ---------------------------- | ------------------------------------------------------------- |
+| **Execution Mode Selection** | Decide `in_process`, `sidecar_process`, or `docker_container` |
+| **Process Management**       | Spawn, monitor, and terminate skill processes                 |
+| **Resource Isolation**       | Prevent dependency conflicts between skills                   |
+| **Health Monitoring**        | Track MCP server and process status                           |
+
+#### Execution Modes
+
+```python
+from agent.core.swarm import get_swarm
+
+result = await get_swarm().execute_skill(
+    skill_name="crawl4ai",
+    command="engine.py",
+    args={"url": "https://example.com"},
+    mode="sidecar_process"  # Request isolated execution
+)
+```
+
+| Mode               | Use Case                 | Example Skills                         |
+| ------------------ | ------------------------ | -------------------------------------- |
+| `in_process`       | Lightweight, fast skills | `git`, `filesystem`, `knowledge`       |
+| `sidecar_process`  | Heavy dependencies       | `crawl4ai` (crawl4ai), `data` (pandas) |
+| `docker_container` | Complete isolation       | Security-critical operations           |
+
+#### Sidecar Pattern (Heavy Dependencies)
+
+Skills with heavy dependencies (like `crawl4ai`, `playwright`) use the **Sidecar Pattern**:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Main Agent                              │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │  tools.py (lightweight interface)                       ││
+│  │  - No heavy imports                                     ││
+│  │  - Calls Swarm.execute_skill()                          ││
+│  └─────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     Swarm (Execution Layer)                  │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │  run_skill_script() via uv isolation                    ││
+│  │  - Uses skill's own pyproject.toml                      ││
+│  │  - No dependency conflicts with main agent              ││
+│  └─────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Integration Example
+
+```python
+# assets/skills/crawl4ai/tools.py
+from agent.core.swarm import get_swarm
+from agent.skills.decorators import skill_command
+
+
+@skill_command
+def crawl_webpage(url: str, fit_markdown: bool = True) -> dict:
+    """Crawl a webpage using isolated environment."""
+    return get_swarm().execute_skill(
+        skill_name="crawl4ai",
+        command="engine.py",
+        args={"url": url, "fit_markdown": fit_markdown},
+        mode="sidecar_process",
+    )
+```
 
 ### Dependency Rule
 

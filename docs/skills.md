@@ -707,6 +707,118 @@ def test_with_decorator(git):
     assert git.status().success
 ```
 
+---
+
+## Sidecar Execution Pattern
+
+For skills with heavy dependencies (e.g., `crawl4ai`, `playwright`), use the **Sidecar Execution Pattern** to avoid polluting the main agent runtime.
+
+### Core Concept
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Omni Core (Main Agent)                   │
+│                                                             │
+│  tools.py (lightweight) ──────┐                             │
+│  - imports only from common   │                             │
+│  - no heavy dependencies      │                             │
+│                              ↓                              │
+│                      uv run --directory skill/              │
+│                      python scripts/engine.py               │
+│                              ↓                              │
+│              ┌──────────────────────────────┐               │
+│              │    Skill Isolated Env        │               │
+│              │    (Independent .venv)       │               │
+│              │                              │               │
+│              │  scripts/engine.py           │               │
+│              │  - crawl4ai                  │               │
+│              │  - pydantic                  │               │
+│              │  - fire                      │               │
+│              └──────────────────────────────┘               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Implementation
+
+**1. Use `SwarmEngine`** - Unified execution via agent.core.swarm:
+
+```python
+from agent.core.swarm import get_swarm
+from agent.skills.decorators import skill_command
+
+@skill_command
+def crawl_webpage(url: str, fit_markdown: bool = True) -> dict:
+    """Crawl a webpage using isolated environment."""
+    return get_swarm().execute_skill(
+        skill_name="crawl4ai",
+        command="engine.py",
+        args={"url": url, "fit_markdown": fit_markdown},
+        mode="sidecar_process",
+        timeout=30,
+    )
+```
+
+**2. Skill `pyproject.toml`** - Skill-specific dependencies:
+
+```toml
+[project]
+name = "skill-crawl4ai"
+dependencies = ["crawl4ai>=0.5.0", "fire>=0.5.0"]
+```
+
+**3. `scripts/engine.py`** - Actual implementation (runs in isolation):
+
+```python
+import asyncio
+import json
+from crawl4ai import AsyncWebCrawler
+
+async def crawl(url: str):
+    async with AsyncWebCrawler() as crawler:
+        result = await crawler.arun(url=url)
+        print(json.dumps({"success": result.success, "markdown": result.markdown}))
+```
+
+### Example Skill: crawl4ai
+
+The `crawl4ai` skill demonstrates this pattern:
+
+```
+assets/skills/crawl4ai/
+├── pyproject.toml        # Skill dependencies (crawl4ai, fire, pydantic)
+├── tools.py              # Lightweight interface (uses agent.core.swarm)
+├── scripts/
+│   └── engine.py         # Heavy implementation (imports crawl4ai)
+├── SKILL.md              # Skill documentation
+└── prompts.md            # Routing prompts
+```
+
+**Usage:**
+
+```python
+# Direct call - recommended for known skills
+@omni("crawl4ai.crawl_webpage", {"url": "https://example.com"})
+
+# Via skill.run - for dynamic/experimental skill calls
+@omni("skill.run", {"skill": "crawl4ai", "command": "crawl_webpage", "url": "https://example.com"})
+```
+
+**What's the difference?**
+
+| Call Style                    | When to Use                                                            |
+| ----------------------------- | ---------------------------------------------------------------------- |
+| `crawl4ai.crawl_webpage(...)` | Direct, known skill commands                                           |
+| `skill.run(...)`              | Dynamic skill discovery or when you don't know the skill ahead of time |
+
+### Benefits
+
+1. **Zero Pollution**: Main agent doesn't install heavy dependencies
+2. **Version Isolation**: Each skill can use different library versions
+3. **Hot Swappable**: Add/remove skills without restarting
+4. **Security**: Limited blast radius for compromised code
+
+---
+
 ## Related Documentation
 
 - [Trinity Architecture](./explanation/trinity-architecture.md) - Technical deep dive

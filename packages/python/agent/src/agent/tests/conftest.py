@@ -25,6 +25,7 @@ import pytest
 import asyncio
 import os
 import importlib.util
+import sys
 from pathlib import Path
 from typing import Generator, Any, Callable, Optional
 
@@ -37,6 +38,29 @@ from common.skills_path import SKILLS_DIR, load_skill_module
 from common.gitops import get_project_root
 
 _PROJECT_ROOT = get_project_root()
+
+
+# =============================================================================
+# Session Initialization - Ensure agent.skills is loaded for pytest-xdist
+# =============================================================================
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _ensure_agent_skills_loaded():
+    """Ensure agent.skills package is loaded for all tests.
+
+    This fixes ModuleNotFoundError when running tests with pytest-xdist
+    by ensuring the package is loaded before any test workers start.
+    """
+    # Import and load the agent.skills package
+    import agent.skills
+    import agent.skills.core
+
+    # Verify the packages are in sys.modules
+    assert "agent.skills" in sys.modules
+    assert "agent.skills.core" in sys.modules
+
+    yield
 
 
 # =============================================================================

@@ -294,6 +294,13 @@ def skill_command(
         else:
             return wrapper
 
+    # Handle @skill_command without parentheses
+    # When used as @skill_command, name receives the decorated function
+    if callable(name):
+        func = name
+        name = None
+        return decorator(func)
+
     return decorator
 
 

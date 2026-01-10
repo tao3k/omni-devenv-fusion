@@ -4,25 +4,27 @@ utils - Common utilities for MCP servers.
 Phase 29: Protocol-based design with slots=True.
 
 Modules:
-- logging.py: Structured logging setup
 - path_safety.py: Path safety checking
 - file_ops.py: Safe file operations
 - env.py: Environment variable utilities
 
-Usage:
-    from mcp_core.utils import setup_logging, is_safe_path, read_file_safely
+Note: Logging has been moved to common.log_config (Phase 35.2)
 
-    log = setup_logging(level="INFO")
+Usage:
+    from common.log_config import configure_logging, get_logger
+    from mcp_core.utils import is_safe_path, read_file_safely
+
+    configure_logging(level="INFO")
     is_safe, error = is_safe_path("path/to/file.txt")
 """
 
-from .logging import setup_logging, get_logger
+from common.log_config import configure_logging as setup_logging, get_logger
 from .path_safety import is_safe_path, is_safe_command
 from .file_ops import read_file_safely, write_file_safely
 from .env import load_env_from_file, get_env
 
 __all__ = [
-    # Logging
+    # Logging (re-exported from common.log_config)
     "setup_logging",
     "get_logger",
     # Path safety

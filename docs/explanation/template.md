@@ -1,5 +1,10 @@
 # [Concept Name]: Deep Dive
 
+> **Template**: Use this as a starting point for new deep-dive documents
+> **See Also**: `docs/explanation/` for examples of completed documents
+
+---
+
 > **Summary**: A 1-2 sentence summary of what this concept is and why it matters.
 > _Example: "The Fusion Engine is our custom orchestration layer that allows multiple MCP servers to share context without direct coupling."_
 

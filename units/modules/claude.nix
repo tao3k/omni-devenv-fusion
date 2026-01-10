@@ -2,10 +2,16 @@
   lib,
   config,
   pkgs,
-  inputs,
+  __inputs__,
   ...
 }:
+let
+  system = pkgs.stdenv.hostPlatform.system;
+in
 {
+  packages = [
+    __inputs__.llm-agents.packages.${system}.claude-code
+  ];
   claude.code.enable = true;
   claude.code.env = {
     ANTHROPIC_BASE_URL = "https://api.minimax.io/anthropic";
@@ -57,15 +63,18 @@
       };
     };
 
-    orchestrator = {
+    omni-devenv-fusion = {
       type = "stdio";
+      # url = "http://0.0.0.0:3002/sse";
       command = "uv";
       args = [
         "run"
-        "python"
-        "-m"
-        "agent.cli"
+        "omni"
         "mcp"
+        "--transport"
+        "stdio"
+        # "--port"
+        # "3002"
       ];
       env = {
         OMNI_UX_MODE = "headless";

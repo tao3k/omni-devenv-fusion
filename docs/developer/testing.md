@@ -51,8 +51,320 @@ packages/python/agent/src/agent/tests/
 
 | Suite        | Count | Execution Time | Parallel |
 | ------------ | ----- | -------------- | -------- |
-| Main Tests   | 605   | ~25s           | `-n 4`   |
+| Main Tests   | 610   | ~25s           | `-n 3`   |
 | Stress Tests | 22+   | ~2s            | -        |
+
+### Hot Reload Testing (Phase 35.2)
+
+The test system includes comprehensive hot-reload tests for skills:
+
+```python
+# packages/python/agent/src/agent/tests/test_one_tool.py
+
+class TestSkillManagerHotReload:
+    """Test SkillManager hot reload functionality for tools.py and scripts/*."""
+
+    def test_ensure_fresh_detects_tools_py_changes(self, fresh_manager):
+        """_ensure_fresh should detect when tools.py is modified."""
+        # Touch tools.py and verify reload is triggered
+
+    def test_ensure_fresh_detects_scripts_changes(self, fresh_manager):
+        """_ensure_fresh should detect when scripts/* files are modified."""
+        # Touch scripts/status.py and verify reload is triggered
+
+    def test_module_loader_clears_scripts_on_reload(self, fresh_manager):
+        """module_loader should clear scripts/* modules when reloading tools."""
+        # Verify scripts modules are cleared on hot reload
+
+    def test_hot_reload_preserves_skill_commands(self, fresh_manager):
+        """Hot reload should preserve skill commands after reload."""
+        # Verify commands still work after reload
+
+    def test_hot_reload_with_both_tools_and_scripts(self, fresh_manager):
+        """Hot reload should work when both tools.py and scripts/* are modified."""
+        # Verify reload works with multiple changes
+```
+
+#### Hot Reload Mechanism
+
+```
+User modifies skills/<skill>/tools.py or scripts/*.py
+                    ↓
+mcp_server.py: omni() calls manager.run()
+                    ↓
+skill_manager.py: _ensure_fresh() checks mtime
+                    ↓
+├─ tools.py mtime > skill.mtime → trigger reload
+├─ scripts/*.py mtime > skill.mtime → trigger reload
+                    ↓
+module_loader.py: load_module(reload=True)
+                    ↓
+├─ Delete sys.modules["agent.skills.<skill>.tools"]
+├─ Delete sys.modules["agent.skills.<skill>.scripts.*"]
+└─ Re-exec module from file
+```
+
+**Key Files**:
+
+- `agent/core/skill_manager.py:488-549` - `_ensure_fresh()` with scripts/\* monitoring
+- `agent/core/module_loader.py:167-175` - scripts/\* module cleanup on reload
+
+---
+
+## Testing Layers (Phase 35.2 Atomic Skills)
+
+Omni-DevEnv uses layered testing strategies that perfectly align with the Atomic Skills architecture:
+
+```
+assets/skills/git/
+├── tools.py              # Interface Layer (testing routing and parameters)
+├── scripts/              # Logic Layer (testing business logic)
+│   ├── __init__.py
+│   ├── status.py
+│   └── prepare.py
+└── tests/                # Skill Tests
+    ├── test_logic.py     # Direct import of scripts/* for testing
+    └── test_interface.py # Test interface using git fixture
+```
+
+### Layer 1: Logic Tests (`scripts/`)
+
+Purpose: Pure Python unit tests focused on business logic and algorithms
+
+```python
+# assets/skills/git/tests/test_logic.py
+from ..scripts.rendering import render_commit_message
+
+def test_render_commit_message():
+    """Test rendering logic without MCP or Fixture"""
+    result = render_commit_message(
+        changes=[{"file": "test.py", "type": "M"}],
+        conventions={"header_format": "{type}: {scope} - {description}"}
+    )
+    assert "M test.py" in result
+```
+
+**Characteristics**:
+
+- Direct import of script modules
+- No Plugin involvement required
+- Extremely fast
+- Standard Mock/Patch available
+
+### Layer 2: Interface Tests (`tools.py`)
+
+Purpose: Integration tests verifying routing, parameter validation, and system prompts
+
+```python
+# assets/skills/git/tests/test_interface.py
+
+def test_git_interface(git):  # 'git' fixture auto-injected
+    """Test interface contract"""
+    assert hasattr(git, "prepare_commit")
+    assert callable(git.prepare_commit)
+    assert hasattr(git, "status")
+```
+
+**Characteristics**:
+
+- Fixture `git` auto-injected
+- Test interface existence
+- Verify parameter signatures
+
+**For IDE Autocomplete**: See [IDE Type Hints](#ide-type-hints-no-pyi-generation) section.
+
+### Running Tests
+
+```bash
+# Layer 1: Pure logic tests
+uv run pytest assets/skills/git/tests/test_logic.py -v
+
+# Layer 2: Interface tests
+uv run pytest assets/skills/git/tests/test_interface.py -v
+
+# All skill tests
+uv run pytest assets/skills/ -v
+
+# Run via Omni CLI
+uv run omni skill test git
+```
+
+---
+
+## IDE Type Hints (No .pyi Generation)
+
+Since fixtures are dynamically injected, IDEs cannot automatically infer their types. Here are two Pythonic solutions:
+
+### Option 1: Explicit Type Annotation (Recommended)
+
+Use `TYPE_CHECKING` to import tools modules for static analysis only:
+
+```python
+# assets/skills/git/tests/test_git_status.py
+import pytest
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from assets.skills.git import tools as GitTools
+
+@pytest.mark.asyncio
+async def test_status_clean(git: "GitTools"):  # String annotation
+    # IDE now knows 'git' is GitTools module
+    # Type git. and get autocomplete for prepare_commit, status, etc.
+    result = await git.status()
+    assert result.success
+```
+
+**Pros**: Simple, no extra files, works with existing `tools.py` structure.
+
+### Option 2: Unified Skills Context (Implemented) ✅
+
+**Status**: Implemented in `agent/testing/context.py`
+
+Create a centralized type registry for all skills:
+
+```python
+# packages/python/agent/src/agent/testing/context.py
+from typing import TYPE_CHECKING
+import pytest
+
+if TYPE_CHECKING:
+    from assets.skills.git import tools as git_tools
+    from assets.skills.knowledge import tools as knowledge_tools
+    from assets.skills.filesystem import tools as filesystem_tools
+
+class SkillsContext:
+    """
+    Virtual context class for type hints only.
+
+    Runtime behavior:
+        - Delegates to pytest fixtures via __getattr__
+        - Lazy fixture resolution (only when accessed)
+
+    Type hints:
+        - All properties return typed references for IDE autocomplete
+        - Actual fixture values returned at runtime
+    """
+    def __init__(self, request: pytest.FixtureRequest):
+        self._request = request
+        self._cache: dict[str, Any] = {}
+
+    def __getattr__(self, name: str) -> Any:
+        if name.startswith("_"):
+            raise AttributeError(name)
+        if name in self._cache:
+            return self._cache[name]
+        fixture = self._request.getfixturevalue(name)
+        self._cache[name] = fixture
+        return fixture
+
+    @property
+    def git(self) -> "git_tools":
+        return self._request.getfixturevalue("git")
+
+    @property
+    def knowledge(self) -> "knowledge_tools":
+        return self._request.getfixturevalue("knowledge")
+
+    @property
+    def filesystem(self) -> "filesystem_tools":
+        return self._request.getfixturevalue("filesystem")
+```
+
+Registered in `agent/testing/plugin.py`:
+
+```python
+@pytest.fixture
+def skills_fixture(request: pytest.FixtureRequest) -> "SkillsContext":
+    from agent.testing.context import SkillsContext
+    return SkillsContext(request)
+```
+
+Usage in tests:
+
+```python
+# assets/skills/git/tests/test_workflow.py
+
+def test_multi_skill_workflow(skills):  # IDE infers SkillsContext
+    # Type skills. → shows .git, .knowledge, .filesystem
+    # Type skills.git. → shows prepare_commit, status
+    skills.git.init()
+    skills.knowledge.get_development_context()
+```
+
+### Option 3: Protocol for Contract Testing
+
+Define strict interface contracts:
+
+```python
+# agent/testing/protocols.py
+from typing import Protocol, runtime_checkable
+
+@runtime_checkable
+class GitSkillProtocol(Protocol):
+    def prepare_commit(self, message: str) -> dict: ...
+    def status(self) -> dict: ...
+
+def test_git_contract(git: GitSkillProtocol):
+    # IDE provides hints based on Protocol
+    git.prepare_commit("msg")
+```
+
+---
+
+## Fixture Collision Prevention
+
+### Reserved Fixture Names
+
+Some skill names would conflict with pytest built-in fixtures. The plugin detects these and warns:
+
+| Reserved      | Reason              |
+| ------------- | ------------------- |
+| `request`     | Pytest core fixture |
+| `cache`       | Pytest caching      |
+| `tmpdir`      | Temporary directory |
+| `capsys`      | IO capture          |
+| `monkeypatch` | Mocking             |
+| `mock`        | Mocking             |
+
+**Collision Guard** in `plugin.py`:
+
+```python
+RESERVED_FIXTURES = {"request", "config", "cache", "session", "capsys", ...}
+PYTEST_BUILTIN_FIXTURES = {...}
+
+def _register_skill_fixture(skill_name: str, skills_root: Path):
+    if skill_name in RESERVED_FIXTURES:
+        logger.warning(
+            f"Skill '{skill_name}' conflicts with pytest fixture. "
+            f"Use 'skills.{skill_name}' instead."
+        )
+```
+
+### Using skills Namespace (Recommended)
+
+If a skill name conflicts, use the `skills` namespace fixture:
+
+```python
+def test_conflicting_skill(skills):  # Use skills namespace
+    # Instead of request() fixture, use:
+    skills.request  # Accesses request fixture via skills
+
+    # For a skill named 'cache':
+    skills.cache.init()  # Access skill via namespace
+```
+
+---
+
+## Best Practices Summary
+
+| Scenario             | Recommended Approach                            |
+| -------------------- | ----------------------------------------------- |
+| Simple skill test    | `def test_git(git): ...`                        |
+| Multi-skill workflow | `def test_workflow(skills): skills.git.init()`  |
+| Type safety needed   | `def test_typed(git: "GitTools"): ...`          |
+| Contract testing     | `def test_contract(git: GitSkillProtocol): ...` |
+| Conflicting name     | `def test_safe(skills): skills.cache.init()`    |
 
 ---
 
@@ -193,7 +505,7 @@ def test_math_logic():
     assert helper_math_function(1, 1) == 2
 ```
 
-**System behavior**: Pytest runs this directly. Our plugin is loaded but doesn't介入.
+**System behavior**: Pytest runs this directly. Our plugin is loaded but doesn't intervene.
 
 ### Scenario 2: Mixed Tests
 
@@ -763,7 +1075,28 @@ elif toxic_type == "import_error":
 
 ## Troubleshooting
 
-### Issue: asyncio.run() Error
+### Issue: asyncio.run() Error - "Already running asyncio"
+
+**Symptom**: `RuntimeError: asyncio.run() cannot be called from a running event loop`
+
+**Cause**: Using `FastMCP.run()` which internally calls `anyio.run()` while an event loop already exists
+
+**Solution**: Use async methods directly:
+
+```python
+# BAD - FastMCP.run() is synchronous, uses anyio.run() internally
+await mcp.run()  # This will fail if called from an async context
+
+# GOOD - Use async methods directly
+await mcp.run_stdio_async()  # For stdio transport
+await mcp.run_sse_async(mount_path)  # For SSE transport
+```
+
+**Files Modified**:
+
+- `packages/python/agent/src/agent/mcp_server.py` - Changed `await mcp.run()` to `await mcp.run_stdio_async()`
+
+### Issue: asyncio.run() Error - "a coroutine was expected"
 
 **Symptom**: `ValueError: a coroutine was expected`
 
@@ -825,7 +1158,108 @@ result = await module.async_function()
 
 ## Refactoring History
 
-### 2026-01-09 (Phase 35.2 - Cascading Templates & Module Loader Fixes)
+### 2026-01-09 (Phase 35.2 - Hot Reload & pytest-xdist Fixes)
+
+| Change                | Description                                                       |
+| --------------------- | ----------------------------------------------------------------- |
+| Hot Reload scripts/\* | `_ensure_fresh()` now monitors both `tools.py` and `scripts/*`    |
+| Module Cleanup        | `load_module()` clears `scripts/*` modules on hot reload          |
+| Naming Convention     | Unified `skill.command` format (e.g., `git.status`, `git.commit`) |
+| pytest-xdist Fix      | `module_loader.py` appends paths instead of overwriting           |
+| Test Count            | 610 tests                                                         |
+
+#### pytest-xdist Module Loading Issue
+
+**Problem**: Parallel tests with `-n 4` failed with `ModuleNotFoundError: No module named 'agent.skills.core'`
+
+**Root Cause**: Namespace Package vs. Dynamic Loading conflict. When `conftest.py` pre-creates `agent.skills` with `agent_skills_src` path, then `ModuleLoader._ensure_parent_packages()` sees it already exists and skips updating, causing `agent.skills.core` import to fail.
+
+**Solution - Fix `module_loader.py`**:
+
+```python
+def _ensure_parent_packages(self) -> None:
+    """Create parent packages for skill modules."""
+    # ... agent package setup ...
+
+    skills_dir = str(self.skills_dir)
+    if "agent.skills" not in sys.modules:
+        # First time: create with assets/skills path
+        skills_pkg = types.ModuleType("agent.skills")
+        skills_pkg.__path__ = [skills_dir]
+        # ...
+    else:
+        # Already exists (e.g., pre-loaded by conftest.py for pytest-xdist)
+        # FIX: Don't overwrite - append assets/skills to __path__ instead!
+        skills_pkg = sys.modules["agent.skills"]
+        if hasattr(skills_pkg, "__path__") and skills_dir not in skills_pkg.__path__:
+            skills_pkg.__path__.append(skills_dir)
+```
+
+**Additional Fixes**:
+
+1. **Added `agent/skills/__init__.py`**:
+
+```python
+# packages/python/agent/src/agent/skills/__init__.py
+"""agent.skills - Skill modules package"""
+from .decorators import skill_command, CommandResult
+```
+
+2. **Pre-load in `registry/core.py`**:
+
+```python
+# Top of file - pre-load for pytest-xdist
+import agent.skills.core  # noqa: F401
+```
+
+3. **Session fixture in `conftest.py`**:
+
+```python
+@pytest.fixture(scope="session", autouse=True)
+def _ensure_agent_skills_loaded():
+    """Ensure agent.skills package is loaded for all tests."""
+    import agent.skills
+    import agent.skills.core
+    assert "agent.skills" in sys.modules
+    assert "agent.skills.core" in sys.modules
+    yield
+```
+
+4. **Robust import in `get_skill_manifest()`**:
+
+```python
+try:
+    from agent.skills.core.skill_manifest_loader import get_manifest_loader
+except ModuleNotFoundError:
+    import importlib
+    import sys
+    if "agent.skills" not in sys.modules:
+        import agent.skills
+    if "agent.skills.core" not in sys.modules:
+        import agent.skills.core
+    skill_manifest_loader = importlib.import_module("agent.skills.core.skill_manifest_loader")
+    get_manifest_loader = skill_manifest_loader.get_manifest_loader
+```
+
+5. **Updated `justfile`**:
+
+```bash
+# Use 3 workers instead of 4 for stability
+uv run pytest packages/python/agent/src/agent/tests/ -n 3 --ignore=... -v
+```
+
+**Key Files**:
+
+- `agent/core/module_loader.py` - **FIX**: Append paths instead of overwriting
+- `agent/skills/__init__.py` - Package init file
+- `agent/core/registry/core.py` - Pre-load and robust import
+- `agent/tests/conftest.py` - Session-scoped autouse fixture
+
+**Test Results**:
+
+```
+✅ 610 passed, 2 skipped (pytest-xdist stable with 3 workers)
+```
 
 | Change                   | Description                                                      |
 | ------------------------ | ---------------------------------------------------------------- |

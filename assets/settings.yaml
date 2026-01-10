@@ -63,7 +63,7 @@ config:
   # Commit message validation configuration files
   cog_toml: "cog.toml"
   conform_yaml: ".conform.yaml"
-
+  lefhook_yaml: "lefthook.yml"
   # Project root marker
   project_marker: ".git"
 
@@ -235,6 +235,11 @@ skills:
 
         - path: "repomix.json"
           description: "Repomix configuration (auto-generated if missing)"
+          type: "file"
+
+        # Phase 35.2: Sidecar Execution Pattern support
+        - path: "pyproject.toml"
+          description: "Skill dependencies for subprocess mode (crawl4ai, playwright, etc.)"
           type: "file"
 
         - path: "README.md"

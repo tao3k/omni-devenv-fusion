@@ -828,6 +828,10 @@ def get_skill_manager() -> SkillManager:
         loader._ensure_parent_packages()
         loader._preload_decorators()
 
+    # Load all skills if not already loaded (fix: skills weren't preloaded)
+    if not _manager._loaded:
+        _manager.load_all()
+
     # Sync the alias
     _skill_manager = _manager
     return _manager

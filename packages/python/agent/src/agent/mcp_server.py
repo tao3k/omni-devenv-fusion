@@ -245,7 +245,7 @@ def omni_help_prompt() -> str:
     for skill_name in sorted(skills):
         info = manager.get_info(skill_name)
         if info:
-            lines.append(f"- **{skill_name}**: {info.command_count} commands")
+            lines.append(f"- **{skill_name}**: {info['command_count']} commands")
 
     lines.extend(
         [
@@ -266,30 +266,29 @@ def omni_help_prompt() -> str:
 
 
 # =============================================================================
-# Main Entry Point
+# Server Runner with Transport Support
 # =============================================================================
 
 
-def main():
-    """Run the Omni MCP Server."""
-    import argparse
+async def run_mcp_server(transport: str = "stdio", host: str = "127.0.0.1", port: int = 3000):
+    """
+    Start the MCP server with the specified transport mode.
 
-    parser = argparse.ArgumentParser(description="Omni Agentic OS - MCP Server (Phase 29)")
-    parser.add_argument("--port", type=int, default=None, help="Port to run on")
-    parser.add_argument("--stdio", action="store_true", default=True, help="Use stdio transport")
-    args = parser.parse_args()
-
+    Args:
+        transport: Transport mode - "stdio" for Claude Desktop, "sse" for Claude Code CLI
+        host: Host to bind to (SSE only, defaults to 127.0.0.1 for security)
+        port: Port to listen on (only for SSE mode, use 0 for random available port)
+    """
     logger = _get_logger()
-    logger.info("🚀 Starting Omni MCP Server (Phase 29: Protocol-based Architecture)")
-    logger.info("📦 Single entry point: omni_run(command, args)")
+    logger.info(f"🚀 Starting Omni MCP Server in {transport.upper()} mode")
 
-    # Log available tools (should be exactly 1)
+    # Log available tools
     tools = list(mcp._tool_manager._tools.values())
-    logger.info(f"📋 Available tools: {len(tools)} (expected: 1)")
+    logger.info(f"📋 Available tools: {len(tools)}")
     for tool in tools:
         logger.info(f"  - {tool.name}")
 
-    # Preload core skills at startup for faster first invocation
+    # Preload core skills at startup
     try:
         from agent.core.bootstrap import boot_core_skills
 
@@ -298,13 +297,42 @@ def main():
     except Exception as e:
         logger.warning(f"⚠️  Failed to preload skills: {e}")
 
-    if args.stdio:
-        # Run with stdio transport (for Claude Desktop)
-        mcp.run(transport="stdio")
+    if transport == "stdio":
+        # Stdio mode (Claude Desktop)
+        logger.info("📡 Running in stdio mode (Claude Desktop)")
+        await mcp.run_stdio_async()
+    elif transport == "sse":
+        # SSE mode (Claude Code CLI / debugging)
+        logger.info(f"📡 Running in SSE mode on {host}:{port}")
+        from mcp.server.sse import SseServerTransport
+        from starlette.applications import Starlette
+        from starlette.routing import Route
+        from starlette.requests import Request
+        import uvicorn
+
+        sse = SseServerTransport("/sse")
+
+        async def handle_sse(request: Request):
+            async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
+                await mcp.run(
+                    streams[0],
+                    streams[1],
+                    mcp.create_initialization_options(),
+                )
+
+        async def handle_messages(request: Request):
+            await sse.handle_post_message(request.scope, request.receive, request._send)
+
+        app = Starlette(
+            debug=True,
+            routes=[
+                Route("/sse", endpoint=handle_sse),
+                Route("/messages", endpoint=handle_messages, methods=["POST"]),
+            ],
+        )
+
+        config = uvicorn.Config(app, host=host, port=port, log_level="info")
+        server = uvicorn.Server(config)
+        await server.serve()
     else:
-        # Run with HTTP transport
-        mcp.run(host="0.0.0.0", port=args.port or 3000)
-
-
-if __name__ == "__main__":
-    main()
+        raise ValueError(f"Unknown transport mode: {transport}. Use 'stdio' or 'sse'.")

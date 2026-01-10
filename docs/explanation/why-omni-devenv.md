@@ -1,6 +1,7 @@
 # Why omni-dev-fusion?
 
-> Addressing the real problems in AI-assisted software development.
+> **Status**: ⚠️ LEGACY - Historical rationale, preserved for context
+> **See Also**: `CLAUDE.md` for current project overview
 
 ---
 

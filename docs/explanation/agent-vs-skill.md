@@ -5,6 +5,11 @@ description: Deep dive into why Reviewer is an Agent, not a Skill
 
 # Agent vs Skill: Architectural Decision
 
+> **Status**: ⚠️ PARTIALLY LEGACY - Core concepts still relevant, terminology may have evolved
+> **See Also**: `trinity-architecture.md` for current skill architecture
+
+---
+
 > A deep analysis of why Reviewer should be an Agent (Worker), not a Skill (Tool).
 
 This document explains a fundamental distinction in **Agentic Architecture** that often causes confusion: **Role (Agent)** vs **Capability (Skill)**.

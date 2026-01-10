@@ -361,8 +361,8 @@ lint:
 
 [group('validate')]
 test:
-    @echo "Running all tests in parallel (4 workers)..."
-    @uv run pytest packages/python/agent/src/agent/tests/ -n 4 --ignore=packages/python/agent/src/agent/tests/stress_tests -v
+    @echo "Running all tests in parallel (3 workers for stability)..."
+    @uv run pytest packages/python/agent/src/agent/tests/ -n 3 --ignore=packages/python/agent/src/agent/tests/stress_tests -v
 
 [group('validate')]
 test-sequential:

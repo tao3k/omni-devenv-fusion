@@ -1,6 +1,7 @@
 # Why Nix? The Bedrock of Autonomous Agents
 
-> **The Core Thesis**: An AI Agent cannot be autonomous if it breaks the environment every time it installs a package. Nix provides the immutable ground truth.
+> **Status**: ⚠️ LEGACY - Historical rationale, preserved for context
+> **Note**: Nix is still used but uv is now primary for Python dependency management
 
 ---
 

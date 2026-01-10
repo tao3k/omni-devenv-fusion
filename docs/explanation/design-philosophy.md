@@ -1,5 +1,10 @@
 # Design Philosophy
 
+> **Status**: ⚠️ PARTIALLY LEGACY - Core principles still valid, but Phase 25+ updates needed
+> **See Also**: `trinity-architecture.md` for current architecture
+
+---
+
 ## Core Design Principles
 
 ### 1. Code is Mechanism, Prompt is Policy

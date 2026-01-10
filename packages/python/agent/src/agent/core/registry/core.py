@@ -17,6 +17,10 @@ from typing import TYPE_CHECKING, Any
 from common.gitops import get_project_root
 from common.config.settings import get_setting
 
+# Pre-load agent.skills.core for pytest-xdist compatibility
+# This ensures the module is available in all test workers
+import agent.skills.core  # noqa: F401
+
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
 
@@ -113,7 +117,26 @@ class SkillRegistry:
     def get_skill_manifest(self, skill_name: str) -> "SkillManifest | None":
         """Read and parse a skill's manifest from SKILL.md."""
         from agent.core.schema import SkillManifest, SkillDependencies
-        from agent.skills.core.skill_manifest_loader import get_manifest_loader
+
+        # Robust import for pytest-xdist compatibility
+        # Sometimes the module is not found in sys.modules due to test worker isolation
+        try:
+            from agent.skills.core.skill_manifest_loader import get_manifest_loader
+        except ModuleNotFoundError:
+            # Force reload the module
+            import importlib
+            import sys
+
+            # Ensure parent package exists
+            if "agent.skills" not in sys.modules:
+                import agent.skills
+            if "agent.skills.core" not in sys.modules:
+                import agent.skills.core
+            # Now import the function
+            skill_manifest_loader = importlib.import_module(
+                "agent.skills.core.skill_manifest_loader"
+            )
+            get_manifest_loader = skill_manifest_loader.get_manifest_loader
 
         skill_path = self.skills_dir / skill_name
         if not skill_path.exists():

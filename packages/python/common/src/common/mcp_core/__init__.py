@@ -145,7 +145,7 @@ from .utils import (
 )
 
 # Keep backward compatibility for log_decision and run_subprocess
-from .utils.logging import get_logger as _get_logger
+from common.log_config import get_logger as _get_logger
 
 
 def log_decision(event: str, payload: dict[str, Any], logger=None) -> None:

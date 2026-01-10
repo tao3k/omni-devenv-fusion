@@ -74,13 +74,33 @@ class ModuleLoader:
             logger.debug("Created 'agent' package in sys.modules")
 
         # Ensure 'agent.skills' package exists (namespace package)
+        # IMPORTANT: Include BOTH paths for proper module resolution:
+        # - packages/python/agent/src/agent/skills (for core modules like agent.skills.core)
+        # - assets/skills (for skill tools like agent.skills.git.tools)
+        agent_skills_src = self.project_root / "packages/python/agent/src/agent/skills"
+        skills_dir = str(self.skills_dir)  # assets/skills
+        agent_skills_src_str = str(agent_skills_src)
+
         if "agent.skills" not in sys.modules:
+            # First time: create with BOTH paths (order matters!)
             skills_pkg = types.ModuleType("agent.skills")
-            skills_pkg.__path__ = [str(self.skills_dir)]
-            skills_pkg.__file__ = str(self.skills_dir / "__init__.py")
+            # src first for core modules, assets for skill discovery
+            skills_pkg.__path__ = [agent_skills_src_str, skills_dir]
+            skills_pkg.__file__ = str(agent_skills_src / "__init__.py")
             sys.modules["agent.skills"] = skills_pkg
             sys.modules["agent"].skills = skills_pkg
-            logger.debug("Created 'agent.skills' package in sys.modules")
+            logger.debug("Created 'agent.skills' package with both paths")
+        else:
+            # Already exists: ensure BOTH paths are present
+            skills_pkg = sys.modules["agent.skills"]
+            if hasattr(skills_pkg, "__path__"):
+                current_paths = set(skills_pkg.__path__)
+                if agent_skills_src_str not in current_paths:
+                    skills_pkg.__path__.insert(0, agent_skills_src_str)
+                    logger.debug("Prepended agent_skills_src to 'agent.skills' __path__")
+                if skills_dir not in current_paths:
+                    skills_pkg.__path__.append(skills_dir)
+                    logger.debug("Appended assets/skills to 'agent.skills' __path__")
 
     def _ensure_skill_package(self, skill_name: str) -> None:
         """Ensure skill-specific package exists (needed for subpackage imports)."""

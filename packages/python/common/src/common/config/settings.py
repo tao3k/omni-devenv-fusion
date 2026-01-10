@@ -248,10 +248,27 @@ def get_setting(key: str, default: Any = None) -> Any:
         default: Default value if key not found
 
     Returns:
-        The setting value or default
+        The setting value or default. Path values are auto-resolved with project_root.
     """
     settings = Settings()
-    return settings.get(key, default)
+    value = settings.get(key, default)
+
+    # Auto-resolve path values with project_root (SSOT)
+    if (
+        isinstance(value, str)
+        and value
+        and (
+            value.endswith((".yaml", ".yml", ".toml", ".json", ".nix"))
+            or "/" in value
+            or value.startswith("../")
+        )
+    ):
+        from common.gitops import get_project_root
+
+        project_root = get_project_root()
+        return str(project_root / value)
+
+    return value
 
 
 def get_config_path(key: str) -> str:

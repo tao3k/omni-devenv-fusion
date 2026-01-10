@@ -1,0 +1,53 @@
+[project]
+name = "{{ skill_name }}"
+version = "0.1.0"
+description = "{{ skill_description }}"
+requires-python = ">=3.11"
+
+# Phase 35.2: Sidecar Execution Pattern
+# Heavy dependencies for subprocess mode - NOT imported by main agent
+dependencies = [
+    # Add skill-specific dependencies here
+    # These will be installed in an isolated uv environment
+    # Example: "crawl4ai>=0.5.0",
+    # Example: "playwright>=1.40.0",
+]
+
+[tool.uv]
+# uv manages skill-specific dependencies
+# Main agent does NOT import these packages
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# ============================================================================
+# Sidecar Execution Pattern Usage
+# ============================================================================
+#
+# For skills with heavy dependencies, use the Sidecar Pattern:
+#
+# 1. tools.py - Lightweight interface (uses common.isolation.run_skill_script)
+# 2. scripts/engine.py - Heavy implementation (imports crawl4ai, playwright, etc.)
+# 3. pyproject.toml - Skill dependencies (isolated by uv)
+#
+# Example tools.py:
+#     from common.isolation import run_skill_script
+#     from pathlib import Path
+#
+#     def my_command(param: str):
+#         return run_skill_script(
+#             skill_dir=Path(__file__).parent,
+#             script_name="engine.py",
+#             args={"param": param},
+#         )
+#
+# Example scripts/engine.py:
+#     import json
+#     from heavy_lib import do_work  # This import only works here!
+#
+#     def main(param: str):
+#         result = do_work(param)
+#         print(json.dumps({"success": True, "result": result}))
+#
+# ============================================================================

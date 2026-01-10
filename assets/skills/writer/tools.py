@@ -16,6 +16,7 @@ from typing import Dict, List, Any, Optional
 import structlog
 
 from agent.skills.decorators import skill_command
+from common.skills_path import SKILLS_DIR
 
 logger = structlog.get_logger(__name__)
 
@@ -46,7 +47,8 @@ class WritingStyleCache:
 
     def _load_styles(self) -> None:
         """Load all writing style guidelines from skills/writer/writing-style/*.md"""
-        skill_dir = Path(__file__).parent
+        # SSOT: Use SKILLS_DIR for path resolution
+        skill_dir = SKILLS_DIR("writer")
         style_dir = skill_dir / "writing-style"
 
         if not style_dir.exists():

@@ -120,3 +120,55 @@ def help() -> str:
     skill_dir = SKILLS_DIR(skill="_template")
     output = repomix(skill_dir, style="xml", include=["SKILL.md", "tools.py", "guide.md"])
     return output
+
+
+# =============================================================================
+# SIDECAR EXECUTION EXAMPLE (For Heavy Dependencies)
+# =============================================================================
+# If your skill has heavy dependencies (like crawl4ai, playwright, pandas),
+# use the Sidecar Execution Pattern via Swarm to avoid polluting the main agent.
+#
+# Example:
+#
+# @skill_command(
+#     name="_template.heavy_operation",
+#     category="write",
+#     description="Execute heavy computation in isolated environment.",
+# )
+# def heavy_operation(input_data: str) -> dict:
+#     """
+#     Execute heavy operation using Swarm sidecar execution.
+#
+#     This keeps the main agent clean of heavy dependencies.
+#     """
+#     from agent.core.swarm import get_swarm
+#
+#     return get_swarm().execute_skill(
+#         skill_name="_template",
+#         command="heavy.py",
+#         args={"input": input_data},
+#         mode="sidecar_process",
+#         timeout=120,
+#     )
+#
+# Then create scripts/heavy.py with the actual implementation:
+#
+# """scripts/heavy.py - Heavy computation (runs in uv isolation)"""
+# import pandas as pd
+# import heavy_library
+#
+# def heavy_computation(input_data: str) -> dict:
+#     # Your heavy computation here
+#     result = heavy_library.process(input_data)
+#     return {"result": result}
+#
+# if __name__ == "__main__":
+#     import json
+#     import sys
+#     args = json.loads(sys.argv[1])
+#     result = heavy_computation(**args)
+#     print(json.dumps({"success": True, "data": result}))
+#
+# Usage:
+#   @omni("_template.heavy_operation", {"input": "data"})
+#

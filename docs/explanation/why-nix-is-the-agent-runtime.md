@@ -1,6 +1,7 @@
 # Why Nix Is the Agent Runtime
 
-> **The Core Thesis**: Probabilistic AI (Chaos) meets Deterministic Engineering (Order). Nix is the bridge that makes autonomous agents possible.
+> **Status**: ⚠️ LEGACY - Historical rationale (Phase 1-5), preserved for context
+> **Note**: Nix is still used for system-level dependencies
 
 ---
 

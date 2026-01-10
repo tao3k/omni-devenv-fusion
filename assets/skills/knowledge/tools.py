@@ -27,6 +27,8 @@ except ImportError:
 import structlog
 
 from agent.skills.decorators import skill_command
+from common.gitops import get_project_root
+from common.skills_path import SKILLS_DIR
 
 logger = structlog.get_logger(__name__)
 
@@ -76,7 +78,8 @@ class StandardsCache:
 
     def _load_standards(self) -> None:
         """Load all language standards from skills/knowledge/standards/."""
-        skill_dir = Path(__file__).parent
+        # SSOT: Use SKILLS_DIR for path resolution
+        skill_dir = SKILLS_DIR("knowledge")
         standards_dir = skill_dir / "standards"
 
         if not standards_dir.exists():
@@ -150,7 +153,9 @@ def _extract_relevant_standards(standard: str, task: str) -> Optional[str]:
 
 def _get_project_name() -> str:
     """Extract project name from pyproject.toml."""
-    pyproject = Path.cwd() / "pyproject.toml"
+    # SSOT: Use get_project_root() for path resolution
+    project_root = get_project_root()
+    pyproject = project_root / "pyproject.toml"
     if pyproject.exists():
         try:
             with open(pyproject, "rb") as f:
@@ -163,16 +168,14 @@ def _get_project_name() -> str:
 
 def _load_scopes() -> List[str]:
     """Load valid git scopes from cog.toml."""
-    from common.gitops import get_project_root
     from common.settings import get_setting
 
     try:
-        project_root = get_project_root()
-        cog_toml_path = get_setting("config.cog_toml", "cog.toml")
-        cog_toml = project_root / cog_toml_path
+        # SSOT: get_setting() auto-resolves paths with project_root
+        cog_toml_path = Path(get_setting("config.cog_toml", "cog.toml"))
 
-        if cog_toml.exists():
-            with open(cog_toml, "rb") as f:
+        if cog_toml_path.exists():
+            with open(cog_toml_path, "rb") as f:
                 data = tomllib.load(f)
                 return data.get("scopes", [])
     except Exception:
@@ -182,12 +185,16 @@ def _load_scopes() -> List[str]:
 
 def _analyze_lefthook() -> List[Dict[str, str]]:
     """Analyze lefthook configuration to determine active guardrails."""
+    from common.settings import get_setting
+
     hooks = []
 
-    lefthook_nix = Path.cwd() / "units" / "modules" / "lefthook.nix"
-    if lefthook_nix.exists():
+    # SSOT: get_setting() auto-resolves paths with project_root
+    lefthook_yaml = Path(get_setting("config.lefhook_yaml", "lefthook.yml"))
+
+    if lefthook_yaml.exists():
         try:
-            content = lefthook_nix.read_text()
+            content = lefthook_yaml.read_text()
             hook_map = [
                 ("nixfmt", "nixfmt", "Format Nix code"),
                 ("vale", "vale", "Writing style check"),
@@ -229,21 +236,25 @@ def _get_architecture_summary() -> Dict[str, str]:
 
 def _search_docs(topic: str) -> str:
     """Search documentation for a topic."""
-    docs_dir = Path.cwd() / "docs"
+    from common.gitops import get_project_root
+
+    # SSOT: Use get_project_root() for path resolution
+    docs_dir = get_project_root() / "docs"
     if not docs_dir.exists():
         return f"No docs directory found for topic '{topic}'."
 
     topic_lower = topic.lower().replace(" ", "-").replace("_", "-")
     matches = []
 
+    project_root = get_project_root()
     for md_file in docs_dir.rglob("*.md"):
         if topic_lower in md_file.name.lower():
             content = _read_file_content(str(md_file))
             if content:
-                matches.append(f"=== {md_file.relative_to(Path.cwd())} ===\n{content[:1000]}...")
+                matches.append(f"=== {md_file.relative_to(project_root)} ===\n{content[:1000]}...")
 
     if not matches:
-        agent_dir = Path.cwd() / "agent"
+        agent_dir = project_root / "agent"
         for md_file in agent_dir.rglob("*.md"):
             if (
                 topic_lower in md_file.name.lower()
@@ -252,7 +263,7 @@ def _search_docs(topic: str) -> str:
                 content = _read_file_content(str(md_file))
                 if content:
                     matches.append(
-                        f"=== {md_file.relative_to(Path.cwd())} ===\n{content[:1000]}..."
+                        f"=== {md_file.relative_to(project_root)} ===\n{content[:1000]}..."
                     )
 
     if matches:
@@ -263,8 +274,15 @@ def _search_docs(topic: str) -> str:
 
 def _read_file_content(path: str) -> str:
     """Read file content safely."""
+    from common.gitops import get_project_root
+
     try:
-        file_path = Path.cwd() / path
+        # SSOT: Use get_project_root() for path resolution
+        project_root = get_project_root()
+        file_path = Path(path)
+        if not file_path.is_absolute():
+            file_path = project_root / file_path
+
         if file_path.exists():
             return file_path.read_text().strip()
     except Exception:
@@ -451,7 +469,8 @@ async def list_supported_languages() -> str:
         JSON list of supported languages
     """
     languages = []
-    skill_dir = Path(__file__).parent
+    # SSOT: Use SKILLS_DIR for path resolution
+    skill_dir = SKILLS_DIR("knowledge")
     standards_dir = skill_dir / "standards"
 
     for lang_id, lang_name in LANG_NAMES.items():

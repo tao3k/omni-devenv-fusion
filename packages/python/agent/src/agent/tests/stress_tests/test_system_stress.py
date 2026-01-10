@@ -347,12 +347,13 @@ class TestSystemEndurance:
                 collection=col_name,
             )
 
+            # Small delay to allow ChromaDB to sync (fixes race condition)
+            # Without this, rapid add+search can fail with "Collection does not exist"
+            await asyncio.sleep(0.05)
+
             # Step 5: Recall (Validation)
             results = await memory.search(f"iteration {i}", n_results=1, collection=col_name)
             assert len(results) > 0, f"Failed to recall insight from turn {i}"
-
-            # Small delay to simulate real work
-            await asyncio.sleep(0.01)
 
         total_time = time.perf_counter() - start_time
         print(

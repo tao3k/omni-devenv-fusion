@@ -17,6 +17,8 @@ dependencies = [
     "python-frontmatter>=1.1.0",
     "pydantic-ai>=1.39.0",
     "structlog>=24.0.0",
+    "starlette>=0.40.0",
+    "uvicorn>=0.30.0",
     "typer>=0.15.0",
     "omni-dev-fusion-common",
 ]

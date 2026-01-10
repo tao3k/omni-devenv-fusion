@@ -120,14 +120,109 @@ def _register_base_fixtures(skills_root: Path):
         """Alias for skills_root (for backward compatibility)."""
         return SKILLS_DIR()
 
+    @pytest.fixture
+    def skills_fixture(request: pytest.FixtureRequest) -> "SkillsContext":
+        """
+        Unified Skills Context for IDE type hints.
+
+        Usage:
+            def test_workflow(skills):  # IDE infers SkillsContext
+                skills.git.init()
+                skills.docker.run()
+        """
+        from agent.testing.context import SkillsContext
+
+        return SkillsContext(request)
+
     # Register them globally
     setattr(sys.modules[__name__], "skills_root", skills_root_fixture)
     setattr(sys.modules[__name__], "project_root", project_root_fixture)
     setattr(sys.modules[__name__], "skills_dir", skills_dir_fixture)
+    setattr(sys.modules[__name__], "skills", skills_fixture)
+
+
+# Reserved pytest fixture names that skills should not override
+RESERVED_FIXTURES = {
+    # Core fixtures
+    "request",
+    "config",
+    "cache",
+    "session",
+    "workerinput",
+    "workeroutput",
+    # IO fixtures
+    "capsys",
+    "capfd",
+    "caplog",
+    "pytestconfig",
+    "record_testsuite_property",
+    # Mocking fixtures
+    "monkeypatch",
+    "patch",
+    "mock",
+    "pytester",
+    # Flow control
+    "pytester",
+    "testdir",
+    "localpath",
+    "tmp_path",
+    "tmp_path_factory",
+    "tmpdir",
+    "tmpdir_factory",
+    # Debugging
+    "record_xml_property",
+    "record_property",
+}
+
+# Pytest built-in fixtures (comprehensive list)
+PYTEST_BUILTIN_FIXTURES = {
+    "request",
+    "pytestconfig",
+    "cache",
+    "testpath",
+    "pytester",
+    "capsys",
+    "capfd",
+    "caplog",
+    "record_testsuite_property",
+    "record_property",
+    "monkeypatch",
+    "patch",
+    "mock",
+    "pytester",
+    "testdir",
+    "localpath",
+    "tmpdir",
+    "tmpdir_factory",
+    "tmp_path",
+    "tmp_path_factory",
+    "session",
+    "workerinput",
+    "workeroutput",
+    "logging",
+    "hookwrapper",
+    "mark",
+}
 
 
 def _register_skill_fixture(skill_name: str, skills_root: Path):
-    """Dynamically create and register a fixture for a skill."""
+    """
+    Dynamically create and register a fixture for a skill.
+
+    Collision Detection:
+        - Checks against RESERVED_FIXTURES and PYTEST_BUILTIN_FIXTURES
+        - Logs warning if skill name conflicts with pytest built-ins
+        - Skills with conflicting names still get registered via skills.git
+    """
+    # Collision detection
+    if skill_name in RESERVED_FIXTURES or skill_name in PYTEST_BUILTIN_FIXTURES:
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            f"Skill '{skill_name}' conflicts with pytest fixture. "
+            f"Use 'skills.{skill_name}' instead of '{skill_name}' fixture."
+        )
 
     @pytest.fixture(name=skill_name, scope="function")
     def _skill_fixture():
