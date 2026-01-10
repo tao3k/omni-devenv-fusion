@@ -101,7 +101,7 @@ def _create_backup(filepath: Path) -> bool:
 
 
 @skill_command(
-    name="file_ops_read_file",
+    name="read_file",
     category="read",
     description="Read a single file with line numbering.",
 )
@@ -139,7 +139,7 @@ async def read_file(path: str) -> str:
 
 
 @skill_command(
-    name="file_ops_search_files",
+    name="search_files",
     category="read",
     description="Search for text patterns in files (like grep).",
 )
@@ -211,7 +211,7 @@ async def search_files(pattern: str, path: str = ".", use_regex: bool = False) -
 
 
 @skill_command(
-    name="file_ops_save_file",
+    name="save_file",
     category="write",
     description="Write content to a file within the project directory.",
 )
@@ -302,7 +302,7 @@ async def save_file(
 
 
 @skill_command(
-    name="file_ops_apply_changes",
+    name="apply_changes",
     category="write",
     description="Apply changes to multiple files in one go.",
 )
@@ -405,7 +405,7 @@ async def _run_ast_rewrite(
 
 
 @skill_command(
-    name="file_ops_ast_search",
+    name="ast_search",
     category="read",
     description="Query code structure using ast-grep patterns.",
 )
@@ -431,7 +431,7 @@ async def ast_search(pattern: str, lang: str = "py", path: str = ".") -> str:
 
 
 @skill_command(
-    name="file_ops_ast_rewrite",
+    name="ast_rewrite",
     category="write",
     description="Apply AST-based code rewrite using ast-grep.",
 )

@@ -19,6 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import yaml
 import chromadb
 from chromadb.config import Settings
 
@@ -82,7 +83,7 @@ except Exception as e:
 
 
 @skill_command(
-    name="memory_remember_insight",
+    name="remember_insight",
     category="write",
     description="Store a key insight into ChromaDB.",
 )
@@ -119,7 +120,7 @@ async def remember_insight(content: str, domain: str = "general") -> str:
 
 
 @skill_command(
-    name="memory_log_episode",
+    name="log_episode",
     category="write",
     description="Log a significant action taken during the session.",
 )
@@ -160,7 +161,7 @@ async def log_episode(action: str, result: str, context: str = "") -> str:
 
 
 @skill_command(
-    name="memory_recall",
+    name="recall",
     category="read",
     description="Semantically search memory for relevant past experiences.",
 )
@@ -203,7 +204,7 @@ async def recall(query: str, n_results: int = 3) -> str:
 
 
 @skill_command(
-    name="memory_list_harvested_knowledge",
+    name="list_harvested_knowledge",
     category="read",
     description="List all harvested insights stored in memory.",
 )
@@ -243,7 +244,7 @@ async def list_harvested_knowledge() -> str:
 
 
 @skill_command(
-    name="memory_harvest_session_insight",
+    name="harvest_session_insight",
     category="write",
     description="Extract and store key learnings from current session.",
 )
@@ -284,7 +285,7 @@ async def harvest_session_insight(context_summary: str, files_changed: List[str]
 
 
 @skill_command(
-    name="memory_get_stats",
+    name="get_stats",
     category="view",
     description="Get statistics about stored memories.",
 )
@@ -329,15 +330,23 @@ def _get_skills_dir() -> Path:
 
 
 def _load_manifest(skill_name: str) -> Optional[Dict[str, Any]]:
-    """Load a skill's manifest.json."""
+    """Load a skill's manifest from SKILL.md YAML frontmatter."""
     skills_dir = _get_skills_dir()
-    manifest_path = skills_dir / skill_name / "manifest.json"
+    skill_path = skills_dir / skill_name / "SKILL.md"
 
-    if not manifest_path.exists():
+    if not skill_path.exists():
         return None
 
     try:
-        return json.loads(manifest_path.read_text(encoding="utf-8"))
+        content = skill_path.read_text(encoding="utf-8")
+        # Parse YAML frontmatter
+        if content.startswith("---"):
+            parts = content.split("---", 3)
+            if len(parts) >= 2:
+                manifest = yaml.safe_load(parts[1])
+                if manifest:
+                    return manifest
+        return None
     except Exception:
         return None
 
@@ -353,7 +362,7 @@ def _load_prompts(skill_name: str) -> Optional[str]:
 
 
 @skill_command(
-    name="memory_load_skill",
+    name="load_skill",
     category="write",
     description="Load a skill's manifest into semantic memory.",
 )
@@ -428,7 +437,7 @@ async def load_skill(skill_name: str) -> str:
 
 
 @skill_command(
-    name="memory_load_activated_skills",
+    name="load_activated_skills",
     category="write",
     description="Load all activated skills into semantic memory.",
 )
@@ -444,11 +453,11 @@ async def load_activated_skills() -> str:
     if not CHROMA_AVAILABLE or not semantic_mem:
         return "ChromaDB not available. Cannot load skills."
 
-    from agent.core.skill_manager import get_skill_manager
+    from agent.core.registry import get_skill_registry
 
     try:
-        manager = get_skill_manager()
-        activated_skills = manager.list_loaded_skills()
+        registry = get_skill_registry()
+        activated_skills = registry.list_loaded_skills()
 
         if not activated_skills:
             return "No activated skills found."
@@ -458,7 +467,9 @@ async def load_activated_skills() -> str:
 
         for skill_name in activated_skills:
             result = await load_skill(skill_name)
-            if result.startswith("✅"):
+            # load_skill is decorated, returns CommandResult
+            result_str = result.data if hasattr(result, "data") else str(result)
+            if result_str.startswith("✅"):
                 loaded.append(skill_name)
             else:
                 failed.append(skill_name)

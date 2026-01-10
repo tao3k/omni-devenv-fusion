@@ -27,7 +27,7 @@ def _get_safe_path(path: str) -> Path:
 
 
 @skill_command(
-    name="filesystem_list_directory",
+    name="list_directory",
     category="read",
     description="List files and directories in the given path.",
     inject_root=True,
@@ -56,7 +56,7 @@ async def list_directory(path: str = ".", project_root: Path = None) -> str:
 
 
 @skill_command(
-    name="filesystem_read_file",
+    name="read_file",
     category="read",
     description="Read the full content of a file (UTF-8).",
     inject_root=True,
@@ -76,7 +76,7 @@ async def read_file(path: str, project_root: Path = None) -> str:
 
 
 @skill_command(
-    name="filesystem_read_multiple_files",
+    name="read_multiple_files",
     category="read",
     description="Read multiple files at once.",
     inject_root=True,
@@ -92,7 +92,7 @@ async def read_multiple_files(paths: List[str], project_root: Path = None) -> st
 
 
 @skill_command(
-    name="filesystem_write_file",
+    name="write_file",
     category="write",
     description="Create or Overwrite a file with new content.",
     inject_root=True,
@@ -110,7 +110,7 @@ async def write_file(path: str, content: str, project_root: Path = None) -> str:
 
 
 @skill_command(
-    name="filesystem_get_file_info",
+    name="get_file_info",
     category="read",
     description="Get metadata about a file.",
     inject_root=True,
@@ -134,7 +134,7 @@ async def get_file_info(path: str, project_root: Path = None) -> str:
 
 
 @skill_command(
-    name="filesystem_search_files",
+    name="search_files",
     category="read",
     description="Search for files matching a glob pattern.",
     inject_root=True,

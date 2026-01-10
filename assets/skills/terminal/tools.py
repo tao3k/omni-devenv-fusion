@@ -3,12 +3,14 @@ agent/skills/terminal/tools.py
 Terminal Skill - Shell execution with safety.
 
 Phase 25.1: Macro System with @skill_command decorators.
+Phase 36: Local SafeExecutor implementation (moved from mcp_core.execution)
 """
 
 import asyncio
+import re
 from pathlib import Path
-from typing import Optional
-from common.mcp_core import log_decision, SafeExecutor, check_dangerous_patterns, ProjectMemory
+from typing import Optional, Any
+from dataclasses import dataclass, field
 import structlog
 
 from agent.skills.decorators import skill_command
@@ -23,23 +25,228 @@ def _get_project_memory():
     """Lazy initialization of project memory."""
     global _project_memory
     if _project_memory is None:
-        _project_memory = ProjectMemory()
+        try:
+            from common.mcp_core.memory import ProjectMemory
+
+            _project_memory = ProjectMemory()
+        except ImportError:
+            _project_memory = None
     return _project_memory
 
 
+# =============================================================================
+# Local SafeExecutor Implementation (moved from mcp_core.execution)
+# =============================================================================
+
+# Whitelist of allowed commands (empty = allow all for development)
+ALLOWED_COMMANDS: list[str] = []
+
+# Dangerous patterns that will always be blocked
+DANGEROUS_PATTERNS = [
+    (r"rm\s+-rf\s+/", "rm -rf / - Deletes entire filesystem"),
+    (r"rm\s+-rf\s+/\w+", "rm -rf /{path} - Dangerous recursive delete"),
+    (r":\(\)\s*\|", "Process substitution - may bypass security"),
+    (r"\$\(.*\)", "Command substitution - complex execution"),
+    (r"`[^`]+`", "Backtick command substitution - complex execution"),
+    (r">\s*/dev/", "Redirect to device - potential DoS"),
+    (r"&\&", "Conditional execution - may alter logic"),
+    (r"\|\|", "Conditional execution - may alter logic"),
+    (r";\s*rm", "Chained rm - potential data loss"),
+    (r"mkfs", "Format filesystem - destructive"),
+    (r"dd\s+if=", "Direct disk access - dangerous"),
+    (r"wget\s+.*\|\s*sh", "Pipe to shell - extremely dangerous"),
+    (r"curl\s+.*\|\s*sh", "Pipe to shell - extremely dangerous"),
+    (r"python.*-c.*\|", "Python one-liner pipe - suspicious"),
+    (r"nc\s+-e", "Netcat with execute - reverse shell pattern"),
+    (r"/etc/passwd", "Access to password file - privilege escalation risk"),
+    (r"~/.ssh", "Access to SSH keys - credential theft risk"),
+    (r"chmod\s+\+[xs]", "Add executable permission - privilege escalation"),
+    (r"chown", "Change ownership - privilege escalation"),
+    (r"sudo\s+rm", "sudo rm - high risk operation"),
+    (r"fork\s* bomb", "Fork bomb - DoS attack"),
+]
+
+
+@dataclass
+class ExecutionResult:
+    """Result of command execution."""
+
+    exit_code: int = 0
+    stdout: str = ""
+    stderr: str = ""
+    duration_ms: float = 0.0
+    command: str = ""
+    args: list[str] = field(default_factory=list)
+
+
+class SafeExecutor:
+    """
+    Safe command executor with whitelist validation.
+
+    Phase 36: Local implementation - no longer depends on mcp_core.execution
+    """
+
+    # Whitelist of allowed commands
+    _whitelist: set[str] = set()
+
+    @classmethod
+    def add_to_whitelist(cls, commands: list[str]) -> None:
+        """Add commands to the whitelist."""
+        cls._whitelist.update(commands)
+
+    @classmethod
+    def clear_whitelist(cls) -> None:
+        """Clear the whitelist."""
+        cls._whitelist.clear()
+
+    @classmethod
+    async def run(
+        cls, command: str, args: list[str] | None = None, timeout: int = 60
+    ) -> dict[str, Any]:
+        """
+        Execute a command safely with timeout.
+
+        Args:
+            command: Command to execute
+            args: Command arguments
+            timeout: Timeout in seconds
+
+        Returns:
+            Dict with exit_code, stdout, stderr, duration_ms
+        """
+        if args is None:
+            args = []
+
+        # Check whitelist if not empty
+        if cls._whitelist and command not in cls._whitelist:
+            return {
+                "exit_code": 1,
+                "stdout": "",
+                "stderr": f"Command '{command}' not in whitelist",
+                "duration_ms": 0,
+                "command": command,
+                "args": args,
+            }
+
+        # Build command string for logging
+        cmd_str = f"{command} {' '.join(args)}" if args else command
+
+        try:
+            start_time = asyncio.get_event_loop().time()
+
+            process = await asyncio.create_subprocess_exec(
+                command,
+                *args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            try:
+                stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                    process.communicate(), timeout=timeout
+                )
+            except asyncio.TimeoutExpired:
+                process.kill()
+                return {
+                    "exit_code": -1,
+                    "stdout": "",
+                    "stderr": f"Command timed out after {timeout}s",
+                    "duration_ms": timeout * 1000,
+                    "command": command,
+                    "args": args,
+                }
+
+            duration_ms = (asyncio.get_event_loop().time() - start_time) * 1000
+
+            return {
+                "exit_code": process.returncode,
+                "stdout": stdout_bytes.decode("utf-8", errors="replace"),
+                "stderr": stderr_bytes.decode("utf-8", errors="replace"),
+                "duration_ms": duration_ms,
+                "command": command,
+                "args": args,
+            }
+
+        except FileNotFoundError:
+            return {
+                "exit_code": -1,
+                "stdout": "",
+                "stderr": f"Command not found: {command}",
+                "duration_ms": 0,
+                "command": command,
+                "args": args,
+            }
+        except Exception as e:
+            return {
+                "exit_code": -1,
+                "stdout": "",
+                "stderr": str(e),
+                "duration_ms": 0,
+                "command": command,
+                "args": args,
+            }
+
+    @staticmethod
+    def format_result(result: dict[str, Any], command: str, args: list[str]) -> str:
+        """Format execution result for display."""
+        output = []
+
+        if result.get("stdout"):
+            output.append(result["stdout"])
+
+        if result.get("stderr"):
+            output.append(f"STDERR:\n{result['stderr']}")
+
+        if result.get("exit_code", 0) != 0:
+            output.append(f"Exit code: {result.get('exit_code')}")
+
+        return "\n".join(output).strip() or "(no output)"
+
+
+def check_dangerous_patterns(command: str, args: list[str]) -> tuple[bool, str]:
+    """
+    Check if a command contains dangerous patterns.
+
+    Args:
+        command: The command being executed
+        args: Command arguments
+
+    Returns:
+        Tuple of (is_safe, error_message)
+    """
+    full_command = f"{command} {' '.join(args)}"
+
+    for pattern, description in DANGEROUS_PATTERNS:
+        if re.search(pattern, full_command, re.IGNORECASE):
+            return False, f"Dangerous pattern detected: {description}"
+
+    return True, ""
+
+
+def log_decision(event: str, payload: dict[str, Any], logger=None) -> None:
+    """Log a decision/event with structured payload."""
+    if logger is None:
+        logger = structlog.get_logger("decision")
+    logger.info(event, **payload)
+
+
 @skill_command(
-    name="terminal_execute_command",
+    name="execute_command",
     category="workflow",
     description="Execute a shell command with whitelist validation.",
 )
-async def execute_command(command: str, timeout: int = 60) -> str:
+async def execute_command(command: str, args: Optional[list[str]] = None, timeout: int = 60) -> str:
     """
     Execute a shell command with whitelist validation.
 
     Args:
-        command: The command string to execute (e.g., "uv sync", "just test").
+        command: The command to execute (e.g., "cat", "ls").
+        args: Command arguments (e.g., ["cog.toml", "-la"]).
         timeout: Maximum execution time in seconds (default: 60).
     """
+    if args is None:
+        args = []
+
     # Protocol Enforcement: Block direct git commit
     cmd_lower = command.lower()
     if "git commit" in cmd_lower:
@@ -49,18 +256,12 @@ async def execute_command(command: str, timeout: int = 60) -> str:
             "Reason: Requires user confirmation via Claude Desktop."
         )
 
-    # Parse command and args for security checks
-    parts = command.strip().split()
-    if not parts:
-        return "Error: Empty command"
-
-    cmd = parts[0]
-    args = parts[1:]
-
-    # Check dangerous patterns
+    # Security check
     is_safe, error_msg = check_dangerous_patterns(command, args)
     if not is_safe:
         return f"Blocked: {error_msg}"
+
+    cmd = command
 
     # Execute using SafeExecutor (whitelist-based)
     result = await SafeExecutor.run(cmd, args, timeout=timeout)
@@ -89,7 +290,7 @@ async def execute_command(command: str, timeout: int = 60) -> str:
 
 
 @skill_command(
-    name="terminal_run_task",
+    name="run_task",
     category="workflow",
     description="Run safe development tasks (just, nix, git) with FLIGHT RECORDER.",
 )
@@ -149,7 +350,7 @@ Use git_commit in git skill instead.
             return blocked_msg
 
     # Execute command
-    log_decision("run_task.request", {"command": command, "args": args}, logger)
+    log_decision("run_task.request", {"cmd": command, "args": args}, logger)
     result = await SafeExecutor.run(command=command, args=args)
     formatted_output = SafeExecutor.format_result(result, command, args)
 
@@ -177,7 +378,7 @@ Use git_commit in git skill instead.
 
 
 @skill_command(
-    name="terminal_analyze_last_error",
+    name="analyze_last_error",
     category="view",
     description="Analyze the last failed command in Flight Recorder.",
 )
@@ -217,7 +418,7 @@ Please analyze it to find:
 
 
 @skill_command(
-    name="terminal_inspect_environment",
+    name="inspect_environment",
     category="read",
     description="Check the current execution environment.",
 )

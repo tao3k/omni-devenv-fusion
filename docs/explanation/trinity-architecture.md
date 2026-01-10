@@ -1,19 +1,260 @@
-# Trinity Architecture (Phase 35.3)
+# Trinity Architecture (Phase 36)
 
-> Unified skill management: Code (Hot-Reloading), Context (Repomix), and State (Registry).
-> **Phase 35.3**: Pure MCP Server (no FastMCP) - High-Performance with uvloop + orjson
+> **Phase 36: Trinity v2.0 - Swarm Engine + Skills**
+> **Core Philosophy**: "Everything is a Skill" - The Executor is no longer a code module, but a logical role played by atomic skills.
 
 ## Quick Reference
 
-| Phase | Key Change                                                  |
-| ----- | ----------------------------------------------------------- |
-| 35.3  | Pure MCP Server (mcp.server.Server, no FastMCP)             |
-| 35.2  | Sidecar Execution Pattern (uv isolation for crawl4ai, etc.) |
-| 35.1  | Zero-configuration test framework (pytest plugin)           |
-| 34    | Cognitive system (CommandResult, StateCheckpointer)         |
-| 33    | SKILL.md unified format                                     |
-| 32    | Import optimization                                         |
-| 29    | Trinity Architecture + Protocols                            |
+| Phase | Key Change                                                                                                 |
+| ----- | ---------------------------------------------------------------------------------------------------------- |
+| 36    | **Trinity v2.0**: Legacy `mcp_core.execution` deleted. Execution now via `skills/terminal` + Swarm Engine. |
+| 35.3  | Pure MCP Server (mcp.server.Server, no FastMCP)                                                            |
+| 35.2  | Sidecar Execution Pattern (uv isolation for crawl4ai, etc.)                                                |
+| 35.1  | Zero-configuration test framework (pytest plugin)                                                          |
+| 34    | Cognitive system (CommandResult, StateCheckpointer)                                                        |
+| 33    | SKILL.md unified format                                                                                    |
+
+## Trinity v2.0 Overview
+
+The Trinity Architecture unifies three critical concerns through a **Skill-Centric** design. The key insight: **Execution is a Skill, not a module.**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          Trinity v2.0 Architecture                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  User (Claude Desktop/Code)                                                 │
+│         │                                                                    │
+│         ▼                                                                    │
+│  ┌─────────────────┐                                                        │
+│  │  MCP Gateway    │  (Pure MCP Server - Protocol Adapter Only)              │
+│  │  mcp_server.py  │                                                        │
+│  └────────┬────────┘                                                        │
+│           │                                                                  │
+│           ▼                                                                  │
+│  ┌─────────────────┐                                                        │
+│  │ 🧠 Swarm Engine │  (Runtime Orchestrator - Dispatch & Isolation)          │
+│  │                 │                                                        │
+│  │  • Route calls  │                                                        │
+│  │  • Isolate deps │                                                        │
+│  │  • Handle errors│                                                        │
+│  └────────┬────────┘                                                        │
+│           │                                                                  │
+│           ▼                                                                  │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                    THE TRINITY ROLES (Cognitive Layer)                 │  │
+│  │                                                                       │  │
+│  │  🧠 Orchestrator      📝 Coder              🛠️ Executor               │  │
+│  │  (Planning &          (Reading &            (Execution &              │  │
+│  │   Strategy)            Writing)              Operations)              │  │
+│  │                                                                       │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│           │                                                                  │
+│           ▼                                                                  │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                    THE MUSCLE LAYER (Skill Runtime)                    │  │
+│  │                                                                       │  │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐   │  │
+│  │  │   Terminal  │  │     Git     │  │  Filesystem │  │  Knowledge  │   │  │
+│  │  │   Skill     │  │   Skill     │  │   Skill     │  │   Skill     │   │  │
+│  │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘   │  │
+│  │         │                │                │                │          │  │
+│  │         ▼                ▼                ▼                ▼          │  │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐   │  │
+│  │  │subprocess   │  │  git CLI    │  │  safe I/O   │  │  RAG/LLM    │   │  │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘   │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## The Trinity Roles (v2.0)
+
+### 🧠 Orchestrator (The Brain)
+
+**Purpose**: Planning, routing, and strategy.
+
+**Implementation**:
+
+- `skills/knowledge` - Development context, rules, standards
+- `skills/skill` - Skill discovery, management, JIT installation
+
+**Usage**: `@omni("knowledge.get_development_context")` to understand project rules.
+
+### 📝 Coder (The Pen)
+
+**Purpose**: Reading and writing code/files.
+
+**Implementation**:
+
+- `skills/filesystem` - Safe file operations (read, write, search)
+- `skills/code_insight` - AST analysis, code structure
+- `skills/file_ops` - Advanced file operations, AST refactoring
+
+**Usage**: `@omni("filesystem.read_file", {"path": "README.md"})`
+
+### 🛠️ Executor (The Hands)
+
+**Purpose**: Running commands and operations.
+
+**Implementation**:
+
+- `skills/terminal` - Shell command execution (replaces legacy `SafeExecutor`)
+- `skills/git` - Version control operations
+- `skills/testing` - Test execution
+
+**Usage**: `@omni("terminal.execute_command", {"command": "ls", "args": ["-la"]})`
+
+> **Key Change**: The Executor is NO LONGER a Python class. It's a logical role fulfilled by `skills/terminal/tools.py`. This skill contains `SafeExecutor` logic directly, enabling hot-reload and sandboxing without core code changes.
+
+## Execution Model Evolution
+
+| Aspect             | Legacy (Phase 29)                              | Current (Phase 36)                                             |
+| ------------------ | ---------------------------------------------- | -------------------------------------------------------------- |
+| **Execution Path** | MCP → `common.mcp_core.execution` → subprocess | MCP → `Swarm.execute_skill()` → `skills/terminal` → subprocess |
+| **Executor Type**  | Python class (`SafeExecutor`)                  | Atomic Skill (`skills/terminal`)                               |
+| **Security**       | Code-level checks                              | Skill isolation + checks                                       |
+| **Hot-Reload**     | N/A                                            | Yes (skill files are hot-reloadable)                           |
+| **Sandboxing**     | Limited                                        | Full isolation via sidecar or Docker                           |
+
+## Migration from Legacy Execution
+
+### Before (Deprecated)
+
+```python
+# Old code - DO NOT USE
+from common.mcp_core.execution import SafeExecutor
+
+executor = SafeExecutor()
+result = await executor.run("ls", ["-la"])
+```
+
+### After (Current)
+
+```python
+# New approach - Use the terminal skill via MCP
+@omni("terminal.execute_command", {"command": "ls", "args": ["-la"]})
+
+# Or directly via Swarm Engine
+from agent.core.swarm import get_swarm
+
+result = await get_swarm().execute_skill(
+    skill_name="terminal",
+    command="execute_command",
+    args={"command": "ls", "args": ["-la"]}
+)
+```
+
+## Why This Change?
+
+1. **Security**: Terminal skill can be sandboxed, disabled, or routed through Docker without changing core code.
+2. **Consistency**: Running a command is identical to running a search - everything is a Skill.
+3. **Observability**: Swarm Engine provides unified logging, timeout, and error handling.
+4. **Hot-Reload**: Modify execution logic without restarting the server.
+5. **Testability**: Skills can be mocked at the skill level, not just the function level.
+
+## Key Components
+
+### Swarm Engine (`agent/core/swarm.py`)
+
+```python
+class Swarm:
+    async def execute_skill(
+        self,
+        skill_name: str,
+        command: str,
+        args: dict,
+        mode: str = "direct",  # "direct", "sidecar_process", "docker"
+        timeout: int = 60,
+    ) -> dict:
+        """Execute a skill command with optional isolation."""
+        ...
+```
+
+### Terminal Skill (`assets/skills/terminal/tools.py`)
+
+```python
+@skill_command(
+    name="execute_command",
+    category="workflow",
+    description="Execute a shell command with whitelist validation.",
+)
+async def execute_command(command: str, args: list[str] = None, timeout: int = 60) -> str:
+    """Terminal skill - The new 'Executor' implementation."""
+    is_safe, error_msg = check_dangerous_patterns(command, args)
+    if not is_safe:
+        return f"Blocked: {error_msg}"
+
+    result = await SafeExecutor.run(command, args, timeout)
+    return SafeExecutor.format_result(result, command, args)
+```
+
+## File Structure (Phase 36)
+
+```
+packages/python/agent/src/agent/
+├── core/
+│   ├── swarm.py              # 🧠 Runtime orchestrator (Phase 36)
+│   ├── module_loader.py      # Hot-reload mechanism
+│   └── skill_manager.py      # Trinity facade
+├── mcp_server.py             # Pure MCP Server (Thin Gateway)
+└── skills/
+    └── decorators.py         # @skill_command decorator
+
+assets/skills/
+├── terminal/                 # 🛠️ Executor implementation
+│   ├── tools.py              # Command execution interface
+│   ├── scripts/              # Atomic implementations
+│   └── SKILL.md              # Skill manifest
+├── git/                      # Version control
+│   └── tools.py              # Git operations
+├── filesystem/               # File operations
+│   └── tools.py              # Safe I/O operations
+└── <other-skills>/           # Additional capabilities
+
+packages/python/common/src/common/
+├── mcp_core/                 # Protocol definitions (NO execution)
+│   ├── protocols.py          # ISkill, ISkillCommand
+│   └── __init__.py           # Shared types
+└── config/
+    └── settings.py           # Configuration
+
+# LEGACY - DELETED (Phase 36)
+# packages/python/common/src/common/mcp_core/execution/  ❌ REMOVED
+```
+
+---
+
+# v2.0 Summary
+
+## Trinity v2.0 Key Points
+
+1. **Executor is a Skill, Not a Module**: The legacy `mcp_core.execution` module has been deleted. Execution is now handled by `skills/terminal`.
+
+2. **Swarm Engine**: New runtime orchestrator that dispatches skill commands and handles isolation/sandboxing.
+
+3. **Config-Driven Aliases**: Tool names can be configured in `settings.yaml:skills.overrides` for "Configuration over Convention".
+
+4. **90+ Tools Registered**: All skills follow `skill.command` naming convention.
+
+## Quick Reference
+
+| Component       | Location               | Purpose               |
+| --------------- | ---------------------- | --------------------- |
+| MCP Gateway     | `mcp_server.py`        | Protocol adapter      |
+| Swarm Engine    | `agent/core/swarm.py`  | Runtime orchestration |
+| Executor Role   | `skills/terminal`      | Command execution     |
+| Skill Decorator | `skills/decorators.py` | `@skill_command`      |
+
+## Next Steps
+
+- See `docs/skills.md` for skill implementation guide
+- See `docs/reference/odf-ep-protocol.md` for engineering rules
+
+---
+
+# Legacy Content (Phase 29-35)
+
+> The following content is kept for historical reference. Current implementation is Trinity v2.0 (Phase 36).
 
 ## Overview
 

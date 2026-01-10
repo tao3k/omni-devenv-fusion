@@ -34,7 +34,7 @@ from agent.skills.decorators import skill_command
 
 
 @skill_command(
-    name="_template.example",
+    name="example",
     category="read",
     description="An example command for the template skill.",
 )
@@ -54,7 +54,7 @@ def example(param: str = "default") -> str:
 
 
 @skill_command(
-    name="_template.example_with_options",
+    name="example_with_options",
     category="read",
     description="Example command with optional parameters.",
 )
@@ -75,7 +75,7 @@ def example_with_options(enabled: bool = True, value: int = 42) -> dict:
 
 
 @skill_command(
-    name="_template.process_data",
+    name="process_data",
     category="write",
     description="Process a list of data strings.",
 )
@@ -106,7 +106,7 @@ def process_data(data: list[str], filter_empty: bool = True) -> dict:
 
 
 @skill_command(
-    name="_template.help",
+    name="help",
     category="view",
     description="Show full skill context and guidelines.",
 )

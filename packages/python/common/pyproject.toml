@@ -1,6 +1,6 @@
 [project]
 name = "omni-dev-fusion-common"
-version = "0.3.0-dev"
+version = "0.4.0-dev"
 description = "Shared kernel for omni-dev-fusion MCP servers"
 readme = "README.md"
 requires-python = ">=3.12"

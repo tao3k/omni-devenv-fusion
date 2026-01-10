@@ -90,7 +90,7 @@ def categorize_changes(files: list) -> Dict[str, bool]:
 
 
 @skill_command(
-    name="testing_protocol_smart_test_runner",
+    name="smart_test_runner",
     category="read",
     description="Execute tests following agent/how-to/testing-workflows.md.",
 )
@@ -212,7 +212,7 @@ async def smart_test_runner(focus_file: str = None) -> str:
 
 
 @skill_command(
-    name="testing_protocol_run_test_command",
+    name="run_test_command",
     category="read",
     description="Run a test command and return results.",
 )
@@ -272,7 +272,7 @@ async def run_test_command(command: str) -> str:
 
 
 @skill_command(
-    name="testing_protocol_get_test_protocol",
+    name="get_test_protocol",
     category="read",
     description="Get the testing protocol summary.",
 )

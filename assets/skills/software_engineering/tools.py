@@ -24,7 +24,7 @@ logger = structlog.get_logger(__name__)
 
 
 @skill_command(
-    name="software_engineering_analyze_project_structure",
+    name="analyze_project_structure",
     category="read",
     description="Generate a tree-like view of the project structure.",
 )
@@ -68,7 +68,7 @@ async def analyze_project_structure(depth: int = 2) -> str:
 
 
 @skill_command(
-    name="software_engineering_grep_codebase",
+    name="grep_codebase",
     category="read",
     description="Universal content search (grep) for patterns in files.",
 )
@@ -133,7 +133,7 @@ async def grep_codebase(pattern: str, file_extension: str = "", path: str = ".")
 
 
 @skill_command(
-    name="software_engineering_detect_tech_stack",
+    name="detect_tech_stack",
     category="read",
     description="Analyze the project to identify languages and frameworks.",
 )

@@ -16,7 +16,7 @@ logger = structlog.get_logger(__name__)
 
 
 @skill_command(
-    name="testing_run_tests",
+    name="run_tests",
     category="read",
     description="Run tests using pytest.",
 )
@@ -67,7 +67,7 @@ async def run_tests(path: str = ".", verbose: bool = False, max_fail: int = 5) -
 
 
 @skill_command(
-    name="testing_list_tests",
+    name="list_tests",
     category="read",
     description="Discover and list available tests without running them.",
 )

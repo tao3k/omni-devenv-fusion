@@ -110,12 +110,92 @@ async def server_lifespan():
 # --- Tool Call Handler ---
 
 
+# Cached skill overrides from settings (loaded lazily)
+_skill_overrides_cache: dict | None = None
+
+
+def _get_skill_overrides() -> dict:
+    """
+    Load skill overrides from settings.yaml.
+
+    Returns:
+        Dict mapping "skill.command" -> {"alias": "...", "append_doc": "..."}
+    """
+    global _skill_overrides_cache
+    if _skill_overrides_cache is None:
+        try:
+            from common.config.settings import get_setting
+
+            overrides = get_setting("skills.overrides", {})
+            _skill_overrides_cache = overrides
+            logger.info(f"📖 [Config] Loaded {len(overrides)} skill overrides from settings.yaml")
+        except Exception as e:
+            logger.warning(f"⚠️ [Config] Failed to load skill overrides: {e}")
+            _skill_overrides_cache = {}
+    return _skill_overrides_cache
+
+
+def _get_alias_reverse_map() -> dict:
+    """
+    Build reverse mapping: alias_name -> original_name for call resolution.
+
+    Returns:
+        Dict mapping "alias" -> "skill.command"
+    """
+    overrides = _get_skill_overrides()
+    reverse_map = {}
+    for original_name, config in overrides.items():
+        alias = config.get("alias")
+        if alias:
+            reverse_map[alias] = original_name
+    return reverse_map
+
+
+def _get_tool_name(original_name: str, description: str = "") -> tuple[str, str]:
+    """
+    Convert skill.command to tool name and inject behavioral guidance.
+
+    Reads from settings.yaml:skills.overrides for configuration.
+    Default: Keep "skill.command" format (no conversion).
+    Only apply alias if explicitly configured.
+
+    Returns:
+        tuple of (tool_name, enhanced_description)
+    """
+    overrides = _get_skill_overrides()
+    config = overrides.get(original_name, {})
+
+    # Apply alias from config if present, otherwise keep original format
+    tool_name = config.get("alias", original_name)
+
+    # Inject behavioral guidance from config (Docstring Injection)
+    append_doc = config.get("append_doc", "")
+    if append_doc:
+        enhanced_desc = description + append_doc
+    else:
+        enhanced_desc = description
+
+    return tool_name, enhanced_desc
+
+
 @server.list_tools()
 async def handle_list_tools() -> list[Tool]:
-    """List all available tools from loaded skills."""
+    """
+    List all available tools from loaded skills.
+
+    CRITICAL: This is called immediately after MCP connection.
+    If skills aren't loaded yet, we MUST block and wait to prevent
+    Claude from receiving an empty tool list (which causes Bash downgrade).
+    """
     from agent.core.skill_manager import get_skill_manager
 
     manager = get_skill_manager()
+
+    # [Fix Timing Issue] Block until at least core skills are loaded
+    if not manager._loaded:
+        logger.info("⏳ Tools requested but skills not ready. Loading synchronously...")
+        await manager.load_all()
+
     tools = []
 
     # Get all loaded skills and their commands
@@ -131,8 +211,13 @@ async def handle_list_tools() -> list[Tool]:
             if cmd is None:
                 continue
 
-            # Convert to MCP Tool
-            tool_name = f"{skill_name}.{cmd_name}"
+            # Original name (skill.command format)
+            original_name = f"{skill_name}.{cmd_name}"
+
+            # Apply Native Mimicry transformation
+            tool_name, enhanced_desc = _get_tool_name(
+                original_name, cmd.description or f"Execute {skill_name}.{cmd_name}"
+            )
 
             # Parse input schema from command config
             input_schema = {
@@ -144,7 +229,7 @@ async def handle_list_tools() -> list[Tool]:
             tools.append(
                 Tool(
                     name=tool_name,
-                    description=cmd.description or f"Execute {skill_name}.{cmd_name}",
+                    description=enhanced_desc,
                     inputSchema=input_schema,
                 )
             )
@@ -153,18 +238,59 @@ async def handle_list_tools() -> list[Tool]:
     return tools
 
 
+async def _notify_tools_changed():
+    """Send MCP notification to refresh tool list on changes."""
+    try:
+        if server.request_context and server.request_context.session:
+            await server.request_context.session.send_tool_list_changed()
+            logger.info("🔔 [Tools] Notified client of tool updates")
+    except Exception as e:
+        logger.warning(f"⚠️ [Tools] Failed to notify client: {e}")
+
+
 @server.call_tool()
 async def handle_call_tool(name: str, arguments: dict | None) -> list[TextContent]:
-    """Execute a tool via SkillManager."""
+    """
+    Execute a tool via SkillManager.
+
+    Supports both:
+    - Native alias format: "run_command" -> resolves to "terminal.run_task"
+    - Original format: "terminal.run_task"
+    """
     from agent.core.skill_manager import get_skill_manager
 
     args = arguments or {}
     logger.info(f"🔨 [Tool] Executing: {name}")
 
+    # Fix common argument serialization issues from MCP clients
+    fixed_args = {}
+    for key, value in args.items():
+        if isinstance(value, str) and value.startswith("[") and value.endswith("]"):
+            # Try to parse string as JSON array
+            try:
+                import json
+
+                parsed = json.loads(value)
+                if isinstance(parsed, list):
+                    fixed_args[key] = parsed
+                    continue
+            except json.JSONDecodeError:
+                pass
+        fixed_args[key] = value
+    args = fixed_args
+
     try:
+        original_name = name
+
+        # Resolve alias to original name using config-driven reverse map
+        alias_reverse = _get_alias_reverse_map()
+        if name in alias_reverse:
+            original_name = alias_reverse[name]
+            logger.info(f"🔄 [Tool] Resolved alias '{name}' -> '{original_name}'")
+
         # Parse skill.command format
-        if "." in name:
-            parts = name.split(".", 1)
+        if "." in original_name:
+            parts = original_name.split(".", 1)
             skill_name = parts[0]
             command_name = parts[1]
         else:

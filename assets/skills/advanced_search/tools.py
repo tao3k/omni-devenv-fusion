@@ -126,7 +126,7 @@ def _parse_ripgrep_output(output: str, context_lines: int = 2) -> list[SearchRes
 
 
 @skill_command(
-    name="advanced_search_search_project_code",
+    name="search_project_code",
     category="read",
     description="Search for a regex pattern in code files using ripgrep.",
 )

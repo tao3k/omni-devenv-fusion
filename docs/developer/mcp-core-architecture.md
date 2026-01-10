@@ -1,6 +1,8 @@
 # mcp_core Architecture
 
-> **Phase 30: Modular Architecture** | **Phase 31: Performance Optimization** | **Phase 32: Import Optimization**
+> **Phase 30: Modular Architecture** | **Phase 31: Performance Optimization** | **Phase 32: Import Optimization** | **Phase 36: Trinity v2.0**
+
+> **Important (Phase 36)**: The `mcp_core/execution/` module has been **DELETED**. Execution is now handled by `skills/terminal/tools.py`. Protocol definitions remain for compatibility.
 
 Shared library providing common functionality for orchestrator and coder MCP servers.
 
@@ -11,7 +13,6 @@ mcp_core is a modular, protocol-based design for type-safe, testable code with O
 ```
 common/mcp_core/
 ├── protocols.py          # Protocol definitions (405 lines)
-├── execution/            # Safe command execution
 ├── lazy_cache/           # Lazy-loading singleton caches
 ├── utils/                # Common utilities
 ├── context/              # Project-specific coding context
@@ -19,6 +20,9 @@ common/mcp_core/
 ├── memory/               # Project memory persistence
 ├── api/                  # API key management
 └── instructions/         # Project instructions loader
+
+# DELETED (Phase 36)
+# execution/              # Moved to skills/terminal/tools.py
 ```
 
 ## Module Structure
@@ -49,24 +53,31 @@ mock_executor: ISafeExecutor = MagicMock()
 - `IEnvironmentLoader` - Environment variable loading
 - `IMCPLogger` - Structured logging
 
-### execution/
+### execution/ (DELETED - Phase 36)
 
-Safe command execution with security boundaries.
+> **Migration**: Execution is now handled by `skills/terminal/tools.py`
 
 ```python
-from mcp_core.execution import SafeExecutor, check_dangerous_patterns, check_whitelist
+# OLD (deprecated)
+from mcp_core.execution import SafeExecutor, check_dangerous_patterns
 
-# Check if command is safe
-is_safe, error = check_dangerous_patterns("rm", ["-rf", "/"])
+# NEW (current)
+@omni("terminal.execute_command", {"command": "ls", "args": ["-la"]})
+
+# Or directly via Swarm Engine
+from agent.core.swarm import get_swarm
+result = await get_swarm().execute_skill("terminal", "execute_command", {...})
 ```
 
-**Modules:**
+**What Changed:**
 
-- `executor.py` - SafeExecutor class
-- `security.py` - Security utilities (Phase 31: pre-compiled regex)
-- `protocols.py` - Execution protocols
+| Before                        | After                             |
+| ----------------------------- | --------------------------------- |
+| `mcp_core.execution` module   | `skills/terminal/tools.py`        |
+| Python class (`SafeExecutor`) | Skill command (`execute_command`) |
+| Direct import                 | MCP call or Swarm Engine dispatch |
 
-**Phase 31 Optimization:** Regex patterns are pre-compiled at module load time, providing **70% faster** pattern matching.
+**Security**: `check_dangerous_patterns()` moved to `skills/terminal/tools.py` with same logic.
 
 ### lazy_cache/
 
@@ -379,13 +390,14 @@ Per ODEP 80/20 matrix:
 
 ## Version History
 
-| Version | Date       | Changes                                      |
-| ------- | ---------- | -------------------------------------------- |
-| 2.3.0   | 2026-01-07 | Phase 32: Path utilities (SKILLS_DIR)        |
-| 2.2.0   | 2026-01-07 | Phase 32: Import optimizations (117x faster) |
-| 2.1.0   | 2026-01-07 | Phase 31: Performance optimizations          |
-| 2.0.0   | 2026-01-07 | Phase 30: Fully modular architecture         |
-| 1.0.0   | Earlier    | Monolithic single-file modules               |
+| Version | Date       | Changes                                       |
+| ------- | ---------- | --------------------------------------------- |
+| 2.4.0   | 2026-01-10 | Phase 36: Trinity v2.0 - `execution/` DELETED |
+| 2.3.0   | 2026-01-07 | Phase 32: Path utilities (SKILLS_DIR)         |
+| 2.2.0   | 2026-01-07 | Phase 32: Import optimizations (117x faster)  |
+| 2.1.0   | 2026-01-07 | Phase 31: Performance optimizations           |
+| 2.0.0   | 2026-01-07 | Phase 30: Fully modular architecture          |
+| 1.0.0   | Earlier    | Monolithic single-file modules                |
 
 ## Testing
 
@@ -402,16 +414,28 @@ uv run pytest packages/python/agent/src/agent/tests/stress_tests/test_performanc
 
 ## Backward Compatibility
 
-All exports maintained through `mcp_core/__init__.py`:
+> **Phase 36 Breaking Change**: `mcp_core.execution` module is removed. Use `skills/terminal` instead.
+
+```python
+# BEFORE (no longer works)
+from mcp_core.execution import SafeExecutor
+
+# AFTER (current)
+from agent.core.swarm import get_swarm
+result = await get_swarm().execute_skill("terminal", "execute_command", {...})
+
+# OR via MCP
+@omni("terminal.execute_command", {"command": "ls", "args": ["-la"]})
+```
+
+**Remaining Compatible Exports:**
 
 ```python
 from mcp_core import (
     # From protocols
     ISafeExecutor, IInferenceClient,
-    # From execution
-    SafeExecutor, check_dangerous_patterns,
     # From settings (via common.settings)
     Settings, get_setting,
-    # ... and more
+    # ... other modules unchanged
 )
 ```

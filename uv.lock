@@ -2135,7 +2135,7 @@ dev = [
 
 [[package]]
 name = "omni-dev-fusion-agent"
-version = "0.3.0.dev0"
+version = "0.4.0.dev0"
 source = { editable = "packages/python/agent" }
 dependencies = [
     { name = "chromadb" },
@@ -2177,7 +2177,7 @@ requires-dist = [
 
 [[package]]
 name = "omni-dev-fusion-common"
-version = "0.3.0.dev0"
+version = "0.4.0.dev0"
 source = { editable = "packages/python/common" }
 dependencies = [
     { name = "anthropic" },

@@ -325,29 +325,9 @@ def run_mcp_core_high(runner: BenchmarkRunner) -> None:
     with runner.measure("import", "from common.mcp_core.protocols import ISettings", priority=2):
         from common.mcp_core.protocols import ISettings
 
-    # execution submodule (uses __init__.py which imports executor)
-    clear_modules(["common"])
-    with runner.measure("import", "from common.mcp_core.execution import SafeExecutor", priority=2):
-        from common.mcp_core.execution import SafeExecutor
-
-    with runner.measure("function", "SafeExecutor() instantiation", priority=2):
-        from common.mcp_core.execution import SafeExecutor
-
-        executor = SafeExecutor()
-
-    # execution security - directly from security.py
-    clear_modules(["common"])
-    with runner.measure(
-        "import",
-        "from common.mcp_core.execution.security import check_dangerous_patterns",
-        priority=2,
-    ):
-        from common.mcp_core.execution.security import check_dangerous_patterns
-
-    with runner.measure("function", "check_dangerous_patterns(['rm', '-rf', '/'])", priority=2):
-        from common.mcp_core.execution.security import check_dangerous_patterns
-
-        check_dangerous_patterns(["rm", "-rf", "/"])
+    # execution submodule - REMOVED (legacy code, now handled by skills/terminal)
+    # The execution logic has been moved to assets/skills/terminal/tools.py
+    # and is no longer part of mcp_core
 
     # inference - heavy, imports anthropic SDK
     clear_modules(["common", "anthropic"])

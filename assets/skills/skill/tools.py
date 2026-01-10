@@ -68,7 +68,7 @@ def suggest(task: str) -> str:
     Returns:
         Skill suggestions with installation commands
     """
-    from agent.core.skill_registry import suggest_skills_for_task as registry_suggest
+    from agent.core.registry import suggest_skills_for_task as registry_suggest
 
     result = registry_suggest(task=task)
 
@@ -116,7 +116,7 @@ def jit_install(skill_id: str, auto_load: bool = True) -> str:
     Returns:
         Installation status and next steps
     """
-    from agent.core.skill_registry import jit_install_skill as registry_jit_install
+    from agent.core.registry import jit_install_skill as registry_jit_install
 
     result = registry_jit_install(skill_id=skill_id, auto_load=auto_load)
 
@@ -558,3 +558,35 @@ def templates(
         return templates_mod.format_info_result(skill_name, template_name)
 
     return f"❌ **Unknown action**\n\nUnknown action '{action}'. Use: list, eject, info"
+
+
+@skill_command(category="view")
+def list_tools() -> str:
+    """
+    List all registered MCP tools from loaded skills.
+
+    Use this to see what tools are available in the current session.
+
+    Returns:
+        Formatted list of all tools with names and descriptions
+    """
+    # Import from scripts module (lazy load)
+    from agent.skills.skill.scripts.list_tools import format_tools_list
+
+    return format_tools_list(compact=False)
+
+
+@skill_command(category="view")
+def tools() -> str:
+    """
+    List all registered MCP tools (compact format).
+
+    Use this for a quick overview of available tools.
+
+    Returns:
+        Simple list of tool names
+    """
+    # Import from scripts module (lazy load)
+    from agent.skills.skill.scripts.list_tools import format_tools_list
+
+    return format_tools_list(compact=True)

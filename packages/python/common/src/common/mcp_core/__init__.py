@@ -6,7 +6,6 @@ Phase 31: Optimized architecture with Protocol-based design.
 
 Modules:
 - protocols.py: Protocol definitions for type-safe, testable code
-- execution/: Safe command execution with security boundaries
 - lazy_cache/: Lazy-loading singleton caches for protocols and configs
 - utils/: Common utilities (logging, path checking)
 - context/: Project-specific coding context framework
@@ -15,13 +14,16 @@ Modules:
 - api/: API key management
 - instructions/: Eager-loaded project instructions
 - settings: Common settings (fast import from common.settings)
+- execution: Moved to assets/skills/terminal/tools.py (Trinity Architecture)
 
 Usage:
     # Protocol-based design (for testing)
     from mcp_core.protocols import ISafeExecutor, IInferenceClient
 
+    # Execution now via terminal skill (Trinity Architecture):
+    # @omni("terminal.execute_command", {"command": "ls", "args": ["-la"]})
+
     # From modular subpackages
-    from mcp_core.execution import SafeExecutor, check_dangerous_patterns
     from mcp_core.lazy_cache import FileCache, MarkdownCache, ConfigCache, RepomixCache
     from common.config.settings import Settings, get_setting, get_commit_types  # Fast import
     from mcp_core.utils import setup_logging, is_safe_path
@@ -94,17 +96,10 @@ except ImportError:
     pass
 
 # =============================================================================
-# Execution
+# Execution - REMOVED (now handled by assets/skills/terminal/tools.py)
+# The ISafeExecutor protocol remains for type hints, but implementation
+# is provided by the terminal skill via Swarm Engine.
 # =============================================================================
-
-from .execution import (
-    SafeExecutor,
-    check_dangerous_patterns,
-    check_whitelist,
-    create_sandbox_env,
-    DANGEROUS_PATTERNS,
-    DEFAULT_ALLOWED_COMMANDS,
-)
 
 # =============================================================================
 # Settings (import from common.config for faster imports)
@@ -279,13 +274,7 @@ __all__ = [
     "MarkdownCache",
     "ConfigCache",
     "RepomixCache",
-    # Execution
-    "SafeExecutor",
-    "check_dangerous_patterns",
-    "check_whitelist",
-    "create_sandbox_env",
-    "DANGEROUS_PATTERNS",
-    "DEFAULT_ALLOWED_COMMANDS",
+    # Execution - REMOVED (now in skills/terminal)
     # Settings
     "Settings",
     "get_setting",

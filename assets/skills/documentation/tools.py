@@ -28,7 +28,7 @@ knowledge_dir = root / "agent" / "knowledge"
 
 
 @skill_command(
-    name="documentation_create_knowledge_entry",
+    name="create_knowledge_entry",
     category="write",
     description="Create a new standardized knowledge entry.",
 )
@@ -64,7 +64,7 @@ async def create_knowledge_entry(title: str, category: str, content: str) -> str
 
 
 @skill_command(
-    name="documentation_rebuild_knowledge_index",
+    name="rebuild_knowledge_index",
     category="write",
     description="Scan all markdown files and update the main README.md index.",
 )
@@ -103,7 +103,7 @@ async def rebuild_knowledge_index() -> str:
 
 
 @skill_command(
-    name="documentation_search_knowledge_base",
+    name="search_knowledge_base",
     category="read",
     description="Simple text search across the knowledge base.",
 )

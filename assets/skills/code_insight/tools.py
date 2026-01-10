@@ -61,7 +61,7 @@ class _ToolVisitor(ast.NodeVisitor):
 
 
 @skill_command(
-    name="code_insight_find_tools",
+    name="find_tools",
     category="read",
     description="Find all @tool decorated functions in a Python file.",
 )
@@ -101,7 +101,7 @@ async def find_tools(file_path: str) -> str:
 
 
 @skill_command(
-    name="code_insight_count_lines",
+    name="count_lines",
     category="read",
     description="Count lines of code in a file.",
 )

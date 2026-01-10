@@ -40,3 +40,6 @@ def reset_all() -> str:
 def reset_soft(commit: str = "HEAD") -> str:
     """Soft reset to a commit."""
     return _run(["git", "reset", "--soft", commit])
+
+
+# test

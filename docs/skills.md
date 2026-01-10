@@ -1,6 +1,8 @@
 # Skills Documentation
 
-> **Phase 35.3: Pure MCP Server** | **Phase 35.2: Cascading Templates & Router-Controller** | **Phase 35.1: Simplified Test Framework** | **Phase 34: Cognitive System** | **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
+> **Phase 36: Trinity v2.0** | **Phase 35.3: Pure MCP Server** | **Phase 35.2: Cascading Templates** | **Phase 35.1: Simplified Test Framework** | **Phase 34: Cognitive System** | **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
+
+> **Phase 36**: The **Executor is now a Skill** (`skills/terminal`). Legacy `mcp_core.execution` has been deleted.
 
 ## Overview
 
@@ -79,6 +81,73 @@ assets/skills/git/
 - Prevents namespace conflicts when scaling to 100+ skills
 - `agent.skills.git.scripts.status` ≠ `agent.skills.docker.scripts.status`
 - Each `scripts/` is a separate Python package
+
+## Trinity Architecture (Phase 36 - v2.0)
+
+**Core Philosophy**: "Everything is a Skill" - The Executor is no longer a code module, but a logical role played by atomic skills.
+
+```
++-------------------------------------------------------------+
+|                     Trinity v2.0                            |
++-------------------------------------------------------------+
+|  🧠 Orchestrator    |  📝 Coder        |  🛠️ Executor       |
+|  (Planning)         |  (Reading/Writing)|  (Execution)       |
+|  - knowledge        |  - filesystem     |  - terminal        |
+|  - skill            |  - file_ops       |  - git             |
+|                     |  - code_insight   |  - testing         |
++-------------------------------------------------------------+
+|  Swarm Engine (Runtime Orchestrator)                        |
+|  - Route calls    - Isolate deps  - Handle errors           |
++-------------------------------------------------------------+
+```
+
+**Key Change (Phase 36)**: The `mcp_core.execution` module has been **deleted**. Execution is now handled by the `skills/terminal` skill, which contains the `SafeExecutor` logic directly. This enables hot-reload and sandboxing without core code changes.
+
+See [Trinity Architecture](./explanation/trinity-architecture.md) for full v2.0 documentation.
+
+## Core Infrastructure Skills
+
+These skills form the foundational capabilities of Omni:
+
+| Skill          | Purpose                        | Key Commands                                            |
+| -------------- | ------------------------------ | ------------------------------------------------------- |
+| **terminal**   | 🛠️ Execution (Executor Role)   | `execute_command`, `analyze_last_error`                 |
+| **filesystem** | 📝 File I/O (Coder Role)       | `read_file`, `write_file`, `list_directory`             |
+| **git**        | Version Control                | `status`, `commit`, `branch`, `log`                     |
+| **knowledge**  | 🧠 Context (Orchestrator Role) | `get_development_context`, `consult_architecture_doc`   |
+| **skill**      | Skill Management               | `list_index`, `discover`, `jit_install`, `list_tools`   |
+| **memory**     | Vector Memory                  | `remember_insight`, `recall`, `harvest_session_insight` |
+
+### Terminal Skill (Executor)
+
+The **Executor Role** is fulfilled by `skills/terminal`:
+
+```python
+@omni("terminal.execute_command", {"command": "ls", "args": ["-la"]})
+@omni("terminal.analyze_last_error")  # Analyze Flight Recorder errors
+```
+
+**Contains**: `SafeExecutor` and `check_dangerous_patterns()` (moved from legacy `mcp_core.execution`)
+
+### Filesystem Skill (Coder)
+
+The **Coder Role** handles all file operations:
+
+```python
+@omni("filesystem.read_file", {"path": "README.md"})
+@omni("filesystem.write_file", {"path": "test.txt", "content": "data"})
+@omni("filesystem.search_files", {"pattern": "**/*.py"})
+```
+
+### Knowledge Skill (Orchestrator)
+
+The **Orchestrator Role** provides development context:
+
+```python
+@omni("knowledge.get_development_context")  # Load ODF-EP rules
+@omni("knowledge.get_language_standards", {"language": "python"})
+@omni("knowledge.consult_architecture_doc", {"query": "testing"})
+```
 
 ## Trinity Architecture (Phase 29)
 
@@ -238,23 +307,43 @@ assets/templates/git/
 └── workflow_result.j2
 ```
 
-## Available Skills
+## Available Skills (19 Skills, 90+ Commands)
 
-| Skill                | Path                                  | Description                      |
-| -------------------- | ------------------------------------- | -------------------------------- |
-| Git                  | `assets/skills/git/`                  | Version control, commit workflow |
-| Terminal             | `assets/skills/terminal/`             | Shell command execution          |
-| Filesystem           | `assets/skills/filesystem/`           | File I/O operations              |
-| Testing Protocol     | `assets/skills/testing_protocol/`     | Test runner                      |
-| File Ops             | `assets/skills/file_ops/`             | Batch file operations            |
-| Knowledge            | `assets/skills/knowledge/`            | Project context, RAG             |
-| Writer               | `assets/skills/writer/`               | Writing quality                  |
-| Memory               | `assets/skills/memory/`               | Vector memory                    |
-| Documentation        | `assets/skills/documentation/`        | Doc management                   |
-| Code Insight         | `assets/skills/code_insight/`         | Code analysis                    |
-| Software Engineering | `assets/skills/software_engineering/` | Architecture                     |
-| Advanced Search      | `assets/skills/advanced_search/`      | Semantic search                  |
-| Python Engineering   | `assets/skills/python_engineering/`   | Python best practices            |
+### Core Infrastructure (5)
+
+| Skill          | Role            | Commands | Description                         |
+| -------------- | --------------- | -------- | ----------------------------------- |
+| **terminal**   | 🛠️ Executor     | 8        | Shell command execution with safety |
+| **filesystem** | 📝 Coder        | 6        | Safe file I/O operations            |
+| **git**        | Version Control | 15       | Git workflow automation             |
+| **knowledge**  | 🧠 Orchestrator | 9        | Development context, RAG            |
+| **skill**      | Management      | 8        | Skill discovery, JIT install        |
+
+### Capability Skills (14)
+
+| Skill                    | Commands | Description                           |
+| ------------------------ | -------- | ------------------------------------- |
+| **memory**               | 6        | Vector memory for session persistence |
+| **file_ops**             | 6        | AST-based file operations             |
+| **code_insight**         | 4        | Code analysis and tool discovery      |
+| **software_engineering** | 3        | Architecture analysis                 |
+| **advanced_search**      | 2        | Semantic search                       |
+| **testing**              | 2        | Pytest integration                    |
+| **testing_protocol**     | 3        | Smart test runner                     |
+| **writer**               | 5        | Writing quality enforcement           |
+| **documentation**        | 4        | Documentation management              |
+| **crawl4ai**             | 1        | Web content extraction                |
+| **python_engineering**   | 2        | Python best practices                 |
+| **\_template**           | -        | Skill template                        |
+| **test-skill**           | 4        | Test skill example                    |
+| **stress_test_skill**    | -        | Stress testing                        |
+
+### View All Tools
+
+```python
+@omni("skill.list_tools")  # List all 90+ registered MCP tools
+@omni("skill.list_index")  # List all skills in known index
+```
 
 ## Usage
 

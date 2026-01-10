@@ -148,7 +148,7 @@ def _check_passive_voice(line: str) -> List[str]:
 
 
 @skill_command(
-    name="writer_lint_writing_style",
+    name="lint_writing_style",
     category="read",
     description="Check text against Module 02 (Rosenberg Mechanics) style guide.",
 )
@@ -231,7 +231,7 @@ async def lint_writing_style(text: str) -> str:
 
 
 @skill_command(
-    name="writer_check_markdown_structure",
+    name="check_markdown_structure",
     category="read",
     description="Check Markdown structure against Module 03 (Structure & AI).",
 )
@@ -328,7 +328,7 @@ async def check_markdown_structure(text: str) -> str:
 
 
 @skill_command(
-    name="writer_polish_text",
+    name="polish_text",
     category="read",
     description="Polish text using writing guidelines.",
 )
@@ -362,7 +362,7 @@ async def polish_text(text: str) -> str:
 
 
 @skill_command(
-    name="writer_load_writing_memory",
+    name="load_writing_memory",
     category="read",
     description="Load writing guidelines into LLM context.",
 )
@@ -393,7 +393,7 @@ async def load_writing_memory() -> str:
 
 
 @skill_command(
-    name="writer_run_vale_check",
+    name="run_vale_check",
     category="read",
     description="Run Vale CLI on a markdown file.",
 )

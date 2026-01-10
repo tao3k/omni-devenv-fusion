@@ -19,17 +19,9 @@ from __future__ import annotations
 import functools
 import inspect
 import time
-from typing import Any, Callable
+from typing import Any, Callable, get_type_hints, Optional, Union
 
 from pydantic import BaseModel, ConfigDict
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type,
-    before_sleep_log,
-    after_log,
-)
 
 # Import from common (not mcp_core - these are general utilities)
 from common.config_paths import get_project_root
@@ -100,29 +92,6 @@ class CommandResult(BaseModel):
 
 
 # =============================================================================
-# Retry Configuration
-# =============================================================================
-
-
-def _get_retry_decorator(name: str, category: str):
-    """Create a tenacity retry decorator with structured logging."""
-
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type((ConnectionError, TimeoutError)),
-        before_sleep=before_sleep_log(_get_logger(), "WARNING"),
-        after=after_log(_get_logger(), "INFO"),
-        reraise=True,
-    )
-    def retry_wrapper():
-        """Placeholder for retry logic."""
-        pass
-
-    return retry_wrapper
-
-
-# =============================================================================
 # Skill Command Decorator (Enhanced)
 # =============================================================================
 
@@ -176,6 +145,7 @@ def skill_command(
             "description": description or _extract_description(func),
             "retry_on": retry_on,
             "max_attempts": max_attempts,
+            "input_schema": _get_param_schema(func),
         }
 
         # 2. Sync Wrapper with Structured Logging
@@ -305,72 +275,7 @@ def skill_command(
 
 
 # =============================================================================
-# Test Scripts (Phase 35.1)
-# =============================================================================
-# Registry for backward compatibility with @test_script decorator
-_test_script_registry: dict[str, list[str]] = {}
-
-
-def test_script(filename: str):
-    """
-    [DEPRECATED] Use module-level test_scripts list instead.
-
-    This decorator is kept for backward compatibility.
-    New skills should use:
-        test_scripts = ["test_file1.py", "test_file2.py"]
-
-    Args:
-        filename: Name of the test file in tests/ directory
-    """
-
-    def decorator(func: Callable) -> Callable:
-        import sys
-
-        module = sys.modules.get(func.__module__)
-        skill_name = "unknown"
-        if module and hasattr(module, "__name__"):
-            parts = module.__name__.split(".")
-            if len_parts := len(parts):
-                skill_name = parts[-2] if parts[-1] == "tools" else parts[-1]
-
-        if skill_name not in _test_script_registry:
-            _test_script_registry[skill_name] = []
-        if filename not in _test_script_registry[skill_name]:
-            _test_script_registry[skill_name].append(filename)
-
-        return func
-
-    return decorator
-
-
-def get_test_scripts(skill_name: str) -> list[str]:
-    """
-    Get declared test scripts for a skill.
-
-    Reads from:
-    1. Module-level test_scripts list in tools.py (preferred)
-    2. Legacy @test_script decorator registry (backward compat)
-    """
-    import sys
-
-    # Try to load from module's test_scripts attribute
-    module_name = f"assets.skills.{skill_name}.tools"
-    module = sys.modules.get(module_name)
-
-    if module and hasattr(module, "test_scripts"):
-        return list(module.test_scripts)
-
-    # Fallback to registry
-    return _test_script_registry.get(skill_name, [])
-
-
-def clear_test_registry():
-    """Clear the test registry (useful for testing)."""
-    _test_script_registry.clear()
-
-
-# =============================================================================
-# Structure Validation Macro (Phase 35.1)
+# Structure Validation (Phase 35.1)
 # =============================================================================
 
 
@@ -504,6 +409,81 @@ def _extract_description(func: Callable) -> str:
     return ""
 
 
+def _get_param_schema(func: Callable) -> dict:
+    """Extract parameter schema from function signature for MCP inputSchema."""
+    try:
+        hints = get_type_hints(func)
+    except Exception:
+        hints = {}
+
+    sig = inspect.signature(func)
+    properties = {}
+    required = []
+
+    for param_name, param in sig.parameters.items():
+        # Skip *args and **kwargs
+        if param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+            continue
+
+        # Skip injected parameters
+        if param_name in ("project_root",):
+            continue
+
+        # Determine type
+        param_type = hints.get(param_name, param.annotation)
+        if param_type is inspect.Parameter.empty:
+            param_type = str
+
+        # Handle Optional types (Union[..., None])
+        origin = getattr(param_type, "__origin__", None)
+        type_args = getattr(param_type, "__args__", ())
+
+        # Convert to JSON schema type
+        type_map = {
+            str: "string",
+            int: "integer",
+            float: "number",
+            bool: "boolean",
+            list: "array",
+            dict: "object",
+        }
+
+        # Check for list in Union args (e.g., Optional[list[str]])
+        is_list_type = False
+        for arg in type_args:
+            arg_origin = getattr(arg, "__origin__", None)
+            if arg_origin is list:
+                is_list_type = True
+                break
+
+        if is_list_type:
+            json_type = "array"
+        elif origin is list:
+            json_type = "array"
+        elif origin is Union:
+            # Handle Optional[str], Optional[int], etc.
+            for arg in type_args:
+                if arg not in (type(None), None):
+                    json_type = type_map.get(arg, "string")
+                    break
+            else:
+                json_type = "string"
+        else:
+            json_type = type_map.get(param_type, "string")
+
+        properties[param_name] = {"type": json_type}
+
+        # Check if parameter is required (has no default)
+        if param.default is inspect.Parameter.empty:
+            required.append(param_name)
+
+    return {
+        "type": "object",
+        "properties": properties,
+        "required": required,
+    }
+
+
 # =============================================================================
 # Export
 # =============================================================================
@@ -512,7 +492,6 @@ def _extract_description(func: Callable) -> str:
 __all__ = [
     "skill_command",
     "CommandResult",
-    "get_test_scripts",
     "validate_structure",
     "generate_structure_tests",
     "get_skill_structure",

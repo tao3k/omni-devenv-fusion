@@ -469,7 +469,7 @@ class TestSkillManagerOmniCLI:
 
 
 # Import decorator tests from common test library (Phase 35.1)
-from agent.tests.test_decorators import TestFilesystemSkillDecorators
+# Note: TestFilesystemSkillDecorators removed (Phase 36) - tests migrated to skills/filesystem/tests/
 
 
 class TestFilesystemSkill:

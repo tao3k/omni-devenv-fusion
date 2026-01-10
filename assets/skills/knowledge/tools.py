@@ -296,7 +296,7 @@ def _read_file_content(path: str) -> str:
 
 
 @skill_command(
-    name="knowledge_get_development_context",
+    name="get_development_context",
     category="read",
     description="[Cognition] Load the Rules of Engagement for this project.",
 )
@@ -342,7 +342,7 @@ async def get_development_context() -> str:
 
 
 @skill_command(
-    name="knowledge_consult_architecture_doc",
+    name="consult_architecture_doc",
     category="read",
     description="[RAG] Semantic search for documentation.",
 )
@@ -361,7 +361,7 @@ async def consult_architecture_doc(topic: str) -> str:
 
 
 @skill_command(
-    name="knowledge_consult_language_expert",
+    name="consult_language_expert",
     category="read",
     description="[Language Expert] Consult language-specific standards.",
 )
@@ -415,7 +415,7 @@ async def consult_language_expert(file_path: str, task_description: str) -> str:
 
 
 @skill_command(
-    name="knowledge_get_language_standards",
+    name="get_language_standards",
     category="read",
     description="[Standards] Get language-specific coding standards.",
 )
@@ -457,7 +457,7 @@ async def get_language_standards(lang: str) -> str:
 
 
 @skill_command(
-    name="knowledge_list_supported_languages",
+    name="list_supported_languages",
     category="read",
     description="List all supported languages with their standards.",
 )
