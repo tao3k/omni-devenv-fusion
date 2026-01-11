@@ -70,7 +70,9 @@ class HotReloadMixin:
                         pass
 
             # DEBUG: Log mtime comparison
-            should_reload = current_mtime > skill.mtime or scripts_mtime > skill.mtime
+            # Use >= to ensure reload triggers even when mtimes are equal
+            # (can happen when tools.py and scripts are modified together)
+            should_reload = current_mtime >= skill.mtime or scripts_mtime >= skill.mtime
             _get_logger().debug(
                 "Hot-reload check",
                 skill=skill_name,
@@ -84,9 +86,9 @@ class HotReloadMixin:
             # Trigger reload if any file was modified
             if should_reload:
                 modified = []
-                if current_mtime > skill.mtime:
+                if current_mtime >= skill.mtime:
                     modified.append("tools.py")
-                if scripts_mtime > skill.mtime:
+                if scripts_mtime >= skill.mtime:
                     modified.append("scripts/*")
                 _get_logger().info("Hot-reloading skill", skill=skill_name, modified=modified)
 

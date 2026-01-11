@@ -500,10 +500,16 @@ Route this request and provide a mission brief."""
             top_skill = new_candidates[0]
             suggested_ids = [s.get("id") for s in new_candidates]
 
+            # Add newly discovered skills to selected_skills (since they're more relevant)
+            # This fixes the case where LLM picks wrong skill but vector search finds better one
+            for skill_id in suggested_ids:
+                if skill_id not in result.selected_skills:
+                    result.selected_skills.append(skill_id)
+
             # Update result with suggestions
             result.suggested_skills = suggested_ids
             result.reasoning += (
-                f" [Vector Fallback] Found local skills: {', '.join(suggested_ids)}."
+                f" [Vector Fallback] Found relevant local skills: {', '.join(suggested_ids)}."
             )
 
             # Boost confidence since we found relevant skills
@@ -512,6 +518,7 @@ Route this request and provide a mission brief."""
             _get_logger().info(
                 "Vector fallback triggered",
                 query=query[:50],
+                selected_skills=result.selected_skills,
                 suggestions=suggested_ids,
             )
 

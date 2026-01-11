@@ -115,7 +115,7 @@ def _create_backup(filepath: Path) -> bool:
     category="read",
     description="Read a single file with line numbering.",
 )
-async def read_file(path: str) -> str:
+async def read_file(file_path: str) -> str:
     """
     Read a single file with line numbering.
 
@@ -124,36 +124,36 @@ async def read_file(path: str) -> str:
     - Trusted absolute paths (e.g., /nix/store/*)
     """
     # Check for trusted absolute paths (e.g., /nix/store/*)
-    if path.startswith("/"):
-        is_safe, error_msg = is_safe_path(path, allow_absolute=True)
+    if file_path.startswith("/"):
+        is_safe, error_msg = is_safe_path(file_path, allow_absolute=True)
     else:
-        is_safe, error_msg = is_safe_path(path)
+        is_safe, error_msg = is_safe_path(file_path)
 
     if not is_safe:
         return f"Error: {error_msg}"
 
     # Handle absolute paths (trusted) vs relative paths
-    if path.startswith("/"):
-        full_path = Path(path)
+    if file_path.startswith("/"):
+        full_path = Path(file_path)
     else:
         project_root = Path.cwd()
-        full_path = project_root / path
+        full_path = project_root / file_path
 
     if not full_path.exists():
-        return f"Error: File '{path}' does not exist."
+        return f"Error: File '{file_path}' does not exist."
     if not full_path.is_file():
-        return f"Error: '{path}' is not a file."
+        return f"Error: '{file_path}' is not a file."
     if full_path.stat().st_size > 100 * 1024:
-        return f"Error: File '{path}' is too large (> 100KB)."
+        return f"Error: File '{file_path}' is too large (> 100KB)."
 
     try:
         with open(full_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
         numbered_lines = [f"{i + 1:4d} | {line}" for i, line in enumerate(lines)]
         content = "".join(numbered_lines)
-        return f"--- File: {path} ({len(lines)} lines) ---\n{content}"
+        return f"--- File: {file_path} ({len(lines)} lines) ---\n{content}"
     except UnicodeDecodeError:
-        return f"Error: Cannot read '{path}' - not a text file."
+        return f"Error: Cannot read '{file_path}' - not a text file."
     except Exception as e:
         return f"Error reading file: {e}"
 

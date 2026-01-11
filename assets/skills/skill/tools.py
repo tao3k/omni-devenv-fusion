@@ -107,6 +107,8 @@ async def suggest(task: str) -> str:
         @omni("skill.suggest", {"task": "analyze nginx logs"})
         ```
     """
+    from common.skills_path import SKILLS_DIR
+
     discovery = _get_discovery()
 
     # Search all skills (local + remote)
@@ -126,6 +128,7 @@ async def suggest(task: str) -> str:
         )
 
     best_match = suggestions[0]
+    skill_name = best_match.get("name", best_match.get("id", "")).lower().replace(" ", "-")
 
     lines = ["# 💡 Skill Recommendation", ""]
     lines.append(f"**Task**: {task}")
@@ -148,7 +151,22 @@ async def suggest(task: str) -> str:
     lines.append(f"**Description**: {best_match.get('description', 'No description')}")
     lines.append("")
 
-    if best_match.get("installed"):
+    # Check if local skill directory exists
+    skills_base = SKILLS_DIR()
+    local_skill_path = skills_base / skill_name
+    has_local_skill = local_skill_path.exists()
+
+    if has_local_skill:
+        lines.append("✅ **Local skill found!**")
+        lines.append("")
+        lines.append("**To load and use**:")
+        lines.append("```python")
+        lines.append(f'@omni("skill.load", {{"skill_name": "{skill_name}"}})')
+        lines.append("```")
+        lines.append("")
+        lines.append("**Or via CLI**:")
+        lines.append(f"`omni skill load {skill_name}`")
+    elif best_match.get("installed"):
         lines.append("✅ **This skill is installed and ready to use!**")
         lines.append(f'👉 Try: `@omni("{best_match["name"]}.help")`')
     else:
@@ -163,6 +181,70 @@ async def suggest(task: str) -> str:
         lines.append(f"`omni skill install {best_match.get('url', best_match['id'])}`")
 
     return "\n".join(lines)
+
+
+@skill_command(category="workflow")
+async def load(skill_name: str) -> str:
+    """
+    Load a local skill into the MCP server.
+
+    Use this to enable a skill that exists locally but is not currently loaded.
+
+    Args:
+        skill_name: Name of the skill to load (e.g., "network", "git", "filesystem")
+
+    Returns:
+        Confirmation message with skill details
+
+    Examples:
+        ```python
+        @omni("skill.load", {"skill_name": "network"})
+        ```
+    """
+    from common.skills_path import SKILLS_DIR
+    from pathlib import Path
+
+    skills_base = SKILLS_DIR()
+    skill_path = skills_base / skill_name
+
+    if not skill_path.exists():
+        return f"❌ **Skill not found**: `{skill_name}`\n\nSkill directory does not exist."
+
+    if not skill_path.is_dir():
+        return f"❌ **Not a skill**: `{skill_name}`"
+
+    # Check for required SKILL.md
+    skill_md = skill_path / "SKILL.md"
+    if not skill_md.exists():
+        return f"❌ **Invalid skill**: `{skill_name}`\n\nMissing SKILL.md file."
+
+    # Load the skill via registry
+    from agent.core.registry import get_skill_registry
+
+    registry = get_skill_registry()
+    success, message = registry.load_skill(skill_name)
+
+    if success:
+        # Read skill info (manifest is a SkillManifest object)
+        manifest = registry.get_skill_manifest(skill_name)
+        name = manifest.name if manifest and hasattr(manifest, "name") else skill_name
+        description = (
+            manifest.description
+            if manifest and hasattr(manifest, "description")
+            else "No description"
+        )
+
+        lines = [
+            f"# ✅ Skill Loaded: {name}",
+            "",
+            f"**Skill**: `{skill_name}`",
+            f"**Description**: {description}",
+            "",
+            f'👉 Try: `@omni("{skill_name}.help")` to see available commands.',
+        ]
+        return "\n".join(lines)
+    else:
+        return f"❌ **Failed to load skill**: `{skill_name}`\n\n{message}"
 
 
 @skill_command(category="admin")

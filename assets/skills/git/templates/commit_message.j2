@@ -1,45 +1,74 @@
-{#
-# git/commit_message.j2 - Commit Message Template
-#
-# Structured output for LLM-friendly parsing.
-# Uses XML-like tags for clear semantic boundaries.
-#
-# Usage:
-#     from .rendering import render_commit_message
-#     result = render_commit_message(subject, body, verified=True)
-#
-#}
+{# git/commit_message.j2 - Commit Message Template #}
+{# Variables: status, subject, body, timestamp, verified, checks, security_warning, security_passed #}
 
-{%- if status %}
-<git_commit_context>
-    <status>{{ status }}</status>
-    <timestamp>{{ timestamp }}</timestamp>
-{% endif -%}
+{%- if status == "committed" -%}
+## ✅ Commit Created
 
-{% if subject -%}
-</commit_message>
-# {{ subject }}
-{% else %}
-</commit_message>
-# No subject provided
-{%- endif %}
+**Subject**: `{{ subject }}`
 
 {%- if body %}
 {{ body }}
 {%- endif %}
 
 ---
-{% if verified %}
-<verification_badge>
-    <tool>Omni Git Skill</tool>
-    <status>Verified</status>
-{% if checks %}
-    <checks>
+**Commit**: `{{ commit_hash }}`
+
+{%- elif status == "security_violation" -%}
+## ⚠️ Security Issue Detected
+
+**Subject**: `{{ subject }}`
+
+⚠️ **Security Issues**: {{ security_issues|join(", ") }}
+
+**Action Required**: Fix security issues before committing.
+
+{%- elif status == "error" -%}
+## ❌ Error Occurred
+
+**Subject**: `{{ subject }}`
+
+**Error**: {{ error }}
+
+{%- elif status == "failed" -%}
+## ❌ Commit Failed
+
+**Subject**: `{{ subject }}`
+
+**Error**: {{ error }}
+
+{%- elif status == "pending" -%}
+{%- if verified %}
+## 🛡️ Commit Ready
+
+**Subject**: `{{ subject }}`
+
+{%- if body %}
+{{ body }}
+{%- endif %}
+
+{%- if security_warning %}
+{{ security_warning }}
+{%- endif %}
+
+{%- if checks %}
+**Checks Passed**:
 {% for check in checks -%}
-        - [x] {{ check }}
+- [x] {{ check }}
 {% endfor -%}
-    </checks>
 {% endif %}
-    <signature>✨ Verified by Omni Git Skill (cog) ✨</signature>
-</verification_badge>
-{% endif %}
+
+---
+✨ **Verified by Omni Git Skill**
+
+{%- else %}
+## 📝 Draft Commit Message
+
+**Subject**: {{ subject }}
+
+{%- if body %}
+{{ body }}
+{%- endif %}
+
+{%- endif -%}
+
+{%- endif -%}

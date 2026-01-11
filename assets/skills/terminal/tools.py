@@ -12,7 +12,6 @@ Naming Convention:
     @skill_command(name="<command>", ...)
     - Command names are just the function name (e.g., "run_task")
     - MCP Server automatically prefixes with skill name: "terminal.run_task"
-    - Use "run_command" alias to invoke directly
 
 Usage:
     @omni("terminal.run_task", {"command": "ls", "args": ["-la"]})

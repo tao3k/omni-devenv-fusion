@@ -209,17 +209,16 @@ def commit(message: str) -> str:
 
     # Get security status from prepare_commit result
     security_passed = prep_result.get("security_passed", True)
-    security_warning = prep_result.get("security_warning", "")
-    # Ensure security_warning always has a value for template rendering
-    if not security_warning:
+    security_issues = prep_result.get("security_issues", [])
+    security_guard = prep_result.get("security_guard", "")
+    # Ensure security_guard always has a value for template rendering
+    if not security_guard:
         if security_passed:
-            security_warning = (
+            security_guard = (
                 "🛡️ Security Guard Detection - No sensitive files detected. Safe to proceed."
             )
         else:
-            security_warning = (
-                "⚠️ Security Guard Detection - Sensitive files detected. Please review."
-            )
+            security_guard = "⚠️ Security Guard Detection - Sensitive files detected. Please review."
 
     # Parse commit message for template rendering
     lines = message.strip().split("\n")
@@ -250,9 +249,208 @@ def commit(message: str) -> str:
         verified=True,
         checks=["lefthook passed", "scope validated"],
         status="committed",
-        security_passed=security_passed,
-        security_warning=security_warning,
+        security_issues=security_issues,
+        security_guard=security_guard,
     )
+
+
+# ==============================================================================
+# SMART COMMIT Workflow (Phase 36.7)
+# ==============================================================================
+# Architecture: Tool provides data, LLM provides intelligence.
+# Flow: prepare -> (LLM Analysis) -> execute
+# ==============================================================================
+
+
+import uuid
+
+
+@skill_command(
+    name="smart_commit",
+    category="workflow",
+    description="Smart commit: Tool stages & extracts diff, LLM analyzes & generates message",
+)
+def smart_commit(
+    message: str = None,
+    action: str = "start",
+    workflow_id: str = None,
+) -> str:
+    """
+    Smart commit workflow with Human-in-the-Loop (HITL) approval.
+
+    Architecture: Tool provides data, LLM provides intelligence.
+
+    Flow:
+    1. prepare: Stage files, extract diff, run security scan
+    2. LLM analyzes diff and generates commit message
+    3. execute: Perform the actual git commit
+
+    Args:
+        message: LLM-generated commit message (for 'approve' action)
+        action: "start" to begin workflow, "approve" to confirm, "reject" to cancel
+        workflow_id: Unique workflow ID (auto-generated if not provided)
+
+    Returns:
+        Review card with diff for LLM analysis, or result message for approve/reject
+
+    Usage:
+        # Start workflow (returns diff for LLM analysis)
+        @omni("git.smart_commit", {"action": "start"})
+
+        # LLM analyzes diff, generates message, then:
+        @omni("git.smart_commit", {"action": "approve", "workflow_id": "abc123", "message": "refactor(core): ..."})
+
+        # Reject
+        @omni("git.smart_commit", {"action": "reject", "workflow_id": "abc123"})
+    """
+    from common.gitops import get_project_root
+    from agent.skills.git.scripts import smart_workflow as smart_mod
+
+    root = get_project_root()
+    thread_id = workflow_id or str(uuid.uuid4())[:8]
+
+    if action == "start":
+        # Start the workflow - runs prepare node and interrupts before execute
+        state = smart_mod.start_workflow(
+            project_root=str(root),
+            workflow_id=thread_id,
+        )
+
+        # Return formatted review card for LLM consumption
+        return smart_mod.format_review_card(state)
+
+    elif action == "approve":
+        if not message:
+            return "❌ **Error**: Message required for 'approve' action"
+
+        # Approve with LLM-generated message and resume
+        state = smart_mod.approve_workflow(
+            message=message,
+            workflow_id=thread_id,
+        )
+
+        status = state.get("status")
+
+        from agent.skills.git.scripts.rendering import render_commit_message
+
+        if status == "error":
+            return render_commit_message(
+                subject="Commit Error",
+                body=state.get("error", "Unknown error"),
+                verified=False,
+                checks=[],
+                status="error",
+                security_passed=False,
+                security_warning="⚠️ Workflow Error",
+                commit_hash="",
+                error=state.get("error", "Unknown error"),
+            )
+        elif status == "completed" and state.get("commit_hash"):
+            # Workflow completed successfully - return success message
+            retry_note = state.get("retry_note", "")
+            note_line = f" ({retry_note})" if retry_note else ""
+
+            return render_commit_message(
+                subject=state.get("final_message", message).split("\n")[0],
+                body="",
+                verified=True,
+                checks=["smart workflow approved"],
+                status="committed",
+                security_passed=True,
+                security_warning="🛡️ Smart Commit Workflow - Approved" + note_line,
+                commit_hash=state.get("commit_hash", ""),
+            )
+        elif status == "failed":
+            # Commit failed after all retries
+            error = state.get("error", "Unknown error")
+            retry_note = state.get("retry_note", "")
+            note_line = f" ({retry_note})" if retry_note else ""
+
+            return render_commit_message(
+                subject="Commit Failed",
+                body=f"{error}{note_line}",
+                verified=False,
+                checks=[],
+                status="failed",
+                security_passed=False,
+                security_warning="⚠️ Commit Failed",
+                commit_hash="",
+                error=error,
+            )
+        elif status == "approved":
+            # Execute node ran but commit failed (lefthook check, etc.)
+            error = state.get("error", "Commit was not created")
+            return render_commit_message(
+                subject="Commit Failed",
+                body="Workflow executed but commit was not created. Please fix the issue and try again.",
+                verified=False,
+                checks=[],
+                status="failed",
+                security_passed=False,
+                security_warning="⚠️ Execution Error",
+                commit_hash="",
+                error=error,
+            )
+        else:
+            return render_commit_message(
+                subject="Unexpected Status",
+                body=f"Status: {status}",
+                verified=False,
+                checks=[],
+                status="error",
+                security_passed=False,
+                security_warning="⚠️ Unknown Status",
+                commit_hash="",
+                error=f"Unexpected status: {status}",
+            )
+
+    elif action == "reject":
+        # Reject and cancel
+        state = smart_mod.reject_workflow(workflow_id=thread_id)
+        return "🛑 **Commit Cancelled** - You rejected this commit."
+
+    else:
+        return f"❌ **Unknown action**: {action}. Use 'start', 'approve', or 'reject'"
+
+
+@skill_command(
+    name="commit_status",
+    category="read",
+    description="Check status of a smart commit workflow",
+)
+def commit_status(workflow_id: str = "default") -> str:
+    """Check the status of a pending smart commit workflow."""
+    from agent.skills.git.scripts import smart_workflow as smart_mod
+
+    state = smart_mod.get_workflow_status(workflow_id)
+
+    if not state:
+        return f"ℹ️ No workflow found with ID: {workflow_id}"
+
+    status = state.get("status", "unknown")
+
+    # New status values from simplified workflow
+    if status == "prepared":
+        return (
+            "⏳ **Waiting for LLM Analysis** - Diff extracted, ready for commit message generation"
+        )
+    elif status == "completed":
+        retry_note = state.get("retry_note", "")
+        note = f" ({retry_note})" if retry_note else ""
+        return f"✅ **Committed**{note} - `{state.get('commit_hash', 'unknown')}`"
+    elif status == "failed":
+        error = state.get("error", "Unknown error")
+        return f"❌ **Failed** - {error}"
+    elif status == "rejected":
+        return "🛑 **Cancelled** - You rejected this commit"
+    elif status == "security_violation":
+        return "⚠️ **Security Issue** - Fix before committing"
+    elif status == "error":
+        return f"❌ **Error**: {state.get('error', 'Unknown')}"
+    elif status == "empty":
+        return "🤷 **Nothing to commit** - No staged files"
+    else:
+        return f"ℹ️ **Status**: {status}"
 
 
 @skill_command(name="checkout", category="write", description="Switch branch.")

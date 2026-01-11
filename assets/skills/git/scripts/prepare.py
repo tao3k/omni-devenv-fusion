@@ -371,65 +371,82 @@ def format_prepare_result(prep_result: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _legacy_format_result(prep_result: Dict[str, Any]) -> str:
+# ==============================================================================
+# Smart Commit Workflow Functions (Phase 36.7)
+# ==============================================================================
+
+
+def stage_and_scan(root_dir: str = ".") -> dict:
     """
-    Legacy string formatting fallback (for debugging/fallback).
+    Stage files and capture diff for LLM analysis.
+
+    This function does the "dirty work" for the Smart Commit workflow:
+    1. Stage all changes
+    2. Get staged file list
+    3. Extract diff content (truncated for context limits)
+    4. Check for sensitive files
 
     Args:
-        prep_result: Result from prepare_commit()
+        root_dir: Project root directory
 
     Returns:
-        Formatted markdown string matching original output format
+        Dict with:
+        - staged_files: List of staged file paths
+        - diff: Raw diff content for LLM analysis
+        - security_issues: List of sensitive files detected
     """
-    lines = []
+    import glob as glob_module
 
-    # Header
-    lines.append("\n".join(prep_result["results"]))
+    result = {
+        "staged_files": [],
+        "diff": "",
+        "security_issues": [],
+    }
 
-    # Lefthook report
-    if prep_result["lefthook_report"]:
-        lines.append(prep_result["lefthook_report"])
+    # 1. Stage all changes
+    stdout, stderr, rc = _run(["git", "add", "."], cwd=root_dir)
+    if rc != 0:
+        return result
 
-    # Scope warning
-    if prep_result["scope_warning"]:
-        lines.append(prep_result["scope_warning"])
+    # 2. Get staged file list
+    files_out, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root_dir)
+    result["staged_files"] = [line for line in files_out.splitlines() if line.strip()]
 
-    # Security warning
-    if prep_result["security_warning"]:
-        lines.append(prep_result["security_warning"])
+    # 3. Get diff content (truncated to prevent context overflow)
+    # Ignore lock files to save tokens
+    diff_cmd = ["git", "diff", "--cached", "--", ".", ":!*lock.json", ":!*lock.yaml"]
+    diff_out, _, _ = _run(diff_cmd, cwd=root_dir)
 
-    # Ready for analysis
-    if prep_result["checks_passed"] and prep_result["has_staged"]:
-        if not prep_result["has_unstaged"]:
-            # Simplified output for clean working tree
-            lines.append(f"""Staged Files Detected - Ready to Commit
+    # Simple truncation guard
+    if len(diff_out) > 6000:
+        result["diff"] = diff_out[:6000] + "\n... (Diff truncated for analysis)"
+    else:
+        result["diff"] = diff_out
 
-{prep_result["staged_file_count"]} staged files ready to commit:
-{prep_result["staged_diff"]}
-Please confirm: Press Yes to submit commit, or No to cancel.""")
-        else:
-            # Full diff output
-            lines.append("Ready for Analysis")
-            if prep_result["security_warning"]:
-                lines.append(prep_result["security_warning"])
+    # 4. Security scan for sensitive files
+    sensitive_patterns = [
+        "*.env*",
+        "*.pem",
+        "*.key",
+        "*.secret",
+        "*.credentials*",
+        "id_rsa*",
+        "id_ed25519*",
+    ]
 
-            lines.append(f"""Staged Changes:
+    sensitive = []
+    for pattern in sensitive_patterns:
+        matches = glob_module.glob(pattern, recursive=True)
+        for m in matches:
+            if m in result["staged_files"] and m not in sensitive:
+                sensitive.append(m)
+    result["security_issues"] = sensitive
 
-{prep_result["staged_diff_stats"]}
+    return result
 
 
-Detailed Diff:
-
-{prep_result["staged_diff"]}
-
-
-""")
-
-            # Final confirmation
-            lines.append("Please confirm: Press Yes to submit commit, or No to cancel.")
-
-    # Error cases
-    if not prep_result["has_staged"]:
-        lines.append(prep_result["results"][-1])  # Last message
-
-    return "\n".join(lines)
+__all__ = [
+    "prepare_commit",
+    "format_prepare_result",
+    "stage_and_scan",
+]

@@ -47,20 +47,20 @@ def _get_search_paths() -> list:
     Get template search paths for cascading loader.
 
     Returns:
-        List of paths [user_override, skill_default, ...]
+        List of paths [skill_default, user_override, ...]
     """
     project_root = get_project_root()
 
-    # Path 1: User override templates (Priority)
+    # Path 1: Skill-local default templates (Primary - from assets/skills/git/templates/)
+    skill_templates_dir = SKILLS_DIR("git", path="templates")
+
+    # Path 2: User override templates (Fallback - from assets/templates/git/)
     templates_config = get_setting("assets.templates_dir", "assets/templates")
     user_templates_root = project_root / templates_config
     user_git_templates = user_templates_root / "git"
 
-    # Path 2: Skill-local default templates (Fallback)
-    skill_templates_dir = SKILLS_DIR("git", path="templates")
-
-    # Return valid paths only
-    return [p for p in [user_git_templates, skill_templates_dir] if p.exists()]
+    # Return valid paths only (skill first, then user)
+    return [p for p in [skill_templates_dir, user_git_templates] if p.exists()]
 
 
 @lru_cache(maxsize=1)
@@ -69,8 +69,8 @@ def _get_jinja_env() -> jinja2.Environment:
     Get cached Jinja2 environment with cascading loader.
 
     Search Path (Priority: High -> Low):
-        1. User Overrides: assets/templates/git/
-        2. Skill Defaults: assets/skills/git/templates/
+        1. Skill Defaults: assets/skills/git/templates/
+        2. User Overrides: assets/templates/git/
 
     Jinja2 loads first matching template from search paths.
     """
@@ -93,25 +93,31 @@ def render_commit_message(
     body: str = "",
     verified: bool = True,
     checks: Optional[List[str]] = None,
-    status: str = "ready",
-    security_passed: bool = True,
+    status: str = "pending",
+    security_issues: Optional[List[str]] = None,
     security_warning: str = "",
+    security_passed: bool = True,
+    commit_hash: str = "",
+    error: str = "",
 ) -> str:
     """
     Render commit message using cascading Jinja2 template.
 
     Template resolution:
-        - First checks: assets/templates/git/commit_message.j2 (user override)
-        - Falls back to: assets/skills/git/templates/commit_message.j2 (skill default)
+        - First checks: assets/skills/git/templates/commit_message.j2 (skill default)
+        - Falls back to: assets/templates/git/commit_message.j2 (user override)
 
     Args:
         subject: Commit subject line
         body: Extended commit description
         verified: Whether the commit is verified
         checks: List of verification checks passed
-        status: Commit status (ready, draft, etc.)
-        security_passed: Whether security guard check passed
-        security_warning: Security warning message if any sensitive files detected
+        status: Commit status (pending, committed, security_violation, error)
+        security_issues: List of security issues detected
+        security_warning: Security guard warning message
+        security_passed: Whether security checks passed
+        commit_hash: Commit hash (for committed status)
+        error: Error message (for error status)
 
     Returns:
         Formatted commit message with verification badge
@@ -130,8 +136,11 @@ def render_commit_message(
         checks=checks,
         status=status,
         timestamp=datetime.now().isoformat(),
-        security_passed=security_passed,
+        security_issues=security_issues or [],
         security_warning=security_warning,
+        security_passed=security_passed,
+        commit_hash=commit_hash,
+        error=error,
     )
 
 
@@ -145,8 +154,8 @@ def render_workflow_result(
     Render workflow execution result.
 
     Template resolution:
-        - First checks: assets/templates/git/workflow_result.j2 (user override)
-        - Falls back to: assets/skills/git/templates/workflow_result.j2 (skill default)
+        - First checks: assets/skills/git/templates/workflow_result.j2 (skill default)
+        - Falls back to: assets/templates/git/workflow_result.j2 (user override)
 
     Args:
         intent: Workflow intent (hotfix, commit, branch, etc.)
@@ -178,8 +187,8 @@ def render_error(
     Render error message for LLM parsing.
 
     Template resolution:
-        - First checks: assets/templates/git/error_message.j2 (user override)
-        - Falls back to: assets/skills/git/templates/error_message.j2 (skill default)
+        - First checks: assets/skills/git/templates/error_message.j2 (skill default)
+        - Falls back to: assets/templates/git/error_message.j2 (user override)
 
     Args:
         error_type: Type of error (validation, execution, etc.)
