@@ -1,239 +1,411 @@
-# Why omni-dev-fusion?
+# Why Omni-DevEnv Fusion?
 
-> **Status**: ⚠️ LEGACY - Historical rationale, preserved for context
-> **See Also**: `CLAUDE.md` for current project overview
+> **Your AI Coding Assistant That Actually Understands Your Project**
+
+Ever wish your AI assistant knew exactly how you work? That it understood your project's rules, your coding style, and your tools? That's what Omni-DevEnv Fusion is built for.
 
 ---
 
-## The Community Pain Points
+## 🎯 Who Is This For?
 
-We built omni-dev-fusion because we faced these problems every day.
+| If you...                          | Omni-Dev Helps You                               |
+| ---------------------------------- | ------------------------------------------------ |
+| Are new to AI assistants           | Get started without learning complex commands    |
+| Know what you want but not how     | Just describe your goal — skills handle the rest |
+| Are intimidated by command lines   | Skills provide safe, guided workflows            |
+| Want consistent results every time | Each skill enforces your project's standards     |
 
-### 1. AI is Context-Blind
+---
 
-Every developer has experienced this:
+## 🤔 What Are "Skills"?
+
+Think of skills like **specialized assistants** living inside Omni.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Omni-DevEnv Fusion                            │
+│                                                                  │
+│   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐          │
+│   │   📝 Writer │   │   🔀 Git    │   │  📁 File    │          │
+│   │   Skill     │   │   Skill     │   │   Skill     │          │
+│   │             │   │             │   │             │          │
+│   │ "Help me    │   │ "Commit my  │   │ "Find in    │          │
+│   │  write docs"│   │  changes"   │   │  files"     │          │
+│   └─────────────┘   └─────────────┘   └─────────────┘          │
+│                                                                  │
+│   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐          │
+│   │  🧠 Memory  │   │ 🔍 Discovery│   │  🧪 Testing │          │
+│   │   Skill     │   │   Skill     │   │   Skill     │          │
+│   │             │   │             │   │             │          │
+│   │ "Remember   │   │ "Find the   │   │ "Run tests" │          │
+│   │  this"      │   │  right tool"│   │             │          │
+│   └─────────────┘   └─────────────┘   └─────────────┘          │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**You don't need to know how they work. You just say what you need.**
+
+### Example: Writing Documentation
+
+**Old Way (without Omni):**
+
+```
+You: "Help me write documentation"
+AI:  "Sure! What format do you want? What sections? How long?"
+You: [Spends 30 minutes explaining requirements...]
+```
+
+**New Way (with Omni Writer Skill):**
+
+```
+You: @omni("writer.polish_text", {"content": "my draft here"})
+AI:  [Uses your project's writing standards]
+     [Checks grammar automatically]
+     [Formats to match your style guide]
+Result: ✓ Professional docs in seconds
+```
+
+---
+
+## 🚀 What Can Omni Solve For You?
+
+### Scenario 1: "I Want to Write Better Documentation"
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    WRITING SCENARIO                                  │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  You                                                    Omni-Dev      │
+│    │                                                       │         │
+│    │  "I need to document my project"                       │         │
+│    │───────────────────────────────────────────────────────→│         │
+│    │                                                       │         │
+│    │                                          ┌────────────┴─────┐   │
+│    │                                          │  Discovery Skill │   │
+│    │                                          │  "User wants docs"│  │
+│    │                                          └─────────┬────────┘   │
+│    │                                                    │            │
+│    │                                          ┌─────────┴────────┐   │
+│    │                                          │  Writer Skill    │   │
+│    │                                          │  • Grammar check │   │
+│    │                                          │  • Style match   │   │
+│    │                                          │  • Format docs   │   │
+│    │                                          └─────────┬────────┘   │
+│    │                                                    │            │
+│    │  ✅ Professional documentation                     │            │
+│    │     that follows your                             │            │
+│    │     project's standards                           │            │
+│    │◀──────────────────────────────────────────────────│            │
+│    │                                                       │         │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**What you experience:** "I asked for help, and it just worked."
+
+---
+
+### Scenario 2: "I'm New to Git and Scared of Breaking Things"
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    GIT SCENARIO (For Beginners)                     │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  You                                                    Omni-Dev      │
+│    │                                                       │         │
+│    │  "I want to save my changes safely"                   │         │
+│    │───────────────────────────────────────────────────────→│         │
+│    │                                                       │         │
+│    │                                          ┌────────────┴─────┐   │
+│    │                                          │  Discovery Skill │   │
+│    │                                          │  "Needs git help"│   │
+│    │                                          └─────────┬────────┘   │
+│    │                                                    │            │
+│    │                                          ┌─────────┴────────┐   │
+│    │                                          │  Git Skill       │   │
+│    │                                          │                  │   │
+│    │                                          │  • Stages files  │   │
+│    │                                          │  • Reviews diff  │   │
+│    │                                          │  • Safe commits  │   │
+│    │                                          │  • No destructive│   │
+│    │                                          │    commands!     │   │
+│    │                                          └─────────┬────────┘   │
+│    │                                                    │            │
+│    │  ✅ Changes saved                                │            │
+│    │     Review shows exactly what                    │            │
+│    │     will be committed                            │            │
+│    │◀──────────────────────────────────────────────────│            │
+│    │                                                       │         │
+└─────────────────────────────────────────────────────────────────────┘
+
+Safety Features You Get:
+• No "git reset --hard" allowed
+• All changes reviewed before commit
+• Pre-commit checks run automatically
+• Human authorization required
+```
+
+**What you experience:** "Git finally feels safe."
+
+---
+
+### Scenario 3: "I Want to Find Something in My Code But Don't Know How to Search"
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    SEARCH SCENARIO (Non-Programmer)                 │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  You                                                    Omni-Dev      │
+│    │                                                       │         │
+│    │  "Where did I define the login function?"             │         │
+│    │───────────────────────────────────────────────────────→│         │
+│    │                                                       │         │
+│    │                                          ┌────────────┴─────┐   │
+│    │                                          │  Discovery Skill │   │
+│    │                                          │  "Search request"│   │
+│    │                                          └─────────┬────────┘   │
+│    │                                                    │            │
+│    │                                          ┌─────────┴────────┐   │
+│    │                                          │  Search Skill    │   │
+│    │                                          │                  │   │
+│    │                                          │  • Natural       │   │
+│    │                                          │    language:     │   │
+│    │                                          │    "login"       │   │
+│    │                                          │  • Finds all     │   │
+│    │                                          │    matches       │   │
+│    │                                          │  • Shows context │   │
+│    │                                          └─────────┬────────┘   │
+│    │                                                    │            │
+│    │  ✅ "Found in 3 files:"                           │            │
+│    │     • auth.py:42 (function definition)            │            │
+│    │     • forms.py:12 (usage)                         │            │
+│    │     • tests/test_auth.py:8 (test)                 │            │
+│    │◀──────────────────────────────────────────────────│            │
+│    │                                                       │         │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**What you experience:** "I just asked in plain English."
+
+---
+
+## 🏗️ How Omni Works (In Simple Terms)
+
+### The Magic: Skills + Discovery + Routing
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    OMNI ARCHITECTURE (Simplified)                       │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  You Type:                                                               │
+│  "Write documentation about my project"                                  │
+│         │                                                                │
+│         ▼                                                                │
+│  ┌───────────────────────────────────────────────────────────────────┐  │
+│  │                    🤖 ROUTING BRAIN                                │  │
+│  │                                                                    │  │
+│  │  1️⃣ Quick Memory Check                                            │  │
+│  │     "Have I helped with docs before?"                              │  │
+│  │     → Returns cached answer if yes (instant!)                      │  │
+│  │                                                                    │  │
+│  │  2️⃣ Exact Match                                                   │  │
+│  │     "Is there a 'write docs' command?"                             │  │
+│  │     → Returns exact match if yes (instant!)                        │  │
+│  │                                                                    │  │
+│  │  3️⃣ Smart Routing (AI Analysis)                                    │  │
+│  │     "What skill handles writing?"                                  │  │
+│  │     → Routes to: Writer Skill                                      │  │
+│  │                                                                    │  │
+│  │  4️⃣ Fallback Search (if AI is unsure)                              │  │
+│  │     "Search for 'writing' in all skills"                           │  │
+│  │     → Finds Writer Skill by meaning                                │  │
+│  │                                                                    │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
+│         │                                                                │
+│         ▼                                                                │
+│  ┌───────────────────────────────────────────────────────────────────┐  │
+│  │                    ✨ WRITER SKILL ACTIVATED                       │  │
+│  │                                                                    │  │
+│  │  • Loads your project's writing standards                          │  │
+│  │  • Checks grammar                                                  │  │
+│  │  • Formats according to your style                                 │  │
+│  │  • Returns polished documentation                                  │  │
+│  │                                                                    │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
+│         │                                                                │
+│         ▼                                                                │
+│  ✅ You get professional documentation                                  │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**What This Means For You:**
+
+| Layer               | What It Does               | Why You Care                                  |
+| ------------------- | -------------------------- | --------------------------------------------- |
+| **Quick Memory**    | Remembers past requests    | Faster responses for common tasks             |
+| **Exact Match**     | Finds known commands       | Consistent, reliable results                  |
+| **Smart Routing**   | AI understands your intent | Just type naturally                           |
+| **Fallback Search** | Semantic skill discovery   | Finds the right tool even with vague requests |
+
+---
+
+## 📦 The Skills Directory: Your Power Source
+
+**You don't need to be a developer. Just add skills.**
+
+```
+your-project/
+├── assets/
+│   └── skills/
+│       ├── git/              # Version control
+│       ├── writer/           # Documentation
+│       ├── terminal/         # Command execution
+│       ├── memory/           # Project memory
+│       └── ...               # Add more as needed
+├── src/
+└── ...
+```
+
+### How to Get Started:
+
+1. **Install Omni-DevEnv** (one command)
+2. **Skills come pre-installed** (git, writer, terminal, memory...)
+3. **Just use natural language:**
+   ```
+   @omni("git.commit", {"message": "my changes"})
+   @omni("writer.polish_text", {"content": "..."})
+   @omni("memory.remember", {"insight": "..."})
+   ```
+
+### Adding New Skills:
+
+```
+# Install a skill from the registry
+omni skill install <skill-name>
+
+# Omni automatically discovers and indexes it
+# Now you can use it immediately!
+```
+
+---
+
+## 🎯 What Makes Omni Different?
+
+### Traditional AI Assistants vs Omni
+
+| Aspect          | Traditional AI         | Omni-DevEnv                 |
+| --------------- | ---------------------- | --------------------------- |
+| **Context**     | Forgets your project   | Remembers everything        |
+| **Safety**      | Can delete files       | Blocks destructive commands |
+| **Consistency** | Varies by session      | Enforces your standards     |
+| **Discovery**   | You must know commands | Natural language routing    |
+| **Learning**    | No project memory      | Long-term memory skills     |
+
+---
+
+## 🚀 Quick Start (3 Steps)
+
+### Step 1: Install
 
 ```bash
-# You ask the AI
-> Add user authentication
-
-# AI creates this (wrong stack!)
-> class UserAuth(models.Model):
->     # Uses SQLite!
+git clone https://github.com/tao3k/omni-dev-fusion.git
+cd omni-dev-fusion
+just setup
 ```
 
-**Our reality**: Nix, PostgreSQL, specific security standards.
-
-**Result**: 30 minutes wasted fighting the AI to use our stack.
-
-> Generic AI doesn't understand your project's **institutional knowledge**—your conventions, your standards, your stack.
-
-### 2. Engineering Rigor Disappears
-
-AI-generated code often lacks:
-
-- Tests
-- Documentation
-- Type safety
-- Security reviews
-- Consistent formatting
-
-> AI optimizes for "it works" not "it's maintainable."
-
-### 3. Tool Sprawl
-
-Every project re-invents the wheel:
+### Step 2: Describe What You Need
 
 ```
-MCP servers for Nix, Docker, GitHub...
-Custom scripts for commits
-Separate linters for docs
-No unified persona system
-No project memory
+@omni("git.status")                    # Check your changes
+@omni("writer.polish_text", {...})     # Improve your writing
+@omni("terminal.run_task", {...})      # Run development tasks
+@omni("memory.recall", {...})          # Find past decisions
 ```
 
-> No cohesive architecture.
+### Step 3: Get Consistent Results
 
-### 4. AI Can Break Things
+Every skill:
 
-```bash
-# You ask the AI
-> Fix the bug
-
-# AI runs this (destructive!)
-> git reset --hard
-```
-
-> AI has no safety rails.
-
-### 5. Documentation Debt
-
-AI writes docs that are:
-
-- Verbose ("strip the clutter" - On Writing Well)
-- Passive voice (Engineering standard: active voice)
-- Inconsistent (No single source of truth)
-- Out of date (No enforcement mechanism)
+- ✅ Follows your project's rules
+- ✅ Uses your coding standards
+- ✅ Passes safety checks
+- ✅ Logs actions for review
 
 ---
 
-## Our Solutions
+## 💡 Everyday Examples
 
-### Solution 1: The Bridge Pattern
-
-We extend MCP with a policy layer. The Bridge isn't new—it's the **Decorator Pattern** applied to MCP.
+### "I'm stuck on a problem"
 
 ```
-User Request → Orchestrator (The Bridge) → Personas → Coder → Validate
+@omni("memory.recall", {"query": "how we solved login issues"})
 ```
 
-| Capability             | Purpose                                                      |
-| ---------------------- | ------------------------------------------------------------ |
-| **Context Injection**  | Every query gets project-aware context                       |
-| **Policy Enforcement** | Rejects requests that violate `CLAUDE.md`                    |
-| **Persona Routing**    | SRE for security, Architect for design, Tech Writer for docs |
+→ Omni remembers past solutions
 
-### Solution 2: Personas as Guardrails
+### "I need to commit my work"
 
-Use AI to check AI.
-
-| Persona           | Role            | What It Prevents            |
-| ----------------- | --------------- | --------------------------- |
-| `architect`       | Design review   | Bad architectural decisions |
-| `platform_expert` | Nix review      | Broken devenv configs       |
-| `devops_mlops`    | CI/CD review    | Failing pipelines           |
-| `sre`             | Security review | Vulnerabilities             |
-| `tech_writer`     | Docs review     | Verbose, passive docs       |
-
-### Solution 3: Writing Standards System
-
-Automated documentation quality:
-
-1. **Reference**: `design/writing-style/` (modular library)
-2. **Persona**: `tech_writer` enforces standards
-3. **Tool**: `polish_text` auto-improves drafts
-4. **Linter**: Vale catches passive voice, wordiness
-
-### Solution 4: Memory Garden
-
-Long-term project memory in `.memory/`:
-
-| Operation      | Purpose                                      |
-| -------------- | -------------------------------------------- |
-| `add_decision` | Record ADRs (Architectural Decision Records) |
-| `add_task`     | Track technical debt                         |
-| `save_context` | Snapshot project state                       |
-
-### Solution 5: Safe Execution
-
-Sandboxed commands with whitelist:
-
-**Allowed:**
-
-```bash
-just validate
-just test-mcp
-git status
-nix fmt
+```
+@omni("git.prepare_commit")
 ```
 
-**Blocked:**
+→ Omni stages files, runs checks, shows you the diff
+→ You approve → Commit happens
 
-```bash
-rm -rf
-git reset --hard
-curl | sh
+### "I want to write better docs"
+
+```
+@omni("writer.polish_text", {"content": "my draft"})
 ```
 
-### Solution 6: Test-First Protocol
+→ Omni applies your writing standards automatically
 
-Every feature gets tests in the same commit:
+### "I want to understand my codebase"
 
-```python
-# mcp-server/tests/test_basic.py
-def test_new_tool():
-    # Write the test first
-    pass
+```
+@omni("software_engineering.analyze_project_structure")
 ```
 
----
-
-## What We Bring to the Community
-
-| Community Problem    | Our Solution                                    |
-| -------------------- | ----------------------------------------------- |
-| AI is context-blind  | Bridge Pattern with persona delegation          |
-| No engineering rigor | Test-First Protocol + Personas as Guardrails    |
-| Tool sprawl          | Unified MCP architecture (Orchestrator + Coder) |
-| AI breaks things     | Safe execution whitelist                        |
-| Documentation debt   | Writing Standards System (Vale + Tech Writer)   |
-| No project memory    | Memory Garden for ADRs and lessons              |
+→ Omni maps your project structure visually
 
 ---
 
-## Not Reinventing the Wheel
+## 📚 Learn More
 
-We stand on the shoulders of giants:
-
-| What We Use          | Why                                             |
-| -------------------- | ----------------------------------------------- |
-| **MCP**              | Standard protocol for AI-tools integration      |
-| **Vale**             | Proven prose linter (we integrate, not rewrite) |
-| **Claude Cookbooks** | Orchestrator pattern, personas                  |
-| **ast-grep**         | Standard AST-based code search                  |
-| **Nix**              | Reproducible builds (the foundation)            |
-| **On Writing Well**  | Proven writing principles                       |
-| **numtide/prj-spec** | Project directory conventions                   |
-
-**Our Contribution**: We synthesized these into a **cohesive, documented, testable system**.
+| Topic                 | Resource                                                     |
+| --------------------- | ------------------------------------------------------------ |
+| **Skills Overview**   | [Skills Guide](../skills.md)                                 |
+| **Writing Standards** | [Writing Style Index](../design/writing-style/00_index.md)   |
+| **Architecture**      | [Trinity Architecture](trinity-architecture.md)              |
+| **Getting Started**   | [Tutorial: Getting Started](../tutorials/getting-started.md) |
 
 ---
 
-## Project Philosophy
+## 🌟 The Vision
 
-> "Don't reinvent the wheel—perfect it."
+> **From "AI helps you code" to "AI works the way you think"**
 
-We don't claim to have invented:
+Omni-DevEnv Fusion bridges the gap between:
 
-- MCP (Anthropic did)
-- Linting (many did)
-- Safe execution (Claude-box did)
-- Personas (many did)
+```
+    Technical Complexity          │          Human Intention
+                                    │
+    ───────────────────────────────┼──────────────────────────────
+                                    │
+    • Learn command syntax          │    • Describe goal naturally
+    • Memorize tool names           │    • Skills find the right tool
+    • Repeat manual workflows       │    • Consistent, safe automation
+    • Context switching             │    • Persistent project memory
+                                    │
+```
 
-**What we did**: Synthesized these into a **cohesive, documented, testable system** that you can adopt incrementally.
-
----
-
-## Who This Is For
-
-### For Individual Developers
-
-- Get AI that understands your stack
-- Maintain code quality automatically
-- Learn by exploring the patterns
-
-### For Teams
-
-- Enforce standards across all contributors
-- Institutional memory that persists
-- Safe AI experimentation
-
-### For Tool Builders
-
-- Reference our MCP architecture
-- Copy the Writing Standards System
-- Use our Test-First Protocol
+**You focus on what you want to achieve. Omni handles how to achieve it.**
 
 ---
 
-## Next Steps
-
-| Goal                     | Resource                                                     |
-| ------------------------ | ------------------------------------------------------------ |
-| Get started quickly      | [Tutorial: Getting Started](../tutorials/getting-started.md) |
-| Solve a specific problem | [How-to Guides](../how-to/)                                  |
-| Browse API commands      | [Reference](../reference/)                                   |
-
----
-
-_Built on standards. Not reinventing the wheel._
+_Built on standards. Designed for humans._

@@ -511,3 +511,41 @@ def tools() -> str:
     from agent.skills.skill.scripts.list_tools import format_tools_list
 
     return format_tools_list(compact=True)
+
+
+@skill_command(category="read")
+def templates(skill_name: str, action: str = "list") -> str:
+    """
+    List or manage skill templates.
+
+    Template Locations:
+    - User Overrides: assets/templates/{skill}/
+    - Skill Defaults: assets/skills/{skill}/templates/
+
+    Args:
+        skill_name: Name of the skill (e.g., "git", "filesystem")
+        action: Action to perform (default: "list")
+            - "list": List available templates
+            - "info": Get info about a specific template
+
+    Returns:
+        Formatted template list or info
+
+    Examples:
+        ```python
+        @omni("skill.templates", {"skill_name": "git", "action": "list"})
+        @omni("skill.templates", {"skill_name": "git", "action": "info", "template_name": "commit_message.j2"})
+        ```
+    """
+    from agent.skills.skill.scripts import templates as template_module
+
+    if action == "list":
+        return template_module.format_template_list(skill_name)
+    elif action == "info":
+        import re
+
+        # Extract template_name from kwargs if passed
+        # This is a simple approach - full implementation would parse args
+        return f"# 📄 Template Info\n\n**Skill**: {skill_name}\n\n**Note**: Use template_name parameter for specific template info."
+    else:
+        return f"# ❌ Unknown action: {action}\n\n**Valid actions**: list, info"

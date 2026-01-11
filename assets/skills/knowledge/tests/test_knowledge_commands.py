@@ -50,7 +50,7 @@ def test_has_skill_commands(knowledge):
 def test_development_context_has_config(knowledge):
     assert hasattr(knowledge.get_development_context, "_skill_config")
     config = knowledge.get_development_context._skill_config
-    assert config["name"] == "knowledge_get_development_context"
+    assert config["name"] == "get_development_context"
     assert config["category"] == "read"
 
 

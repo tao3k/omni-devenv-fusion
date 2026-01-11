@@ -118,7 +118,7 @@ class TestSkillTemplatesCommand:
             result = result.data if result.success else result.error
 
         assert isinstance(result, str), "templates() should return string"
-        assert "not found" in result.lower() or "No templates" in result.lower()
+        assert "no templates" in result.lower() or "not found" in result.lower()
 
 
 class TestSkillCommandsMetadata:
