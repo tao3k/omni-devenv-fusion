@@ -157,6 +157,14 @@ memory:
   path: ""
 
 # =============================================================================
+# Cache Configuration
+# =============================================================================
+cache:
+  # Project name for cache directory structure
+  # All cache dirs will be under: {git_root}/.cache/{project_name}/
+  project_name: "omni-dev-fusion"
+
+# =============================================================================
 # Phase 13.10: Dynamic Skill Loading
 # =============================================================================
 skills:

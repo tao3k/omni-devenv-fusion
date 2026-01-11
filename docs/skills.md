@@ -1,6 +1,6 @@
 # Skills Documentation
 
-> **Phase 36: Trinity v2.0** | **Phase 35.3: Pure MCP Server** | **Phase 35.2: Cascading Templates** | **Phase 35.1: Simplified Test Framework** | **Phase 34: Cognitive System** | **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
+> **Phase 36.6: Production Stability** | **Phase 36.5: Hot Reload & Index Sync** | **Phase 36: Trinity v2.0** | **Phase 35.3: Pure MCP Server** | **Phase 35.2: Cascading Templates** | **Phase 35.1: Simplified Test Framework** | **Phase 34: Cognitive System** | **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
 
 > **Phase 36**: The **Executor is now a Skill** (`skills/terminal`). Legacy `mcp_core.execution` has been deleted.
 
@@ -407,6 +407,216 @@ omni skill index-stats
 
 - [Developer Guide](../developer/discover.md) - Detailed discovery architecture
 - [Testing Guide](../developer/testing.md) - Discovery flow tests
+
+---
+
+## Hot Reload (Phase 36.5/36.6)
+
+> **Zero-Downtime Skill Reloading** - Modify skills without restarting the server.
+
+### Overview
+
+Starting with Phase 36.5, skills can be reloaded at runtime without restarting the MCP server. This is critical for:
+
+- **Development**: Iterate on skills without breaking the workflow
+- **Production**: Fix bugs or update skills without downtime
+- **Swarm Mode**: Scale skills independently in a cluster
+
+### Quick Demo
+
+```bash
+# Modify a skill file
+vim assets/skills/git/tools.py
+
+# Reload the skill (in another terminal or via @omni)
+@omni("skill.reload", {"skill_name": "git"})
+
+# Or trigger automatic reload on file change
+@omni("skill.watch", {"skill_name": "git", "pattern": "**/*.py"})
+```
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    SkillManager (Runtime)                       │
+├─────────────────────────────────────────────────────────────────┤
+│  _observers: [MCP Observer, Index Sync Observer]               │
+│  _pending_changes: [(skill_name, change_type), ...]            │
+│  _debounced_notify(): 200ms batch window                       │
+└─────────────────────────────────────────────────────────────────┘
+           ↓                              ↓
+┌────────────────────────┐    ┌──────────────────────────────┐
+│  MCP Observer          │    │  Index Sync Observer         │
+│  (Tool List Update)    │    │  (ChromaDB Sync)             │
+├────────────────────────┤    ├──────────────────────────────┤
+│ send_tool_list_        │    │ index_single_skill()         │
+│ changed()              │    │ remove_skill_from_index()    │
+└────────────────────────┘    └──────────────────────────────┘
+```
+
+### Observer Pattern
+
+Skills can subscribe to change notifications:
+
+```python
+from agent.core.skill_manager import get_skill_manager
+
+manager = get_skill_manager()
+
+async def on_skill_change(skill_name: str, change_type: str):
+    """Called when any skill is loaded/unloaded/reloaded."""
+    print(f"Skill {skill_name} changed: {change_type}")
+    if change_type == "load":
+        await index_single_skill(skill_name)
+    elif change_type == "unload":
+        await remove_skill_from_index(skill_name)
+
+manager.subscribe(on_skill_change)
+```
+
+### Debounced Notifications
+
+Multiple rapid skill changes are batched into a single notification:
+
+```python
+# Loading 10 skills at startup
+for skill in skills:
+    manager._notify_change(skill, "load")
+# → ONE notification after 200ms (not 10!)
+```
+
+**Benefits**:
+
+- Prevents notification storms
+- Reduces MCP client tool list refreshes
+- Better performance during batch operations
+
+### Hot Reload Flow
+
+```
+1. Detect file change (mtime polling or explicit reload)
+        ↓
+2. Validate syntax (py_compile) - FAIL SAFE!
+        ↓
+3. Inline unload (sys.modules cleanup, cache invalidation)
+        ↓
+4. Load fresh version from disk
+        ↓
+5. Debounced notification (200ms batch)
+        ↓
+6. Observers notified:
+   - MCP: send_tool_list_changed()
+   - Index Sync: upsert to ChromaDB
+```
+
+### Transactional Safety
+
+Syntax validation prevents "bricked" skills:
+
+```python
+def _validate_syntax(skill_path: Path) -> bool:
+    """Validate before destructive reload."""
+    import py_compile
+
+    # Check tools.py
+    try:
+        py_compile.compile(skill_path / "tools.py", doraise=True)
+    except py_compile.PyCompileError:
+        return False  # Abort reload!
+
+    return True
+```
+
+### Phase 36.6 Production Optimizations
+
+#### 1. Async Task GC Protection
+
+Background tasks are tracked to prevent premature GC collection:
+
+```python
+class SkillManager:
+    _background_tasks: set[asyncio.Task] = set()
+
+    def _fire_and_forget(self, coro):
+        task = asyncio.create_task(coro)
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+        return task
+```
+
+#### 2. Atomic Upsert
+
+ChromaDB operations use atomic `upsert` instead of delete+add:
+
+```python
+# Single atomic operation (no race conditions)
+collection.upsert(
+    documents=[semantic_text],
+    ids=[skill_id],
+    metadatas=[...],
+)
+```
+
+#### 3. Startup Reconciliation
+
+Cleans up "phantom skills" after crash or unclean shutdown:
+
+```python
+from agent.core.skill_discovery import reconcile_index
+
+# Called during server startup
+stats = await reconcile_index(loaded_skills)
+# Removes: Index entries for skills not in loaded_skills
+# Re-indexes: Loaded skills missing from index
+```
+
+### Performance at Scale
+
+| Metric                        | Value                          |
+| ----------------------------- | ------------------------------ |
+| Concurrent reload (10 skills) | 1 notification (90% reduction) |
+| Reload time (with sync)       | ~80ms                          |
+| Phantom skill detection       | Automatic at startup           |
+| Task GC safety                | Guaranteed                     |
+
+### CLI Commands
+
+```bash
+# Reload a specific skill
+omni skill reload <skill_name>
+
+# Reload all skills
+omni skill reload --all
+
+# Watch a skill for changes (dev mode)
+omni skill watch <skill_name>
+
+# Force reload (skip syntax validation)
+omni skill reload <skill_name> --force
+
+# Show reload status
+omni skill status
+```
+
+### Testing Hot Reload
+
+```bash
+# Run hot reload integration tests
+uv run pytest packages/python/agent/src/agent/tests/scenarios/test_hot_reload.py -v
+
+# Key test scenarios:
+# - Recursive sys.modules cleanup
+# - Observer pattern and notifications
+# - Full reload cycle (3 iterations)
+# - MCP IO safety (no stdout pollution)
+```
+
+### See Also
+
+- [Developer Guide](../developer/discover.md) - Detailed Phase 36.5/36.6 documentation
+- [Trinity Architecture](./explanation/trinity-architecture.md) - System architecture
+- [MCP Core Architecture](../developer/mcp-core-architecture.md) - Shared library patterns
 
 ## Usage
 

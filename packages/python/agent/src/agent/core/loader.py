@@ -385,6 +385,56 @@ class SkillLoader:
                 error=str(e),
             )
 
+    # =========================================================================
+    # Hot Reload (Phase 36.4)
+    # =========================================================================
+
+    def reload(self, skill_name: str) -> LoadResult:
+        """
+        Hot reload a skill.
+
+        Phase 36.4: Performs surgical reload:
+        1. Identifies the skill path
+        2. Unloads the skill via Manager (recursive sys.modules cleanup)
+        3. Re-runs the full Load pipeline
+
+        Args:
+            skill_name: Name of the skill to reload
+
+        Returns:
+            LoadResult with success status
+        """
+        logger.info(f"🔄 [Loader] Performing hot reload for {skill_name}...")
+
+        # Try to get path from loaded skill first
+        skill = self._manager._skills.get(skill_name)
+        skill_path = None
+
+        if skill and skill.path:
+            # Use parent directory of tools.py
+            skill_path = skill.path.parent
+        else:
+            # Fallback to discovery
+            paths = self.discover(self._manager.skills_dir)
+            for p in paths:
+                if p.name == skill_name:
+                    skill_path = p
+                    break
+
+        if not skill_path or not skill_path.exists():
+            return LoadResult(
+                success=False,
+                skill_name=skill_name,
+                skill_path=skill_path or Path(skill_name),
+                error="Skill path not found",
+            )
+
+        # Perform unload (via manager - does recursive cleanup)
+        self._manager.unload(skill_name)
+
+        # Perform fresh load
+        return self.load(skill_path)
+
     def load_all(
         self,
         skills_dir: Path | None = None,

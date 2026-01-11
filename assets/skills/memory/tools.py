@@ -61,7 +61,7 @@ def _get_memory_path() -> Path:
     if custom_path:
         return Path(custom_path)
 
-    project = "omni-dev-fusion"
+    project = get_setting("cache.project_name", "omni-dev-fusion")
     git_root = get_project_root()
     return git_root / ".cache" / project / "memory"
 

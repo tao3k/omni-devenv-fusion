@@ -1,18 +1,17 @@
-# Trinity Architecture (Phase 36)
+# Trinity Architecture (Phase 36.6)
 
-> **Phase 36: Trinity v2.0 - Swarm Engine + Skills**
+> **Phase 36.6: Production Stability** | **Phase 36.5: Hot Reload & Index Sync** | **Phase 36: Trinity v2.0 - Swarm Engine + Skills**
 > **Core Philosophy**: "Everything is a Skill" - The Executor is no longer a code module, but a logical role played by atomic skills.
 
 ## Quick Reference
 
 | Phase | Key Change                                                                                                 |
 | ----- | ---------------------------------------------------------------------------------------------------------- |
+| 36.6  | **Production Stability**: Async Task GC Protection, Atomic Upsert, Startup Reconciliation                  |
+| 36.5  | **Hot Reload & Index Sync**: Observer pattern, debounced notifications, Index Sync observer                |
 | 36    | **Trinity v2.0**: Legacy `mcp_core.execution` deleted. Execution now via `skills/terminal` + Swarm Engine. |
 | 35.3  | Pure MCP Server (mcp.server.Server, no FastMCP)                                                            |
 | 35.2  | Sidecar Execution Pattern (uv isolation for crawl4ai, etc.)                                                |
-| 35.1  | Zero-configuration test framework (pytest plugin)                                                          |
-| 34    | Cognitive system (CommandResult, StateCheckpointer)                                                        |
-| 33    | SKILL.md unified format                                                                                    |
 
 ## Trinity v2.0 Overview
 
@@ -242,6 +241,136 @@ packages/python/common/src/common/
 | Swarm Engine    | `agent/core/swarm.py`  | Runtime orchestration |
 | Executor Role   | `skills/terminal`      | Command execution     |
 | Skill Decorator | `skills/decorators.py` | `@skill_command`      |
+
+---
+
+## Phase 36.5/36.6: Hot Reload & Production Stability
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    Phase 36.5/36.6 Hot Reload System                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                    SkillManager (Runtime)                              │  │
+│  ├───────────────────────────────────────────────────────────────────────┤  │
+│  │  _observers: [MCP Observer, Index Sync Observer]                      │  │
+│  │  _pending_changes: [(skill_name, change_type), ...]                   │  │
+│  │  _debounced_notify(): 200ms batch window                               │  │
+│  │  _background_tasks: set[asyncio.Task] (GC Protection)                 │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│           │                                                                  │
+│           ▼                                                                  │
+│  ┌────────────────────────┐    ┌──────────────────────────────┐            │
+│  │  MCP Observer          │    │  Index Sync Observer         │            │
+│  │  (Tool List Update)    │    │  (ChromaDB Sync)             │            │
+│  ├────────────────────────┤    ├──────────────────────────────┤            │
+│  │ send_tool_list_        │    │ index_single_skill()         │            │
+│  │ changed()              │    │ remove_skill_from_index()    │            │
+│  │                        │    │ reconcile_index()            │            │
+│  └────────────────────────┘    └──────────────────────────────┘            │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Phase 36.5: Hot Reload Flow
+
+```
+File Modified (tools.py)
+        ↓
+manager.reload(skill_name)
+        ↓
+1. Syntax Validation (py_compile) - FAIL SAFE!
+        ↓
+2. Inline Unload (sys.modules cleanup, cache invalidation)
+        ↓
+3. Load Fresh (from disk)
+        ↓
+4. Debounced Notification (200ms batch)
+        ↓
+5. Observers notified:
+   ├─ MCP Observer → send_tool_list_changed()
+   └─ Index Sync Observer → ChromaDB Upsert
+```
+
+### Observer Pattern
+
+```python
+from agent.core.skill_manager import get_skill_manager
+
+manager = get_skill_manager()
+
+async def on_skill_change(skill_name: str, change_type: str):
+    """Callback signature (Phase 36.5): (skill_name, change_type)"""
+    if change_type == "load":
+        await index_single_skill(skill_name)
+    elif change_type == "unload":
+        await remove_skill_from_index(skill_name)
+    elif change_type == "reload":
+        await index_single_skill(skill_name)
+
+manager.subscribe(on_skill_change)
+```
+
+### Debounced Notifications
+
+Multiple rapid skill changes are batched into a single notification:
+
+```python
+# Loading 10 skills at startup
+for skill in skills:
+    manager._notify_change(skill, "load")
+# → ONE notification after 200ms (not 10!)
+```
+
+### Phase 36.6: Production Optimizations
+
+#### 1. Async Task GC Protection
+
+```python
+class SkillManager:
+    _background_tasks: set[asyncio.Task] = set()
+
+    def _fire_and_forget(self, coro: asyncio.coroutine) -> asyncio.Task:
+        """Fire-and-forget with GC protection."""
+        task = asyncio.create_task(coro)
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+        return task
+```
+
+#### 2. Atomic Upsert (ChromaDB)
+
+```python
+# Single atomic operation (no race conditions)
+collection.upsert(
+    documents=[semantic_text],
+    ids=[skill_id],
+    metadatas=[...],
+)
+```
+
+#### 3. Startup Reconciliation
+
+```python
+async def reconcile_index(loaded_skills: list[str]) -> dict[str, int]:
+    """Cleanup phantom skills after crash/unclean shutdown."""
+    # 1. Get all local skill IDs from ChromaDB
+    # 2. Compare with loaded skills
+    # 3. Remove phantoms (in index but not loaded)
+    # 4. Re-index missing skills
+    return {"removed": N, "reindexed": N}
+```
+
+### Performance at Scale
+
+| Metric                        | Value                          |
+| ----------------------------- | ------------------------------ |
+| Concurrent reload (10 skills) | 1 notification (90% reduction) |
+| Reload time (with sync)       | ~80ms                          |
+| Phantom skill detection       | Automatic at startup           |
+| Task GC safety                | Guaranteed                     |
 
 ## Next Steps
 

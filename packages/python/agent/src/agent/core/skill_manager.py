@@ -221,6 +221,10 @@ class SkillManager:
         "_command_cache",  # O(1) command lookup cache
         "_mtime_cache",  # Lazy mtime checking
         "_manifest_loader",  # Skill manifest loader
+        "_observers",  # Phase 36.4: Observer pattern for change notifications
+        "_pending_change_task",  # Phase 36.5: Debounced notification task
+        "_pending_changes",  # Phase 36.5: Track pending skill changes for debounce
+        "_background_tasks",  # Phase 36.6: Track background tasks to prevent GC
     )
 
     # Registry marker for @skill_command decorated functions
@@ -253,6 +257,130 @@ class SkillManager:
 
         # Unified manifest loader (SKILL.md + manifest.json)
         self._manifest_loader: UnifiedManifestAdapter = get_unified_adapter()
+
+        # Phase 36.4: Observer pattern for hot-reload notifications
+        self._observers: list[Callable[[str, str], Any]] = []
+
+        # Phase 36.5: Debounced notification task and pending changes
+        self._pending_change_task: asyncio.Task | None = None
+        self._pending_changes: list[tuple[str, str]] = []  # [(skill_name, change_type), ...]
+
+        # Phase 36.6: Track background tasks to prevent GC during fire-and-forget
+        self._background_tasks: set[asyncio.Task] = set()
+
+    # =========================================================================
+    # Observer Pattern (Phase 36.4)
+    # =========================================================================
+
+    def subscribe(self, callback: Callable[[str, str], Any]) -> None:
+        """
+        Register a callback to be invoked when skills change.
+
+        The callback will be called after:
+        - A skill is loaded (load_skill)
+        - A skill is unloaded (unload)
+        - A skill is reloaded (reload)
+
+        Callback signature: callback(skill_name: str, change_type: str) -> None
+        - skill_name: Name of the skill that changed
+        - change_type: "load", "unload", or "reload"
+
+        Args:
+            callback: Callable that takes (skill_name, change_type). Can be sync or async.
+        """
+        self._observers.append(callback)
+        _get_logger().info("Observer subscribed", total=len(self._observers))
+
+    def _fire_and_forget(self, coro: asyncio.coroutine) -> asyncio.Task:
+        """
+        Phase 36.6: Fire-and-forget with GC protection.
+
+        Creates a background task and adds it to _background_tasks set.
+        When the task completes, it's automatically removed from the set.
+        This prevents Python's GC from collecting the task prematurely.
+
+        Args:
+            coro: The coroutine to execute
+
+        Returns:
+            The created Task (can be ignored if not needed)
+        """
+        task = asyncio.create_task(coro)
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+        return task
+
+    async def _debounced_notify(self) -> None:
+        """
+        Phase 36.5: Actually notify all observers after debounce delay.
+
+        This is called after 200ms debounce delay to batch multiple
+        skill changes into a single notification.
+        """
+        await asyncio.sleep(0.2)  # 200ms debounce
+
+        # Check if there are still observers to notify
+        if not self._observers:
+            self._pending_changes.clear()
+            return
+
+        # Get the changes to notify (deduped)
+        changes = list(set(self._pending_changes))
+        self._pending_changes.clear()
+
+        _get_logger().info("🔔 [Debounce] Notifying observers", changes=[c[0] for c in changes])
+
+        for skill_name, change_type in changes:
+            for cb in self._observers:
+                try:
+                    if asyncio.iscoroutinefunction(cb):
+                        # Phase 36.6: Use fire-and-forget with GC protection
+                        self._fire_and_forget(cb(skill_name, change_type))
+                    else:
+                        cb(skill_name, change_type)
+                except Exception as e:
+                    _get_logger().error("Observer callback failed", error=str(e))
+
+        self._pending_change_task = None
+
+    def _notify_change(self, skill_name: str, change_type: str = "load") -> None:
+        """
+        Phase 36.5: Debounced notification of skill change.
+
+        Instead of notifying immediately, this batches multiple rapid
+        skill changes (e.g., loading 10 skills) into a single notification
+        after 200ms delay.
+
+        Args:
+            skill_name: Name of the skill that changed
+            change_type: "load", "unload", or "reload"
+
+        This triggers MCP Server to send_tool_list_changed() so Claude
+        refreshes its available tools.
+        """
+        # Add to pending changes
+        self._pending_changes.append((skill_name, change_type))
+
+        # Cancel any pending notification
+        if self._pending_change_task is not None:
+            self._pending_change_task.cancel()
+            self._pending_change_task = None
+
+        # Schedule new debounced notification
+        try:
+            loop = asyncio.get_running_loop()
+            self._pending_change_task = loop.create_task(self._debounced_notify())
+        except RuntimeError:
+            # No event loop running - notify immediately
+            for cb in self._observers:
+                try:
+                    if asyncio.iscoroutinefunction(cb):
+                        # Run in new event loop
+                        asyncio.run(cb(skill_name, change_type))
+                    else:
+                        cb(skill_name, change_type)
+                except Exception as e:
+                    _get_logger().error("Observer callback failed", error=str(e))
 
     # =========================================================================
     # Properties (for backward compatibility with tests)
@@ -407,6 +535,9 @@ class SkillManager:
             commands=len(commands),
             mode=execution_mode.value,
         )
+
+        # Phase 36.5: Notify observers of skill change (triggers MCP tool list update + Index Sync)
+        self._notify_change(skill_name, "load")
 
         return skill
 
@@ -788,7 +919,15 @@ class SkillManager:
             return "Error: 'uv' not found. Please install uv: https://uv.sh"
 
     def unload(self, skill_name: str) -> bool:
-        """Unload a skill by name."""
+        """
+        Unload a skill by name.
+
+        Phase 36.4: Performs surgical cleanup:
+        1. Removes skill from internal registry
+        2. Clears command cache entries
+        3. Recursively cleans sys.modules (removes submodules like scripts/*)
+        4. Notifies observers to update MCP tool list
+        """
         skill = self._skills.pop(skill_name, None)
         if skill is None:
             return False
@@ -801,20 +940,131 @@ class SkillManager:
         # Clear mtime cache
         self._mtime_cache.pop(skill_name, None)
 
-        # Clear from sys.modules
-        if self._module_loader:
-            self._module_loader.unload_module(skill.module_name)
+        # Phase 36.4: Recursive sys.modules cleanup
+        # This ensures submodules like `agent.skills.git.scripts.log` are also killed
+        # Using module_name (e.g., "agent.skills.git.tools") to find and remove all related modules
+        if skill.module_name:
+            # Remove the main module first
+            if skill.module_name in sys.modules:
+                del sys.modules[skill.module_name]
+                _get_logger().debug("Cleaned main module from memory", module=skill.module_name)
+
+            # Remove submodules (scripts/*, etc.) with same prefix
+            prefix = f"agent.skills.{skill_name}."
+            modules_to_remove = [m for m in sys.modules if m.startswith(prefix)]
+            for module in modules_to_remove:
+                del sys.modules[module]
+                _get_logger().debug("Cleaned submodule from memory", module=module)
 
         _get_logger().info("Skill unloaded", skill=skill_name)
+
+        # Phase 36.5: Notify observers of skill change
+        self._notify_change(skill_name, "unload")
+
         return True
 
     def reload(self, skill_name: str) -> Skill | None:
-        """Force reload a skill."""
+        """
+        Force reload a skill.
+
+        Phase 36.5: This performs a transactional hot-reload cycle:
+        1. Validate syntax of new code BEFORE unloading old code
+        2. Unload the existing skill (with sys.modules cleanup)
+        3. Load the fresh version from disk
+        4. Notifies observers of the change (single "reload" event)
+
+        If syntax validation fails, the old skill is preserved.
+        """
         skill_path = self._discover_single(skill_name)
         if skill_path is None:
+            _get_logger().warning("Cannot reload - skill not found", skill=skill_name)
             return None
 
-        return self.load_skill(skill_path, reload=True)
+        # Phase 36.5: Syntax validation BEFORE destructive operations
+        if not self._validate_syntax(skill_path):
+            _get_logger().error(
+                "⚠️ [Reload] Syntax validation failed - aborting reload", skill=skill_name
+            )
+            return self._skills.get(skill_name)  # Return existing skill, don't modify
+
+        # Unload first to ensure clean slate (suppress notification)
+        skill = self._skills.pop(skill_name, None)
+        if skill:
+            # Clear command cache entries for this skill
+            keys_to_remove = [k for k in self._command_cache if k.startswith(f"{skill_name}.")]
+            for key in keys_to_remove:
+                del self._command_cache[key]
+            self._mtime_cache.pop(skill_name, None)
+            # Recursive sys.modules cleanup
+            if skill.module_name:
+                if skill.module_name in sys.modules:
+                    del sys.modules[skill.module_name]
+                prefix = f"agent.skills.{skill_name}."
+                modules_to_remove = [m for m in sys.modules if m.startswith(prefix)]
+                for module in modules_to_remove:
+                    del sys.modules[module]
+            _get_logger().info("Skill unloaded for reload", skill=skill_name)
+
+        # Load fresh (single notification for reload)
+        result = self.load_skill(skill_path, reload=True)
+        if result:
+            # Send a single "reload" notification to batch unload+load
+            self._pending_changes.append((skill_name, "reload"))
+            # Trigger the notification
+            if self._pending_change_task is not None:
+                self._pending_change_task.cancel()
+            try:
+                loop = asyncio.get_running_loop()
+                self._pending_change_task = loop.create_task(self._debounced_notify())
+            except RuntimeError:
+                pass
+
+        return result
+
+    def _validate_syntax(self, skill_path: Path) -> bool:
+        """
+        Phase 36.5: Validate Python syntax before reloading.
+
+        This is a safety check to prevent destroying a working skill
+        when the new code has syntax errors.
+
+        Args:
+            skill_path: Path to skill directory
+
+        Returns:
+            True if all Python files have valid syntax, False otherwise
+        """
+        import py_compile
+
+        valid = True
+
+        # Check tools.py
+        tools_path = skill_path / "tools.py"
+        if tools_path.exists():
+            try:
+                py_compile.compile(tools_path, doraise=True)
+            except py_compile.PyCompileError as e:
+                _get_logger().error("Syntax error in tools.py", skill=skill_path.name, error=str(e))
+                valid = False
+
+        # Check scripts/*.py (skip __init__.py)
+        scripts_path = skill_path / "scripts"
+        if scripts_path.exists() and scripts_path.is_dir():
+            for py_file in scripts_path.glob("*.py"):
+                if py_file.name.startswith("_"):
+                    continue  # Skip __init__.py and private modules
+                try:
+                    py_compile.compile(py_file, doraise=True)
+                except py_compile.PyCompileError as e:
+                    _get_logger().error(
+                        "Syntax error in script",
+                        skill=skill_path.name,
+                        file=str(py_file.relative_to(skill_path)),
+                        error=str(e),
+                    )
+                    valid = False
+
+        return valid
 
 
 # =============================================================================

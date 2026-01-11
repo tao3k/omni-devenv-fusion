@@ -30,15 +30,15 @@ Problem-oriented. Recipes for solving specific tasks.
 
 Information-oriented. Technical details, API specs, and configuration options.
 
-| Document                                                          | Description                                   |
-| ----------------------------------------------------------------- | --------------------------------------------- |
-| [Version Control](./reference/versioning.md)                      | Monorepo versioning with hatch-vcs + Justfile |
-| [MCP Orchestrator](./reference/mcp-orchestrator.md)               | Omni MCP tool configuration and usage         |
-| [MCP Best Practices](./reference/mcp-best-practices.md)           | MCP server design patterns and anti-patterns  |
-| [Documentation Standards](./reference/documentation-standards.md) | Doc guidelines for this project               |
-| [ODF-EP Protocol](./reference/odf-ep-protocol.md)                 | MANDATORY for LLMs - Engineering Protocol     |
-| [Skills](./skills.md)                                             | Skill architecture and development guide      |
-| [Skill Discovery](./developer/discover.md)                        | Phase 36.2 Vector-Enhanced Discovery System   |
+| Document                                                          | Description                                                       |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------- |
+| [Version Control](./reference/versioning.md)                      | Monorepo versioning with hatch-vcs + Justfile                     |
+| [MCP Orchestrator](./reference/mcp-orchestrator.md)               | Omni MCP tool configuration and usage                             |
+| [MCP Best Practices](./reference/mcp-best-practices.md)           | MCP server design patterns and anti-patterns                      |
+| [Documentation Standards](./reference/documentation-standards.md) | Doc guidelines for this project                                   |
+| [ODF-EP Protocol](./reference/odf-ep-protocol.md)                 | MANDATORY for LLMs - Engineering Protocol                         |
+| [Skills](./skills.md)                                             | Skill architecture and development guide                          |
+| [Skill Discovery](./developer/discover.md)                        | Phase 36.2 Vector-Enhanced Discovery & Phase 36.5/36.6 Hot Reload |
 
 ---
 
@@ -46,12 +46,12 @@ Information-oriented. Technical details, API specs, and configuration options.
 
 Internal documentation for Omni-Dev Fusion developers.
 
-| Document                                                      | Description                                            |
-| ------------------------------------------------------------- | ------------------------------------------------------ |
-| [Skill Discovery](./developer/discover.md)                    | Phase 36.2 Vector-Enhanced Discovery & Virtual Loading |
-| [Testing Guide](./developer/testing.md)                       | Test system architecture and developer guide           |
-| [CLI Guide](./developer/cli.md)                               | CLI developer documentation                            |
-| [MCP Core Architecture](./developer/mcp-core-architecture.md) | Shared library architecture guide                      |
+| Document                                                      | Description                                                       |
+| ------------------------------------------------------------- | ----------------------------------------------------------------- |
+| [Skill Discovery](./developer/discover.md)                    | Phase 36.2 Vector-Enhanced Discovery & Phase 36.5/36.6 Hot Reload |
+| [Testing Guide](./developer/testing.md)                       | Test system architecture and developer guide                      |
+| [CLI Guide](./developer/cli.md)                               | CLI developer documentation                                       |
+| [MCP Core Architecture](./developer/mcp-core-architecture.md) | Shared library architecture guide                                 |
 
 ---
 

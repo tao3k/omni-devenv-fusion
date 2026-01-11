@@ -570,11 +570,190 @@ async def vector_suggest_for_task(task: str) -> Dict[str, Any]:
     return await discovery.suggest_for_query(task)
 
 
+async def index_single_skill(skill_name: str) -> bool:
+    """
+    Phase 36.5: Index a single skill into the vector store.
+
+    This is used for incremental updates when a skill is loaded
+    or reloaded, ensuring the vector index stays in sync.
+
+    Phase 36.6: Uses atomic upsert instead of delete+add to prevent race conditions.
+
+    Args:
+        skill_name: Name of the skill to index
+
+    Returns:
+        True if indexed successfully, False otherwise
+    """
+    from agent.core.registry import get_skill_registry
+    from agent.core.vector_store import get_vector_memory
+
+    registry = get_skill_registry()
+    vm = get_vector_memory()
+
+    try:
+        manifest = registry.get_skill_manifest(skill_name)
+        if not manifest:
+            logger.warning(f"Cannot index skill '{skill_name}': manifest not found")
+            return False
+
+        # Build semantic document
+        semantic_text = _build_skill_document(manifest)
+
+        # Phase 36.6: Use atomic upsert instead of delete+add
+        # This prevents race conditions when multiple threads reload the same skill
+        collection_name = SKILL_REGISTRY_COLLECTION
+        skill_id = f"skill-{skill_name}"
+
+        # Get the collection and use upsert (update or insert atomically)
+        try:
+            collection = vm.client.get_collection(name=collection_name)
+            # ChromaDB's upsert is atomic and more efficient than delete+add
+            collection.upsert(
+                documents=[semantic_text],
+                ids=[skill_id],
+                metadatas=[
+                    {
+                        "id": skill_name,
+                        "name": skill_name,
+                        "keywords": ",".join(manifest.routing_keywords),
+                        "installed": "true",
+                        "type": "local",
+                        "version": manifest.version,
+                    }
+                ],
+            )
+            logger.info(f"✅ [Index Sync] Upserted skill: {skill_name}")
+            return True
+        except Exception as e:
+            # If upsert fails (e.g., collection doesn't exist), try to create and add
+            logger.warning(f"Upsert failed for '{skill_name}', trying add: {e}")
+            success = await vm.add(
+                documents=[semantic_text],
+                ids=[skill_id],
+                collection=collection_name,
+                metadatas=[
+                    {
+                        "id": skill_name,
+                        "name": skill_name,
+                        "keywords": ",".join(manifest.routing_keywords),
+                        "installed": "true",
+                        "type": "local",
+                        "version": manifest.version,
+                    }
+                ],
+            )
+            if success:
+                logger.info(f"✅ [Index Sync] Added skill: {skill_name}")
+            return success
+
+    except Exception as e:
+        logger.error(f"Failed to index skill '{skill_name}'", error=str(e))
+        return False
+
+
+async def remove_skill_from_index(skill_name: str) -> bool:
+    """
+    Phase 36.5: Remove a skill from the vector store.
+
+    This is called when a skill is unloaded to keep the index in sync.
+
+    Args:
+        skill_name: Name of the skill to remove
+
+    Returns:
+        True if removed successfully, False otherwise
+    """
+    from agent.core.vector_store import get_vector_memory
+
+    try:
+        vm = get_vector_memory()
+        collection = vm.client.get_collection(name=SKILL_REGISTRY_COLLECTION)
+        collection.delete(ids=[f"skill-{skill_name}"])
+        logger.info(f"🗑️ [Index Sync] Removed skill from index: {skill_name}")
+        return True
+    except Exception as e:
+        logger.warning(f"Failed to remove skill '{skill_name}' from index", error=str(e))
+        return False
+
+
+async def reconcile_index(loaded_skills: list[str]) -> dict[str, int]:
+    """
+    Phase 36.6: Startup reconciliation to prevent "Phantom Skills".
+
+    After a crash or unclean shutdown, the index may contain skills that
+    no longer exist on disk. This function cleans up those "ghost" entries.
+
+    Flow:
+    1. Get all skill IDs from the index
+    2. Compare with actually loaded skills
+    3. Delete index entries that don't match (phantom skills)
+    4. (Optional) Re-index any loaded skills missing from index
+
+    Args:
+        loaded_skills: List of skill names that are currently loaded
+
+    Returns:
+        Dict with reconciliation stats: {"removed": N, "reindexed": N}
+    """
+    from agent.core.vector_store import get_vector_memory
+
+    logger.info("🔄 [Reconciliation] Starting index cleanup...")
+    stats = {"removed": 0, "reindexed": 0}
+
+    try:
+        vm = get_vector_memory()
+        collection = vm.client.get_collection(name=SKILL_REGISTRY_COLLECTION)
+
+        # Get all local skill IDs from index (exclude remote skills)
+        # Remote skills have IDs like "skill-remote-{name}"
+        try:
+            all_docs = collection.get(where={"type": "local"})
+            indexed_ids = all_docs.get("ids", [])
+        except Exception:
+            # Collection might be empty
+            indexed_ids = []
+
+        # Build set of expected skill IDs
+        expected_ids = {f"skill-{name}" for name in loaded_skills}
+
+        # Find phantom skills (in index but not loaded)
+        phantom_ids = [sid for sid in indexed_ids if sid not in expected_ids]
+
+        if phantom_ids:
+            collection.delete(ids=phantom_ids)
+            stats["removed"] = len(phantom_ids)
+            logger.info(
+                f"🧹 [Reconciliation] Removed {len(phantom_ids)} phantom skills",
+                phantoms=[pid.replace("skill-", "") for pid in phantom_ids],
+            )
+        else:
+            logger.info("✅ [Reconciliation] No phantom skills found")
+
+        # Optional: Re-index any loaded skills missing from index
+        missing_skills = [name for name in loaded_skills if f"skill-{name}" not in indexed_ids]
+        if missing_skills:
+            logger.info(f"🔍 [Reconciliation] Re-indexing {len(missing_skills)} missing skills")
+            for skill_name in missing_skills:
+                success = await index_single_skill(skill_name)
+                if success:
+                    stats["reindexed"] += 1
+
+    except Exception as e:
+        logger.error(f"❌ [Reconciliation] Failed: {e}")
+
+    logger.info(f"✅ [Reconciliation] Complete: {stats}")
+    return stats
+
+
 __all__ = [
     "SkillDiscovery",
     "VectorSkillDiscovery",
     "reindex_skills_from_manifests",
     "vector_search_skills",
     "vector_suggest_for_task",
+    "index_single_skill",
+    "remove_skill_from_index",
+    "reconcile_index",
     "SKILL_REGISTRY_COLLECTION",
 ]

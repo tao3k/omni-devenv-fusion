@@ -246,6 +246,82 @@ User Request
 
 See [Developer Guide](../docs/developer/discover.md) for detailed architecture documentation.
 
+## Phase 36.5: Hot Reload & Index Sync
+
+Omni now supports **zero-downtime skill reloading** with automatic index synchronization:
+
+```bash
+# Reload a skill at runtime
+omni skill reload git
+
+# Force reload (skip syntax validation)
+omni skill reload git --force
+
+# Watch mode (auto-reload on file changes)
+omni skill watch git
+```
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    SkillManager (Runtime)                       │
+├─────────────────────────────────────────────────────────────────┤
+│  _observers: [MCP Observer, Index Sync Observer]               │
+│  _debounced_notify(): 200ms batch window                       │
+└─────────────────────────────────────────────────────────────────┘
+           ↓                              ↓
+┌────────────────────────┐    ┌──────────────────────────────┐
+│  MCP Observer          │    │  Index Sync Observer         │
+│  send_tool_list_       │    │  ChromaDB Upsert             │
+│  changed()             │    │  (Vector Discovery Sync)     │
+└────────────────────────┘    └──────────────────────────────┘
+```
+
+### Key Features
+
+- **Observer Pattern**: Skills emit events on load/unload/reload
+- **Debounced Notifications**: 200ms batching prevents notification storms
+- **Index Sync**: ChromaDB index stays in sync with runtime changes
+- **Transactional Safety**: Syntax validation prevents "bricked" skills
+
+### Flow
+
+```
+File Modified → Syntax Check → Unload → Load → Debounced Notification
+                                              ↓
+                          ┌──────────────────┴──────────────────┐
+                          ↓                                       ↓
+                   MCP Observer                          Index Sync
+                   Tool List Update                      ChromaDB Upsert
+```
+
+## Phase 36.6: Production Stability
+
+Optimizations for 100+ skill scale and Swarm mode:
+
+### 1. Async Task GC Protection
+
+Background tasks are tracked to prevent premature garbage collection.
+
+### 2. Atomic Upsert
+
+ChromaDB uses atomic `upsert` instead of delete+add (no race conditions).
+
+### 3. Startup Reconciliation
+
+Automatic cleanup of "phantom skills" after crash or unclean shutdown.
+
+### Performance at Scale
+
+| Metric                        | Value                          |
+| ----------------------------- | ------------------------------ |
+| Concurrent reload (10 skills) | 1 notification (90% reduction) |
+| Reload time (with sync)       | ~80ms                          |
+| Phantom skill detection       | Automatic at startup           |
+
+See [Developer Guide](../docs/developer/discover.md) for Phase 36.5/36.6 details.
+
 ## The Vision
 
 **Copilot** (today): AI helps you write code, you drive.

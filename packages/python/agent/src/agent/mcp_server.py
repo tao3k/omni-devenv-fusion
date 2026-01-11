@@ -99,6 +99,20 @@ async def server_lifespan():
         logger.warning(f"⚠️  [Lifecycle] Skill preload failed: {e}")
         # Continue - skills can be loaded on-demand
 
+    # Phase 36.5: Register Hot-Reload Observers
+    # This ensures MCP clients receive tool list updates and vector index stays in sync
+    from agent.core.skill_manager import get_skill_manager
+
+    manager = get_skill_manager()
+
+    # Observer 1: MCP tool list update
+    manager.subscribe(_notify_tools_changed)
+    logger.info("👀 [Lifecycle] Hot-reload observer registered (MCP Tools)")
+
+    # Observer 2: Index Sync (Phase 36.5 - Bridge between Vector Discovery and Hot Reload)
+    manager.subscribe(_update_search_index)
+    logger.info("🔍 [Lifecycle] Index Sync observer registered (ChromaDB)")
+
     logger.info("✅ [Lifecycle] Server ready")
 
     try:
@@ -238,14 +252,58 @@ async def handle_list_tools() -> list[Tool]:
     return tools
 
 
-async def _notify_tools_changed():
-    """Send MCP notification to refresh tool list on changes."""
+async def _notify_tools_changed(skill_name: str, change_type: str):
+    """
+    Phase 36.5: Observer callback for skill changes.
+
+    Called when SkillManager loads/unloads/reloads skills.
+    Triggers MCP client to refresh tool list via send_tool_list_changed().
+
+    Args:
+        skill_name: Name of the skill that changed
+        change_type: "load", "unload", or "reload"
+    """
     try:
+        # We must check if we are currently inside a request context
+        # This works because skill changes (like jit_install) are triggered
+        # as tool calls within a session scope.
         if server.request_context and server.request_context.session:
             await server.request_context.session.send_tool_list_changed()
-            logger.info("🔔 [Tools] Notified client of tool updates")
+            logger.info(f"🔔 [{change_type.title()}] Sent tool list update to client: {skill_name}")
+        else:
+            logger.debug(
+                f"🔕 [{change_type.title()}] Skill changed but no active session: {skill_name}"
+            )
     except Exception as e:
-        logger.warning(f"⚠️ [Tools] Failed to notify client: {e}")
+        logger.warning(f"⚠️ [Hot Reload] Notification failed: {e}")
+
+
+async def _update_search_index(skill_name: str, change_type: str):
+    """
+    Phase 36.5: Index Sync observer for ChromaDB.
+
+    Keeps the vector search index in sync with runtime skill changes.
+    This is the bridge between Phase 36.2 (Vector Discovery) and Phase 36.4 (Hot Reload).
+
+    Args:
+        skill_name: Name of the skill that changed
+        change_type: "load", "unload", or "reload"
+    """
+    try:
+        from agent.core.skill_discovery import index_single_skill, remove_skill_from_index
+
+        if change_type in ("load", "reload"):
+            # Index the skill (or re-index on reload)
+            success = await index_single_skill(skill_name)
+            if not success:
+                logger.warning(f"⚠️ [Index Sync] Failed to index skill: {skill_name}")
+
+        elif change_type == "unload":
+            # Remove from index
+            await remove_skill_from_index(skill_name)
+
+    except Exception as e:
+        logger.warning(f"⚠️ [Index Sync] Error updating index for {skill_name}: {e}")
 
 
 @server.call_tool()
