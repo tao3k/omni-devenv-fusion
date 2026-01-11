@@ -2,9 +2,26 @@
 Fake VectorStore for Testing.
 
 A lightweight in-memory implementation of VectorStoreProtocol for fast testing.
+Supports ChromaDB-style filtering and search results.
 """
 
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
+from dataclasses import dataclass
+
+
+@dataclass
+class SearchResult:
+    """Fake search result matching ChromaDB's SearchResult structure."""
+
+    id: str
+    content: str
+    metadata: Dict[str, Any]
+    distance: float = 0.0
+
+    @property
+    def score(self) -> float:
+        """Convert distance to similarity score."""
+        return 1.0 - self.distance
 
 
 @runtime_checkable
@@ -24,7 +41,8 @@ class VectorStoreProtocol(Protocol):
         collection: str,
         query: str,
         n_results: int = 5,
-    ) -> List[Dict[str, Any]]: ...
+        where_filter: Optional[Dict[str, str]] = None,
+    ) -> List[SearchResult]: ...
 
     async def delete_collection(self, collection: str) -> None: ...
 
@@ -36,11 +54,15 @@ class FakeVectorStore:
     In-memory fake vector store for testing.
 
     Implements VectorStoreProtocol for seamless replacement in tests.
+    Supports ChromaDB-style where_filter for filtering by metadata.
 
     Usage:
         store = FakeVectorStore()
         await store.add_documents("test", ["doc1", "doc2"], ["id1", "id2"])
         results = await store.search("test", "query")
+
+    Filtering:
+        await store.search("test", "query", where_filter={"installed": "true"})
     """
 
     def __init__(self):
@@ -71,29 +93,48 @@ class FakeVectorStore:
         collection: str,
         query: str,
         n_results: int = 5,
-    ) -> List[Dict[str, Any]]:
-        """Search for documents in a collection using simple keyword matching."""
+        where_filter: Optional[Dict[str, str]] = None,
+    ) -> List[SearchResult]:
+        """
+        Search for documents in a collection using simple keyword matching.
+
+        Supports ChromaDB-style filtering via where_filter:
+            where_filter={"installed": "true"}  # Only installed skills
+            where_filter={"type": "remote"}      # Only remote skills
+        """
         if collection not in self._collections:
             return []
 
         data = self._collections[collection]
         results = []
+        query_lower = query.lower()
 
         for doc, doc_id, meta in zip(
             data["documents"],
             data["ids"],
             data["metadata"],
         ):
+            # Apply where_filter if provided
+            if where_filter:
+                match = True
+                for key, value in where_filter.items():
+                    if meta.get(key) != value:
+                        match = False
+                        break
+                if not match:
+                    continue
+
             # Simple keyword matching for testing
-            query_lower = query.lower()
             if query_lower in doc.lower():
+                # Calculate fake distance based on keyword relevance
+                distance = 0.0 if query_lower in doc.lower() else 0.5
                 results.append(
-                    {
-                        "id": doc_id,
-                        "content": doc,
-                        "metadata": meta,
-                        "score": 1.0,
-                    }
+                    SearchResult(
+                        id=doc_id,
+                        content=doc,
+                        metadata=meta,
+                        distance=distance,
+                    )
                 )
                 if len(results) >= n_results:
                     break
@@ -107,6 +148,12 @@ class FakeVectorStore:
     async def get_collection(self, collection: str) -> Optional[Dict[str, Any]]:
         """Get collection data."""
         return self._collections.get(collection)
+
+    async def count(self, collection: str) -> int:
+        """Count documents in a collection."""
+        if collection not in self._collections:
+            return 0
+        return len(self._collections[collection]["documents"])
 
     async def clear(self) -> None:
         """Clear all collections."""

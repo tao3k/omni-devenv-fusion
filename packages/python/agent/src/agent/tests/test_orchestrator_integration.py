@@ -219,7 +219,6 @@ class TestAgentSelection:
 
         # Coder should have code skills
         assert "filesystem" in coder.default_skills
-        assert "file_ops" in coder.default_skills
         assert "python_engineering" in coder.default_skills
 
         # Coder should NOT have quality skills
@@ -239,7 +238,6 @@ class TestAgentSelection:
         assert "linter" in reviewer.default_skills
 
         # Reviewer should NOT have code skills
-        assert "file_ops" not in reviewer.default_skills
         assert "python_engineering" not in reviewer.default_skills
 
 

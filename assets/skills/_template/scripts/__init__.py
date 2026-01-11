@@ -4,7 +4,7 @@ _template/scripts/ - Isolated Implementation Module
 This package contains atomic script implementations for this skill.
 Each script is isolated via absolute imports, preventing namespace conflicts.
 
-Architecture (Phase 35.2):
+Architecture (Phase 36):
     tools.py    -> Router (just dispatches, validates params)
     scripts/    -> Controllers (actual implementation)
 

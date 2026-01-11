@@ -28,9 +28,9 @@ When working with the Template skill:
 - All implementation lives in scripts/ directory
 ```
 
-## Trinity Architecture Context (Phase 35.2)
+## Trinity Architecture Context (Phase 36)
 
-This skill operates within the **Trinity Architecture** with **Isolated Sandbox + Explicit Routing**:
+This skill operates within the **Trinity Architecture** with **Controller Layer Pattern**:
 
 ```
 _template/
@@ -77,7 +77,7 @@ All core skill modules follow the **"Python Zenith" Engineering Protocol**:
 
 Use `_template` as a scaffold for new skills:
 
-### Development Workflow (Phase 35.3)
+### Development Workflow (Phase 36)
 
 ```
 1. _template/                    # Start: Copy this template

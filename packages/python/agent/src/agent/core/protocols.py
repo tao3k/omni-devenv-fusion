@@ -66,6 +66,7 @@ class SkillCategory(str, Enum):
     WRITE = "write"
     EVOLUTION = "evolution"
     GENERAL = "general"
+    ADMIN = "admin"
 
     # Aliases for backward compatibility
     @classmethod

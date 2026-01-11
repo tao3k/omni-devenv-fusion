@@ -62,11 +62,11 @@ mock_executor: ISafeExecutor = MagicMock()
 from mcp_core.execution import SafeExecutor, check_dangerous_patterns
 
 # NEW (current)
-@omni("terminal.execute_command", {"command": "ls", "args": ["-la"]})
+@omni("terminal.run_task", {"command": "ls", "args": ["-la"]})
 
 # Or directly via Swarm Engine
 from agent.core.swarm import get_swarm
-result = await get_swarm().execute_skill("terminal", "execute_command", {...})
+result = await get_swarm().execute_skill("terminal", "run_task", {...})
 ```
 
 **What Changed:**
@@ -74,7 +74,7 @@ result = await get_swarm().execute_skill("terminal", "execute_command", {...})
 | Before                        | After                             |
 | ----------------------------- | --------------------------------- |
 | `mcp_core.execution` module   | `skills/terminal/tools.py`        |
-| Python class (`SafeExecutor`) | Skill command (`execute_command`) |
+| Python class (`SafeExecutor`) | Skill command (`run_task`)        |
 | Direct import                 | MCP call or Swarm Engine dispatch |
 
 **Security**: `check_dangerous_patterns()` moved to `skills/terminal/tools.py` with same logic.
@@ -422,10 +422,10 @@ from mcp_core.execution import SafeExecutor
 
 # AFTER (current)
 from agent.core.swarm import get_swarm
-result = await get_swarm().execute_skill("terminal", "execute_command", {...})
+result = await get_swarm().execute_skill("terminal", "run_task", {...})
 
 # OR via MCP
-@omni("terminal.execute_command", {"command": "ls", "args": ["-la"]})
+@omni("terminal.run_task", {"command": "ls", "args": ["-la"]})
 ```
 
 **Remaining Compatible Exports:**

@@ -11,8 +11,7 @@ Phase 19 Enhancement:
 - Tool Injection: Uses filesystem tools (read_file, write_file, etc.)
 
 Skills (Narrow Context):
-- filesystem: Navigate and locate files
-- file_ops: Read/write/modify files
+- filesystem: Read/write/modify files (consolidated from file_ops)
 - code_insight: AST analysis and code structure
 - python_engineering: Python-specific refactoring
 - terminal: Run simple shell commands for validation
@@ -68,10 +67,9 @@ class CoderAgent(BaseAgent):
     role = "Senior Python Architect"
     description = "Primary executor for code writing, refactoring, and bug fixes"
 
-    # ✅ Narrow Context: Only code-related skills
+    # ✅ Narrow Context: Only code-related skills (file_ops consolidated into filesystem)
     default_skills = [
-        "filesystem",  # Navigate and locate files
-        "file_ops",  # Read/write/modify files
+        "filesystem",  # Read/write/modify files (includes grep, AST, batch operations)
         "code_insight",  # AST analysis and code structure
         "python_engineering",  # Python-specific refactoring tools
         "terminal",  # Simple shell commands (ls, python -c)
@@ -106,13 +104,9 @@ class CoderAgent(BaseAgent):
         # Get tools from loaded skills via Skill Registry
         tools = {}
 
-        # Get filesystem skill tools
+        # Get filesystem skill tools (includes all former file_ops commands)
         fs_tools = get_skill_tools("filesystem")
         tools.update(fs_tools)
-
-        # Get file_ops skill tools
-        file_ops_tools = get_skill_tools("file_ops")
-        tools.update(file_ops_tools)
 
         return tools
 

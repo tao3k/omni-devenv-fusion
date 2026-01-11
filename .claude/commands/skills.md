@@ -25,7 +25,7 @@ description: List available Omni Skills and MCP tools
 
 This shows all tools currently registered in MCP, including:
 
-- Tool name (e.g., `terminal.execute_command`)
+- Tool name (e.g., `terminal.run_task`)
 - Tool description
 - Organized by skill
 

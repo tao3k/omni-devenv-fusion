@@ -198,7 +198,7 @@ async def test_mission_brief():
     clear_routing_cache()
 
     test_cases = [
-        ("fix the IndexError in src/main.py line 42", ["filesystem", "file_ops", "code_insight"]),
+        ("fix the IndexError in src/main.py line 42", ["filesystem", "code_insight"]),
         ("commit my changes with message 'feat: add new feature'", ["git"]),
         ("write a README for this project", ["writer", "documentation"]),
         ("search for all occurrences of 'TODO' in the codebase", ["advanced_search"]),
@@ -254,8 +254,8 @@ TEST_CASES_BY_SKILL = {
     "filesystem": [
         ("read the README file", ["filesystem"]),
         ("list files in current directory", ["filesystem"]),
-        ("create a new Python file called utils.py", ["filesystem", "file_ops"]),
-        ("edit config.yaml", ["file_ops"]),
+        ("create a new Python file called utils.py", ["filesystem"]),
+        ("edit config.yaml", ["filesystem"]),
         ("show me the directory structure", ["filesystem"]),
         ("find all JSON files", ["filesystem"]),
     ],

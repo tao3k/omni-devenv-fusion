@@ -4,6 +4,7 @@ Semantic Router - Tool selection with Mission Brief Protocol.
 
 Phase 14: Routes user requests to appropriate Skills.
 Phase 14.5: Uses Semantic Cortex for fuzzy matching.
+Phase 36.2: Virtual Loading via Vector Discovery (local skills only).
 
 Usage:
     # SemanticRouter is defined in this file
@@ -27,6 +28,7 @@ if TYPE_CHECKING:
 _cached_inference_client: Any = None
 _cached_cache: Any = None
 _cached_cortex: Any = None
+_cached_vector_discovery: Any = None
 
 # Lazy logger - defer structlog.get_logger() to avoid ~100ms import cost
 _cached_logger: Any = None
@@ -40,6 +42,16 @@ def _get_logger() -> Any:
 
         _cached_logger = structlog.get_logger(__name__)
     return _cached_logger
+
+
+def _get_vector_discovery() -> Any:
+    """Get VectorSkillDiscovery lazily (Phase 36.2)."""
+    global _cached_vector_discovery
+    if _cached_vector_discovery is None:
+        from agent.core.skill_discovery import VectorSkillDiscovery
+
+        _cached_vector_discovery = VectorSkillDiscovery()
+    return _cached_vector_discovery
 
 
 def _get_inference_client() -> Any:
@@ -197,6 +209,11 @@ class SemanticRouter:
     - Semantic Cortex: Vector-based fuzzy matching cache
     - "Fix bug" ≈ "Fix the bug" (same routing result)
     - Learns from past routing decisions
+
+    Phase 36.2 Enhancement (Virtual Loading):
+    - Cold Path: When LLM routing fails or is weak, search local skills only
+    - Uses VectorSkillDiscovery to find relevant but unloaded local skills
+    - Remote skills are NOT searched (installation not yet implemented)
     """
 
     def __init__(
@@ -205,12 +222,15 @@ class SemanticRouter:
         cache_size: int = 1000,
         cache_ttl: int = 3600,
         use_semantic_cache: bool = True,
+        use_vector_fallback: bool = True,
     ):
         self.registry = get_skill_registry()
         self._inference = inference_client
         self._cache = None
         self._cache_config = (cache_size, cache_ttl)
         self._use_semantic_cache = use_semantic_cache
+        self._use_vector_fallback = use_vector_fallback
+        self._vector_discovery = None
 
     @property
     def inference(self) -> Any:
@@ -254,6 +274,18 @@ class SemanticRouter:
         global _cached_cortex
         _cached_cortex = value
 
+    @property
+    def vector_discovery(self) -> Any:
+        """Lazy VectorSkillDiscovery accessor (Phase 36.2)."""
+        if self._vector_discovery is None:
+            self._vector_discovery = _get_vector_discovery()
+        return self._vector_discovery
+
+    @vector_discovery.setter
+    def vector_discovery(self, value: Any) -> None:
+        """Setter for backward compatibility with tests."""
+        self._vector_discovery = value
+
     def _build_routing_menu(self) -> str:
         """Build routing menu from Skill Registry manifests (Data-Driven)."""
         menu_items = []
@@ -292,6 +324,7 @@ class SemanticRouter:
         Cache Lookup Order:
         1. Semantic Cortex (fuzzy match): "Fix bug" ≈ "Fix the bug"
         2. Exact Match Cache (fast): "run tests" (exact string match)
+        3. Vector Fallback (Phase 36.2): Search local skills for better matches
 
         Args:
             user_query: The user's request
@@ -335,14 +368,15 @@ AVAILABLE SKILLS (WORKERS):
 ROUTING RULES:
 1. Analyze the user's request and conversation context
 2. Select the MINIMAL set of skills needed (usually 1-2, max 3)
-3. If the request is about writing, use 'writer' skill
-4. If the request is about code structure analysis, use 'code_insight'
-5. If the request is about file operations, use 'filesystem' or 'file_ops'
-6. If the request is about testing, use 'testing' or 'testing_protocol'
-7. If the request is about project knowledge/rules, use 'knowledge'
-8. If the request is about git/version control, use 'git'
-9. If the request is about terminal/shell commands, use 'terminal'
-10. If the request is about general conversation, use 'writer' or 'knowledge'
+3. If the request is about CREATING documentation (write docs, create README, write guide), use 'documentation' skill
+4. If the request is about POLISHING/IMPROVING existing text (grammar, style, rewrite), use 'writer' skill
+5. If the request is about code structure analysis, use 'code_insight'
+6. If the request is about file operations, use 'filesystem' (includes grep, AST, batch operations)
+7. If the request is about testing, use 'testing' or 'testing_protocol'
+8. If the request is about project knowledge/rules, use 'knowledge'
+9. If the request is about git/version control, use 'git'
+10. If the request is about terminal/shell commands, use 'terminal'
+11. If the request is about general conversation, use 'writer' or 'knowledge'
 
 MISSION BRIEF GUIDELINES (Commander's Intent - NOT Step-by-Step):
 - Write COMMANDER'S INTENT: Tell the Worker WHAT goal to achieve and WHAT constraints to follow
@@ -392,22 +426,34 @@ Route this request and provide a mission brief."""
             routing_data = json.loads(content)
 
             skills = routing_data.get("skills", [])
+            confidence = routing_data.get("confidence", 0.5)
+
             # Validate skills exist
             valid_skills = [s for s in skills if self.registry.get_skill_manifest(s)]
 
-            if not valid_skills:
-                return fallback
-
             routing_result = RoutingResult(
-                selected_skills=valid_skills,
+                selected_skills=valid_skills if valid_skills else ["writer"],
                 mission_brief=routing_data.get(
                     "mission_brief", f"Handle the user's request about: {user_query}"
                 ),
                 reasoning=routing_data.get(
                     "reasoning", "Skill selected based on request analysis."
                 ),
-                confidence=routing_data.get("confidence", 0.5),
+                confidence=confidence,
             )
+
+            # 🔥 Phase 36.2: Cold Path - Virtual Loading
+            # If low confidence, fallback to generic skills, or weak route, try vector search
+            is_weak_route = (
+                not valid_skills  # No valid skills found
+                or confidence < 0.5  # Low confidence
+                or (
+                    len(valid_skills) == 1 and valid_skills[0] in ["writer", "knowledge"]
+                )  # Generic fallback
+            )
+
+            if is_weak_route and self._use_vector_fallback:
+                await self._try_vector_fallback(user_query, routing_result)
 
             # 🐝 Store in Hive Mind Cache (Exact Match)
             self.cache.set(user_query, routing_result)
@@ -420,6 +466,57 @@ Route this request and provide a mission brief."""
 
         except (json.JSONDecodeError, KeyError):
             return fallback
+
+    async def _try_vector_fallback(self, query: str, result: RoutingResult) -> None:
+        """
+        Phase 36.2: Search local skills via vector store for better routing.
+
+        This is the "Cold Path" - used when LLM routing fails or is weak.
+        Only searches LOCAL (installed) skills, not remote ones.
+
+        Args:
+            query: The user query
+            result: RoutingResult to modify in-place
+        """
+        try:
+            # Search local skills only (installed_only=True by default)
+            suggestions = await self.vector_discovery.search(
+                query=query,
+                limit=3,
+                installed_only=True,  # Only local skills
+            )
+
+            if not suggestions:
+                return
+
+            # Filter out already selected skills
+            loaded_skills = set(result.selected_skills)
+            new_candidates = [s for s in suggestions if s.get("id") not in loaded_skills]
+
+            if not new_candidates:
+                return
+
+            # Found better local skills!
+            top_skill = new_candidates[0]
+            suggested_ids = [s.get("id") for s in new_candidates]
+
+            # Update result with suggestions
+            result.suggested_skills = suggested_ids
+            result.reasoning += (
+                f" [Vector Fallback] Found local skills: {', '.join(suggested_ids)}."
+            )
+
+            # Boost confidence since we found relevant skills
+            result.confidence = max(result.confidence, 0.7)
+
+            _get_logger().info(
+                "Vector fallback triggered",
+                query=query[:50],
+                suggestions=suggested_ids,
+            )
+
+        except Exception as e:
+            _get_logger().warning("Vector fallback failed", error=str(e))
 
 
 # =============================================================================

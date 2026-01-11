@@ -269,8 +269,7 @@ Fix the auth bug in login.py
   Security Standard: Always hash passwords with bcrypt before logging.
 
 ## 🛠️ YOUR CAPABILITIES
-- [filesystem]: File system operations
-- [file_ops]: Read, write, edit files
+- [filesystem]: Read, write, edit files (includes grep, AST operations)
 - [python_engineering]: Python development
 
 ## ⚠️ CONSTRAINTS

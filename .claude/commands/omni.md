@@ -8,7 +8,7 @@ no-auto-format: true
 
 **Usage:** `/omni git.status` or `/omni filesystem.read_file {"path": "file.txt"}`
 
-> **Phase 36**: The **Executor is now a Skill**. Use `terminal.execute_command` instead of legacy `mcp_core.execution`.
+> **Phase 36**: The **Executor is now a Skill**. Use `terminal.run_task` instead of legacy `mcp_core.execution`.
 
 ## How to Handle This Slash Command
 
@@ -25,33 +25,33 @@ When user provides: `/omni {skill}.{command} [{args}]`
 ### Command Execution Pattern
 
 ```python
-# GOOD - Use terminal.execute_command
-@omni("terminal.execute_command", {"command": "ls", "args": ["-la"]})
+# GOOD - Use terminal.run_task
+@omni("terminal.run_task", {"command": "ls", "args": ["-la"]})
 
 # GOOD - Using configured alias
 @omni("run_command", {"command": "ls", "args": ["-la"]})
 
 # GOOD - Direct via Swarm Engine
 from agent.core.swarm import get_swarm
-result = await get_swarm().execute_skill("terminal", "execute_command", {"command": "ls"})
+result = await get_swarm().execute_skill("terminal", "run_task", {"command": "ls"})
 ```
 
 ### Security: Check Before Execute
 
 ```python
 # Terminal skill includes built-in safety checks
-@omni("terminal.execute_command", {"command": "rm", "args": ["-rf", "/tmp/test"]})
+@omni("terminal.run_task", {"command": "rm", "args": ["-rf", "/tmp/test"]})
 # Returns: "Blocked: Dangerous pattern detected"
 ```
 
 ## Examples
 
-| User Input                                                              | @omni Invocation                                                            |
-| ----------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `/omni git.status`                                                      | `@omni("git.status")`                                                       |
-| `/omni filesystem.read_file {"path": "README.md"}`                      | `@omni("filesystem.read_file", {"path": "README.md"})`                      |
-| `/omni terminal.execute_command {"command": "git", "args": ["status"]}` | `@omni("terminal.execute_command", {"command": "git", "args": ["status"]})` |
-| `/omni skill.list_tools`                                                | `@omni("skill.list_tools")` - List all 90+ tools                            |
+| User Input                                                       | @omni Invocation                                                     |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `/omni git.status`                                               | `@omni("git.status")`                                                |
+| `/omni filesystem.read_file {"path": "README.md"}`               | `@omni("filesystem.read_file", {"path": "README.md"})`               |
+| `/omni terminal.run_task {"command": "git", "args": ["status"]}` | `@omni("terminal.run_task", {"command": "git", "args": ["status"]})` |
+| `/omni skill.list_tools`                                         | `@omni("skill.list_tools")` - List all 90+ tools                     |
 
 ## Operational Rules (Must Follow)
 
@@ -59,7 +59,7 @@ result = await get_swarm().execute_skill("terminal", "execute_command", {"comman
 
 2. **File Operations**: Use `filesystem.read_file` / `write_file` / `search_files` instead of `cat`, `echo`, or `grep`.
 
-3. **Command Execution**: Use `terminal.execute_command` for shell commands - it captures stdout/stderr properly and avoids terminal issues. Contains `SafeExecutor` logic (moved from legacy `mcp_core.execution`).
+3. **Command Execution**: Use `terminal.run_task` for shell commands - it captures stdout/stderr properly and avoids terminal issues. Contains `SafeExecutor` logic (moved from legacy `mcp_core.execution`).
 
 4. **Git Operations**: Prefer `git.status` / `git.stage_all` / `git.commit` tools for proper state tracking.
 
@@ -74,7 +74,7 @@ Omni MCP supports **config-driven aliases** via `settings.yaml:skills.overrides`
 ```yaml
 skills:
   overrides:
-    terminal.execute_command:
+    terminal.run_task:
       alias: "run_command"
     crawl4ai.crawl_webpage:
       alias: "web_fetch"
@@ -85,11 +85,11 @@ skills:
 
 **Available Aliases:**
 
-| Alias         | Resolves To                |
-| ------------- | -------------------------- |
-| `web_fetch`   | `crawl4ai.crawl_webpage`   |
-| `read_file`   | `filesystem.read_file`     |
-| `run_command` | `terminal.execute_command` |
-| `git_status`  | `git.status`               |
+| Alias         | Resolves To              |
+| ------------- | ------------------------ |
+| `web_fetch`   | `crawl4ai.crawl_webpage` |
+| `read_file`   | `filesystem.read_file`   |
+| `run_command` | `terminal.run_task`      |
+| `git_status`  | `git.status`             |
 
 The server resolves aliases automatically using `settings.yaml:skills.overrides` configuration.

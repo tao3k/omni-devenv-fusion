@@ -2,6 +2,7 @@
 skill.py - Skill Command Group
 
 Phase 35.2: Modular CLI Architecture
+Phase 36: Vector-Enhanced Discovery
 
 Provides full skill management commands:
 - run: Run a skill command
@@ -14,6 +15,8 @@ Provides full skill management commands:
 - check: Validate skill structure (Phase 35.2)
 - templates: Manage skill templates (Phase 35.2)
 - create: Create a new skill from template (Phase 35.2)
+- reindex: Reindex skills into vector store (Phase 36)
+- index-stats: Show index statistics (Phase 36)
 """
 
 from __future__ import annotations
@@ -298,6 +301,126 @@ def skill_create(
 
     ctx = TestContext()
     ctx.create_skill(skill_name, description, force=force)
+
+
+@skill_app.command("reindex")
+def skill_reindex(
+    clear: bool = typer.Option(
+        False, "--clear", "-c", help="Clear existing index before reindexing"
+    ),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output result as JSON"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed progress logs"),
+):
+    """
+    Reindex all skills into the vector store for semantic search.
+
+    This command scans all installed skills and creates semantic embeddings
+    in ChromaDB, enabling intelligent discovery even when keywords don't
+    exactly match (e.g., "draw chart" → "visualization").
+
+    Example:
+        omni skill reindex           # Reindex all skills
+        omni skill reindex --clear   # Clear and reindex
+        omni skill reindex --json    # JSON output for scripting
+        omni skill reindex -v        # Verbose output
+    """
+    import asyncio
+    import logging
+
+    from agent.core.skill_discovery import reindex_skills_from_manifests
+
+    # Suppress verbose logging by default
+    if not verbose:
+        logging.getLogger("agent.core.vector_store").setLevel(logging.WARNING)
+        logging.getLogger("agent.core.skill_discovery").setLevel(logging.WARNING)
+
+    err_console.print(
+        Panel(
+            "Reindexing skills into vector store...",
+            title="🔄 Skill Index",
+            style="blue",
+        )
+    )
+
+    try:
+        result = asyncio.run(reindex_skills_from_manifests(clear_existing=clear))
+
+        if json_output:
+            import json
+
+            err_console.print(json.dumps(result, indent=2))
+        else:
+            err_console.print(
+                Panel(
+                    f"Indexed {result['total_skills_indexed']} skills "
+                    f"({result['local_skills_indexed']} local, {result['remote_skills_indexed']} remote)",
+                    title="✅ Complete",
+                    style="green",
+                )
+            )
+
+            if result.get("errors"):
+                error_panel = Panel(
+                    "\n".join([f"- {e['skill']}: {e['error']}" for e in result["errors"]]),
+                    title="⚠️ Errors",
+                    style="yellow",
+                )
+                err_console.print(error_panel)
+
+    except Exception as e:
+        err_console.print(
+            Panel(
+                f"Reindex failed: {e}",
+                title="❌ Error",
+                style="red",
+            )
+        )
+        raise typer.Exit(1)
+
+
+@skill_app.command("index-stats")
+def skill_index_stats(
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output result as JSON"),
+):
+    """
+    Show statistics about the skill vector index.
+
+    Displays the number of indexed skills and collection information.
+    """
+    import asyncio
+
+    from agent.core.skill_discovery import VectorSkillDiscovery
+
+    async def get_stats():
+        return await VectorSkillDiscovery().get_index_stats()
+
+    try:
+        result = asyncio.run(get_stats())
+
+        if json_output:
+            import json
+
+            err_console.print(json.dumps(result, indent=2))
+        else:
+            err_console.print(
+                Panel(
+                    f"Collection: {result['collection']}\n"
+                    f"Indexed Skills: {result['skill_count']}\n"
+                    f"Available Collections: {', '.join(result.get('available_collections', []))}",
+                    title="📊 Index Statistics",
+                    style="blue",
+                )
+            )
+
+    except Exception as e:
+        err_console.print(
+            Panel(
+                f"Failed to get stats: {e}",
+                title="❌ Error",
+                style="red",
+            )
+        )
+        raise typer.Exit(1)
 
 
 def register_skill_command(app_instance: typer.Typer) -> None:

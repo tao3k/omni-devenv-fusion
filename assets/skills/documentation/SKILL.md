@@ -14,6 +14,11 @@ routing_keywords:
     "guide",
     "manual",
     "tutorial",
+    "write about",
+    "document",
+    "writing",
+    "create doc",
+    "edit doc",
   ]
 authors: ["omni-dev-fusion"]
 ---

@@ -12,7 +12,7 @@
 ```
 User: "Fix this bug, it's an IndexError."
 
-Router (LLM): (Thinks: Python issue, needs file_ops and git) → Activates Skills.
+Router (LLM): (Thinks: Python issue, needs filesystem and git) → Activates Skills.
 
 Worker (Main LLM): (Wakes up, sees tools) "Hello, what do you want?
                     Oh, fix a bug. Let me re-analyze this IndexError..."
@@ -21,7 +21,7 @@ Worker (Main LLM): (Wakes up, sees tools) "Hello, what do you want?
 **What's Wasted:**
 
 - Router spends 2 seconds understanding: "IndexError in src/main.py, need read_file + write_file + git_commit"
-- Worker receives: `["file_ops", "git"]` (tool list only)
+- Worker receives: `["filesystem", "git"]` (tool list only)
 - Worker must re-analyze: "User wants me to fix a bug... What bug? Which file?"
 
 **Root Cause:**

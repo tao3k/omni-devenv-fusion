@@ -191,7 +191,7 @@ class TestSkillManagerOmniCLI:
         assert len(git_skill.commands) >= 1
 
     @pytest.mark.asyncio
-    async def test_skill_manager_execute_command(self, skill_manager):
+    async def test_skill_manager_run_command(self, skill_manager):
         """SkillManager.run() should execute commands from @skill_command."""
         skill_manager.load_skills()
 

@@ -172,7 +172,7 @@ remember_insight("Remember: knowledge skill must be preloaded first", domain="ar
 
 ```
 # Execute something
-result = execute_command("just validate")
+result = run_task("just validate")
 # Log the outcome
 log_episode(action="Ran just validate", result=result[:100])
 ```

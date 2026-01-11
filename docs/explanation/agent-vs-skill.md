@@ -26,11 +26,11 @@ Implementing `ReviewerAgent` in `packages/python/agent/src/agent/core/agents/rev
 
 ### Skill (Capability/Toolbox)
 
-| Aspect             | Description                                                                   |
-| ------------------ | ----------------------------------------------------------------------------- |
-| **Definition**     | Passive, deterministic, atomic capability                                     |
-| **Examples**       | `git` (execute commands), `file_ops` (read/write), `linter` (static analysis) |
-| **Characteristic** | Skills have no "subjective initiative"                                        |
+| Aspect             | Description                                                                     |
+| ------------------ | ------------------------------------------------------------------------------- |
+| **Definition**     | Passive, deterministic, atomic capability                                       |
+| **Examples**       | `git` (execute commands), `filesystem` (read/write), `linter` (static analysis) |
+| **Characteristic** | Skills have no "subjective initiative"                                          |
 
 A `git commit` doesn't think "is this code garbage?" It only commits.
 
@@ -133,7 +133,7 @@ Both are Agent subclasses—just mount different Skills and Prompts.
 ```
 packages/python/agent/src/agent/core/agents/
 ├── base.py           # BaseAgent, AgentContext, AgentResult, AuditResult
-├── coder.py          # 👷 CoderAgent (filesystem, file_ops, python_engineering)
+├── coder.py          # 👷 CoderAgent (filesystem, python_engineering)
 └── reviewer.py       # 🕵️ ReviewerAgent (git, testing, linter, documentation)
 ```
 

@@ -1,18 +1,17 @@
 """
-_template/tools.py - Template Skill Router (Phase 35.2)
+_template/tools.py - Template Skill Router (Phase 36)
 
 This is the ROUTER layer - it only dispatches to implementation scripts.
 All actual logic is in the scripts/ directory.
 
-Architecture (Isolated Sandbox + Explicit Routing):
+Architecture (Controller Layer Pattern):
     tools.py    -> Router (just dispatches, validates params)
     scripts/    -> Controllers (actual implementation)
-                -> Fully isolated namespace (no conflicts with other skills)
 
 Naming Convention:
-    @skill_command(name="<skill_name>.<command>", ...)
-    - All command names use "skill.command" format for LLM clarity
-    - Example: git.status, git.commit, _template.example, _template.help
+    @skill_command(name="<command>", ...)
+    - Command names are just the function name (e.g., "example")
+    - MCP Server automatically prefixes with skill name: "_template.example"
 
 Usage:
     from agent.skills._template.scripts import example

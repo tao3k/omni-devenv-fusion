@@ -93,8 +93,8 @@ assets/skills/git/
 |  🧠 Orchestrator    |  📝 Coder        |  🛠️ Executor       |
 |  (Planning)         |  (Reading/Writing)|  (Execution)       |
 |  - knowledge        |  - filesystem     |  - terminal        |
-|  - skill            |  - file_ops       |  - git             |
-|                     |  - code_insight   |  - testing         |
+|  - skill            |  - code_insight   |  - git             |
+|                     |  - writer         |  - testing         |
 +-------------------------------------------------------------+
 |  Swarm Engine (Runtime Orchestrator)                        |
 |  - Route calls    - Isolate deps  - Handle errors           |
@@ -111,7 +111,7 @@ These skills form the foundational capabilities of Omni:
 
 | Skill          | Purpose                        | Key Commands                                            |
 | -------------- | ------------------------------ | ------------------------------------------------------- |
-| **terminal**   | 🛠️ Execution (Executor Role)   | `execute_command`, `analyze_last_error`                 |
+| **terminal**   | 🛠️ Execution (Executor Role)   | `run_task` / `run_command`, `analyze_last_error`        |
 | **filesystem** | 📝 File I/O (Coder Role)       | `read_file`, `write_file`, `list_directory`             |
 | **git**        | Version Control                | `status`, `commit`, `branch`, `log`                     |
 | **knowledge**  | 🧠 Context (Orchestrator Role) | `get_development_context`, `consult_architecture_doc`   |
@@ -123,7 +123,7 @@ These skills form the foundational capabilities of Omni:
 The **Executor Role** is fulfilled by `skills/terminal`:
 
 ```python
-@omni("terminal.execute_command", {"command": "ls", "args": ["-la"]})
+@omni("terminal.run_task", {"command": "ls", "args": ["-la"]})
 @omni("terminal.analyze_last_error")  # Analyze Flight Recorder errors
 ```
 
@@ -324,7 +324,7 @@ assets/templates/git/
 | Skill                    | Commands | Description                           |
 | ------------------------ | -------- | ------------------------------------- |
 | **memory**               | 6        | Vector memory for session persistence |
-| **file_ops**             | 6        | AST-based file operations             |
+| **filesystem**           | 9        | File I/O, grep, AST operations        |
 | **code_insight**         | 4        | Code analysis and tool discovery      |
 | **software_engineering** | 3        | Architecture analysis                 |
 | **advanced_search**      | 2        | Semantic search                       |
@@ -344,6 +344,69 @@ assets/templates/git/
 @omni("skill.list_tools")  # List all 90+ registered MCP tools
 @omni("skill.list_index")  # List all skills in known index
 ```
+
+## Skill Discovery (Phase 36.2)
+
+Omni uses **ChromaDB-based vector search** for intelligent skill discovery. This enables semantic matching even when keywords don't exactly match.
+
+### Discovery Tools
+
+| Tool                | Description                      |
+| ------------------- | -------------------------------- |
+| `skill.discover`    | Semantic search for skills       |
+| `skill.suggest`     | Task-based skill recommendations |
+| `skill.reindex`     | Rebuild vector index             |
+| `skill.index-stats` | Show index statistics            |
+
+### Examples
+
+```python
+# Semantic search - find skills related to containers
+@omni("skill.discover", {"query": "docker containers", "limit": 5})
+
+# Search local skills only (installed skills)
+@omni("skill.discover", {"query": "git operations", "local_only": true})
+
+# Get task-based recommendations
+@omni("skill.suggest", {"task": "write documentation"})
+
+# Rebuild the vector index
+@omni("skill.reindex", {"clear": true})
+```
+
+### Routing Flow
+
+**Hot Path** (Fast): Cache hit → Return cached result
+
+**Cold Path** (Fallback): LLM low confidence (<0.5) or generic skills → Vector search
+
+```
+User Request
+    ↓
+1. Semantic Cortex (fuzzy cache)
+2. Exact Match Cache
+3. LLM Routing (Hot Path)
+4. Vector Fallback (Cold Path)
+    - Searches ChromaDB (skill_registry collection)
+    - Filters: installed_only=True (local skills only)
+    - Returns suggested_skills
+```
+
+### CLI Commands
+
+```bash
+# Rebuild vector index from SKILL.md files
+omni skill reindex
+omni skill reindex --clear    # Full rebuild
+
+# Show index statistics
+omni skill index-stats
+```
+
+### See Also
+
+- [Developer Guide](../developer/discover.md) - Detailed discovery architecture
+- [Testing Guide](../developer/testing.md) - Discovery flow tests
 
 ## Usage
 

@@ -36,7 +36,9 @@ Information-oriented. Technical details, API specs, and configuration options.
 | [MCP Orchestrator](./reference/mcp-orchestrator.md)               | Omni MCP tool configuration and usage         |
 | [MCP Best Practices](./reference/mcp-best-practices.md)           | MCP server design patterns and anti-patterns  |
 | [Documentation Standards](./reference/documentation-standards.md) | Doc guidelines for this project               |
+| [ODF-EP Protocol](./reference/odf-ep-protocol.md)                 | MANDATORY for LLMs - Engineering Protocol     |
 | [Skills](./skills.md)                                             | Skill architecture and development guide      |
+| [Skill Discovery](./developer/discover.md)                        | Phase 36.2 Vector-Enhanced Discovery System   |
 
 ---
 
@@ -44,9 +46,12 @@ Information-oriented. Technical details, API specs, and configuration options.
 
 Internal documentation for Omni-Dev Fusion developers.
 
-| Document                                | Description                                  |
-| --------------------------------------- | -------------------------------------------- |
-| [Testing Guide](./developer/testing.md) | Test system architecture and developer guide |
+| Document                                                      | Description                                            |
+| ------------------------------------------------------------- | ------------------------------------------------------ |
+| [Skill Discovery](./developer/discover.md)                    | Phase 36.2 Vector-Enhanced Discovery & Virtual Loading |
+| [Testing Guide](./developer/testing.md)                       | Test system architecture and developer guide           |
+| [CLI Guide](./developer/cli.md)                               | CLI developer documentation                            |
+| [MCP Core Architecture](./developer/mcp-core-architecture.md) | Shared library architecture guide                      |
 
 ---
 
@@ -62,6 +67,7 @@ Understanding-oriented. Deep dives into architecture and design philosophy.
 | [Why Nix for AI?](./explanation/why-nix-for-ai.md)                            | The Technical Bet - reproducibility as foundation   |
 | [Vision: Agentic OS](./explanation/vision-agentic-os.md)                      | The Endgame - from IDE to Agentic OS                |
 | [Why Omni-DevEnv?](./explanation/why-omni-devenv.md)                          | Core value proposition and solutions                |
+| [Trinity Architecture](./explanation/trinity-architecture.md)                 | Phase 36 v2.0 - Orchestrator/Coder/Executor Pattern |
 | [MCP Architecture Roadmap](../design/mcp-architecture-roadmap.md)             | Technical architecture and future vision            |
 
 ---

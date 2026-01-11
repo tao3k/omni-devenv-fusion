@@ -93,16 +93,16 @@ class TestSkillCommandDecorators:
         """Load filesystem skill module."""
         return load_skill_module("filesystem")
 
-    def test_execute_command_has_marker(self, terminal_module):
-        """execute_command should have _is_skill_command marker."""
-        assert hasattr(terminal_module.execute_command, "_is_skill_command")
-        assert terminal_module.execute_command._is_skill_command is True
+    def test_run_task_has_marker(self, terminal_module):
+        """run_task should have _is_skill_command marker."""
+        assert hasattr(terminal_module.run_task, "_is_skill_command")
+        assert terminal_module.run_task._is_skill_command is True
 
-    def test_execute_command_has_config(self, terminal_module):
-        """execute_command should have _skill_config."""
-        assert hasattr(terminal_module.execute_command, "_skill_config")
-        config = terminal_module.execute_command._skill_config
-        assert config["name"] == "execute_command"
+    def test_run_task_has_config(self, terminal_module):
+        """run_task should have _skill_config."""
+        assert hasattr(terminal_module.run_task, "_skill_config")
+        config = terminal_module.run_task._skill_config
+        assert config["name"] == "run_task"
         assert config["category"] == "workflow"
 
     def test_read_file_has_marker(self, filesystem_module):

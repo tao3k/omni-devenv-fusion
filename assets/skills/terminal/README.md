@@ -6,7 +6,7 @@ Provides direct access to the system shell to execute commands. This is a high-p
 
 ## Capabilities
 
-- **Execute**: `execute_command` (Run any shell command)
+- **Execute**: `run_task` / `run_command` (Run any shell command)
 - **Background**: `run_background_process` (Long-running tasks) [Planned]
 
 ## Safety Rules

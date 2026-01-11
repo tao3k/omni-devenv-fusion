@@ -1,0 +1,387 @@
+# Phase 36.2: Vector-Enhanced Skill Discovery
+
+> **Virtual Loading** - Intelligent skill discovery using ChromaDB vector search.
+
+## Overview
+
+Phase 36.2 introduces **Vector-Enhanced Skill Discovery**, enabling semantic matching between user requests and available skills. This system bridges the gap between "what users ask for" and "what skills can do" even when keywords don't exactly match.
+
+### Key Capabilities
+
+- **Semantic Search**: Find skills by meaning, not just keywords
+- **Virtual Loading**: Discover unloaded skills without installation
+- **Local-Only Mode**: Search only installed skills (privacy-conscious)
+- **Automatic Fallback**: Router triggers vector search when LLM routing is weak
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     User Request                                 │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 1️⃣ Semantic Cortex (Fuzzy Cache)                                │
+│    "Fix bug" ≈ "Fix the bug"                                    │
+└─────────────────────────────────────────────────────────────────┘
+         ❌ Miss                    ✅ Hit → Return Cached
+                ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 2️⃣ Exact Match Cache                                            │
+│    "git commit" → exact string match                            │
+└─────────────────────────────────────────────────────────────────┘
+         ❌ Miss                    ✅ Hit → Return Cached
+                ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 3️⃣ LLM Routing (Hot Path)                                       │
+│    Analyze request → Select skills → Generate Mission Brief     │
+└─────────────────────────────────────────────────────────────────┘
+         ✅ High Confidence        ⚠️ Low Confidence / Generic Skills
+                ↓                              ↓
+┌─────────────────────────┐    ┌─────────────────────────────────┐
+│ Return Result           │    │ 4️⃣ Vector Fallback (Cold Path)  │
+│ (No Vector Search)      │    │    • Search ChromaDB            │
+│                         │    │    • Filter: installed_only=True │
+│                         │    │    • Return suggested_skills     │
+└─────────────────────────┘    └─────────────────────────────────┘
+                                        ↓
+                              ┌─────────────────────────────────┐
+                              │      RoutingResult              │
+                              │  • selected_skills              │
+                              │  • suggested_skills (NEW)       │
+                              │  • confidence                   │
+                              └─────────────────────────────────┘
+```
+
+## Vector Skill Discovery
+
+### `VectorSkillDiscovery` Class
+
+Located in `agent/core/skill_discovery.py`.
+
+```python
+from agent.core.skill_discovery import VectorSkillDiscovery
+
+discovery = VectorSkillDiscovery()
+
+# Search local skills only
+results = await discovery.search(
+    query="git operations",
+    limit=5,
+    installed_only=True  # Default: True
+)
+
+# Search all skills (local + remote)
+results = await discovery.search(
+    query="docker containers",
+    limit=10,
+    installed_only=False
+)
+```
+
+### Return Format
+
+```python
+[
+    {
+        "id": "git",
+        "name": "git",
+        "description": "Git version control system...",
+        "score": 0.85,           # Similarity score (0-1)
+        "installed": True,       # Local or remote
+        "keywords": "git, commit, branch",
+    },
+    # ...
+]
+```
+
+### Constants
+
+```python
+from agent.core.skill_discovery import SKILL_REGISTRY_COLLECTION
+# Value: "skill_registry"
+```
+
+## Index Management
+
+### Building the Index
+
+The index is built from all `SKILL.md` files:
+
+```python
+from agent.core.skill_discovery import reindex_skills_from_manifests
+
+# Incremental update
+stats = await reindex_skills_from_manifests(clear_existing=False)
+
+# Full rebuild
+stats = await reindex_skills_from_manifests(clear_existing=True)
+
+# Result:
+# {
+#     "local_skills_indexed": 19,
+#     "remote_skills_indexed": 20,
+#     "total_skills_indexed": 39,
+#     "errors": []
+# }
+```
+
+### What Gets Indexed
+
+For each skill, the following is embedded:
+
+```markdown
+Skill: git
+Description: Git version control system for managing code changes.
+Keywords: git, commit, branch, merge, push, pull
+Intents: commit, push, pull, branch management
+```
+
+## CLI Commands
+
+### `omni skill reindex`
+
+Rebuild the vector index from all installed skills.
+
+```bash
+# Incremental update (default)
+omni skill reindex
+
+# Full rebuild (clear existing)
+omni skill reindex --clear
+
+# Verbose output
+omni skill reindex -v
+
+# JSON output
+omni skill reindex --json
+```
+
+**Output:**
+
+```
+╭──────────────────────────────── ✅ Complete ─────────────────────────────────╮
+│ Indexed 39 skills (19 local, 20 remote)                                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
+
+### `omni skill index-stats`
+
+Show statistics about the vector index.
+
+```bash
+# Human readable
+omni skill index-stats
+
+# JSON output
+omni skill index-stats --json
+```
+
+**Output:**
+
+```
+╭──────────────────────────────── 📊 Index Statistics ────────────────────────╮
+│ Collection: skill_registry                                                   │
+│ Indexed Skills: 39                                                           │
+│ Available Collections: [skill_registry, project_knowledge]                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
+
+## User Tools
+
+### `skill.discover`
+
+Semantic search for skills.
+
+```python
+@omni("skill.discover", {
+    "query": "git workflow",
+    "limit": 5,
+    "local_only": true
+})
+```
+
+| Parameter    | Type   | Default  | Description           |
+| ------------ | ------ | -------- | --------------------- |
+| `query`      | string | required | Search query          |
+| `limit`      | int    | 5        | Max results           |
+| `local_only` | bool   | false    | Only installed skills |
+
+**Example Output:**
+
+```markdown
+# 🔍 Discovery Results: 'git operations'
+
+## ✅ git (Match: 85%)
+
+**ID**: `git`
+**Description**: Git version control system...
+**Keywords**: git, commit, branch, merge
+
+## ✅ file_ops (Match: 45%)
+
+**ID**: `file_ops`
+**Description**: File operations including AST-based refactoring...
+```
+
+### `skill.suggest`
+
+Get task-based skill recommendations.
+
+```python
+@omni("skill.suggest", {"task": "analyze nginx logs"})
+```
+
+| Parameter | Type   | Description      |
+| --------- | ------ | ---------------- |
+| `task`    | string | Task description |
+
+**Example Output:**
+
+```markdown
+# 💡 Skill Recommendation
+
+**Task**: analyze nginx logs
+
+## Top Matches
+
+1. ✅ **HTTP Client** - HTTP requests... (85%)
+2. ☁️ **Network Analysis** - PCAP analysis... (64%)
+
+## Best Match: HTTP Client
+
+**Confidence**: 85%
+**Description**: HTTP requests, API testing...
+```
+
+### `skill.reindex`
+
+Rebuild the vector index (user tool version).
+
+```python
+@omni("skill.reindex", {"clear": true})
+```
+
+| Parameter | Type | Description                |
+| --------- | ---- | -------------------------- |
+| `clear`   | bool | Clear existing index first |
+
+## Router Integration
+
+### Trigger Conditions
+
+Vector Fallback is triggered when:
+
+```python
+# semantic_router.py:444-450
+is_weak_route = (
+    not valid_skills or                    # No valid skills found
+    confidence < 0.5 or                    # Low confidence
+    (len(valid_skills) == 1 and            # Only 1 skill
+     valid_skills[0] in ["writer", "knowledge"])  # Generic fallback
+)
+```
+
+### `suggested_skills` Field
+
+The `RoutingResult` now includes `suggested_skills`:
+
+```python
+from agent.core.router.models import RoutingResult
+
+result = RoutingResult(
+    selected_skills=["writer"],        # Currently selected
+    suggested_skills=["documentation"], # Recommended to load
+    mission_brief="...",
+    confidence=0.7,
+    reasoning="..."
+)
+```
+
+### Example Flow
+
+```python
+# User: "write documentation about this project"
+# LLM: confidence=0.7, selects "writer" (generic)
+
+# Vector Fallback triggers
+# Searches for "write documentation" in local skills
+# Finds: documentation (score=0.92)
+
+# Result:
+result.suggested_skills = ["documentation"]
+result.confidence = 0.85  # Boosted!
+result.reasoning += " [Vector Fallback] Found local skill: documentation"
+```
+
+## Testing
+
+### Test File
+
+`packages/python/agent/src/agent/tests/scenarios/test_discovery_flow.py`
+
+### Scenarios
+
+| Test                                            | Description                        |
+| ----------------------------------------------- | ---------------------------------- |
+| `test_scenario1_explicit_tool_discover`         | skill.discover tool rendering      |
+| `test_scenario2_cold_path_virtual_loading`      | Router falls back to vector search |
+| `test_scenario3_hot_path_performance_guardrail` | No unnecessary vector search       |
+| `test_scenario4_ambiguous_graceful_fail`        | Graceful handling of nonsense      |
+| `test_scenario5_vector_filtering`               | installed_only filter works        |
+| `test_scenario6_cache_hit`                      | Cache integration                  |
+| `test_scenario7_discovery_search_interface`     | Discovery API interface            |
+
+### Running Tests
+
+```bash
+# Run all discovery flow tests
+uv run pytest packages/python/agent/src/agent/tests/scenarios/test_discovery_flow.py -v
+
+# Run specific test
+uv run pytest packages/python/agent/src/agent/tests/scenarios/test_discovery_flow.py::test_scenario2_cold_path_virtual_loading -v
+
+# Run with verbose output
+uv run pytest packages/python/agent/src/agent/tests/scenarios/test_discovery_flow.py -v -s
+```
+
+## Architecture Decisions
+
+### Why ChromaDB?
+
+- **Performance**: O(log N) ANN search vs O(N) linear scan
+- **Persistence**: Index survives restarts
+- **Filtering**: Support for `where_filter` metadata queries
+- **Simplicity**: Easy integration with existing VectorMemory
+
+### Why Local-Only Default?
+
+The `installed_only=True` default ensures:
+
+- **Privacy**: No metadata about remote skills leaves the system
+- **Reliability**: Only skills that can actually be loaded are suggested
+- **Phased Rollout**: Remote skill installation is TBD
+
+### Hot Path vs Cold Path
+
+| Path | Trigger                     | Speed  | Use Case           |
+| ---- | --------------------------- | ------ | ------------------ |
+| Hot  | Cache hit / High confidence | ~1ms   | Common requests    |
+| Cold | Weak LLM routing            | ~100ms | Ambiguous requests |
+
+## Related Files
+
+| File                                     | Purpose                             |
+| ---------------------------------------- | ----------------------------------- |
+| `agent/core/skill_discovery.py`          | VectorSkillDiscovery class          |
+| `agent/core/router/semantic_router.py`   | Router with Vector Fallback         |
+| `agent/cli/commands/skill.py`            | CLI commands (reindex, index-stats) |
+| `agent/core/vector_store.py`             | ChromaDB wrapper                    |
+| `tests/scenarios/test_discovery_flow.py` | Integration tests                   |
+| `tests/fakes/fake_vectorstore.py`        | Test double for vector store        |
+
+## See Also
+
+- [Skills Overview](../skills.md) - Complete skill documentation
+- [Trinity Architecture](../explanation/trinity-architecture.md) - System architecture
+- [ODF-EP Protocol](../reference/odf-ep-protocol.md) - Engineering protocol

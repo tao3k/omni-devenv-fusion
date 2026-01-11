@@ -415,15 +415,15 @@ class TestToolCallParsing:
         agent = BaseAgent()
 
         # XML format from LLM (correct format: <invoke><tool_name>args</tool_name></invoke>)
-        xml_response = """<invoke><file_ops>
+        xml_response = """<invoke><filesystem>
 <path>main.py</path>
-</file_ops></invoke>"""
+</filesystem></invoke>"""
 
         result = agent._parse_tool_call(xml_response)
 
         assert result is not None
         tool_name, args = result
-        assert tool_name == "file_ops"
+        assert tool_name == "filesystem"
         assert "path" in args or "main.py" in str(args)
 
     def test_parse_xml_format_with_action(self):
@@ -433,16 +433,16 @@ class TestToolCallParsing:
         agent = BaseAgent()
 
         # XML format with action
-        xml_response = """<invoke><file_ops>
+        xml_response = """<invoke><filesystem>
 <action>read</action>
 <path>main.py</path>
-</file_ops></invoke>"""
+</filesystem></invoke>"""
 
         result = agent._parse_tool_call(xml_response)
 
         assert result is not None
         tool_name, args = result
-        assert tool_name == "file_ops"
+        assert tool_name == "filesystem"
         assert args.get("action") == "read" or args.get("read") == "main.py"
 
     def test_parse_bracket_format(self):

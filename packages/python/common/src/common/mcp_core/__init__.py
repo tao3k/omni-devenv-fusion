@@ -21,7 +21,7 @@ Usage:
     from mcp_core.protocols import ISafeExecutor, IInferenceClient
 
     # Execution now via terminal skill (Trinity Architecture):
-    # @omni("terminal.execute_command", {"command": "ls", "args": ["-la"]})
+    # @omni("terminal.run_task", {"command": "ls", "args": ["-la"]})
 
     # From modular subpackages
     from mcp_core.lazy_cache import FileCache, MarkdownCache, ConfigCache, RepomixCache

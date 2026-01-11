@@ -166,7 +166,7 @@ class InferenceClient:
         """Get tool definitions in JSON Schema format for ReAct loop."""
         tool_schemas = []
 
-        if not skill_names or "filesystem" in skill_names or "file_ops" in skill_names:
+        if not skill_names or "filesystem" in skill_names:
             tool_schemas.extend(
                 [
                     {

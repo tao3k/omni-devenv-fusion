@@ -12,6 +12,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+# Trusted read-only paths (Nix store paths are immutable and safe)
+_TRUSTED_ABSOLUTE_PATHS = {"/nix/store/"}
+
 
 def is_safe_path(
     path: str,
@@ -19,6 +22,7 @@ def is_safe_path(
     blocked_dirs: set[str] | None = None,
     allow_hidden: bool = True,
     allowed_hidden_files: set[str] | None = None,
+    allow_absolute: bool = False,
 ) -> tuple[bool, str]:
     """Check if a path is safe to access within the project.
 
@@ -28,6 +32,7 @@ def is_safe_path(
         blocked_dirs: Set of blocked directory prefixes
         allow_hidden: Whether to allow hidden files
         allowed_hidden_files: Set of allowed hidden filenames (e.g., {".gitignore"})
+        allow_absolute: Allow absolute paths (for trusted paths like /nix/store/*)
 
     Returns:
         Tuple of (is_safe, error_message)
@@ -43,6 +48,9 @@ def is_safe_path(
 
     # Check for absolute paths
     if path.startswith("/"):
+        # Allow trusted absolute paths (e.g., /nix/store/*)
+        if allow_absolute or any(path.startswith(trusted) for trusted in _TRUSTED_ABSOLUTE_PATHS):
+            return True, ""
         return False, "Absolute paths are not allowed."
 
     # Check for path traversal

@@ -86,9 +86,8 @@ The Trinity Architecture unifies three critical concerns through a **Skill-Centr
 
 **Implementation**:
 
-- `skills/filesystem` - Safe file operations (read, write, search)
+- `skills/filesystem` - File I/O, grep search, AST operations (consolidated from file_ops)
 - `skills/code_insight` - AST analysis, code structure
-- `skills/file_ops` - Advanced file operations, AST refactoring
 
 **Usage**: `@omni("filesystem.read_file", {"path": "README.md"})`
 
@@ -102,7 +101,7 @@ The Trinity Architecture unifies three critical concerns through a **Skill-Centr
 - `skills/git` - Version control operations
 - `skills/testing` - Test execution
 
-**Usage**: `@omni("terminal.execute_command", {"command": "ls", "args": ["-la"]})`
+**Usage**: `@omni("terminal.run_task", {"command": "ls", "args": ["-la"]})`
 
 > **Key Change**: The Executor is NO LONGER a Python class. It's a logical role fulfilled by `skills/terminal/tools.py`. This skill contains `SafeExecutor` logic directly, enabling hot-reload and sandboxing without core code changes.
 
@@ -132,14 +131,14 @@ result = await executor.run("ls", ["-la"])
 
 ```python
 # New approach - Use the terminal skill via MCP
-@omni("terminal.execute_command", {"command": "ls", "args": ["-la"]})
+@omni("terminal.run_task", {"command": "ls", "args": ["-la"]})
 
 # Or directly via Swarm Engine
 from agent.core.swarm import get_swarm
 
 result = await get_swarm().execute_skill(
     skill_name="terminal",
-    command="execute_command",
+    command="run_task",
     args={"command": "ls", "args": ["-la"]}
 )
 ```
@@ -174,18 +173,17 @@ class Swarm:
 
 ```python
 @skill_command(
-    name="execute_command",
+    name="run_task",
     category="workflow",
-    description="Execute a shell command with whitelist validation.",
+    description="Run safe development tasks (just, nix, git) with FLIGHT RECORDER.",
 )
-async def execute_command(command: str, args: list[str] = None, timeout: int = 60) -> str:
+async def run_task(command: str, args: list[str] = None, **kwargs) -> str:
     """Terminal skill - The new 'Executor' implementation."""
-    is_safe, error_msg = check_dangerous_patterns(command, args)
-    if not is_safe:
-        return f"Blocked: {error_msg}"
+    # Import from controller layer
+    from agent.skills.terminal.scripts import engine
 
-    result = await SafeExecutor.run(command, args, timeout)
-    return SafeExecutor.format_result(result, command, args)
+    result = engine.run_command(command, args, timeout=60)
+    return engine.format_result(result, command, args)
 ```
 
 ## File Structure (Phase 36)

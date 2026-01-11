@@ -176,6 +176,76 @@ You: @omni("skill.suggest", {"task": "analyze pcap file"})
 2. **Auto-Load**: Skills are automatically loaded after installation
 3. **Index-Based**: Uses `known_skills.json` for reliable discovery
 
+## Phase 36.2: Vector-Enhanced Discovery (Virtual Loading)
+
+Omni now uses **ChromaDB-based vector search** for intelligent skill discovery with semantic matching:
+
+```bash
+# Reindex all skills into vector store
+omni skill reindex
+omni skill reindex --clear    # Full rebuild
+
+# Show index statistics
+omni skill index-stats
+
+# Search local skills only
+@omni("skill.discover", {"query": "docker containers", "local_only": true})
+
+# Get task-based suggestions
+@omni("skill.suggest", {"task": "analyze nginx logs"})
+```
+
+### Routing Flow (Phase 36.2)
+
+```
+User Request
+    ↓
+1. Semantic Cortex (fuzzy cache)
+2. Exact Match Cache
+3. LLM Routing (Hot Path)
+4. Vector Fallback (Cold Path) ← NEW
+    - Only searches LOCAL skills (installed_only=True)
+    - Returns suggested_skills in RoutingResult
+```
+
+### How It Works
+
+- **Index Source**: SKILL.md files are parsed and embedded
+- **Storage**: ChromaDB collection `skill_registry`
+- **Query**: Semantic similarity search with metadata filtering
+- **Fallback**: Triggered when LLM confidence < 0.5 or uses generic skills
+
+### Vector Fallback Example
+
+```python
+# User: "write documentation about this project"
+# LLM returns: confidence=0.7, selects generic "writer" skill
+
+# Vector Fallback triggers
+# Searches for "write documentation" in local skills
+# Finds: documentation (score=0.92)
+
+# Result:
+# {
+#     "selected_skills": ["writer"],
+#     "suggested_skills": ["documentation"],  # NEW!
+#     "confidence": 0.85,  # Boosted
+#     "reasoning": "... [Vector Fallback] Found local skill: documentation"
+# }
+```
+
+### Available Commands
+
+| Command                  | Description                |
+| ------------------------ | -------------------------- |
+| `omni skill reindex`     | Rebuild vector index       |
+| `omni skill index-stats` | Show index statistics      |
+| `skill.discover`         | Semantic skill search      |
+| `skill.suggest`          | Task-based recommendations |
+| `skill.reindex`          | Rebuild index (tool)       |
+
+See [Developer Guide](../docs/developer/discover.md) for detailed architecture documentation.
+
 ## The Vision
 
 **Copilot** (today): AI helps you write code, you drive.

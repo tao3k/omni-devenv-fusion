@@ -211,7 +211,6 @@ class TestCoderAgent:
 
         # Should have code skills
         assert "filesystem" in agent.default_skills
-        assert "file_ops" in agent.default_skills
         assert "code_insight" in agent.default_skills
         assert "python_engineering" in agent.default_skills
         assert "terminal" in agent.default_skills
@@ -262,8 +261,7 @@ class TestReviewerAgent:
         assert "linter" in agent.default_skills
         assert "terminal" in agent.default_skills
 
-        # Should NOT have file_ops (Coder skill)
-        assert "file_ops" not in agent.default_skills
+        # Should NOT have code skills (Coder skills)
         assert "python_engineering" not in agent.default_skills
 
     def test_reviewer_role_and_name(self):
@@ -302,10 +300,10 @@ class TestAgentContextNarrowing:
         agent = CoderAgent()
 
         # Coder should have 5 skills max
-        assert len(agent.default_skills) == 5
+        assert len(agent.default_skills) == 4
 
-        # All skills should be code-related
-        code_related = {"filesystem", "file_ops", "code_insight", "python_engineering", "terminal"}
+        # All skills should be code-related (file_ops consolidated into filesystem)
+        code_related = {"filesystem", "code_insight", "python_engineering", "terminal"}
         assert set(agent.default_skills) == code_related
 
     def test_reviewer_skill_set_is_narrow(self):

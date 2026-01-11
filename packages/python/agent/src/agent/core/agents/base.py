@@ -16,7 +16,7 @@ Usage:
     class CoderAgent(BaseAgent):
         name = "coder"
         role = "Senior Python Architect"
-        default_skills = ["filesystem", "file_ops", "python_engineering"]
+        default_skills = ["filesystem", "python_engineering"]
 """
 
 from abc import ABC
@@ -609,7 +609,7 @@ class BaseAgent(ABC):
 
         Supports multiple formats:
         1. Simple: `TOOL: read_file(path="main.py")`
-        2. XML/MCP: `<invoke><file_ops>\n<read>\n<path>main.py</path>...</invoke>`
+        2. XML/MCP: `<invoke><filesystem>\n<read>\n<path>main.py</path>...</invoke>`
         3. Bracket: `[TOOL] write_file(path="test.py", content="...")`
 
         Args:
