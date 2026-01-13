@@ -1,8 +1,10 @@
 #![allow(clippy::doc_markdown, clippy::uninlined_format_args)]
 
 use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 use git2::{Repository, StatusOptions, Status};
+use omni_types::EnvironmentSnapshot;
 
 /// Errors for `OmniSniffer` operations.
 #[derive(Debug, Error)]
@@ -20,57 +22,21 @@ pub enum SnifferError {
     ScratchpadRead(std::path::PathBuf),
 }
 
-/// Holographic snapshot structure (Atomic Snapshot)
-#[derive(Debug, serde::Serialize)]
-pub struct EnvironmentSnapshot {
-    pub git_branch: String,
-    pub git_modified: usize,
-    pub git_staged: usize,
-    pub active_context_lines: usize,
-    pub dirty_files: Vec<String>,
-}
-
-impl EnvironmentSnapshot {
-    /// Render as human-readable prompt string (Phase 43 compatible)
-    #[must_use]
-    pub fn to_prompt_string(&self) -> String {
-        let dirty_desc = if self.dirty_files.is_empty() {
-            "Clean".to_string()
-        } else {
-            let count = self.dirty_files.len();
-            let preview = self.dirty_files.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
-            if count > 3 {
-                format!("{count} files ({preview}, ...)")
-            } else {
-                format!("{count} files ({preview})")
-            }
-        };
-
-        format!(
-            "[LIVE ENVIRONMENT STATE]\n\
-            - Git: Branch: {} | Modified: {} | Staged: {} | Status: {}\n\
-            - Active Context: {} lines in SCRATCHPAD.md",
-            self.git_branch,
-            self.git_modified,
-            self.git_staged,
-            dirty_desc,
-            self.active_context_lines
-        )
-    }
-}
-
+/// High-performance environment sniffer using libgit2.
+/// The sensory system of the Omni DevEnv.
 pub struct OmniSniffer {
     repo_path: std::path::PathBuf,
 }
 
 impl OmniSniffer {
+    /// Create a new sniffer for the given repository root.
     pub fn new<P: AsRef<Path>>(root: P) -> Self {
         Self {
             repo_path: root.as_ref().to_path_buf(),
         }
     }
 
-    /// Get Git status (uses libgit2, 10-50x faster than subprocess)
+    /// Get Git status using libgit2 (10-50x faster than subprocess).
     ///
     /// # Errors
     ///
@@ -122,7 +88,7 @@ impl OmniSniffer {
         Ok((branch, modified, staged, dirty_files))
     }
 
-    /// Scan Scratchpad (IO-intensive, Rust advantage)
+    /// Scan Scratchpad for active context (IO-intensive).
     pub fn scan_context(&self) -> usize {
         let scratchpad = self.repo_path.join(".memory/active_context/SCRATCHPAD.md");
         if !scratchpad.exists() {
@@ -137,7 +103,10 @@ impl OmniSniffer {
         0
     }
 
-    /// Aggregate snapshot
+    /// Get a complete environment snapshot with timestamp.
+    ///
+    /// Returns [`EnvironmentSnapshot`] containing all sensory data.
+    #[must_use]
     pub fn get_snapshot(&self) -> EnvironmentSnapshot {
         let (branch, modified, staged, dirty_files) = self.scan_git().unwrap_or_else(|_| (
             "unavailable".to_string(),
@@ -148,12 +117,19 @@ impl OmniSniffer {
 
         let context_lines = self.scan_context();
 
+        // Get current timestamp
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs_f64())
+            .unwrap_or(0.0);
+
         EnvironmentSnapshot {
             git_branch: branch,
             git_modified: modified,
             git_staged: staged,
             active_context_lines: context_lines,
             dirty_files,
+            timestamp,
         }
     }
 }
@@ -170,6 +146,7 @@ mod tests {
             git_staged: 1,
             active_context_lines: 42,
             dirty_files: vec!["src/main.rs".to_string(), "Cargo.toml".to_string()],
+            timestamp: 0.0,
         };
 
         let prompt = snapshot.to_prompt_string();

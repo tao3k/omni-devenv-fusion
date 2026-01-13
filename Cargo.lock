@@ -339,6 +339,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "omni-sniffer",
+ "omni-types",
  "pyo3",
  "serde",
  "serde_json",
@@ -349,6 +350,7 @@ name = "omni-sniffer"
 version = "0.1.0"
 dependencies = [
  "git2",
+ "omni-types",
  "serde",
  "thiserror",
  "tokio",

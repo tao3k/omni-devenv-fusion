@@ -1,6 +1,8 @@
 use pyo3::prelude::*;
 use omni_sniffer::OmniSniffer;
 
+/// Python wrapper for EnvironmentSnapshot.
+/// Uses omni_types::EnvironmentSnapshot for type unification.
 #[pyclass]
 #[derive(serde::Serialize)]
 struct PyEnvironmentSnapshot {
@@ -9,6 +11,7 @@ struct PyEnvironmentSnapshot {
     git_staged: usize,
     active_context_lines: usize,
     dirty_files: Vec<String>,
+    timestamp: f64,
 }
 
 #[pymethods]
@@ -38,6 +41,11 @@ impl PyEnvironmentSnapshot {
         self.dirty_files.clone()
     }
 
+    #[getter]
+    fn timestamp(&self) -> f64 {
+        self.timestamp
+    }
+
     fn to_prompt_string(&self) -> String {
         let dirty_desc = if self.dirty_files.is_empty() {
             "Clean".to_string()
@@ -45,9 +53,9 @@ impl PyEnvironmentSnapshot {
             let count = self.dirty_files.len();
             let preview = self.dirty_files.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
             if count > 3 {
-                format!("{} files ({}, ...)", count, preview)
+                format!("{count} files ({preview}, ...)")
             } else {
-                format!("{} files ({})", count, preview)
+                format!("{count} files ({preview})")
             }
         };
 
@@ -68,6 +76,7 @@ impl PyEnvironmentSnapshot {
     }
 }
 
+/// Python wrapper for OmniSniffer.
 #[pyclass]
 struct PyOmniSniffer {
     sniffer: OmniSniffer,
@@ -91,13 +100,14 @@ impl PyOmniSniffer {
             git_staged: snapshot.git_staged,
             active_context_lines: snapshot.active_context_lines,
             dirty_files: snapshot.dirty_files,
+            timestamp: snapshot.timestamp,
         }
     }
 
     /// Quick git status check (lightweight)
     fn git_status(&self) -> PyResult<(String, usize, usize)> {
         let (branch, modified, staged, _) = self.sniffer.scan_git()
-            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Git error: {}", e)))?;
+            .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Git error: {e}")))?;
         Ok((branch, modified, staged))
     }
 }
@@ -128,27 +138,5 @@ fn py_get_sniffer(project_root: Option<&str>) -> PyOmniSniffer {
 fn get_environment_snapshot(root_path: &str) -> String {
     let sniffer = OmniSniffer::new(root_path);
     let snapshot = sniffer.get_snapshot();
-
-    let dirty_desc = if snapshot.dirty_files.is_empty() {
-        "Clean".to_string()
-    } else {
-        let count = snapshot.dirty_files.len();
-        let preview = snapshot.dirty_files.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
-        if count > 3 {
-            format!("{} files ({}, ...)", count, preview)
-        } else {
-            format!("{} files ({})", count, preview)
-        }
-    };
-
-    format!(
-        "[LIVE ENVIRONMENT STATE]\n\
-        - Git: Branch: {} | Modified: {} | Staged: {} | Status: {}\n\
-        - Active Context: {} lines in SCRATCHPAD.md",
-        snapshot.git_branch,
-        snapshot.git_modified,
-        snapshot.git_staged,
-        dirty_desc,
-        snapshot.active_context_lines
-    )
+    snapshot.to_prompt_string()
 }
