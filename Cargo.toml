@@ -35,3 +35,13 @@ pyo3 = { version = "0.23.3", features = ["extension-module"] }
 lto = true
 codegen-units = 1
 strip = true
+
+# [ODF-REP] Global Lints Configuration (Rust 1.74+)
+[workspace.lints.rust]
+unsafe_code = "deny"       # Default deny unsafe unless explicitly allowed
+missing_docs = "warn"      # Public APIs must have documentation
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"       # Deny unwrap usage in production
+expect_used = "deny"       # Deny expect usage in production

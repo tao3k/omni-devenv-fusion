@@ -79,7 +79,7 @@ in
     nixpkgs-latest.glow
     nixpkgs-latest.google-cloud-sdk
     packages.secretspec
-    
+
     nixpkgs-latest.maturin
   ];
 
@@ -92,9 +92,15 @@ in
   # https://devenv.sh/languages/
   languages.rust = {
     enable = true;
-    channel =  "nightly";
+    channel = "nightly";
     # Ensure rust can link python library
-    components = [ "rustc" "cargo" "clippy" "rustfmt" "rust-analyzer" ];
+    components = [
+      "rustc"
+      "cargo"
+      "clippy"
+      "rustfmt"
+      "rust-analyzer"
+    ];
   };
 
   # https://devenv.sh/processes/

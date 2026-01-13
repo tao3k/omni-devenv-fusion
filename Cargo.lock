@@ -337,6 +337,7 @@ dependencies = [
 name = "omni-core-rs"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "omni-sniffer",
  "pyo3",
  "serde",
@@ -347,9 +348,9 @@ dependencies = [
 name = "omni-sniffer"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "git2",
  "serde",
+ "thiserror",
  "tokio",
 ]
 

@@ -20,6 +20,7 @@ packages/rust/
 ```
 
 This structure made it difficult to:
+
 - Manage multiple Rust crates
 - Share dependencies across crates
 - Build Python bindings properly
@@ -50,11 +51,11 @@ omni-devenv-fusion/
 
 ### Crate Organization
 
-| Crate | Purpose | Dependencies |
-|-------|---------|--------------|
-| `omni-types` | Common type definitions, error types | serde, thiserror |
+| Crate          | Purpose                              | Dependencies       |
+| -------------- | ------------------------------------ | ------------------ |
+| `omni-types`   | Common type definitions, error types | serde, thiserror   |
 | `omni-sniffer` | High-performance environment sensing | git2, tokio, serde |
-| `omni-core-rs` | Python bindings (PyO3) | pyo3, omni-sniffer |
+| `omni-core-rs` | Python bindings (PyO3)               | pyo3, omni-sniffer |
 
 ### Dependency Management
 
@@ -156,33 +157,33 @@ print(snapshot.to_prompt_string())
 
 ## Performance Comparison
 
-| Operation | Python (subprocess) | Rust (libgit2) | Speedup |
-|-----------|---------------------|----------------|---------|
-| Git status | ~50ms | ~1ms | **50x** |
-| Scan context | ~10ms | ~0.5ms | **20x** |
-| Full snapshot | ~60ms | ~2ms | **30x** |
+| Operation     | Python (subprocess) | Rust (libgit2) | Speedup |
+| ------------- | ------------------- | -------------- | ------- |
+| Git status    | ~50ms               | ~1ms           | **50x** |
+| Scan context  | ~10ms               | ~0.5ms         | **20x** |
+| Full snapshot | ~60ms               | ~2ms           | **30x** |
 
 ## Benefits
 
-| Benefit | Description |
-|---------|-------------|
-| **Performance** | 10-50x faster environment sensing |
+| Benefit         | Description                                     |
+| --------------- | ----------------------------------------------- |
+| **Performance** | 10-50x faster environment sensing               |
 | **Type Safety** | Rust's compile-time guarantees catch bugs early |
-| **Modularity** | Independent crates with clear boundaries |
-| **Reusability** | Types shared across Python and Rust |
-| **Monorepo** | Standard Rust workspace structure |
+| **Modularity**  | Independent crates with clear boundaries        |
+| **Reusability** | Types shared across Python and Rust             |
+| **Monorepo**    | Standard Rust workspace structure               |
 
 ## Files Created
 
-| File | Purpose |
-|------|---------|
-| `packages/rust/Cargo.toml` | Workspace configuration |
-| `packages/rust/crates/omni-sniffer/Cargo.toml` | Sniffer crate config |
-| `packages/rust/crates/omni-sniffer/src/lib.rs` | Core implementation |
-| `packages/rust/crates/omni-types/Cargo.toml` | Types crate config |
-| `packages/rust/crates/omni-types/src/lib.rs` | Shared types |
-| `packages/rust/bindings/python/Cargo.toml` | Python bindings config |
-| `packages/rust/bindings/python/src/lib.rs` | PyO3 bindings |
+| File                                           | Purpose                 |
+| ---------------------------------------------- | ----------------------- |
+| `packages/rust/Cargo.toml`                     | Workspace configuration |
+| `packages/rust/crates/omni-sniffer/Cargo.toml` | Sniffer crate config    |
+| `packages/rust/crates/omni-sniffer/src/lib.rs` | Core implementation     |
+| `packages/rust/crates/omni-types/Cargo.toml`   | Types crate config      |
+| `packages/rust/crates/omni-types/src/lib.rs`   | Shared types            |
+| `packages/rust/bindings/python/Cargo.toml`     | Python bindings config  |
+| `packages/rust/bindings/python/src/lib.rs`     | PyO3 bindings           |
 
 ## Future Enhancements
 

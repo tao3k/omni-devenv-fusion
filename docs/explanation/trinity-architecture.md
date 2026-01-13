@@ -6,9 +6,9 @@
 
 ## Quick Reference
 
-| Phase | Key Change |
+| Phase | Key Change                                                                                                 |
 | ----- | ---------------------------------------------------------------------------------------------------------- |
-| 45    | **Rust Core Integration**: Workspace structure, high-performance omni-sniffer (libgit2, 30x speedup)     |
+| 45    | **Rust Core Integration**: Workspace structure, high-performance omni-sniffer (libgit2, 30x speedup)       |
 | 44    | **Experiential Agent**: Skill-level episodic memory from harvested insights                                |
 | 43    | **Holographic Agent**: Inject environment snapshot into ReAct loop at every step (OODA Loop)               |
 | 42    | **State-Aware Routing**: Inject environment state (Git, active context) to prevent hallucinated actions    |
@@ -835,11 +835,11 @@ While Phase 43 gave the agent "holographic vision" (seeing the environment), Pha
 
 ### Key Components
 
-| Component                   | Purpose                                          |
-| --------------------------- | ------------------------------------------------ |
-| `librarian.get_skill_lessons()` | Query harvested insights for agent skills   |
-| `BaseAgent._get_agent_skill_lessons()` | Retrieve lessons for default skills |
-| `skill_lessons` parameter   | Injected into system prompt                      |
+| Component                              | Purpose                                   |
+| -------------------------------------- | ----------------------------------------- |
+| `librarian.get_skill_lessons()`        | Query harvested insights for agent skills |
+| `BaseAgent._get_agent_skill_lessons()` | Retrieve lessons for default skills       |
+| `skill_lessons` parameter              | Injected into system prompt               |
 
 ### How It Works
 
@@ -859,18 +859,18 @@ While Phase 43 gave the agent "holographic vision" (seeing the environment), Pha
 
 ### Benefits
 
-| Benefit                  | Description                                        |
-| ------------------------ | -------------------------------------------------- |
-| **No Repeated Mistakes** | Agent remembers what went wrong before             |
-| **Continuous Learning**  | Each session improves future performance           |
-| **Cross-Session Wisdom** | Hard-won lessons persist across sessions           |
+| Benefit                  | Description                              |
+| ------------------------ | ---------------------------------------- |
+| **No Repeated Mistakes** | Agent remembers what went wrong before   |
+| **Continuous Learning**  | Each session improves future performance |
+| **Cross-Session Wisdom** | Hard-won lessons persist across sessions |
 
 ### Related Files
 
-| File                                        | Change                         |
-| ------------------------------------------- | ------------------------------ |
-| `agent/capabilities/knowledge/librarian.py` | Added `get_skill_lessons()`    |
-| `agent/core/agents/base.py`                 | Added skill lessons retrieval  |
+| File                                        | Change                        |
+| ------------------------------------------- | ----------------------------- |
+| `agent/capabilities/knowledge/librarian.py` | Added `get_skill_lessons()`   |
+| `agent/core/agents/base.py`                 | Added skill lessons retrieval |
 
 ### Related Specs
 
@@ -904,19 +904,19 @@ omni-devenv-fusion/
 
 ### Crate Organization
 
-| Crate | Purpose | Dependencies |
-|-------|---------|--------------|
-| `omni-types` | Common type definitions, error types | serde, thiserror |
+| Crate          | Purpose                              | Dependencies       |
+| -------------- | ------------------------------------ | ------------------ |
+| `omni-types`   | Common type definitions, error types | serde, thiserror   |
 | `omni-sniffer` | High-performance environment sensing | git2, tokio, serde |
-| `omni-core-rs` | Python bindings (PyO3) | pyo3, omni-sniffer |
+| `omni-core-rs` | Python bindings (PyO3)               | pyo3, omni-sniffer |
 
 ### Performance Comparison
 
-| Operation | Python (subprocess) | Rust (libgit2) | Speedup |
-|-----------|---------------------|----------------|---------|
-| Git status | ~50ms | ~1ms | **50x** |
-| Scan context | ~10ms | ~0.5ms | **20x** |
-| Full snapshot | ~60ms | ~2ms | **30x** |
+| Operation     | Python (subprocess) | Rust (libgit2) | Speedup |
+| ------------- | ------------------- | -------------- | ------- |
+| Git status    | ~50ms               | ~1ms           | **50x** |
+| Scan context  | ~10ms               | ~0.5ms         | **20x** |
+| Full snapshot | ~60ms               | ~2ms           | **30x** |
 
 ### Rust Usage
 
@@ -953,12 +953,12 @@ print(snapshot.to_prompt_string())
 
 ### Related Files
 
-| File | Purpose |
-|------|---------|
-| `packages/rust/Cargo.toml` | Workspace configuration |
-| `packages/rust/crates/omni-sniffer/src/lib.rs` | Core implementation |
-| `packages/rust/crates/omni-types/src/lib.rs` | Shared types |
-| `packages/rust/bindings/python/src/lib.rs` | PyO3 bindings |
+| File                                           | Purpose                 |
+| ---------------------------------------------- | ----------------------- |
+| `packages/rust/Cargo.toml`                     | Workspace configuration |
+| `packages/rust/crates/omni-sniffer/src/lib.rs` | Core implementation     |
+| `packages/rust/crates/omni-types/src/lib.rs`   | Shared types            |
+| `packages/rust/bindings/python/src/lib.rs`     | PyO3 bindings           |
 
 ### Related Specs
 

@@ -21,11 +21,11 @@ maturin develop -m packages/rust/bindings/python/Cargo.toml
 
 ## Crates
 
-| Crate | Purpose | Type |
-|-------|---------|------|
-| `omni-types` | Common type definitions, error types | Library |
+| Crate          | Purpose                              | Type    |
+| -------------- | ------------------------------------ | ------- |
+| `omni-types`   | Common type definitions, error types | Library |
 | `omni-sniffer` | High-performance environment sensing | Library |
-| `omni-core-rs` | Python bindings (PyO3) | cdylib |
+| `omni-core-rs` | Python bindings (PyO3)               | cdylib  |
 
 ## Directory Structure
 

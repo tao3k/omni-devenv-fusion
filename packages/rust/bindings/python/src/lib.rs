@@ -108,6 +108,8 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyOmniSniffer>()?;
     m.add_class::<PyEnvironmentSnapshot>()?;
     m.add_function(pyo3::wrap_pyfunction!(py_get_sniffer, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(get_environment_snapshot, m)?)?;
+    m.add("VERSION", "0.1.0")?;
     Ok(())
 }
 
@@ -117,4 +119,36 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
 fn py_get_sniffer(project_root: Option<&str>) -> PyOmniSniffer {
     let root = project_root.unwrap_or(".");
     PyOmniSniffer::new(root)
+}
+
+/// Get environment snapshot as a formatted prompt string.
+/// This is the primary interface for Phase 43 Holographic Agent.
+#[pyfunction]
+#[pyo3(signature = (root_path="."))]
+fn get_environment_snapshot(root_path: &str) -> String {
+    let sniffer = OmniSniffer::new(root_path);
+    let snapshot = sniffer.get_snapshot();
+
+    let dirty_desc = if snapshot.dirty_files.is_empty() {
+        "Clean".to_string()
+    } else {
+        let count = snapshot.dirty_files.len();
+        let preview = snapshot.dirty_files.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
+        if count > 3 {
+            format!("{} files ({}, ...)", count, preview)
+        } else {
+            format!("{} files ({})", count, preview)
+        }
+    };
+
+    format!(
+        "[LIVE ENVIRONMENT STATE]\n\
+        - Git: Branch: {} | Modified: {} | Staged: {} | Status: {}\n\
+        - Active Context: {} lines in SCRATCHPAD.md",
+        snapshot.git_branch,
+        snapshot.git_modified,
+        snapshot.git_staged,
+        dirty_desc,
+        snapshot.active_context_lines
+    )
 }

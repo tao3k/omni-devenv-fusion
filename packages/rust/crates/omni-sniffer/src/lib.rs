@@ -1,6 +1,24 @@
+#![allow(clippy::doc_markdown, clippy::uninlined_format_args)]
+
 use std::path::Path;
-use anyhow::{Result, Context};
+use thiserror::Error;
 use git2::{Repository, StatusOptions, Status};
+
+/// Errors for `OmniSniffer` operations.
+#[derive(Debug, Error)]
+pub enum SnifferError {
+    #[error("Failed to open git repository at {0}")]
+    RepoOpen(std::path::PathBuf),
+
+    #[error("Git repository has no head reference")]
+    NoHead,
+
+    #[error("Git status scan failed: {0}")]
+    StatusScan(String),
+
+    #[error("Failed to read scratchpad: {0}")]
+    ScratchpadRead(std::path::PathBuf),
+}
 
 /// Holographic snapshot structure (Atomic Snapshot)
 #[derive(Debug, serde::Serialize)]
@@ -14,6 +32,7 @@ pub struct EnvironmentSnapshot {
 
 impl EnvironmentSnapshot {
     /// Render as human-readable prompt string (Phase 43 compatible)
+    #[must_use]
     pub fn to_prompt_string(&self) -> String {
         let dirty_desc = if self.dirty_files.is_empty() {
             "Clean".to_string()
@@ -21,9 +40,9 @@ impl EnvironmentSnapshot {
             let count = self.dirty_files.len();
             let preview = self.dirty_files.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
             if count > 3 {
-                format!("{} files ({}, ...)", count, preview)
+                format!("{count} files ({preview}, ...)")
             } else {
-                format!("{} files ({})", count, preview)
+                format!("{count} files ({preview})")
             }
         };
 
@@ -52,15 +71,18 @@ impl OmniSniffer {
     }
 
     /// Get Git status (uses libgit2, 10-50x faster than subprocess)
-    pub fn scan_git(&self) -> Result<(String, usize, usize, Vec<String>)> {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SnifferError`] if repository cannot be opened or scanned.
+    pub fn scan_git(&self) -> Result<(String, usize, usize, Vec<String>), SnifferError> {
         let repo = Repository::open(&self.repo_path)
-            .context("Failed to open git repository")?;
+            .map_err(|_| SnifferError::RepoOpen(self.repo_path.clone()))?;
 
         // 1. Get branch
-        let head = repo.head().ok();
+        let head = repo.head().map_err(|_| SnifferError::NoHead)?;
         let branch = head
-            .as_ref()
-            .and_then(|h| h.shorthand())
+            .shorthand()
             .unwrap_or("unknown")
             .to_string();
 
@@ -68,7 +90,8 @@ impl OmniSniffer {
         let mut opts = StatusOptions::new();
         opts.include_untracked(true);
 
-        let statuses = repo.statuses(Some(&mut opts))?;
+        let statuses = repo.statuses(Some(&mut opts))
+            .map_err(|e| SnifferError::StatusScan(e.to_string()))?;
 
         let mut modified = 0;
         let mut staged = 0;
@@ -108,7 +131,7 @@ impl OmniSniffer {
 
         // Quick line count without loading entire file
         use std::io::BufRead;
-        if let Ok(file) = std::fs::File::open(scratchpad) {
+        if let Ok(file) = std::fs::File::open(&scratchpad) {
             return std::io::BufReader::new(file).lines().count();
         }
         0

@@ -1,0 +1,10 @@
+# ODF-REP Clippy Configuration
+# Strict linting rules for Omni Rust Core
+
+avoid-breaking-exported-api = false
+
+# Allow console scripts
+allowed-scripts = ["console"]
+
+# Type complexity threshold
+type-complexity-threshold = 250
