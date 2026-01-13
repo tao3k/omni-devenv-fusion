@@ -35,6 +35,7 @@ async def _get_git_status(self) -> str:
 ```
 
 Detects:
+
 - Current branch name
 - Number of modified files
 - Up to 3 modified file names (with +N more indicator)
@@ -80,12 +81,12 @@ ROUTING RULES:
 
 ## Files Modified
 
-| File | Change |
-|------|--------|
-| `agent/core/router/sniffer.py` | NEW - ContextSniffer class |
+| File                                   | Change                                        |
+| -------------------------------------- | --------------------------------------------- |
+| `agent/core/router/sniffer.py`         | NEW - ContextSniffer class                    |
 | `agent/core/router/semantic_router.py` | Added sniffer integration, three-way parallel |
-| `agent/core/router/models.py` | Added `env_snapshot` field to RoutingResult |
-| `agent/cli/commands/route.py` | Display environment snapshot in CLI |
+| `agent/core/router/models.py`          | Added `env_snapshot` field to RoutingResult   |
+| `agent/cli/commands/route.py`          | Display environment snapshot in CLI           |
 
 ## Usage Example
 

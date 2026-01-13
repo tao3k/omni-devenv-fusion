@@ -134,17 +134,17 @@ MISSION BRIEF GUIDELINES:
 
 ### 4.1 Modified Files
 
-| File | Change |
-|------|--------|
+| File                                                             | Change                                                           |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------- |
 | `packages/python/agent/src/agent/core/router/semantic_router.py` | Add librarian integration, knowledge retrieval, prompt injection |
 
 ### 4.2 New Methods
 
-| Method | Purpose |
-|--------|---------|
-| `_get_librarian()` | Lazy load Librarian function |
-| `_format_lessons()` | Format knowledge results for prompt |
-| `_inject_lessons_into_prompt()` | Build prompt with lessons |
+| Method                          | Purpose                             |
+| ------------------------------- | ----------------------------------- |
+| `_get_librarian()`              | Lazy load Librarian function        |
+| `_format_lessons()`             | Format knowledge results for prompt |
+| `_inject_lessons_into_prompt()` | Build prompt with lessons           |
 
 ## 5. Implementation Plan
 
@@ -216,14 +216,17 @@ Result: Correct tool + operational wisdom applied
 **User Query**: "I need to commit my changes"
 
 **Knowledge Retrieved** (from `harvested/*.md`):
+
 ```markdown
 ### Git Commit Workflow Best Practices
+
 - Always run `git_status` first to see what's staged
 - Use `git_stage_all` for bulk staging (more reliable than individual staging)
 - Review diff before committing
 ```
 
 **Generated Mission Brief**:
+
 ```
 Commit staged changes with message 'feat(router): add wisdom-aware routing'.
 
@@ -239,11 +242,11 @@ as individual staging can be unreliable.
 
 ## 9. Performance Impact
 
-| Metric | Before | After |
-|--------|--------|-------|
-| Routing latency | ~100-500ms | ~100-600ms (+parallel retrieval) |
-| Knowledge retrieval | N/A | ~50-100ms (parallel) |
-| Brief quality | Generic | Context-aware with lessons |
+| Metric              | Before     | After                            |
+| ------------------- | ---------- | -------------------------------- |
+| Routing latency     | ~100-500ms | ~100-600ms (+parallel retrieval) |
+| Knowledge retrieval | N/A        | ~50-100ms (parallel)             |
+| Brief quality       | Generic    | Context-aware with lessons       |
 
 ## 10. Related Documentation
 

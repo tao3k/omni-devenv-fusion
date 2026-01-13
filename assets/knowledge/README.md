@@ -15,9 +15,9 @@ Long-term knowledge extracted from development sessions, ingested into Neural Ma
 
 ## Storage Strategy
 
-| Type | Path | Management |
-| ---- | ---- | ---------- |
-| **Harvested Knowledge** | `assets/knowledge/harvested/` | Long-term, version controlled |
-| **Cache** | `.cache/` | Temporary, safe to delete |
-| **Memory** | `.cache/memory/` | Runtime data (routing_feedback.json, active_context/) |
-| **Vector DB** | `.cache/chromadb/` | ChromaDB vector index |
+| Type                    | Path                          | Management                                            |
+| ----------------------- | ----------------------------- | ----------------------------------------------------- |
+| **Harvested Knowledge** | `assets/knowledge/harvested/` | Long-term, version controlled                         |
+| **Cache**               | `.cache/`                     | Temporary, safe to delete                             |
+| **Memory**              | `.cache/memory/`              | Runtime data (routing_feedback.json, active_context/) |
+| **Vector DB**           | `.cache/chromadb/`            | ChromaDB vector index                                 |

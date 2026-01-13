@@ -169,6 +169,7 @@ def _record_cli_success(command: str, skill_name: str) -> None:
     """
     try:
         from agent.capabilities.learning.harvester import record_routing_feedback
+
         # Use command as pseudo-query, record mild positive feedback
         record_routing_feedback(command, skill_name, success=True)
     except Exception:

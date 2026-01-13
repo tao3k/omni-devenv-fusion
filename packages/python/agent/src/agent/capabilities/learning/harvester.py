@@ -63,7 +63,7 @@ class FeedbackStore:
 
     # Score bounds to prevent runaway accumulation
     MIN_SCORE = -0.3  # Maximum penalty
-    MAX_SCORE = 0.3   # Maximum boost
+    MAX_SCORE = 0.3  # Maximum boost
     DECAY_FACTOR = 0.1  # How much each feedback affects score
     TIME_DECAY_RATE = 0.99  # [Phase 40] Decay multiplier per read (1% decay)
 
@@ -101,8 +101,7 @@ class FeedbackStore:
         try:
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
             self._db_path.write_text(
-                json.dumps(self._data, indent=2, ensure_ascii=False),
-                encoding="utf-8"
+                json.dumps(self._data, indent=2, ensure_ascii=False), encoding="utf-8"
             )
         except Exception as e:
             logger.warning("Failed to save feedback store", error=str(e))

@@ -114,16 +114,16 @@ Final Score = Base Vector Score
 
 ### 4.1 New Files
 
-| File | Purpose |
-|------|---------|
+| File                                                                 | Purpose                                   |
+| -------------------------------------------------------------------- | ----------------------------------------- |
 | `packages/python/agent/src/agent/capabilities/learning/harvester.py` | FeedbackStore class + harvester functions |
 
 ### 4.2 Modified Files
 
-| File | Change |
-|------|--------|
+| File                                                             | Change                                      |
+| ---------------------------------------------------------------- | ------------------------------------------- |
 | `packages/python/agent/src/agent/core/skill_discovery/vector.py` | Integrate feedback_boost into hybrid search |
-| `packages/python/agent/src/agent/core/router/semantic_router.py` | Show feedback reasoning in output |
+| `packages/python/agent/src/agent/core/router/semantic_router.py` | Show feedback reasoning in output           |
 
 ## 5. Implementation Plan
 
@@ -186,12 +186,12 @@ Query: "commit code"
 
 ## 8. Performance Impact
 
-| Metric | Before | After |
-|--------|--------|-------|
-| First query | Baseline | Baseline |
-| 5th identical query | Baseline | +0.50 boost |
-| Storage | N/A | ~1KB per 100 feedback entries |
-| Lookup overhead | N/A | ~0.1ms |
+| Metric              | Before   | After                         |
+| ------------------- | -------- | ----------------------------- |
+| First query         | Baseline | Baseline                      |
+| 5th identical query | Baseline | +0.50 boost                   |
+| Storage             | N/A      | ~1KB per 100 feedback entries |
+| Lookup overhead     | N/A      | ~0.1ms                        |
 
 ## 9. Related Documentation
 

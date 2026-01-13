@@ -513,7 +513,9 @@ async def test_phase38_auto_route_typo_handling(populated_vector_store):
     populated_vector_store._collections[SKILL_REGISTRY_COLLECTION]["documents"].append(
         "Code analysis and insight skill. Analyze code structure and understand patterns."
     )
-    populated_vector_store._collections[SKILL_REGISTRY_COLLECTION]["ids"].append("skill-code_insight")
+    populated_vector_store._collections[SKILL_REGISTRY_COLLECTION]["ids"].append(
+        "skill-code_insight"
+    )
     populated_vector_store._collections[SKILL_REGISTRY_COLLECTION]["metadata"].append(
         {
             "id": "code_insight",
@@ -547,10 +549,10 @@ async def test_phase38_auto_route_typo_handling(populated_vector_store):
     assert len(result) >= 1, "Should find at least one skill"
 
     # Check that code_insight or filesystem is in results
-    found_relevant = any(
-        r["id"] in ["code_insight", "filesystem"] for r in result
+    found_relevant = any(r["id"] in ["code_insight", "filesystem"] for r in result)
+    assert found_relevant, (
+        f"Should find code_insight or filesystem, got: {[r['id'] for r in result]}"
     )
-    assert found_relevant, f"Should find code_insight or filesystem, got: {[r['id'] for r in result]}"
 
     # Verify calibrated scoring (confidence should be >= 0.6 after calibration)
     top_skill = result[0]
@@ -658,7 +660,9 @@ async def test_phase38_adaptive_confidence_gap(populated_vector_store):
     top_result = results[0]
     # Note: Fake store uses substring matching, so results may vary
     # The key is that calibrated scoring fields are present
-    assert top_result["score"] >= 0.3, f"Score should be at least MIN_CONFIDENCE, got {top_result['score']}"
+    assert top_result["score"] >= 0.3, (
+        f"Score should be at least MIN_CONFIDENCE, got {top_result['score']}"
+    )
     assert "keyword_matches" in top_result, "Should have keyword_matches field"
     assert "keyword_bonus" in top_result, "Should have keyword_bonus field"
 
@@ -693,7 +697,9 @@ async def test_phase38_keyword_boost_effectiveness(populated_vector_store):
     results_with_match = await discovery.search(query="run tests", limit=5, installed_only=True)
 
     # Query without keyword match
-    results_without_match = await discovery.search(query="execute verification procedures", limit=5, installed_only=True)
+    results_without_match = await discovery.search(
+        query="execute verification procedures", limit=5, installed_only=True
+    )
 
     # The skill with matching keywords should score higher
     if results_with_match and results_without_match:
@@ -704,7 +710,9 @@ async def test_phase38_keyword_boost_effectiveness(populated_vector_store):
             # Keyword match should provide bonus
             assert with_match["keyword_bonus"] > 0, "Should have keyword bonus when keywords match"
             # Score with keyword match should be >= score without
-            assert with_match["score"] >= without_match["score"], "Keyword match should boost or equal score"
+            assert with_match["score"] >= without_match["score"], (
+                "Keyword match should boost or equal score"
+            )
 
 
 @pytest.mark.asyncio
@@ -781,14 +789,16 @@ async def test_phase38_full_pipeline_with_typo():
     for skill_id, description, keywords in test_skills:
         store._collections[SKILL_REGISTRY_COLLECTION]["documents"].append(description)
         store._collections[SKILL_REGISTRY_COLLECTION]["ids"].append(f"skill-{skill_id}")
-        store._collections[SKILL_REGISTRY_COLLECTION]["metadata"].append({
-            "id": skill_id,
-            "name": skill_id,
-            "description": description,
-            "installed": "true",
-            "keywords": keywords,
-            "type": "local",
-        })
+        store._collections[SKILL_REGISTRY_COLLECTION]["metadata"].append(
+            {
+                "id": skill_id,
+                "name": skill_id,
+                "description": description,
+                "installed": "true",
+                "keywords": keywords,
+                "type": "local",
+            }
+        )
 
     # Create discovery with store
     discovery = VectorSkillDiscovery()
@@ -810,7 +820,9 @@ async def test_phase38_full_pipeline_with_typo():
 
     # Top result should be relevant (code_insight or filesystem)
     top_skill = result[0]["id"]
-    assert top_skill in ["code_insight", "filesystem"], f"Expected code_insight or filesystem, got {top_skill}"
+    assert top_skill in ["code_insight", "filesystem"], (
+        f"Expected code_insight or filesystem, got {top_skill}"
+    )
 
 
 # =============================================================================

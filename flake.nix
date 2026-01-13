@@ -58,15 +58,13 @@
             lib.composeManyExtensions [
               pyproject-build-systems.overlays.wheel
               overlay
-              (
-                final: prev: {
-                  pypika = prev.pypika.overrideAttrs (old: {
-                    nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
-                      final.setuptools
-                    ];
-                  });
-                }
-              )
+              (final: prev: {
+                pypika = prev.pypika.overrideAttrs (old: {
+                  nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
+                    final.setuptools
+                  ];
+                });
+              })
             ]
           )
       );

@@ -36,11 +36,11 @@ The routing system now retrieves relevant lessons from `harvested/*.md` and inje
 
 ### Key Components
 
-| Component | Purpose |
-|-----------|---------|
-| `SemanticRouter.librarian` | Lazy-loaded Librarian function |
-| `_format_lessons()` | Format knowledge results for prompt |
-| `route()` | Parallel knowledge retrieval with menu building |
+| Component                  | Purpose                                         |
+| -------------------------- | ----------------------------------------------- |
+| `SemanticRouter.librarian` | Lazy-loaded Librarian function                  |
+| `_format_lessons()`        | Format knowledge results for prompt             |
+| `route()`                  | Parallel knowledge retrieval with menu building |
 
 ### Usage
 
@@ -58,12 +58,15 @@ result = await router.route("Edit tools.py and test it")
 **User Query**: "commit my changes"
 
 **Knowledge Retrieved**:
+
 ```markdown
 ### Git Commit Workflow Best Practices
+
 - Use git_stage_all for bulk staging (more reliable than individual)
 ```
 
 **Generated Mission Brief**:
+
 ```
 Commit staged changes with message 'feat(router): add wisdom-aware routing'.
 
@@ -73,11 +76,11 @@ can be unreliable (per past session lesson).
 
 ### Related Files
 
-| File | Purpose |
-|------|---------|
-| `agent/core/router/semantic_router.py` | Librarian integration, lesson formatting |
-| `agent/capabilities/knowledge/librarian.py` | `consult_knowledge_base` function |
-| `assets/specs/phase41_wisdom_aware_routing.md` | Phase 41 spec |
+| File                                           | Purpose                                  |
+| ---------------------------------------------- | ---------------------------------------- |
+| `agent/core/router/semantic_router.py`         | Librarian integration, lesson formatting |
+| `agent/capabilities/knowledge/librarian.py`    | `consult_knowledge_base` function        |
+| `assets/specs/phase41_wisdom_aware_routing.md` | Phase 41 spec                            |
 
 ---
 
@@ -116,12 +119,12 @@ The routing system now detects real-time environment state (Git status, active c
 
 ### Key Components
 
-| Component | Purpose |
-|-----------|---------|
-| `ContextSniffer` | Fast, async environment state detector |
-| `get_sniffer()` | Singleton accessor for ContextSniffer |
-| `sniffer.get_snapshot()` | Returns formatted environment state |
-| `RoutingResult.env_snapshot` | Field to store environment snapshot |
+| Component                    | Purpose                                |
+| ---------------------------- | -------------------------------------- |
+| `ContextSniffer`             | Fast, async environment state detector |
+| `get_sniffer()`              | Singleton accessor for ContextSniffer  |
+| `sniffer.get_snapshot()`     | Returns formatted environment state    |
+| `RoutingResult.env_snapshot` | Field to store environment snapshot    |
 
 ### What ContextSniffer Detects
 
@@ -172,12 +175,12 @@ $ omni route invoke "commit my changes" --verbose
 
 ### Related Files
 
-| File | Purpose |
-|------|---------|
-| `agent/core/router/sniffer.py` | ContextSniffer class |
+| File                                   | Purpose                                |
+| -------------------------------------- | -------------------------------------- |
+| `agent/core/router/sniffer.py`         | ContextSniffer class                   |
 | `agent/core/router/semantic_router.py` | Three-way parallel, env_snapshot field |
-| `agent/core/router/models.py` | RoutingResult.env_snapshot field |
-| `agent/cli/commands/route.py` | Display environment snapshot in CLI |
+| `agent/core/router/models.py`          | RoutingResult.env_snapshot field       |
+| `agent/cli/commands/route.py`          | Display environment snapshot in CLI    |
 
 ### Related Specs
 
@@ -225,11 +228,11 @@ Final Score = Base Vector Score
 
 ### Automatic Feedback Sources
 
-| Signal Source | Trigger | Boost |
-|--------------|---------|-------|
-| **CLI Success** | `omni git.status` executes | +0.1 |
-| **Reviewer Approval** | Audit passes | +0.1 (trusted signal) |
-| **Time Decay** | Each read | 1% decay to prevent Matthew effect |
+| Signal Source         | Trigger                    | Boost                              |
+| --------------------- | -------------------------- | ---------------------------------- |
+| **CLI Success**       | `omni git.status` executes | +0.1                               |
+| **Reviewer Approval** | Audit passes               | +0.1 (trusted signal)              |
+| **Time Decay**        | Each read                  | 1% decay to prevent Matthew effect |
 
 ### Feedback Storage
 

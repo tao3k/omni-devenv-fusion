@@ -1,6 +1,6 @@
 """
 src/agent/core/agents/base.py
-Base Agent - Core Engine with Context Injection.
+Base Agent - Core Engine with Holographic OODA Loop.
 
 Phase 14 Enhancement:
 - Context Injection: Converts TaskBrief to System Prompt
@@ -11,6 +11,11 @@ Phase 19 Enhancement:
 - Dependency Injection: Accepts inference engine and tools
 - ReAct Loop Support: Base implementation for think->act->observe
 - UX Event Emission: Emits events for Glass Cockpit (Phase 18)
+
+Phase 43 Enhancement (The Holographic Agent):
+- Continuous State Injection (CSI): Injects live environment snapshot (Git, Files)
+  into the System Prompt at EVERY step of the ReAct loop.
+- Agent OODA Loop: Enables agent to "see" the consequences of its actions immediately.
 
 Usage:
     class CoderAgent(BaseAgent):
@@ -29,6 +34,9 @@ from pydantic import BaseModel
 
 from agent.core.registry import get_skill_registry
 from agent.core.vector_store import get_vector_memory, SearchResult
+
+# [Phase 43] Import Sniffer for Holographic Context
+from agent.core.router.sniffer import get_sniffer
 
 logger = structlog.get_logger(__name__)
 
@@ -112,10 +120,15 @@ class AuditResult(BaseModel):
 class BaseAgent(ABC):
     """
     Abstract base class for all specialist agents in The Hive.
+    Now equipped with Phase 43 Holographic Perception.
 
     Phase 19: Dependency Injection
     - inference: LLM engine for cognitive capabilities
     - tools: Dict of callable tools for action execution
+
+    Phase 43: Holographic Agent
+    - sniffer: ContextSniffer for real-time environment state
+    - CSI: Continuous State Injection into ReAct loop
 
     Each agent provides:
     - prepare_context(): Converts TaskBrief to System Prompt
@@ -151,6 +164,9 @@ class BaseAgent(ABC):
         self.inference = inference
         self.tools = tools or {}
         self._action_history: List[Dict] = []  # Track ReAct actions
+
+        # [Phase 43] Initialize Sensory System (ContextSniffer)
+        self.sniffer = get_sniffer()
 
     async def prepare_context(
         self,
@@ -351,6 +367,13 @@ class BaseAgent(ABC):
                 "- Use the provided tools precisely",
                 "- If unclear, ask for clarification",
                 "- Learn from success and failures for future tasks",
+                "",
+                "## 📡 [Phase 43] HOLOGRAPHIC AWARENESS",
+                "- You will receive a LIVE ENVIRONMENT SNAPSHOT at the start of each reasoning cycle",
+                "- The snapshot shows current Git status (branch, modified files)",
+                "- It also shows active context (what files are currently being worked on)",
+                "- **TRUST THE SNAPSHOT**: If a file you expected isn't mentioned, it may have been deleted or moved",
+                "- Don't assume previous actions succeeded - verify with the snapshot",
             ]
         )
 
@@ -425,12 +448,17 @@ class BaseAgent(ABC):
         max_steps: int = 5,
     ) -> AgentResult:
         """
-        Run ReAct (Reasoning + Action) loop.
+        Run ReAct (Reasoning + Action) loop with Phase 43 Holographic Perception.
 
-        ReAct Pattern:
-        1. Think: LLM decides what to do
-        2. Act: Execute tool if needed
-        3. Observe: Get result, repeat
+        ReAct Pattern (Upgraded to OODA):
+        1. Observe: Get live environment snapshot (Phase 43)
+        2. Orient: LLM reasons with current state
+        3. Act: Execute tool if needed
+        4. Observe: Get result, repeat
+
+        Phase 43: Every iteration injects the live environment snapshot
+        into the system prompt, so the agent "sees" the consequences of
+        its actions immediately (e.g., git status change, file deletion).
 
         Args:
             task: The user task
@@ -458,11 +486,26 @@ class BaseAgent(ABC):
         )
 
         for step in range(max_steps):
+            # [Phase 43] 📸 HOLOGRAPHIC CONTEXT INJECTION
+            # Capture the live environment state BEFORE thinking.
+            # This ensures the agent sees the result of previous actions
+            # (e.g., git status change, file created/deleted).
+            env_snapshot = await self.sniffer.get_snapshot()
+
+            # Inject snapshot into System Prompt dynamically
+            # We append it to make it the most recent/authoritative context
+            dynamic_system_prompt = f"{system_prompt}\n\n[LIVE ENVIRONMENT STATE]\n{env_snapshot}\n\nIMPORTANT: Use the environment state above to verify your assumptions. If files you expected to exist are not mentioned, they may have been deleted or moved. If git status shows no changes, your previous staging action may have failed."
+
             # UX Event: Think phase starts
             _emit_ux_event(
                 "think_start",
                 self.name,
-                {"step": step + 1, "task": task[:100], "history_length": len(self._action_history)},
+                {
+                    "step": step + 1,
+                    "task": task[:100],
+                    "history_length": len(self._action_history),
+                    "env_snapshot": env_snapshot[:100] + "...",  # Log partial snapshot
+                },
             )
 
             # Build user content with task and history
@@ -474,9 +517,9 @@ class BaseAgent(ABC):
             current_messages = messages + [{"role": "user", "content": user_content}]
 
             try:
-                # Call LLM with tools and conversation history
+                # Call LLM with DYNAMIC system prompt (includes environment snapshot)
                 result = await self.inference.complete(
-                    system_prompt=system_prompt,
+                    system_prompt=dynamic_system_prompt,  # [Phase 43] Updated with CSI
                     user_query=user_content,
                     messages=current_messages,  # Use full conversation history
                     tools=tool_schemas if step == 0 else [],  # Only send tools on first call

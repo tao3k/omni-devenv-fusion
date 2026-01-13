@@ -844,6 +844,7 @@ Final Score = Vector Similarity
 ### Example
 
 **First query: "commit code"**
+
 ```
 Vector: 0.65
 Keyword: +0.10 (commit)
@@ -853,6 +854,7 @@ Final: 0.90
 ```
 
 **After 3 successful "git.commit" executions:**
+
 ```
 Vector: 0.65
 Keyword: +0.10 (commit)
@@ -890,11 +892,11 @@ cat .memory/routing_feedback.json
 
 ### Related Files
 
-| File                                      | Purpose                           |
-| ----------------------------------------- | --------------------------------- |
-| `agent/core/skill_discovery/vector.py`    | Hybrid search with feedback boost |
-| `agent/capabilities/learning/harvester.py`| FeedbackStore with decay          |
-| `agent/core/router/semantic_router.py`    | Router with feedback reasoning    |
+| File                                       | Purpose                           |
+| ------------------------------------------ | --------------------------------- |
+| `agent/core/skill_discovery/vector.py`     | Hybrid search with feedback boost |
+| `agent/capabilities/learning/harvester.py` | FeedbackStore with decay          |
+| `agent/core/router/semantic_router.py`     | Router with feedback reasoning    |
 
 ### See Also
 

@@ -1,20 +1,20 @@
-# Trinity Architecture (Phase 42)
+# Trinity Architecture (Phase 43)
 
-> **Phase 42: State-Aware Routing** | **Phase 41: Wisdom-Aware Routing** | **Phase 40: Automated Reinforcement Loop**
-> **Phase 36.6: Production Stability** | **Phase 36.5: Hot Reload & Index Sync** | **Phase 36: Trinity v2.0 - Swarm Engine + Skills**
-> **Phase 39: Self-Evolving Feedback Loop**
+> **Phase 43: The Holographic Agent** | **Phase 42: State-Aware Routing** | **Phase 41: Wisdom-Aware Routing**
+> **Phase 40: Automated Reinforcement Loop** | **Phase 36: Trinity v2.0 - Swarm Engine + Skills**
 > **Core Philosophy**: "Everything is a Skill" - The Executor is no longer a code module, but a logical role played by atomic skills.
 
 ## Quick Reference
 
 | Phase | Key Change |
 | ----- | ---------------------------------------------------------------------------------------------------------- |
+| 43    | **Holographic Agent**: Inject environment snapshot into ReAct loop at every step (OODA Loop) |
 | 42    | **State-Aware Routing**: Inject environment state (Git, active context) to prevent hallucinated actions |
 | 41    | **Wisdom-Aware Routing**: Inject past lessons from harvested knowledge into Mission Brief |
-| 40    | **Automated Reinforcement**: Auto-record feedback on CLI success + Reviewer approval, 1% decay per read |
-| 39    | **Self-Evolving Feedback**: FeedbackStore records routing outcomes, boosts future confidence by +0.1 |
-| 36.6  | **Production Stability**: Async Task GC Protection, Atomic Upsert, Startup Reconciliation |
-| 36.5  | **Hot Reload & Index Sync**: Observer pattern, debounced notifications, Index Sync observer |
+| 40    | **Automated Reinforcement**: Auto-record feedback on CLI success + Reviewer approval, 1% decay per read    |
+| 39    | **Self-Evolving Feedback**: FeedbackStore records routing outcomes, boosts future confidence by +0.1       |
+| 36.6  | **Production Stability**: Async Task GC Protection, Atomic Upsert, Startup Reconciliation                  |
+| 36.5  | **Hot Reload & Index Sync**: Observer pattern, debounced notifications, Index Sync observer                |
 | 36    | **Trinity v2.0**: Legacy `mcp_core.execution` deleted. Execution now via `skills/terminal` + Swarm Engine. |
 | 35.3  | Pure MCP Server (mcp.server.Server, no FastMCP)                                                            |
 | 35.2  | Sidecar Execution Pattern (uv isolation for crawl4ai, etc.)                                                |
@@ -426,11 +426,11 @@ class FeedbackStore:
 
 Three automatic feedback pathways:
 
-| Signal Source | Trigger | Boost |
-|--------------|---------|-------|
-| **CLI Success** | `omni git.status` executes | +0.1 |
-| **Reviewer Approval** | Audit passes | +0.1 (trusted) |
-| **Time Decay** | Each read | 1% decay |
+| Signal Source         | Trigger                    | Boost          |
+| --------------------- | -------------------------- | -------------- |
+| **CLI Success**       | `omni git.status` executes | +0.1           |
+| **Reviewer Approval** | Audit passes               | +0.1 (trusted) |
+| **Time Decay**        | Each read                  | 1% decay       |
 
 ### Scoring Formula
 
@@ -469,13 +469,13 @@ Prevents "Matthew effect" where old successful skills dominate forever.
 
 ### File Changes
 
-| File | Purpose |
-|------|---------|
-| `agent/capabilities/learning/harvester.py` | FeedbackStore class + decay |
-| `agent/core/skill_discovery/vector.py` | Feedback boost in hybrid search |
-| `agent/core/router/semantic_router.py` | Show feedback reasoning |
-| `agent/cli/runner.py` | CLI success feedback |
-| `agent/core/orchestrator/feedback.py` | Reviewer approval feedback |
+| File                                       | Purpose                         |
+| ------------------------------------------ | ------------------------------- |
+| `agent/capabilities/learning/harvester.py` | FeedbackStore class + decay     |
+| `agent/core/skill_discovery/vector.py`     | Feedback boost in hybrid search |
+| `agent/core/router/semantic_router.py`     | Show feedback reasoning         |
+| `agent/cli/runner.py`                      | CLI success feedback            |
+| `agent/core/orchestrator/feedback.py`      | Reviewer approval feedback      |
 
 ### Verification
 
@@ -528,11 +528,11 @@ The system now injects retrieved lessons from `harvested/*.md` into the routing 
 
 ### Key Components
 
-| Component | Purpose |
-|-----------|---------|
-| `SemanticRouter.librarian` | Lazy-loaded Librarian function |
-| `_format_lessons()` | Format knowledge results for prompt |
-| `route()` | Parallel knowledge retrieval with menu building |
+| Component                  | Purpose                                         |
+| -------------------------- | ----------------------------------------------- |
+| `SemanticRouter.librarian` | Lazy-loaded Librarian function                  |
+| `_format_lessons()`        | Format knowledge results for prompt             |
+| `route()`                  | Parallel knowledge retrieval with menu building |
 
 ### How It Works
 
@@ -546,13 +546,16 @@ The system now injects retrieved lessons from `harvested/*.md` into the routing 
 **User Query**: "I need to commit my changes"
 
 **Knowledge Retrieved** (from `harvested/*.md`):
+
 ```markdown
 ### Git Commit Workflow Best Practices
+
 - Always run `git_status` first to see what's staged
 - Use `git_stage_all` for bulk staging (more reliable)
 ```
 
 **Generated Mission Brief**:
+
 ```
 Commit staged changes with message 'feat(router): add wisdom-aware routing'.
 
@@ -575,11 +578,11 @@ router = SemanticRouter(
 
 ### Related Files
 
-| File | Purpose |
-|------|---------|
-| `agent/core/router/semantic_router.py` | Librarian integration, lesson formatting |
-| `agent/capabilities/knowledge/librarian.py` | `consult_knowledge_base` function |
-| `agent/capabilities/learning/harvester.py` | Knowledge harvesting |
+| File                                        | Purpose                                  |
+| ------------------------------------------- | ---------------------------------------- |
+| `agent/core/router/semantic_router.py`      | Librarian integration, lesson formatting |
+| `agent/capabilities/knowledge/librarian.py` | `consult_knowledge_base` function        |
+| `agent/capabilities/learning/harvester.py`  | Knowledge harvesting                     |
 
 ### Related Specs
 
@@ -625,12 +628,12 @@ The system now detects real-time environment state (Git status, active context) 
 
 ### Key Components
 
-| Component | Purpose |
-|-----------|---------|
-| `ContextSniffer` | Fast, async environment state detector |
-| `get_sniffer()` | Singleton accessor for ContextSniffer |
-| `sniffer.get_snapshot()` | Returns formatted environment state |
-| `RoutingResult.env_snapshot` | Field to store environment snapshot |
+| Component                    | Purpose                                |
+| ---------------------------- | -------------------------------------- |
+| `ContextSniffer`             | Fast, async environment state detector |
+| `get_sniffer()`              | Singleton accessor for ContextSniffer  |
+| `sniffer.get_snapshot()`     | Returns formatted environment state    |
+| `RoutingResult.env_snapshot` | Field to store environment snapshot    |
 
 ### What ContextSniffer Detects
 
@@ -648,6 +651,7 @@ The system now detects real-time environment state (Git status, active context) 
 **User Query**: "commit my changes"
 
 **Environment Snapshot Retrieved**:
+
 ```
 [ENVIRONMENT STATE]
 - Branch: main | Modified: 51 files (M assets/references.yaml, M assets/settings.yaml, ...)
@@ -655,6 +659,7 @@ The system now detects real-time environment state (Git status, active context) 
 ```
 
 **Mission Brief Generated**:
+
 ```
 Commit staged changes. Based on the current environment, 51 files are modified.
 Ensure you review the most important changes before committing.
@@ -691,17 +696,111 @@ router = SemanticRouter(
 
 ### Related Files
 
-| File | Purpose |
-|------|---------|
-| `agent/core/router/sniffer.py` | NEW: ContextSniffer class |
+| File                                   | Purpose                                |
+| -------------------------------------- | -------------------------------------- |
+| `agent/core/router/sniffer.py`         | NEW: ContextSniffer class              |
 | `agent/core/router/semantic_router.py` | Three-way parallel, env_snapshot field |
-| `agent/core/router/models.py` | RoutingResult.env_snapshot field |
-| `agent/cli/commands/route.py` | Display environment snapshot in CLI |
+| `agent/core/router/models.py`          | RoutingResult.env_snapshot field       |
+| `agent/cli/commands/route.py`          | Display environment snapshot in CLI    |
 
 ### Related Specs
 
 - `assets/specs/phase42_state_aware_routing.md`
 - `assets/specs/phase41_wisdom_aware_routing.md`
+
+---
+
+## Phase 43: The Holographic Agent
+
+> **Phase 43**: Extend state awareness from Router to Agent execution layer.
+
+While Phase 42 gave the Router "full holographic vision" during task dispatch, Phase 43 ensures the Agent maintains that vision throughout execution using **Continuous State Injection (CSI)**.
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    Phase 43: Holographic OODA Loop                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Agent ReAct Loop (Upgraded to Holographic)                                 │
+│       ↓                                                                     │
+│  ┌─────────────────────────────────────────────────────┐                    │
+│  │  For each step:                                     │                    │
+│  │  1. OBSERVE:   Get live environment snapshot        │ ← CSI: Every step  │
+│  │  2. ORIENT:   Inject snapshot into system prompt    │                    │
+│  │  3. ACT:      Call LLM with dynamic context         │                    │
+│  │  4. OBSERVE:  Get result, next iteration updates    │                    │
+│  └─────────────────────────────────────────────────────┘                    │
+│       ↓                                                                     │
+│  Agent "sees" the consequences of actions immediately                       │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Components
+
+| Component | Purpose |
+|-----------|---------|
+| `BaseAgent.sniffer` | ContextSniffer instance for each agent |
+| `_run_react_loop()` | Modified to inject snapshot every step |
+| `dynamic_system_prompt` | Base prompt + live environment state |
+
+### How It Works
+
+1. **Before Each LLM Call**: Agent captures environment snapshot
+2. **Dynamic Prompt**: Appends snapshot to system prompt
+3. **LLM Reasoning**: Agent sees current Git status, file state
+4. **Action Execution**: Agent verifies assumptions before acting
+
+### Example: Agent Detects Lefthook Changes
+
+**Before Phase 43**:
+```
+Agent: "I'll commit the staged files..."
+Lefthook: reformats files, unstages them
+Agent: "Commit failed... but I don't know why" ❌
+```
+
+**After Phase 43**:
+```
+Agent: "Checking environment snapshot..."
+Snapshot: "Branch: main | Modified: 5 files (reformatted by lefthook)"
+Agent: "Ah! Lefthook reformatted files. Re-staging now." ✅
+```
+
+### System Prompt Enhancement
+
+Agents now have a `[Phase 43] HOLOGRAPHIC AWARENESS` section:
+
+```markdown
+## 📡 [Phase 43] HOLOGRAPHIC AWARENESS
+- You will receive a LIVE ENVIRONMENT SNAPSHOT at each reasoning cycle
+- The snapshot shows current Git status (branch, modified files)
+- **TRUST THE SNAPSHOT**: If a file you expected isn't mentioned, it may not exist
+- Don't assume previous actions succeeded - verify with the snapshot
+```
+
+### Benefits
+
+| Benefit | Description |
+|---------|-------------|
+| **No More Blind Execution** | Agent sees state changes immediately |
+| **Reduced Token Waste** | No need for `git status` / `ls` tool calls |
+| **Hallucination Prevention** | Agent trusts real data, not assumptions |
+| **Faster Recovery** | Agent detects failures and self-corrects |
+
+### Related Files
+
+| File | Purpose |
+|------|---------|
+| `agent/core/agents/base.py` | Added sniffer, CSI in ReAct loop |
+| `agent/core/router/sniffer.py` | Existing (Phase 42) |
+
+### Related Specs
+
+- `assets/specs/phase43_holographic_agent.md`
+- `assets/specs/phase42_state_aware_routing.md`
 
 ---
 

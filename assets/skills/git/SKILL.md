@@ -2,8 +2,7 @@
 name: "git"
 version: "2.0.0"
 description: "Git integration with LangGraph workflow support, Smart Commit V2, and Spec-Awareness"
-routing_keywords:
-  [
+routing_keywords: [
     # Core verbs (high priority)
     "git",
     "commit",

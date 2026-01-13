@@ -59,16 +59,16 @@ Internal documentation for Omni-Dev Fusion developers.
 
 Understanding-oriented. Deep dives into architecture and design philosophy.
 
-| Document                                                                      | Description                                         |
-| ----------------------------------------------------------------------------- | --------------------------------------------------- |
-| [Design Philosophy](./design-philosophy.md)                                   | Two interaction patterns (Memory Loading vs Query)  |
-| [Why Fusion Exists](./explanation/why-fusion-exists.md)                       | The Silo Problem - why standard tools aren't enough |
-| [Why Nix Is the Agent Runtime](./explanation/why-nix-is-the-agent-runtime.md) | The three paths to Agentic Infrastructure           |
-| [Why Nix for AI?](./explanation/why-nix-for-ai.md)                            | The Technical Bet - reproducibility as foundation   |
-| [Vision: Agentic OS](./explanation/vision-agentic-os.md)                      | The Endgame - from IDE to Agentic OS                |
-| [Why Omni-DevEnv?](./explanation/why-omni-devenv.md)                          | Core value proposition and solutions                |
+| Document                                                                      | Description                                                                              |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| [Design Philosophy](./design-philosophy.md)                                   | Two interaction patterns (Memory Loading vs Query)                                       |
+| [Why Fusion Exists](./explanation/why-fusion-exists.md)                       | The Silo Problem - why standard tools aren't enough                                      |
+| [Why Nix Is the Agent Runtime](./explanation/why-nix-is-the-agent-runtime.md) | The three paths to Agentic Infrastructure                                                |
+| [Why Nix for AI?](./explanation/why-nix-for-ai.md)                            | The Technical Bet - reproducibility as foundation                                        |
+| [Vision: Agentic OS](./explanation/vision-agentic-os.md)                      | The Endgame - from IDE to Agentic OS                                                     |
+| [Why Omni-DevEnv?](./explanation/why-omni-devenv.md)                          | Core value proposition and solutions                                                     |
 | [Trinity Architecture](./explanation/trinity-architecture.md)                 | Phase 36 v2.0 - Orchestrator/Coder/Executor Pattern + Phase 39/40 Self-Evolving Feedback |
-| [MCP Architecture Roadmap](../design/mcp-architecture-roadmap.md)             | Technical architecture and future vision            |
+| [MCP Architecture Roadmap](../design/mcp-architecture-roadmap.md)             | Technical architecture and future vision                                                 |
 
 ---
 

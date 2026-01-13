@@ -649,11 +649,11 @@ The system now learns from experience. Successful routing decisions boost future
 
 ### How It Works
 
-| Signal Source | Trigger | Boost |
-|--------------|---------|-------|
-| **CLI Success** | `omni git.status` executes | +0.1 |
-| **Reviewer Approval** | Audit passes | +0.1 (trusted) |
-| **Time Decay** | Each read | 1% decay |
+| Signal Source         | Trigger                    | Boost          |
+| --------------------- | -------------------------- | -------------- |
+| **CLI Success**       | `omni git.status` executes | +0.1           |
+| **Reviewer Approval** | Audit passes               | +0.1 (trusted) |
+| **Time Decay**        | Each read                  | 1% decay       |
 
 ### Scoring Formula
 

@@ -704,7 +704,9 @@ Route this request and provide a mission brief."""
 
             if keyword_boost > 0:
                 if verb_matched:
-                    reasoning_parts.append(f"(Keyword match +{keyword_boost:.2f} with verb priority)")
+                    reasoning_parts.append(
+                        f"(Keyword match +{keyword_boost:.2f} with verb priority)"
+                    )
                 else:
                     reasoning_parts.append(f"(Keyword match +{keyword_boost:.2f})")
 

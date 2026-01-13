@@ -10,19 +10,19 @@ The `omni route` command tests and demonstrates the Semantic Router with wisdom-
 
 ### Commands
 
-| Command | Description |
-|---------|-------------|
-| `omni route invoke <query>` | Route a query and show results |
+| Command                     | Description                         |
+| --------------------------- | ----------------------------------- |
+| `omni route invoke <query>` | Route a query and show results      |
 | `omni route wisdom <query>` | Search harvested wisdom for a query |
-| `omni route status` | Show routing system status |
+| `omni route status`         | Show routing system status          |
 
 ### Options
 
-| Option | Description |
-|--------|-------------|
-| `--verbose, -v` | Show detailed reasoning |
+| Option            | Description              |
+| ----------------- | ------------------------ |
+| `--verbose, -v`   | Show detailed reasoning  |
 | `--no-wisdom, -n` | Disable wisdom injection |
-| `--json, -j` | Output as JSON |
+| `--json, -j`      | Output as JSON           |
 
 ### Examples
 
@@ -67,9 +67,9 @@ Confidence: 0.95
 
 ### Related Files
 
-| File | Purpose |
-|------|---------|
-| `agent/cli/commands/route.py` | Route command implementation |
+| File                                   | Purpose                                    |
+| -------------------------------------- | ------------------------------------------ |
+| `agent/cli/commands/route.py`          | Route command implementation               |
 | `agent/core/router/semantic_router.py` | SemanticRouter with wisdom/state awareness |
 
 ---

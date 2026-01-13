@@ -28,9 +28,7 @@ def _record_feedback_safe(query: str, skill_id: str, success: bool) -> None:
         from agent.capabilities.learning.harvester import record_routing_feedback
 
         # Create task but don't await - fire and forget
-        asyncio.create_task(
-            _async_record_feedback(query, skill_id, success)
-        )
+        asyncio.create_task(_async_record_feedback(query, skill_id, success))
     except Exception:
         # Silently ignore if feedback system not available
         pass
@@ -40,6 +38,7 @@ async def _async_record_feedback(query: str, skill_id: str, success: bool) -> No
     """Async wrapper for feedback recording."""
     try:
         from agent.capabilities.learning.harvester import record_routing_feedback
+
         record_routing_feedback(query, skill_id, success)
     except Exception:
         pass

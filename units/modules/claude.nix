@@ -12,7 +12,7 @@ in
   packages = [
     __inputs__.llm-agents.packages.${system}.claude-code
   ];
- claude.code.enable = true;
+  claude.code.enable = true;
   claude.code.env = {
     MINIMAX_API_KEY = config.secretspec.secrets.MINIMAX_API_KEY;
     ANTHROPIC_BASE_URL = "https://api.minimax.io/anthropic";

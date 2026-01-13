@@ -51,9 +51,7 @@ def route_invoke(
     logger = structlog.get_logger(__name__)
 
     err_console.print()
-    err_console.print(
-        Panel(f"Phase 41: Wisdom-Aware Routing", style="bold blue")
-    )
+    err_console.print(Panel(f"Phase 41: Wisdom-Aware Routing", style="bold blue"))
     err_console.print()
 
     async def run_route():
@@ -73,42 +71,50 @@ def route_invoke(
                 if "run tests" in user_query.lower():
                     return {
                         "success": True,
-                        "content": json.dumps({
-                            "skills": ["testing"],
-                            "mission_brief": "Run the project test suite using python_test tool.\n\nIMPORTANT: Per past session lesson, always use python_test instead of running pytest directly, as the testing skill handles environment activation properly.",
-                            "confidence": 0.92,
-                            "reasoning": "Routing to testing skill. Wisdom injection: Use python_test instead of pytest directly (from harvested lesson)."
-                        })
+                        "content": json.dumps(
+                            {
+                                "skills": ["testing"],
+                                "mission_brief": "Run the project test suite using python_test tool.\n\nIMPORTANT: Per past session lesson, always use python_test instead of running pytest directly, as the testing skill handles environment activation properly.",
+                                "confidence": 0.92,
+                                "reasoning": "Routing to testing skill. Wisdom injection: Use python_test instead of pytest directly (from harvested lesson).",
+                            }
+                        ),
                     }
                 elif "commit" in user_query.lower():
                     return {
                         "success": True,
-                        "content": json.dumps({
-                            "skills": ["git"],
-                            "mission_brief": "Commit staged changes.\n\nIMPORTANT: Per past session lesson, use git_stage_all for bulk staging as individual staging can be unreliable.",
-                            "confidence": 0.95,
-                            "reasoning": "Routing to git skill for commit. Wisdom: Use git_stage_all for bulk staging."
-                        })
+                        "content": json.dumps(
+                            {
+                                "skills": ["git"],
+                                "mission_brief": "Commit staged changes.\n\nIMPORTANT: Per past session lesson, use git_stage_all for bulk staging as individual staging can be unreliable.",
+                                "confidence": 0.95,
+                                "reasoning": "Routing to git skill for commit. Wisdom: Use git_stage_all for bulk staging.",
+                            }
+                        ),
                     }
                 elif "edit" in user_query.lower() or "modify" in user_query.lower():
                     return {
                         "success": True,
-                        "content": json.dumps({
-                            "skills": ["filesystem"],
-                            "mission_brief": "Edit the specified file using filesystem tools.\n\nNOTE: If modifying tools.py or any skill file, remember to trigger hot-reload after changes.",
-                            "confidence": 0.88,
-                            "reasoning": "Routing to filesystem for file editing. Wisdom: Hot-reload required after skill file changes."
-                        })
+                        "content": json.dumps(
+                            {
+                                "skills": ["filesystem"],
+                                "mission_brief": "Edit the specified file using filesystem tools.\n\nNOTE: If modifying tools.py or any skill file, remember to trigger hot-reload after changes.",
+                                "confidence": 0.88,
+                                "reasoning": "Routing to filesystem for file editing. Wisdom: Hot-reload required after skill file changes.",
+                            }
+                        ),
                     }
                 else:
                     return {
                         "success": True,
-                        "content": json.dumps({
-                            "skills": ["writer"],
-                            "mission_brief": f"Handle the user's request: {user_query[:100]}",
-                            "confidence": 0.70,
-                            "reasoning": "Default routing to writer skill"
-                        })
+                        "content": json.dumps(
+                            {
+                                "skills": ["writer"],
+                                "mission_brief": f"Handle the user's request: {user_query[:100]}",
+                                "confidence": 0.70,
+                                "reasoning": "Default routing to writer skill",
+                            }
+                        ),
                     }
 
         router._inference = MockInference()
@@ -138,12 +144,10 @@ def route_invoke(
             err_console.print(Panel(f"Query: {query}", title="Input", style="blue"))
 
             # [Phase 42] Environment State
-            env_snapshot = getattr(result, 'env_snapshot', None)
+            env_snapshot = getattr(result, "env_snapshot", None)
             if env_snapshot:
                 env_panel = Panel(
-                    env_snapshot,
-                    title="[Phase 42] Environment State",
-                    style="dim cyan"
+                    env_snapshot, title="[Phase 42] Environment State", style="dim cyan"
                 )
                 err_console.print(env_panel)
                 err_console.print()
@@ -156,25 +160,23 @@ def route_invoke(
             err_console.print(skills_table)
 
             # Mission Brief
-            brief_panel = Panel(
-                result.mission_brief,
-                title="Mission Brief",
-                style="green"
-            )
+            brief_panel = Panel(result.mission_brief, title="Mission Brief", style="green")
             err_console.print(brief_panel)
 
             # Confidence
-            conf_style = "green" if result.confidence >= 0.8 else "yellow" if result.confidence >= 0.6 else "red"
+            conf_style = (
+                "green"
+                if result.confidence >= 0.8
+                else "yellow"
+                if result.confidence >= 0.6
+                else "red"
+            )
             err_console.print(f"Confidence: [{conf_style}]{result.confidence:.2f}[/{conf_style}]")
 
             # Reasoning
             if verbose:
                 err_console.print()
-                reasoning_panel = Panel(
-                    result.reasoning,
-                    title="Reasoning",
-                    style="dim"
-                )
+                reasoning_panel = Panel(result.reasoning, title="Reasoning", style="dim")
                 err_console.print(reasoning_panel)
 
             # Wisdom status
@@ -185,9 +187,7 @@ def route_invoke(
                 err_console.print("[green]Wisdom injection: ENABLED[/green]")
 
     except Exception as e:
-        err_console.print(
-            Panel(f"Routing failed: {e}", title="Error", style="red")
-        )
+        err_console.print(Panel(f"Routing failed: {e}", title="Error", style="red"))
         raise typer.Exit(1)
 
 
@@ -204,18 +204,14 @@ def route_wisdom(
     would be injected for a given query.
     """
     err_console.print()
-    err_console.print(
-        Panel(f"Wisdom Search: {query}", style="bold blue")
-    )
+    err_console.print(Panel(f"Wisdom Search: {query}", style="bold blue"))
     err_console.print()
 
     async def search_wisdom():
         from agent.capabilities.knowledge.librarian import consult_knowledge_base
 
         results = await consult_knowledge_base(
-            query=query,
-            n_results=limit,
-            domain_filter="harvested_insight"
+            query=query, n_results=limit, domain_filter="harvested_insight"
         )
 
         return results
@@ -249,15 +245,13 @@ def route_wisdom(
                 f"[bold]Relevance:[/bold] {relevance:.2f}\n\n"
                 f"{content}...",
                 title=f"Lesson {i}",
-                style="blue"
+                style="blue",
             )
             err_console.print(lesson_panel)
             err_console.print()
 
     except Exception as e:
-        err_console.print(
-            Panel(f"Wisdom search failed: {e}", title="Error", style="red")
-        )
+        err_console.print(Panel(f"Wisdom search failed: {e}", title="Error", style="red"))
         raise typer.Exit(1)
 
 
@@ -267,9 +261,7 @@ def route_status():
     Show Phase 41 Wisdom-Aware Routing status.
     """
     err_console.print()
-    err_console.print(
-        Panel("Phase 41: Wisdom-Aware Routing Status", style="bold blue")
-    )
+    err_console.print(Panel("Phase 41: Wisdom-Aware Routing Status", style="bold blue"))
 
     # Check vector store
     async def check_status():
@@ -286,8 +278,7 @@ def route_status():
                 # Get all docs and filter
                 all_docs = await vm.search(query="", n_results=100, collection="project_knowledge")
                 harvested_count = sum(
-                    1 for d in all_docs
-                    if d.metadata.get("type") == "harvested_insight"
+                    1 for d in all_docs if d.metadata.get("type") == "harvested_insight"
                 )
             except:
                 pass
@@ -295,7 +286,7 @@ def route_status():
         return {
             "collections": collections,
             "harvested_count": harvested_count,
-            "vector_store_available": vm.client is not None
+            "vector_store_available": vm.client is not None,
         }
 
     try:
@@ -306,7 +297,9 @@ def route_status():
         table.add_column("Component", style="bold")
         table.add_column("Status", style="green")
 
-        table.add_row("Vector Store", "✓ Available" if status["vector_store_available"] else "✗ Unavailable")
+        table.add_row(
+            "Vector Store", "✓ Available" if status["vector_store_available"] else "✗ Unavailable"
+        )
         table.add_row("Harvested Insights", f"{status['harvested_count']} documents")
 
         collections = ", ".join(status["collections"]) if status["collections"] else "None"
@@ -324,9 +317,7 @@ def route_status():
         err_console.print("  ✓ Automated Reinforcement (Phase 40): Active")
 
     except Exception as e:
-        err_console.print(
-            Panel(f"Status check failed: {e}", title="Error", style="red")
-        )
+        err_console.print(Panel(f"Status check failed: {e}", title="Error", style="red"))
         raise typer.Exit(1)
 
 

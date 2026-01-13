@@ -145,11 +145,11 @@ Removed from storage
 
 ### 4.1 Modified Files
 
-| File | Change |
-|------|--------|
-| `packages/python/agent/src/agent/cli/runner.py` | Add `_record_cli_success()` call after successful execution |
-| `packages/python/agent/src/agent/core/orchestrator/feedback.py` | Add `_record_feedback_safe()` on Reviewer approval |
-| `packages/python/agent/src/agent/capabilities/learning/harvester.py` | Add time-based decay mechanism |
+| File                                                                 | Change                                                      |
+| -------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `packages/python/agent/src/agent/cli/runner.py`                      | Add `_record_cli_success()` call after successful execution |
+| `packages/python/agent/src/agent/core/orchestrator/feedback.py`      | Add `_record_feedback_safe()` on Reviewer approval          |
+| `packages/python/agent/src/agent/capabilities/learning/harvester.py` | Add time-based decay mechanism                              |
 
 ## 5. Implementation Plan
 
@@ -215,21 +215,21 @@ After 1 month idle:
 
 ## 8. Performance Impact
 
-| Metric | Before | After |
-|--------|--------|-------|
-| CLI execution | ~10ms | ~10ms (+0.1ms feedback) |
-| Orchestrator approval | ~100ms | ~100ms (+async overhead) |
-| Storage growth | N/A | ~1KB per 100 successful queries |
-| Memory | Baseline | +~1KB for feedback cache |
+| Metric                | Before   | After                           |
+| --------------------- | -------- | ------------------------------- |
+| CLI execution         | ~10ms    | ~10ms (+0.1ms feedback)         |
+| Orchestrator approval | ~100ms   | ~100ms (+async overhead)        |
+| Storage growth        | N/A      | ~1KB per 100 successful queries |
+| Memory                | Baseline | +~1KB for feedback cache        |
 
 ## 9. Signal Quality Hierarchy
 
-| Signal Source | Weight | Trust Level |
-|--------------|--------|-------------|
-| Reviewer approval | +0.1 | High (audited quality) |
-| CLI success | +0.1 | Medium (execution success) |
-| User rejection | -0.1 | High (explicit correction) |
-| User override | -0.1 | High (explicit correction) |
+| Signal Source     | Weight | Trust Level                |
+| ----------------- | ------ | -------------------------- |
+| Reviewer approval | +0.1   | High (audited quality)     |
+| CLI success       | +0.1   | Medium (execution success) |
+| User rejection    | -0.1   | High (explicit correction) |
+| User override     | -0.1   | High (explicit correction) |
 
 ## 10. Related Documentation
 

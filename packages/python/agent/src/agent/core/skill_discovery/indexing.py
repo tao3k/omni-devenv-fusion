@@ -373,9 +373,7 @@ async def reindex_skills_from_manifests(
     return result
 
 
-async def index_single_skill(
-    skill_name: str, generate_synthetic: bool = True
-) -> bool:
+async def index_single_skill(skill_name: str, generate_synthetic: bool = True) -> bool:
     """
     Phase 36.5: Index a single skill into the vector store.
 

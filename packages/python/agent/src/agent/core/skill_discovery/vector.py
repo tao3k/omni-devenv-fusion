@@ -33,10 +33,34 @@ MAX_CONFIDENCE = 0.95  # Maximum score ceiling (leave room for "certain")
 
 # [Phase 38.1] Verb-priority boost - core action verbs get extra weight
 CORE_ACTION_VERBS = {
-    "commit", "push", "pull", "merge", "deploy", "build", "test", "run",
-    "create", "delete", "update", "write", "read", "search", "find",
-    "install", "remove", "check", "validate", "lint", "format",
-    "save", "load", "fetch", "sync", "rebase", "checkout", "stash",
+    "commit",
+    "push",
+    "pull",
+    "merge",
+    "deploy",
+    "build",
+    "test",
+    "run",
+    "create",
+    "delete",
+    "update",
+    "write",
+    "read",
+    "search",
+    "find",
+    "install",
+    "remove",
+    "check",
+    "validate",
+    "lint",
+    "format",
+    "save",
+    "load",
+    "fetch",
+    "sync",
+    "rebase",
+    "checkout",
+    "stash",
 }
 VERB_PRIORITY_BONUS = 0.10  # Extra bonus when matching core verbs
 
@@ -57,6 +81,7 @@ def _get_feedback_boost_safe(query: str, skill_id: str) -> float:
     """
     try:
         from agent.capabilities.learning.harvester import get_feedback_boost
+
         return get_feedback_boost(query, skill_id)
     except Exception:
         # Silently return 0 if feedback system is not available
@@ -250,7 +275,9 @@ class VectorSkillDiscovery:
 
                 # [Phase 38] Fuzzy keyword matching
                 skill_keywords_str = res.metadata.get("keywords", "")
-                skill_keywords = set(kw.strip().lower() for kw in skill_keywords_str.split(",") if kw.strip())
+                skill_keywords = set(
+                    kw.strip().lower() for kw in skill_keywords_str.split(",") if kw.strip()
+                )
 
                 # Count fuzzy matches with verb detection
                 keyword_matches, verb_matched = _fuzzy_keyword_match(query_tokens, skill_keywords)

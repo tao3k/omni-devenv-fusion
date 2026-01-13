@@ -5,6 +5,7 @@ Context Sniffer - The Sensory System of the Router.
 Phase 42: Provides real-time environment snapshots (Git status, active files)
 to the Semantic Router to prevent hallucinated actions.
 """
+
 import asyncio
 import os
 from pathlib import Path
@@ -32,7 +33,7 @@ class ContextSniffer:
                 "git rev-parse --abbrev-ref HEAD",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=self.root
+                cwd=self.root,
             )
             stdout_br, _ = await proc_branch.communicate()
             branch = stdout_br.decode().strip() or "unknown"
@@ -42,11 +43,11 @@ class ContextSniffer:
                 "git status --porcelain",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=self.root
+                cwd=self.root,
             )
             stdout_st, _ = await proc_status.communicate()
 
-            status_lines = stdout_st.decode().strip().split('\n')
+            status_lines = stdout_st.decode().strip().split("\n")
             status_lines = [l for l in status_lines if l.strip()]
 
             count = len(status_lines)
@@ -56,7 +57,7 @@ class ContextSniffer:
             # Show up to 3 modified files
             details = ", ".join([l.strip() for l in status_lines[:3]])
             if count > 3:
-                details += f", ... (+{count-3} more)"
+                details += f", ... (+{count - 3} more)"
 
             return f"Branch: {branch} | Modified: {count} files ({details})"
 
@@ -72,7 +73,7 @@ class ContextSniffer:
             scratchpad_path = self.root / ".memory" / "active_context" / "SCRATCHPAD.md"
             if scratchpad_path.exists():
                 content = scratchpad_path.read_text(encoding="utf-8").strip()
-                lines = content.split('\n')
+                lines = content.split("\n")
                 # Extract simple summary (first few lines or specific section)
                 # For now, just return presence
                 return f"Active Context: {len(lines)} lines in SCRATCHPAD.md"
