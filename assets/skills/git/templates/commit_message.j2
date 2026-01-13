@@ -1,74 +1,60 @@
-{# git/commit_message.j2 - Commit Message Template #}
-{# Variables: status, subject, body, timestamp, verified, checks, security_warning, security_passed #}
+{# git/commit_message.j2 - Commit Message Template (Phase 36.8) #}
+{# Variables: subject, body, timestamp, commit_hash, file_count, verified_by, security_status #}
 
 {%- if status == "committed" -%}
-## ✅ Commit Created
+## ✅ Commit Successful!
 
-**Subject**: `{{ subject }}`
+**{{ subject }}**
 
-{%- if body %}
 {{ body }}
-{%- endif %}
 
 ---
-**Commit**: `{{ commit_hash }}`
+
+📅 Date: {{ timestamp }}
+📁 Files: {{ file_count }} files changed
+
+🛡️ **Verified by**: {{ verified_by }}
+🔒 **Security Detection**: {{ security_status }}
 
 {%- elif status == "security_violation" -%}
 ## ⚠️ Security Issue Detected
 
-**Subject**: `{{ subject }}`
+**{{ subject }}**
 
-⚠️ **Security Issues**: {{ security_issues|join(", ") }}
+{{ body }}
+
+---
+
+📅 Date: {{ timestamp }}
+
+🔒 **Security Issues**: {{ security_issues|join(", ") }}
 
 **Action Required**: Fix security issues before committing.
 
 {%- elif status == "error" -%}
 ## ❌ Error Occurred
 
-**Subject**: `{{ subject }}`
+**{{ subject }}**
+
+{{ body }}
+
+---
+
+📅 Date: {{ timestamp }}
 
 **Error**: {{ error }}
 
 {%- elif status == "failed" -%}
 ## ❌ Commit Failed
 
-**Subject**: `{{ subject }}`
+**{{ subject }}**
 
-**Error**: {{ error }}
-
-{%- elif status == "pending" -%}
-{%- if verified %}
-## 🛡️ Commit Ready
-
-**Subject**: `{{ subject }}`
-
-{%- if body %}
 {{ body }}
-{%- endif %}
-
-{%- if security_warning %}
-{{ security_warning }}
-{%- endif %}
-
-{%- if checks %}
-**Checks Passed**:
-{% for check in checks -%}
-- [x] {{ check }}
-{% endfor -%}
-{% endif %}
 
 ---
-✨ **Verified by Omni Git Skill**
 
-{%- else %}
-## 📝 Draft Commit Message
+📅 Date: {{ timestamp }}
 
-**Subject**: {{ subject }}
-
-{%- if body %}
-{{ body }}
-{%- endif %}
-
-{%- endif -%}
+**Error**: {{ error }}
 
 {%- endif -%}

@@ -26,22 +26,51 @@ def _build_skill_document(manifest: Any) -> str:
     """
     Build a rich semantic document from a skill manifest.
 
-    Combines description, keywords, and intents into a single
-    text that will be embedded for semantic search.
+    Creates a comprehensive document that captures:
+    - What the skill does (description)
+    - How to use it (keywords and examples)
+    - What tasks it helps with (use cases)
+    - Related concepts and synonyms
+
+    This rich document produces better embeddings for semantic search.
     """
     parts = [
-        f"Skill: {manifest.name}",
-        f"Description: {manifest.description}",
+        f"## Skill: {manifest.name}",
+        f"## Description: {manifest.description}",
     ]
 
     if manifest.routing_keywords:
-        parts.append(f"Keywords: {', '.join(manifest.routing_keywords)}")
+        # Create a rich keyword section with examples
+        keywords_str = ", ".join(manifest.routing_keywords)
+        parts.append(f"## Keywords: {keywords_str}")
+
+        # Expand keywords with usage examples
+        examples = []
+        for kw in manifest.routing_keywords[:10]:  # Limit to first 10
+            # Add common verb + keyword patterns
+            if " " not in kw:  # Single word keywords
+                examples.append(f"how to {kw}")
+                examples.append(f"{kw} task")
+                examples.append(f"work with {kw}")
+            else:  # Multi-word phrases
+                examples.append(f"how to {kw}")
+                examples.append(f"do {kw}")
+        parts.append(f"## Usage Examples: {', '.join(examples)}")
 
     if manifest.intents:
-        parts.append(f"Intents: {', '.join(manifest.intents)}")
+        parts.append(f"## Intents: {', '.join(manifest.intents)}")
 
-    if manifest.author:
-        parts.append(f"Author: {manifest.author}")
+    # Add use case section based on keywords
+    if manifest.routing_keywords:
+        # Generate use case scenarios
+        scenarios = []
+        for kw in manifest.routing_keywords[:5]:
+            scenarios.append(f"I need to {kw}")
+            scenarios.append(f"Help me {kw}")
+        parts.append(f"## Use Cases: {'; '.join(scenarios)}")
+
+    # Add related concepts (common software development patterns)
+    parts.append(f"## Category: Software Development Tool")
 
     return "\n".join(parts)
 
@@ -66,16 +95,28 @@ async def _index_remote_skills(vm: Any) -> int:
             if not skill_id:
                 continue
 
-            # Build semantic document
+            # Build rich semantic document (same format as local skills)
+            keywords = skill.get("keywords", [])
             doc_parts = [
-                f"Skill: {skill.get('name', skill_id)}",
-                f"Description: {skill.get('description', '')}",
-                f"Keywords: {', '.join(skill.get('keywords', []))}",
+                f"## Skill: {skill.get('name', skill_id)}",
+                f"## Description: {skill.get('description', '')}",
+                f"## Keywords: {', '.join(keywords)}",
             ]
+
+            # Add usage examples for remote skills too
+            if keywords:
+                examples = []
+                for kw in keywords[:10]:
+                    if " " not in kw:
+                        examples.append(f"how to {kw}")
+                        examples.append(f"{kw} task")
+                    else:
+                        examples.append(f"how to {kw}")
+                doc_parts.append(f"## Usage Examples: {', '.join(examples)}")
 
             if skill.get("repository"):
                 repo = skill.get("repository")
-                doc_parts.append(f"Repository: {repo.get('url', '')}")
+                doc_parts.append(f"## Repository: {repo.get('url', '')}")
 
             await vm.add(
                 documents=["\n".join(doc_parts)],
@@ -85,7 +126,7 @@ async def _index_remote_skills(vm: Any) -> int:
                     {
                         "id": skill_id,
                         "name": skill.get("name", skill_id),
-                        "keywords": ",".join(skill.get("keywords", [])),
+                        "keywords": ",".join(keywords),
                         "installed": "false",
                         "type": "remote",
                         "url": skill.get("url", ""),

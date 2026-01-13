@@ -159,7 +159,12 @@ class VectorMemory:
         try:
             return client.get_or_create_collection(
                 name=collection_name,
-                metadata={"description": f"Project knowledge base: {collection_name}"},
+                metadata={
+                    "description": f"Project knowledge base: {collection_name}",
+                    # Use cosine distance for semantic similarity (0 = identical, 1 = opposite)
+                    # Cosine is better for semantic search than L2 distance
+                    "hnsw:space": "cosine",
+                },
             )
         except Exception as e:
             _get_logger().error(

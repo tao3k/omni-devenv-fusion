@@ -246,11 +246,10 @@ def commit(message: str) -> str:
     return render_commit_message(
         subject=first_line,
         body=body,
-        verified=True,
-        checks=["lefthook passed", "scope validated"],
         status="committed",
-        security_issues=security_issues,
-        security_guard=security_guard,
+        security_status="No sensitive files detected"
+        if not security_issues
+        else f"Issues: {', '.join(security_issues)}",
     )
 
 
@@ -337,13 +336,9 @@ def smart_commit(
             return render_commit_message(
                 subject="Commit Error",
                 body=state.get("error", "Unknown error"),
-                verified=False,
-                checks=[],
                 status="error",
-                security_passed=False,
-                security_warning="⚠️ Workflow Error",
-                commit_hash="",
                 error=state.get("error", "Unknown error"),
+                security_status="⚠️ Workflow Error",
             )
         elif status == "completed" and state.get("commit_hash"):
             # Workflow completed successfully - return success message
@@ -352,13 +347,12 @@ def smart_commit(
 
             return render_commit_message(
                 subject=state.get("final_message", message).split("\n")[0],
-                body="",
-                verified=True,
-                checks=["smart workflow approved"],
+                body="\n".join(state.get("final_message", message).split("\n")[1:]).strip(),
                 status="committed",
-                security_passed=True,
-                security_warning="🛡️ Smart Commit Workflow - Approved" + note_line,
                 commit_hash=state.get("commit_hash", ""),
+                file_count=len(state.get("staged_files", [])),
+                verified_by="omni Git Skill (cog)" + note_line,
+                security_status="No sensitive files detected",
             )
         elif status == "failed":
             # Commit failed after all retries
@@ -369,13 +363,9 @@ def smart_commit(
             return render_commit_message(
                 subject="Commit Failed",
                 body=f"{error}{note_line}",
-                verified=False,
-                checks=[],
                 status="failed",
-                security_passed=False,
-                security_warning="⚠️ Commit Failed",
-                commit_hash="",
                 error=error,
+                security_status="⚠️ Commit Failed",
             )
         elif status == "approved":
             # Execute node ran but commit failed (lefthook check, etc.)
@@ -383,25 +373,17 @@ def smart_commit(
             return render_commit_message(
                 subject="Commit Failed",
                 body="Workflow executed but commit was not created. Please fix the issue and try again.",
-                verified=False,
-                checks=[],
                 status="failed",
-                security_passed=False,
-                security_warning="⚠️ Execution Error",
-                commit_hash="",
                 error=error,
+                security_status="⚠️ Execution Error",
             )
         else:
             return render_commit_message(
                 subject="Unexpected Status",
                 body=f"Status: {status}",
-                verified=False,
-                checks=[],
                 status="error",
-                security_passed=False,
-                security_warning="⚠️ Unknown Status",
-                commit_hash="",
                 error=f"Unexpected status: {status}",
+                security_status="⚠️ Unknown Status",
             )
 
     elif action == "reject":

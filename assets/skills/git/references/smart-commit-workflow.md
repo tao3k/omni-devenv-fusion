@@ -1,4 +1,4 @@
-# Smart Commit Workflow (Phase 36.7)
+# Smart Commit Workflow (Phase 36.8)
 
 ## Architecture: Tool provides Data, LLM provides Intelligence
 
@@ -9,9 +9,9 @@
 └─────────┘     └─────────────────────┘     └─────────┘
      │                  │                       │
      ▼                  ▼                       ▼
-Stage files        Analyze diff            Commit hash
-Extract diff       Generate message        With retry logic
-Security scan      User approval
+Pre-commit       Analyze diff            Commit hash
+Re-stage         Generate message        With retry logic
+Stage files      User approval
 ```
 
 ## Usage
@@ -39,9 +39,11 @@ Security scan      User approval
 The `prepare` node performs all "dirty work":
 
 1. **Stage all changes**: `git add .`
-2. **Get file list**: `git diff --cached --name-only`
-3. **Extract diff**: `git diff --cached` (truncated to 6000 chars)
-4. **Security scan**: Check for sensitive patterns (`.env`, `.pem`, `.key`, etc.)
+2. **Run lefthook pre-commit**: May reformat files
+3. **Re-stage reformatted files**: Detect and re-stage files that were unstaged by lefthook
+4. **Get file list**: `git diff --cached --name-only`
+5. **Extract diff**: `git diff --cached` (truncated to 6000 chars)
+6. **Security scan**: Check for sensitive patterns (`.env`, `.pem`, `.key`, etc.)
 
 Returns to LLM: `staged_files[]`, `diff_content`, `security_issues[]`
 
@@ -118,11 +120,11 @@ The tool returns a Jinja2 template string from `templates/review_card.j2`. LLM p
 ````markdown
 ### 📋 Commit Analysis
 
-| Field           | Value                                           |
-| --------------- | ----------------------------------------------- |
-| **Type**        | `feat\|fix\|refactor\|docs\|style\|test\|chore` |
-| **Scope**       | `git`                                           |
-| **Description** | {short_description}                             |
+| Field           | Value               |
+| --------------- | ------------------- | --- | -------- | ---- | ----- | ---- | ------ |
+| **Type**        | `feat               | fix | refactor | docs | style | test | chore` |
+| **Scope**       | `git`               |
+| **Description** | {short_description} |
 
 #### 📁 Files to commit (already staged)
 
@@ -176,15 +178,35 @@ After user confirms "Yes", call:
 ### Step 2: After approval (with retry note)
 
 ```markdown
-✅ **Commit Success** (Retried after lefthook format)
+## ✅ Commit Successful!
 
-**Hash**: `abc1234`
+**refactor(git): simplify smart commit workflow architecture**
+
+- Simplified workflow from 3 nodes to 2 nodes
+- Moved analysis logic from Python to LLM
+- Added stage_and_scan() helper function
+
+---
+
+📅 Date: 2026-01-12 19:56:27
+📁 Files: 10 files changed
+
+🛡️ **Verified by**: omni Git Skill (cog)
+🔒 **Security Detection**: No sensitive files detected
 ```
 
 ### Failed Example
 
 ```markdown
-❌ **Commit Failed** (Invalid scope)
+## ❌ Commit Failed
+
+**Commit Failed**
+
+Invalid scope: git-ops
+
+---
+
+📅 Date: 2026-01-12 19:56:27
 
 **Error**: Commit failed after retries. Invalid scope
 

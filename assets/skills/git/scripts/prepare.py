@@ -382,9 +382,11 @@ def stage_and_scan(root_dir: str = ".") -> dict:
 
     This function does the "dirty work" for the Smart Commit workflow:
     1. Stage all changes
-    2. Get staged file list
-    3. Extract diff content (truncated for context limits)
-    4. Check for sensitive files
+    2. Run lefthook pre-commit (may reformat files)
+    3. Re-stage any reformatted files
+    4. Get staged file list
+    5. Extract diff content (truncated for context limits)
+    6. Check for sensitive files
 
     Args:
         root_dir: Project root directory
@@ -396,6 +398,7 @@ def stage_and_scan(root_dir: str = ".") -> dict:
         - security_issues: List of sensitive files detected
     """
     import glob as glob_module
+    import shutil
 
     result = {
         "staged_files": [],
@@ -408,11 +411,37 @@ def stage_and_scan(root_dir: str = ".") -> dict:
     if rc != 0:
         return result
 
-    # 2. Get staged file list
+    # Get initial staged files before lefthook
+    initial_staged, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root_dir)
+    initial_staged_set = set(line for line in initial_staged.splitlines() if line.strip())
+
+    # 2. Run lefthook pre-commit (may reformat files)
+    if shutil.which("lefthook"):
+        _run(["lefthook", "run", "pre-commit"], cwd=root_dir)
+
+    # 3. Re-stage reformatted files (lefthook may have modified them)
+    # Get ALL modified files (both staged and unstaged)
+    modified, _, _ = _run(["git", "diff", "--name-only"], cwd=root_dir)
+    modified_set = set(line for line in modified.splitlines() if line.strip())
+
+    # Get currently staged files
+    current_staged, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root_dir)
+    current_staged_set = set(line for line in current_staged.splitlines() if line.strip())
+
+    # Re-stage any modified file that isn't currently staged
+    # This catches both: previously staged files that became unstaged AND newly modified files
+    re_staged_files = modified_set - current_staged_set
+
+    if re_staged_files:
+        # Re-stage the reformatted files
+        for f in re_staged_files:
+            _run(["git", "add", f], cwd=root_dir)
+
+    # 4. Get staged file list (after re-stage)
     files_out, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root_dir)
     result["staged_files"] = [line for line in files_out.splitlines() if line.strip()]
 
-    # 3. Get diff content (truncated to prevent context overflow)
+    # 5. Get diff content (truncated to prevent context overflow)
     # Ignore lock files to save tokens
     diff_cmd = ["git", "diff", "--cached", "--", ".", ":!*lock.json", ":!*lock.yaml"]
     diff_out, _, _ = _run(diff_cmd, cwd=root_dir)
@@ -423,7 +452,7 @@ def stage_and_scan(root_dir: str = ".") -> dict:
     else:
         result["diff"] = diff_out
 
-    # 4. Security scan for sensitive files
+    # 6. Security scan for sensitive files
     sensitive_patterns = [
         "*.env*",
         "*.pem",

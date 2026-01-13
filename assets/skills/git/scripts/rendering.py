@@ -82,7 +82,7 @@ def _get_jinja_env() -> jinja2.Environment:
 
     return jinja2.Environment(
         loader=jinja2.FileSystemLoader(search_paths),
-        autoescape=jinja2.select_autoescape(["html", "xml"]),
+        autoescape=False,  # Markdown 不需要 HTML escape
         trim_blocks=True,
         lstrip_blocks=True,
     )
@@ -91,13 +91,12 @@ def _get_jinja_env() -> jinja2.Environment:
 def render_commit_message(
     subject: str,
     body: str = "",
-    verified: bool = True,
-    checks: Optional[List[str]] = None,
-    status: str = "pending",
-    security_issues: Optional[List[str]] = None,
-    security_warning: str = "",
-    security_passed: bool = True,
+    status: str = "committed",
     commit_hash: str = "",
+    file_count: int = 0,
+    verified_by: str = "omni Git Skill (cog)",
+    security_status: str = "No sensitive files detected",
+    security_issues: Optional[List[str]] = None,
     error: str = "",
 ) -> str:
     """
@@ -110,14 +109,13 @@ def render_commit_message(
     Args:
         subject: Commit subject line
         body: Extended commit description
-        verified: Whether the commit is verified
-        checks: List of verification checks passed
-        status: Commit status (pending, committed, security_violation, error)
-        security_issues: List of security issues detected
-        security_warning: Security guard warning message
-        security_passed: Whether security checks passed
+        status: Commit status (committed, security_violation, error, failed)
         commit_hash: Commit hash (for committed status)
-        error: Error message (for error status)
+        file_count: Number of files changed
+        verified_by: Who verified the commit
+        security_status: Security scan result message
+        security_issues: List of security issues (for security_violation status)
+        error: Error message (for error/failed status)
 
     Returns:
         Formatted commit message with verification badge
@@ -125,22 +123,17 @@ def render_commit_message(
     env = _get_jinja_env()
     template = env.get_template("commit_message.j2")
 
-    # Default checks if not provided
-    if checks is None:
-        checks = ["Pre-commit hooks passed"]
-
     return template.render(
         subject=subject,
         body=body,
-        verified=verified,
-        checks=checks,
         status=status,
-        timestamp=datetime.now().isoformat(),
-        security_issues=security_issues or [],
-        security_warning=security_warning,
-        security_passed=security_passed,
         commit_hash=commit_hash,
+        file_count=file_count,
+        verified_by=verified_by,
+        security_status=security_status,
+        security_issues=security_issues or [],
         error=error,
+        timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     )
 
 
@@ -266,3 +259,23 @@ def get_template_source(template_name: str) -> Optional[str]:
         return template.source
     except jinja2.TemplateNotFound:
         return None
+
+
+def render_template(template_name: str, **context) -> str:
+    """
+    Render any Jinja2 template with cascading support.
+
+    Template resolution:
+        - First checks: assets/templates/git/ (user override)
+        - Falls back to: assets/skills/git/templates/ (skill default)
+
+    Args:
+        template_name: Template filename (e.g., "review_card.j2")
+        **context: Variables to pass to template
+
+    Returns:
+        Rendered template string
+    """
+    env = _get_jinja_env()
+    template = env.get_template(template_name)
+    return template.render(**context)

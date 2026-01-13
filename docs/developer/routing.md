@@ -365,6 +365,90 @@ uv run pytest packages/python/agent/src/agent/tests/scenarios/test_hot_reload.py
 uv run pytest packages/python/agent/src/agent/tests/ -k "routing or cortex or router" -v
 ```
 
+## Phase 36.8: Auto-Route Skill Discovery
+
+**Auto-Trigger Skill Discovery** - When users express intent through natural language, the system can automatically discover and prepare skills.
+
+### Auto-Route Command
+
+```python
+@omni("skill.auto_route", {"task": "analyze pcap file"})
+```
+
+### Flow
+
+```
+User: "Analyze this pcap file"
+    ↓
+@omni("skill.auto_route", {"task": "analyze pcap file"})
+    ↓
+┌─────────────────────────────────────────────────────────┐
+│ Step 1: Search local skills (installed)                 │
+│ Step 2: Check if loaded                                 │
+│                                                         │
+│ Case 1: Already loaded → ✅ Ready to execute!          │
+│ Case 2: Local but not loaded → 🔄 Auto-load!           │
+│ Case 3: No local skills → ☁️ Show remote suggestions   │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Output Examples
+
+**Case 1: Already Loaded**
+
+```markdown
+# 🎯 Auto-Route: Task Preparation
+
+**Task**: analyze pcap file
+
+✅ **Skill is loaded and ready!**
+
+**Skill**: network-analysis
+**Confidence**: 92%
+
+👉 **Ready to execute**: `network-analysis.help`
+```
+
+**Case 2: Auto-Loaded**
+
+```markdown
+# 🎯 Auto-Route: Task Preparation
+
+**Task**: analyze pcap file
+
+🔄 **Skill loaded automatically!**
+
+**Skill**: network-analysis
+**Confidence**: 92%
+
+👉 **Ready**: `network-analysis.help`
+```
+
+**Case 3: Remote Suggestions**
+
+```markdown
+# 🎯 Auto-Route: Task Preparation
+
+**Task**: analyze pcap file
+
+☁️ **No matching local skills found**
+
+**Suggested skills**:
+
+1. **network-analysis** - Analyze network traffic... (92%)
+2. **packet-capture** - Capture network packets... (85%)
+
+**To install**:
+@omni("skill.jit_install", {"skill_id": "network-analysis"})
+```
+
+### Parameters
+
+| Parameter      | Type    | Required | Default | Description                       |
+| -------------- | ------- | -------- | ------- | --------------------------------- |
+| `task`         | string  | Yes      | -       | Natural language task description |
+| `auto_install` | boolean | No       | false   | Auto-install remote skills        |
+
 ## Related Files
 
 | File                                           | Purpose                            |

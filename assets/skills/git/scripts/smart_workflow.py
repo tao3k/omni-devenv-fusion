@@ -22,6 +22,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from .commit_state import CommitState, create_initial_state
 from . import prepare as prepare_mod
 from . import commit as commit_mod
+from . import rendering
 
 # In-memory checkpoint for state persistence
 _memory = MemorySaver()
@@ -536,30 +537,44 @@ def format_review_card(state: CommitState) -> str:
 
     # Status: Prepared (ready for LLM analysis)
     if status == "prepared":
-        from common.skills_path import SKILLS_DIR
-
         # Build data for template
-        files_list = "\n".join([f"- `{f}`" for f in state.get("staged_files", [])[:15]])
-        if len(state.get("staged_files", [])) > 15:
-            files_list += f"\n- ... and {len(state['staged_files']) - 15} more files"
+        staged_files = state.get("staged_files", [])
+        files_list = "\n".join([f"- `{f}`" for f in staged_files[:15]])
+        if len(staged_files) > 15:
+            files_list += f"\n- ... and {len(staged_files) - 15} more files"
 
         diff = state.get("diff_content", "")
         workflow_id = state.get("workflow_id", "default")
 
-        # Return template with embedded data for LLM to parse
-        template_path = SKILLS_DIR("git", path="templates") / "review_card.j2"
-        return (
-            template_path.read_text()
-            .replace("{{STAGED_FILES}}", files_list)
-            .replace("{{WORKFLOW_ID}}", workflow_id)
-            .replace("{{DIFF}}", diff)
+        # Render template with cascading loader from rendering module
+        return rendering.render_template(
+            "review_card.j2",
+            staged_files=files_list,
+            workflow_id=workflow_id,
+            diff=diff,
         )
 
     # Status: Completed
     if status == "completed":
         commit_hash = state.get("commit_hash", "unknown")
         message = state.get("final_message", "")
-        return f"✅ **Commit Success**\n\n**Hash**: `{commit_hash}`\n**Message**: {message}"
+        staged_files = state.get("staged_files", [])
+
+        # Parse message into subject and body
+        lines = message.strip().split("\n")
+        subject = lines[0] if lines else ""
+        body = "\n".join(lines[1:]).strip()
+
+        # Use the new commit message template
+        return rendering.render_commit_message(
+            subject=subject,
+            body=body,
+            status="committed",
+            commit_hash=commit_hash,
+            file_count=len(staged_files),
+            verified_by="omni Git Skill (cog)",
+            security_status="No sensitive files detected",
+        )
 
     # Status: Rejected
     if status == "rejected":

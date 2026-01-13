@@ -8,6 +8,7 @@ inputs:
   omnibus:
     url: github:tao3k/omnibus/main
 allowUnfree: true
+
 secretspec:
   enable: true
   profile: default

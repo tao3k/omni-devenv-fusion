@@ -10,6 +10,7 @@ from typing import Dict, Any, Optional, List
 from agent.core.agents.base import AgentResult
 from agent.core.agents.coder import CoderAgent
 from agent.core.telemetry import CostEstimator
+from agent.core.router import get_router
 
 
 async def dispatch_standard(
@@ -45,6 +46,29 @@ async def dispatch_standard(
         confidence=route.confidence,
         from_cache=route.from_cache,
     )
+
+    # Phase 36.8: Auto-trigger SemanticRouter for skill-level routing
+    # This happens in parallel - skill routing is independent of agent routing
+    try:
+        router = get_router()
+        skill_route = await router.route(user_query, history, use_cache=True)
+
+        # Show skill suggestions if remote skills found
+        if skill_route.remote_suggestions:
+            self.ux.show_skill_suggestions(skill_route.remote_suggestions)
+
+            # Log skill suggestions
+            logger.bind(
+                session_id=self._session_id,
+                remote_skill_count=len(skill_route.remote_suggestions),
+            ).info("skill_suggestions_found")
+
+    except Exception as e:
+        # Skill routing failure should not block agent execution
+        logger.bind(
+            session_id=self._session_id,
+            error=str(e),
+        ).warning("skill_routing_failed")
 
     # Phase 19: Log routing decision with cost estimate
     route_info = {

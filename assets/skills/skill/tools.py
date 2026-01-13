@@ -184,6 +184,145 @@ async def suggest(task: str) -> str:
 
 
 @skill_command(category="workflow")
+async def auto_route(task: str, auto_install: bool = False) -> str:
+    """
+    Auto-discover and prepare skills for a task.
+
+    This is the main entry point for skill-based task handling:
+    1. Search for matching skills (local + remote)
+    2. If local skills found but not loaded → auto-load
+    3. If no local skills → show remote skill suggestions
+    4. Return ALL relevant skills (not just one)
+
+    Args:
+        task: Natural language task description (e.g., "analyze pcap file")
+        auto_install: If True, auto-install remote skills (default: False)
+
+    Returns:
+        Status message with all relevant skills and next steps
+
+    Examples:
+        ```python
+        @omni("skill.auto_route", {"task": "update documentation"})
+        @omni("skill.auto_route", {"task": "work with docker", "auto_install": true})
+        ```
+    """
+    from common.skills_path import SKILLS_DIR
+    from agent.core.registry import get_skill_registry
+
+    discovery = _get_discovery()
+    registry = get_skill_registry()
+    skills_base = SKILLS_DIR()
+
+    lines = ["# 🎯 Auto-Route: Task Preparation", ""]
+    lines.append(f"**Task**: {task}")
+    lines.append("")
+
+    # Step 1: Search all skills (installed + remote)
+    all_results = await discovery.search(
+        query=task,
+        limit=10,
+        installed_only=False,  # Search all skills
+    )
+
+    if not all_results:
+        return (
+            f"# ❌ No matching skills found\n\n"
+            f"**Task**: {task}\n\n"
+            "No skills match this task in the index.\n\n"
+            "**Options**:\n"
+            "1. Try different keywords\n"
+            "2. Create a custom skill: `skill.create`\n"
+            "3. Reindex: `skill.reindex`"
+        )
+
+    # Step 2: Categorize skills
+    remote_skills = [s for s in all_results if not s.get("installed")]
+    installed_skills = [s for s in all_results if s.get("installed")]
+
+    # Step 3: Check which are loaded
+    loaded_skills = set(registry.list_loaded_skills())
+
+    # Separate into loaded, unloaded_local, remote
+    loaded_list = []
+    unloaded_local = []
+
+    for skill in installed_skills:
+        skill_name = skill.get("id", skill.get("name", "")).lower().replace(" ", "-")
+        if skill_name in loaded_skills:
+            loaded_list.append(skill)
+        else:
+            unloaded_local.append(skill)
+
+    # Step 4: Auto-load unloaded local skills that exist
+    auto_loaded = []
+    for skill in unloaded_local:
+        skill_name = skill.get("id", skill.get("name", "")).lower().replace(" ", "-")
+        skill_path = skills_base / skill_name
+
+        if skill_path.exists():
+            success, message = registry.load_skill(skill_name)
+            if success:
+                auto_loaded.append(skill)
+                loaded_skills.add(skill_name)
+
+    # Step 5: Build output with ALL relevant skills
+    all_relevant = loaded_list + auto_loaded
+
+    if all_relevant:
+        lines.append(f"## ✅ Relevant Skills ({len(all_relevant)} loaded)")
+        lines.append("")
+
+        for skill in all_relevant:
+            raw_score = skill.get("score", 0)
+            confidence = max(0.0, min(1.0, raw_score))
+            skill_name = skill.get("id", skill.get("name", ""))
+
+            status = "🔄 Auto-loaded" if skill in auto_loaded else "✅ Loaded"
+            lines.append(f"### {status}: {skill['name']}")
+            lines.append(f"- **Confidence**: {confidence:.0%}")
+            lines.append(f"- **Description**: {skill.get('description', '')[:100]}")
+            lines.append(f'- **Try**: `@omni("{skill_name}.help")`')
+            lines.append("")
+
+        # Show remote suggestions if no local skills found
+        if not loaded_list and not auto_loaded and remote_skills:
+            lines.append("## ☁️ Remote Skills (not installed)")
+            lines.append("")
+            for i, skill in enumerate(remote_skills[:3], 1):
+                raw_score = skill.get("score", 0)
+                confidence = max(0.0, min(1.0, raw_score))
+                lines.append(f"{i}. **{skill['name']}** ({confidence:.0%})")
+                lines.append(f"   {skill.get('description', '')[:80]}...")
+
+            lines.append("")
+            lines.append("**To install**:")
+            lines.append("```python")
+            lines.append(f'@omni("skill.jit_install", {{"skill_id": "{remote_skills[0]["id"]}"}})')
+            lines.append("```")
+    else:
+        # No local skills, show remote suggestions
+        lines.append("## ☁️ No local skills found")
+        lines.append("")
+        lines.append("**Suggested remote skills**:")
+        lines.append("")
+
+        for i, skill in enumerate(remote_skills[:3], 1):
+            raw_score = skill.get("score", 0)
+            confidence = max(0.0, min(1.0, raw_score))
+            lines.append(f"{i}. **{skill['name']}** ({confidence:.0%})")
+            lines.append(f"   {skill.get('description', '')[:80]}...")
+
+        lines.append("")
+        lines.append("**To install**:")
+        lines.append("```python")
+        lines.append(f'@omni("skill.jit_install", {{"skill_id": "{remote_skills[0]["id"]}"}})')
+        lines.append("```")
+
+    return "\n".join(lines)
+
+
+@skill_command(category="workflow")
 async def load(skill_name: str) -> str:
     """
     Load a local skill into the MCP server.

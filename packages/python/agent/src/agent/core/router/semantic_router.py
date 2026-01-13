@@ -472,36 +472,71 @@ Route this request and provide a mission brief."""
         Phase 36.2: Search local skills via vector store for better routing.
 
         This is the "Cold Path" - used when LLM routing fails or is weak.
-        Only searches LOCAL (installed) skills, not remote ones.
+        1. First search LOCAL (installed) skills
+        2. If no local skills found, search REMOTE skills and return suggestions
 
         Args:
             query: The user query
             result: RoutingResult to modify in-place
         """
         try:
-            # Search local skills only (installed_only=True by default)
+            # 1. Search local skills first (installed_only=True by default)
             suggestions = await self.vector_discovery.search(
                 query=query,
                 limit=3,
                 installed_only=True,  # Only local skills
             )
 
-            if not suggestions:
-                return
-
             # Filter out already selected skills
             loaded_skills = set(result.selected_skills)
             new_candidates = [s for s in suggestions if s.get("id") not in loaded_skills]
 
+            # 2. If no local skills found, search remote skills for suggestions
+            if not new_candidates:
+                # Search remote skills (Phase 36.8: Auto-trigger skill.suggest logic)
+                remote_suggestions = await self.vector_discovery.search(
+                    query=query,
+                    limit=5,
+                    installed_only=False,  # Search all skills (remote too)
+                )
+
+                if remote_suggestions:
+                    # Add remote suggestions to result
+                    for skill in remote_suggestions:
+                        if skill.get("id") not in loaded_skills:
+                            result.remote_suggestions.append(
+                                {
+                                    "id": skill.get("id"),
+                                    "name": skill.get("name"),
+                                    "description": skill.get("description", ""),
+                                    "keywords": skill.get("keywords", []),
+                                    "score": skill.get("score", 0.0),
+                                    "installed": skill.get("installed", False),
+                                    "url": skill.get("url", ""),
+                                }
+                            )
+
+                    result.reasoning += (
+                        f" [Skill Suggestion] No local skills found. "
+                        f"Found {len(remote_suggestions)} remote skill(s) that may help."
+                    )
+                    result.confidence = 0.3  # Low confidence, but providing suggestions
+
+                    _get_logger().info(
+                        "Auto-triggered skill suggestion",
+                        query=query[:50],
+                        suggestions=[s.get("id") for s in remote_suggestions],
+                    )
+                    return
+
             if not new_candidates:
                 return
 
-            # Found better local skills!
+            # Found local skills!
             top_skill = new_candidates[0]
             suggested_ids = [s.get("id") for s in new_candidates]
 
-            # Add newly discovered skills to selected_skills (since they're more relevant)
-            # This fixes the case where LLM picks wrong skill but vector search finds better one
+            # Add newly discovered skills to selected_skills
             for skill_id in suggested_ids:
                 if skill_id not in result.selected_skills:
                     result.selected_skills.append(skill_id)

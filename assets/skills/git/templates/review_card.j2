@@ -1,21 +1,21 @@
 {# review_card.j2 - Smart Commit Review Card Template #}
-{# Phase 36.7: LLM analysis template with placeholders #}
+{# Phase 36.7: LLM analysis template with Jinja2 variables #}
 
 ### 📋 Commit Analysis
 
 | Field           | Value               |
 | --------------- | ------------------- |
-| **Type**        | `feat\|fix\|refactor\|docs\|style\|test\|chore` |
+| **Type**        | `feat|fix|refactor|docs|style|test|chore` |
 | **Scope**       | `scope-name`        |
 | **Description** | {short_description} |
 
 #### 📁 Files to commit (already staged)
 
-{{STAGED_FILES}}
+{{ staged_files }}
 
 #### 🔍 Diff for Analysis
 ```diff
-{{DIFF}}
+{{ diff }}
 ```
 
 #### 📝 Message
@@ -40,7 +40,7 @@ After user confirms "Yes", call:
 ```
 @omni("git.smart_commit", {
     "action": "approve",
-    "workflow_id": "{{WORKFLOW_ID}}",
+    "workflow_id": "{{ workflow_id }}",
     "message": "YOUR_GENERATED_MESSAGE"
 })
 ```

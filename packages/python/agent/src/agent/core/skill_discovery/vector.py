@@ -81,13 +81,17 @@ class VectorSkillDiscovery:
             # Convert SearchResult to skill dict format
             skills = []
             for res in results[:limit]:
+                # Convert distance to similarity (clamp between 0 and 1)
+                raw_score = 1.0 - res.distance
+                similarity = max(0.0, min(1.0, raw_score))
+
                 skills.append(
                     {
                         "id": res.metadata.get("id", res.id),
                         "name": res.metadata.get("name", res.metadata.get("id", "")),
                         "description": res.content[:200] if res.content else "",
                         "keywords": res.metadata.get("keywords", "").split(","),
-                        "score": 1.0 - res.distance,  # Convert distance to similarity
+                        "score": similarity,
                         "installed": res.metadata.get("installed", "false") == "true",
                         "type": res.metadata.get("type", "local"),
                     }

@@ -17,6 +17,8 @@ def build_mission_injection(routing_result: RoutingResult) -> str:
     This is the "Telepathic Link" - the mission brief that tells the worker
     exactly what to do, bypassing the need for the worker to reanalyze intent.
 
+    Phase 36.8: Also includes remote skill suggestions when available.
+
     Args:
         routing_result: The routing result from SemanticRouter
 
@@ -35,6 +37,24 @@ def build_mission_injection(routing_result: RoutingResult) -> str:
     else:
         indicator = "🔴 LOW CONFIDENCE"
 
+    # Phase 36.8: Add remote skill suggestions
+    suggestions_block = ""
+    if routing_result.remote_suggestions:
+        suggestion_lines = []
+        for s in routing_result.remote_suggestions[:3]:  # Max 3 suggestions
+            name = s.get("name", s.get("id", "Unknown"))
+            description = s.get("description", "")[:60]
+            suggestion_lines.append(f"  • {name}: {description}...")
+
+        if suggestion_lines:
+            suggestions_block = f"""
+║                                                                              ║
+║ 🎯 SUGGESTED SKILLS (not installed):                                        ║
+║ {chr(10).join(suggestion_lines):<76}║
+║                                                                              ║
+║ Install: @omni('skill.jit_install', {{'skill_name': '<skill_id>'}})        ║
+"""
+
     return f"""
 
 ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -45,7 +65,7 @@ def build_mission_injection(routing_result: RoutingResult) -> str:
 ║                                                                              ║
 ║ 📋 YOUR OBJECTIVE:                                                          ║
 ║ {brief:<76}║
-║                                                                              ║
+{suggestions_block}║                                                                              ║
 ║ 💡 FOCUS ONLY ON THIS OBJECTIVE. Use the activated skills above.            ║
 ║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝

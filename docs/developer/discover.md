@@ -651,3 +651,161 @@ uv run pytest packages/python/agent/src/agent/tests/scenarios/test_hot_reload.py
 | `agent/core/skill_discovery.py`            | Index sync, upsert, reconciliation        |
 | `agent/mcp_server.py`                      | Observer registration                     |
 | `agent/tests/scenarios/test_hot_reload.py` | 13 comprehensive tests                    |
+
+---
+
+## Phase 36.8: Auto-Route Skill Discovery
+
+> **Auto-Trigger Skill Discovery** - When users express intent through natural language, the system can automatically discover and prepare skills.
+
+### Overview
+
+Phase 36.8 introduces `skill.auto_route`, a unified command that:
+
+1. Searches for matching skills (local + remote)
+2. Auto-loads unloaded local skills
+3. Returns ALL relevant skills (not just one)
+4. Shows remote skill suggestions when no local match
+
+### Auto-Route Command
+
+```python
+@omni("skill.auto_route", {"task": "update documentation"})
+@omni("skill.auto_route", {"task": "polish text", "auto_install": true})
+```
+
+### Flow
+
+```
+User: "update documentation"
+    ↓
+@omni("skill.auto_route", {"task": "update documentation"})
+    ↓
+┌─────────────────────────────────────────────────────────┐
+│ Step 1: Search all skills (installed + remote)          │
+│ Step 2: Categorize: loaded / unloaded_local / remote    │
+│ Step 3: Auto-load unloaded local skills that exist      │
+│ Step 4: Return ALL relevant skills                      │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Output Examples
+
+**Multiple Skills Loaded**
+
+```markdown
+# 🎯 Auto-Route: Task Preparation
+
+**Task**: update documentation
+
+## ✅ Relevant Skills (4 loaded)
+
+### ✅ Loaded: documentation (40%)
+
+- **Try**: `@omni("documentation.help")`
+
+### ✅ Loaded: writer (34%)
+
+- **Try**: `@omni("writer.help")`
+
+### ✅ Loaded: knowledge (34%)
+
+- **Try**: `@omni("knowledge.help")`
+
+### ✅ Loaded: git (32%)
+
+- **Try**: `@omni("git.help")`
+```
+
+**Auto-Loaded Skills**
+
+```markdown
+## 🔄 Auto-loaded: new-skill (75%)
+
+- **Try**: `@omni("new-skill.help")`
+```
+
+**Remote Suggestions**
+
+```markdown
+## ☁️ Remote Skills (not installed)
+
+1. **network-analysis** - Analyze network traffic... (85%)
+2. **packet-capture** - Capture packets... (72%)
+
+**To install**:
+@omni("skill.jit_install", {"skill_id": "network-analysis"})
+```
+
+### Parameters
+
+| Parameter      | Type   | Default  | Description                       |
+| -------------- | ------ | -------- | --------------------------------- |
+| `task`         | string | required | Natural language task description |
+| `auto_install` | bool   | false    | Auto-install remote skills        |
+
+### Index Optimization
+
+Phase 36.8 also improves vector index quality:
+
+**1. Rich Semantic Documents**
+
+```python
+# Before (minimal document)
+"Skill: git\nDescription: Git version control..."
+
+# After (rich document)
+"""## Skill: git
+## Description: Git version control system for managing code changes.
+## Keywords: git, commit, branch, merge, push, pull
+## Usage Examples: how to git, git task, work with git, how to commit...
+## Use Cases: I need to commit, Help me merge, I need to push...
+## Category: Software Development Tool"""
+```
+
+**2. Cosine Distance Metric**
+
+Changed ChromaDB collection to use cosine distance for better semantic similarity:
+
+```python
+# vector_store.py
+return client.get_or_create_collection(
+    name=collection_name,
+    metadata={
+        "description": f"Project knowledge base: {collection_name}",
+        "hnsw:space": "cosine",  # Cosine instead of L2
+    },
+)
+```
+
+**3. Confidence Calculation**
+
+Distance-to-similarity conversion with clamping:
+
+```python
+# Convert distance to similarity (clamp between 0 and 1)
+raw_score = 1.0 - res.distance
+similarity = max(0.0, min(1.0, raw_score))
+```
+
+### Test Results
+
+| Query                  | Top Skill     | Confidence |
+| ---------------------- | ------------- | ---------- |
+| "update documentation" | documentation | 45%        |
+| "polish text"          | writer        | 52%        |
+| "commit changes"       | git           | 32%        |
+
+### Related Files
+
+| File                                     | Purpose                           |
+| ---------------------------------------- | --------------------------------- |
+| `assets/skills/skill/tools.py`           | `skill.auto_route` implementation |
+| `agent/core/skill_discovery/indexing.py` | Rich document building            |
+| `agent/core/vector_store.py`             | Cosine distance configuration     |
+| `assets/skills/skill/tests/...`          | Phase 36.8 tests                  |
+
+### See Also
+
+- [Routing](routing.md) - SemanticRouter and skill routing
+- [Skills Overview](../skills.md) - Complete skill documentation

@@ -76,12 +76,12 @@ in
   packages = [
     pkgs.git
     pkgs.just
-    pkgs.secretspec
     nixpkgs-latest.glow
+    nixpkgs-latest.google-cloud-sdk
+    packages.secretspec
   ];
 
   dotenv.enable = true;
-
   dotenv.filename = [ ".env" ];
   # https://devenv.sh/languages/
   # languages.rust.enable = true;

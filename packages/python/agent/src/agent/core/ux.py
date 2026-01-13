@@ -291,6 +291,17 @@ class UXManager:
         else:
             self._render_show_warning(message)
 
+    def show_skill_suggestions(self, suggestions: List[Dict[str, Any]]) -> None:
+        """
+        Display remote skill suggestions with installation instructions.
+
+        Phase 36.8: When no local skills match, suggest remote skills.
+        """
+        if self._should_emit():
+            self._emit("show_skill_suggestions", suggestions=suggestions)
+        else:
+            self._render_show_skill_suggestions(suggestions)
+
     # ==================== Rendering Methods (Original Implementation) ====================
 
     def _render_rule(self, title: str = "", style: str = "blue") -> None:
@@ -516,6 +527,41 @@ class UXManager:
                 Text(f"[yellow]⚠️ {message}[/]", justify="left"),
                 title="⚠️ Warning",
                 border_style="yellow",
+            )
+        )
+
+    def _render_show_skill_suggestions(self, suggestions: List[Dict[str, Any]]) -> None:
+        """Display remote skill suggestions with installation instructions.
+
+        Phase 36.8: When no local skills match, suggest remote skills.
+        """
+        if not suggestions:
+            return
+
+        # Build suggestion content
+        content_lines = ["[bold cyan]💡 Available Skills (not installed)[/]\n"]
+
+        for i, skill in enumerate(suggestions[:5], 1):  # Max 5 suggestions
+            name = skill.get("name", skill.get("id", "Unknown"))
+            description = skill.get("description", "")[:100]
+            score = skill.get("score", 0.0)
+
+            content_lines.append(f"[bold]{i}. {name}[/]")
+            content_lines.append(f"   {description}")
+            content_lines.append(f"   [dim]Match: {score:.0%}[/]")
+            content_lines.append("")
+
+        install_cmd = "@omni('skill.jit_install', {'skill_name': '<skill_id>'})"
+        content_lines.append(f"[yellow]To install:[/] {install_cmd}")
+
+        content = "\n".join(content_lines)
+
+        self.console.print(
+            Panel(
+                Text(content, justify="left"),
+                title="🎯 Skill Suggestions",
+                border_style="magenta",
+                padding=(1, 2),
             )
         )
 

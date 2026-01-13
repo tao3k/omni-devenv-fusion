@@ -31,7 +31,8 @@ class RoutingResult:
     - mission_brief: Actionable directive for the Worker
     - reasoning: Audit trail of why these skills were chosen
     - confidence: Routing confidence (0.0-1.0)
-    - suggested_skills: Skills found via Vector Fallback (Phase 36.2)
+    - suggested_skills: Skills found via Vector Fallback (Phase 36.2) - LOCAL only
+    - remote_suggestions: Remote skills found that need installation (Phase 36.8)
     - from_cache: Whether this was a cache hit
     - timestamp: When routing decision was made
     """
@@ -41,6 +42,7 @@ class RoutingResult:
     reasoning: str
     confidence: float = 0.5
     suggested_skills: List[str] = field(default_factory=list)
+    remote_suggestions: List[Dict[str, Any]] = field(default_factory=list)  # Phase 36.8
     from_cache: bool = False
     timestamp: float = field(default_factory=time.time)
 
@@ -51,6 +53,7 @@ class RoutingResult:
             "reasoning": self.reasoning,
             "confidence": self.confidence,
             "suggested_skills": self.suggested_skills,
+            "remote_suggestions": self.remote_suggestions,
             "from_cache": self.from_cache,
             "timestamp": self.timestamp,
         }
