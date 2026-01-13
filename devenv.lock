@@ -67,10 +67,10 @@
     "devenv": {
       "locked": {
         "dir": "src/modules",
-        "lastModified": 1768251012,
+        "lastModified": 1768272662,
         "owner": "cachix",
         "repo": "devenv",
-        "rev": "a444c2e25abd025b312c8de8a86607d36390b685",
+        "rev": "8851f6d40a61091a39076f55e2765ca2b15b733e",
         "type": "github"
       },
       "original": {
@@ -217,10 +217,10 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1768227710,
+        "lastModified": 1768292020,
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "321aab84a04492df7230090eabc61fa0b224a106",
+        "rev": "4dd9e82a1fba52429845af76ab9e170925a48bc3",
         "type": "github"
       },
       "original": {
@@ -316,7 +316,27 @@
         "omnibus": "omnibus",
         "pre-commit-hooks": [
           "git-hooks"
+        ],
+        "rust-overlay": "rust-overlay"
+      }
+    },
+    "rust-overlay": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs-latest"
         ]
+      },
+      "locked": {
+        "lastModified": 1768272338,
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "rev": "03dda130a8701b08b0347fcaf850a190c53a3c1e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "type": "github"
       }
     },
     "systems": {

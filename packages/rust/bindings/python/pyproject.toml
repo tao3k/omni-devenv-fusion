@@ -1,0 +1,18 @@
+[project]
+name = "omni-core-rs"
+version = "0.1.0"
+description = "Rust core for Omni DevEnv"
+requires-python = ">=3.13"
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+]
+
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+
+[tool.maturin]
+module-name = "omni_core_rs"

@@ -1,7 +1,10 @@
 # Skills Documentation
 
-> **Phase 41: Wisdom-Aware Routing** | **Phase 40: Automated Reinforcement Loop** | **Phase 39: Self-Evolving Feedback Loop** | **Phase 36.6: Production Stability** | **Phase 36.5: Hot Reload & Index Sync** | **Phase 36: Trinity v2.0** | **Phase 35.3: Pure MCP Server** | **Phase 35.2: Cascading Templates** | **Phase 35.1: Simplified Test Framework** | **Phase 34: Cognitive System** | **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
+> **Phase 45: Rust Core Integration** | **Phase 44: Experiential Agent** | **Phase 43: Holographic Agent** | **Phase 41: Wisdom-Aware Routing** | **Phase 40: Automated Reinforcement Loop** | **Phase 39: Self-Evolving Feedback Loop** | **Phase 36.6: Production Stability** | **Phase 36.5: Hot Reload & Index Sync** | **Phase 36: Trinity v2.0** | **Phase 35.3: Pure MCP Server** | **Phase 35.2: Cascading Templates** | **Phase 35.1: Simplified Test Framework** | **Phase 34: Cognitive System** | **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
 
+> **Phase 45**: Rust workspace with high-performance omni-sniffer (libgit2, 30x speedup)
+> **Phase 44**: Skill-level episodic memory from harvested insights
+> **Phase 43**: The Holographic Agent - environment snapshot injected into ReAct loop
 > **Phase 41**: The system now **injects past lessons** from harvested knowledge into Mission Briefs.
 > **Phase 40**: The system now **learns from experience**. Successful routing decisions boost future confidence automatically.
 > **Phase 36**: The **Executor is now a Skill** (`skills/terminal`). Legacy `mcp_core.execution` has been deleted.

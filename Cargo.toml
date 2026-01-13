@@ -1,0 +1,37 @@
+[workspace]
+resolver = "2"
+
+# Include all Rust crates from packages/rust/
+members = [
+    "packages/rust/crates/*",
+    "packages/rust/bindings/python"
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["Omni-DevEnv Team"]
+license = "MIT"
+publish = false
+
+# [Phase 45.2] Unified dependency management
+[workspace.dependencies]
+# Core dependencies
+tokio = { version = "1.36", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+walkdir = "2.4"
+
+# Git operations (libgit2 for performance)
+git2 = "0.18"
+
+# Python bindings - Python 3.13 support via PyO3 0.23+
+pyo3 = { version = "0.23.3", features = ["extension-module"] }
+
+# Performance optimization
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

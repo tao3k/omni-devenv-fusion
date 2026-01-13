@@ -1,0 +1,14 @@
+[package]
+name = "omni-core-rs"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# [Phase 45.2] Python 3.13 support via PyO3 0.23
+pyo3 = { workspace = true, features = ["extension-module"] }
+omni-sniffer = { path = "../../crates/omni-sniffer" }
+serde = { workspace = true }
+serde_json = { workspace = true }

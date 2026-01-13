@@ -5,6 +5,13 @@ inputs:
     url: github:cachix/devenv-nixpkgs/rolling
   nixpkgs-latest:
     url: github:NixOS/nixpkgs/nixpkgs-unstable
+
+  rust-overlay:
+    url: github:oxalica/rust-overlay
+    inputs:
+      nixpkgs:
+        follows: nixpkgs-latest
+
   omnibus:
     url: github:tao3k/omnibus/main
 allowUnfree: true

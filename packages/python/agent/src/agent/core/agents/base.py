@@ -38,6 +38,9 @@ from agent.core.vector_store import get_vector_memory, SearchResult
 # [Phase 43] Import Sniffer for Holographic Context
 from agent.core.router.sniffer import get_sniffer
 
+# [Phase 44] Import Librarian for Skill-Level Memory
+from agent.capabilities.knowledge.librarian import get_skill_lessons
+
 logger = structlog.get_logger(__name__)
 
 
@@ -179,6 +182,7 @@ class BaseAgent(ABC):
         ⚡️ Core: Convert TaskBrief to System Prompt (Phase 14 Physical Implementation).
         Phase 16: Injects relevant project knowledge from VectorStore.
         Phase 18: Returns RAG sources for UX visualization.
+        Phase 44: Injects skill-level experiential memory.
 
         Args:
             mission_brief: The Commander's Intent from HiveRouter
@@ -201,13 +205,17 @@ class BaseAgent(ABC):
         if enable_rag:
             knowledge_context, rag_sources = await self._retrieve_relevant_knowledge(mission_brief)
 
-        # 4. Build Telepathic System Prompt with knowledge injection
+        # 4. Phase 44: Retrieve skill-level experiential lessons
+        skill_lessons = await self._get_agent_skill_lessons()
+
+        # 5. Build Telepathic System Prompt with knowledge injection
         system_prompt = self._build_system_prompt(
             mission_brief=mission_brief,
             skill_prompts=skill_prompts,
             constraints=constraints or [],
             relevant_files=relevant_files or [],
             knowledge_context=knowledge_context,
+            skill_lessons=skill_lessons,  # Phase 44: Experiential memory
         )
 
         return AgentContext(
@@ -316,6 +324,26 @@ class BaseAgent(ABC):
             logger.warning("RAG retrieval failed", error=str(e))
             return "", []
 
+    async def _get_agent_skill_lessons(self) -> str:
+        """
+        [Phase 44] Retrieve experiential lessons for the agent's default skills.
+
+        Searches the vector store for harvested insights (past mistakes, pitfalls,
+        best practices) that are relevant to the agent's skills.
+
+        Returns:
+            Formatted string with skill lessons, or empty string if none found
+        """
+        if not self.default_skills:
+            return ""
+
+        try:
+            lessons = await get_skill_lessons(skills=self.default_skills, limit=5)
+            return lessons
+        except Exception as e:
+            logger.warning("Skill lessons retrieval failed", error=str(e))
+            return ""
+
     def _build_system_prompt(
         self,
         mission_brief: str,
@@ -323,12 +351,14 @@ class BaseAgent(ABC):
         constraints: List[str],
         relevant_files: List[str],
         knowledge_context: str = "",  # Phase 16: RAG knowledge
+        skill_lessons: str = "",  # Phase 44: Experiential memory
     ) -> str:
         """
         Build the telepathic system prompt with Mission Brief.
 
         Phase 14: "Prompt is Policy" - The Brief IS the contract.
         Phase 16: Injects relevant project knowledge from VectorStore.
+        Phase 44: Injects skill-level experiential memory (past mistakes, pitfalls).
         """
         prompt_parts = [
             f"# ROLE: {self.role}",
@@ -345,6 +375,10 @@ class BaseAgent(ABC):
         # Phase 16: Inject knowledge if available
         if knowledge_context:
             prompt_parts.extend([knowledge_context, ""])
+
+        # Phase 44: Inject skill-level experiential memory
+        if skill_lessons:
+            prompt_parts.extend([skill_lessons, ""])
 
         prompt_parts.extend(
             [

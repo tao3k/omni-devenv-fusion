@@ -235,6 +235,53 @@ async def search_project_rules(query: str) -> str:
     return "\n".join(lines)
 
 
+async def get_skill_lessons(skills: List[str], limit: int = 5) -> str:
+    """
+    [Phase 44] Retrieve lessons specifically tagged for these skills.
+
+    Searches the vector store for harvested insights (past mistakes, pitfalls,
+    best practices) that are relevant to the given skills.
+
+    Args:
+        skills: List of skill names to search lessons for
+        limit: Maximum number of lessons to return (default: 5)
+
+    Returns:
+        Formatted string with lessons, or empty string if none found
+    """
+    if not skills:
+        return ""
+
+    vm = get_vector_memory()
+
+    if not vm.client:
+        return ""
+
+    # Build query from skill names
+    query = f"mistakes pitfalls best practices for {' '.join(skills)}"
+
+    # Search specifically for harvested insights
+    results = await vm.search(
+        query=query, n_results=limit, where_filter={"type": "harvested_insight"}
+    )
+
+    if not results:
+        return ""
+
+    # Format results with header
+    lines = ["### 🛑 KNOWN PITFALLS & PAST LESSONS", ""]
+
+    for r in results:
+        skill_tag = r.metadata.get("skill", "general")
+        relevance = "⭐" * int((1.0 - r.distance) * 5)
+        lines.append(f"{relevance} **{skill_tag}**: {r.content}")
+        lines.append("")
+
+    logger.info("Skill lessons retrieved", skills=skills, lessons=len(results))
+
+    return "\n".join(lines)
+
+
 logger.info("Librarian functions loaded (One Tool compatible)")
 
 
@@ -244,4 +291,5 @@ __all__ = [
     "bootstrap_knowledge",
     "list_knowledge_domains",
     "search_project_rules",
+    "get_skill_lessons",
 ]

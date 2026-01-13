@@ -448,7 +448,9 @@ def test_prepare_commit_handles_lefthook_reformat(git, tmp_path, monkeypatch):
 
     # Initialize git repo first
     subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
-    subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"], cwd=tmp_path, capture_output=True
+    )
     subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True)
 
     # Create and stage a file
@@ -492,4 +494,6 @@ def test_prepare_commit_handles_lefthook_reformat(git, tmp_path, monkeypatch):
     # Verify file was re-staged after lefthook
     # Should have: 1) initial staging, 2) re-staging after lefthook
     add_calls = [c for c in calls if c[:2] == ["git", "add"]]
-    assert len(add_calls) >= 2, f"File should be staged initially and re-staged after lefthook. Got: {add_calls}"
+    assert len(add_calls) >= 2, (
+        f"File should be staged initially and re-staged after lefthook. Got: {add_calls}"
+    )

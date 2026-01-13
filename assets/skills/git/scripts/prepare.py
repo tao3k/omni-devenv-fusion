@@ -205,10 +205,7 @@ def prepare_commit(
     initially_staged, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root)
     initially_staged_set = set(line for line in initially_staged.splitlines() if line.strip())
 
-    modified, _, _ = _run(
-        ["git", "diff", "--name-only", "--diff-filter=ACM"],
-        cwd=root
-    )
+    modified, _, _ = _run(["git", "diff", "--name-only", "--diff-filter=ACM"], cwd=root)
     modified_set = set(line for line in modified.splitlines() if line.strip())
 
     all_to_stage = initially_staged_set | modified_set
@@ -441,10 +438,7 @@ def stage_and_scan(root_dir: str = ".") -> dict:
 
     # 2. Get modified tracked files (not untracked)
     # Use --exclude-standard to respect .gitignore
-    modified, _, _ = _run(
-        ["git", "diff", "--name-only", "--diff-filter=ACM"],
-        cwd=root_dir
-    )
+    modified, _, _ = _run(["git", "diff", "--name-only", "--diff-filter=ACM"], cwd=root_dir)
     modified_set = set(line for line in modified.splitlines() if line.strip())
 
     # 3. Stage: (originally staged) + (modified tracked files)

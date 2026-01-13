@@ -41,10 +41,6 @@
         sourcePreference = "wheel";
       };
 
-      editableOverlay = workspace.mkEditablePyprojectOverlay {
-        root = "$REPO_ROOT";
-      };
-
       pythonSets = forAllSystems (
         system:
         let
@@ -59,15 +55,26 @@
               pyproject-build-systems.overlays.wheel
               overlay
               (final: prev: {
+                # Fix pypika build with setuptools
                 pypika = prev.pypika.overrideAttrs (old: {
                   nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
                     final.setuptools
+                  ];
+                });
+                # Fix hatchling editable build with editables
+                hatchling = prev.hatchling.overrideAttrs (old: {
+                  propagatedBuildInputs = (old.propagatedBuildInputs or [ ]) ++ [
+                    final.editables
                   ];
                 });
               })
             ]
           )
       );
+
+      editableOverlay = workspace.mkEditablePyprojectOverlay {
+        root = "$REPO_ROOT";
+      };
 
     in
     {

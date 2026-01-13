@@ -1,0 +1,10 @@
+[package]
+name = "omni-sniffer"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+anyhow = { workspace = true }
+git2 = { workspace = true }

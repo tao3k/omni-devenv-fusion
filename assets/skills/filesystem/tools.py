@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import List, Literal, Any
 
 from pydantic import BaseModel, Field
-from common.mcp_core import is_safe_path, run_subprocess
+from common.mcp_core import is_safe_path, run_subprocess, normalize_path
 import structlog
 
 from agent.skills.decorators import skill_command
@@ -168,10 +168,17 @@ async def search_files(pattern: str, path: str = ".", use_regex: bool = False) -
     Search for text patterns in files (like grep).
 
     Use this to find code snippets, function definitions, or specific patterns.
+
+    Supports:
+    - Relative paths (e.g., "packages/python/agent")
+    - Absolute paths within project (auto-converted to relative)
+    - Trusted absolute paths (e.g., /nix/store/*)
     """
-    is_safe, error_msg = is_safe_path(path)
+    # Normalize path (converts absolute to relative, validates safety)
+    is_safe, error_msg, normalized = normalize_path(path)
     if not is_safe:
         return f"Error: {error_msg}"
+    path = normalized
 
     project_root = Path.cwd()
     search_root = project_root / path
@@ -415,6 +422,14 @@ async def _run_ast_rewrite(
     return f"--- ast-rewrite Applied ---\n{stdout}"
 
 
+def _convert_path_to_relative(path: str) -> str:
+    """Convert absolute path to relative path if within project."""
+    is_safe, error_msg, normalized = normalize_path(path)
+    if not is_safe:
+        raise ValueError(error_msg)
+    return normalized
+
+
 @skill_command(
     name="ast_search",
     category="read",
@@ -430,7 +445,14 @@ async def ast_search(pattern: str, lang: str = "py", path: str = ".") -> str:
     - "if $COND:" - Find all if statements
     - "print($ARGS)" - Find print calls with any args
     - "import $MODULE" - Find all import statements
+
+    Supports absolute paths - they will be converted to relative paths automatically.
     """
+    try:
+        path = _convert_path_to_relative(path)
+    except ValueError as e:
+        return f"Error: {e}"
+
     is_safe, error_msg = is_safe_path(path)
     if not is_safe:
         return f"Error: {error_msg}"
@@ -450,7 +472,14 @@ async def ast_rewrite(pattern: str, replacement: str, lang: str = "py", path: st
     Rewrite Examples:
     - pattern: "print($MSG)" -> replacement: "logger.info($MSG)"
     - pattern: "def $NAME($ARGS):" -> replacement: "async def $NAME($ARGS):"
+
+    Supports absolute paths - they will be converted to relative paths automatically.
     """
+    try:
+        path = _convert_path_to_relative(path)
+    except ValueError as e:
+        return f"Error: {e}"
+
     is_safe, error_msg = is_safe_path(path)
     if not is_safe:
         return f"Error: {error_msg}"
