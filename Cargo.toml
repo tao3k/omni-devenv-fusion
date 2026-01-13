@@ -33,6 +33,7 @@ pyo3 = { version = "0.27.2", features = ["extension-module"] }
 # [Phase 47] The Iron Lung - Safe I/O & Tokenization
 tiktoken-rs = "0.9.1"
 memchr = "2.7.6"
+tempfile = "3.19.1"
 
 # Performance optimization
 [profile.release]

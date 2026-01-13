@@ -1,7 +1,8 @@
 # Skills Documentation
 
-> **Phase 47: The Iron Lung** | **Phase 46: The Neural Bridge** | **Phase 45: Rust Core Integration** | **Phase 44: Experiential Agent** | **Phase 43: Holographic Agent** | **Phase 41: Wisdom-Aware Routing** | **Phase 40: Automated Reinforcement Loop** | **Phase 39: Self-Evolving Feedback Loop** | **Phase 36.6: Production Stability** | **Phase 36.5: Hot Reload & Index Sync** | **Phase 36: Trinity v2.0** | **Phase 35.3: Pure MCP Server** | **Phase 35.2: Cascading Templates** | **Phase 35.1: Simplified Test Framework** | **Phase 34: Cognitive System** | **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
+> **Phase 52: The Surgeon** | **Phase 47: The Iron Lung** | **Phase 46: The Neural Bridge** | **Phase 45: Rust Core Integration** | **Phase 44: Experiential Agent** | **Phase 43: Holographic Agent** | **Phase 41: Wisdom-Aware Routing** | **Phase 40: Automated Reinforcement Loop** | **Phase 39: Self-Evolving Feedback Loop** | **Phase 36.6: Production Stability** | **Phase 36.5: Hot Reload & Index Sync** | **Phase 36: Trinity v2.0** | **Phase 35.3: Pure MCP Server** | **Phase 35.2: Cascading Templates** | **Phase 35.1: Simplified Test Framework** | **Phase 34: Cognitive System** | **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
 
+> **Phase 52**: AST-based structural code editing with dry-run support. "Preview twice, apply once."
 > **Phase 47**: Safe I/O (binary detection, size limits) + BPE tokenization (100-250x faster)
 > **Phase 46**: Type unification between Rust and Python (SSOT via omni-types)
 > **Phase 45**: Rust workspace with high-performance omni-sniffer (libgit2, 30x speedup)
@@ -314,7 +315,7 @@ assets/templates/git/
 └── workflow_result.j2
 ```
 
-## Available Skills (19 Skills, 90+ Commands)
+## Available Skills (20 Skills, 95+ Commands)
 
 ### Core Infrastructure (5)
 
@@ -326,7 +327,7 @@ assets/templates/git/
 | **knowledge**  | 🧠 Orchestrator | 9        | Development context, RAG            |
 | **skill**      | Management      | 8        | Skill discovery, JIT install        |
 
-### Capability Skills (14)
+### Capability Skills (15)
 
 | Skill                    | Commands | Description                           |
 | ------------------------ | -------- | ------------------------------------- |
@@ -341,6 +342,7 @@ assets/templates/git/
 | **documentation**        | 4        | Documentation management              |
 | **crawl4ai**             | 1        | Web content extraction                |
 | **python_engineering**   | 2        | Python best practices                 |
+| **structural_editing**   | 4        | AST-based refactoring (Phase 52)      |
 | **\_template**           | -        | Skill template                        |
 | **test-skill**           | 4        | Test skill example                    |
 | **stress_test_skill**    | -        | Stress testing                        |

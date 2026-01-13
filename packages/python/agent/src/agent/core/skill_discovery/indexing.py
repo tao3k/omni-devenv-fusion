@@ -292,6 +292,7 @@ async def reindex_skills_from_manifests(
     Returns:
         Dict with stats about the reindexing operation
     """
+    import asyncio
     from agent.core.registry import get_skill_registry
     from agent.core.vector_store import get_vector_memory
 
@@ -319,45 +320,81 @@ async def reindex_skills_from_manifests(
         except Exception as e:
             logger.warning("Failed to clear existing collection", error=str(e))
 
-    # Index each skill
+    # Prepare all skill data first (serial, fast)
+    skill_data_list = []
     for skill_name in skills:
         try:
             manifest = registry.get_skill_manifest(skill_name)
             if not manifest:
                 continue
-
-            # [Phase 37.1] Generate synthetic queries if enabled
-            synthetic_queries: list[str] = []
-            if generate_synthetic:
-                synthetic_queries = await _generate_synthetic_queries(manifest)
-
-            # Build rich semantic document from manifest (with synthetic queries)
-            semantic_text = _build_skill_document(manifest, synthetic_queries)
-
-            success = await vm.add(
-                documents=[semantic_text],
-                ids=[f"skill-{skill_name}"],
-                collection=SKILL_REGISTRY_COLLECTION,
-                metadatas=[
-                    {
-                        "id": skill_name,
-                        "name": skill_name,
-                        "keywords": ",".join(manifest.routing_keywords),
-                        "installed": "true",
-                        "type": "local",
-                        "version": manifest.version,
-                        "synthetic_queries": len(synthetic_queries),  # Track for debugging
-                    }
-                ],
-            )
-
-            if success:
-                indexed += 1
-                logger.debug(f"Indexed skill: {skill_name}")
-
+            skill_data_list.append((skill_name, manifest))
         except Exception as e:
             errors.append({"skill": skill_name, "error": str(e)})
-            logger.error(f"Failed to index skill {skill_name}", error=str(e))
+            logger.error(f"Failed to load manifest for {skill_name}", error=str(e))
+
+    # [Optimization] Generate synthetic queries concurrently
+    synthetic_queries_map: dict[str, list[str]] = {}
+    if generate_synthetic:
+        logger.info(f"Generating synthetic queries for {len(skill_data_list)} skills...")
+        # Process in batches of 5 to avoid overwhelming the API
+        batch_size = 5
+        for i in range(0, len(skill_data_list), batch_size):
+            batch = skill_data_list[i : i + batch_size]
+            # Concurrent LLM calls for this batch
+            tasks = [_generate_synthetic_queries(manifest) for _, manifest in batch]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            # Map results back to skill names
+            for (skill_name, _), result in zip(batch, results):
+                if isinstance(result, Exception):
+                    logger.debug(
+                        f"Synthetic query generation failed for {skill_name}", error=str(result)
+                    )
+                    synthetic_queries_map[skill_name] = []
+                elif isinstance(result, list):
+                    synthetic_queries_map[skill_name] = result
+                else:
+                    synthetic_queries_map[skill_name] = []
+            logger.debug(
+                f"Processed batch {i // batch_size + 1}/{(len(skill_data_list) + batch_size - 1) // batch_size}"
+            )
+
+    # [Optimization] Index all skills concurrently (batch add to vector store)
+    logger.info(f"Indexing {len(skill_data_list)} skills...")
+    documents = []
+    ids = []
+    metadatas = []
+
+    for skill_name, manifest in skill_data_list:
+        synthetic_queries = synthetic_queries_map.get(skill_name, [])
+        semantic_text = _build_skill_document(manifest, synthetic_queries)
+
+        documents.append(semantic_text)
+        ids.append(f"skill-{skill_name}")
+        metadatas.append(
+            {
+                "id": skill_name,
+                "name": skill_name,
+                "keywords": ",".join(manifest.routing_keywords),
+                "installed": "true",
+                "type": "local",
+                "version": manifest.version,
+                "synthetic_queries": len(synthetic_queries),
+            }
+        )
+
+    # Batch add to vector store (much faster than individual adds)
+    if documents:
+        success = await vm.add(
+            documents=documents,
+            ids=ids,
+            collection=SKILL_REGISTRY_COLLECTION,
+            metadatas=metadatas,
+        )
+        if success:
+            indexed = len(documents)
+            logger.info(f"Indexed {indexed} skills successfully")
+        else:
+            errors.append({"batch": "vector_store", "error": "Batch add failed"})
 
     # Also index remote skills from known_skills.json
     remote_indexed = await _index_remote_skills(vm)

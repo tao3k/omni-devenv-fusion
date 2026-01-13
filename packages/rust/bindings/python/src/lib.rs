@@ -6,6 +6,7 @@
 //! - Token counting (count_tokens)
 //! - Secret scanning (scan_secrets)
 //! - Code navigation (get_file_outline, search_code, search_directory)
+//! - Structural refactoring (structural_replace, structural_preview)
 
 use pyo3::prelude::*;
 use omni_sniffer::OmniSniffer;
@@ -13,6 +14,7 @@ use omni_io;
 use omni_tokenizer;
 use omni_security::SecretScanner;
 use omni_tags::TagExtractor;
+use omni_edit::StructuralEditor;
 use anyhow;
 
 /// Python wrapper for EnvironmentSnapshot.
@@ -145,7 +147,11 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Phase 51: The Hunter - Structural Code Search
     m.add_function(pyo3::wrap_pyfunction!(search_code, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(search_directory, m)?)?;
-    m.add("VERSION", "0.3.0")?;
+    // Phase 52: The Surgeon - Structural Refactoring
+    m.add_function(pyo3::wrap_pyfunction!(structural_replace, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(structural_preview, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(structural_apply, m)?)?;
+    m.add("VERSION", "0.4.0")?;
     Ok(())
 }
 
@@ -295,6 +301,95 @@ fn search_directory(path: String, pattern: String, file_pattern: Option<&str>) -
             };
             TagExtractor::search_directory(&path, &pattern, config)
                 .unwrap_or_else(|e| format!("[Search error: {}]", e))
+        })
+    })
+}
+
+// ============================================================================
+// Phase 52: The Surgeon - Structural Refactoring
+// ============================================================================
+
+/// Perform structural replace on content using ast-grep patterns.
+///
+/// This is the pure function that operates on content strings.
+/// Use structural_preview or structural_apply for file operations.
+///
+/// Args:
+///   content: Source code content
+///   pattern: ast-grep pattern to match (e.g., "connect($ARGS)")
+///   replacement: Replacement pattern (e.g., "async_connect($ARGS)")
+///   language: Programming language (python, rust, javascript, typescript)
+///
+/// Returns:
+///   Formatted string showing diff and edit locations, or error message.
+///
+/// Examples:
+///   structural_replace("x = connect(a, b)", "connect($ARGS)", "safe_connect($ARGS)", "python")
+///   # Returns diff showing "x = safe_connect(a, b)"
+#[pyfunction]
+fn structural_replace(content: &str, pattern: &str, replacement: &str, language: &str) -> String {
+    Python::attach(|py| {
+        py.detach(|| {
+            match StructuralEditor::replace(content, pattern, replacement, language) {
+                Ok(result) => StructuralEditor::format_result(&result, None),
+                Err(e) => format!("[Structural replace error: {}]", e),
+            }
+        })
+    })
+}
+
+/// Preview structural replace on a file (no modification).
+///
+/// Returns diff showing what changes would be made without modifying the file.
+///
+/// Args:
+///   path: Path to the source file
+///   pattern: ast-grep pattern to match
+///   replacement: Replacement pattern
+///   language: Optional language hint (auto-detected if None)
+///
+/// Returns:
+///   Formatted string showing diff and edit locations.
+#[pyfunction]
+#[pyo3(signature = (path, pattern, replacement, language = None))]
+fn structural_preview(path: String, pattern: &str, replacement: &str, language: Option<&str>) -> String {
+    Python::attach(|py| {
+        py.detach(|| {
+            match StructuralEditor::preview(&path, pattern, replacement, language) {
+                Ok(result) => StructuralEditor::format_result(&result, Some(&path)),
+                Err(e) => format!("[Structural preview error: {}]", e),
+            }
+        })
+    })
+}
+
+/// Apply structural replace to a file (modifies the file).
+///
+/// **CAUTION**: This modifies the file in place. Use structural_preview first to verify changes.
+///
+/// Args:
+///   path: Path to the source file
+///   pattern: ast-grep pattern to match
+///   replacement: Replacement pattern
+///   language: Optional language hint (auto-detected if None)
+///
+/// Returns:
+///   Formatted string showing applied changes and diff.
+#[pyfunction]
+#[pyo3(signature = (path, pattern, replacement, language = None))]
+fn structural_apply(path: String, pattern: &str, replacement: &str, language: Option<&str>) -> String {
+    Python::attach(|py| {
+        py.detach(|| {
+            match StructuralEditor::apply(&path, pattern, replacement, language) {
+                Ok(result) => {
+                    let mut output = StructuralEditor::format_result(&result, Some(&path));
+                    if result.count > 0 {
+                        output.push_str("\n[FILE MODIFIED]\n");
+                    }
+                    output
+                }
+                Err(e) => format!("[Structural apply error: {}]", e),
+            }
         })
     })
 }

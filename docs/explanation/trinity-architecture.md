@@ -1,6 +1,6 @@
-# Trinity Architecture (Phase 47)
+# Trinity Architecture (Phase 52)
 
-> **Phase 47: The Iron Lung** | **Phase 46: The Neural Bridge** | **Phase 45: Rust Core Integration**
+> **Phase 52: The Surgeon** | **Phase 47: The Iron Lung** | **Phase 46: The Neural Bridge** | **Phase 45: Rust Core Integration**
 > **Phase 44: Experiential Agent** | **Phase 43: Holographic Agent** | **Phase 42: State-Aware Routing**
 > **Phase 41: Wisdom-Aware Routing** | **Phase 40: Automated Reinforcement Loop**
 > **Phase 36: Trinity v2.0 - Swarm Engine + Skills**
@@ -10,6 +10,7 @@
 
 | Phase | Key Change                                                                                                 |
 | ----- | ---------------------------------------------------------------------------------------------------------- |
+| 52    | **The Surgeon**: AST-based structural editing with dry-run support via omni-edit (ast-grep + similar)      |
 | 47    | **The Iron Lung**: Safe I/O (binary detection, size limits) + BPE tokenization (100-250x faster)           |
 | 46    | **The Neural Bridge**: Type unification between Rust and Python (SSOT via omni-types)                      |
 | 45    | **Rust Core Integration**: Workspace structure, high-performance omni-sniffer (libgit2, 30x speedup)       |
@@ -98,6 +99,7 @@ The Trinity Architecture unifies three critical concerns through a **Skill-Centr
 **Implementation**:
 
 - `skills/filesystem` - File I/O, grep search, AST operations (consolidated from file_ops)
+- `skills/structural_editing` - AST-based refactoring with dry-run (Phase 52: The Surgeon)
 - `skills/code_insight` - AST analysis, code structure
 
 **Usage**: `@omni("filesystem.read_file", {"path": "README.md"})`

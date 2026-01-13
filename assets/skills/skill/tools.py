@@ -387,7 +387,7 @@ async def load(skill_name: str) -> str:
 
 
 @skill_command(category="admin")
-async def reindex(clear: bool = False) -> str:
+async def reindex(clear: bool = False, generate_synthetic: bool = True) -> str:
     """
     [Admin] Force update the vector index from SKILL.md files.
 
@@ -396,14 +396,16 @@ async def reindex(clear: bool = False) -> str:
 
     Args:
         clear: If True, delete existing index before reindexing
+        generate_synthetic: If True, generate LLM-based queries for better search (slower)
 
     Returns:
         Index update status
 
     Examples:
         ```python
-        @omni("skill.reindex")  # Incremental update
+        @omni("skill.reindex")  # Incremental update with synthetic queries
         @omni("skill.reindex", {"clear": true})  # Full rebuild
+        @omni("skill.reindex", {"clear": true, "generate_synthetic": false})  # Fast rebuild
         ```
     """
     from agent.core.skill_discovery import reindex_skills_from_manifests
@@ -415,11 +417,17 @@ async def reindex(clear: bool = False) -> str:
     else:
         lines.append("**Mode**: Incremental update")
 
+    lines.append(
+        f"**Synthetic Queries**: {'Enabled (slower)' if generate_synthetic else 'Disabled (fast)'}"
+    )
+
     lines.append("")
     lines.append("⏳ *Reindexing skills...*")
 
     # Run reindexing
-    stats = await reindex_skills_from_manifests(clear_existing=clear)
+    stats = await reindex_skills_from_manifests(
+        clear_existing=clear, generate_synthetic=generate_synthetic
+    )
 
     lines = [
         "# ✅ Knowledge Index Updated",

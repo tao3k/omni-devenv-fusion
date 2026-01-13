@@ -20,6 +20,8 @@ omni-tokenizer = { path = "../../crates/omni-tokenizer" }
 omni-security = { path = "../../crates/omni-security" }
 # [Phase 50] The Cartographer
 omni-tags = { path = "../../crates/omni-tags" }
+# [Phase 52] The Surgeon - Structural Refactoring
+omni-edit = { path = "../../crates/omni-edit" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }

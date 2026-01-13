@@ -1,6 +1,6 @@
 # ODF-REP: Rust Engineering Protocol
 
-> **Version:** 1.0 (Genesis)
+> **Version:** 1.1 (Phase 52)
 > **Toolchain:** `nightly-2026-01-12`
 > **Philosophy:** Atomic, Fearless, Zero-Cost.
 
@@ -77,6 +77,8 @@ Since we use Nightly, we can leverage cutting-edge features, but must be restrai
 
 ## 5. File Structure Specification
 
+### 5.1 Workspace Structure
+
 ```
 packages/rust/
 ├── crates/
@@ -98,6 +100,77 @@ packages/rust/
 ├── .clippy.toml           # Clippy strict configuration
 └── .cargo/
     └── config.toml        # Platform-specific build configuration
+```
+
+### 5.2 Atomic Module Structure (Required for Crates > 300 LOC)
+
+When a crate exceeds 300 lines of code, it MUST be split into atomic modules:
+
+```
+omni-edit/src/
+├── lib.rs       # Thin re-export layer (< 100 lines)
+├── error.rs     # Error enum (thiserror)
+├── types.rs     # Data structures (Serialize/Deserialize)
+├── [domain].rs  # Core business logic
+└── [util].rs    # Helper utilities
+```
+
+**Rules:**
+
+1. **lib.rs as Porter**: `lib.rs` MUST only contain:
+   - Module declarations (`mod foo;`)
+   - Public re-exports (`pub use foo::Bar;`)
+   - Crate-level documentation
+
+2. **One Concern Per Module**: Each module handles exactly one domain:
+   - `error.rs` - Error types only
+   - `types.rs` - Data structures only
+   - `editor.rs` - Core logic only
+   - `diff.rs` - Utility functions only
+
+3. **Tests Collocated**: Each module contains its own `#[cfg(test)] mod tests`.
+
+**Example (omni-edit):**
+
+```rust
+// lib.rs - Thin re-export layer
+mod capture;
+mod diff;
+mod editor;
+mod error;
+mod types;
+
+pub use editor::StructuralEditor;
+pub use error::EditError;
+pub use types::{EditConfig, EditLocation, EditResult};
+```
+
+```rust
+// error.rs - Error types only
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum EditError {
+    #[error("IO error: {0}")]
+    Io(#[from] omni_io::IoError),
+    // ...
+}
+```
+
+```rust
+// editor.rs - Core logic with tests
+pub struct StructuralEditor;
+
+impl StructuralEditor {
+    pub fn replace(...) -> Result<EditResult, EditError> { ... }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_replace() { ... }
+}
 ```
 
 ## 6. Naming Conventions

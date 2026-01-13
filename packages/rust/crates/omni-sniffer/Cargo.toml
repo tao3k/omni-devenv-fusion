@@ -12,3 +12,6 @@ serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 git2 = { workspace = true }
 omni-types = { path = "../omni-types" }
+
+[dev-dependencies]
+tempfile = { workspace = true }
