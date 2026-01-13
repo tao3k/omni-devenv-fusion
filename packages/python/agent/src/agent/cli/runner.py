@@ -2,11 +2,13 @@
 runner.py - Skill Execution Runner
 
 Phase 35.2: Modular CLI Architecture
+Phase 40: Automated Reinforcement Loop
 
 Provides skill execution logic with:
 - Dynamic module loading
 - Async/sync bridging
 - Result formatting
+- [Phase 40] Automatic feedback recording on success
 
 UNIX Philosophy:
 - Logs go to stderr (visible to user, ignored by pipes)
@@ -145,9 +147,33 @@ def run_skills(
     else:
         result = raw_result
 
+    # [Phase 40] Record successful execution as positive feedback
+    # This helps the system learn which skills are useful for which queries
+    _record_cli_success(cmd, skill_name)
+
     # Print result with smart formatting
     is_tty = sys.stdout.isatty()
     print_result(result, is_tty, json_output)
+
+
+def _record_cli_success(command: str, skill_name: str) -> None:
+    """
+    [Phase 40] Record CLI execution success as positive feedback.
+
+    This is a lightweight signal - CLI success doesn't guarantee
+    the routing was correct, but it's still useful data.
+
+    Args:
+        command: The full command that was executed (e.g., "git.status")
+        skill_name: The skill that was used
+    """
+    try:
+        from agent.capabilities.learning.harvester import record_routing_feedback
+        # Use command as pseudo-query, record mild positive feedback
+        record_routing_feedback(command, skill_name, success=True)
+    except Exception:
+        # Silently ignore if feedback system not available
+        pass
 
 
 __all__ = ["run_skills"]

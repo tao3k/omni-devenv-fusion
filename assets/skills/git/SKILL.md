@@ -4,24 +4,37 @@ version: "2.0.0"
 description: "Git integration with LangGraph workflow support, Smart Commit V2, and Spec-Awareness"
 routing_keywords:
   [
+    # Core verbs (high priority)
     "git",
     "commit",
     "push",
     "pull",
-    "branch",
     "merge",
-    "version control",
-    "repo",
-    "history",
-    "diff",
-    "status",
-    "log",
     "rebase",
     "checkout",
     "stash",
     "tag",
+    # High-frequency phrases (Phase 38 optimization)
+    "commit code",
+    "save changes",
+    "commit changes",
+    "push code",
+    "save work",
+    "check in",
+    "submit code",
+    # Context keywords
+    "branch",
+    "version control",
+    "repo",
+    "repository",
+    "history",
+    "diff",
+    "status",
+    "log",
     "hotfix",
     "pr",
+    "pull request",
+    "code review",
   ]
 intents:
   [

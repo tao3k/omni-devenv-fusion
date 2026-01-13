@@ -1,15 +1,18 @@
 """
 src/agent/core/skill_discovery/indexing.py
 Phase 36: Skill Index Management
+Phase 37: Cognitive Indexing & Adaptive Routing
 
 Functions for indexing skills into the vector store:
 - reindex_skills_from_manifests: Full reindex
 - index_single_skill: Incremental index (Phase 36.5)
 - remove_skill_from_index: Remove from index (Phase 36.5)
+- _generate_synthetic_queries: HyDE-style query generation (Phase 37.1)
 """
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import structlog
@@ -22,7 +25,122 @@ logger = structlog.get_logger(__name__)
 SKILL_REGISTRY_COLLECTION = "skill_registry"
 
 
-def _build_skill_document(manifest: Any) -> str:
+def _extract_json_array(content: str) -> list[str] | None:
+    """
+    Extract JSON array from LLM response with multiple fallback strategies.
+
+    Args:
+        content: Raw LLM response content
+
+    Returns:
+        List of strings if found, None otherwise
+    """
+    import re
+
+    content = content.strip()
+
+    # Strategy 1: Handle markdown code blocks
+    if "```" in content:
+        # Extract content between code blocks
+        match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", content, re.DOTALL)
+        if match:
+            content = match.group(1).strip()
+
+    # Strategy 2: Direct JSON parse
+    try:
+        data = json.loads(content)
+        if isinstance(data, list):
+            return [q for q in data if isinstance(q, str) and len(q) > 3]
+    except json.JSONDecodeError:
+        pass
+
+    # Strategy 3: Find JSON array in text
+    match = re.search(r"\[[\s\S]*?\]", content)
+    if match:
+        try:
+            data = json.loads(match.group(0))
+            if isinstance(data, list):
+                return [q for q in data if isinstance(q, str) and len(q) > 3]
+        except json.JSONDecodeError:
+            pass
+
+    # Strategy 4: Extract quoted strings manually (fallback)
+    quoted = re.findall(r'"([^"]{4,})"', content)
+    if quoted:
+        return quoted[:10]
+
+    return None
+
+
+async def _generate_synthetic_queries(manifest: Any) -> list[str]:
+    """
+    [Phase 37.1] Generate hypothetical user queries using LLM (HyDE-style).
+
+    Uses the InferenceClient to predict how a user might naturally ask
+    for this skill. This bridges the "description-query gap" that causes
+    low recall in pure semantic search.
+
+    Args:
+        manifest: Skill manifest with name, description, and keywords
+
+    Returns:
+        List of synthetic user queries for indexing
+    """
+    # Lazy import to avoid slow module loading
+    from common.mcp_core.inference import InferenceClient
+
+    client = InferenceClient()
+
+    # Build a concise prompt for query generation
+    keywords = ", ".join(manifest.routing_keywords) if manifest.routing_keywords else "None"
+    prompt = f"""Generate 10 diverse user queries for this skill.
+
+Skill: {manifest.name}
+Description: {manifest.description}
+Keywords: {keywords}
+
+Output: JSON array of query strings only.
+Example: ["analyze code", "check my code", "review this file"]
+
+JSON array:"""
+
+    try:
+        result = await client.complete(
+            system_prompt="Output only valid JSON arrays. No explanation.",
+            user_query=prompt,
+            max_tokens=400,
+        )
+
+        if not result.get("success"):
+            # Non-critical: skill will still be indexed without synthetic queries
+            logger.debug(
+                f"Synthetic query generation skipped for {manifest.name}",
+                reason=result.get("error", "unknown"),
+            )
+            return []
+
+        content = result.get("content", "")
+        if not content:
+            return []
+
+        # Use robust extraction with fallbacks
+        queries = _extract_json_array(content)
+        if queries:
+            valid = queries[:10]
+            logger.debug(f"Generated {len(valid)} synthetic queries for {manifest.name}")
+            return valid
+
+        # Not an error - some LLM responses may not be parseable
+        logger.debug(f"Could not parse synthetic queries for {manifest.name}")
+        return []
+
+    except Exception as e:
+        # Log at debug level - synthetic queries are optional enhancement
+        logger.debug(f"Synthetic query generation failed for {manifest.name}", error=str(e))
+        return []
+
+
+def _build_skill_document(manifest: Any, synthetic_queries: list[str] = None) -> str:
     """
     Build a rich semantic document from a skill manifest.
 
@@ -31,9 +149,17 @@ def _build_skill_document(manifest: Any) -> str:
     - How to use it (keywords and examples)
     - What tasks it helps with (use cases)
     - Related concepts and synonyms
+    - [Phase 37.1] Synthetic user queries for HyDE-style indexing
 
     This rich document produces better embeddings for semantic search.
+
+    Args:
+        manifest: Skill manifest
+        synthetic_queries: Optional list of LLM-generated user queries
     """
+    if synthetic_queries is None:
+        synthetic_queries = []
+
     parts = [
         f"## Skill: {manifest.name}",
         f"## Description: {manifest.description}",
@@ -71,6 +197,11 @@ def _build_skill_document(manifest: Any) -> str:
 
     # Add related concepts (common software development patterns)
     parts.append(f"## Category: Software Development Tool")
+
+    # [Phase 37.1] Add synthetic user queries for HyDE-style indexing
+    # These represent how users might naturally ask for this skill
+    if synthetic_queries:
+        parts.append(f"## User Query Examples: {', '.join(synthetic_queries)}")
 
     return "\n".join(parts)
 
@@ -143,6 +274,7 @@ async def _index_remote_skills(vm: Any) -> int:
 
 async def reindex_skills_from_manifests(
     clear_existing: bool = True,
+    generate_synthetic: bool = True,
 ) -> dict[str, Any]:
     """
     Reindex all installed skills into the vector store.
@@ -150,8 +282,12 @@ async def reindex_skills_from_manifests(
     Scans SKILL.md files from all installed skills and creates
     semantic embeddings for intelligent discovery.
 
+    Phase 37.1: Optionally generates synthetic user queries (HyDE-style)
+    to improve recall for natural language queries.
+
     Args:
         clear_existing: Clear existing index before reindexing
+        generate_synthetic: Generate synthetic queries using LLM (default: True)
 
     Returns:
         Dict with stats about the reindexing operation
@@ -190,8 +326,13 @@ async def reindex_skills_from_manifests(
             if not manifest:
                 continue
 
-            # Build rich semantic document from manifest
-            semantic_text = _build_skill_document(manifest)
+            # [Phase 37.1] Generate synthetic queries if enabled
+            synthetic_queries: list[str] = []
+            if generate_synthetic:
+                synthetic_queries = await _generate_synthetic_queries(manifest)
+
+            # Build rich semantic document from manifest (with synthetic queries)
+            semantic_text = _build_skill_document(manifest, synthetic_queries)
 
             success = await vm.add(
                 documents=[semantic_text],
@@ -205,6 +346,7 @@ async def reindex_skills_from_manifests(
                         "installed": "true",
                         "type": "local",
                         "version": manifest.version,
+                        "synthetic_queries": len(synthetic_queries),  # Track for debugging
                     }
                 ],
             )
@@ -231,7 +373,9 @@ async def reindex_skills_from_manifests(
     return result
 
 
-async def index_single_skill(skill_name: str) -> bool:
+async def index_single_skill(
+    skill_name: str, generate_synthetic: bool = True
+) -> bool:
     """
     Phase 36.5: Index a single skill into the vector store.
 
@@ -239,9 +383,11 @@ async def index_single_skill(skill_name: str) -> bool:
     or reloaded, ensuring the vector index stays in sync.
 
     Phase 36.6: Uses atomic upsert instead of delete+add to prevent race conditions.
+    Phase 37.1: Optionally generates synthetic user queries for HyDE-style indexing.
 
     Args:
         skill_name: Name of the skill to index
+        generate_synthetic: Generate synthetic queries using LLM (default: True)
 
     Returns:
         True if indexed successfully, False otherwise
@@ -258,8 +404,13 @@ async def index_single_skill(skill_name: str) -> bool:
             logger.warning(f"Cannot index skill '{skill_name}': manifest not found")
             return False
 
-        # Build semantic document
-        semantic_text = _build_skill_document(manifest)
+        # [Phase 37.1] Generate synthetic queries if enabled
+        synthetic_queries: list[str] = []
+        if generate_synthetic:
+            synthetic_queries = await _generate_synthetic_queries(manifest)
+
+        # Build semantic document (with synthetic queries)
+        semantic_text = _build_skill_document(manifest, synthetic_queries)
 
         # Phase 36.6: Use atomic upsert instead of delete+add
         # This prevents race conditions when multiple threads reload the same skill
@@ -281,6 +432,7 @@ async def index_single_skill(skill_name: str) -> bool:
                         "installed": "true",
                         "type": "local",
                         "version": manifest.version,
+                        "synthetic_queries": len(synthetic_queries),
                     }
                 ],
             )
@@ -301,6 +453,7 @@ async def index_single_skill(skill_name: str) -> bool:
                         "installed": "true",
                         "type": "local",
                         "version": manifest.version,
+                        "synthetic_queries": len(synthetic_queries),
                     }
                 ],
             )

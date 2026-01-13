@@ -1,7 +1,9 @@
 # Skills Documentation
 
-> **Phase 36.6: Production Stability** | **Phase 36.5: Hot Reload & Index Sync** | **Phase 36: Trinity v2.0** | **Phase 35.3: Pure MCP Server** | **Phase 35.2: Cascading Templates** | **Phase 35.1: Simplified Test Framework** | **Phase 34: Cognitive System** | **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
+> **Phase 41: Wisdom-Aware Routing** | **Phase 40: Automated Reinforcement Loop** | **Phase 39: Self-Evolving Feedback Loop** | **Phase 36.6: Production Stability** | **Phase 36.5: Hot Reload & Index Sync** | **Phase 36: Trinity v2.0** | **Phase 35.3: Pure MCP Server** | **Phase 35.2: Cascading Templates** | **Phase 35.1: Simplified Test Framework** | **Phase 34: Cognitive System** | **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
 
+> **Phase 41**: The system now **injects past lessons** from harvested knowledge into Mission Briefs.
+> **Phase 40**: The system now **learns from experience**. Successful routing decisions boost future confidence automatically.
 > **Phase 36**: The **Executor is now a Skill** (`skills/terminal`). Legacy `mcp_core.execution` has been deleted.
 
 ## Overview
@@ -617,6 +619,83 @@ uv run pytest packages/python/agent/src/agent/tests/scenarios/test_hot_reload.py
 - [Developer Guide](../developer/discover.md) - Detailed Phase 36.5/36.6 documentation
 - [Trinity Architecture](./explanation/trinity-architecture.md) - System architecture
 - [MCP Core Architecture](../developer/mcp-core-architecture.md) - Shared library patterns
+
+---
+
+## Phase 39/40: Self-Evolving Feedback Loop (The Harvester)
+
+> **Phase 40**: Automated Reinforcement | **Phase 39**: Self-Evolving Feedback
+
+The system now learns from experience. Successful routing decisions boost future confidence automatically.
+
+### Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    Phase 39/40: Self-Evolving System                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  User Query → Semantic Router → Skill Execution → Feedback Recording        │
+│       ↓              ↓                ↓                   ↓                  │
+│  Vector Search    Hybrid Score    Success?        FeedbackStore             │
+│  (ChromaDB)       (+keyword)      (Reviewer)      (.memory/routing_        │
+│                                      Approval         feedback.json)        │
+│       ↓              ↓                ↓                   ↓                  │
+│  Confidence    Final Score    High Signal         Boost +0.1               │
+│  0.60          0.95           → Future queries → Confidence 0.70           │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### How It Works
+
+| Signal Source | Trigger | Boost |
+|--------------|---------|-------|
+| **CLI Success** | `omni git.status` executes | +0.1 |
+| **Reviewer Approval** | Audit passes | +0.1 (trusted) |
+| **Time Decay** | Each read | 1% decay |
+
+### Scoring Formula
+
+```
+Final Score = Base Vector Score
+            + Keyword Bonus (+0.1-0.3)
+            + Verb Priority Boost (+0.2 for CORE_ACTION_VERBS)
+            + Feedback Boost (+0.1 per success, max +0.3)
+            - Sigmoid Calibration (stretch 0.3-0.95 range)
+```
+
+### Feedback Storage
+
+**Location**: `.cache/memory/routing_feedback.json`
+
+```json
+{
+  "git.status": {
+    "git": 0.1
+  },
+  "commit code": {
+    "git": 0.2
+  }
+}
+```
+
+### Viewing Learned Feedback
+
+```bash
+# View what the system has learned
+cat .cache/memory/routing_feedback.json
+
+# Clear feedback (if needed)
+echo "{}" > .cache/memory/routing_feedback.json
+```
+
+### Related Specs
+
+- `assets/specs/phase39_self_evolving_feedback_loop.md`
+- `assets/specs/phase40_automated_reinforcement_loop.md`
+
+---
 
 ## Usage
 

@@ -234,7 +234,7 @@ async def handle_list_tools() -> list[Tool]:
             )
 
             # Parse input schema from command config
-            input_schema = {
+            input_schema = getattr(cmd, "input_schema", {}) or {
                 "type": "object",
                 "properties": {},
                 "required": [],

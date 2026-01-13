@@ -78,11 +78,10 @@ class RepomixCache:
         self._repomix_bin = shutil.which("repomix")
 
         # Determine cache directory and output file path
-        project_root = get_project_root()
-        project_name = project_root.name
-        skill_name = target_path.name
+        from common.cache_path import CACHE_DIR
 
-        self._cache_dir = project_root / ".cache" / project_name
+        skill_name = target_path.name
+        self._cache_dir = CACHE_DIR()
         self._output_file = self._cache_dir / f"skill_{skill_name}_repomix.xml"
 
         self._cached: Optional[str] = None

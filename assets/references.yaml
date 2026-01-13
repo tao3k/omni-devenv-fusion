@@ -98,6 +98,13 @@ cache_patterns:
   description: "Caching patterns and implementation details"
 
 # =============================================================================
+# Harvested Knowledge References
+# =============================================================================
+harvested_knowledge:
+  dir: "assets/knowledge/harvested"
+  description: "Long-term knowledge extracted from development sessions"
+
+# =============================================================================
 # Knowledge Cache References (Internal)
 # =============================================================================
 knowledge_caches:

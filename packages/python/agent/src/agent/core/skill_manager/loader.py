@@ -54,6 +54,7 @@ class SkillLoaderMixin:
             cmd_name = config.get("name") or name
             description = config.get("description", "") or self._get_docstring(obj)
             category = config.get("category", "general")
+            input_schema = config.get("input_schema", {})
 
             commands[cmd_name] = SkillCommand(
                 name=cmd_name,
@@ -61,6 +62,7 @@ class SkillLoaderMixin:
                 description=description,
                 category=SkillCategory(category),
                 _skill_name=skill_name,
+                input_schema=input_schema,
             )
 
         return commands

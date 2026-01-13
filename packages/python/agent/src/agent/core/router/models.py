@@ -35,6 +35,7 @@ class RoutingResult:
     - remote_suggestions: Remote skills found that need installation (Phase 36.8)
     - from_cache: Whether this was a cache hit
     - timestamp: When routing decision was made
+    - env_snapshot: Environment state from ContextSniffer (Phase 42)
     """
 
     selected_skills: List[str]
@@ -45,6 +46,7 @@ class RoutingResult:
     remote_suggestions: List[Dict[str, Any]] = field(default_factory=list)  # Phase 36.8
     from_cache: bool = False
     timestamp: float = field(default_factory=time.time)
+    env_snapshot: str = ""  # [Phase 42] Environment state snapshot
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -56,6 +58,7 @@ class RoutingResult:
             "remote_suggestions": self.remote_suggestions,
             "from_cache": self.from_cache,
             "timestamp": self.timestamp,
+            "env_snapshot": self.env_snapshot,
         }
 
 

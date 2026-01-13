@@ -28,10 +28,11 @@ def main():
 
 
 # Register subcommands
-from .commands import register_skill_command, register_mcp_command
+from .commands import register_skill_command, register_mcp_command, register_route_command
 
 register_skill_command(app)
 register_mcp_command(app)
+register_route_command(app)  # Phase 41: Wisdom-Aware Routing
 
 
 __all__ = ["app", "main"]

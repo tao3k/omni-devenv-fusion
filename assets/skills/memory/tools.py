@@ -31,39 +31,24 @@ logger = structlog.get_logger(__name__)
 
 
 # =============================================================================
-# Path Configuration (Configurable via settings.yaml)
+# Path Configuration (Uses common.cache_path.CACHE_DIR)
 # =============================================================================
-
-
-def _get_git_toplevel() -> Path:
-    """Get git toplevel directory."""
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, timeout=5
-        )
-        if result.returncode == 0:
-            return Path(result.stdout.strip())
-    except Exception:
-        pass
-    return Path.cwd()
 
 
 def _get_memory_path() -> Path:
     """
-    Get memory root path following prj-spec.
-    Configurable via settings.yaml: memory.path
-    Falls back to: {git_toplevel}/.cache/{project}/.memory/
+    Get memory root path from CACHE_DIR.
+    Path: {project_root}/{cache_dir}/memory/
     """
+    from common.cache_path import CACHE_DIR
     from common.settings import get_setting
-    from common.gitops import get_project_root
 
+    # Check for custom override in settings.yaml
     custom_path = get_setting("memory.path", "")
     if custom_path:
         return Path(custom_path)
 
-    project = get_setting("cache.project_name", "omni-dev-fusion")
-    git_root = get_project_root()
-    return git_root / ".cache" / project / "memory"
+    return CACHE_DIR("memory")
 
 
 MEMORY_ROOT = _get_memory_path()

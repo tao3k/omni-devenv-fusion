@@ -26,16 +26,240 @@ import datetime
 import json
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import structlog
 
 from agent.core.schema import HarvestedInsight, KnowledgeCategory
-from common.gitops import get_project_root
 from common.mcp_core.api.api_key import get_anthropic_api_key
 from agent.core.vector_store import get_vector_memory
 
 logger = structlog.get_logger(__name__)
+
+
+# =============================================================================
+# Phase 39: Routing Feedback Store (Self-Evolving Loop)
+# =============================================================================
+
+# Feedback storage uses CACHE_DIR from common.cache_path
+# Path: {project_root}/{cache_dir}/memory/routing_feedback.json
+
+
+class FeedbackStore:
+    """
+    [Phase 39] Lightweight store for routing reinforcement learning.
+    [Phase 40] With time-based decay mechanism.
+
+    Maps (normalized_query, skill_id) -> score (weight adjustment).
+    Positive scores boost future routing, negative scores penalize.
+
+    Storage: JSON file for simplicity (can migrate to ChromaDB later).
+
+    Decay Mechanism (Phase 40):
+    - Scores decay by 1% each time they are read
+    - This prevents "Matthew effect" (old successful skills dominating forever)
+    - Gives new skills a fair chance to prove themselves
+    """
+
+    # Score bounds to prevent runaway accumulation
+    MIN_SCORE = -0.3  # Maximum penalty
+    MAX_SCORE = 0.3   # Maximum boost
+    DECAY_FACTOR = 0.1  # How much each feedback affects score
+    TIME_DECAY_RATE = 0.99  # [Phase 40] Decay multiplier per read (1% decay)
+
+    def __init__(self):
+        self._data: Dict[str, Dict[str, float]] = {}
+        self._db_path: Optional[Path] = None
+        self._loaded = False
+
+    def _ensure_loaded(self) -> None:
+        """Lazy load feedback data."""
+        if self._loaded:
+            return
+
+        try:
+            from common.cache_path import CACHE_DIR
+
+            self._db_path = CACHE_DIR("memory", "routing_feedback.json")
+
+            if self._db_path.exists():
+                self._data = json.loads(self._db_path.read_text(encoding="utf-8"))
+                logger.debug("Feedback store loaded", entries=len(self._data))
+            else:
+                self._data = {}
+        except Exception as e:
+            logger.warning("Failed to load feedback store", error=str(e))
+            self._data = {}
+
+        self._loaded = True
+
+    def _save(self) -> None:
+        """Persist feedback data to disk."""
+        if self._db_path is None:
+            return
+
+        try:
+            self._db_path.parent.mkdir(parents=True, exist_ok=True)
+            self._db_path.write_text(
+                json.dumps(self._data, indent=2, ensure_ascii=False),
+                encoding="utf-8"
+            )
+        except Exception as e:
+            logger.warning("Failed to save feedback store", error=str(e))
+
+    @staticmethod
+    def _normalize_query(query: str) -> str:
+        """Normalize query for consistent matching."""
+        # Lowercase, collapse whitespace, strip
+        return " ".join(query.lower().split())
+
+    def record_feedback(self, query: str, skill_id: str, success: bool) -> float:
+        """
+        Record user feedback for a routing decision.
+
+        Args:
+            query: The user query that was routed
+            skill_id: The skill that was selected/executed
+            success: True if user accepted/executed, False if rejected
+
+        Returns:
+            The new score for this (query, skill) pair
+        """
+        self._ensure_loaded()
+
+        norm_query = self._normalize_query(query)
+        score_delta = self.DECAY_FACTOR if success else -self.DECAY_FACTOR
+
+        if norm_query not in self._data:
+            self._data[norm_query] = {}
+
+        current_score = self._data[norm_query].get(skill_id, 0.0)
+        new_score = current_score + score_delta
+
+        # Clamp to bounds
+        new_score = max(self.MIN_SCORE, min(self.MAX_SCORE, new_score))
+
+        self._data[norm_query][skill_id] = new_score
+        self._save()
+
+        logger.info(
+            "Routing feedback recorded",
+            query=norm_query[:50],
+            skill=skill_id,
+            success=success,
+            old_score=round(current_score, 3),
+            new_score=round(new_score, 3),
+        )
+
+        return new_score
+
+    def get_boost(self, query: str, skill_id: str) -> float:
+        """
+        Get the learned boost/penalty for a skill given a query.
+
+        [Phase 40] Applies time-based decay on read to prevent stale data
+        from dominating decisions forever.
+
+        Args:
+            query: The user query
+            skill_id: The skill to check
+
+        Returns:
+            Score adjustment (-0.3 to +0.3)
+        """
+        self._ensure_loaded()
+        norm_query = self._normalize_query(query)
+
+        if norm_query not in self._data:
+            return 0.0
+
+        if skill_id not in self._data[norm_query]:
+            return 0.0
+
+        # [Phase 40] Apply decay and update stored value
+        current_score = self._data[norm_query][skill_id]
+
+        # Only decay non-zero scores
+        if abs(current_score) > 0.01:
+            decayed_score = current_score * self.TIME_DECAY_RATE
+
+            # If score becomes negligible, remove it
+            if abs(decayed_score) < 0.01:
+                del self._data[norm_query][skill_id]
+                # Clean up empty query entries
+                if not self._data[norm_query]:
+                    del self._data[norm_query]
+                self._save()
+                return 0.0
+
+            # Update with decayed value (lazy persistence)
+            self._data[norm_query][skill_id] = decayed_score
+            return decayed_score
+
+        return current_score
+
+    def get_all_boosts(self, query: str) -> Dict[str, float]:
+        """
+        Get all learned boosts for a query.
+
+        Args:
+            query: The user query
+
+        Returns:
+            Dict mapping skill_id -> score
+        """
+        self._ensure_loaded()
+        norm_query = self._normalize_query(query)
+        return self._data.get(norm_query, {}).copy()
+
+    def get_stats(self) -> Dict[str, int]:
+        """Get statistics about the feedback store."""
+        self._ensure_loaded()
+        total_pairs = sum(len(skills) for skills in self._data.values())
+        return {
+            "unique_queries": len(self._data),
+            "total_feedback_pairs": total_pairs,
+        }
+
+
+# Singleton instance
+_feedback_store: Optional[FeedbackStore] = None
+
+
+def get_feedback_store() -> FeedbackStore:
+    """Get the singleton FeedbackStore instance."""
+    global _feedback_store
+    if _feedback_store is None:
+        _feedback_store = FeedbackStore()
+    return _feedback_store
+
+
+def record_routing_feedback(query: str, skill_id: str, success: bool) -> float:
+    """
+    [Phase 39] Public API to record routing outcome.
+
+    Call this when:
+    - success=True: User accepted/executed the routed skill
+    - success=False: User rejected/overrode the routing
+
+    Args:
+        query: The original user query
+        skill_id: The skill that was routed to
+        success: Whether the routing was accepted
+
+    Returns:
+        The new score for this (query, skill) pair
+    """
+    return get_feedback_store().record_feedback(query, skill_id, success)
+
+
+def get_feedback_boost(query: str, skill_id: str) -> float:
+    """
+    [Phase 39] Get dynamic boost for scoring.
+
+    Used by vector.py to adjust skill scores based on past feedback.
+    """
+    return get_feedback_store().get_boost(query, skill_id)
 
 
 async def harvest_session_insight(
@@ -161,8 +385,9 @@ async def harvest_session_insight(
 
     # Step 2: Crystallize to Markdown File
     try:
-        project_root = get_project_root()
-        harvest_dir = project_root / "agent" / "knowledge" / "harvested"
+        from common.mcp_core.reference_library import get_reference_path
+
+        harvest_dir = Path(get_reference_path("harvested_knowledge.dir"))
         harvest_dir.mkdir(parents=True, exist_ok=True)
 
         date_str = datetime.datetime.now().strftime("%Y%m%d")
@@ -260,8 +485,9 @@ def list_harvested_knowledge() -> str:
         List of harvested insight files with their metadata
     """
     try:
-        project_root = get_project_root()
-        harvest_dir = project_root / "agent" / "knowledge" / "harvested"
+        from common.mcp_core.reference_library import get_reference_path
+
+        harvest_dir = Path(get_reference_path("harvested_knowledge.dir"))
 
         if not harvest_dir.exists():
             return "📭 No harvested knowledge yet."
@@ -303,8 +529,9 @@ def get_scratchpad_summary() -> str:
     Useful as input to harvest_session_insight after completing a task.
     """
     try:
-        project_root = get_project_root()
-        scratchpad = project_root / ".memory" / "active_context" / "SCRATCHPAD.md"
+        from common.cache_path import CACHE_DIR
+
+        scratchpad = CACHE_DIR("memory", "active_context", "SCRATCHPAD.md")
 
         if not scratchpad.exists():
             return "No SCRATCHPAD.md found."
@@ -354,4 +581,9 @@ __all__ = [
     "harvest_session_insight_tool",
     "list_harvested_knowledge_tool",
     "get_scratchpad_summary_tool",
+    # Phase 39: Feedback Loop
+    "FeedbackStore",
+    "get_feedback_store",
+    "record_routing_feedback",
+    "get_feedback_boost",
 ]

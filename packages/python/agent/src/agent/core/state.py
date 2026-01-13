@@ -165,8 +165,9 @@ class StateCheckpointer:
             checkpoint_interval: Checkpoint every N updates (default: 10)
         """
         if db_path is None:
-            project_root = get_project_root()
-            db_path = project_root / ".cache" / "agent" / "checkpoints.db"
+            from common.cache_path import CACHE_DIR
+
+            db_path = CACHE_DIR("agent", "checkpoints.db")
 
         self.db_path = Path(db_path)
         self.checkpoint_interval = checkpoint_interval

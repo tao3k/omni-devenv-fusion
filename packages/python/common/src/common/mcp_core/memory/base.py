@@ -14,8 +14,18 @@ import structlog
 
 log = structlog.get_logger("mcp-core.memory")
 
-# Default memory directory (per prj-spec: .cache/<namespace>/.memory)
-MEMORY_DIR = Path(".cache/omni-dev-fusion/.memory")
+# Default memory directory (from CACHE_DIR + "memory")
+def _get_memory_dir() -> Path:
+    """Get memory directory from CACHE_DIR."""
+    try:
+        from common.cache_path import CACHE_DIR
+        return CACHE_DIR("memory")
+    except Exception:
+        # Fallback for edge cases
+        return Path(".cache/omni-dev-fusion/memory")
+
+
+MEMORY_DIR = _get_memory_dir()
 
 
 def init_memory_dir(dir_path: Path = None) -> bool:

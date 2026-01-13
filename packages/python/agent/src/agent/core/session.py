@@ -107,8 +107,9 @@ def get_agent_storage_dir() -> Path:
     Returns:
         Path to session storage directory
     """
-    project_root = get_project_root()
-    storage_dir = project_root / ".cache" / "agent" / "sessions"
+    from common.cache_path import CACHE_DIR
+
+    storage_dir = CACHE_DIR("agent", "sessions")
     storage_dir.mkdir(parents=True, exist_ok=True)
     return storage_dir
 

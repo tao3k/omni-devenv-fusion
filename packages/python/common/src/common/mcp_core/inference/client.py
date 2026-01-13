@@ -3,24 +3,18 @@
 Inference Client - LLM API client.
 
 Phase 30: Modularized for testability.
+Phase 37: Configuration-driven from settings.yaml.
 """
 
 import asyncio
-import os
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 import structlog
 from anthropic import AsyncAnthropic
 
-from .api import load_api_key
+from .api import load_api_key, get_inference_config
 
 log = structlog.get_logger("mcp-core.inference")
-
-# Default configuration
-DEFAULT_MODEL = "MiniMax-M2.1"
-DEFAULT_BASE_URL = "https://api.minimax.io/anthropic"
-DEFAULT_TIMEOUT = 120
-DEFAULT_MAX_TOKENS = 4096
 
 
 class InferenceClient:
@@ -36,23 +30,38 @@ class InferenceClient:
     ):
         """Initialize InferenceClient.
 
+        Configuration is read from settings.yaml (inference section).
+        Parameters passed here override settings.
+
         Args:
-            api_key: API key (defaults to ANTHROPIC_API_KEY env var)
+            api_key: API key (defaults to configured env var in settings.yaml)
             base_url: API base URL
             model: Default model name
             timeout: Request timeout in seconds
             max_tokens: Max tokens per response
         """
+        config = get_inference_config()
+
         self.api_key = api_key or load_api_key()
-        self.base_url = base_url or DEFAULT_BASE_URL
-        self.model = model or DEFAULT_MODEL
-        self.timeout = timeout or DEFAULT_TIMEOUT
-        self.max_tokens = max_tokens or DEFAULT_MAX_TOKENS
+        self.base_url = base_url or config["base_url"]
+        self.model = model or config["model"]
+        self.timeout = timeout or config["timeout"]
+        self.max_tokens = max_tokens or config["max_tokens"]
 
         if not self.api_key:
-            log.warning("inference.no_api_key")
+            log.warning("inference.no_api_key", configured_env=config["api_key_env"])
 
-        self.client = AsyncAnthropic(api_key=self.api_key, base_url=self.base_url)
+        # MiniMax requires Authorization: Bearer header (auth_token) instead of x-api-key
+        if self.base_url and "minimax" in self.base_url.lower():
+            self.client = AsyncAnthropic(
+                auth_token=self.api_key,
+                base_url=self.base_url,
+            )
+        else:
+            self.client = AsyncAnthropic(
+                api_key=self.api_key,
+                base_url=self.base_url,
+            )
 
     def _build_system_prompt(
         self, role: str, name: str = None, description: str = None, prompt: str = None
@@ -330,8 +339,4 @@ class InferenceClient:
 
 __all__ = [
     "InferenceClient",
-    "DEFAULT_MODEL",
-    "DEFAULT_BASE_URL",
-    "DEFAULT_TIMEOUT",
-    "DEFAULT_MAX_TOKENS",
 ]

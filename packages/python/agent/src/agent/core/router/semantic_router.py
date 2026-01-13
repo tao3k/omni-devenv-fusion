@@ -5,6 +5,9 @@ Semantic Router - Tool selection with Mission Brief Protocol.
 Phase 14: Routes user requests to appropriate Skills.
 Phase 14.5: Uses Semantic Cortex for fuzzy matching.
 Phase 36.2: Virtual Loading via Vector Discovery (local skills only).
+Phase 37.3: Adaptive Confidence based on Score Gap.
+Phase 41: Wisdom-Aware Routing - Inject past lessons from harvested knowledge.
+Phase 42: State-Aware Routing - Inject environment state (Git, active context).
 
 Usage:
     # SemanticRouter is defined in this file
@@ -13,6 +16,7 @@ Usage:
     result = await router.route("Fix the bug in router.py")
 """
 
+import asyncio
 import json
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
@@ -24,11 +28,19 @@ from agent.core.router.models import RoutingResult
 if TYPE_CHECKING:
     from common.mcp_core.inference.client import InferenceClient
 
+# [Phase 37.3] Adaptive confidence configuration
+CONFIDENCE_HIGH_GAP = 0.15  # Gap > 15% = High confidence boost
+CONFIDENCE_LOW_GAP = 0.05  # Gap < 5% = Low confidence penalty
+CONFIDENCE_MAX_BOOST = 1.15  # Max boost multiplier for high distinctiveness
+CONFIDENCE_MAX_PENALTY = 0.85  # Max penalty multiplier for ambiguity
+
 # Lazy imports to avoid slow initialization
 _cached_inference_client: Any = None
 _cached_cache: Any = None
 _cached_cortex: Any = None
 _cached_vector_discovery: Any = None
+_cached_librarian: Any = None  # [Phase 41] Lazy Librarian for wisdom retrieval
+_cached_sniffer: Any = None  # [Phase 42] Lazy ContextSniffer for environment state
 
 # Lazy logger - defer structlog.get_logger() to avoid ~100ms import cost
 _cached_logger: Any = None
@@ -52,6 +64,26 @@ def _get_vector_discovery() -> Any:
 
         _cached_vector_discovery = VectorSkillDiscovery()
     return _cached_vector_discovery
+
+
+def _get_librarian() -> Any:
+    """[Phase 41] Get Librarian function lazily for wisdom retrieval."""
+    global _cached_librarian
+    if _cached_librarian is None:
+        from agent.capabilities.knowledge.librarian import consult_knowledge_base
+
+        _cached_librarian = consult_knowledge_base
+    return _cached_librarian
+
+
+def _get_sniffer() -> Any:
+    """[Phase 42] Get ContextSniffer lazily for environment state detection."""
+    global _cached_sniffer
+    if _cached_sniffer is None:
+        from agent.core.router.sniffer import get_sniffer
+
+        _cached_sniffer = get_sniffer()
+    return _cached_sniffer
 
 
 def _get_inference_client() -> Any:
@@ -214,6 +246,16 @@ class SemanticRouter:
     - Cold Path: When LLM routing fails or is weak, search local skills only
     - Uses VectorSkillDiscovery to find relevant but unloaded local skills
     - Remote skills are NOT searched (installation not yet implemented)
+
+    Phase 41 Enhancement (Wisdom-Aware Routing):
+    - Injects past lessons from harvested knowledge into routing prompt
+    - Consults Librarian for relevant lessons before generating Mission Brief
+    - Mission Brief now includes operational wisdom from past mistakes
+
+    Phase 42 Enhancement (State-Aware Routing):
+    - Injects real-time environment state into routing prompt
+    - Uses ContextSniffer to detect Git status and active context
+    - Prevents hallucinated actions by grounding routing in current reality
     """
 
     def __init__(
@@ -223,6 +265,7 @@ class SemanticRouter:
         cache_ttl: int = 3600,
         use_semantic_cache: bool = True,
         use_vector_fallback: bool = True,
+        use_wisdom_routing: bool = True,  # [Phase 41] Enable wisdom-aware routing
     ):
         self.registry = get_skill_registry()
         self._inference = inference_client
@@ -231,6 +274,9 @@ class SemanticRouter:
         self._use_semantic_cache = use_semantic_cache
         self._use_vector_fallback = use_vector_fallback
         self._vector_discovery = None
+        self._librarian = None  # [Phase 41] Lazy Librarian
+        self._use_wisdom_routing = use_wisdom_routing
+        self._sniffer = None  # [Phase 42] Lazy ContextSniffer
 
     @property
     def inference(self) -> Any:
@@ -285,6 +331,46 @@ class SemanticRouter:
     def vector_discovery(self, value: Any) -> None:
         """Setter for backward compatibility with tests."""
         self._vector_discovery = value
+
+    @property
+    def librarian(self) -> Any:
+        """[Phase 41] Lazy Librarian accessor for wisdom retrieval."""
+        if self._librarian is None:
+            self._librarian = _get_librarian()
+        return self._librarian
+
+    @librarian.setter
+    def librarian(self, value: Any) -> None:
+        """Setter for backward compatibility with tests."""
+        self._librarian = value
+
+    @property
+    def sniffer(self) -> Any:
+        """[Phase 42] Lazy ContextSniffer accessor for environment state."""
+        if self._sniffer is None:
+            self._sniffer = _get_sniffer()
+        return self._sniffer
+
+    @sniffer.setter
+    def sniffer(self, value: Any) -> None:
+        """Setter for backward compatibility with tests."""
+        self._sniffer = value
+
+    def _format_lessons(self, knowledge_results: Dict[str, Any]) -> str:
+        """[Phase 41] Format retrieved lessons for the routing prompt."""
+        if not knowledge_results.get("success") or not knowledge_results.get("results"):
+            return "No relevant past lessons found."
+
+        lines = ["## Historical Lessons (Apply These):"]
+        for i, result in enumerate(knowledge_results["results"][:3], 1):  # Top 3 lessons
+            content = result.get("content", "")[:400]  # Truncate for prompt
+            metadata = result.get("metadata", {})
+            title = metadata.get("title", f"Lesson {i}")
+            category = metadata.get("domain", "general")
+            lines.append(f"\n### {title} [{category}]")
+            lines.append(content)
+
+        return "\n".join(lines)
 
     def _build_routing_menu(self) -> str:
         """Build routing menu from Skill Registry manifests (Data-Driven)."""
@@ -346,7 +432,48 @@ class SemanticRouter:
             if cached is not None:
                 return cached
 
-        menu_text = self._build_routing_menu()
+        # [Phase 41+42] Parallel: Build menu, retrieve wisdom, AND sniff environment
+        menu_task = asyncio.to_thread(self._build_routing_menu)
+        knowledge_task = None
+        sniffer_task = None
+
+        if self._use_wisdom_routing:
+            # [Phase 41] Retrieve relevant lessons from harvested knowledge
+            knowledge_task = asyncio.create_task(
+                self.librarian(
+                    query=user_query,
+                    n_results=3,  # Top 3 relevant lessons
+                    domain_filter="harvested_insight",  # Only harvested insights
+                )
+            )
+
+        # [Phase 42] Get environment state snapshot (parallel, non-blocking)
+        sniffer_task = asyncio.create_task(self.sniffer.get_snapshot())
+
+        # Wait for menu building (blocking, but fast)
+        menu_text = await menu_task
+
+        # [Phase 41] Get wisdom lessons (parallel, non-blocking)
+        lessons_text = "No relevant past lessons found."
+        if knowledge_task:
+            try:
+                knowledge_results = await knowledge_task
+                lessons_text = self._format_lessons(knowledge_results)
+                _get_logger().debug(
+                    "Wisdom retrieved",
+                    query=user_query[:50],
+                    lessons_count=knowledge_results.get("count", 0),
+                )
+            except Exception as e:
+                _get_logger().warning("Knowledge retrieval failed", error=str(e))
+                lessons_text = "No relevant past lessons found."
+
+        # [Phase 42] Get environment snapshot (parallel, non-blocking)
+        env_snapshot = "Environment: Unknown"
+        try:
+            env_snapshot = await sniffer_task
+        except Exception as e:
+            _get_logger().warning("Environment sniffing failed", error=str(e))
 
         # Build context from chat history (last 3 exchanges)
         history_context = ""
@@ -365,6 +492,12 @@ class SemanticRouter:
 AVAILABLE SKILLS (WORKERS):
 {menu_text}
 
+[Phase 41] RELEVANT PAST LESSONS (Apply These):
+{lessons_text}
+
+[Phase 42] CURRENT ENVIRONMENT STATE:
+{env_snapshot}
+
 ROUTING RULES:
 1. Analyze the user's request and conversation context
 2. Select the MINIMAL set of skills needed (usually 1-2, max 3)
@@ -378,8 +511,16 @@ ROUTING RULES:
 10. If the request is about terminal/shell commands, use 'terminal'
 11. If the request is about general conversation, use 'writer' or 'knowledge'
 
+[Phase 42] ENVIRONMENT-AWARE RULES:
+- If user asks to "commit" and modified files are shown, include modified files in brief
+- If workspace has uncommitted changes that might be relevant, acknowledge them in brief
+- Use the git branch/status info to contextualize routing decisions
+
 MISSION BRIEF GUIDELINES (Commander's Intent - NOT Step-by-Step):
 - Write COMMANDER'S INTENT: Tell the Worker WHAT goal to achieve and WHAT constraints to follow
+- REFERENCE relevant lessons from PAST LESSONS section in your brief
+- [Phase 42] REFERENCE current ENVIRONMENT STATE when relevant (e.g., modified files, branch context)
+- If a lesson mentions a pitfall, explicitly mention it in constraints
 - AVOID step-by-step procedures: Let the Worker decide tool order based on context
 - Be GENERAL and PATH-INDEPENDENT: This brief will be CACHED for future similar requests
 - If user mentioned a file, note it but don't hardcode paths (file may move)
@@ -416,6 +557,7 @@ Route this request and provide a mission brief."""
             mission_brief="Handle the user's general request. Ask for clarification if needed.",
             reasoning=f"Routing failed: {result.get('error', 'Unknown error')}. Using safe defaults.",
             confidence=0.0,
+            env_snapshot=env_snapshot,  # [Phase 42] Include environment snapshot
         )
 
         if not result["success"]:
@@ -440,6 +582,7 @@ Route this request and provide a mission brief."""
                     "reasoning", "Skill selected based on request analysis."
                 ),
                 confidence=confidence,
+                env_snapshot=env_snapshot,  # [Phase 42] Include environment snapshot
             )
 
             # 🔥 Phase 36.2: Cold Path - Virtual Loading
@@ -470,10 +613,12 @@ Route this request and provide a mission brief."""
     async def _try_vector_fallback(self, query: str, result: RoutingResult) -> None:
         """
         Phase 36.2: Search local skills via vector store for better routing.
+        Phase 37.3: Adaptive Confidence based on Score Gap.
 
         This is the "Cold Path" - used when LLM routing fails or is weak.
         1. First search LOCAL (installed) skills
         2. If no local skills found, search REMOTE skills and return suggestions
+        3. [Phase 37.3] Calculate adaptive confidence based on score gap
 
         Args:
             query: The user query
@@ -543,18 +688,98 @@ Route this request and provide a mission brief."""
 
             # Update result with suggestions
             result.suggested_skills = suggested_ids
-            result.reasoning += (
-                f" [Vector Fallback] Found relevant local skills: {', '.join(suggested_ids)}."
-            )
 
-            # Boost confidence since we found relevant skills
-            result.confidence = max(result.confidence, 0.7)
+            # [Phase 39] Build reasoning with boost details
+            reasoning_parts = [f"Found relevant local skills: {', '.join(suggested_ids)}."]
+
+            # Check for feedback influence
+            feedback_bonus = top_skill.get("feedback_bonus", 0.0)
+            keyword_boost = top_skill.get("keyword_bonus", 0.0)
+            verb_matched = top_skill.get("verb_matched", False)
+
+            if feedback_bonus > 0:
+                reasoning_parts.append(f"(Reinforced by past success +{feedback_bonus:.2f})")
+            elif feedback_bonus < 0:
+                reasoning_parts.append(f"(Penalized by past rejection {feedback_bonus:.2f})")
+
+            if keyword_boost > 0:
+                if verb_matched:
+                    reasoning_parts.append(f"(Keyword match +{keyword_boost:.2f} with verb priority)")
+                else:
+                    reasoning_parts.append(f"(Keyword match +{keyword_boost:.2f})")
+
+            result.reasoning += " [Vector Fallback] " + " ".join(reasoning_parts)
+
+            # [Phase 37.3] Adaptive Confidence based on Score Gap
+            # Calculate the gap between top and second result
+            if len(new_candidates) >= 2:
+                top_score = new_candidates[0].get("score", 0.0)
+                second_score = new_candidates[1].get("score", 0.0)
+                score_gap = top_score - second_score
+
+                # Get raw score and keyword boost for debugging
+                raw_vector = new_candidates[0].get("raw_vector_score", top_score)
+                keyword_boost = new_candidates[0].get("keyword_boost", 0.0)
+
+                if score_gap > CONFIDENCE_HIGH_GAP:
+                    # High distinctiveness: boost confidence
+                    # Example: 0.85 base score with 0.20 gap -> 0.95 (boosted)
+                    boosted = min(CONFIDENCE_MAX_BOOST, 1.0 + (score_gap * 0.5))
+                    result.confidence = min(0.95, top_score * boosted)
+                    result.reasoning += (
+                        f" [High Confidence] Score gap ({score_gap:.2f}) indicates strong match."
+                    )
+                    _get_logger().info(
+                        "Adaptive confidence: high distinctiveness",
+                        query=query[:50],
+                        top_score=top_score,
+                        second_score=second_score,
+                        gap=score_gap,
+                        final_confidence=result.confidence,
+                    )
+                elif score_gap < CONFIDENCE_LOW_GAP:
+                    # Ambiguous match: penalize confidence
+                    # Example: 0.80 base score with 0.02 gap -> 0.68 (penalized)
+                    penalized = max(CONFIDENCE_MAX_PENALTY, 1.0 - (CONFIDENCE_LOW_GAP - score_gap))
+                    result.confidence = max(0.3, top_score * penalized)
+                    result.reasoning += (
+                        f" [Low Confidence] Score gap ({score_gap:.2f}) indicates ambiguity."
+                    )
+                    _get_logger().info(
+                        "Adaptive confidence: ambiguous match",
+                        query=query[:50],
+                        top_score=top_score,
+                        second_score=second_score,
+                        gap=score_gap,
+                        final_confidence=result.confidence,
+                    )
+                else:
+                    # Moderate gap: use base score
+                    result.confidence = top_score
+                    result.reasoning += f" [Moderate Confidence] Score gap: {score_gap:.2f}."
+
+                # Log detailed scoring info
+                _get_logger().debug(
+                    "Vector search scoring details",
+                    query=query[:50],
+                    top_skill=top_skill.get("id"),
+                    top_score=top_score,
+                    raw_vector_score=raw_vector,
+                    keyword_boost=keyword_boost,
+                    second_score=second_score,
+                    score_gap=score_gap,
+                )
+            else:
+                # Only one result - use its score as base confidence
+                result.confidence = new_candidates[0].get("score", 0.7)
+                result.reasoning += " [Single Result] Only one relevant skill found."
 
             _get_logger().info(
                 "Vector fallback triggered",
                 query=query[:50],
                 selected_skills=result.selected_skills,
                 suggestions=suggested_ids,
+                confidence=result.confidence,
             )
 
         except Exception as e:

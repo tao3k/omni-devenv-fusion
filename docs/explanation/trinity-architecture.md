@@ -1,14 +1,20 @@
-# Trinity Architecture (Phase 36.6)
+# Trinity Architecture (Phase 42)
 
+> **Phase 42: State-Aware Routing** | **Phase 41: Wisdom-Aware Routing** | **Phase 40: Automated Reinforcement Loop**
 > **Phase 36.6: Production Stability** | **Phase 36.5: Hot Reload & Index Sync** | **Phase 36: Trinity v2.0 - Swarm Engine + Skills**
+> **Phase 39: Self-Evolving Feedback Loop**
 > **Core Philosophy**: "Everything is a Skill" - The Executor is no longer a code module, but a logical role played by atomic skills.
 
 ## Quick Reference
 
-| Phase | Key Change                                                                                                 |
+| Phase | Key Change |
 | ----- | ---------------------------------------------------------------------------------------------------------- |
-| 36.6  | **Production Stability**: Async Task GC Protection, Atomic Upsert, Startup Reconciliation                  |
-| 36.5  | **Hot Reload & Index Sync**: Observer pattern, debounced notifications, Index Sync observer                |
+| 42    | **State-Aware Routing**: Inject environment state (Git, active context) to prevent hallucinated actions |
+| 41    | **Wisdom-Aware Routing**: Inject past lessons from harvested knowledge into Mission Brief |
+| 40    | **Automated Reinforcement**: Auto-record feedback on CLI success + Reviewer approval, 1% decay per read |
+| 39    | **Self-Evolving Feedback**: FeedbackStore records routing outcomes, boosts future confidence by +0.1 |
+| 36.6  | **Production Stability**: Async Task GC Protection, Atomic Upsert, Startup Reconciliation |
+| 36.5  | **Hot Reload & Index Sync**: Observer pattern, debounced notifications, Index Sync observer |
 | 36    | **Trinity v2.0**: Legacy `mcp_core.execution` deleted. Execution now via `skills/terminal` + Swarm Engine. |
 | 35.3  | Pure MCP Server (mcp.server.Server, no FastMCP)                                                            |
 | 35.2  | Sidecar Execution Pattern (uv isolation for crawl4ai, etc.)                                                |
@@ -371,6 +377,333 @@ async def reconcile_index(loaded_skills: list[str]) -> dict[str, int]:
 | Reload time (with sync)       | ~80ms                          |
 | Phantom skill detection       | Automatic at startup           |
 | Task GC safety                | Guaranteed                     |
+
+---
+
+## Phase 39/40: Self-Evolving Feedback Loop (The Harvester)
+
+> **Phase 39**: Self-Evolving Feedback Loop | **Phase 40**: Automated Reinforcement Loop
+
+The system now learns from experience. Successful routing decisions boost future confidence, and the system automatically records feedback signals.
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    Phase 39/40: Self-Evolving System                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  User Query → Semantic Router → Skill Execution → Feedback Recording        │
+│       ↓              ↓                ↓                   ↓                  │
+│  Vector Search    Hybrid Score    Success?        FeedbackStore             │
+│  (ChromaDB)       (+keyword)      (Reviewer)      (.memory/routing_        │
+│                                      Approval         feedback.json)        │
+│       ↓              ↓                ↓                   ↓                  │
+│  Confidence    Final Score    High Signal         Boost +0.1               │
+│  0.60          0.95           → Future queries → Confidence 0.70           │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Phase 39: FeedbackStore
+
+```python
+class FeedbackStore:
+    """Lightweight store for routing reinforcement learning."""
+    MIN_SCORE = -0.3   # Maximum penalty
+    MAX_SCORE = 0.3    # Maximum boost
+    DECAY_FACTOR = 0.1  # How much each feedback affects score
+    TIME_DECAY_RATE = 0.99  # [Phase 40] Decay multiplier per read (1% decay)
+
+    def record_feedback(self, query: str, skill_id: str, success: bool) -> float:
+        """Record user feedback for a routing decision."""
+
+    def get_boost(self, query: str, skill_id: str) -> float:
+        """Get boost with time-based decay."""
+```
+
+### Phase 40: Automated Reinforcement
+
+Three automatic feedback pathways:
+
+| Signal Source | Trigger | Boost |
+|--------------|---------|-------|
+| **CLI Success** | `omni git.status` executes | +0.1 |
+| **Reviewer Approval** | Audit passes | +0.1 (trusted) |
+| **Time Decay** | Each read | 1% decay |
+
+### Scoring Formula
+
+```
+Final Score = Base Vector Score
+            + Keyword Bonus (+0.1-0.3)
+            + Verb Priority Boost (+0.2 for CORE_ACTION_VERBS)
+            + Feedback Boost (+0.1 per success, max +0.3)
+            - Sigmoid Calibration (stretch 0.3-0.95 range)
+```
+
+### Feedback Storage
+
+**Location**: `.memory/routing_feedback.json`
+
+```json
+{
+  "git.status": {
+    "git": 0.1
+  },
+  "commit code": {
+    "git": 0.2
+  }
+}
+```
+
+### Decay Mechanism (Phase 40)
+
+Scores decay by 1% each time they are read:
+
+```
+0.10 → 0.099 → 0.098 → ... → 0.01 (removed)
+```
+
+Prevents "Matthew effect" where old successful skills dominate forever.
+
+### File Changes
+
+| File | Purpose |
+|------|---------|
+| `agent/capabilities/learning/harvester.py` | FeedbackStore class + decay |
+| `agent/core/skill_discovery/vector.py` | Feedback boost in hybrid search |
+| `agent/core/router/semantic_router.py` | Show feedback reasoning |
+| `agent/cli/runner.py` | CLI success feedback |
+| `agent/core/orchestrator/feedback.py` | Reviewer approval feedback |
+
+### Verification
+
+```bash
+# View learned feedback
+cat .memory/routing_feedback.json
+
+# Run tests
+uv run pytest packages/python/agent/src/agent/tests/ -k "feedback" -v
+```
+
+### Related Specs
+
+- `assets/specs/phase39_self_evolving_feedback_loop.md`
+- `assets/specs/phase40_automated_reinforcement_loop.md`
+
+---
+
+## Phase 41: Wisdom-Aware Routing
+
+> **Phase 41**: From "muscle memory" to "intelligent guidance" - learn from past lessons
+
+The system now injects retrieved lessons from `harvested/*.md` into the routing prompt, so the LLM generates Mission Briefs that avoid known pitfalls.
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    Phase 41: Wisdom-Aware Routing                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  User Query                                                                  │
+│       ↓                                                                       │
+│  SemanticRouter.route()                                                      │
+│       ↓                                                                       │
+│  ┌─────────────────────────────────────┐                                    │
+│  │  Parallel:                          │                                    │
+│  │  - Build routing menu               │                                    │
+│  │  - Consult Librarian (harvested/)   │ ← NEW: Retrieve past lessons        │
+│  └─────────────────────────────────────┘                                    │
+│       ↓                                                                       │
+│  System Prompt + PAST LESSONS                                                │
+│       ↓                                                                       │
+│  LLM generates Mission Brief with:                                           │
+│  - "Use filesystem for file edits"                                           │
+│  - "NOTE: Remember to hot-reload after tools.py changes"                     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Components
+
+| Component | Purpose |
+|-----------|---------|
+| `SemanticRouter.librarian` | Lazy-loaded Librarian function |
+| `_format_lessons()` | Format knowledge results for prompt |
+| `route()` | Parallel knowledge retrieval with menu building |
+
+### How It Works
+
+1. **Parallel Retrieval**: While building the routing menu, also query Librarian for relevant lessons
+2. **Lesson Formatting**: Format top 3 lessons with title, category, and content
+3. **Prompt Injection**: Add `[Phase 41] RELEVANT PAST LESSONS` section to system prompt
+4. **Brief Generation**: LLM references lessons when generating Mission Brief
+
+### Example
+
+**User Query**: "I need to commit my changes"
+
+**Knowledge Retrieved** (from `harvested/*.md`):
+```markdown
+### Git Commit Workflow Best Practices
+- Always run `git_status` first to see what's staged
+- Use `git_stage_all` for bulk staging (more reliable)
+```
+
+**Generated Mission Brief**:
+```
+Commit staged changes with message 'feat(router): add wisdom-aware routing'.
+
+Steps:
+1. Run git_status to verify what's staged
+2. Use git_stage_all to ensure all changes are staged
+3. Review the diff before proceeding
+
+NOTE: Previous session emphasized using git_stage_all for bulk staging
+as individual staging can be unreliable.
+```
+
+### Configuration
+
+```python
+router = SemanticRouter(
+    use_wisdom_routing=True,  # Enable wisdom-aware routing (default: True)
+)
+```
+
+### Related Files
+
+| File | Purpose |
+|------|---------|
+| `agent/core/router/semantic_router.py` | Librarian integration, lesson formatting |
+| `agent/capabilities/knowledge/librarian.py` | `consult_knowledge_base` function |
+| `agent/capabilities/learning/harvester.py` | Knowledge harvesting |
+
+### Related Specs
+
+- `assets/specs/phase41_wisdom_aware_routing.md`
+- `assets/specs/phase39_self_evolving_feedback_loop.md`
+- `assets/specs/phase40_automated_reinforcement_loop.md`
+
+---
+
+## Phase 42: State-Aware Routing
+
+> **Phase 42**: Ground routing in reality - prevent hallucinated actions by detecting environment state
+
+The system now detects real-time environment state (Git status, active context) and injects it into the routing prompt, preventing the router from suggesting actions that conflict with current reality.
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    Phase 42: State-Aware Routing                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  User Query                                                                  │
+│       ↓                                                                       │
+│  SemanticRouter.route()                                                      │
+│       ↓                                                                       │
+│  ┌─────────────────────────────────────────────────────┐                    │
+│  │  Three-Way Parallel:                                │                    │
+│  │  - Build routing menu (blocking, ~5ms)              │                    │
+│  │  - Consult Librarian for wisdom (parallel, ~50ms)   │                    │
+│  │  - ContextSniffer.get_snapshot() (parallel, ~10ms)  │ ← NEW: Environment  │
+│  └─────────────────────────────────────────────────────┘                    │
+│       ↓                                                                       │
+│  System Prompt + WISDOM + ENVIRONMENT STATE                                  │
+│       ↓                                                                       │
+│  LLM generates Mission Brief that:                                           │
+│  - References modified files from Git status                                 │
+│  - Acknowledges current branch context                                       │
+│  - Avoids suggesting actions that conflict with reality                      │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Components
+
+| Component | Purpose |
+|-----------|---------|
+| `ContextSniffer` | Fast, async environment state detector |
+| `get_sniffer()` | Singleton accessor for ContextSniffer |
+| `sniffer.get_snapshot()` | Returns formatted environment state |
+| `RoutingResult.env_snapshot` | Field to store environment snapshot |
+
+### What ContextSniffer Detects
+
+1. **Git Status**
+   - Current branch name
+   - Number of modified files
+   - Up to 3 modified file names (with +N more indicator)
+
+2. **Active Context**
+   - Reads `.memory/active_context/SCRATCHPAD.md`
+   - Reports line count or "Empty" state
+
+### Example
+
+**User Query**: "commit my changes"
+
+**Environment Snapshot Retrieved**:
+```
+[ENVIRONMENT STATE]
+- Branch: main | Modified: 51 files (M assets/references.yaml, M assets/settings.yaml, ...)
+- Active Context: Empty
+```
+
+**Mission Brief Generated**:
+```
+Commit staged changes. Based on the current environment, 51 files are modified.
+Ensure you review the most important changes before committing.
+```
+
+### CLI Integration
+
+```bash
+$ omni route invoke "commit my changes" --verbose
+
+# Output includes:
+╭──────────────────────── [Phase 42] Environment State ────────────────────────╮
+│ [ENVIRONMENT STATE]                                                          │
+│ - Branch: main | Modified: 51 files (...)                                    │
+│ - Active Context: Empty                                                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
+
+### How It Works
+
+1. **Parallel Execution**: Menu building, wisdom retrieval, and environment sniffing happen in parallel
+2. **Async I/O**: Git commands run async to avoid blocking
+3. **Lazy Loading**: ContextSniffer is lazily loaded to avoid slow initialization
+4. **Graceful Degradation**: If sniffing fails, continues with empty snapshot
+
+### Configuration
+
+```python
+router = SemanticRouter(
+    use_wisdom_routing=True,  # Wisdom-aware routing (default: True)
+    # State-aware routing is always enabled (no flag needed)
+)
+```
+
+### Related Files
+
+| File | Purpose |
+|------|---------|
+| `agent/core/router/sniffer.py` | NEW: ContextSniffer class |
+| `agent/core/router/semantic_router.py` | Three-way parallel, env_snapshot field |
+| `agent/core/router/models.py` | RoutingResult.env_snapshot field |
+| `agent/cli/commands/route.py` | Display environment snapshot in CLI |
+
+### Related Specs
+
+- `assets/specs/phase42_state_aware_routing.md`
+- `assets/specs/phase41_wisdom_aware_routing.md`
+
+---
 
 ## Next Steps
 

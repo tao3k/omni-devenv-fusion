@@ -38,11 +38,9 @@ logger = structlog.get_logger(__name__)
 def _get_ux_event_log_path() -> Path:
     """Get UX event log path from project cache directory."""
     try:
-        from common.gitops import get_project_root
+        from common.cache_path import CACHE_DIR
 
-        cache_dir = get_project_root() / ".cache"
-        cache_dir.mkdir(exist_ok=True)
-        return cache_dir / "omni_ux_events.jsonl"
+        return CACHE_DIR.ensure_parent("omni_ux_events.jsonl")
     except Exception:
         return Path("/tmp/omni_ux_events.jsonl")
 

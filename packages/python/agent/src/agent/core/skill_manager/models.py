@@ -54,6 +54,7 @@ class SkillCommand:
     description: str = ""
     category: str = "general"
     _skill_name: str = ""
+    input_schema: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Normalize category to enum."""

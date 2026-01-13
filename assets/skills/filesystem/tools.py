@@ -337,6 +337,10 @@ async def apply_file_changes(changes: List[FileOperation]) -> str:
     error_count = 0
 
     for change in changes:
+        # Handle both FileOperation objects and raw dicts from MCP
+        if isinstance(change, dict):
+            change = FileOperation(**change)
+
         try:
             full_path = project_root / change.path
 

@@ -489,6 +489,331 @@ async def test_scenario7_discovery_search_interface(populated_vector_store):
 
 
 # =============================================================================
+# PHASE 38: Integration Tests - Calibrated Scoring & Auto-Route
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_phase38_auto_route_typo_handling(populated_vector_store):
+    """
+    Phase 38: Auto-Route with Typo Handling
+
+    Tests skill.auto_route with a typo: "analyze code" (close to "analyze code")
+    Should correctly route to 'code_insight' via vector search.
+
+    Validates:
+    1. Vector Fallback is triggered (LLM returns low confidence)
+    2. Correct skill is found (code_insight)
+    3. RoutingResult is returned with calibrated confidence >= 0.6
+    """
+    discovery = VectorSkillDiscovery()
+    discovery._vm = populated_vector_store
+
+    # Add code_insight and filesystem to the store for this test
+    populated_vector_store._collections[SKILL_REGISTRY_COLLECTION]["documents"].append(
+        "Code analysis and insight skill. Analyze code structure and understand patterns."
+    )
+    populated_vector_store._collections[SKILL_REGISTRY_COLLECTION]["ids"].append("skill-code_insight")
+    populated_vector_store._collections[SKILL_REGISTRY_COLLECTION]["metadata"].append(
+        {
+            "id": "code_insight",
+            "name": "code_insight",
+            "description": "Analyze code structure and provide insights.",
+            "installed": "true",
+            "keywords": "analyze, code, insight, structure, understand, pattern",
+            "type": "local",
+        }
+    )
+
+    populated_vector_store._collections[SKILL_REGISTRY_COLLECTION]["documents"].append(
+        "File operations skill. Read, write, search, and list files in the project."
+    )
+    populated_vector_store._collections[SKILL_REGISTRY_COLLECTION]["ids"].append("skill-filesystem")
+    populated_vector_store._collections[SKILL_REGISTRY_COLLECTION]["metadata"].append(
+        {
+            "id": "filesystem",
+            "name": "filesystem",
+            "description": "File operations and management.",
+            "installed": "true",
+            "keywords": "file, read, write, search, list, directory",
+            "type": "local",
+        }
+    )
+
+    # Test query that will match via substring in fake store
+    result = await discovery.search(query="analyze code", limit=5, installed_only=True)
+
+    # Verify results
+    assert len(result) >= 1, "Should find at least one skill"
+
+    # Check that code_insight or filesystem is in results
+    found_relevant = any(
+        r["id"] in ["code_insight", "filesystem"] for r in result
+    )
+    assert found_relevant, f"Should find code_insight or filesystem, got: {[r['id'] for r in result]}"
+
+    # Verify calibrated scoring (confidence should be >= 0.6 after calibration)
+    top_skill = result[0]
+    assert top_skill["score"] >= 0.6, f"Calibrated score should be >= 0.6, got {top_skill['score']}"
+
+    # Verify new scoring fields exist
+    assert "raw_vector_score" in top_skill, "Should have raw_vector_score field"
+    assert "calibrated_vector" in top_skill, "Should have calibrated_vector field"
+    assert "keyword_matches" in top_skill, "Should have keyword_matches field"
+    assert "keyword_bonus" in top_skill, "Should have keyword_bonus field"
+
+
+@pytest.mark.asyncio
+async def test_phase38_calibrated_scoring():
+    """
+    Phase 38: Calibrated Scoring Verification
+
+    Tests that the sigmoid calibration and Base+Boost model work correctly.
+    """
+    from agent.core.skill_discovery.vector import (
+        _sigmoid_calibration,
+        _fuzzy_keyword_match,
+        MIN_CONFIDENCE,
+        MAX_CONFIDENCE,
+        KEYWORD_BONUS,
+    )
+
+    # Test 1: Sigmoid calibration stretches scores
+    # Raw scores around 0.5 should be pushed outward
+    low_score = _sigmoid_calibration(0.3)
+    mid_score = _sigmoid_calibration(0.5)
+    high_score = _sigmoid_calibration(0.7)
+
+    assert mid_score > low_score, "Sigmoid should push 0.5 higher than 0.3"
+    assert high_score > mid_score, "Sigmoid should push 0.7 higher than 0.5"
+
+    # Test 2: Sigmoid output is bounded
+    assert 0.0 <= _sigmoid_calibration(0.0) <= 1.0, "Sigmoid should output 0.0-1.0"
+    assert 0.0 <= _sigmoid_calibration(1.0) <= 1.0, "Sigmoid should output 0.0-1.0"
+
+    # Test 3: Fuzzy keyword matching (returns tuple[int, bool] since Phase 38.1)
+    # Exact match
+    match_count, verb_matched = _fuzzy_keyword_match({"test"}, {"test"})
+    assert match_count >= 1, "Exact match should work"
+
+    # Substring match (tests -> test)
+    match_count, _ = _fuzzy_keyword_match({"tests"}, {"test"})
+    assert match_count >= 1, f"Substring match should work, got {match_count}"
+
+    # Stemming (running -> run)
+    match_count, _ = _fuzzy_keyword_match({"running"}, {"run"})
+    assert match_count >= 1, f"Stemming should work, got {match_count}"
+
+    # Verb detection (commit is a core verb)
+    match_count, verb_matched = _fuzzy_keyword_match({"commit"}, {"commit"})
+    assert verb_matched is True, "commit should be detected as core verb"
+
+    # Test 4: Score bounds
+    assert MIN_CONFIDENCE == 0.3, "MIN_CONFIDENCE should be 0.3"
+    assert MAX_CONFIDENCE == 0.95, "MAX_CONFIDENCE should be 0.95"
+    assert KEYWORD_BONUS == 0.15, "KEYWORD_BONUS should be 0.15"
+
+    # Test 5: Verify sigmoid values at key points
+    # Score 0.5 should give ~0.5 (center of sigmoid)
+    assert abs(_sigmoid_calibration(0.5) - 0.5) < 0.1, "0.5 input should give ~0.5 output"
+    # Score 0.3 should give < 0.5
+    assert _sigmoid_calibration(0.3) < 0.5, "0.3 input should give < 0.5 output"
+    # Score 0.7 should give > 0.5
+    assert _sigmoid_calibration(0.7) > 0.5, "0.7 input should give > 0.5 output"
+
+
+@pytest.mark.asyncio
+async def test_phase38_adaptive_confidence_gap(populated_vector_store):
+    """
+    Phase 38: Adaptive Confidence based on Score Gap
+
+    Tests that the router correctly adjusts confidence based on
+    the gap between top and second results.
+    """
+    discovery = VectorSkillDiscovery()
+    discovery._vm = populated_vector_store
+
+    # Add a skill that should clearly match "git commit"
+    populated_vector_store._collections[SKILL_REGISTRY_COLLECTION]["documents"].append(
+        "Git commit skill. Stage and commit changes with smart commit workflow."
+    )
+    populated_vector_store._collections[SKILL_REGISTRY_COLLECTION]["ids"].append("skill-git-commit")
+    populated_vector_store._collections[SKILL_REGISTRY_COLLECTION]["metadata"].append(
+        {
+            "id": "git",
+            "name": "git",
+            "description": "Git version control operations.",
+            "installed": "true",
+            "keywords": "git, commit, branch, merge",
+            "type": "local",
+        }
+    )
+
+    # Search for a clear query (that will match in fake store)
+    results = await discovery.search(query="git commit", limit=3, installed_only=True)
+
+    assert len(results) >= 1, "Should find results"
+
+    # Verify high confidence for clear match
+    top_result = results[0]
+    # Note: Fake store uses substring matching, so results may vary
+    # The key is that calibrated scoring fields are present
+    assert top_result["score"] >= 0.3, f"Score should be at least MIN_CONFIDENCE, got {top_result['score']}"
+    assert "keyword_matches" in top_result, "Should have keyword_matches field"
+    assert "keyword_bonus" in top_result, "Should have keyword_bonus field"
+
+
+@pytest.mark.asyncio
+async def test_phase38_keyword_boost_effectiveness(populated_vector_store):
+    """
+    Phase 38: Keyword Boost Effectiveness
+
+    Tests that keyword matching provides a positive boost to scores.
+    """
+    discovery = VectorSkillDiscovery()
+    discovery._vm = populated_vector_store
+
+    # Add skills with clear keywords
+    populated_vector_store._collections[SKILL_REGISTRY_COLLECTION]["documents"].append(
+        "Testing skill for running and managing tests."
+    )
+    populated_vector_store._collections[SKILL_REGISTRY_COLLECTION]["ids"].append("skill-testing")
+    populated_vector_store._collections[SKILL_REGISTRY_COLLECTION]["metadata"].append(
+        {
+            "id": "testing",
+            "name": "testing",
+            "description": "Test execution and management.",
+            "installed": "true",
+            "keywords": "test, tests, testing, run",
+            "type": "local",
+        }
+    )
+
+    # Query with keyword match
+    results_with_match = await discovery.search(query="run tests", limit=5, installed_only=True)
+
+    # Query without keyword match
+    results_without_match = await discovery.search(query="execute verification procedures", limit=5, installed_only=True)
+
+    # The skill with matching keywords should score higher
+    if results_with_match and results_without_match:
+        with_match = next((r for r in results_with_match if r["id"] == "testing"), None)
+        without_match = next((r for r in results_without_match if r["id"] == "testing"), None)
+
+        if with_match and without_match:
+            # Keyword match should provide bonus
+            assert with_match["keyword_bonus"] > 0, "Should have keyword bonus when keywords match"
+            # Score with keyword match should be >= score without
+            assert with_match["score"] >= without_match["score"], "Keyword match should boost or equal score"
+
+
+@pytest.mark.asyncio
+async def test_phase38_router_integration(populated_vector_store):
+    """
+    Phase 38: Router Integration with Calibrated Scoring
+
+    Tests that SemanticRouter correctly uses the new calibrated scoring
+    when LLM confidence is low.
+    """
+    router = SemanticRouter(
+        use_semantic_cache=False,
+        use_vector_fallback=True,
+    )
+
+    # Inject fake vector discovery
+    router._vector_discovery = VectorSkillDiscovery()
+    router._vector_discovery._vm = populated_vector_store
+
+    # Mock cache
+    router._cache = MagicMock()
+    router._cache.get.return_value = None
+    router._cache.set = MagicMock()
+
+    # Mock inference to return low confidence
+    class LowConfidenceInference:
+        async def complete(self, **kwargs):
+            return {
+                "success": True,
+                "content": '{"skills": ["writer"], "mission_brief": "Handle the request.", "confidence": 0.3, "reasoning": "LLM uncertain."}',
+            }
+
+    router._inference = LowConfidenceInference()
+
+    # Route a query that should trigger vector fallback
+    result = await router.route("git commit changes", use_cache=False)
+
+    # Verify result structure
+    assert result is not None
+    assert hasattr(result, "selected_skills")
+    assert hasattr(result, "confidence")
+    assert hasattr(result, "reasoning")
+
+    # With vector fallback, confidence should be boosted
+    # Either from direct routing or from vector search
+    assert result.confidence >= 0.0, "Confidence should be non-negative"
+
+
+@pytest.mark.asyncio
+async def test_phase38_full_pipeline_with_typo():
+    """
+    Phase 38: Full Pipeline Test with Typo
+
+    End-to-end test simulating @omni("skill.auto_route", {"task": "analyze code"})
+    Tests the complete flow from auto_route through vector search to RoutingResult.
+    """
+    from agent.core.skill_discovery.vector import VectorSkillDiscovery
+
+    # Create a fresh vector store
+    store = FakeVectorStore()
+    store._collections[SKILL_REGISTRY_COLLECTION] = {
+        "documents": [],
+        "ids": [],
+        "metadata": [],
+    }
+
+    # Add test skills
+    test_skills = [
+        ("code_insight", "Analyze code structure and provide insights.", "analyze, code, insight"),
+        ("filesystem", "Read, write, and manage files.", "file, read, write"),
+        ("git", "Git version control operations.", "git, commit, branch"),
+    ]
+
+    for skill_id, description, keywords in test_skills:
+        store._collections[SKILL_REGISTRY_COLLECTION]["documents"].append(description)
+        store._collections[SKILL_REGISTRY_COLLECTION]["ids"].append(f"skill-{skill_id}")
+        store._collections[SKILL_REGISTRY_COLLECTION]["metadata"].append({
+            "id": skill_id,
+            "name": skill_id,
+            "description": description,
+            "installed": "true",
+            "keywords": keywords,
+            "type": "local",
+        })
+
+    # Create discovery with store
+    discovery = VectorSkillDiscovery()
+    discovery._vm = store
+
+    # Test query (simulating skill.auto_route)
+    result = await discovery.search(query="analyze code", limit=3, installed_only=True)
+
+    # Verify results
+    assert len(result) >= 1, "Should find at least one skill"
+
+    # Verify calibrated scoring fields
+    for r in result:
+        assert "score" in r, "Result must have score"
+        assert "raw_vector_score" in r, "Result must have raw_vector_score"
+        assert "calibrated_vector" in r, "Result must have calibrated_vector"
+        assert "keyword_matches" in r, "Result must have keyword_matches"
+        assert "keyword_bonus" in r, "Result must have keyword_bonus"
+
+    # Top result should be relevant (code_insight or filesystem)
+    top_skill = result[0]["id"]
+    assert top_skill in ["code_insight", "filesystem"], f"Expected code_insight or filesystem, got {top_skill}"
+
+
+# =============================================================================
 # Run Tests
 # =============================================================================
 

@@ -3,6 +3,7 @@ agent/core/orchestrator/feedback.py
 Feedback Loop for Orchestrator.
 
 Phase 15: Virtuous Cycle - Coder executes -> Reviewer audits -> Self-correction.
+Phase 40: Automated Reinforcement Loop - Record feedback on task success.
 """
 
 from typing import Dict, Any, List
@@ -10,6 +11,38 @@ from typing import Dict, Any, List
 from agent.core.agents.base import AgentResult
 from agent.core.agents.reviewer import ReviewerAgent
 from agent.core.telemetry import CostEstimator
+
+
+# [Phase 40] Safe import for feedback recording
+def _record_feedback_safe(query: str, skill_id: str, success: bool) -> None:
+    """
+    Safely record routing feedback without blocking main execution.
+
+    Args:
+        query: The original user query
+        skill_id: The skill/agent that was used
+        success: Whether the task was successful
+    """
+    try:
+        import asyncio
+        from agent.capabilities.learning.harvester import record_routing_feedback
+
+        # Create task but don't await - fire and forget
+        asyncio.create_task(
+            _async_record_feedback(query, skill_id, success)
+        )
+    except Exception:
+        # Silently ignore if feedback system not available
+        pass
+
+
+async def _async_record_feedback(query: str, skill_id: str, success: bool) -> None:
+    """Async wrapper for feedback recording."""
+    try:
+        from agent.capabilities.learning.harvester import record_routing_feedback
+        record_routing_feedback(query, skill_id, success)
+    except Exception:
+        pass
 
 
 async def execute_with_feedback_loop(
@@ -154,6 +187,17 @@ async def execute_with_feedback_loop(
                 confidence=audit_result.confidence,
                 attempt=attempt,
             ).info("audit_passed")
+
+            # [Phase 40] Reinforcement Learning: Record positive feedback
+            # When Reviewer approves, this is a high-value signal that the routing was correct.
+            # We record this so future queries will be more confident about this skill.
+            _record_feedback_safe(user_query, worker.name, success=True)
+            logger.debug(
+                "Reinforcement signal sent",
+                query=user_query[:50],
+                skill=worker.name,
+                success=True,
+            )
 
             # Log full audit history for transparency
             logger.bind(session_id=self._session_id, audit_history=audit_history).debug(

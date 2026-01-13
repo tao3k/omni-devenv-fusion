@@ -1,5 +1,7 @@
 # Phase 36.2: Vector-Enhanced Skill Discovery
 
+> **Phase 41: Wisdom-Aware Routing** | **Phase 40: Automated Reinforcement** | **Phase 39: Self-Evolving Feedback** | **Phase 36.8: Auto-Route Discovery** | **Phase 36.5: Hot Reload** | **Phase 36.2: Vector-Enhanced Discovery**
+
 > **Virtual Loading** - Intelligent skill discovery using ChromaDB vector search.
 
 ## Overview
@@ -805,7 +807,98 @@ similarity = max(0.0, min(1.0, raw_score))
 | `agent/core/vector_store.py`             | Cosine distance configuration     |
 | `assets/skills/skill/tests/...`          | Phase 36.8 tests                  |
 
+---
+
+## Phase 39: Feedback Boost in Vector Search
+
+> **Self-Evolving Discovery** - Vector search now includes feedback boost from past successful routings.
+
+### Overview
+
+Phase 39 integrates the FeedbackStore with vector search to boost scores based on learned experience:
+
+```python
+# vector.py - hybrid_search with feedback boost
+def hybrid_search(query: str, limit: int = 5) -> list[dict]:
+    # ... base vector + keyword search ...
+
+    # Phase 39: Add feedback boost
+    for skill in results:
+        feedback_bonus = get_feedback_boost(query, skill["id"])
+        skill["score"] += feedback_bonus
+        skill["feedback_bonus"] = feedback_bonus
+
+    return sorted(results, key=lambda x: x["score"], reverse=True)
+```
+
+### Scoring Formula
+
+```
+Final Score = Vector Similarity
+            + Keyword Bonus (+0.1-0.3)
+            + Verb Priority Boost (+0.2 for CORE_ACTION_VERBS)
+            + Feedback Boost (+0.1 per past success, max +0.3)
+            + Sigmoid Calibration (stretch 0.3-0.95 range)
+```
+
+### Example
+
+**First query: "commit code"**
+```
+Vector: 0.65
+Keyword: +0.10 (commit)
+Verb: +0.15 (git push, git commit)
+Feedback: +0.00 (no history)
+Final: 0.90
+```
+
+**After 3 successful "git.commit" executions:**
+```
+Vector: 0.65
+Keyword: +0.10 (commit)
+Verb: +0.15 (git push, git commit)
+Feedback: +0.20 (3 successes × 0.1)
+Final: 1.10 → clamped to 0.95 (max)
+```
+
+### CLI Integration
+
+```bash
+# Each successful command updates feedback
+omni git.status     # → {"git.status": {"git": 0.1}}
+omni git.status     # → {"git.status": {"git": 0.2}}
+omni git.status     # → {"git.status": {"git": 0.3}} (max)
+```
+
+### Time-Based Decay (Phase 40)
+
+Scores decay by 1% each time they are read to prevent stale data from dominating:
+
+```python
+# Each get_boost() call applies decay
+current_score = 0.10
+decayed_score = 0.10 * 0.99  # 0.099
+# After 68 reads: < 0.01 → removed
+```
+
+### Viewing Feedback Data
+
+```bash
+# Check learned feedback
+cat .memory/routing_feedback.json
+```
+
+### Related Files
+
+| File                                      | Purpose                           |
+| ----------------------------------------- | --------------------------------- |
+| `agent/core/skill_discovery/vector.py`    | Hybrid search with feedback boost |
+| `agent/capabilities/learning/harvester.py`| FeedbackStore with decay          |
+| `agent/core/router/semantic_router.py`    | Router with feedback reasoning    |
+
 ### See Also
 
-- [Routing](routing.md) - SemanticRouter and skill routing
+- [Routing](routing.md) - SemanticRouter with feedback loop
 - [Skills Overview](../skills.md) - Complete skill documentation
+- `assets/specs/phase39_self_evolving_feedback_loop.md`
+- `assets/specs/phase40_automated_reinforcement_loop.md`

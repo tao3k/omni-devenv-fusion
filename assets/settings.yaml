@@ -76,6 +76,27 @@ api:
   anthropic_settings: ".claude/settings.json"
 
 # =============================================================================
+# Inference Configuration (LLM API)
+# =============================================================================
+# Configure which LLM provider to use for internal inference (writer, semantic search, etc.)
+inference:
+  # Environment variable name for the API key
+  # Common options: ANTHROPIC_API_KEY, MINIMAX_API_KEY, OPENAI_API_KEY
+  api_key_env: "MINIMAX_API_KEY"
+
+  # API base URL (for OpenAI-compatible or Anthropic-compatible endpoints)
+  base_url: "https://api.minimax.io/anthropic"
+
+  # Default model name
+  model: "MiniMax-M2.1"
+
+  # Request timeout in seconds
+  timeout: 120
+
+  # Max tokens per response
+  max_tokens: 4096
+
+# =============================================================================
 # MCP Configuration
 # =============================================================================
 # MCP configuration files

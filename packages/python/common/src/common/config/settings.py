@@ -254,9 +254,11 @@ def get_setting(key: str, default: Any = None) -> Any:
     value = settings.get(key, default)
 
     # Auto-resolve path values with project_root (SSOT)
+    # Skip URLs (http://, https://, etc.)
     if (
         isinstance(value, str)
         and value
+        and not value.startswith(("http://", "https://", "file://"))
         and (
             value.endswith((".yaml", ".yml", ".toml", ".json", ".nix"))
             or "/" in value

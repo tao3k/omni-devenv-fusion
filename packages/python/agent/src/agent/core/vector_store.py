@@ -114,12 +114,10 @@ class VectorMemory:
             return
 
         # Defer ChromaDB client creation - only compute path
-        # Using same pattern as memory skill: {git_root}/.cache/{project}/chromadb/
-        from common.settings import get_setting
+        # Using CACHE_DIR for consistent cache location
+        from common.cache_path import CACHE_DIR
 
-        project_root = get_project_root()
-        project_name = get_setting("cache.project_name", "omni-dev-fusion")
-        self._cache_path = project_root / ".cache" / project_name / "chromadb"
+        self._cache_path = CACHE_DIR("chromadb")
         self._cache_path.mkdir(parents=True, exist_ok=True)
 
         self._initialized = True

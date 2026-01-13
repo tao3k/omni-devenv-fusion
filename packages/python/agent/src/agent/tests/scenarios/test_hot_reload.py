@@ -267,7 +267,8 @@ async def test_scenario2_mcp_notification_with_session(skill_manager):
     # Patch server.request_context at module level
     import agent.mcp_server as mcp_module
 
-    original = getattr(type(mcp_module.server), "request_context", None)
+    # Save original server instance
+    original_server = mcp_module.server
 
     class MockContext:
         request_context = mock_request_context
@@ -288,9 +289,8 @@ async def test_scenario2_mcp_notification_with_session(skill_manager):
         mock_session.send_tool_list_changed.assert_called_once()
 
     finally:
-        # Restore
-        if original:
-            setattr(type(mcp_module.server), "request_context", original)
+        # Restore original server instance
+        mcp_module.server = original_server
 
 
 @pytest.mark.asyncio

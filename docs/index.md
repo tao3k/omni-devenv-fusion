@@ -67,7 +67,7 @@ Understanding-oriented. Deep dives into architecture and design philosophy.
 | [Why Nix for AI?](./explanation/why-nix-for-ai.md)                            | The Technical Bet - reproducibility as foundation   |
 | [Vision: Agentic OS](./explanation/vision-agentic-os.md)                      | The Endgame - from IDE to Agentic OS                |
 | [Why Omni-DevEnv?](./explanation/why-omni-devenv.md)                          | Core value proposition and solutions                |
-| [Trinity Architecture](./explanation/trinity-architecture.md)                 | Phase 36 v2.0 - Orchestrator/Coder/Executor Pattern |
+| [Trinity Architecture](./explanation/trinity-architecture.md)                 | Phase 36 v2.0 - Orchestrator/Coder/Executor Pattern + Phase 39/40 Self-Evolving Feedback |
 | [MCP Architecture Roadmap](../design/mcp-architecture-roadmap.md)             | Technical architecture and future vision            |
 
 ---

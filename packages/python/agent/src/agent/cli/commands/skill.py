@@ -3,11 +3,13 @@ skill.py - Skill Command Group
 
 Phase 35.2: Modular CLI Architecture
 Phase 36: Vector-Enhanced Discovery
+Phase 37/38: Hybrid Search & Scoring
 
 Provides full skill management commands:
 - run: Run a skill command
 - list: List installed skills
 - discover: Discover skills from index
+- search: Semantic vector search (Phase 37/38)
 - info: Show skill information
 - install: Install a skill from URL
 - update: Update an installed skill
@@ -416,6 +418,91 @@ def skill_index_stats(
         err_console.print(
             Panel(
                 f"Failed to get stats: {e}",
+                title="❌ Error",
+                style="red",
+            )
+        )
+        raise typer.Exit(1)
+
+
+@skill_app.command("search")
+def skill_search(
+    query: str = typer.Argument(..., help="Semantic search query"),
+    limit: int = typer.Option(5, "--limit", "-n", help="Maximum number of results"),
+    all_skills: bool = typer.Option(
+        False, "--all", "-a", help="Include remote (not installed) skills"
+    ),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output result as JSON"),
+):
+    """
+    Search skills using semantic vector search (Phase 37/38).
+
+    Uses hybrid search with:
+    - Vector similarity (ChromaDB embeddings)
+    - Fuzzy keyword matching (substring, stemming)
+    - Sigmoid score calibration
+
+    Examples:
+        omni skill search "write documentation"
+        omni skill search "commit code" --limit 10
+        omni skill search "git workflow" --all --json
+    """
+    import asyncio
+
+    from agent.core.skill_discovery import VectorSkillDiscovery
+
+    async def do_search():
+        discovery = VectorSkillDiscovery()
+        return await discovery.search(query, limit=limit, installed_only=not all_skills)
+
+    try:
+        results = asyncio.run(do_search())
+
+        if json_output:
+            print_result(json.dumps(results, indent=2))
+        elif results:
+            table = Table(title=f"🔍 Search: '{query}'", show_header=True)
+            table.add_column("Skill", style="bold")
+            table.add_column("Score", justify="right")
+            table.add_column("Keywords")
+            table.add_column("Installed")
+
+            for skill in results:
+                score = skill.get("score", 0)
+                score_style = "green" if score >= 0.7 else "yellow" if score >= 0.5 else "red"
+                keywords = ", ".join(skill.get("keywords", [])[:3])
+                installed = "✅" if skill.get("installed") else "❌"
+
+                table.add_row(
+                    skill.get("name", skill.get("id", "")),
+                    f"[{score_style}]{score:.2f}[/{score_style}]",
+                    keywords[:30] + "..." if len(keywords) > 30 else keywords,
+                    installed,
+                )
+
+            err_console.print(table)
+
+            # Show scoring details for top result
+            if results:
+                top = results[0]
+                verb_info = " +verb" if top.get("verb_matched") else ""
+                feedback = top.get("feedback_bonus", 0.0)
+                feedback_info = f", feedback={feedback:+.2f}" if feedback != 0 else ""
+                err_console.print(
+                    f"\n[dim]Top match scoring: "
+                    f"vector={top.get('calibrated_vector', 0):.2f}, "
+                    f"keyword_bonus=+{top.get('keyword_bonus', 0):.2f} "
+                    f"({top.get('keyword_matches', 0)} matches){verb_info}{feedback_info}[/dim]"
+                )
+        else:
+            err_console.print(
+                Panel(f"No skills found for '{query}'", title="🔍 Results", style="yellow")
+            )
+
+    except Exception as e:
+        err_console.print(
+            Panel(
+                f"Search failed: {e}",
                 title="❌ Error",
                 style="red",
             )

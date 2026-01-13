@@ -12,8 +12,9 @@ in
   packages = [
     __inputs__.llm-agents.packages.${system}.claude-code
   ];
-  claude.code.enable = true;
+ claude.code.enable = true;
   claude.code.env = {
+    MINIMAX_API_KEY = config.secretspec.secrets.MINIMAX_API_KEY;
     ANTHROPIC_BASE_URL = "https://api.minimax.io/anthropic";
     ANTHROPIC_AUTH_TOKEN = config.secretspec.secrets.MINIMAX_API_KEY;
     API_TIMEOUT_MS = "2000000";
@@ -76,6 +77,7 @@ in
       ];
       env = {
         OMNI_UX_MODE = "headless";
+        MINIMAX_API_KEY = config.secretspec.secrets.MINIMAX_API_KEY;
       };
     };
   };

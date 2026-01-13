@@ -37,4 +37,10 @@ def __getattr__(name: str):
 
         return getattr(skill_utils, name)
 
+    # Lazy load cache_path
+    if name in ("CACHE_DIR", "get_cache_dir"):
+        from . import cache_path
+
+        return getattr(cache_path, name)
+
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

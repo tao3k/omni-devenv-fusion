@@ -1,8 +1,128 @@
 # CLI Developer Guide
 
-> Phase 35.2: Modular CLI Architecture with Atomic Module Structure
+> **Phase 42: State-Aware Routing** | **Phase 41: Wisdom-Aware Routing** | **Phase 40: Automated Reinforcement Loop** | **Phase 35.2: Modular CLI Architecture** | **Phase 35.1: Simplified Test Framework**
 
-This document provides debugging tips and developer notes for the CLI module.
+> **Phase 42**: CLI route command now displays environment state from ContextSniffer.
+
+## Phase 41/42: Route Command
+
+The `omni route` command tests and demonstrates the Semantic Router with wisdom-aware and state-aware routing.
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `omni route invoke <query>` | Route a query and show results |
+| `omni route wisdom <query>` | Search harvested wisdom for a query |
+| `omni route status` | Show routing system status |
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--verbose, -v` | Show detailed reasoning |
+| `--no-wisdom, -n` | Disable wisdom injection |
+| `--json, -j` | Output as JSON |
+
+### Examples
+
+```bash
+# Route a query with wisdom and environment state
+omni route invoke "run tests for this project" --verbose
+
+# Search for wisdom without routing
+omni route wisdom "python testing"
+
+# Check system status
+omni route status
+
+# Route without wisdom injection
+omni route invoke "commit my changes" --no-wisdom
+```
+
+### Output Example
+
+```
+$ omni route invoke "commit my changes" --verbose
+
+╭─────────────────────────────────── Input ────────────────────────────────────╮
+│ Query: commit my changes                                                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭──────────────────────── [Phase 42] Environment State ────────────────────────╮
+│ [ENVIRONMENT STATE]                                                          │
+│ - Branch: main | Modified: 51 files (M assets/references.yaml, ...)          │
+│ - Active Context: Empty                                                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+┏━━━━━━━┓
+┃ Skill ┃
+┡━━━━━━━┩
+│ git   │
+└───────┘
+╭─────────────────────────────── Mission Brief ────────────────────────────────╮
+│ Commit staged changes.                                                       │
+│ IMPORTANT: Use git_stage_all for bulk staging...                             │
+╰──────────────────────────────────────────────────────────────────────────────╯
+Confidence: 0.95
+```
+
+### Related Files
+
+| File | Purpose |
+|------|---------|
+| `agent/cli/commands/route.py` | Route command implementation |
+| `agent/core/router/semantic_router.py` | SemanticRouter with wisdom/state awareness |
+
+---
+
+## Phase 40: Automatic Feedback Recording
+
+When a skill command executes successfully via CLI, the system automatically records positive feedback:
+
+```python
+# runner.py - After successful command execution
+def _record_cli_success(command: str, skill_name: str) -> None:
+    """Record CLI execution success as positive feedback.
+
+    This is a lightweight signal - CLI success doesn't guarantee
+    the routing was correct, but it's still useful data.
+    """
+    try:
+        from agent.capabilities.learning.harvester import record_routing_feedback
+        # Use command as pseudo-query, record mild positive feedback
+        record_routing_feedback(command, skill_name, success=True)
+    except Exception:
+        # Silently ignore if feedback system not available
+        pass
+```
+
+### How It Works
+
+1. User runs: `omni git.status`
+2. Command executes successfully
+3. `_record_cli_success("git.status", "git")` is called
+4. Feedback stored in `.memory/routing_feedback.json`:
+
+```json
+{
+  "git.status": {
+    "git": 0.1
+  }
+}
+```
+
+5. Future "git status" queries get +0.1 confidence boost
+
+### Viewing Feedback Data
+
+```bash
+# Check learned feedback
+cat .memory/routing_feedback.json
+
+# Monitor feedback during development
+tail -f .memory/routing_feedback.json
+```
+
+---
 
 ## MCP Server Command
 
@@ -74,7 +194,8 @@ agent/cli/
 ├── runner.py            # Skill execution logic
 └── commands/
     ├── __init__.py
-    └── skill.py         # Skill command group (run, list, etc.)
+    ├── skill.py         # Skill command group (run, list, etc.)
+    └── route.py         # Route command (Phase 41/42)
 ```
 
 ---
