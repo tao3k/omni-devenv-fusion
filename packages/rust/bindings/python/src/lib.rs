@@ -1,5 +1,8 @@
 use pyo3::prelude::*;
 use omni_sniffer::OmniSniffer;
+use omni_io::{self, IoError};
+use omni_tokenizer;
+use anyhow;
 
 /// Python wrapper for EnvironmentSnapshot.
 /// Uses omni_types::EnvironmentSnapshot for type unification.
@@ -119,7 +122,11 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyEnvironmentSnapshot>()?;
     m.add_function(pyo3::wrap_pyfunction!(py_get_sniffer, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(get_environment_snapshot, m)?)?;
-    m.add("VERSION", "0.1.0")?;
+    // Phase 47: Iron Lung functions
+    m.add_function(pyo3::wrap_pyfunction!(read_file_safe, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(count_tokens, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(truncate_tokens, m)?)?;
+    m.add("VERSION", "0.2.0")?;
     Ok(())
 }
 
@@ -139,4 +146,44 @@ fn get_environment_snapshot(root_path: &str) -> String {
     let sniffer = OmniSniffer::new(root_path);
     let snapshot = sniffer.get_snapshot();
     snapshot.to_prompt_string()
+}
+
+// ============================================================================
+// Phase 47: The Iron Lung - Safe I/O and Tokenization
+// ============================================================================
+
+/// Safely read a text file with size and binary checks.
+/// Releases GIL for CPU-intensive file operations.
+#[pyfunction]
+#[pyo3(signature = (path, max_bytes = 1048576))]
+fn read_file_safe(path: String, max_bytes: u64) -> PyResult<String> {
+    Python::with_gil(|py| {
+        py.allow_threads(|| {
+            omni_io::read_text_safe(path, max_bytes)
+                .map_err(|e| anyhow::anyhow!(e))
+        })
+    }).map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string()))
+}
+
+/// Count tokens in text using cl100k_base (GPT-4/3.5 standard).
+/// Releases GIL for CPU-intensive tokenization.
+#[pyfunction]
+fn count_tokens(text: &str) -> usize {
+    Python::with_gil(|py| {
+        py.allow_threads(|| {
+            omni_tokenizer::count_tokens(text)
+        })
+    })
+}
+
+/// Truncate text to fit within a maximum token count.
+/// Releases GIL for CPU-intensive tokenization.
+#[pyfunction]
+#[pyo3(signature = (text, max_tokens))]
+fn truncate_tokens(text: &str, max_tokens: usize) -> String {
+    Python::with_gil(|py| {
+        py.allow_threads(|| {
+            omni_tokenizer::truncate(text, max_tokens)
+        })
+    })
 }

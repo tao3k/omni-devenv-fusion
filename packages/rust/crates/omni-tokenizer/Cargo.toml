@@ -1,0 +1,11 @@
+[package]
+name = "omni-tokenizer"
+version.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+tiktoken-rs = "0.5"
+thiserror = { workspace = true }

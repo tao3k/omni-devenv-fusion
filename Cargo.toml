@@ -30,6 +30,10 @@ git2 = "0.18"
 # Python bindings - Python 3.13 support via PyO3 0.23+
 pyo3 = { version = "0.23.3", features = ["extension-module"] }
 
+# [Phase 47] The Iron Lung - Safe I/O & Tokenization
+tiktoken-rs = "0.5"
+memchr = "2.7"
+
 # Performance optimization
 [profile.release]
 lto = true

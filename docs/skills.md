@@ -1,7 +1,9 @@
 # Skills Documentation
 
-> **Phase 45: Rust Core Integration** | **Phase 44: Experiential Agent** | **Phase 43: Holographic Agent** | **Phase 41: Wisdom-Aware Routing** | **Phase 40: Automated Reinforcement Loop** | **Phase 39: Self-Evolving Feedback Loop** | **Phase 36.6: Production Stability** | **Phase 36.5: Hot Reload & Index Sync** | **Phase 36: Trinity v2.0** | **Phase 35.3: Pure MCP Server** | **Phase 35.2: Cascading Templates** | **Phase 35.1: Simplified Test Framework** | **Phase 34: Cognitive System** | **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
+> **Phase 47: The Iron Lung** | **Phase 46: The Neural Bridge** | **Phase 45: Rust Core Integration** | **Phase 44: Experiential Agent** | **Phase 43: Holographic Agent** | **Phase 41: Wisdom-Aware Routing** | **Phase 40: Automated Reinforcement Loop** | **Phase 39: Self-Evolving Feedback Loop** | **Phase 36.6: Production Stability** | **Phase 36.5: Hot Reload & Index Sync** | **Phase 36: Trinity v2.0** | **Phase 35.3: Pure MCP Server** | **Phase 35.2: Cascading Templates** | **Phase 35.1: Simplified Test Framework** | **Phase 34: Cognitive System** | **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
 
+> **Phase 47**: Safe I/O (binary detection, size limits) + BPE tokenization (100-250x faster)
+> **Phase 46**: Type unification between Rust and Python (SSOT via omni-types)
 > **Phase 45**: Rust workspace with high-performance omni-sniffer (libgit2, 30x speedup)
 > **Phase 44**: Skill-level episodic memory from harvested insights
 > **Phase 43**: The Holographic Agent - environment snapshot injected into ReAct loop

@@ -1,0 +1,15 @@
+[package]
+name = "omni-io"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+memchr = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util"] }
+
+[dev-dependencies]
+tempfile = "3.12"
+
+[lints]
+workspace = true

@@ -55,6 +55,18 @@ Internal documentation for Omni-Dev Fusion developers.
 
 ---
 
+## Rust Core Architecture
+
+Phase 45-47: High-performance Rust core with Python bindings.
+
+| Document                                                                            | Description                                                |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| [Phase 45: Rust Core Integration](../assets/specs/phase45_rust_core_integration.md) | Monorepo structure, workspace configuration, PyO3 bindings |
+| [Phase 46: The Neural Bridge](../assets/specs/phase46_the_neural_bridge.md)         | Type unification between Rust and Python                   |
+| [Phase 47: The Iron Lung](../assets/specs/phase47_the_iron_lung.md)                 | Safe I/O, tokenization, GIL release patterns               |
+
+---
+
 ## Explanation
 
 Understanding-oriented. Deep dives into architecture and design philosophy.
