@@ -1,5 +1,9 @@
 #![allow(clippy::doc_markdown, clippy::uninlined_format_args)]
 
+//! High-performance environment sniffer for Omni DevEnv.
+//!
+//! Uses libgit2 for fast git operations and provides environment snapshots.
+
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
@@ -9,15 +13,16 @@ use omni_types::EnvironmentSnapshot;
 /// Errors for `OmniSniffer` operations.
 #[derive(Debug, Error)]
 pub enum SnifferError {
+    /// Cannot open the git repository
     #[error("Failed to open git repository at {0}")]
     RepoOpen(std::path::PathBuf),
-
+    /// Git repository has no head (empty repo)
     #[error("Git repository has no head reference")]
     NoHead,
-
+    /// Git status scan failed
     #[error("Git status scan failed: {0}")]
     StatusScan(String),
-
+    /// Failed to read the scratchpad file
     #[error("Failed to read scratchpad: {0}")]
     ScratchpadRead(std::path::PathBuf),
 }

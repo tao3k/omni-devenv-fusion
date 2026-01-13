@@ -20,12 +20,13 @@ use thiserror::Error;
 /// Errors for tokenization operations.
 #[derive(Error, Debug)]
 pub enum TokenizerError {
+    /// Failed to initialize the tokenization model
     #[error("Tokenization model initialization failed: {0}")]
     ModelInit(String),
-
+    /// Failed to encode text to tokens
     #[error("Token encoding failed: {0}")]
     Encoding(String),
-
+    /// Failed to decode tokens back to text
     #[error("Token decoding failed: {0}")]
     Decoding(String),
 }

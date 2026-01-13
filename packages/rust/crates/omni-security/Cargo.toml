@@ -1,0 +1,15 @@
+[package]
+name = "omni-security"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# Core engine: DFA regex for linear-time scanning
+regex = "1.10"
+# Static initialization of regex sets
+once_cell = "1.19"
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

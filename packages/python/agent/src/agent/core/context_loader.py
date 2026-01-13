@@ -1,11 +1,14 @@
 """
 src/agent/core/context_loader.py
 
-Phase 13.8: Configuration-Driven Context
+Phase 48: Hyper-Context Loader (Rust Accelerated).
+Phase 13.8: Configuration-Driven Context (Legacy)
 
-Responsible for hydrating the Agent's context from configuration and local overrides.
-Phase 13.9: Context Injection - Auto-inject Git status for zero-click awareness.
-Follows the Configuration vs Code separation principle.
+Upgraded to use omni_core_rs for:
+- Safe file reading with binary detection and size limits
+- GIL release pattern for concurrent file operations
+
+[Phase 48.1] Legacy fallback removed - Full Rust adoption.
 """
 
 import subprocess
@@ -15,31 +18,49 @@ import structlog
 from common.config.settings import get_setting
 from common.gitops import get_project_root
 
+# [Phase 48] Import Rust Core
+import omni_core_rs
+
 logger = structlog.get_logger(__name__)
+
+# Default file size limit (100KB per file)
+DEFAULT_MAX_FILE_SIZE = 100 * 1024
 
 
 class ContextLoader:
-    """Load and combine system prompts from config files."""
+    """
+    Load and combine system prompts from configuration and local overrides.
+    Phase 48: Rust-accelerated file reading with safety checks.
+    [Phase 48.1] Pure Rust implementation - no legacy fallback.
+    """
 
-    def __init__(self):
+    def __init__(self, max_file_size: int = DEFAULT_MAX_FILE_SIZE):
         self.root = get_project_root()
+        self.max_file_size = max_file_size
 
     def _read_file_safe(self, rel_path: str) -> str:
-        """Safely read a text file relative to project root."""
+        """
+        Safely read a text file relative to project root.
+        Uses omni_core_rs.read_file_safe for:
+        - Size limit (returns error if too big)
+        - Binary detection (returns error if binary)
+        - Encoding (lossy utf-8 fallback)
+        """
         if not rel_path:
             return ""
 
         full_path = self.root / rel_path
-        if full_path.exists():
-            try:
-                return full_path.read_text(encoding="utf-8")
-            except Exception as e:
-                logger.error(f"Error reading prompt file {rel_path}: {e}")
-                return ""
-        else:
+        if not full_path.exists():
             # It's okay if user custom file doesn't exist
             if "user_custom" not in rel_path:
                 logger.warning(f"Prompt file not found: {full_path}")
+            return ""
+
+        # [Phase 48] Pure Rust path - no fallback
+        try:
+            return omni_core_rs.read_file_safe(str(full_path), self.max_file_size)
+        except Exception as e:
+            logger.error(f"Error reading prompt file {rel_path}: {e}")
             return ""
 
     def _get_git_status_summary(self) -> str:

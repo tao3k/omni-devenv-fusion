@@ -17,22 +17,22 @@ publish = false
 # [Phase 45.2] Unified dependency management
 [workspace.dependencies]
 # Core dependencies
-tokio = { version = "1.36", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-anyhow = "1.0"
-thiserror = "1.0"
-walkdir = "2.4"
+tokio = { version = "1.49.0", features = ["full"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+anyhow = "1.0.100"
+thiserror = "2.0.17"
+walkdir = "2.5.0"
 
 # Git operations (libgit2 for performance)
-git2 = "0.18"
+git2 = "0.20.3"
 
-# Python bindings - Python 3.13 support via PyO3 0.23+
-pyo3 = { version = "0.23.3", features = ["extension-module"] }
+# Python bindings - Python 3.13 support via PyO3 0.27+
+pyo3 = { version = "0.27.2", features = ["extension-module"] }
 
 # [Phase 47] The Iron Lung - Safe I/O & Tokenization
-tiktoken-rs = "0.5"
-memchr = "2.7"
+tiktoken-rs = "0.9.1"
+memchr = "2.7.6"
 
 # Performance optimization
 [profile.release]

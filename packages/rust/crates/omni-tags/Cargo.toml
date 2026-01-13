@@ -1,0 +1,21 @@
+[package]
+name = "omni-tags"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# ast-grep for AST-based code navigation
+ast-grep-core = "0.40.5"
+ast-grep-language = "0.40.5"
+once_cell = "1.19"
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+omni-io = { path = "../omni-io" }
+tree-sitter = "0.26"
+walkdir = "2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

@@ -17,16 +17,22 @@ use std::io::Read;
 use tokio::fs as tokio_fs;
 use tokio::io::AsyncReadExt;
 
+/// Error types for file I/O operations.
 #[derive(Error, Debug)]
 pub enum IoError {
+    /// File does not exist
     #[error("File not found: {0}")]
     NotFound(String),
+    /// File exceeds size limit
     #[error("File too large: {0} bytes (limit: {1})")]
     TooLarge(u64, u64),
+    /// File contains binary content
     #[error("Binary file detected")]
     BinaryFile,
+    /// Low-level I/O error
     #[error("IO error: {0}")]
     System(#[from] std::io::Error),
+    /// Invalid UTF-8 encoding
     #[error("UTF-8 decoding error")]
     Encoding,
 }
@@ -55,6 +61,14 @@ fn decode_buffer(buffer: Vec<u8>) -> Result<String, IoError> {
 // Synchronous API (Best for Python `allow_threads` usage)
 // ============================================================================
 
+/// Read text from a file with size and binary checks (synchronous).
+///
+/// # Arguments
+/// * `path` - Path to the file
+/// * `max_bytes` - Maximum file size in bytes
+///
+/// # Returns
+/// Decoded text content or an error
 pub fn read_text_safe<P: AsRef<Path>>(path: P, max_bytes: u64) -> Result<String, IoError> {
     let path = path.as_ref();
     let metadata = std_fs::metadata(path)
@@ -75,6 +89,14 @@ pub fn read_text_safe<P: AsRef<Path>>(path: P, max_bytes: u64) -> Result<String,
 // Asynchronous API (Powered by Tokio)
 // ============================================================================
 
+/// Read text from a file with size and binary checks (asynchronous).
+///
+/// # Arguments
+/// * `path` - Path to the file
+/// * `max_bytes` - Maximum file size in bytes
+///
+/// # Returns
+/// Decoded text content or an error
 pub async fn read_text_safe_async<P: AsRef<Path>>(path: P, max_bytes: u64) -> Result<String, IoError> {
     let path = path.as_ref();
     let metadata = tokio_fs::metadata(path)

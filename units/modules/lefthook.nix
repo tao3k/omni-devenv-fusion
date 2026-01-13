@@ -39,6 +39,11 @@ let
     "git-ops" # Git operations tools
     "agent" # Agent modules: BaseAgent, CoderAgent, ReviewerAgent, skills
     "core" # Core agent modules: BaseAgent, CoderAgent, ReviewerAgent
+    "rust-core" # Rust core modules
+    "rust-types" # omni-types crate (type unification)
+    "rust-io" # omni-io crate (safe file I/O)
+    "rust-tokenizer" # omni-tokenizer crate (BPE tokenization)
+    "rust-bindings" # Python bindings via PyO3
   ];
   # Define generator configurations
   generators = [
