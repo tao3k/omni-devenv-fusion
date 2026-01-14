@@ -107,7 +107,7 @@ def script_task(
                 if timeout:
                     import signal
 
-                    def timeout_handler(signum, frame):
+                    def timeout_handler(_signum, _frame):
                         raise TimeoutError(f"Task {task_name} timed out after {timeout}s")
 
                     signal.signal(signal.SIGALRM, timeout_handler)

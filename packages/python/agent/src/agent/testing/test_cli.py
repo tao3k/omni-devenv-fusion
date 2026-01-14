@@ -76,9 +76,9 @@ def test_module_imports():
     from agent.cli import app, main, err_console
 
     # Test individual module imports
-    from agent.cli.app import app as app_direct, main as main_direct
+    from agent.cli.app import app, main
     from agent.cli.console import (
-        err_console as console_err,
+        err_console,
         cli_log_handler,
         print_result,
         print_metadata_box,

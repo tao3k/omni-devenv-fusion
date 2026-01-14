@@ -143,6 +143,7 @@ class ISafeExecutor(Protocol):
         command: str,
         args: list[str] | None = None,
         timeout: int = 60,
+        # NOTE: read_only and sandbox_env are reserved for future sandbox implementation
         read_only: bool = False,
         sandbox_env: dict[str, str] | None = None,
     ) -> dict[str, Any]: ...

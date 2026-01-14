@@ -1,27 +1,21 @@
 """
 agent/skills/memory/tools.py
-Memory Skill - The Hippocampus Interface.
-
-Phase 25.1: Macro System with @skill_command decorators.
+Phase 53: The Librarian - Long-term Memory Skill.
 
 Role:
-  Allows the Agent to semantically store and retrieve knowledge via ChromaDB.
-  Replaces rigid file-based logging with fluid vector memory.
+  Allows the Agent to semantically store and retrieve knowledge via LanceDB.
+  Powered by Rust-based omni-vector (LanceDB wrapper).
 
-Memory Path (from settings.yaml -> prj-spec):
-  {git_toplevel}/.cache/{project_name}/.memory/
+Memory Path:
+  {project_root}/.memory/lancedb/
 """
 
 import json
 import os
-import subprocess
-from datetime import datetime
+import uuid
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-
-import yaml
-import chromadb
-from chromadb.config import Settings
 
 import structlog
 
@@ -29,17 +23,13 @@ from agent.skills.decorators import skill_command
 
 logger = structlog.get_logger(__name__)
 
-
 # =============================================================================
-# Path Configuration (Uses common.cache_path.CACHE_DIR)
+# Vector Store Initialization (Rust + LanceDB)
 # =============================================================================
 
 
 def _get_memory_path() -> Path:
-    """
-    Get memory root path from CACHE_DIR.
-    Path: {project_root}/{cache_dir}/memory/
-    """
+    """Get memory root path."""
     from common.cache_path import CACHE_DIR
     from common.settings import get_setting
 
@@ -52,29 +42,70 @@ def _get_memory_path() -> Path:
 
 
 MEMORY_ROOT = _get_memory_path()
-DB_PATH = MEMORY_ROOT / "chroma_db"
+DB_PATH = MEMORY_ROOT / "lancedb"
 DB_PATH.mkdir(parents=True, exist_ok=True)
 
+# Try to initialize Rust VectorStore
 try:
-    client = chromadb.PersistentClient(path=str(DB_PATH))
-    episodic_mem = client.get_or_create_collection(name="episodic_memory")
-    semantic_mem = client.get_or_create_collection(name="semantic_knowledge")
-    CHROMA_AVAILABLE = True
+    import omni_core_rs
+
+    # Get embedding dimension from the embedding service
+    # This ensures Rust LanceDB schema matches Python embedding dimension
+    embedding_dimension = 384  # Default for BGE-small
+    try:
+        from agent.core.embedding import get_embedding_service
+
+        embedding_dimension = get_embedding_service().dimension
+        logger.info(f"Using embedding dimension: {embedding_dimension}")
+    except Exception:
+        logger.warning(f"Could not get embedding dimension, using default: {embedding_dimension}")
+
+    _store = omni_core_rs.PyVectorStore(str(DB_PATH), embedding_dimension)
+    RUST_AVAILABLE = True
+    logger.info(
+        f"Librarian (VectorStore) initialized at {DB_PATH} with dimension {embedding_dimension}"
+    )
 except Exception as e:
-    CHROMA_AVAILABLE = False
-    client = None
-    episodic_mem = None
-    semantic_mem = None
+    RUST_AVAILABLE = False
+    _store = None
+    logger.warning(f"Failed to init Rust VectorStore: {e}")
+
+# Default table name
+DEFAULT_TABLE = "knowledge_base"
+
+
+def _get_embedding(text: str) -> List[float]:
+    """
+    [Phase 53.5] Real Semantic Embedding using FastEmbed or OpenAI.
+
+    Falls back to DummyEmbedding if real embedding service fails.
+    """
+    try:
+        from agent.core.embedding import get_embedding_service
+
+        service = get_embedding_service()
+        return service.embed(text)[0]
+    except Exception as e:
+        logger.warning(f"Real embedding failed, using dummy: {e}")
+        # Fallback to dummy embedding for testing
+        seed = sum(ord(c) for c in text) % 100
+        dimension = 384  # BGE-small default dimension
+        return [0.001 * seed] * dimension
+
+
+# =============================================================================
+# Memory Commands
+# =============================================================================
 
 
 @skill_command(
-    name="remember_insight",
+    name="save_memory",
     category="write",
-    description="Store a key insight into ChromaDB.",
+    description="Store a key insight into long-term memory.",
 )
-async def remember_insight(content: str, domain: str = "general") -> str:
+async def save_memory(content: str, metadata: Optional[Dict[str, Any]] = None) -> str:
     """
-    [Long-term Memory] Store a key insight, decision, or learning into ChromaDB.
+    [Long-term Memory] Store a key insight, decision, or learning into LanceDB.
 
     Use this when you've learned something reusable:
     - "Use scope 'nix' for flake changes"
@@ -83,194 +114,108 @@ async def remember_insight(content: str, domain: str = "general") -> str:
 
     Args:
         content: The insight to store (what you learned)
-        domain: Category like "git", "nix", "architecture", "workflow"
+        metadata: Optional metadata dict (tags, domain, etc.)
 
     Returns:
         Confirmation message with stored content preview
     """
-    if not CHROMA_AVAILABLE:
-        return "ChromaDB not available. Cannot store insight."
-
-    timestamp = datetime.now().isoformat()
+    if not RUST_AVAILABLE or not _store:
+        return "Rust VectorStore not available. Cannot store memory."
 
     try:
-        semantic_mem.add(
-            documents=[content],
-            metadatas=[{"timestamp": timestamp, "domain": domain, "type": "insight"}],
-            ids=[f"insight_{timestamp}"],
-        )
-        return f'Insight stored in Hippocampus:\n[Domain: {domain}]\n"{content[:100]}..."'
+        doc_id = str(uuid.uuid4())
+        vector = _get_embedding(content)
+
+        # Add timestamp to metadata
+        if metadata is None:
+            metadata = {}
+        metadata["timestamp"] = time.time()
+
+        _store.add_documents(DEFAULT_TABLE, [doc_id], [vector], [content], [json.dumps(metadata)])
+        return f"Saved memory [{doc_id[:8]}]: {content[:80]}..."
     except Exception as e:
-        return f"Failed to store insight: {e}"
+        logger.error("save_memory failed", error=str(e))
+        return f"Error saving memory: {str(e)}"
 
 
 @skill_command(
-    name="log_episode",
-    category="write",
-    description="Log a significant action taken during the session.",
-)
-async def log_episode(action: str, result: str, context: str = "") -> str:
-    """
-    [Short-term Memory] Log a significant action taken during the session.
-
-    Use this for:
-    - "Fixed bug in git skill"
-    - "Refactored skill registry"
-    - "Added new documentation"
-
-    Args:
-        action: What you did
-        result: What happened (success/failure/observation)
-        context: Optional context (file, function, etc.)
-
-    Returns:
-        Confirmation of logged episode
-    """
-    if not CHROMA_AVAILABLE:
-        return "ChromaDB not available. Cannot log episode."
-
-    timestamp = datetime.now().isoformat()
-    content = f"Action: {action}\nResult: {result}"
-    if context:
-        content += f"\nContext: {context}"
-
-    try:
-        episodic_mem.add(
-            documents=[content],
-            metadatas=[{"timestamp": timestamp, "type": "episode"}],
-            ids=[f"epi_{timestamp}"],
-        )
-        return f"Episode logged: {action[:50]}..."
-    except Exception as e:
-        return f"Failed to log episode: {e}"
-
-
-@skill_command(
-    name="recall",
+    name="search_memory",
     category="read",
     description="Semantically search memory for relevant past experiences.",
 )
-async def recall(query: str, n_results: int = 3) -> str:
+async def search_memory(query: str, limit: int = 5) -> str:
     """
     [Retrieval] Semantically search memory for relevant past experiences or rules.
 
     Examples:
-    - recall("git commit message format")
-    - recall("nixfmt error solution")
-    - recall("how to add a new skill")
+    - search_memory("git commit message format")
+    - search_memory("nixfmt error solution")
+    - search_memory("how to add a new skill")
 
     Args:
         query: What you're looking for
-        n_results: Number of results to return (default: 3)
+        limit: Number of results to return (default: 5)
 
     Returns:
         Relevant memories found, or "No relevant memories found"
     """
-    if not CHROMA_AVAILABLE:
-        return "ChromaDB not available. Cannot recall memories."
-
-    if not semantic_mem:
-        return "No semantic memory available."
+    if not RUST_AVAILABLE or not _store:
+        return "Rust VectorStore not available. Cannot search memory."
 
     try:
-        results = semantic_mem.query(query_texts=[query], n_results=n_results)
+        vector = _get_embedding(query)
 
-        if not results["documents"][0]:
-            return "No relevant memories found."
+        # Call Rust search - returns JSON strings
+        results_json = _store.search(DEFAULT_TABLE, vector, limit)
 
-        memories = []
-        for i, (doc, meta) in enumerate(zip(results["documents"][0], results["metadatas"][0])):
-            domain = meta.get("domain", "unknown")
-            memories.append(f"[{i + 1}] [{domain}] {doc}")
+        if not results_json:
+            return "No matching memories found."
 
-        return f"**Hippocampus Recall**:\n" + "\n---\n".join(memories)
+        output = [f"Found {len(results_json)} matches for '{query}':"]
+        for r_str in results_json:
+            r = json.loads(r_str)
+            dist = r.get("distance", 0.0)
+            content = r.get("content", "")
+            meta = r.get("metadata", {})
+
+            # Format output for LLM consumption
+            output.append(f"- [Score: {dist:.4f}] {content[:100]}")
+            if meta:
+                output[-1] += f" (Meta: {json.dumps(meta)[:50]}...)"
+
+        return "\n".join(output)
     except Exception as e:
-        return f"Recall failed: {e}"
+        logger.error("search_memory failed", error=str(e))
+        return f"Error searching memory: {str(e)}"
 
 
 @skill_command(
-    name="list_harvested_knowledge",
-    category="read",
-    description="List all harvested insights stored in memory.",
-)
-async def list_harvested_knowledge() -> str:
-    """
-    [Reflection] List all harvested insights stored in memory.
-
-    Returns:
-        Formatted list of all stored insights
-    """
-    if not CHROMA_AVAILABLE or not semantic_mem:
-        return "No knowledge available."
-
-    try:
-        results = semantic_mem.get(where={"type": "insight"})
-
-        if not results["documents"]:
-            return "No harvested knowledge yet."
-
-        by_domain: Dict[str, List[str]] = {}
-        for doc, meta in zip(results["documents"], results.get("metadatas", [])):
-            domain = meta.get("domain", "general")
-            if domain not in by_domain:
-                by_domain[domain] = []
-            by_domain[domain].append(doc)
-
-        lines = ["Harvested Knowledge", ""]
-        for domain, insights in by_domain.items():
-            lines.append(f"### {domain.upper()}")
-            for i, insight in enumerate(insights):
-                lines.append(f"  {i + 1}. {insight[:80]}...")
-            lines.append("")
-
-        return "\n".join(lines)
-    except Exception as e:
-        return f"Failed to list knowledge: {e}"
-
-
-@skill_command(
-    name="harvest_session_insight",
+    name="index_memory",
     category="write",
-    description="Extract and store key learnings from current session.",
+    description="Optimize memory index for faster search (IVF-FLAT).",
 )
-async def harvest_session_insight(context_summary: str, files_changed: List[str] = None) -> str:
+async def index_memory() -> str:
     """
-    [Consolidation] Extract key learnings from current session and store in memory.
+    [Optimization] Create/optimize vector index for faster search.
 
-    Call this at the end of a significant session to capture:
-    - What was accomplished
-    - What was learned
-    - What should be remembered
-
-    Args:
-        context_summary: Summary of what was done and learned
-        files_changed: List of files that were modified
+    Call this after bulk imports to improve search performance.
+    Uses IVF-FLAT algorithm for ANN search.
 
     Returns:
-        Confirmation of harvested insights
+        Confirmation of index creation
     """
-    if not CHROMA_AVAILABLE:
-        return "ChromaDB not available. Cannot harvest insights."
-
-    timestamp = datetime.now().isoformat()
-
-    insight = f"Session at {timestamp}:\n{context_summary}"
-    if files_changed:
-        insight += f"\nFiles changed: {', '.join(files_changed)}"
+    if not RUST_AVAILABLE or not _store:
+        return "Rust VectorStore not available. Cannot create index."
 
     try:
-        semantic_mem.add(
-            documents=[insight],
-            metadatas=[{"timestamp": timestamp, "domain": "session", "type": "harvest"}],
-            ids=[f"harvest_{timestamp}"],
-        )
-        return f'Session insight harvested and stored.\n"{context_summary[:100]}..."'
+        _store.create_index(DEFAULT_TABLE)
+        return "Index creation/optimization complete. Search performance improved."
     except Exception as e:
-        return f"Harvest failed: {e}"
+        return f"Error creating index: {str(e)}"
 
 
 @skill_command(
-    name="get_stats",
+    name="get_memory_stats",
     category="view",
     description="Get statistics about stored memories.",
 )
@@ -279,71 +224,16 @@ async def get_memory_stats() -> str:
     [Diagnostics] Get statistics about stored memories.
 
     Returns:
-        Count of episodic and semantic memories
+        Count of stored memories
     """
-    if not CHROMA_AVAILABLE:
-        return "ChromaDB not available."
+    if not RUST_AVAILABLE or not _store:
+        return "Rust VectorStore not available."
 
-    stats = []
     try:
-        if semantic_mem:
-            semantic_count = semantic_mem.count()
-            stats.append(f"Semantic memories (insights): {semantic_count}")
-
-        if episodic_mem:
-            episodic_count = episodic_mem.count()
-            stats.append(f"Episodic memories (actions): {episodic_count}")
-
-        return "Memory Statistics\n" + "\n".join(stats)
+        count = _store.count(DEFAULT_TABLE)
+        return f"Stored memories: {count}"
     except Exception as e:
-        return f"Stats failed: {e}"
-
-
-# =============================================================================
-# Skill Loader - Load skills into semantic memory
-# =============================================================================
-
-
-def _get_skills_dir() -> Path:
-    """Get skills directory path."""
-    from common.settings import get_setting
-    from common.gitops import get_project_root
-
-    skills_path = get_setting("skills.path", "assets/skills")
-    project_root = get_project_root()
-    return project_root / skills_path
-
-
-def _load_manifest(skill_name: str) -> Optional[Dict[str, Any]]:
-    """Load a skill's manifest from SKILL.md YAML frontmatter."""
-    skills_dir = _get_skills_dir()
-    skill_path = skills_dir / skill_name / "SKILL.md"
-
-    if not skill_path.exists():
-        return None
-
-    try:
-        content = skill_path.read_text(encoding="utf-8")
-        # Parse YAML frontmatter
-        if content.startswith("---"):
-            parts = content.split("---", 3)
-            if len(parts) >= 2:
-                manifest = yaml.safe_load(parts[1])
-                if manifest:
-                    return manifest
-        return None
-    except Exception:
-        return None
-
-
-def _load_prompts(skill_name: str) -> Optional[str]:
-    """Load a skill's prompts.md if it exists."""
-    skills_dir = _get_skills_dir()
-    prompts_path = skills_dir / skill_name / "prompts.md"
-
-    if prompts_path.exists():
-        return prompts_path.read_text(encoding="utf-8")
-    return None
+        return f"Error getting stats: {str(e)}"
 
 
 @skill_command(
@@ -364,10 +254,10 @@ async def load_skill(skill_name: str) -> str:
     Returns:
         Confirmation message with skill details
     """
-    if not CHROMA_AVAILABLE or not semantic_mem:
-        return "ChromaDB not available. Cannot load skill."
+    if not RUST_AVAILABLE or not _store:
+        return "Rust VectorStore not available. Cannot load skill."
 
-    manifest = _load_manifest(skill_name)
+    manifest, prompts = _load_skill_manifest(skill_name)
     if not manifest:
         return f"Skill '{skill_name}' not found or invalid manifest."
 
@@ -387,85 +277,72 @@ async def load_skill(skill_name: str) -> str:
 """
 
     # Append prompts.md content if available
-    prompts = _load_prompts(skill_name)
     if prompts:
         document += f"\n---\n\n## System Prompts\n{prompts[:2000]}"
 
-    timestamp = datetime.now().isoformat()
-    skill_id = f"skill_{skill_name}"
+    doc_id = f"skill_{skill_name}"
+    vector = _get_embedding(document)
 
     try:
-        # Upsert skill manifest (replace if exists)
-        semantic_mem.delete(ids=[skill_id])
-        semantic_mem.add(
-            documents=[document],
-            metadatas=[
-                {
-                    "timestamp": timestamp,
-                    "type": "skill_manifest",
-                    "skill_name": skill_name,
-                    "version": manifest.get("version", "unknown"),
-                    "routing_keywords": json.dumps(routing_kw),
-                    "intents": json.dumps(intents),
-                    "domain": "skill",
-                }
+        _store.add_documents(
+            DEFAULT_TABLE,
+            [doc_id],
+            [vector],
+            [document],
+            [
+                json.dumps(
+                    {
+                        "type": "skill_manifest",
+                        "skill_name": skill_name,
+                        "version": manifest.get("version", "unknown"),
+                    }
+                )
             ],
-            ids=[skill_id],
         )
 
-        return (
-            f"✅ Skill '{skill_name}' loaded into semantic memory.\n"
-            f"**Routing Keywords:** {', '.join(routing_kw[:5])}..."
-        )
+        return f"✅ Skill '{skill_name}' loaded into semantic memory."
     except Exception as e:
         return f"Failed to load skill '{skill_name}': {e}"
 
 
-@skill_command(
-    name="load_activated_skills",
-    category="write",
-    description="Load all activated skills into semantic memory.",
-)
-async def load_activated_skills() -> str:
-    """
-    [Skill Loader] Load all activated skills into semantic memory.
+# =============================================================================
+# Helper Functions
+# =============================================================================
 
-    Reads skills from SkillManager and stores each manifest in ChromaDB.
 
-    Returns:
-        Summary of loaded skills
-    """
-    if not CHROMA_AVAILABLE or not semantic_mem:
-        return "ChromaDB not available. Cannot load skills."
+def _load_skill_manifest(skill_name: str) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """Load a skill's manifest and prompts."""
+    from common.settings import get_setting
+    from common.gitops import get_project_root
 
-    from agent.core.registry import get_skill_registry
+    skills_path = get_setting("skills.path", "assets/skills")
+    project_root = get_project_root()
+    skills_dir = project_root / skills_path
+    skill_path = skills_dir / skill_name
 
-    try:
-        registry = get_skill_registry()
-        activated_skills = registry.list_loaded_skills()
+    if not skill_path.exists():
+        return None, None
 
-        if not activated_skills:
-            return "No activated skills found."
+    # Load manifest from SKILL.md
+    skill_md = skill_path / "SKILL.md"
+    prompts = None
 
-        loaded = []
-        failed = []
+    manifest = None
+    if skill_md.exists():
+        try:
+            import yaml
 
-        for skill_name in activated_skills:
-            result = await load_skill(skill_name)
-            # load_skill is decorated, returns CommandResult
-            result_str = result.data if hasattr(result, "data") else str(result)
-            if result_str.startswith("✅"):
-                loaded.append(skill_name)
-            else:
-                failed.append(skill_name)
+            content = skill_md.read_text(encoding="utf-8")
+            if content.startswith("---"):
+                parts = content.split("---", 3)
+                if len(parts) >= 2:
+                    manifest = yaml.safe_load(parts[1])
+        except Exception:
+            pass
 
-        summary = f"**Loaded {len(loaded)} skills:**\n"
-        for skill in loaded:
-            summary += f"- {skill}\n"
+    # Load prompts.md
+    prompts_path = skill_path / "prompts.md"
+    if prompts_path.exists():
+        prompts = prompts_path.read_text(encoding="utf-8")
 
-        if failed:
-            summary += f"\n**Failed:** {', '.join(failed)}"
-
-        return summary
-    except Exception as e:
-        return f"Failed to load activated skills: {e}"
+    return manifest, prompts

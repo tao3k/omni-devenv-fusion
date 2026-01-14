@@ -448,12 +448,9 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
     # Lifecycle
     # =========================================================================
 
-    def load_all(self, preload: bool = True) -> dict[str, Skill]:
+    def load_all(self) -> dict[str, Skill]:
         """
         Load all discovered skills.
-
-        Args:
-            preload: If True, load all at once; otherwise lazy load
 
         Returns:
             Dictionary of loaded skills

@@ -160,7 +160,6 @@ async def route_and_build_context(
 def format_context_for_llm(
     context: str,
     user_message: str,
-    include_mission_highlight: bool = True,
 ) -> Dict[str, Any]:
     """
     Format context for LLM API call.
@@ -168,7 +167,6 @@ def format_context_for_llm(
     Args:
         context: The assembled context string
         user_message: The user's actual message
-        include_mission_highlight: Whether to highlight mission in output
 
     Returns:
         Dict ready for LLM API (system_prompt, user_message)

@@ -18,7 +18,6 @@ from typing import Optional
 
 import typer
 from rich.panel import Panel
-from rich.pretty import Pretty
 from rich.table import Table
 
 from ..console import err_console, cli_log_handler

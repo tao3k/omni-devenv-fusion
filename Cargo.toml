@@ -11,7 +11,7 @@ members = [
 version = "0.1.0"
 edition = "2024"
 authors = ["Omni-DevEnv Team"]
-license = "MIT"
+license = "Apache-2.0"
 publish = false
 
 # [Phase 45.2] Unified dependency management
@@ -33,13 +33,15 @@ pyo3 = { version = "0.27.2", features = ["extension-module"] }
 # [Phase 47] The Iron Lung - Safe I/O & Tokenization
 tiktoken-rs = "0.9.1"
 memchr = "2.7.6"
-tempfile = "3.19.1"
+tempfile = "3.24"
 
-# Performance optimization
+# Performance optimization - Thin LTO for reduced memory
 [profile.release]
-lto = true
-codegen-units = 1
-strip = true
+opt-level = 3       
+lto = "thin"        
+codegen-units = 16  
+strip = true        
+panic = "abort"     
 
 # [ODF-REP] Global Lints Configuration (Rust 1.74+)
 [workspace.lints.rust]

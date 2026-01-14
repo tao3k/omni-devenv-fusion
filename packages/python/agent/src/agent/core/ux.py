@@ -29,16 +29,12 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from rich.console import Console
 from rich.panel import Panel
-from rich.layout import Layout
 from rich.live import Live
 from rich.text import Text
 from rich.tree import Tree
-from rich.syntax import Syntax
 from rich.markdown import Markdown
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+from rich.progress import Progress
 from rich.table import Table
-from rich.columns import Columns
-from rich.align import Align
 from rich.rule import Rule
 from enum import Enum
 

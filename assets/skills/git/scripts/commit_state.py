@@ -45,6 +45,8 @@ class CommitState(TypedDict):
     final_message: str  # LLM-generated commit message
     commit_hash: Optional[str]
     error: Optional[str]
+    retry_note: Optional[str]  # Note about retry attempts
+    scope_warning: Optional[str]  # Warning about invalid scope
 
 
 def create_initial_state(
@@ -71,6 +73,8 @@ def create_initial_state(
         "final_message": "",
         "commit_hash": None,
         "error": None,
+        "retry_note": None,
+        "scope_warning": None,
     }
 
 

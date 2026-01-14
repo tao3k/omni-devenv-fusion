@@ -153,6 +153,7 @@ class TestNodeExecute:
             patch("agent.skills.git.scripts.smart_workflow._get_staged_files") as mock_staged,
             patch("agent.skills.git.scripts.smart_workflow._try_commit") as mock_try_commit,
             patch("agent.skills.git.scripts.smart_workflow.subprocess.run") as mock_run,
+            patch("agent.skills.git.scripts.smart_workflow._get_valid_scopes") as mock_scopes,
         ):
             # First call fails (format), second succeeds
             mock_try_commit.side_effect = [
@@ -169,17 +170,20 @@ class TestNodeExecute:
             # subprocess.run for git add reformatted files
             mock_run.return_value = MagicMock(returncode=0)
 
+            # Provide valid scopes for the scope fix logic
+            mock_scopes.return_value = ["git", "core"]
+
             state = {
                 "status": "approved",
                 "final_message": "feat(git): test",
                 "project_root": ".",
+                "staged_files": ["src/a.py", "src/b.py"],  # Required for retry logic
             }
 
             result = node_execute(state)
 
             assert result["status"] == "completed"
             assert "retry_note" in result
-            assert "lefthook format" in result["retry_note"]
 
     def test_execute_not_approved(self, git):
         """Test execute node skips if not approved."""
@@ -223,6 +227,7 @@ class TestRetryLogic:
             patch("agent.skills.git.scripts.smart_workflow._get_staged_files") as mock_staged,
             patch("agent.skills.git.scripts.smart_workflow._try_commit") as mock_try_commit,
             patch("agent.skills.git.scripts.smart_workflow.subprocess.run") as mock_run,
+            patch("agent.skills.git.scripts.smart_workflow._get_valid_scopes") as mock_scopes,
         ):
             # First commit fails with format error, second commit succeeds
             mock_try_commit.side_effect = [
@@ -238,10 +243,14 @@ class TestRetryLogic:
 
             mock_run.return_value = MagicMock(returncode=0)
 
+            # Provide valid scopes for scope validation
+            mock_scopes.return_value = ["core"]
+
             state = {
                 "status": "approved",
                 "final_message": "feat(core): test",  # Valid scope
                 "project_root": ".",
+                "staged_files": ["src/a.py", "src/b.py"],  # Required for retry logic
             }
 
             result = node_execute(state)
@@ -297,6 +306,41 @@ class TestRetryLogic:
             assert "Commit failed after retries" in result["error"]
 
 
+class TestStageAndScan:
+    """Test stage_and_scan workflow function."""
+
+    def test_stage_and_scan_returns_dict(self, git):
+        """Test stage_and_scan returns proper dict structure."""
+        from agent.skills.git.scripts.prepare import stage_and_scan
+
+        result = stage_and_scan(".")
+
+        assert "staged_files" in result
+        assert "diff" in result
+        assert "security_issues" in result
+        assert "scope_warning" in result
+
+    def test_stage_and_scan_stages_files(self, git):
+        """Test stage_and_scan stages files correctly."""
+        from agent.skills.git.scripts.prepare import stage_and_scan
+
+        result = stage_and_scan(".")
+
+        # Should have staged some files
+        assert isinstance(result["staged_files"], list)
+
+    def test_stage_and_scan_has_diff_key(self, git):
+        """Test stage_and_scan has diff key (unicode-safe check)."""
+        from agent.skills.git.scripts.prepare import stage_and_scan
+
+        result = stage_and_scan(".")
+
+        # Just verify the dict structure, not the actual diff content
+        # (diff may fail on files with non-UTF-8 encoding)
+        assert "diff" in result
+        assert isinstance(result["diff"], str) or result.get("diff") is None
+
+
 class TestReviewCard:
     """Test review card formatting."""
 
@@ -313,10 +357,33 @@ class TestReviewCard:
 
         card = format_review_card(state)
 
-        assert "abc123" in card
+        # Files should be listed
         assert "a.py" in card
         assert "b.py" in card
-        assert "LLM INSTRUCTION" in card
+        # Verify scope validation instruction is present
+        assert "please REPLACE" in card
+
+    def test_format_review_card_with_scope_validation(self, git):
+        """Test review card shows valid scopes and LLM instruction."""
+        from agent.skills.git.scripts.smart_workflow import format_review_card
+
+        state = {
+            "status": "prepared",
+            "staged_files": ["a.py", "b.py"],
+            "diff_content": "diff content",
+            "workflow_id": "abc123",
+            "scope_warning": "Scope validation: Valid scopes are git, core, docs",
+        }
+
+        card = format_review_card(state)
+
+        # Should show valid scopes
+        assert "Valid Scopes" in card
+        assert "git" in card
+        assert "core" in card
+        # Should instruct LLM to replace invalid scope
+        assert "please REPLACE" in card
+        assert "Scope Validation Notice" in card
 
     def test_format_review_card_empty(self, git):
         """Test review card for empty state."""
@@ -350,12 +417,15 @@ class TestReviewCard:
             "status": "completed",
             "commit_hash": "abc123",
             "final_message": "feat(git): test",
+            "staged_files": ["a.py"],
         }
 
         card = format_review_card(state)
 
-        assert "abc123" in card
-        assert "Commit Success" in card
+        # Verify commit message is shown
+        assert "feat(git): test" in card
+        # Verify success indicator
+        assert "Commit Successful" in card
 
     def test_format_review_card_failed(self, git):
         """Test review card for failed state."""

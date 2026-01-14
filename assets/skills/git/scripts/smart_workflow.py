@@ -520,6 +520,8 @@ def format_review_card(state: CommitState) -> str:
     Returns:
         Formatted review card string
     """
+    import re
+
     status = state.get("status")
 
     # Status: Empty
@@ -546,13 +548,36 @@ def format_review_card(state: CommitState) -> str:
         diff = state.get("diff_content", "")
         workflow_id = state.get("workflow_id", "default")
 
-        # Render template with cascading loader from rendering module
-        return rendering.render_template(
-            "review_card.j2",
-            staged_files=files_list,
-            workflow_id=workflow_id,
-            diff=diff,
-        )
+        # Get scope warning from state (set during prepare)
+        scope_warning = state.get("scope_warning", "")
+
+        # Get valid scopes from cog.toml
+        valid_scopes = _get_valid_scopes()
+
+        # Build review card with scope validation notice
+        review_lines = []
+
+        if valid_scopes:
+            review_lines.append(f"**Valid Scopes**: {', '.join(valid_scopes)}")
+            if scope_warning:
+                review_lines.append(f"\n{scope_warning}")
+
+        review_lines.append(f"\n**{len(staged_files)} Files to commit**")
+        review_lines.append(files_list)
+
+        # Add diff preview
+        if diff:
+            review_lines.append(f"\n**Diff Preview**:\n{diff[:2000]}")
+
+        # Add scope validation notice for LLM
+        if valid_scopes:
+            review_lines.append(
+                "\n**⚠️ Scope Validation Notice**: "
+                "If your commit message uses a scope NOT in the list above, "
+                "please REPLACE it with a valid scope from the list."
+            )
+
+        return "\n".join(review_lines)
 
     # Status: Completed
     if status == "completed":

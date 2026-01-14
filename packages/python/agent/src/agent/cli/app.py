@@ -1,10 +1,4 @@
-"""
-app.py - Typer Application Configuration
-
-Phase 35.2: Modular CLI Architecture
-
-Provides the main Typer application instance and entry point.
-"""
+"""app.py - Typer Application Configuration"""
 
 from __future__ import annotations
 
@@ -17,7 +11,7 @@ configure_logging(level="INFO")
 
 app = typer.Typer(
     name="omni",
-    help="Omni DevEnv - Phase 35.2 Modular CLI",
+    help="Omni DevEnv - CCA Runtime Integration",
     add_completion=False,
 )
 
@@ -28,11 +22,17 @@ def main():
 
 
 # Register subcommands
-from .commands import register_skill_command, register_mcp_command, register_route_command
+from .commands import (
+    register_skill_command,
+    register_mcp_command,
+    register_route_command,
+    register_run_command,
+)
 
 register_skill_command(app)
 register_mcp_command(app)
 register_route_command(app)  # Phase 41: Wisdom-Aware Routing
+register_run_command(app)  # Phase 56: Omni Loop
 
 
 __all__ = ["app", "main"]

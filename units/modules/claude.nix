@@ -43,15 +43,15 @@ in
         DEVENV_ROOT = config.devenv.root;
       };
     };
-    nixos = {
-      type = "stdio";
-      command = "nix";
-      args = [
-        "run"
-        "github:utensils/mcp-nixos"
-        "--"
-      ];
-    };
+    # nixos = {
+    #   type = "stdio";
+    #   command = "nix";
+    #   args = [
+    #     "run"
+    #     "github:utensils/mcp-nixos"
+    #     "--"
+    #   ];
+    # };
     MiniMax = {
       type = "stdio";
       command = "uvx";

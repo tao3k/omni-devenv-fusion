@@ -400,19 +400,13 @@ def stage_and_scan(root_dir: str = ".") -> dict:
     """
     Stage files and capture diff for LLM analysis.
 
-    This function does the "dirty work" for the Smart Commit workflow:
-    1. Get currently staged files (preserve existing staging)
-    2. Get modified working tree files
-    3. Stage only: (originally staged) + (modified tracked files)
-    4. Run lefthook pre-commit (may reformat files)
-    5. Re-stage originally staged files (lefthook may have unstaged them)
-    6. Get staged file list
-    7. Extract diff content (truncated for context limits)
-    8. Check for sensitive files
-
-    Safety: Uses conservative staging - only stage files that were already
-    tracked, not untracked/new files. This prevents accidental commits of
-    auto-generated files or temporary artifacts.
+    Workflow:
+    1. git add . - Stage ALL files (including untracked)
+    2. Check sensitive files - UNSTAGE them (not just warn)
+    3. Run lefthook pre-commit (may reformat files)
+    4. Re-stage originally staged files (lefthook may have unstaged them)
+    5. Scope check - if scope not in cog.toml, return warning for LLM
+    6. Generate commit analysis
 
     Args:
         root_dir: Project root directory
@@ -422,65 +416,29 @@ def stage_and_scan(root_dir: str = ".") -> dict:
         - staged_files: List of staged file paths
         - diff: Raw diff content for LLM analysis
         - security_issues: List of sensitive files detected
+        - scope_warning: Warning if scope not in cog.toml
     """
     import glob as glob_module
     import shutil
+    from pathlib import Path as PathType
 
     result = {
         "staged_files": [],
         "diff": "",
         "security_issues": [],
+        "scope_warning": "",
     }
 
-    # 1. Get originally staged files (to preserve)
-    initially_staged, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root_dir)
-    initially_staged_set = set(line for line in initially_staged.splitlines() if line.strip())
+    root_path = PathType(root_dir)
 
-    # 2. Get modified tracked files (not untracked)
-    # Use --exclude-standard to respect .gitignore
-    modified, _, _ = _run(["git", "diff", "--name-only", "--diff-filter=ACM"], cwd=root_dir)
-    modified_set = set(line for line in modified.splitlines() if line.strip())
+    # 1. git add . - Stage ALL files (including untracked)
+    _run(["git", "add", "."], cwd=root_path)
 
-    # 3. Stage: (originally staged) + (modified tracked files)
-    # This preserves existing staging and adds modifications, but NOT new untracked files
-    all_to_stage = initially_staged_set | modified_set
+    # Get all staged files after initial add
+    all_staged_after_add, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root_path)
+    all_staged_set = set(line for line in all_staged_after_add.splitlines() if line.strip())
 
-    if all_to_stage:
-        for f in all_to_stage:
-            _run(["git", "add", f], cwd=root_dir)
-
-    # 4. Run lefthook pre-commit (may reformat files)
-    if shutil.which("lefthook"):
-        _run(["lefthook", "run", "pre-commit"], cwd=root_dir)
-
-    # 5. Re-stage originally staged files (lefthook may have unstaged them)
-    # Get currently staged files after lefthook
-    current_staged, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root_dir)
-    current_staged_set = set(line for line in current_staged.splitlines() if line.strip())
-
-    # Find originally staged files that are now unstaged (lefthook reformatted them)
-    unstaged_by_lefthook = initially_staged_set - current_staged_set
-
-    if unstaged_by_lefthook:
-        for f in unstaged_by_lefthook:
-            _run(["git", "add", f], cwd=root_dir)
-
-    # 6. Get staged file list (after re-stage)
-    files_out, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root_dir)
-    result["staged_files"] = [line for line in files_out.splitlines() if line.strip()]
-
-    # 7. Get diff content (truncated to prevent context overflow)
-    # Ignore lock files to save tokens
-    diff_cmd = ["git", "diff", "--cached", "--", ".", ":!*lock.json", ":!*lock.yaml"]
-    diff_out, _, _ = _run(diff_cmd, cwd=root_dir)
-
-    # Simple truncation guard
-    if len(diff_out) > 6000:
-        result["diff"] = diff_out[:6000] + "\n... (Diff truncated for analysis)"
-    else:
-        result["diff"] = diff_out
-
-    # 8. Security scan for sensitive files
+    # 2. Check sensitive files and UNSTAGE them
     sensitive_patterns = [
         "*.env*",
         "*.pem",
@@ -495,9 +453,55 @@ def stage_and_scan(root_dir: str = ".") -> dict:
     for pattern in sensitive_patterns:
         matches = glob_module.glob(pattern, recursive=True)
         for m in matches:
-            if m in result["staged_files"] and m not in sensitive:
+            if m in all_staged_set and m not in sensitive:
                 sensitive.append(m)
+
+    # UNSTAGE sensitive files
+    for f in sensitive:
+        _run(["git", "reset", "HEAD", "--", f], cwd=root_path)
+
     result["security_issues"] = sensitive
+
+    # Get final staged files after unstaging sensitive ones
+    final_staged, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root_path)
+    final_staged_set = set(line for line in final_staged.splitlines() if line.strip())
+
+    # 3. Run lefthook pre-commit (may reformat files)
+    if shutil.which("lefthook"):
+        _run(["lefthook", "run", "pre-commit"], cwd=root_path)
+
+    # 4. Re-stage originally staged files (lefthook may have unstaged them)
+    current_staged, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root_path)
+    current_staged_set = set(line for line in current_staged.splitlines() if line.strip())
+
+    # Find files that were staged but are now unstaged (lefthook reformatted them)
+    unstaged_by_lefthook = final_staged_set - current_staged_set
+
+    if unstaged_by_lefthook:
+        for f in unstaged_by_lefthook:
+            _run(["git", "add", f], cwd=root_path)
+
+    # 5. Get staged file list (after re-stage)
+    files_out, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root_path)
+    result["staged_files"] = [line for line in files_out.splitlines() if line.strip()]
+
+    # 6. Get diff content (truncated to prevent context overflow)
+    # Use --no-pager to avoid encoding issues
+    diff_cmd = ["git", "--no-pager", "diff", "--cached", "--", ".", ":!*lock.json", ":!*lock.yaml"]
+    try:
+        diff_out, _, _ = _run(diff_cmd, cwd=root_path)
+    except UnicodeDecodeError:
+        diff_out = "[Diff unavailable - encoding issue]"
+
+    if len(diff_out) > 6000:
+        result["diff"] = diff_out[:6000] + "\n... (Diff truncated for analysis)"
+    else:
+        result["diff"] = diff_out
+
+    # 7. Scope validation (check against cog.toml)
+    valid_scopes = _get_cog_scopes(root_path)
+    if valid_scopes:
+        result["scope_warning"] = f"Scope validation: Valid scopes are {', '.join(valid_scopes)}"
 
     return result
 

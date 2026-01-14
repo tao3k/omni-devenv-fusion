@@ -38,14 +38,15 @@ Stage files      User approval
 
 The `prepare` node performs all "dirty work":
 
-1. **Stage all changes**: `git add .`
-2. **Run lefthook pre-commit**: May reformat files
-3. **Re-stage reformatted files**: Detect and re-stage files that were unstaged by lefthook
-4. **Get file list**: `git diff --cached --name-only`
-5. **Extract diff**: `git diff --cached` (truncated to 6000 chars)
-6. **Security scan**: Check for sensitive patterns (`.env`, `.pem`, `.key`, etc.)
+1. **Stage all changes**: `git add .` (includes untracked files)
+2. **Security scan**: Check for sensitive patterns (`.env`, `.pem`, `.key`, etc.) and **UNSTAGE** them
+3. **Run lefthook pre-commit**: May reformat files
+4. **Re-stage reformatted files**: Detect and re-stage files that were unstaged by lefthook
+5. **Get file list**: `git diff --cached --name-only`
+6. **Extract diff**: `git diff --cached` (truncated to 6000 chars)
+7. **Scope validation**: Read valid scopes from `cog.toml`
 
-Returns to LLM: `staged_files[]`, `diff_content`, `security_issues[]`
+Returns to LLM: `staged_files[]`, `diff_content`, `security_issues[]`, `scope_warning`
 
 ### Step 2: LLM Analysis (Cognitive Space)
 
@@ -53,8 +54,15 @@ LLM receives the tool output and performs analysis:
 
 - **Analyze diff**: Understand what changed
 - **Determine type**: `feat`, `fix`, `refactor`, `docs`, `style`, `test`, `chore`
-- **Identify scope**: Affected component/module
+- **Identify scope**: Affected component/module (must be in `cog.toml` scopes)
 - **Generate message**: Conventional Commits format: `type(scope): description`
+- **Scope validation notice**: If LLM generates a scope NOT in the valid scopes list, it will be rejected. The review card includes a notice:
+
+```
+**⚠️ Scope Validation Notice**: If your commit message uses a scope NOT in the list above,
+please REPLACE it with a valid scope from the list.
+```
+
 - **Present to user**: Show analysis and ask for confirmation
 
 ### Step 3: execute (Tool) with Retry Logic
@@ -249,6 +257,7 @@ class CommitState:
     commit_hash: str
     error: Optional[str]
     retry_note: Optional[str]  # For tracking retry actions
+    scope_warning: Optional[str]  # Scope validation warning for LLM
 ```
 
 ### LangGraph Flow
@@ -285,5 +294,6 @@ pytest assets/skills/git/tests/test_git_smart_workflow.py -v
 # - TestWorkflowConstruction: Graph building
 # - TestNodeExecute: Execute node with retry logic
 # - TestRetryLogic: Retry edge cases
+# - TestStageAndScan: stage_and_scan() workflow function
 # - TestReviewCard: Review card formatting
 ```

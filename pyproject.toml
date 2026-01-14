@@ -14,6 +14,7 @@ dev = [
     "pytest-asyncio>=1.3.0",
     "pytest-xdist>=3.6.1",
     "ruff>=0.14.10",
+    "vulture>=2.14",
 ]
 
 [build-system]
@@ -61,3 +62,11 @@ filterwarnings = [
     "ignore::pytest.PytestReturnNotNoneWarning",
 ]
 norecursedirs = ["stress_tests"]
+
+
+[tool.vulture]
+# Vulture configuration for dead code detection
+paths = ["packages/python/agent/src", "packages/python/common/src"]
+min_confidence = 80
+# Exclude generated or third-party code
+exclude = ["*/tests/*", "*/__pycache__/*", "*/.venv/*", "*/venv/*"]

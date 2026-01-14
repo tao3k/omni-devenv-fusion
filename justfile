@@ -370,6 +370,11 @@ test-sequential:
     @uv run pytest packages/python/agent/src/agent/tests/ -v --ignore=packages/python/agent/src/agent/tests/stress_tests
 
 [group('validate')]
+vulture:
+    @echo "Checking for dead code with vulture..."
+    @uvx vulture || echo "Dead code detected - review above items"
+
+[group('validate')]
 test-skills-parallel:
     @echo "Running skills tests in parallel..."
     @uv run pytest packages/python/agent/src/agent/tests/test_skills_full.py -n auto -v

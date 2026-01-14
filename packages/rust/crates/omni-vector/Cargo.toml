@@ -1,0 +1,52 @@
+[package]
+name = "omni-vector"
+version.workspace = true
+edition.workspace = true
+description = "High-performance embedded vector database using LanceDB"
+authors = ["Omni-DevEnv Team"]
+license = "Apache-2.0"
+publish = false
+
+[features]
+# Enable Python bindings feature when building as pyo3 extension
+python = ["pyo3/extension-module"]
+
+[dependencies]
+# Core engine: LanceDB - use bundled arrow types via lance::deps
+lance = "1.0"
+lance-arrow = "1.0"
+lance-index = "1.0"
+lance-linalg = "1.0"
+
+# Async runtime
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "fs"] }
+
+# Async stream utilities
+futures = "0.3"
+
+# Concurrency
+dashmap = "7.0.0-rc2"
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = "1.0"
+
+# Serialization
+serde = { workspace = true }
+serde_json = "1.0"
+
+# Python bindings (only when python feature is enabled)
+pyo3 = { version = "0.27", optional = true, default-features = false }
+
+# Reuse our common types
+omni-types = { path = "../omni-types" }
+omni-io = { path = "../omni-io" }
+
+# Logging
+log = "0.4"
+
+[dev-dependencies]
+tempfile = "3.24"
+
+[lints]
+workspace = true

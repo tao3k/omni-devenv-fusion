@@ -25,9 +25,7 @@ from .base import ProjectContext
 from .registry import ContextRegistry, PythonContext, NixContext
 
 
-def get_project_context(
-    lang: str, category: str | None = None, include_builtins: bool = True
-) -> str:
+def get_project_context(lang: str, category: str | None = None) -> str:
     """Get project-specific context for a language.
 
     This is the main API for retrieving project context.
@@ -36,7 +34,6 @@ def get_project_context(
         lang: Language ID (python, nix, etc.)
         category: Optional category (tooling, patterns, architecture, conventions)
                  If None, returns all categories merged.
-        include_builtins: Include built-in contexts (default: True)
 
     Returns:
         Project context string, or empty string if not found.

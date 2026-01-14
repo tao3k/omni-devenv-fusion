@@ -30,8 +30,8 @@ if TYPE_CHECKING:
     # Static imports only - no runtime dependency
     # These imports enable IDE autocomplete
     from assets.skills.git import tools as git_tools
-    from assets.skills.knowledge import tools as knowledge_tools
-    from assets.skills.filesystem import tools as filesystem_tools
+    from assets.skills.knowledge import tools as knowledge_tools  # noqa: F401
+    from assets.skills.filesystem import tools as filesystem_tools  # noqa: F401
     from assets.skills.skill import tools as skill_tools
 
 from common.skills_path import SKILLS_DIR
@@ -203,13 +203,12 @@ class TestContext:
 
         console.print(table)
 
-    def validate_skill_structure(self, skill_name: str, check_examples: bool = False) -> dict:
+    def validate_skill_structure(self, skill_name: str) -> dict:
         """
         Validate the structure of a skill.
 
         Args:
             skill_name: Name of the skill to validate
-            check_examples: Also check for structure examples
 
         Returns:
             Dictionary with validation results
