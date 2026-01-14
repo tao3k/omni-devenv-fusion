@@ -28,15 +28,8 @@ import argparse
 import json
 from typing import Optional
 
-# Add project root to path
-sys.path.insert(
-    0,
-    str(__file__).rsplit("/packages/python/agent/src/agent/tests/", 1)[0]
-    + "/packages/python/common/src",
-)
-
 # Import omni helper (Phase 35.3)
-from test_skills import omni
+from agent.tests.integration.skills.test_skills import omni
 
 # Check for Anthropic SDK
 try:

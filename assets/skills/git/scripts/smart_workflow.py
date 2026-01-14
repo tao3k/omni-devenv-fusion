@@ -60,6 +60,14 @@ def node_prepare(state: CommitState) -> CommitState:
                 "error": "Nothing to commit",
             }
 
+        # Check for lefthook failure (format issues)
+        if scan_result.get("lefthook_error"):
+            return {
+                **state,
+                "status": "lefthook_failed",
+                "error": scan_result["lefthook_error"],
+            }
+
         # Check for security issues
         if scan_result["security_issues"]:
             return {
@@ -543,6 +551,17 @@ def format_review_card(state: CommitState) -> str:
     if status == "security_violation":
         issues = state.get("security_issues", [])
         return f"⚠️ **Security Issue Detected**\n\nSensitive files detected:\n{', '.join(issues)}\n\nPlease remove sensitive files or add them to .gitignore."
+
+    # Status: Lefthook Failed (format issues detected)
+    if status == "lefthook_failed":
+        error = state.get("error", "")
+        return f"""❌ **Lefthook Pre-commit Failed**
+
+The pre-commit checks found formatting issues that must be fixed before committing:
+
+{error}
+
+**Files are still staged** - Fix the issues above and run `/smart-commit` again."""
 
     # Status: Error
     if status == "error":

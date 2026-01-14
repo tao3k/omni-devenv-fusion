@@ -170,6 +170,27 @@ class _SkillDirCallable:
 SKILLS_DIR: _SkillDirCallable = _SkillDirCallable()
 
 
+def get_all_skill_paths(skills_path: Path | None = None, skip: set | None = None) -> list[Path]:
+    """Get all valid skill directories.
+
+    Args:
+        skills_path: Base skills path (defaults to SKILLS_DIR())
+        skip: Set of skill names to skip (defaults to common internal skills)
+
+    Returns:
+        List of valid skill directory paths
+    """
+    if skills_path is None:
+        skills_path = SKILLS_DIR()
+
+    skip = skip or {"crawl4ai", "stress_test_skill", "skill", "test-skill", "_template"}
+    return [
+        p
+        for p in skills_path.iterdir()
+        if p.is_dir() and p.name not in skip and not p.name.startswith(".")
+    ]
+
+
 def load_skill_module(
     skill_name: str,
     project_root: Optional[Path] = None,

@@ -456,89 +456,85 @@ def parse_config(config_path: Path) -> dict:
 
 ## Testing Standards
 
-### Test Structure
+### Directory Structure
 
 ```
-packages/python/agent/src/agent/tests/
-├── conftest.py              # Pytest configuration
-├── fixtures/                # Shared fixtures
-│   ├── skills.py
-│   └── repos.py
-├── unit/                    # Unit tests
-│   └── test_skill_*.py
-├── integration/             # Integration tests
-│   └── test_*.py
-└── skills/                  # Skill-specific tests
-    └── git/
-        ├── test_status.py
-        └── test_commit.py
+agent/tests/
+├── conftest.py              # Pytest config + backward aliases
+├── factories/               # Pydantic Factories (polyfactory)
+│   ├── __init__.py
+│   ├── manifest_factory.py  # SkillManifestFactory
+│   ├── context_factory.py   # AgentContextFactory
+│   └── mcp_factory.py       # MCPToolFactory
+├── fixtures/                # Pytest Fixtures (plugin-loaded)
+│   ├── core.py              # project_root, skills_path
+│   ├── registry.py          # isolated_registry
+│   ├── mocks.py             # mock_mcp_server
+│   └── skills_data.py       # skill_factory
+├── unit/                    # Fast, isolated tests
+├── integration/             # Full-stack tests
+│   ├── skills/
+│   ├── core/
+│   └── ai/
+└── utils/                   # Helpers, assertions
 ```
 
-### Test Naming
+### Key Principles
 
-| Test Type   | Pattern                            | Example                            |
-| ----------- | ---------------------------------- | ---------------------------------- |
-| Unit        | `test_{module}_{function}.py`      | `test_skill_manager_load_skill.py` |
-| Integration | `test_{feature}.py`                | `test_git_workflow.py`             |
-| Skill       | `skills/{skill}/test_{command}.py` | `skills/git/test_status.py`        |
+1. **No Path Hacking** - Use `SKILLS_DIR()`, `get_project_root()`
+2. **No For Loops** - Use `@pytest.mark.parametrize`
+3. **No Manual Dicts** - Use `polyfactory` factories
 
-### Test Patterns
+### Pydantic Factories
 
 ```python
-# Basic test structure
-def test_git_status_returns_formatted_output(tmp_path):
-    """Test that git_status returns properly formatted output."""
-    from agent.skills.git.scripts.status import git_status
+# factories/manifest_factory.py
+from polyfactory.factories.pydantic_factory import ModelFactory
+from agent.core.schema.skill import SkillManifest
 
-    # Arrange
-    (tmp_path / ".git").mkdir()
-    (tmp_path / "test.txt").touch()
+class SkillManifestFactory(ModelFactory[SkillManifest]):
+    __model__ = SkillManifest
+    name = "test_skill"
+    version = "0.1.0"
 
-    # Act
-    result = git_status(repo_path=str(tmp_path), verbose=False)
-
-    # Assert
-    assert "test.txt" in result
-    assert "Untracked" in result
-
-
-# Async test
-@pytest.mark.asyncio
-async def test_fetch_remote_succeeds(aresponses):
-    """Test successful remote fetch."""
-    from agent.skills.common.http import fetch_url
-
-    aresponses.add("https://api.example.com", response={"status": "ok"})
-
-    result = await fetch_url("https://api.example.com")
-
-    assert result["status"] == "ok"
-
-
-# Parameterized test
-@pytest.mark.parametrize("verbose,expected", [
-    (True, "Untracked files:"),
-    (False, "nothing to commit"),
-])
-def test_git_status_verbosity(tmp_path, verbose, expected):
-    """Test git status respects verbose flag."""
-    from agent.skills.git.scripts.status import git_status
-
-    (tmp_path / ".git").mkdir()
-
-    result = git_status(repo_path=str(tmp_path), verbose=verbose)
-
-    assert (expected in result) == verbose
+# Usage
+manifest = SkillManifestFactory.build()
+custom = SkillManifestFactory.build(name="my_skill", version="2.0.0")
+batch = SkillManifestFactory.batch(size=5)
 ```
 
-### Coverage Requirements
+### Parametrized Tests
 
-| Component                           | Minimum Coverage          |
-| ----------------------------------- | ------------------------- |
-| Core modules (`agent/core/`)        | 90%                       |
-| Skill scripts (`skills/*/scripts/`) | 80%                       |
-| Common utilities (`common/`)        | 95%                       |
-| Integration tests                   | Required for all commands |
+```python
+from common.skills_path import get_all_skill_paths
+
+_ALL_SKILLS = get_all_skill_paths(SKILLS_DIR())
+
+@pytest.mark.parametrize("skill_dir", _ALL_SKILLS, ids=[p.name for p in _ALL_SKILLS])
+def test_skill_has_tools_py(skill_dir: Path):
+    assert (skill_dir / "tools.py").exists()
+```
+
+### Skill Tests (Zero-Config)
+
+Skills use `agent/testing/plugin.py` for auto-fixtures:
+
+```python
+# assets/skills/git/tests/test_commands.py
+def test_status_exists(git):  # 'git' fixture auto-injected
+    assert hasattr(git, "status")
+    assert callable(git.status)
+```
+
+No imports, no conftest.py needed.
+
+### Coverage
+
+| Component | Min Coverage |
+|-----------|-------------|
+| Core | 90% |
+| Common | 95% |
+| Factories | 100% |
 
 ---
 

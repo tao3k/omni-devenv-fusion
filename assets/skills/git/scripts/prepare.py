@@ -404,9 +404,10 @@ def stage_and_scan(root_dir: str = ".") -> dict:
     1. git add . - Stage ALL files (including untracked)
     2. Check sensitive files - UNSTAGE them (not just warn)
     3. Run lefthook pre-commit (may reformat files)
-    4. Re-stage originally staged files (lefthook may have unstaged them)
-    5. Scope check - if scope not in cog.toml, return warning for LLM
-    6. Generate commit analysis
+    4. If lefthook FAILS, return error immediately (user must fix first)
+    5. Re-stage originally staged files (lefthook may have unstaged them)
+    6. Scope check - if scope not in cog.toml, return warning for LLM
+    7. Generate commit analysis
 
     Args:
         root_dir: Project root directory
@@ -417,6 +418,7 @@ def stage_and_scan(root_dir: str = ".") -> dict:
         - diff: Raw diff content for LLM analysis
         - security_issues: List of sensitive files detected
         - scope_warning: Warning if scope not in cog.toml
+        - lefthook_error: Error message if lefthook failed (critical!)
     """
     import glob as glob_module
     import shutil
@@ -427,6 +429,7 @@ def stage_and_scan(root_dir: str = ".") -> dict:
         "diff": "",
         "security_issues": [],
         "scope_warning": "",
+        "lefthook_error": "",  # NEW: Capture lefthook failures
     }
 
     root_path = PathType(root_dir)
@@ -467,19 +470,35 @@ def stage_and_scan(root_dir: str = ".") -> dict:
     final_staged_set = set(line for line in final_staged.splitlines() if line.strip())
 
     # 3. Run lefthook pre-commit (may reformat files)
+    lefthook_failed = False
+    lefthook_output = ""
     if shutil.which("lefthook"):
-        _run(["lefthook", "run", "pre-commit"], cwd=root_path)
+        lh_out, lh_err, lh_rc = _run(["lefthook", "run", "pre-commit"], cwd=root_path)
+        lefthook_output = lh_out or lh_err
+        lefthook_failed = lh_rc != 0
 
-    # 4. Re-stage originally staged files (lefthook may have unstaged them)
-    current_staged, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root_path)
-    current_staged_set = set(line for line in current_staged.splitlines() if line.strip())
+        # If lefthook failed, re-stage reformatted files and retry once
+        if lefthook_failed:
+            # Lefthook reformatted some files (they're now unstaged)
+            # Re-stage them and try lefthook again
+            current_staged, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root_path)
+            current_staged_set = set(line for line in current_staged.splitlines() if line.strip())
+            unstaged_by_lefthook = final_staged_set - current_staged_set
 
-    # Find files that were staged but are now unstaged (lefthook reformatted them)
-    unstaged_by_lefthook = final_staged_set - current_staged_set
+            # Re-stage the reformatted files
+            for f in unstaged_by_lefthook:
+                _run(["git", "add", f], cwd=root_path)
 
-    if unstaged_by_lefthook:
-        for f in unstaged_by_lefthook:
-            _run(["git", "add", f], cwd=root_path)
+            # Retry lefthook once more
+            lh_out, lh_err, lh_rc = _run(["lefthook", "run", "pre-commit"], cwd=root_path)
+            lefthook_output = lh_out or lh_err
+            lefthook_failed = lh_rc != 0
+
+    # 4. If lefthook still failed after retry, return error
+    # User needs to fix issues manually
+    if lefthook_failed:
+        result["lefthook_error"] = lefthook_output
+        return result
 
     # 5. Get staged file list (after re-stage)
     files_out, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root_path)

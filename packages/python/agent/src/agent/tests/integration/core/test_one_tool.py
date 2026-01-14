@@ -27,10 +27,7 @@ from agent.core.router import SemanticRouter, clear_routing_cache
 from agent.skills.decorators import skill_command
 
 # Import helper for unwrapping CommandResult and omni function
-import sys
-
-sys.path.insert(0, str(Path(__file__).parent))
-from test_skills import unwrap_command_result, omni
+from agent.tests.integration.skills.test_skills import unwrap_command_result, omni
 
 
 # =============================================================================
