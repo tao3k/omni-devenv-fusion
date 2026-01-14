@@ -4,9 +4,8 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-# ast-grep for AST-based code navigation
-ast-grep-core = "0.40.5"
-ast-grep-language = "0.40.5"
+# Using omni-ast for unified ast-grep (v0.40.5)
+omni-ast = { path = "../omni-ast" }
 once_cell = "1.19"
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }

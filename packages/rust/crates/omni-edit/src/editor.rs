@@ -6,8 +6,8 @@
 use std::path::Path;
 use std::str::FromStr;
 
-use ast_grep_core::{matcher::MatcherExt, Language, Pattern};
-use ast_grep_language::{LanguageExt, SupportLang};
+// Use omni-ast for unified ast-grep (re-exports Pattern, SupportLang, LanguageExt)
+use omni_ast::{MatcherExt, Pattern, SupportLang, LanguageExt, AstLanguage};
 
 use crate::capture::substitute_captures;
 use crate::diff::generate_unified_diff;

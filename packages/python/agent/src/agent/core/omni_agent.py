@@ -117,32 +117,110 @@ class OmniAgent:
         return self._llm_client
 
     def _load_tools(self) -> None:
-        """Load all available tools from skills."""
+        """Load all available tools from skills.
+
+        Phase 63: Uses Rust scanner to discover @skill_script decorated functions
+        and creates wrapper functions that use JIT loader for execution.
+        """
         if self._tools:
             return  # Already loaded
 
-        logger.info("OmniAgent: Loading tools from skill registry...")
+        logger.info("OmniAgent: Loading tools...")
 
-        # Import here to avoid circular imports
-        from agent.core.registry import get_skill_tools
+        # Try to load tools from Rust scanner (Phase 63)
+        try:
+            import omni_core_rs
+            from agent.core.skill_manager.jit_loader import (
+                get_jit_loader,
+                ToolRecord,
+            )
+            from common.skills_path import SKILLS_DIR
 
-        # Load tools from various skills
-        skill_names = ["filesystem", "git", "testing", "memory"]
-        for skill_name in skill_names:
-            try:
-                tools = get_skill_tools(skill_name)
-                if tools:
-                    self._tools.update(tools)
-                    logger.debug(f"Loaded {len(tools)} tools from {skill_name}")
-            except Exception as e:
-                logger.debug(f"Could not load tools from {skill_name}: {e}")
+            # Use SKILLS_DIR() to get the correct skills path from settings.yaml
+            skills_path = str(SKILLS_DIR())
+            rust_tools = omni_core_rs.scan_skill_tools(skills_path)
 
-        # Get tool schemas for LLM
-        if self._llm_client:
-            try:
-                self._tool_schemas = self._llm_client.get_tool_schema()
-            except Exception:
-                self._tool_schemas = []
+            if rust_tools:
+                logger.info(f"Found {len(rust_tools)} tools from Rust scanner")
+                loader = get_jit_loader()
+
+                # Group tools by tool_name for deduplication
+                seen = set()
+
+                for rt in rust_tools:
+                    tool_name = rt.tool_name
+                    if tool_name in seen:
+                        continue
+                    seen.add(tool_name)
+
+                    # Create a wrapper function for JIT execution
+                    record = ToolRecord.from_rust(rt)
+
+                    def make_wrapper(rec: ToolRecord):
+                        async def wrapper(**kwargs):
+                            return loader.execute_tool(rec, kwargs)
+
+                        return wrapper
+
+                    wrapper_func = make_wrapper(record)
+
+                    # Store as a callable with metadata
+                    self._tools[tool_name] = wrapper_func
+
+                    logger.debug(f"Loaded tool: {tool_name}")
+
+                logger.info(f"Loaded {len(self._tools)} tools from Rust scanner")
+
+        except ImportError:
+            logger.warning("omni_core_rs not available, falling back to registry")
+
+            # Fallback: Load from skill registry (legacy)
+            from agent.core.registry import get_skill_tools
+
+            skill_names = ["filesystem", "git", "testing", "memory"]
+            for skill_name in skill_names:
+                try:
+                    tools = get_skill_tools(skill_name)
+                    if tools:
+                        self._tools.update(tools)
+                        logger.debug(f"Loaded {len(tools)} tools from {skill_name}")
+                except Exception as e:
+                    logger.debug(f"Could not load tools from {skill_name}: {e}")
+
+        # Generate tool schemas from JIT-loaded tools
+        # This is needed because LLM client doesn't know about our Rust-scanned tools
+        from agent.core.skill_manager.jit_loader import get_jit_loader
+
+        loader = get_jit_loader()
+        self._tool_schemas = []
+        for tool_name, wrapper_func in self._tools.items():
+            # Try to get the record from the wrapper's closure
+            # The wrapper captures 'rec' which is a ToolRecord
+            # We need to store the record for schema generation
+            pass  # Schema generation happens below
+
+        # Generate schemas for all tools we loaded
+        # We need to re-scan to get the records for schema generation
+        try:
+            import omni_core_rs
+            from common.skills_path import SKILLS_DIR
+
+            skills_path = str(SKILLS_DIR())
+            all_rust_tools = omni_core_rs.scan_skill_tools(skills_path)
+
+            from agent.core.skill_manager.jit_loader import ToolRecord
+
+            for rt in all_rust_tools:
+                if rt.tool_name in self._tools:
+                    record = ToolRecord.from_rust(rt)
+                    schema = loader.get_tool_schema(record)
+                    self._tool_schemas.append(schema)
+
+            logger.info(f"Generated {len(self._tool_schemas)} tool schemas from Rust scanner")
+
+        except Exception as e:
+            logger.warning(f"Failed to generate tool schemas: {e}")
+            self._tool_schemas = []
 
         logger.info(
             "OmniAgent: Tools loaded",
@@ -204,11 +282,12 @@ class OmniAgent:
             try:
                 tool_fn = self._tools[tool_name]
                 result = tool_fn(**tool_input)
-                result_str = str(result)
 
-                # Handle async results
+                # Handle async results FIRST before string conversion
                 if asyncio.iscoroutine(result):
-                    result_str = await result
+                    result = await result
+
+                result_str = str(result) if result is not None else ""
 
                 logger.info(
                     "OmniAgent: Tool completed",

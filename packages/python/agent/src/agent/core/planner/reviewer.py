@@ -241,14 +241,14 @@ class Reviewer:
             True if retry is recommended.
         """
         return review.status in (ReviewStatus.PIVOT, ReviewStatus.CONTINUE) and any(
-            "retry" in issue.lower() or "failed" in issue.lower()
-            for issue in review.issues
+            "retry" in issue.lower() or "failed" in issue.lower() for issue in review.issues
         )
 
 
 # =============================================================================
 # Polyfactory for Testing
 # =============================================================================
+
 
 def create_reviewer(
     inference_client: Any | None = None,

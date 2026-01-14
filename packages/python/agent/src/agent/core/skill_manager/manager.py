@@ -177,6 +177,10 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
         """
         Load a skill from a path.
 
+        Supports two loading modes:
+        1. tools.py mode (legacy): Load from tools.py with @skill_command
+        2. script mode (Phase 62): Load from scripts/*.py with @skill_script
+
         Args:
             skill_path: Path to the skill directory
             reload: If True, force reload even if already loaded
@@ -212,20 +216,43 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
         # Check execution mode
         execution_mode = metadata.execution_mode
 
-        # Load module
+        # Determine loading mode and extract commands
+        commands: dict[str, SkillCommand] = {}
         tools_path = skill_path / "tools.py"
-        module_name = f"agent.skills.{skill_name}.tools"
+        scripts_dir = skill_path / "scripts"
+        module = None
+        mtime = 0.0
 
-        try:
-            # Use cached module loader (only initializes once)
-            loader = self._get_module_loader()
-            module = loader.load_module(module_name, tools_path, reload=reload)
-        except Exception as e:
-            _get_logger().error("Failed to load module", skill=skill_name, error=str(e))
-            return None
+        # Mode 1: tools.py exists - load from tools.py (legacy mode)
+        if tools_path.exists():
+            module_name = f"agent.skills.{skill_name}.tools"
 
-        # Extract commands
-        commands = self._extract_commands(module, skill_name)
+            try:
+                loader = self._get_module_loader()
+                module = loader.load_module(module_name, tools_path, reload=reload)
+                commands = self._extract_commands(module, skill_name)
+                mtime = tools_path.stat().st_mtime
+            except Exception as e:
+                _get_logger().error("Failed to load tools.py", skill=skill_name, error=str(e))
+                # Continue to try script mode
+
+        # Mode 2: scripts/*.py exists - load from scripts (Phase 62)
+        if scripts_dir.exists() and any(scripts_dir.glob("*.py")):
+            script_commands = self._extract_commands_from_scripts(skill_name, scripts_dir)
+
+            if script_commands:
+                # Merge script commands (script commands take precedence if name conflicts)
+                for cmd_name, cmd in script_commands.items():
+                    commands[cmd_name] = cmd
+
+                # Update mtime based on scripts
+                try:
+                    script_mtimes = [f.stat().st_mtime for f in scripts_dir.glob("*.py")]
+                    if script_mtimes:
+                        mtime = max(script_mtimes)
+                except FileNotFoundError:
+                    pass
+
         if not commands:
             _get_logger().warning("No commands found in skill", skill=skill_name)
             # Not an error - some skills might be pure data
@@ -236,19 +263,13 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
             config_path = None
         context_path = skill_path if config_path else None
 
-        # Get mtime for hot-reload
-        try:
-            mtime = tools_path.stat().st_mtime
-        except FileNotFoundError:
-            mtime = 0.0
-
         # Create skill with lazy context cache
         skill = Skill(
             name=skill_name,
             manifest=manifest,
             commands=commands,
-            module_name=module_name,
-            path=tools_path,
+            module_name=f"agent.skills.{skill_name}",
+            path=tools_path if tools_path.exists() else scripts_dir,
             mtime=mtime,
             execution_mode=execution_mode,
             _context_path=context_path,  # Lazy loaded

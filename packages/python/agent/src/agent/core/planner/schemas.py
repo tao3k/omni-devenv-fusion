@@ -61,46 +61,22 @@ class Task(BaseModel):
 
     id: str = Field(..., description="Unique task identifier")
     description: str = Field(..., description="What needs to be done")
-    status: TaskStatus = Field(
-        default=TaskStatus.PENDING,
-        description="Current execution status"
-    )
-    priority: TaskPriority = Field(
-        default=TaskPriority.MEDIUM,
-        description="Execution priority"
-    )
+    status: TaskStatus = Field(default=TaskStatus.PENDING, description="Current execution status")
+    priority: TaskPriority = Field(default=TaskPriority.MEDIUM, description="Execution priority")
     dependencies: list[str] = Field(
-        default_factory=list,
-        description="Task IDs this task depends on"
+        default_factory=list, description="Task IDs this task depends on"
     )
     tool_calls: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="Planned tool invocations"
+        default_factory=list, description="Planned tool invocations"
     )
-    actual_results: list[str] = Field(
-        default_factory=list,
-        description="Results from execution"
-    )
-    reflection: Optional[str] = Field(
-        default=None,
-        description="Reviewer's assessment"
-    )
-    created_at: datetime = Field(
-        default_factory=_utcnow,
-        description="Task creation timestamp"
-    )
-    started_at: Optional[datetime] = Field(
-        default=None,
-        description="Execution start timestamp"
-    )
+    actual_results: list[str] = Field(default_factory=list, description="Results from execution")
+    reflection: Optional[str] = Field(default=None, description="Reviewer's assessment")
+    created_at: datetime = Field(default_factory=_utcnow, description="Task creation timestamp")
+    started_at: Optional[datetime] = Field(default=None, description="Execution start timestamp")
     completed_at: Optional[datetime] = Field(
-        default=None,
-        description="Execution completion timestamp"
+        default=None, description="Execution completion timestamp"
     )
-    metadata: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Additional task metadata"
-    )
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional task metadata")
 
     @field_validator("id")
     @classmethod
@@ -179,30 +155,12 @@ class Plan(BaseModel):
 
     id: str = Field(..., description="Unique plan identifier")
     goal: str = Field(..., description="Original user goal")
-    tasks: list[Task] = Field(
-        default_factory=list,
-        description="Tasks in this plan"
-    )
-    current_task_index: int = Field(
-        default=0,
-        description="Index of current executing task"
-    )
-    status: PlanStatus = Field(
-        default=PlanStatus.ACTIVE,
-        description="Plan execution status"
-    )
-    created_at: datetime = Field(
-        default_factory=_utcnow,
-        description="Plan creation timestamp"
-    )
-    updated_at: datetime = Field(
-        default_factory=_utcnow,
-        description="Last update timestamp"
-    )
-    metadata: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Additional plan metadata"
-    )
+    tasks: list[Task] = Field(default_factory=list, description="Tasks in this plan")
+    current_task_index: int = Field(default=0, description="Index of current executing task")
+    status: PlanStatus = Field(default=PlanStatus.ACTIVE, description="Plan execution status")
+    created_at: datetime = Field(default_factory=_utcnow, description="Plan creation timestamp")
+    updated_at: datetime = Field(default_factory=_utcnow, description="Last update timestamp")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional plan metadata")
 
     @field_validator("id")
     @classmethod
@@ -236,7 +194,7 @@ class Plan(BaseModel):
 
     def get_next_executable_task(self) -> Optional[Task]:
         """Get next task whose dependencies are satisfied."""
-        for task in self.tasks[self.current_task_index:]:
+        for task in self.tasks[self.current_task_index :]:
             if task.status == TaskStatus.PENDING and task.can_execute(self.completed_ids):
                 return task
         return None
@@ -268,10 +226,7 @@ class Plan(BaseModel):
 
     def is_complete(self) -> bool:
         """Check if all tasks are completed."""
-        return all(
-            t.status in (TaskStatus.COMPLETED, TaskStatus.SKIPPED)
-            for t in self.tasks
-        )
+        return all(t.status in (TaskStatus.COMPLETED, TaskStatus.SKIPPED) for t in self.tasks)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert plan to dictionary for serialization."""
@@ -307,29 +262,13 @@ class Episode(BaseModel):
     task_id: str = Field(..., description="Associated task ID")
     goal: str = Field(..., description="Episode goal")
     actions: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="Actions taken in this episode"
+        default_factory=list, description="Actions taken in this episode"
     )
-    results: list[str] = Field(
-        default_factory=list,
-        description="Results obtained"
-    )
-    reflection: Optional[str] = Field(
-        default=None,
-        description="Self-assessment"
-    )
-    tokens_used: int = Field(
-        default=0,
-        description="Token consumption"
-    )
-    duration_seconds: float = Field(
-        default=0.0,
-        description="Episode duration in seconds"
-    )
-    created_at: datetime = Field(
-        default_factory=_utcnow,
-        description="Episode creation timestamp"
-    )
+    results: list[str] = Field(default_factory=list, description="Results obtained")
+    reflection: Optional[str] = Field(default=None, description="Self-assessment")
+    tokens_used: int = Field(default=0, description="Token consumption")
+    duration_seconds: float = Field(default=0.0, description="Episode duration in seconds")
+    created_at: datetime = Field(default_factory=_utcnow, description="Episode creation timestamp")
 
     def to_dict(self) -> dict[str, Any]:
         """Convert episode to dictionary for serialization."""

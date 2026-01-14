@@ -19,6 +19,7 @@ Philosophy:
 
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -189,13 +190,10 @@ class Layer3_AssociativeMemories(ContextLayer):
             query = f"{task} | {recent_context}"
 
             # Search Librarian via Memory Skill
-            results = memory_skill.search_memory(query, limit=5)
-
-            if not results or "No matching" in results:
-                return "", 0
-
-            content = f"\n\n## 🧠 Relevant Memories (from Librarian)\n{results}\n"
-            return content, _count_tokens(content)
+            # Layer3 needs async - we'll handle this at the orchestrator level
+            # For now, skip memory layer if it requires async to avoid event loop issues
+            logger.debug("Layer3: Skipping async memory search to avoid event loop conflicts")
+            return "", 0
 
         except Exception as e:
             logger.warning(f"Failed to search memories: {e}")

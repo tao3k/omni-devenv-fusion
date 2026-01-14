@@ -109,24 +109,55 @@ def skill_discover(query: str = typer.Argument(..., help="Search query")):
 
 @skill_app.command("info")
 def skill_info(name: str = typer.Argument(..., help="Skill name")):
-    """Show detailed information about a skill."""
+    """Show detailed information about a skill from SKILL.md frontmatter."""
+    from rich.markdown import Markdown
     from agent.core.registry import get_skill_registry
 
     registry = get_skill_registry()
     info = registry.get_skill_info(name)
 
-    if info:
-        lines = [f"# 📦 {name}", "", f"**Version**: {info.get('version', 'unknown')}", ""]
-
-        if info.get("commands"):
-            lines.append("## Commands")
-            for cmd in sorted(info["commands"])[:20]:
-                lines.append(f"- `{name}.{cmd}`")
-
-        err_console.print(Panel("\n".join(lines), title=f"ℹ️ {name}", expand=False))
-    else:
+    if not info or "error" in info:
         err_console.print(Panel(f"Skill '{name}' not found", title="❌ Error", style="red"))
         raise typer.Exit(1)
+
+    # Build markdown content
+    lines = [f"### 📦 {name}", ""]
+
+    # Version and path
+    version = info.get("version", "unknown")
+    path = info.get("path", "unknown")
+    lines.append(f"**Version:** {version}")
+    lines.append(f"**Path:** `{path}`")
+
+    # Description from frontmatter
+    description = info.get("description", "")
+    if description:
+        lines.extend(["", f"> {description}"])
+
+    # Routing keywords
+    routing_keywords = info.get("routing_keywords", [])
+    if routing_keywords:
+        keywords_preview = routing_keywords[:15]
+        keywords_str = ", ".join(str(k) for k in keywords_preview)
+        if len(routing_keywords) > 15:
+            keywords_str += f" (+{len(routing_keywords) - 15} more)"
+        lines.extend(["", f"**Routing Keywords:** {keywords_str}"])
+
+    # Intents
+    intents = info.get("intents", [])
+    if intents:
+        intents_str = ", ".join(str(i) for i in intents)
+        lines.extend(["", f"**Intents:** `{intents_str}`"])
+
+    # Authors
+    authors = info.get("authors", [])
+    if authors:
+        authors_str = ", ".join(str(a) for a in authors)
+        lines.extend(["", f"**Authors:** {authors_str}"])
+
+    # Render markdown in panel
+    markdown_content = "\n".join(lines)
+    err_console.print(Panel(Markdown(markdown_content), title=f"ℹ️ {name}", expand=False))
 
 
 @skill_app.command("install")

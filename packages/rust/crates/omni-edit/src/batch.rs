@@ -12,7 +12,7 @@ use std::collections::HashMap;
 
 use rayon::prelude::*;
 use dashmap::DashMap;
-use ast_grep_core::Language;
+use omni_ast::AstLanguage;
 
 use crate::StructuralEditor;
 
@@ -32,6 +32,7 @@ pub struct BatchRefactorStats {
 }
 
 impl BatchRefactorStats {
+    /// Create a new empty stats instance.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -76,7 +77,7 @@ impl Default for BatchConfig {
 
 /// Detect programming language from file path.
 fn detect_language(path: &Path) -> String {
-    use ast_grep_language::SupportLang;
+    use omni_ast::SupportLang;
 
     if let Some(lang) = SupportLang::from_path(path) {
         return format!("{:?}", lang).to_lowercase();

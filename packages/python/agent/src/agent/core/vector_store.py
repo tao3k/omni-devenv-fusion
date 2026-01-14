@@ -434,6 +434,60 @@ class VectorMemory:
             _get_logger().error("Failed to drop table", error=str(e))
             return False
 
+    async def get_tools_by_skill(self, skill_name: str) -> list[dict]:
+        """
+        Get all indexed tools for a skill from the database.
+
+        Phase 63: Retrieve tools from vector store instead of rescanning.
+
+        Args:
+            skill_name: Name of the skill (e.g., "git")
+
+        Returns:
+            List of tool metadata dictionaries
+        """
+        import json
+
+        store = self._ensure_store()
+        if not store:
+            _get_logger().warning("Vector memory not available for get_tools_by_skill")
+            return []
+
+        try:
+            tools_json = store.get_tools_by_skill(skill_name)
+            tools = [json.loads(t) for t in tools_json if t]
+            _get_logger().debug(f"Retrieved {len(tools)} tools for skill", skill=skill_name)
+            return tools
+        except Exception as e:
+            _get_logger().error("Failed to get tools by skill", skill=skill_name, error=str(e))
+            return []
+
+    async def index_skill_tools(self, base_path: str, table_name: str = "skills") -> int:
+        """
+        Index all skill tools from scripts into the vector store.
+
+        Phase 63: Uses Rust scanner to discover @skill_script decorated functions.
+
+        Args:
+            base_path: Base path containing skills (e.g., "assets/skills")
+            table_name: Table to store tools (default: "skills")
+
+        Returns:
+            Number of tools indexed
+        """
+        store = self._ensure_store()
+        if not store:
+            _get_logger().warning("Vector memory not available for index_skill_tools")
+            return 0
+
+        try:
+            count = store.index_skill_tools(base_path, table_name)
+            _get_logger().info(f"Indexed {count} skill tools", base_path=base_path)
+            return count
+        except Exception as e:
+            _get_logger().error("Failed to index skill tools", error=str(e))
+            return 0
+
 
 # Singleton accessor
 def get_vector_memory() -> VectorMemory:

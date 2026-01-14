@@ -7,12 +7,14 @@ members = [
     "packages/rust/bindings/python"
 ]
 
+# Workspace package metadata (inherited by all crates)
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
 authors = ["Omni-DevEnv Team"]
 license = "Apache-2.0"
 publish = false
+description = "Omni-DevEnv Fusion - Trinity Architecture with Rust Core"
 
 # [Phase 45.2] Unified dependency management
 [workspace.dependencies]

@@ -6,9 +6,7 @@
 use std::path::Path;
 use std::str::FromStr;
 
-use ast_grep_core::meta_var::MetaVariable;
-use ast_grep_core::{matcher::MatcherExt, Pattern};
-use ast_grep_language::{Language, LanguageExt, SupportLang};
+use omni_ast::{MatcherExt, Pattern, SupportLang, MetaVariable, AstLanguage, LanguageExt};
 
 use crate::error::{SearchError, TagError};
 use crate::patterns::{
@@ -543,7 +541,7 @@ impl TagExtractor {
     }
 
     /// Get the text of a variable capture from a matched node
-    fn get_capture<D: ast_grep_core::Doc>(m: &ast_grep_core::NodeMatch<D>, capture: &str) -> String {
+    fn get_capture<D: omni_ast::Doc>(m: &omni_ast::NodeMatch<D>, capture: &str) -> String {
         m.get_env()
             .get_match(capture)
             .map(|n| n.text().to_string())

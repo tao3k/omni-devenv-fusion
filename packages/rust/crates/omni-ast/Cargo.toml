@@ -1,0 +1,28 @@
+[package]
+name = "omni-ast"
+version.workspace = true
+edition.workspace = true
+description = "Unified AST utilities using ast-grep"
+authors = ["Omni-DevEnv Team"]
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+# ast-grep - AST pattern matching (unified version)
+ast-grep-core = "0.40.5"
+ast-grep-language = "0.40.5"
+
+# Common utilities
+serde = { workspace = true, features = ["derive"] }
+anyhow = "1.0"
+thiserror = { workspace = true }
+
+# File traversal
+walkdir = "2.5"
+omni-io = { path = "../omni-io" }
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

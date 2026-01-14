@@ -3,7 +3,7 @@
 //! omni-tags - High-Performance Code Symbol Extraction for Omni DevEnv
 //!
 //! Features:
-//! - AST-based symbol extraction using ast-grep-core
+//! - AST-based symbol extraction using omni-ast (ast-grep)
 //! - Syntax-aware matching for Python, Rust, JavaScript, TypeScript
 //! - CCA-aligned: Generate outlines to reduce token consumption 10-50x
 //!

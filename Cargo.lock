@@ -4391,6 +4391,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "omni-ast"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ast-grep-core",
+ "ast-grep-language",
+ "omni-io",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.17",
+ "walkdir",
+]
+
+[[package]]
 name = "omni-core-rs"
 version = "0.1.0"
 dependencies = [
@@ -4413,10 +4427,9 @@ dependencies = [
 name = "omni-edit"
 version = "0.1.0"
 dependencies = [
- "ast-grep-core",
- "ast-grep-language",
  "dashmap 5.5.3",
  "ignore",
+ "omni-ast",
  "omni-io",
  "once_cell",
  "rayon",
@@ -4463,8 +4476,7 @@ dependencies = [
 name = "omni-tags"
 version = "0.1.0"
 dependencies = [
- "ast-grep-core",
- "ast-grep-language",
+ "omni-ast",
  "omni-io",
  "once_cell",
  "serde",
@@ -4503,6 +4515,7 @@ dependencies = [
  "lance-index",
  "lance-linalg",
  "log",
+ "omni-ast",
  "omni-io",
  "omni-types",
  "serde",
@@ -4510,6 +4523,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.17",
  "tokio",
+ "walkdir",
 ]
 
 [[package]]

@@ -5,6 +5,8 @@ Phase 29: Skill Manager Models - DTOs for skill commands and skills.
 Contains:
 - SkillCommand: A single command exposed by a skill
 - Skill: A loaded skill with commands and context
+
+Phase 62: Added script mode support for @skill_script decorated commands.
 """
 
 from __future__ import annotations
@@ -47,6 +49,9 @@ class SkillCommand:
 
     Note: We don't inherit from ISkillCommand protocol here to avoid
     dataclass field ordering issues with Protocol base classes.
+
+    Phase 62: Supports script mode for @skill_script decorated functions
+    with built-in dependency injection and retry logic.
     """
 
     name: str
@@ -55,17 +60,49 @@ class SkillCommand:
     category: str = "general"
     _skill_name: str = ""
     input_schema: dict[str, Any] = field(default_factory=dict)
+    # Phase 62: Script mode fields
+    _script_mode: bool = False
+    _inject_root: bool = False
+    _inject_settings: list[str] = field(default_factory=list)
+    _retry_on: tuple[type[Exception], ...] = (ConnectionError, TimeoutError)
+    _max_attempts: int = 3
 
     def __post_init__(self) -> None:
         """Normalize category to enum."""
         if isinstance(self.category, str):
             object.__setattr__(self, "category", SkillCategory(self.category))
 
+    def _prepare_args(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Prepare arguments with dependency injection for script mode."""
+        from common.config_paths import get_project_root
+        from common.config.settings import get_setting
+
+        if not self._script_mode:
+            return args
+
+        prepared = dict(args)
+
+        # Inject project root if requested
+        if self._inject_root and "project_root" not in prepared:
+            prepared["project_root"] = get_project_root()
+
+        # Inject settings if requested
+        for key in self._inject_settings:
+            arg_name = key.replace(".", "_")
+            if arg_name not in prepared:
+                try:
+                    prepared[arg_name] = get_setting(key)
+                except Exception:
+                    pass  # Setting not found, skip
+
+        return prepared
+
     async def execute(self, args: dict[str, Any]) -> ExecutionResult:
         """
         Execute the command with arguments.
 
-        Handles both:
+        Handles:
+        - Script mode: With dependency injection and retry
         - Legacy: Raw return values (converted to ExecutionResult)
         - Enhanced: CommandResult from @skill_command decorator
         """
@@ -73,11 +110,18 @@ class SkillCommand:
         import time
 
         t0 = time.perf_counter()
+
+        # Prepare args with DI for script mode
+        prepared_args = self._prepare_args(args)
+
         try:
-            if asyncio.iscoroutinefunction(self.func):
-                result = await self.func(**args)
+            # Execute with retry for script mode
+            if self._script_mode:
+                result = await self._execute_with_retry(prepared_args)
+            elif asyncio.iscoroutinefunction(self.func):
+                result = await self.func(**prepared_args)
             else:
-                result = self.func(**args)
+                result = self.func(**prepared_args)
 
             # Check if result is already a CommandResult (enhanced decorator)
             if hasattr(result, "success") and hasattr(result, "data"):
@@ -104,6 +148,27 @@ class SkillCommand:
                 error=str(e),
                 duration_ms=duration_ms,
             )
+
+    async def _execute_with_retry(self, args: dict[str, Any]) -> Any:
+        """Execute with retry logic for script mode."""
+        import asyncio
+
+        last_error = None
+        for attempt in range(self._max_attempts):
+            try:
+                if asyncio.iscoroutinefunction(self.func):
+                    return await self.func(**args)
+                else:
+                    return self.func(**args)
+            except Exception as e:
+                last_error = e
+                # Check if retryable
+                if not isinstance(e, self._retry_on):
+                    raise
+                # Wait before retry (exponential backoff)
+                if attempt < self._max_attempts - 1:
+                    await asyncio.sleep(0.1 * (2**attempt))
+        raise last_error
 
 
 # =============================================================================

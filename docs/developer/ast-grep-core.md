@@ -141,6 +141,37 @@ if let Some(lang) = SupportLang::from_path(path) {
 "pub? struct $NAME"     // Optional pub (syntactic sugar)
 ```
 
+### 4.4 Sequence Wildcard (`$$$`) - Matching Any Arguments
+
+The `$$$` is ast-grep's **Sequence Wildcard** that matches zero or more items inside parentheses or brackets.
+
+```rust
+// Match function calls with any arguments
+"func($$$)"             // Matches func(), func(1), func(a, b, c)
+
+// Match decorator calls with any arguments
+"@skill_script($$$)"    // Matches @skill_script, @skill_script(name="test"), @skill_script(...)
+
+// Match class inheritance with any number of bases
+"class $NAME($$$)"      // Matches class Foo, class Foo(Base), class Foo(A, B, C)
+```
+
+**Why `$$$` instead of `$`?**
+
+| Pattern              | Behavior                                        |
+| -------------------- | ----------------------------------------------- |
+| `@skill_script($)`   | **Invalid** - `$` matches only a single node    |
+| `@skill_script($A)`  | **Limited** - `$A` matches exactly one argument |
+| `@skill_script($$$)` | **Correct** - Matches zero or more arguments    |
+
+### 4.5 Multi-Variable Capture
+
+You can capture multiple parts of a pattern:
+
+```rust
+"@$DECORATOR($NAME, $DESC)"   // Capture decorator name, function name, and description
+```
+
 ## 5. Complete Example
 
 ```rust
@@ -225,6 +256,80 @@ for p in &patterns {
 "impl $NAME"     // ✅ Can get NAME
 ```
 
+### 6.4 Decorator Pattern Not Matching
+
+**Problem**: Pattern `@skill_script(` or `@skill_script($)` returns 0 matches.
+
+**Cause**: Incomplete Python syntax. The pattern must be valid Python AST.
+
+**Solution**: Use `$$$` for variable arguments:
+
+```rust
+// ❌ Wrong - incomplete Python syntax
+let pattern = r#"@skill_script("#;
+
+// ❌ Wrong - $ matches single node only
+let pattern = r#"@skill_script($)"#;
+
+// ✅ Correct - $$$ matches any arguments
+let pattern = r#"@skill_script($$$)"#;
+```
+
+**Real Example** (from `scanner.rs` for @skill_script discovery):
+
+```rust
+// Match @skill_script decorator with any arguments
+let decorator_pattern = r#"@skill_script($$$)"#;
+
+let search_decorator = Pattern::try_new(decorator_pattern, lang)
+    .map_err(|e| anyhow::anyhow!("Failed to parse decorator pattern: {}", e))?;
+
+// Find all decorator positions
+let mut decorator_positions: Vec<usize> = Vec::new();
+for node in root_node.dfs() {
+    if search_decorator.match_node(node.clone()).is_some() {
+        let range = node.range();
+        decorator_positions.push(range.end);
+    }
+}
+```
+
+### 6.5 Debugging Pattern Matching
+
+When patterns don't work as expected, use this debugging approach:
+
+```rust
+// 1. Check what AST nodes exist
+for node in root_node.dfs() {
+    eprintln!("Node kind: {}, range: {:?}, text: {:?}",
+        node.kind(),
+        node.range(),
+        node.text().to_string().chars().take(50).collect::<String>()
+    );
+}
+
+// 2. Test simple patterns first
+let simple_patterns = vec![
+    "@skill_script($$$)",
+    "@skill_script(...)",
+    "@skill_script",
+];
+for p in &simple_patterns {
+    match Pattern::try_new(p, lang) {
+        Ok(pattern) => {
+            let mut matches = 0;
+            for node in root_node.dfs() {
+                if pattern.match_node(node.clone()).is_some() {
+                    matches += 1;
+                }
+            }
+            eprintln!("Pattern '{}' matched {} nodes", p, matches);
+        }
+        Err(e) => eprintln!("Pattern '{}' parse error: {}", p, e),
+    }
+}
+```
+
 ## 7. API Reference
 
 ### LanguageExt trait
@@ -265,5 +370,8 @@ impl<'tree, D: Doc> NodeMatch<'tree, D> {
 ## 8. Related Files
 
 - `packages/rust/crates/omni-tags/src/lib.rs` - Implementation example
+- `packages/rust/crates/omni-vector/src/scanner.rs` - Real-world @skill_script discovery (Phase 62/63)
+- `packages/rust/crates/omni-ast/src/scan.rs` - Pattern matching utilities
 - `packages/rust/crates/omni-tags/Cargo.toml` - Dependency configuration
 - `assets/specs/phase50_cca_navigation.md` - Phase 50 specification
+- `assets/specs/phase62_script_scanner.md` - Script Scanner specification

@@ -9,23 +9,25 @@ Phase 60.5 gave us Rust acceleration and Hybrid Routing. Phase 61 introduces **C
 
 ### Core Philosophy
 
-| Component | CCA Concept | Purpose |
-|-----------|-------------|---------|
-| **Planner** | Task Decomposition | Break complex goals into ordered Tasks |
-| **Executor** | Step-by-Step | Execute Tasks, report results |
-| **Reviewer** | Reflexion Loop | Evaluate progress, detect drift |
-| **Memory** | Hierarchical Working Memory | Scratchpad → Episodes → Knowledge |
+| Component    | CCA Concept                 | Purpose                                |
+| ------------ | --------------------------- | -------------------------------------- |
+| **Planner**  | Task Decomposition          | Break complex goals into ordered Tasks |
+| **Executor** | Step-by-Step                | Execute Tasks, report results          |
+| **Reviewer** | Reflexion Loop              | Evaluate progress, detect drift        |
+| **Memory**   | Hierarchical Working Memory | Scratchpad → Episodes → Knowledge      |
 
 ---
 
 ## 1. Architecture: Planner & Executor
 
 ### Current State
+
 ```
 User Input → Router → Tool (Fast, single-step)
 ```
 
 ### Target State
+
 ```
 User Input → Router → [Confidence < 0.8?]
                            ↓ Yes
@@ -87,10 +89,12 @@ class Plan(BaseModel):
 ## 2. Hierarchical Memory
 
 ### Level 1: Scratchpad (Short-term)
+
 - Current Task's detailed Tool Outputs
 - FIFO, 4k-8k tokens max
 
 ### Level 2: Episodic Summary (Medium-term)
+
 - Generated when Task completes
 - Stored in SQLite/JSONL
 - Injected into future System Prompts
@@ -108,6 +112,7 @@ Episode 3 (Task: Fix auth bug in login.py):
 ```
 
 ### Level 3: Knowledge Graph (Long-term)
+
 - Vectorized Episode Summaries
 - Retrieved by `Wisdom Injection` for similar tasks
 
@@ -116,24 +121,29 @@ Episode 3 (Task: Fix auth bug in login.py):
 ## 3. Implementation Roadmap
 
 ### Step 1: Core Schemas (Day 1)
+
 - [ ] `agent/core/planner/schemas.py` - Task, Plan, Episode
 - [ ] `agent/core/planner/task_store.py` - SQLite storage
 
 ### Step 2: Planner Module (Day 2-3)
+
 - [ ] `agent/core/planner/decomposer.py` - LLM-based decomposition
 - [ ] `agent/core/planner/prompts.py` - Decomposition prompt templates
 - [ ] `agent/core/planner/planner.py` - Main Planner class
 
 ### Step 3: Executor & Reviewer (Day 4-5)
+
 - [ ] `agent/core/planner/executor.py` - Task execution loop
 - [ ] `agent/core/planner/reviewer.py` - Reflexion/evaluation logic
 
 ### Step 4: Memory Integration (Day 6-7)
+
 - [ ] Episode generation in Executor
 - [ ] Vector storage integration with Librarian
 - [ ] Prompt injection in ContextOrchestrator
 
 ### Step 5: Observability (Day 8)
+
 - [ ] Structured tracing (OpenTelemetry/JSONL)
 - [ ] `omni trace view` command
 
@@ -199,6 +209,7 @@ episodes = await memory.retrieve_relevant(
 ## 5. Integration Points
 
 ### Hybrid Router Integration
+
 ```python
 # When confidence < 0.8, route to Planner
 if confidence < 0.8:
@@ -206,6 +217,7 @@ if confidence < 0.8:
 ```
 
 ### Conductor Integration
+
 ```python
 # Update context with episodic memory
 context = conductor._build_cca_context(
@@ -218,18 +230,19 @@ context = conductor._build_cca_context(
 
 ## 6. Testing Strategy
 
-| Component | Test Type | Examples |
-|-----------|----------|----------|
-| Task Schema | Unit | Valid/invalid task creation, dependency resolution |
-| Decomposition | Integration | Goal → Plan conversion, edge cases |
-| Executor | E2E | Full task execution, error recovery |
-| Memory | Unit + Integration | Episode storage, vector retrieval |
+| Component     | Test Type          | Examples                                           |
+| ------------- | ------------------ | -------------------------------------------------- |
+| Task Schema   | Unit               | Valid/invalid task creation, dependency resolution |
+| Decomposition | Integration        | Goal → Plan conversion, edge cases                 |
+| Executor      | E2E                | Full task execution, error recovery                |
+| Memory        | Unit + Integration | Episode storage, vector retrieval                  |
 
 ---
 
 ## Files to Create/Modify
 
 ### New Files
+
 ```
 agent/core/planner/
 ├── __init__.py
@@ -246,6 +259,7 @@ agent/core/omni_agent.py  # Dual-loop architecture
 ```
 
 ### Modified Files
+
 ```
 agent/core/router.py     # Confidence threshold routing
 agent/core/orchestrator.py  # Episode injection

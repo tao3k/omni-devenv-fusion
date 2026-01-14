@@ -485,12 +485,102 @@ def _get_param_schema(func: Callable) -> dict:
 
 
 # =============================================================================
+# Skill Script Decorator (Phase 62: Metadata-Driven Architecture)
+# =============================================================================
+# Direct decorator for scripts/*.py files - no tools.py router layer needed.
+# Auto-detects skill name from file path and registers directly with SkillManager.
+
+
+_SCRIPT_SKILL_MARKER = "_is_skill_script"
+
+
+def skill_script(
+    name: str | None = None,
+    description: str | None = None,
+    category: str = "general",
+    # Dependency Injection (same as skill_command)
+    inject_root: bool = False,
+    inject_settings: list[str] | None = None,
+    # Retry Configuration
+    retry_on: tuple[type[Exception], ...] = (ConnectionError, TimeoutError),
+    max_attempts: int = 3,
+):
+    """
+    [Macro] Mark a function in scripts/*.py as an exposed skill command.
+
+    This decorator is used directly in script files - no tools.py router needed.
+
+    Features:
+    - Auto-detects skill name from file path (e.g., git/scripts/commit.py -> skill="git")
+    - Auto-generates tool name from function name (e.g., commit -> "git.commit")
+    - Stores full metadata for MCP tool registration
+    - Supports dependency injection and retry logic
+
+    Args:
+        name: Override command name (default: function name)
+        description: Override docstring description
+        category: Grouping for help display (e.g., "write", "read")
+        inject_root: If True, passes 'project_root' (Path) to the function
+        inject_settings: List of setting keys to inject
+        retry_on: Tuple of exception types to retry on
+        max_attempts: Maximum retry attempts
+
+    Usage (in assets/skills/git/scripts/commit.py):
+
+        from agent.skills.decorators import skill_script
+
+        @skill_script(
+            description="Commit staged changes",
+            category="write",
+        )
+        def commit(message: str) -> str:
+            '''Commit changes to git repository.'''
+            # ... implementation ...
+
+    This will be registered as "git.commit" automatically.
+    """
+
+    def decorator(func: Callable) -> Callable:
+        # Attach script-specific metadata
+        func._is_skill_script = True
+        func._script_config = {
+            "name": name or func.__name__,
+            "description": description or _extract_description(func),
+            "category": category,
+            "retry_on": retry_on,
+            "max_attempts": max_attempts,
+            "input_schema": _get_param_schema(func),
+            "inject_root": inject_root,
+            "inject_settings": inject_settings or [],
+        }
+
+        # Return the original function (no wrapper for script commands)
+        # The SkillLoaderMixin will handle execution with proper context
+        return func
+
+    return decorator
+
+
+def is_skill_script(func: Callable) -> bool:
+    """Check if a function is marked with @skill_script."""
+    return getattr(func, _SCRIPT_SKILL_MARKER, False)
+
+
+def get_script_config(func: Callable) -> dict | None:
+    """Get the script config attached to a function."""
+    return getattr(func, "_script_config", None)
+
+
+# =============================================================================
 # Export
 # =============================================================================
 
 
 __all__ = [
     "skill_command",
+    "skill_script",
+    "is_skill_script",
+    "get_script_config",
     "CommandResult",
     "validate_structure",
     "generate_structure_tests",

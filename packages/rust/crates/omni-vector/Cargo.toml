@@ -32,6 +32,10 @@ anyhow = "1.0"
 serde = { workspace = true }
 serde_json = "1.0"
 
+# Script scanning (Phase 62) - using omni-ast (unified ast-grep v0.40.5)
+omni-ast = { path = "../omni-ast" }
+walkdir = "2.5"
+
 # Reuse our common types
 omni-types = { path = "../omni-types" }
 omni-io = { path = "../omni-io" }

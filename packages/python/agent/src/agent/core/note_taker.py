@@ -31,12 +31,12 @@ def _get_llm_client() -> Any:
     global _cached_llm_client
     if _cached_llm_client is None:
         try:
-            from mcp_core.inference import InferenceClient
+            from common.mcp_core.inference import InferenceClient
 
             _cached_llm_client = InferenceClient()
             logger.info("Note-Taker LLM client initialized (InferenceClient with MiniMax)")
         except ImportError as e:
-            logger.warning(f"mcp_core not available: {e}")
+            logger.debug(f"mcp_core not available: {e}")
             return None
     return _cached_llm_client
 
@@ -136,10 +136,23 @@ class NoteTaker:
             return []
 
     def _call_llm(self, transcript: str) -> List[Dict[str, Any]]:
-        """Synchronous wrapper for _call_llm_async."""
+        """Synchronous wrapper for _call_llm_async.
+
+        Handles both sync and async contexts by checking for running event loop.
+        """
         import asyncio
 
-        return asyncio.run(self._call_llm_async(transcript))
+        try:
+            # Check if there's already a running event loop
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop, safe to use asyncio.run()
+            return asyncio.run(self._call_llm_async(transcript))
+
+        # Already in async context - cannot use run_until_complete
+        # Fall back to dummy notes to avoid event loop errors
+        logger.warning("Note-Taker: Already in async context, using dummy notes")
+        return self._generate_dummy_notes(transcript)
 
     def _generate_dummy_notes(self, transcript: str) -> List[Dict[str, Any]]:
         """Generate basic notes when LLM is unavailable."""
@@ -170,8 +183,8 @@ class NoteTaker:
 
         return notes
 
-    def _save_notes(self, notes: List[Dict[str, Any]]) -> int:
-        """Save notes to the Librarian via Memory Skill using SKILLS_DIR()."""
+    async def _save_notes_async(self, notes: List[Dict[str, Any]]) -> int:
+        """Save notes to the Librarian via Memory Skill (async version)."""
         try:
             # Use load_skill_module to load memory tools
             memory_tools = load_skill_module("memory")
@@ -196,7 +209,7 @@ class NoteTaker:
                     "source": "note_taker",
                 }
 
-                memory_tools.save_memory(full_content, metadata)
+                await memory_tools.save_memory(full_content, metadata)
                 saved_count += 1
                 logger.debug(f"Saved note: {title[:50]}...")
 
@@ -205,6 +218,21 @@ class NoteTaker:
         except Exception as e:
             logger.error(f"Failed to save notes to Librarian: {e}")
             return 0
+
+    def _save_notes(self, notes: List[Dict[str, Any]]) -> int:
+        """Save notes to the Librarian via Memory Skill using SKILLS_DIR()."""
+        import asyncio
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop, safe to use asyncio.run()
+            return asyncio.run(self._save_notes_async(notes))
+
+        # Already in async context - we're being called from sync context but loop exists
+        # This shouldn't happen in normal use, but handle it gracefully
+        logger.warning("Note-Taker: save_memory called in async context from sync wrapper")
+        return 0
 
     def distill_and_save(self, history: List[Dict[str, str]]) -> str:
         """

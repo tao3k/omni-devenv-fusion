@@ -138,6 +138,7 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyOmniSniffer>()?;
     m.add_class::<PyEnvironmentSnapshot>()?;
     m.add_class::<PyBatchRefactorStats>()?;
+    m.add_class::<PyToolRecord>()?;
     m.add_class::<PyVectorStore>()?;
     m.add_function(pyo3::wrap_pyfunction!(py_get_sniffer, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(get_environment_snapshot, m)?)?;
@@ -161,6 +162,8 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(pyo3::wrap_pyfunction!(batch_structural_replace, m)?)?;
     // Phase 53/57: Vector Store - omni-vector bindings
     m.add_function(pyo3::wrap_pyfunction!(create_vector_store, m)?)?;
+    // Phase 62: Script Scanner bindings
+    m.add_function(pyo3::wrap_pyfunction!(scan_skill_tools, m)?)?;
     m.add("VERSION", "0.5.0")?;
     Ok(())
 }
@@ -474,6 +477,56 @@ fn batch_structural_replace(
 // Phase 53/57: Vector Store - Python Bindings for omni-vector
 // ============================================================================
 
+/// Python wrapper for ToolRecord (Phase 62)
+/// Represents a discovered tool from script scanning.
+#[pyclass]
+#[derive(Debug, Clone)]
+struct PyToolRecord {
+    #[pyo3(get)]
+    tool_name: String,
+    #[pyo3(get)]
+    description: String,
+    #[pyo3(get)]
+    skill_name: String,
+    #[pyo3(get)]
+    file_path: String,
+    #[pyo3(get)]
+    function_name: String,
+    #[pyo3(get)]
+    execution_mode: String,
+    #[pyo3(get)]
+    keywords: Vec<String>,
+    #[pyo3(get)]
+    input_schema: String,
+    #[pyo3(get)]
+    docstring: String,
+}
+
+impl From<&omni_vector::ToolRecord> for PyToolRecord {
+    fn from(record: &omni_vector::ToolRecord) -> Self {
+        Self {
+            tool_name: record.tool_name.clone(),
+            description: record.description.clone(),
+            skill_name: record.skill_name.clone(),
+            file_path: record.file_path.clone(),
+            function_name: record.function_name.clone(),
+            execution_mode: match record.execution_mode {
+                omni_vector::ExecutionMode::Legacy => "legacy".to_string(),
+                omni_vector::ExecutionMode::Script => "script".to_string(),
+            },
+            keywords: record.keywords.clone(),
+            input_schema: record.input_schema.clone(),
+            docstring: record.docstring.clone(),
+        }
+    }
+}
+
+impl From<omni_vector::ToolRecord> for PyToolRecord {
+    fn from(record: omni_vector::ToolRecord) -> Self {
+        Self::from(&record)
+    }
+}
+
 /// Python wrapper for VectorStore (omni-vector / LanceDB)
 #[pyclass]
 struct PyVectorStore {
@@ -610,6 +663,64 @@ impl PyVectorStore {
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
         })
     }
+
+    /// Phase 62: Index all tools from skills scripts directory.
+    ///
+    /// Scans `base_path/skills/*/scripts/*.py` for `@skill_script` decorated
+    /// functions and indexes them for discovery.
+    ///
+    /// Args:
+    ///   base_path: Base directory containing skills (e.g., "assets/skills")
+    ///   table_name: Table to store tool records (default: "skills")
+    ///
+    /// Returns:
+    ///   Number of tools indexed
+    fn index_skill_tools(&self, base_path: String, table_name: Option<String>) -> PyResult<usize> {
+        let path = self.path.clone();
+        let dimension = self.dimension;
+        let table_name = table_name.unwrap_or_else(|| "skills".to_string());
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        rt.block_on(async {
+            let store = VectorStore::new(&path, Some(dimension)).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            store.index_skill_tools(&base_path, &table_name).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            // Return count of indexed tools (we can count from table)
+            let count = store.count(&table_name).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            Ok(count as usize)
+        })
+    }
+
+    /// Phase 62: Get all tools for a skill.
+    ///
+    /// Args:
+    ///   skill_name: Name of the skill (e.g., "git")
+    ///
+    /// Returns:
+    ///   List of tool metadata JSON strings
+    fn get_tools_by_skill(&self, skill_name: String) -> PyResult<Vec<String>> {
+        let path = self.path.clone();
+        let dimension = self.dimension;
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        rt.block_on(async {
+            let store = VectorStore::new(&path, Some(dimension)).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            let tools = store.get_tools_by_skill(&skill_name).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            let json_tools: Vec<String> = tools
+                .into_iter()
+                .map(|t| serde_json::to_string(&t).unwrap_or_default())
+                .collect();
+            Ok(json_tools)
+        })
+    }
 }
 
 /// Create a vector store (convenience function)
@@ -617,4 +728,36 @@ impl PyVectorStore {
 #[pyo3(signature = (path, dimension = None))]
 fn create_vector_store(path: String, dimension: Option<usize>) -> PyResult<PyVectorStore> {
     PyVectorStore::new(path, dimension)
+}
+
+// ============================================================================
+// Phase 62: Script Scanner - Direct Python Bindings
+// ============================================================================
+
+/// Scan a skills directory and return discovered tools.
+///
+/// This function uses the Rust ast-grep scanner to find all Python functions
+/// decorated with @skill_script in the skill scripts directory.
+///
+/// Args:
+///   base_path: Base directory containing skills (e.g., "assets/skills")
+///
+/// Returns:
+///   List of PyToolRecord objects with discovered tools
+#[pyfunction]
+#[pyo3(signature = (base_path))]
+fn scan_skill_tools(base_path: String) -> Vec<PyToolRecord> {
+    use std::path::Path;
+
+    let scanner = omni_vector::ScriptScanner::new();
+    let skills_path = Path::new(&base_path);
+
+    if !skills_path.exists() {
+        return Vec::new();
+    }
+
+    match scanner.scan_all(skills_path) {
+        Ok(tools) => tools.into_iter().map(|t| t.into()).collect(),
+        Err(_) => Vec::new(),
+    }
 }

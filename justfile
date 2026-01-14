@@ -934,17 +934,56 @@ build-rust:
 
     echo "🔨 Building Rust core library..."
     cd packages/rust/bindings/python
-    cargo build --release
 
-    # Find the built library
-    SO_PATH=$(find ../../target/release -name "libomni_core_rs*.dylib" -o -name "libomni_core_rs*.so" 2>/dev/null | head -1)
-    if [ -z "$SO_PATH" ]; then
-        echo "❌ Error: Could not find built library"
+    # Build wheel (faster than maturin develop)
+    echo "📦 Creating wheel..."
+    maturin build --release
+
+    # Find and install the wheel
+    WHEEL_PATH=$(find ../../target/wheels -name "*.whl" 2>/dev/null | head -1)
+    if [ -z "$WHEEL_PATH" ]; then
+        echo "❌ Error: Could not find built wheel"
         exit 1
     fi
 
-    # Copy to venv site-packages
-    VENV_SITE_PACKAGES=$(uv run python -c "import site; print(site.getsitepackages()[0])")
-    cp "$SO_PATH" "$VENV_SITE_PACKAGES/omni_core_rs.so"
+    echo "📦 Installing wheel: $WHEEL_PATH"
+    uv pip install --force-reinstall --no-deps "$WHEEL_PATH"
 
     echo "✅ Rust library installed to venv"
+
+
+[group('rust')]
+build-rust-dev:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    echo "🔨 Building Rust core library (DEBUG mode - fast)..."
+    cd packages/rust/bindings/python
+
+    # maturin develop uses debug build by default (much faster than release)
+    # First cargo build, then install
+    cargo build && maturin develop
+
+    echo "✅ Rust debug library installed to venv"
+
+
+[group('rust')]
+build-rust-wheel:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    echo "📦 Building Rust wheel (no recompile)..."
+    cd packages/rust/bindings/python
+
+    # Only build wheel (assumes cargo build --release already done)
+    maturin build --release --skip-auditwheel
+
+    # Find and show the wheel
+    WHEEL_PATH=$(find ../../target/wheels -name "*.whl" 2>/dev/null | head -1)
+    if [ -n "$WHEEL_PATH" ]; then
+        echo "✅ Wheel: $WHEEL_PATH"
+        ls -lh "$WHEEL_PATH"
+    else
+        echo "❌ Error: Could not find built wheel"
+        exit 1
+    fi

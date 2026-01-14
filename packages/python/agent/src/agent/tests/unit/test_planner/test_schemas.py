@@ -48,7 +48,12 @@ class TestTaskPriority:
 
     def test_task_priority_ordering(self) -> None:
         """Verify priority ordering works."""
-        priorities = [TaskPriority.LOW, TaskPriority.MEDIUM, TaskPriority.HIGH, TaskPriority.CRITICAL]
+        priorities = [
+            TaskPriority.LOW,
+            TaskPriority.MEDIUM,
+            TaskPriority.HIGH,
+            TaskPriority.CRITICAL,
+        ]
         assert sorted(priorities) == priorities[::-1]
 
 

@@ -2,8 +2,7 @@
 //!
 //! Handles both single captures ($NAME) and variadic captures ($$$ARGS).
 
-use ast_grep_core::meta_var::MetaVariable;
-use ast_grep_core::Doc;
+use omni_ast::{MetaVariable, Doc};
 
 /// Substitute captured variables into replacement text.
 ///
@@ -20,7 +19,7 @@ use ast_grep_core::Doc;
 /// The replacement text with all captures substituted.
 pub fn substitute_captures<D: Doc>(
     replacement: &str,
-    env: &ast_grep_core::meta_var::MetaVarEnv<D>,
+    env: &omni_ast::MetaVarEnv<D>,
     original_text: &str,
 ) -> String {
     let mut new_text = replacement.to_string();

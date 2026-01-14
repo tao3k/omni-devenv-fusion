@@ -293,6 +293,7 @@ class Tracer:
 # Tracer Integration Helpers
 # =============================================================================
 
+
 class TracedExecutor:
     """Wrapper for executor with tracing."""
 
@@ -326,6 +327,7 @@ class TracedExecutor:
 # =============================================================================
 # Polyfactory for Testing
 # =============================================================================
+
 
 def create_tracer(enabled: bool = True) -> Tracer:
     """Factory function to create a Tracer.

@@ -403,7 +403,7 @@ class SkillRegistry:
             "is_dirty": is_dirty,
         }
 
-        # Read SKILL.md
+        # Read SKILL.md frontmatter (YAML metadata)
         skill_md_path = target_dir / "SKILL.md"
         if skill_md_path.exists():
             try:
@@ -411,7 +411,17 @@ class SkillRegistry:
 
                 with open(skill_md_path) as f:
                     post = frontmatter.load(f)
-                info["manifest"] = post.metadata or {}
+                manifest = post.metadata or {}
+                # Extract frontmatter fields
+                info.update(
+                    {
+                        "manifest": manifest,
+                        "description": manifest.get("description", ""),
+                        "routing_keywords": manifest.get("routing_keywords", []),
+                        "intents": manifest.get("intents", []),
+                        "authors": manifest.get("authors", []),
+                    }
+                )
             except Exception as e:
                 info["manifest_error"] = str(e)
 
