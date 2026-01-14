@@ -55,15 +55,46 @@ Internal documentation for Omni-Dev Fusion developers.
 
 ---
 
+## Trinity Architecture
+
+Phase 25-36, 52: Skill-centric agent architecture with hot reload and Swarm Engine.
+
+| Document                                                                               | Description                                                  |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| [Phase 25: Trinity Architecture v1.0](../assets/specs/phase25_trinity_architecture.md) | Original Trinity concept - Orchestrator/Coder/Executor roles |
+| [Phase 29: Trinity + Protocols](../assets/specs/phase29_trinity_protocols.md)          | Modular registry with protocol-based design                  |
+| [Phase 35: Sidecar Pattern + Pure MCP](../assets/specs/phase35_sidecar_mcp.md)         | Heavy dependency isolation + native MCP server               |
+| [Phase 36: Trinity v2.0 + Swarm Engine](../assets/specs/phase36_trinity_v2.md)         | Hot reload, Observer pattern, Production stability           |
+| [Phase 52: The Surgeon](../assets/specs/phase52_the_surgeon.md)                        | AST-based structural editing with dry-run support            |
+
+---
+
 ## Rust Core Architecture
 
-Phase 45-47: High-performance Rust core with Python bindings.
+Phase 45-47, 50: High-performance Rust core with Python bindings.
 
-| Document                                                                            | Description                                                |
-| ----------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| [Phase 45: Rust Core Integration](../assets/specs/phase45_rust_core_integration.md) | Monorepo structure, workspace configuration, PyO3 bindings |
-| [Phase 46: The Neural Bridge](../assets/specs/phase46_the_neural_bridge.md)         | Type unification between Rust and Python                   |
-| [Phase 47: The Iron Lung](../assets/specs/phase47_the_iron_lung.md)                 | Safe I/O, tokenization, GIL release patterns               |
+| Document                                                                              | Description                                                |
+| ------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| [Phase 45: Rust Core Integration](../assets/specs/phase45_rust_core_integration.md)   | Monorepo structure, workspace configuration, PyO3 bindings |
+| [Phase 46: The Neural Bridge](../assets/specs/phase46_the_neural_bridge.md)           | Type unification between Rust and Python                   |
+| [Phase 47: The Iron Lung](../assets/specs/phase47_the_iron_lung.md)                   | Safe I/O, tokenization, GIL release patterns               |
+| [Phase 50: The Cartographer (CCA-Aligned)](../assets/specs/phase50_cca_navigation.md) | AST-based code navigation with symbol extraction           |
+
+---
+
+## Self-Evolving Systems
+
+Phase 39-44, 59: Autonomous agent with memory, learning, and self-improvement.
+
+| Document                                                                                          | Description                                            |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| [Phase 39: Self-Evolving Feedback Loop](../assets/specs/phase39_self_evolving_feedback_loop.md)   | Context building with dynamic skill discovery          |
+| [Phase 40: Automated Reinforcement Loop](../assets/specs/phase40_automated_reinforcement_loop.md) | Automated code improvement and reinforcement           |
+| [Phase 41: Wisdom-Aware Routing](../assets/specs/phase41_wisdom_aware_routing.md)                 | Skill routing based on experience quality              |
+| [Phase 42: State-Aware Routing](../assets/specs/phase42_state_aware_routing.md)                   | Dynamic routing based on agent state                   |
+| [Phase 43: Holographic Agent](../assets/specs/phase43_holographic_agent.md)                       | Continuous state injection for persistent context      |
+| [Phase 44: Experiential Agent](../assets/specs/phase44_experiential_agent.md)                     | Skill-level episodic memory for learning from mistakes |
+| [Phase 59: The Meta-Agent](../assets/specs/phase59_the_meta_agent.md)                             | Autonomous Build-Test-Improve loop (Self-Healing)      |
 
 ---
 

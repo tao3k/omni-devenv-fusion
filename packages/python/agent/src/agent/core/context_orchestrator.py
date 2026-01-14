@@ -12,7 +12,7 @@ Context Pyramid (Priority Order):
 - Layer 5: Raw Code Content (Lowest Priority, Truncated)
 
 Philosophy:
-- Smart token budgeting using omni-tokenizer
+- Smart token budgeting using tiktoken (direct, no PyO3 overhead)
 - Dynamic recall from Librarian based on task relevance
 - Map-first approach for code navigation
 """
@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import structlog
+import tiktoken
 
 from common.gitops import get_project_root
 from common.skills_path import SKILLS_DIR, load_skill_module
@@ -31,41 +32,45 @@ from common.settings import get_setting
 
 logger = structlog.get_logger(__name__)
 
-# Lazy imports for heavy dependencies
+# [Phase 57] Direct tiktoken - faster than Rust wrapper via PyO3
+_ENCODER = tiktoken.get_encoding("cl100k_base")
+
+# Lazy import for Rust-specific features (sniffer, outline, etc.)
+# Initialized to None, set by _get_omni_core()
 _omni_core_rs: Optional[Any] = None
 
 
 def _get_omni_core() -> Any:
-    """Get omni_core_rs module (lazy)."""
+    """Get omni_core_rs module (lazy) for Rust-specific features."""
     global _omni_core_rs
     if _omni_core_rs is None:
         try:
             import omni_core_rs
 
             _omni_core_rs = omni_core_rs
-            logger.debug("omni_core_rs loaded for ContextOrchestrator")
+            logger.debug("omni_core_rs loaded for Rust features")
         except ImportError:
-            logger.warning("omni_core_rs not available, using fallback token counting")
+            logger.debug("omni_core_rs not available")
             _omni_core_rs = None
     return _omni_core_rs
 
 
 def _count_tokens(text: str) -> int:
-    """Count tokens using Rust omni-tokenizer."""
-    omni = _get_omni_core()
-    if omni is not None:
-        return omni.count_tokens(text)
-    # Fallback: rough estimate (4 chars per token)
-    return len(text) // 4
+    """Count tokens using direct tiktoken (faster than PyO3 wrapper)."""
+    if not text:
+        return 0
+    return len(_ENCODER.encode(text))
 
 
 def _truncate_tokens(text: str, max_tokens: int) -> str:
-    """Truncate text to fit token budget."""
-    omni = _get_omni_core()
-    if omni is not None:
-        return omni.truncate_tokens(text, max_tokens)
-    # Fallback: rough truncate
-    return text[: max_tokens * 4]
+    """Truncate text to fit token budget using direct tiktoken."""
+    if not text:
+        return ""
+    tokens = _ENCODER.encode(text)
+    if len(tokens) <= max_tokens:
+        return text
+    truncated = tokens[:max_tokens]
+    return _ENCODER.decode(truncated)
 
 
 class ContextLayer:

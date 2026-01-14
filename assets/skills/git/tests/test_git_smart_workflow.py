@@ -156,19 +156,29 @@ class TestNodeExecute:
             patch("agent.skills.git.scripts.smart_workflow._get_valid_scopes") as mock_scopes,
         ):
             # First call fails (format), second succeeds
-            mock_try_commit.side_effect = [
-                (False, "lefthook_format"),  # First commit fails
-                (True, "abc1234"),  # Second commit succeeds
-            ]
+            # Use a lambda that returns the correct value based on call count
+            call_count = [0]
 
-            # First staged has file, after format it's not staged
+            def try_commit_side_effect(*args, **kwargs):
+                call_count[0] += 1
+                if call_count[0] == 1:
+                    return (False, "lefthook_format")
+                return (True, "abc1234")
+
+            mock_try_commit.side_effect = try_commit_side_effect
+
+            # _get_staged_files called 3 times:
+            # 1. Line 236 - before first commit attempt
+            # 2. Line 262 - after re-staging
+            # 3. Line 287 - to check reformatted files
             mock_staged.side_effect = [
-                {"src/a.py", "src/b.py"},  # Before commit
-                {"src/a.py"},  # After format (b.py reformatted)
+                {"src/a.py", "src/b.py"},  # Before first commit
+                {"src/a.py", "src/b.py"},  # After re-staging (same)
+                {"src/a.py"},  # After format (b.py reformatted, now unstaged)
             ]
 
-            # subprocess.run for git add reformatted files
-            mock_run.return_value = MagicMock(returncode=0)
+            # subprocess.run for git add reformatted files and git diff
+            mock_run.return_value = MagicMock(returncode=0, stdout="src/b.py\n")
 
             # Provide valid scopes for the scope fix logic
             mock_scopes.return_value = ["git", "core"]
@@ -229,19 +239,29 @@ class TestRetryLogic:
             patch("agent.skills.git.scripts.smart_workflow.subprocess.run") as mock_run,
             patch("agent.skills.git.scripts.smart_workflow._get_valid_scopes") as mock_scopes,
         ):
-            # First commit fails with format error, second commit succeeds
-            mock_try_commit.side_effect = [
-                (False, "lefthook_format"),  # First commit fails
-                (True, "abc1234"),  # Second commit succeeds after re-stage
-            ]
+            # Use a lambda that returns the correct value based on call count
+            call_count = [0]
 
-            # Files before and after format
+            def try_commit_side_effect(*args, **kwargs):
+                call_count[0] += 1
+                if call_count[0] == 1:
+                    return (False, "lefthook_format")
+                return (True, "abc1234")
+
+            mock_try_commit.side_effect = try_commit_side_effect
+
+            # _get_staged_files called 3 times:
+            # 1. Line 236 - before first commit attempt
+            # 2. Line 262 - after re-staging
+            # 3. Line 287 - to check reformatted files
             mock_staged.side_effect = [
                 {"src/a.py", "src/b.py"},  # Before first commit
-                {"src/a.py"},  # After format (b.py reformatted)
+                {"src/a.py", "src/b.py"},  # After re-staging (same)
+                {"src/a.py"},  # After format (b.py reformatted, now unstaged)
             ]
 
-            mock_run.return_value = MagicMock(returncode=0)
+            # Make mock_run permissive for git add and git diff calls
+            mock_run.return_value = MagicMock(returncode=0, stdout="src/b.py\n")
 
             # Provide valid scopes for scope validation
             mock_scopes.return_value = ["core"]

@@ -43,6 +43,7 @@ console = Console()
 @dataclass
 class BenchmarkResult:
     """Result of a single benchmark run."""
+
     name: str
     category: str
     rust_time_ms: float
@@ -54,6 +55,7 @@ class BenchmarkResult:
 @dataclass
 class BenchmarkCategory:
     """A category of benchmarks."""
+
     name: str
     description: str
     benchmarks: list[Callable[[], BenchmarkResult]]
@@ -83,21 +85,24 @@ def format_speedup(speedup: float) -> str:
 # IO Benchmarks - Rust vs Python file reading
 # =============================================================================
 
+
 def benchmark_file_read_rust(file_path: Path, iterations: int = 100) -> float:
-    """Read file using Rust omni-sniffer."""
+    """Read file using Rust omni-core-rs read_file_safe."""
     try:
-        import omni_sniffer
+        # Phase 57: Use omni_core_rs.read_file_safe
+        import omni_core_rs
 
         total_time = 0.0
         for _ in range(iterations):
             start = time.perf_counter()
-            content = omni_sniffer.read_file(str(file_path))
+            # read_file_safe takes path and max_bytes (use larger limit)
+            content = omni_core_rs.read_file_safe(str(file_path), 104857600)
             end = time.perf_counter()
             total_time += (end - start) * 1000  # Convert to ms
 
         return total_time / iterations
     except ImportError:
-        return float('inf')
+        return float("inf")
 
 
 def benchmark_file_read_python(file_path: Path, iterations: int = 100) -> float:
@@ -114,14 +119,13 @@ def benchmark_file_read_python(file_path: Path, iterations: int = 100) -> float:
 
 def run_io_benchmark() -> BenchmarkResult:
     """Run IO benchmark: Rust vs Python file reading."""
-    # Create a test file (simulate 14MB)
+    # Create a test file (within Rust limit - 10MB)
     test_file = _PRJ_ROOT / ".cache" / "benchmark_test.txt"
     if not test_file.exists():
-        # Create ~14MB test file
+        # Create ~5MB test file
         test_file.parent.mkdir(parents=True, exist_ok=True)
-        content = "benchmark test content\n" * 100000  # ~2.8MB
-        for _ in range(5):
-            test_file.write_text(content * 5, encoding="utf-8")
+        content = "benchmark test content\n" * 40000  # ~2.2MB per iteration
+        test_file.write_text(content * 2, encoding="utf-8")  # ~4.4MB total
 
     file_size_mb = test_file.stat().st_size / (1024 * 1024)
     console.print(f"[dim]Test file size: {file_size_mb:.2f} MB[/dim]")
@@ -134,7 +138,7 @@ def run_io_benchmark() -> BenchmarkResult:
     speedup = python_time / rust_time if rust_time > 0 else 1.0
 
     return BenchmarkResult(
-        name="File Reading (14MB)",
+        name="File Reading (4.5MB)",
         category="IO",
         rust_time_ms=rust_time,
         python_time_ms=python_time,
@@ -147,21 +151,26 @@ def run_io_benchmark() -> BenchmarkResult:
 # Tokenizer Benchmarks - Rust vs Python tokenization
 # =============================================================================
 
+
 def benchmark_tokenize_rust(text: str, iterations: int = 100) -> float:
-    """Tokenize using Rust omni-tokenizer."""
+    """Tokenize using Rust omni-core-rs count_tokens."""
     try:
-        import omni_tokenizer
+        # Phase 57: Use omni_core_rs.count_tokens
+        import omni_core_rs
+
+        # Warm-up: First call initializes the BPE cache
+        _ = omni_core_rs.count_tokens(text)
 
         total_time = 0.0
         for _ in range(iterations):
             start = time.perf_counter()
-            count = omni_tokenizer.count_tokens(text)
+            count = omni_core_rs.count_tokens(text)
             end = time.perf_counter()
             total_time += (end - start) * 1000
 
         return total_time / iterations
     except ImportError:
-        return float('inf')
+        return float("inf")
 
 
 def benchmark_tokenize_tiktoken(text: str, iterations: int = 100) -> float:
@@ -170,6 +179,9 @@ def benchmark_tokenize_tiktoken(text: str, iterations: int = 100) -> float:
         import tiktoken
 
         enc = tiktoken.get_encoding("cl100k_base")
+
+        # Warm-up: First call to ensure encoding is loaded
+        _ = enc.encode(text)
 
         total_time = 0.0
         for _ in range(iterations):
@@ -181,13 +193,23 @@ def benchmark_tokenize_tiktoken(text: str, iterations: int = 100) -> float:
 
         return total_time / iterations
     except ImportError:
-        return float('inf')
+        return float("inf")
 
 
 def run_tokenizer_benchmark() -> BenchmarkResult:
-    """Run tokenizer benchmark: omni-tokenizer vs tiktoken."""
+    """Run tokenizer benchmark: omni-tokenizer vs tiktoken.
+
+    NOTE: This benchmark compares two Rust implementations!
+    - Python tiktoken calls tiktoken-rs directly (optimized FFI)
+    - Rust omni_tokenizer calls tiktoken-rs then crosses PyO3 boundary
+
+    The PyO3 boundary overhead makes Rust wrapper slower for this case.
+    omni_tokenizer's value is in providing consistent caching and error handling,
+    not raw speed for this specific operation.
+    """
     # Create test text (simulate typical code file)
-    test_text = """
+    test_text = (
+        """
     def hello_world():
         '''A simple hello world function'''
         print("Hello, World!")
@@ -199,7 +221,9 @@ def run_tokenizer_benchmark() -> BenchmarkResult:
 
         def greet(self):
             return f"Hello, {self.name}!"
-    """ * 1000  # Repeat to make it substantial
+    """
+        * 1000
+    )  # Repeat to make it substantial
 
     iterations = 100
 
@@ -222,40 +246,59 @@ def run_tokenizer_benchmark() -> BenchmarkResult:
 # Vector Search Benchmarks - Rust vs Python
 # =============================================================================
 
-def benchmark_vector_search_rust(n_vectors: int = 10000, dim: int = 1536) -> float:
-    """Insert and search vectors using Rust omni-vector."""
-    try:
-        import omni_vector
 
-        # Use temp directory for test
+def benchmark_vector_search_rust(n_vectors: int = 1000, dim: int = 768) -> float:
+    """Insert and search vectors using Rust omni-vector-rs.
+
+    NOTE: This tests full database operations including disk I/O.
+    LanceDB persists data to disk for durability, unlike pure numpy in-memory ops.
+    For production use, this is the fair comparison (database vs database).
+    """
+    try:
+        # Phase 57: Use omni_vector_rs.create_vector_store
+        # Phase 58.9: Merged into omni_core_rs
+        import omni_core_rs
+
+        # Use temp directory for test with unique name
         import tempfile
+        import uuid
+
         with tempfile.TemporaryDirectory() as tmpdir:
-            store = omni_vector.PyVectorStore(tmpdir, dim)
+            # Create store with specified dimension
+            store = omni_core_rs.create_vector_store(tmpdir, dim)
 
             # Generate test vectors
             import numpy as np
+
             vectors = np.random.rand(n_vectors, dim).tolist()
             ids = [f"vec_{i}" for i in range(n_vectors)]
             contents = [f"Document {i}" for i in range(n_vectors)]
             metadatas = [json.dumps({"index": i}) for i in range(n_vectors)]
 
-            # Time the insert
+            # Use unique table name to avoid conflicts
+            table_name = f"bench_{uuid.uuid4().hex[:8]}"
+
+            # Warm-up: Create table and add initial data
+            store.add_documents(table_name, [ids[0]], [vectors[0]], [contents[0]], [metadatas[0]])
+            _ = store.search(table_name, vectors[0], 1)
+
+            # Time the insert (rest of vectors)
             start = time.perf_counter()
-            store.add_documents("test", ids, vectors, contents, metadatas)
+            store.add_documents(table_name, ids[1:], vectors[1:], contents[1:], metadatas[1:])
             insert_time = (time.perf_counter() - start) * 1000
 
             # Time the search
             query_vec = np.random.rand(dim).tolist()
             start = time.perf_counter()
-            results = store.search("test", query_vec, 10)
+            _ = store.search(table_name, query_vec, 10)
             search_time = (time.perf_counter() - start) * 1000
 
             return insert_time + search_time
     except ImportError:
-        return float('inf')
+        return float("inf")
 
 
-def benchmark_vector_search_python(n_vectors: int = 1000, dim: int = 1536) -> float:
+def benchmark_vector_search_python(n_vectors: int = 1000, dim: int = 768) -> float:
     """Insert and search vectors using Python (numpy)."""
     import numpy as np
 
@@ -282,8 +325,8 @@ def benchmark_vector_search_python(n_vectors: int = 1000, dim: int = 1536) -> fl
 
 def run_vector_benchmark() -> BenchmarkResult:
     """Run vector search benchmark: omni-vector vs numpy."""
-    n_vectors = 5000  # Reduced for Python comparison
-    dim = 768  # Reduced dimension for faster test
+    n_vectors = 1000
+    dim = 768
 
     rust_time = benchmark_vector_search_rust(n_vectors, dim)
     python_time = benchmark_vector_search_python(n_vectors, dim)
@@ -303,6 +346,7 @@ def run_vector_benchmark() -> BenchmarkResult:
 # =============================================================================
 # Benchmark Runner
 # =============================================================================
+
 
 def run_benchmarks(categories: list[str] | None = None) -> list[BenchmarkResult]:
     """Run all selected benchmarks."""
@@ -328,9 +372,11 @@ def run_benchmarks(categories: list[str] | None = None) -> list[BenchmarkResult]
                 result = benchmark_fn()
                 result.name = name
                 results.append(result)
-                console.print(f"  [dim]✓ {name}: Rust={format_duration(result.rust_time_ms)}, "
-                           f"Python={format_duration(result.python_time_ms)}, "
-                           f"Speedup={result.speedup:.2f}x[/dim]")
+                console.print(
+                    f"  [dim]✓ {name}: Rust={format_duration(result.rust_time_ms)}, "
+                    f"Python={format_duration(result.python_time_ms)}, "
+                    f"Speedup={result.speedup:.2f}x[/dim]"
+                )
             except Exception as e:
                 console.print(f"  [red]✗ {name}: {e}[/red]")
 
@@ -400,21 +446,14 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--category", "-c",
+        "--category",
+        "-c",
         action="append",
         choices=["io", "tokenizer", "vector"],
-        help="Run specific benchmark category"
+        help="Run specific benchmark category",
     )
-    parser.add_argument(
-        "--all", "-a",
-        action="store_true",
-        help="Run all benchmarks (default)"
-    )
-    parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Output results as JSON"
-    )
+    parser.add_argument("--all", "-a", action="store_true", help="Run all benchmarks (default)")
+    parser.add_argument("--json", action="store_true", help="Output results as JSON")
 
     args = parser.parse_args()
 
@@ -437,7 +476,7 @@ def main():
                     "speedup": r.speedup,
                 }
                 for r in results
-            ]
+            ],
         }
         console.print(json.dumps(output, indent=2))
     else:

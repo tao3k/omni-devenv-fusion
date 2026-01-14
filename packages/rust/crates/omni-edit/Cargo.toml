@@ -15,6 +15,11 @@ serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 omni-io = { path = "../omni-io" }
 
+# Phase 58: The Ouroboros - Heavy-duty batch refactoring
+rayon = "1.8"          # Parallel iteration
+ignore = "0.4"         # .gitignore-aware file traversal
+dashmap = "5.5"        # Concurrent HashMap for stats
+
 [dev-dependencies]
 tempfile = "3"
 

@@ -12,8 +12,7 @@ crate-type = ["cdylib"]
 [dependencies]
 # [Phase 45.2] Python 3.13 support via PyO3 0.23
 pyo3 = { workspace = true, features = ["extension-module"] }
-# Async runtime for VectorStore
-tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+# Note: tokio removed - not needed for synchronous bindings
 omni-sniffer = { path = "../../crates/omni-sniffer" }
 omni-types = { path = "../../crates/omni-types" }
 omni-io = { path = "../../crates/omni-io" }
@@ -24,8 +23,9 @@ omni-security = { path = "../../crates/omni-security" }
 omni-tags = { path = "../../crates/omni-tags" }
 # [Phase 52] The Surgeon - Structural Refactoring
 omni-edit = { path = "../../crates/omni-edit" }
-# [Phase 53] The Librarian - Vector Store
-omni-vector = { path = "../../crates/omni-vector", features = ["python"] }
+# Phase 53: The Librarian - Vector Store for embeddings
+omni-vector = { path = "../../crates/omni-vector" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "fs"] }

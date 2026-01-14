@@ -7,7 +7,8 @@
 //! - Secret scanning (scan_secrets)
 //! - Code navigation (get_file_outline, search_code, search_directory)
 //! - Structural refactoring (structural_replace, structural_preview)
-//! - Vector storage and search (PyVectorStore)
+//!
+//! Phase 53 Vector Store moved to omni-vector-rs package for faster builds.
 
 use pyo3::prelude::*;
 use omni_sniffer::OmniSniffer;
@@ -18,6 +19,7 @@ use omni_tags::TagExtractor;
 use omni_edit::StructuralEditor;
 use omni_vector::VectorStore;
 use anyhow;
+use std::path::Path;
 
 /// Python wrapper for EnvironmentSnapshot.
 /// Uses omni_types::EnvironmentSnapshot for type unification.
@@ -130,107 +132,12 @@ impl PyOmniSniffer {
     }
 }
 
-// ============================================================================
-// Phase 53: The Librarian - Vector Store Python Bindings
-// ============================================================================
-
-/// Python wrapper for VectorStore (Rust LanceDB implementation).
-#[pyclass]
-struct PyVectorStore {
-    inner: VectorStore,
-    rt: tokio::runtime::Runtime,
-}
-
-#[pymethods]
-impl PyVectorStore {
-    #[new]
-    fn new(path: String, dimension: Option<usize>) -> PyResult<Self> {
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-        let store = rt
-            .block_on(async { VectorStore::new(&path, dimension).await })
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-        Ok(PyVectorStore { inner: store, rt })
-    }
-
-    /// Add documents to the vector store.
-    fn add_documents(
-        &self,
-        table_name: String,
-        ids: Vec<String>,
-        vectors: Vec<Vec<f32>>,
-        contents: Vec<String>,
-        metadatas: Vec<String>,
-    ) -> PyResult<()> {
-        let result = self.rt.block_on(async {
-            self.inner
-                .add_documents(&table_name, ids, vectors, contents, metadatas)
-                .await
-        });
-        result.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-    }
-
-    /// Semantic search.
-    /// Returns: List[str] (JSON serialized VectorSearchResult objects)
-    fn search(&self, table_name: String, query: Vec<f32>, k: usize) -> PyResult<Vec<String>> {
-        let results = self.rt.block_on(async {
-            self.inner.search(&table_name, query, k).await
-        });
-        match results {
-            Ok(r) => {
-                // Serialize to JSON strings for Python consumption
-                let json_results: Vec<String> = r
-                    .into_iter()
-                    .map(|r| serde_json::to_string(&r).unwrap_or_default())
-                    .collect();
-                Ok(json_results)
-            }
-            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
-        }
-    }
-
-    /// Create IVF-FLAT vector index for ANN search optimization.
-    fn create_index(&self, table_name: String) -> PyResult<()> {
-        let result = self.rt.block_on(async {
-            self.inner.create_index(&table_name).await
-        });
-        result.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-    }
-
-    /// Delete documents by ID.
-    fn delete(&self, table_name: String, ids: Vec<String>) -> PyResult<()> {
-        let result = self.rt.block_on(async {
-            self.inner.delete(&table_name, ids).await
-        });
-        result.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-    }
-
-    /// Count documents in a table.
-    fn count(&self, table_name: String) -> PyResult<u32> {
-        let result = self.rt.block_on(async {
-            self.inner.count(&table_name).await
-        });
-        result.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-    }
-
-    /// Drop a table completely.
-    fn drop_table(&self, table_name: String) -> PyResult<()> {
-        let result = self.rt.block_on(async {
-            self.inner.drop_table(&table_name).await
-        });
-        result.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-    }
-}
-
 /// Python module initialization
 #[pymodule]
 fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyOmniSniffer>()?;
     m.add_class::<PyEnvironmentSnapshot>()?;
+    m.add_class::<PyBatchRefactorStats>()?;
     m.add_class::<PyVectorStore>()?;
     m.add_function(pyo3::wrap_pyfunction!(py_get_sniffer, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(get_environment_snapshot, m)?)?;
@@ -250,8 +157,10 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(pyo3::wrap_pyfunction!(structural_replace, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(structural_preview, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(structural_apply, m)?)?;
-    // Phase 53: The Librarian
-    m.add_function(pyo3::wrap_pyfunction!(py_create_vector_store, m)?)?;
+    // Phase 58: The Ouroboros - Heavy-Duty Batch Refactoring
+    m.add_function(pyo3::wrap_pyfunction!(batch_structural_replace, m)?)?;
+    // Phase 53/57: Vector Store - omni-vector bindings
+    m.add_function(pyo3::wrap_pyfunction!(create_vector_store, m)?)?;
     m.add("VERSION", "0.5.0")?;
     Ok(())
 }
@@ -292,26 +201,18 @@ fn read_file_safe(path: String, max_bytes: u64) -> PyResult<String> {
 }
 
 /// Count tokens in text using cl100k_base (GPT-4/3.5 standard).
-/// Releases GIL for CPU-intensive tokenization.
+/// Uses cached BPE instance for optimal performance.
 #[pyfunction]
 fn count_tokens(text: &str) -> usize {
-    Python::attach(|py| {
-        py.detach(|| {
-            omni_tokenizer::count_tokens(text)
-        })
-    })
+    omni_tokenizer::count_tokens(text)
 }
 
 /// Truncate text to fit within a maximum token count.
-/// Releases GIL for CPU-intensive tokenization.
+/// Uses cached BPE instance for optimal performance.
 #[pyfunction]
 #[pyo3(signature = (text, max_tokens))]
 fn truncate_tokens(text: &str, max_tokens: usize) -> String {
-    Python::attach(|py| {
-        py.detach(|| {
-            omni_tokenizer::truncate(text, max_tokens)
-        })
-    })
+    omni_tokenizer::truncate(text, max_tokens)
 }
 
 // ============================================================================
@@ -496,22 +397,224 @@ fn structural_apply(path: String, pattern: &str, replacement: &str, language: Op
 }
 
 // ============================================================================
-// Phase 53: The Librarian - Vector Store Helper Functions
+// Phase 58: The Ouroboros - Heavy-Duty Batch Refactoring
 // ============================================================================
 
-/// Convenience function to create a VectorStore.
-/// Returns a PyVectorStore instance for direct use.
+/// Result of batch structural refactoring.
+#[pyclass]
+struct PyBatchRefactorStats {
+    #[pyo3(get)]
+    files_scanned: usize,
+    #[pyo3(get)]
+    files_changed: usize,
+    #[pyo3(get)]
+    replacements: usize,
+    #[pyo3(get)]
+    modified_files: Vec<String>,
+    #[pyo3(get)]
+    errors: Vec<String>,
+}
+
+impl From<omni_edit::BatchRefactorStats> for PyBatchRefactorStats {
+    fn from(stats: omni_edit::BatchRefactorStats) -> Self {
+        Self {
+            files_scanned: stats.files_scanned,
+            files_changed: stats.files_changed,
+            replacements: stats.replacements,
+            modified_files: stats.modified_files,
+            errors: stats.errors.into_iter().map(|(k, v)| format!("{}: {}", k, v)).collect(),
+        }
+    }
+}
+
+/// Perform batch structural refactoring across a directory.
+///
+/// This is the "heavy equipment" function that processes thousands of files
+/// in parallel using Rust's rayon thread pool.
+///
+/// Args:
+///   root_path: Root directory to start searching
+///   search_pattern: ast-grep pattern to match (e.g., `print($ARGS)`)
+///   rewrite_pattern: Replacement pattern (e.g., `logger.info($ARGS)`)
+///   file_pattern: Glob pattern for files (e.g., `**/*.py`)
+///   dry_run: If true, only preview changes (default: true)
+///
+/// Returns:
+///   PyBatchRefactorStats with statistics about the operation.
+#[pyfunction]
+#[pyo3(signature = (root_path, search_pattern, rewrite_pattern, file_pattern = "**/*.py", dry_run = true))]
+fn batch_structural_replace(
+    root_path: String,
+    search_pattern: String,
+    rewrite_pattern: String,
+    file_pattern: &str,
+    dry_run: bool,
+) -> PyResult<PyBatchRefactorStats> {
+    Python::attach(|py| {
+        py.detach(|| {
+            let config = omni_edit::BatchConfig {
+                file_pattern: file_pattern.to_string(),
+                dry_run,
+                ..Default::default()
+            };
+
+            let stats = StructuralEditor::batch_replace(
+                Path::new(&root_path),
+                &search_pattern,
+                &rewrite_pattern,
+                &config,
+            );
+
+            Ok(PyBatchRefactorStats::from(stats))
+        })
+    })
+}
+
+// ============================================================================
+// Phase 53/57: Vector Store - Python Bindings for omni-vector
+// ============================================================================
+
+/// Python wrapper for VectorStore (omni-vector / LanceDB)
+#[pyclass]
+struct PyVectorStore {
+    path: String,
+    dimension: usize,
+}
+
+#[pymethods]
+impl PyVectorStore {
+    #[new]
+    fn new(path: String, dimension: Option<usize>) -> PyResult<Self> {
+        let dimension = dimension.unwrap_or(1536);
+
+        // Verify we can create the store
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+        rt.block_on(async {
+            VectorStore::new(&path, Some(dimension))
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        })?;
+
+        Ok(PyVectorStore { path, dimension })
+    }
+
+    fn add_documents(
+        &self,
+        table_name: String,
+        ids: Vec<String>,
+        vectors: Vec<Vec<f32>>,
+        contents: Vec<String>,
+        metadatas: Vec<String>,
+    ) -> PyResult<()> {
+        let path = self.path.clone();
+        let dimension = self.dimension;
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        rt.block_on(async {
+            let store = VectorStore::new(&path, Some(dimension)).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            store.add_documents(&table_name, ids, vectors, contents, metadatas).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        })
+    }
+
+    fn search(
+        &self,
+        table_name: String,
+        query: Vec<f32>,
+        limit: usize,
+    ) -> PyResult<Vec<String>> {
+        let path = self.path.clone();
+        let dimension = self.dimension;
+        let query = query.clone();
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        rt.block_on(async {
+            let store = VectorStore::new(&path, Some(dimension)).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            let results = store.search(&table_name, query, limit).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            // Return JSON strings for easier Python processing
+            let json_results: Vec<String> = results
+                .into_iter()
+                .map(|r| serde_json::to_string(&r).unwrap_or_default())
+                .collect();
+            Ok(json_results)
+        })
+    }
+
+    fn create_index(&self, table_name: String) -> PyResult<()> {
+        let path = self.path.clone();
+        let dimension = self.dimension;
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        rt.block_on(async {
+            let store = VectorStore::new(&path, Some(dimension)).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            store.create_index(&table_name).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        })
+    }
+
+    fn delete(&self, table_name: String, ids: Vec<String>) -> PyResult<()> {
+        let path = self.path.clone();
+        let dimension = self.dimension;
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        rt.block_on(async {
+            let store = VectorStore::new(&path, Some(dimension)).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            store.delete(&table_name, ids).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        })
+    }
+
+    fn count(&self, table_name: String) -> PyResult<u32> {
+        let path = self.path.clone();
+        let dimension = self.dimension;
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        rt.block_on(async {
+            let store = VectorStore::new(&path, Some(dimension)).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            store.count(&table_name).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        })
+    }
+
+    fn drop_table(&self, table_name: String) -> PyResult<()> {
+        let path = self.path.clone();
+        let dimension = self.dimension;
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        rt.block_on(async {
+            let store = VectorStore::new(&path, Some(dimension)).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            store.drop_table(&table_name).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        })
+    }
+}
+
+/// Create a vector store (convenience function)
 #[pyfunction]
 #[pyo3(signature = (path, dimension = None))]
-fn py_create_vector_store(path: String, dimension: Option<usize>) -> PyResult<PyVectorStore> {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-    let store = rt
-        .block_on(async { VectorStore::new(&path, dimension).await })
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-    Ok(PyVectorStore { inner: store, rt })
+fn create_vector_store(path: String, dimension: Option<usize>) -> PyResult<PyVectorStore> {
+    PyVectorStore::new(path, dimension)
 }

@@ -35,6 +35,7 @@ def run_callback():
     print_banner()
     from agent.core.omni_agent import interactive_mode
     import asyncio
+
     asyncio.run(interactive_mode())
 
 
@@ -43,6 +44,7 @@ def interactive_cmd():
     """Enter interactive REPL mode for CCA Runtime."""
     from agent.core.omni_agent import interactive_mode
     import asyncio
+
     asyncio.run(interactive_mode())
 
 

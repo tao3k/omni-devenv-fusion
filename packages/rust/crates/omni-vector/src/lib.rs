@@ -49,9 +49,6 @@ use lance::deps::arrow_schema::ArrowError;
 
 use tokio::sync::Mutex;
 
-#[cfg(feature = "python")]
-use pyo3::prelude::*;
-
 // ============================================================================
 // Constants
 // ============================================================================
@@ -203,7 +200,8 @@ impl VectorStore {
         &self,
         schema: &Arc<lance::deps::arrow_schema::Schema>,
     ) -> Result<RecordBatch, VectorStoreError> {
-        let dimension = DEFAULT_DIMENSION;
+        // Use instance dimension, not default
+        let dimension = self.dimension;
         let arrays: Vec<Arc<dyn lance::deps::arrow_array::Array>> = vec![
             Arc::new(lance::deps::arrow_array::StringArray::from(Vec::<String>::new())) as _,
             Arc::new(lance::deps::arrow_array::FixedSizeListArray::new_null(
@@ -400,115 +398,6 @@ impl VectorStore {
 
         Ok(())
     }
-}
-
-// ============================================================================
-// Python Bindings (optional)
-// ============================================================================
-
-#[cfg(feature = "python")]
-#[pyclass]
-struct PyVectorStore {
-    inner: VectorStore,
-    rt: tokio::runtime::Runtime,
-}
-
-#[cfg(feature = "python")]
-#[pymethods]
-impl PyVectorStore {
-    #[new]
-    fn new(path: String, dimension: Option<usize>) -> PyResult<Self> {
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-        let store = rt
-            .block_on(async { VectorStore::new(&path, dimension).await })
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-        Ok(PyVectorStore { inner: store, rt })
-    }
-
-    fn add_documents(
-        &self,
-        table_name: String,
-        ids: Vec<String>,
-        vectors: Vec<Vec<f32>>,
-        contents: Vec<String>,
-        metadatas: Vec<String>,
-    ) -> PyResult<()> {
-        Python::attach(|_py| {
-            self.rt.block_on(async {
-                self.inner
-                    .add_documents(&table_name, ids, vectors, contents, metadatas)
-                    .await
-            })
-        })
-        .map_err(|e: VectorStoreError| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-    }
-
-    fn search(
-        &self,
-        table_name: String,
-        query: Vec<f32>,
-        limit: usize,
-    ) -> PyResult<Vec<String>> {
-        Python::attach(|_py| {
-            let results = self.rt.block_on(async {
-                self.inner.search(&table_name, query, limit).await
-            });
-            match results {
-                Ok(r) => {
-                    // Return JSON strings for easier Python processing
-                    let json_results: Vec<String> = r
-                        .into_iter()
-                        .map(|r| serde_json::to_string(&r).unwrap_or_default())
-                        .collect();
-                    Ok(json_results)
-                }
-                Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
-            }
-        })
-    }
-
-    fn create_index(&self, table_name: String) -> PyResult<()> {
-        Python::attach(|_py| {
-            self.rt.block_on(async { self.inner.create_index(&table_name).await })
-        })
-        .map_err(|e: VectorStoreError| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-    }
-
-    fn delete(&self, table_name: String, ids: Vec<String>) -> PyResult<()> {
-        Python::attach(|_py| {
-            self.rt.block_on(async { self.inner.delete(&table_name, ids).await })
-        })
-        .map_err(|e: VectorStoreError| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-    }
-
-    fn count(&self, table_name: String) -> PyResult<u32> {
-        Python::attach(|_py| self.rt.block_on(async { self.inner.count(&table_name).await }))
-            .map_err(|e: VectorStoreError| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-    }
-
-    fn drop_table(&self, table_name: String) -> PyResult<()> {
-        Python::attach(|_py| {
-            self.rt.block_on(async { self.inner.drop_table(&table_name).await })
-        })
-        .map_err(|e: VectorStoreError| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-    }
-}
-
-#[cfg(feature = "python")]
-#[pymodule]
-fn omni_vector(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<PyVectorStore>()?;
-    m.add("DEFAULT_DIMENSION", DEFAULT_DIMENSION)?;
-    m.add("VECTOR_COLUMN", VECTOR_COLUMN)?;
-    m.add("ID_COLUMN", ID_COLUMN)?;
-    m.add("CONTENT_COLUMN", CONTENT_COLUMN)?;
-    m.add("METADATA_COLUMN", METADATA_COLUMN)?;
-    Ok(())
 }
 
 // ============================================================================

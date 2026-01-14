@@ -1,6 +1,6 @@
 # Trinity Architecture (Phase 52)
 
-> **Phase 52: The Surgeon** | **Phase 47: The Iron Lung** | **Phase 46: The Neural Bridge** | **Phase 45: Rust Core Integration**
+> **Phase 59: The Meta-Agent** | **Phase 52: The Surgeon** | **Phase 47: The Iron Lung** | **Phase 46: The Neural Bridge** | **Phase 45: Rust Core Integration**
 > **Phase 44: Experiential Agent** | **Phase 43: Holographic Agent** | **Phase 42: State-Aware Routing**
 > **Phase 41: Wisdom-Aware Routing** | **Phase 40: Automated Reinforcement Loop**
 > **Phase 36: Trinity v2.0 - Swarm Engine + Skills**
@@ -10,6 +10,7 @@
 
 | Phase | Key Change                                                                                                 |
 | ----- | ---------------------------------------------------------------------------------------------------------- |
+| 59    | **The Meta-Agent**: Autonomous Build-Test-Improve loop - system can fix its own bugs!                      |
 | 52    | **The Surgeon**: AST-based structural editing with dry-run support via omni-edit (ast-grep + similar)      |
 | 47    | **The Iron Lung**: Safe I/O (binary detection, size limits) + BPE tokenization (100-250x faster)           |
 | 46    | **The Neural Bridge**: Type unification between Rust and Python (SSOT via omni-types)                      |
@@ -882,6 +883,128 @@ While Phase 43 gave the agent "holographic vision" (seeing the environment), Pha
 
 - `assets/specs/phase44_experiential_agent.md`
 - `assets/specs/phase43_holographic_agent.md`
+
+---
+
+## Phase 59: The Meta-Agent
+
+> **Phase 59**: Autonomous Build-Test-Improve Loop - The system can now fix its own bugs!
+
+Phase 59 introduces **The Meta-Agent** - an autonomous "Build-Test-Improve" loop that implements a self-directed TDD (Test-Driven Development) cycle. This transforms the agent from a passive tool into an active engineer.
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    Phase 59: The Meta-Agent - TDD Loop                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  +---------------------------------------------------------------------+   │
+│  |                    TDD Cycle (5 iterations max)                     |   |
+│  |                                                                       |   |
+│  |   +------------+    +------------+    +------------+                |   |
+│  |   |   TEST     | -> |  ANALYZE   | -> |    FIX     |                |   |
+│  |   | Run tests  |    | LLM analysis|    | Apply code |                |   |
+│  |   +------------+    +------------+    +------------+                |   |
+│  |         |                                    |                       |   |
+│  |         v                                    v                       |   |
+│  |   +------------+    +------------+                                |   |
+│  |   | All pass?  | <- |  VERIFY    |                                |   |
+│  |   |            |    | Re-run tests|                                |   |
+│  |   +------------+    +------------+                                |   |
+│  |         |                                                         |   |
+│  |         v                                                         |   |
+│  |   +------------+                                                  |   |
+│  |   |  REFLECT   | -> Vector Store (learn from mission)             |   |
+│  |   +------------+                                                  |   |
+│  +---------------------------------------------------------------------+   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Components
+
+| Component           | Purpose                                        |
+| ------------------- | ---------------------------------------------- |
+| `MetaAgent`         | Main class with TDD loop                       |
+| `MissionContext`    | Tracks mission state, iterations, test results |
+| `TestResult`        | Individual test outcome                        |
+| `SimpleLLMProvider` | Pattern-based fix generation (replaceable)     |
+
+### The TDD Cycle
+
+```python
+class MetaAgent:
+    async def run_mission(
+        self,
+        mission_description: str,
+        test_command: str,
+        target_path: Optional[str] = None,
+    ) -> MissionContext:
+        """
+        Run a single mission: test -> analyze -> fix -> verify -> reflect.
+        """
+
+    async def _tdd_cycle(self, context: MissionContext) -> None:
+        """Execute one TDD cycle."""
+        while context.iterations < max_iterations:
+            # 1. Test
+            passed = await self._run_tests(context)
+            if passed:
+                return
+
+            # 2. Analyze
+            analysis = await self._analyze_failures(context)
+
+            # 3. Fix
+            await self._apply_fix(context, analysis)
+
+            # 4. Verify (loop continues)
+```
+
+### Example: broken_math.py
+
+```python
+# broken_math.py (intentionally buggy)
+def add(a: int, b: int) -> int:
+    return a - b  # BUG: Should be a + b
+
+def is_even(n: int) -> bool:
+    return n % 2 == 1  # BUG: Should be == 0
+```
+
+### Test Results
+
+```
+Initial state: 2 failed, 2 passed
+Meta-Agent:    2 iterations, 4 passed
+
+Bugs Fixed:
+1. add():    a - b -> a + b
+2. is_even(): n % 2 == 1 -> n % 2 == 0
+```
+
+### Benefits
+
+| Benefit                    | Description                                       |
+| -------------------------- | ------------------------------------------------- |
+| **Autonomous Debugging**   | Agent can fix issues without human intervention   |
+| **Self-Healing**           | Code automatically repairs itself when tests fail |
+| **Continuous Improvement** | System gets better over time through reflection   |
+| **Pattern Learning**       | Same bugs don't repeat (stored in vector store)   |
+
+### Related Files
+
+| File                         | Purpose                       |
+| ---------------------------- | ----------------------------- |
+| `agent/core/meta_agent.py`   | MetaAgent class with TDD loop |
+| `scripts/test_meta_agent.py` | Self-healing test script      |
+
+### Related Specs
+
+- `assets/specs/phase59_the_meta_agent.md`
+- `assets/specs/phase44_experiential_agent.md`
+- `assets/specs/phase39_self_evolving_feedback_loop.md`
 
 ---
 

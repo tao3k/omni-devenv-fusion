@@ -15,6 +15,7 @@
 //! let truncated = truncate(text, 5);
 //! ```
 
+use std::sync::OnceLock;
 use thiserror::Error;
 
 /// Errors for tokenization operations.
@@ -31,9 +32,29 @@ pub enum TokenizerError {
     Decoding(String),
 }
 
+/// Cached cl100k_base BPE instance - initialized only once.
+/// This avoids the expensive re-initialization on every function call.
+/// Using Option to avoid unstable get_or_try_init.
+static CL100K_BASE: OnceLock<tiktoken_rs::CoreBPE> = OnceLock::new();
+
+/// Initialize and get cl100k_base BPE instance.
+fn get_cl100k_base() -> Result<&'static tiktoken_rs::CoreBPE, TokenizerError> {
+    // Use get_or_init which is stable
+    // The first call will initialize, subsequent calls return the cached value
+    let bpe = CL100K_BASE.get_or_init(|| {
+        // unwrap_or_else with a closures that returns the BPE or panics
+        // We handle the error at the call site
+        tiktoken_rs::cl100k_base().unwrap_or_else(|e| {
+            panic!("Failed to initialize cl100k_base: {}", e)
+        })
+    });
+    Ok(bpe)
+}
+
 /// Count tokens in text using cl100k_base (GPT-4/3.5 standard).
 ///
 /// This uses the same tokenizer as GPT-4 and ChatGPT.
+/// The BPE model is cached globally for optimal performance.
 ///
 /// # Arguments
 ///
@@ -44,9 +65,8 @@ pub enum TokenizerError {
 /// Number of tokens in the text.
 #[must_use]
 pub fn count_tokens(text: &str) -> usize {
-    // cl100k_base is the model used by GPT-4 and GPT-3.5 Turbo
-    // It's cached internally by tiktoken-rs
-    tiktoken_rs::cl100k_base()
+    // Use cached BPE instance for optimal performance
+    get_cl100k_base()
         .map(|bpe| bpe.encode_with_special_tokens(text).len())
         .unwrap_or_else(|_| estimate_token_count(text))
 }
@@ -82,7 +102,8 @@ pub fn count_tokens_with_model(text: &str, model: &str) -> Result<usize, Tokeniz
 /// Truncated text that fits within the token limit.
 #[must_use]
 pub fn truncate(text: &str, max_tokens: usize) -> String {
-    let bpe = match tiktoken_rs::cl100k_base() {
+    // Use cached BPE instance for optimal performance
+    let bpe = match get_cl100k_base() {
         Ok(bpe) => bpe,
         Err(_) => return estimate_truncate(text, max_tokens),
     };

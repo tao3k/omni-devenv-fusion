@@ -203,7 +203,7 @@ def node_execute(state: CommitState) -> CommitState:
     Execute stage: Perform the actual git commit with retry logic.
 
     Retry strategy:
-    1. First try: Original message (re-stage all files first if none staged)
+    1. First try: Re-stage all modified tracked files, then commit
     2. If lefthook reformatted: Re-stage only reformatted files and retry
     3. If invalid scope: Fix scope and retry
     4. If all retries fail: Mark as failed
@@ -236,12 +236,23 @@ def node_execute(state: CommitState) -> CommitState:
     currently_staged = _get_staged_files(str(cwd))
 
     # Lefthook may have reformatted files between prepare and execute
-    # Files that were staged but are now unstaged need to be re-staged
-    reformatted = originally_staged - currently_staged
+    # Also, user may have modified additional files
+    # Get all modified tracked files (ACM = Added, Copied, Modified)
+    result = subprocess.run(
+        ["git", "diff", "--name-only", "--diff-filter=ACM"],
+        cwd=str(cwd),
+        capture_output=True,
+        text=True,
+    )
+    modified_out = result.stdout
+    all_modified = set(line.strip() for line in modified_out.splitlines() if line.strip())
 
-    if reformatted:
-        # Lefthook reformatted files - re-stage them immediately
-        for f in reformatted:
+    # Re-stage all modified files (including originally staged + new ones)
+    # This ensures all changes are included in the commit
+    files_to_stage = originally_staged | all_modified
+
+    if files_to_stage:
+        for f in files_to_stage:
             subprocess.run(
                 ["git", "add", f],
                 cwd=str(cwd),

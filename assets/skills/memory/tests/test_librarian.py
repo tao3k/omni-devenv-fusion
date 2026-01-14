@@ -7,6 +7,7 @@ Tests the Rust + Python integration for the vector store.
 """
 
 import sys
+import os
 import json
 import shutil
 
@@ -24,6 +25,8 @@ def test_rust_bindings():
     print("-" * 50)
 
     try:
+        # Phase 57: VectorStore was in separate omni_vector_rs package
+        # Phase 58.9: Merged into omni_core_rs
         import omni_core_rs
 
         print("  ✅ omni_core_rs imported successfully")
@@ -39,8 +42,8 @@ def test_rust_bindings():
     os.makedirs(test_db_path, exist_ok=True)
 
     try:
-        # Create VectorStore
-        store = omni_core_rs.py_create_vector_store(test_db_path)
+        # Create VectorStore using omni_core_rs
+        store = omni_core_rs.create_vector_store(test_db_path)
         print("  ✅ PyVectorStore created successfully")
 
         # Add documents

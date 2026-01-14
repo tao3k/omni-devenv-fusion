@@ -3,7 +3,7 @@ src/agent/core/telemetry.py
 Telemetry Module - Token Usage and Cost Estimation.
 
 Phase 19: The Black Box
-Provides token counting and cost estimation for LLM API calls.
+Phase 57: Updated to use direct tiktoken for accurate BPE counting.
 
 Features:
 - Token usage tracking (input/output/total)
@@ -23,7 +23,12 @@ Usage:
 
 import time
 from typing import Optional
+
+import tiktoken
 from pydantic import BaseModel
+
+# [Phase 57] Direct tiktoken - faster than Rust wrapper via PyO3
+_ENCODER = tiktoken.get_encoding("cl100k_base")
 
 
 class TokenUsage(BaseModel):
@@ -48,12 +53,12 @@ class CostEstimator:
     """
     Estimate LLM call costs based on token usage.
 
+    [Phase 57] Uses direct tiktoken for accurate BPE counting.
+    Uses cl100k_base encoding (GPT-4/3.5 standard).
+
     Default pricing based on Claude 3.5 Sonnet:
     - Input: $3.00 per 1M tokens
     - Output: $15.00 per 1M tokens
-
-    Note: Production systems should use tiktoken or API-returned usage
-    for more accurate token counting. This is a lightweight estimation.
     """
 
     # Pricing per 1M tokens (USD)
@@ -66,45 +71,23 @@ class CostEstimator:
         "default": {"input": 3.0, "output": 15.0},
     }
 
-    # Average characters per token by language
-    CHARS_PER_TOKEN = {
-        "en": 4.0,  # English: ~4 chars/token
-        "zh": 1.5,  # Chinese: ~1.5 chars/token
-        "mixed": 3.0,  # Mixed: average
-    }
-
     @classmethod
     def _count_tokens(cls, text: str) -> int:
         """
-        Estimate token count from text.
+        Count tokens using direct tiktoken (accurate BPE counting).
 
-        This is a simplified estimation. For production use,
-        consider using tiktoken or the API's usage data.
+        [Phase 57] Updated from heuristic estimation to accurate BPE counting.
+        Uses cl100k_base encoding (GPT-4/3.5 standard) directly.
 
         Args:
             text: Input text
 
         Returns:
-            Estimated token count
+            Accurate token count
         """
         if not text:
             return 0
-
-        # Detect language mix
-        chinese_chars = sum(1 for c in text if "\u4e00" <= c <= "\u9fff")
-        total_chars = len(text)
-        chinese_ratio = chinese_chars / total_chars if total_chars > 0 else 0
-
-        # Choose appropriate chars per token
-        if chinese_ratio > 0.3:
-            chars_per_token = cls.CHARS_PER_TOKEN["zh"]
-        elif chinese_ratio > 0.1:
-            chars_per_token = cls.CHARS_PER_TOKEN["mixed"]
-        else:
-            chars_per_token = cls.CHARS_PER_TOKEN["en"]
-
-        # Estimate token count
-        return int(len(text) / chars_per_token)
+        return len(_ENCODER.encode(text))
 
     @classmethod
     def estimate(

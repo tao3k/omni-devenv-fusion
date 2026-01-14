@@ -307,16 +307,9 @@ async def reindex_skills_from_manifests(
     # Clear existing index if requested
     if clear_existing:
         try:
-            client = vm.client
-            if client:
-                # Get the collection and delete it
-                try:
-                    collection = client.get_collection(name="skill_registry")
-                    collection.delete()
-                    logger.info("Cleared existing skill registry collection")
-                except Exception:
-                    # Collection might not exist yet
-                    pass
+            # Phase 58.9: Use Rust drop_table instead of ChromaDB client
+            await vm.drop_table(SKILL_REGISTRY_COLLECTION)
+            logger.info("Cleared existing skill registry collection (omni-vector)")
         except Exception as e:
             logger.warning("Failed to clear existing collection", error=str(e))
 
@@ -447,35 +440,16 @@ async def index_single_skill(skill_name: str, generate_synthetic: bool = True) -
         # Build semantic document (with synthetic queries)
         semantic_text = _build_skill_document(manifest, synthetic_queries)
 
-        # Phase 36.6: Use atomic upsert instead of delete+add
-        # This prevents race conditions when multiple threads reload the same skill
+        # Phase 36.6: Use delete + add instead of ChromaDB upsert
+        # Phase 58.9: Now uses Rust VectorStore API
         collection_name = SKILL_REGISTRY_COLLECTION
         skill_id = f"skill-{skill_name}"
 
-        # Get the collection and use upsert (update or insert atomically)
         try:
-            collection = vm.client.get_collection(name=collection_name)
-            # ChromaDB's upsert is atomic and more efficient than delete+add
-            collection.upsert(
-                documents=[semantic_text],
-                ids=[skill_id],
-                metadatas=[
-                    {
-                        "id": skill_name,
-                        "name": skill_name,
-                        "keywords": ",".join(manifest.routing_keywords),
-                        "installed": "true",
-                        "type": "local",
-                        "version": manifest.version,
-                        "synthetic_queries": len(synthetic_queries),
-                    }
-                ],
-            )
-            logger.info(f"✅ [Index Sync] Upserted skill: {skill_name}")
-            return True
-        except Exception as e:
-            # If upsert fails (e.g., collection doesn't exist), try to create and add
-            logger.warning(f"Upsert failed for '{skill_name}', trying add: {e}")
+            # First try to delete the existing skill (if it exists)
+            await vm.delete(ids=[skill_id], collection=collection_name)
+
+            # Then add the updated skill
             success = await vm.add(
                 documents=[semantic_text],
                 ids=[skill_id],
@@ -493,8 +467,36 @@ async def index_single_skill(skill_name: str, generate_synthetic: bool = True) -
                 ],
             )
             if success:
-                logger.info(f"✅ [Index Sync] Added skill: {skill_name}")
+                logger.info(f"✅ [Index Sync] Re-indexed skill: {skill_name}")
             return success
+        except Exception as e:
+            # If add fails (e.g., collection doesn't exist), try again
+            logger.warning(f"Re-index failed for '{skill_name}', retrying: {e}")
+            try:
+                success = await vm.add(
+                    documents=[semantic_text],
+                    ids=[skill_id],
+                    collection=collection_name,
+                    metadatas=[
+                        {
+                            "id": skill_name,
+                            "name": skill_name,
+                            "keywords": ",".join(manifest.routing_keywords),
+                            "installed": "true",
+                            "type": "local",
+                            "version": manifest.version,
+                            "synthetic_queries": len(synthetic_queries),
+                        }
+                    ],
+                )
+                if success:
+                    logger.info(f"✅ [Index Sync] Added skill: {skill_name}")
+                return success
+            except Exception as retry_error:
+                logger.error(
+                    f"Failed to index skill '{skill_name}' after retry", error=str(retry_error)
+                )
+                return False
 
     except Exception as e:
         logger.error(f"Failed to index skill '{skill_name}'", error=str(e))
@@ -506,6 +508,7 @@ async def remove_skill_from_index(skill_name: str) -> bool:
     Phase 36.5: Remove a skill from the vector store.
 
     This is called when a skill is unloaded to keep the index in sync.
+    Phase 58.9: Now uses Rust VectorStore API instead of ChromaDB.
 
     Args:
         skill_name: Name of the skill to remove
@@ -517,10 +520,11 @@ async def remove_skill_from_index(skill_name: str) -> bool:
 
     try:
         vm = get_vector_memory()
-        collection = vm.client.get_collection(name=SKILL_REGISTRY_COLLECTION)
-        collection.delete(ids=[f"skill-{skill_name}"])
-        logger.info(f"🗑️ [Index Sync] Removed skill from index: {skill_name}")
-        return True
+        # Phase 58.9: Use Rust delete instead of ChromaDB client
+        success = await vm.delete(ids=[f"skill-{skill_name}"], collection=SKILL_REGISTRY_COLLECTION)
+        if success:
+            logger.info(f"🗑️ [Index Sync] Removed skill from index: {skill_name}")
+        return success
     except Exception as e:
         logger.warning(f"Failed to remove skill '{skill_name}' from index", error=str(e))
         return False

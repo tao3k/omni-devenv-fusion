@@ -2,6 +2,7 @@
 .devenv*
 devenv.local.nix
 
+*.so
 !.cargo
 target
 # direnv

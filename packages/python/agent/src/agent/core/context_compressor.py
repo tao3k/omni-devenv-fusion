@@ -6,20 +6,22 @@ Phase 48: Hyper-Context Compressor (Rust Accelerated).
 Phase 19.7 → Phase 21: Migrated from ClaudeCodeAdapter to MCP Server.
 Now serves as the "Token Gatekeeper" for RAG search results.
 
-Upgraded to use omni_core_rs for:
-- Accurate BPE token counting (cl100k_base, GPT-4/3.5 standard)
-- Precision truncation at token boundary (no UTF-8 corruption)
-- 100-250x faster than Python alternatives
+[Phase 48.1] Updated: Use direct tiktoken instead of omni_core_rs wrapper.
+Reason: tiktoken is already Rust, PyO3 wrapper adds ~18x overhead.
 
-[Phase 48.1] Legacy fallback removed - Full Rust adoption.
+[Phase 57] Architecture Note:
+- Python tiktoken calls tiktoken-rs directly (optimized FFI)
+- omni_tokenizer Rust crate still exists for internal Rust operations
+- Fused operations (read+count+truncate) implemented in Rust when needed
 """
 
 from typing import List, Tuple, Optional
+import tiktoken
 
 from common.config.settings import get_setting
 
-# [Phase 48] Import Rust Core
-import omni_core_rs
+# [Phase 48.1] Direct tiktoken - faster than Rust wrapper via PyO3
+_ENCODER = tiktoken.get_encoding("cl100k_base")
 
 # Default settings (fallbacks when settings.yaml not available)
 DEFAULT_MAX_CONTEXT_TOKENS = 4000
@@ -29,11 +31,11 @@ class ContextCompressor:
     """
     Lightweight context compression for MCP server RAG results.
 
-    Phase 48: Rust-accelerated with accurate BPE tokenization.
+    Phase 48: Uses direct tiktoken (Rust) for accurate BPE tokenization.
+    Phase 48.1: Removed omni_core_rs wrapper - direct FFI is faster.
+
     Prevents token explosion and attention dilution when Claude
     queries the knowledge base via MCP tools.
-
-    [Phase 48.1] Pure Rust implementation - no legacy fallback.
     """
 
     def __init__(
@@ -56,14 +58,13 @@ class ContextCompressor:
 
     def count_tokens(self, text: str) -> int:
         """
-        [Phase 48] Accurate and fast token counting using Rust core.
+        [Phase 48.1] Accurate token counting using direct tiktoken.
         Uses cl100k_base encoding (GPT-4/3.5 standard).
+        Direct FFI to tiktoken-rs is faster than PyO3 wrapper.
         """
         if not text:
             return 0
-
-        # [Phase 48] Pure Rust path - no fallback
-        return omni_core_rs.count_tokens(text)
+        return len(_ENCODER.encode(text))
 
     def estimate_tokens(self, text: str) -> int:
         """
@@ -74,8 +75,8 @@ class ContextCompressor:
 
     def truncate(self, text: str, max_tokens: int) -> str:
         """
-        [Phase 48] Precision token-level truncation.
-        Uses Rust core to truncate at BPE boundary (no UTF-8 corruption).
+        [Phase 48.1] Precision token-level truncation using direct tiktoken.
+        Truncates at BPE boundary (no UTF-8 corruption).
         """
         if not text:
             return ""
@@ -84,8 +85,10 @@ class ContextCompressor:
         if current <= max_tokens:
             return text
 
-        # [Phase 48] Pure Rust path - no fallback
-        return omni_core_rs.truncate_tokens(text, max_tokens)
+        # Encode and truncate at token boundary
+        tokens = _ENCODER.encode(text)
+        truncated_tokens = tokens[:max_tokens]
+        return _ENCODER.decode(truncated_tokens)
 
     def compress(self, text: str, max_tokens: Optional[int] = None) -> str:
         """
@@ -107,11 +110,10 @@ class ContextCompressor:
         if current_tokens <= limit:
             return text
 
-        # [Phase 48] Precision truncation at token boundary
+        # Precision truncation at token boundary
         if self.method == "truncate":
             return self.truncate(text, limit)
 
-        # This should not be reached - method is always "truncate"
         return text
 
     def fit_to_budget(self, sections: List[Tuple[str, str, int]], total_budget: int) -> str:

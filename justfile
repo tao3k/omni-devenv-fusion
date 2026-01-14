@@ -922,3 +922,29 @@ agent-ci: agent-validate
 agent-test: test
 agent-lint: lint
 agent-format: fmt
+
+# ==============================================================================
+# RUST BUILD (Phase 58.9: Memory Purge)
+# ==============================================================================
+
+[group('rust')]
+build-rust:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    echo "🔨 Building Rust core library..."
+    cd packages/rust/bindings/python
+    cargo build --release
+
+    # Find the built library
+    SO_PATH=$(find ../../target/release -name "libomni_core_rs*.dylib" -o -name "libomni_core_rs*.so" 2>/dev/null | head -1)
+    if [ -z "$SO_PATH" ]; then
+        echo "❌ Error: Could not find built library"
+        exit 1
+    fi
+
+    # Copy to venv site-packages
+    VENV_SITE_PACKAGES=$(uv run python -c "import site; print(site.getsitepackages()[0])")
+    cp "$SO_PATH" "$VENV_SITE_PACKAGES/omni_core_rs.so"
+
+    echo "✅ Rust library installed to venv"
