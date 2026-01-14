@@ -531,10 +531,10 @@ No imports, no conftest.py needed.
 ### Coverage
 
 | Component | Min Coverage |
-|-----------|-------------|
-| Core | 90% |
-| Common | 95% |
-| Factories | 100% |
+| --------- | ------------ |
+| Core      | 90%          |
+| Common    | 95%          |
+| Factories | 100%         |
 
 ---
 

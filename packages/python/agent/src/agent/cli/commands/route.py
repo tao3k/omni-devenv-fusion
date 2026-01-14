@@ -285,7 +285,7 @@ def route_status():
         return {
             "collections": collections,
             "harvested_count": harvested_count,
-            "vector_store_available": vm.client is not None,
+            "vector_store_available": vm.store is not None,
         }
 
     try:
@@ -314,6 +314,7 @@ def route_status():
         err_console.print("  ✓ Lesson Formatting: Working")
         err_console.print("  ✓ Feedback Store (Phase 39): Active")
         err_console.print("  ✓ Automated Reinforcement (Phase 40): Active")
+        err_console.print("  ✓ The Grand Bazaar (Phase 60): Semantic Tool Routing Active")
 
     except Exception as e:
         err_console.print(Panel(f"Status check failed: {e}", title="Error", style="red"))

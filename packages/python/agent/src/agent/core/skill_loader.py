@@ -279,7 +279,9 @@ class SkillLoader:
             embed_service = get_embedding_service()
             embed_service.embed(task)  # Generate embedding
 
-            results = await vm.search(query=task, n_results=search_limit, collection=SKILL_COLLECTION)
+            results = await vm.search(
+                query=task, n_results=search_limit, collection=SKILL_COLLECTION
+            )
 
             for r in results:
                 skill_name = r.id
@@ -353,8 +355,9 @@ class SkillLoader:
             if kw_lower in task_lower:
                 # Check for word boundary match
                 import re
+
                 # Match whole word to avoid false positives like "git" in "digit"
-                if re.search(rf'\b{re.escape(kw_lower)}\b', task_lower):
+                if re.search(rf"\b{re.escape(kw_lower)}\b", task_lower):
                     return 1.0  # Full score for exact keyword match
                 elif kw_lower in task_lower:
                     score = max(score, 0.5)  # Partial match
