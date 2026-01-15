@@ -67,6 +67,10 @@ class SkillCommand:
     _retry_on: tuple[type[Exception], ...] = (ConnectionError, TimeoutError)
     _max_attempts: int = 3
 
+    # Phase 61: Caching support
+    cache_ttl: float = 0.0  # Time-to-live in seconds. 0 = no caching.
+    pure: bool = False  # If True, implies side-effect free and safely cacheable.
+
     def __post_init__(self) -> None:
         """Normalize category to enum."""
         if isinstance(self.category, str):

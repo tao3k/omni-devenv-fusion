@@ -30,15 +30,18 @@ Problem-oriented. Recipes for solving specific tasks.
 
 Information-oriented. Technical details, API specs, and configuration options.
 
-| Document                                                          | Description                                                       |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------- |
-| [Version Control](./reference/versioning.md)                      | Monorepo versioning with hatch-vcs + Justfile                     |
-| [MCP Orchestrator](./reference/mcp-orchestrator.md)               | Omni MCP tool configuration and usage                             |
-| [MCP Best Practices](./reference/mcp-best-practices.md)           | MCP server design patterns and anti-patterns                      |
-| [Documentation Standards](./reference/documentation-standards.md) | Doc guidelines for this project                                   |
-| [ODF-EP Protocol](./reference/odf-ep-protocol.md)                 | MANDATORY for LLMs - Engineering Protocol                         |
-| [Skills](./skills.md)                                             | Skill architecture and development guide                          |
-| [Skill Discovery](./developer/discover.md)                        | Phase 36.2 Vector-Enhanced Discovery & Phase 36.5/36.6 Hot Reload |
+| Document                                                                | Description                                                       |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| [Version Control](./reference/versioning.md)                            | Monorepo versioning with hatch-vcs + Justfile                     |
+| [MCP Orchestrator](./reference/mcp-orchestrator.md)                     | Omni MCP tool configuration and usage                             |
+| [MCP Best Practices](./reference/mcp-best-practices.md)                 | MCP server design patterns and anti-patterns                      |
+| [Documentation Standards](./reference/documentation-standards.md)       | Doc guidelines for this project                                   |
+| [ODF-EP Protocol](./reference/odf-ep-protocol.md)                       | MANDATORY for LLMs - Engineering Protocol                         |
+| [Skills](./skills.md)                                                   | Skill architecture and development guide                          |
+| [Skill Discovery](./developer/discover.md)                              | Phase 36.2 Vector-Enhanced Discovery & Phase 36.5/36.6 Hot Reload |
+| [CLI Reference](./reference/cli.md)                                     | Omni run, omni run exec commands                                  |
+| [The Knowledge Matrix](../assets/specs/phase70_the_knowledge_matrix.md) | Phase 70: Unified Knowledge Index                                 |
+| [The Memory Mesh](../assets/specs/phase71_the_memory_mesh.md)           | Phase 71: Episodic Memory for Self-Learning                       |
 
 ---
 
@@ -66,6 +69,28 @@ Phase 25-36, 52: Skill-centric agent architecture with hot reload and Swarm Engi
 | [Phase 35: Sidecar Pattern + Pure MCP](../assets/specs/phase35_sidecar_mcp.md)         | Heavy dependency isolation + native MCP server               |
 | [Phase 36: Trinity v2.0 + Swarm Engine](../assets/specs/phase36_trinity_v2.md)         | Hot reload, Observer pattern, Production stability           |
 | [Phase 52: The Surgeon](../assets/specs/phase52_the_surgeon.md)                        | AST-based structural editing with dry-run support            |
+
+---
+
+## Cognitive Trinity - Phase 69-71
+
+Phase 69-71 completes the Cognitive Trinity with Skills, Knowledge, and Memory:
+
+| Component     | Capability                     | Phase | Status |
+| ------------- | ------------------------------ | ----- | ------ |
+| **Skills**    | "I know how to do"             | 69    | ✅     |
+| **Knowledge** | "I know what that is"          | 70    | ✅     |
+| **Memory**    | "I remember doing that before" | 71    | ✅     |
+
+### Core Components
+
+| Document                                                                               | Description                             |
+| -------------------------------------------------------------------------------------- | --------------------------------------- |
+| [Phase 67: Adaptive Loader](./skills.md#phase-67-the-adaptive-loader-infinite-toolbox) | JIT Loading, Ghost Tools, LRU Unloading |
+| [Phase 69: The Skill Mesh](./skills.md)                                                | Dynamic tool loading with Hybrid Search |
+| [Phase 70: The Knowledge Matrix](../assets/specs/phase70_the_knowledge_matrix.md)      | Unified Knowledge Index                 |
+| [Phase 71: The Memory Mesh](../assets/specs/phase71_the_memory_mesh.md)                | Episodic Memory for Self-Learning       |
+| [CLI Reference](./reference/cli.md)                                                    | Omni run, omni run exec commands        |
 
 ---
 

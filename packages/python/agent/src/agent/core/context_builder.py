@@ -1,13 +1,20 @@
 # mcp-server/context_builder.py
 """
 Phase 14: Context Builder - Mission Brief Injection
+Phase 67: Ghost Tool Injection (Adaptive Loader)
 
 Provides utilities to assemble worker context with mission briefs.
 """
 
-from typing import List, Dict, Any, Optional
-from agent.core.router import RoutingResult, get_router
+import json
+import logging
+from typing import List, Dict, Any, Optional, Set
+
+from agent.core.router import get_hive_router
+from agent.core.router.models import RoutingResult
 from agent.core.registry import get_skill_registry
+
+logger = logging.getLogger(__name__)
 
 
 def build_mission_injection(routing_result: RoutingResult) -> str:
@@ -141,7 +148,7 @@ async def route_and_build_context(
             - context: Complete worker context string
             - skills: List of selected skill names
     """
-    router = get_router()
+    router = get_hive_router()
 
     # Step 1: Route and get mission brief
     routing_result = await router.route(user_query, chat_history)
@@ -175,3 +182,102 @@ def format_context_for_llm(
         "system_prompt": context,
         "user_message": user_message,
     }
+
+
+# =============================================================================
+# Phase 67: Ghost Tool Injection (Adaptive Loader)
+# =============================================================================
+
+
+async def fetch_ghost_tools(
+    query: str,
+    skill_manager: Any,
+    limit: int = 5,
+    exclude_tools: Optional[Set[str]] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Retrieve Ghost Tools (unloaded skills) relevant to the query from the index.
+
+    These tools are returned as schemas, allowing the LLM to 'see' and 'call' them.
+    The SkillManager will intercept the execution and JIT load the implementation.
+
+    Args:
+        query: The user's intent string.
+        skill_manager: Instance of SkillManager (for accessing find_tools).
+        limit: Max number of ghost tools to retrieve.
+        exclude_tools: Set of tool names to exclude (usually already loaded tools).
+
+    Returns:
+        List of tool definitions (JSON schemas) ready for LLM tool use.
+    """
+    ghost_tools: List[Dict[str, Any]] = []
+    exclude_tools = exclude_tools or set()
+
+    try:
+        # 1. Search Index via SkillManager (The Librarian)
+        results = await skill_manager.search_skills(query, limit=limit)
+
+        for tool_doc in results:
+            tool_name = tool_doc.get("name")
+
+            # Skip if already loaded or excluded
+            if tool_name in exclude_tools:
+                continue
+
+            metadata = tool_doc.get("metadata", {})
+            schema_str = metadata.get("input_schema", "{}")
+            description = tool_doc.get("description", "")
+
+            # Parse schema
+            try:
+                input_schema = json.loads(schema_str)
+            except (json.JSONDecodeError, TypeError):
+                input_schema = {"type": "object", "properties": {}}
+
+            # Construct Ghost Tool Definition
+            # This matches the structure expected by Claude/OpenAI tool use
+            ghost_tool = {
+                "name": tool_name,
+                "description": f"[GHOST] {description} (Auto-loads on use)",
+                "input_schema": input_schema,
+                # Tag it as a ghost tool for debugging/telemetry
+                "attributes": {"ghost": True, "score": tool_doc.get("score", 0)},
+            }
+
+            ghost_tools.append(ghost_tool)
+            exclude_tools.add(tool_name)  # Prevent duplicates
+
+        logger.info(f"Injected {len(ghost_tools)} ghost tools for query: '{query[:30]}...'")
+
+    except Exception as e:
+        logger.warning(f"Failed to fetch ghost tools: {e}")
+
+    return ghost_tools
+
+
+def merge_tool_definitions(
+    loaded_tools: List[Dict[str, Any]],
+    ghost_tools: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Merge real tools and ghost tools, ensuring no duplicates.
+
+    Loaded tools take priority - if a tool is already loaded, the ghost version
+    is ignored. This prevents confusion where LLM might see two definitions
+    for the same tool.
+
+    Args:
+        loaded_tools: List of currently loaded tool definitions.
+        ghost_tools: List of ghost tool definitions from the index.
+
+    Returns:
+        Merged list with loaded tools first, then unique ghost tools.
+    """
+    final_tools = list(loaded_tools)
+    loaded_names = {t["name"] for t in loaded_tools}
+
+    for ghost in ghost_tools:
+        if ghost["name"] not in loaded_names:
+            final_tools.append(ghost)
+
+    return final_tools

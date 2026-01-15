@@ -21,6 +21,7 @@ from .hot_reload import HotReloadMixin
 from .loader import SkillLoaderMixin
 from .models import Skill, SkillCommand
 from .observer import ObserverMixin
+from .caching import ResultCacheMixin  # Phase 61
 
 from ..module_loader import ModuleLoader, module_loader
 from ..protocols import ExecutionMode, SkillCategory
@@ -52,14 +53,16 @@ def _get_logger() -> Any:
 SKILLS_DIR_PATH: str = "assets/skills"
 
 
-class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
+class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin, ResultCacheMixin):
     """
     Central skill manager with Trinity Architecture.
+
+    Phase 61: Added ResultCacheMixin for IO optimization.
 
     Responsibilities:
     - Discover and load skills
     - Hot-reload on file changes
-    - Execute commands
+    - Execute commands with caching
     - Provide skill context
 
     Design:
@@ -82,6 +85,11 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
         "_pending_change_task",  # Phase 36.5: Debounced notification task
         "_pending_changes",  # Phase 36.5: Track pending skill changes for debounce
         "_background_tasks",  # Phase 36.6: Track background tasks to prevent GC
+        "_result_cache",  # Phase 61: Result caching from ResultCacheMixin
+        # Phase 67 Step 3: Adaptive Unloading (LRU)
+        "_lru_order",
+        "_pinned_skills",
+        "_max_loaded_skills",
     )
 
     def __init__(self, skills_dir: Path | None = None) -> None:
@@ -97,6 +105,9 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
             self.skills_dir = SKILLS_DIR()
         else:
             self.skills_dir = Path(skills_dir)
+
+        # Initialize mixins
+        ResultCacheMixin.__init__(self)
 
         self._skills: dict[str, Skill] = {}
         self._module_loader: ModuleLoader | None = None
@@ -121,6 +132,67 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
 
         # Phase 36.6: Track background tasks to prevent GC during fire-and-forget
         self._background_tasks: set[asyncio.Task] = set()
+
+        # Phase 67 Step 3: Adaptive Unloading (LRU)
+        self._lru_order: list[str] = []
+        self._pinned_skills: set[str] = {"filesystem", "terminal", "writer", "git", "note_taker"}
+        self._max_loaded_skills: int = 15
+
+    # =========================================================================
+    # Phase 67 Step 3: Adaptive Unloading (LRU)
+    # =========================================================================
+
+    def _touch_skill(self, skill_name: str) -> None:
+        """
+        Mark a skill as recently used (moves to end of LRU queue).
+
+        Phase 67: Called on every skill execution to track usage order.
+        """
+        if skill_name in self._lru_order:
+            self._lru_order.remove(skill_name)
+        self._lru_order.append(skill_name)
+
+    def _enforce_memory_limit(self) -> None:
+        """
+        Unload LRU skills if loaded count exceeds limit.
+
+        Phase 67: Prevents memory bloat from JIT loading.
+        Pinned skills (core skills) are protected from unloading.
+        """
+        if len(self._skills) <= self._max_loaded_skills:
+            return
+
+        excess = len(self._skills) - self._max_loaded_skills
+        unloaded_count = 0
+
+        # Iterate from oldest (front) to newest
+        for skill_name in list(self._lru_order):
+            if unloaded_count >= excess:
+                break
+
+            # Skip pinned skills
+            if skill_name in self._pinned_skills:
+                continue
+
+            # Skip skills not currently loaded (sanity check)
+            if skill_name not in self._skills:
+                continue
+
+            _get_logger().info(
+                "Adaptive Unloading: Releasing unused skill",
+                skill=skill_name,
+                loaded_count=len(self._skills),
+                limit=self._max_loaded_skills,
+            )
+
+            if self.unload(skill_name):
+                unloaded_count += 1
+
+        _get_logger().debug(
+            "Adaptive Unloading complete",
+            unloaded=unloaded_count,
+            remaining=len(self._skills),
+        )
 
     # =========================================================================
     # Properties (for backward compatibility with tests)
@@ -279,6 +351,10 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
         # Phase 36.5: Notify observers of skill change (triggers MCP tool list update + Index Sync)
         self._notify_change(skill_name, "load")
 
+        # Phase 67 Step 3: Register in LRU and enforce memory limit
+        self._touch_skill(skill_name)
+        self._enforce_memory_limit()
+
         return skill
 
     def _load_manifest(self, skill_path: Path) -> dict[str, Any] | None:
@@ -302,6 +378,65 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
         return metadata.to_dict()
 
     # =========================================================================
+    # Phase 67: JIT Loading
+    # =========================================================================
+
+    async def _try_jit_load(self, skill_name: str) -> bool:
+        """
+        Attempt to Just-In-Time load a skill from the vector index.
+
+        Phase 67: When a skill is called but not loaded, search the index
+        to find its path and load it automatically.
+
+        Strategy:
+        1. First try direct path lookup (fastest)
+        2. Then fall back to semantic search if skill not in expected location
+
+        Args:
+            skill_name: Name of the skill to load
+
+        Returns:
+            True if skill was successfully loaded, False otherwise
+        """
+        from common.skills_path import SKILLS_DIR
+
+        _get_logger().debug("Attempting JIT load", skill=skill_name)
+
+        # Strategy 1: Direct path lookup using SKILLS_DIR (fastest - most common case)
+        definition_path = SKILLS_DIR.definition_file(skill_name)
+        if definition_path.exists():
+            _get_logger().info(
+                "JIT loaded skill from disk", skill=skill_name, path=str(definition_path.parent)
+            )
+            self.load_skill(definition_path.parent)
+            return True
+
+        # Strategy 2: Fall back to semantic search (edge case: skill moved)
+        results = await self.search_skills(skill_name, limit=10)
+
+        for tool in results:
+            meta = tool.get("metadata", {})
+            if meta.get("skill_name") == skill_name:
+                script_path_str = meta.get("file_path")
+                if script_path_str:
+                    script_path = Path(script_path_str)
+                    try:
+                        potential_root = script_path.parent.parent
+                        if (potential_root / "SKILL.md").exists():
+                            _get_logger().info(
+                                "JIT loaded skill from index",
+                                skill=skill_name,
+                                path=str(potential_root),
+                            )
+                            self.load_skill(potential_root)
+                            return True
+                    except Exception:
+                        continue
+
+        _get_logger().warning("JIT load failed: Skill not found", skill=skill_name)
+        return False
+
+    # =========================================================================
     # Execution (Optimized with O(1) command lookup)
     # =========================================================================
 
@@ -314,10 +449,14 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
         """
         Execute a skill command.
 
+        Phase 61: Optimized with result caching.
+        Phase 67: JIT loading + LRU tracking.
+
         Optimizations:
         - O(1) command lookup via cache
-        - Try cache first, then fallback to direct lookup
-        - Lazy skill loading only when command is invoked
+        - Try result cache first for cached commands
+        - JIT load skill from index if not loaded
+        - LRU tracking for memory management
 
         Args:
             skill_name: Name of the skill
@@ -331,10 +470,15 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
         if command_name == "help":
             return self._get_skill_context(skill_name)
 
-        # HOT RELOAD FIX: Always check mtime before execution
-        # This ensures code changes are picked up on every call
+        # Phase 67: JIT Loading Check
+        # If skill not in memory, try Just-In-Time load from index
         if not self._ensure_fresh(skill_name):
-            return f"Error: Skill '{skill_name}' not found"
+            jit_success = await self._try_jit_load(skill_name)
+            if not jit_success:
+                return f"Error: Skill '{skill_name}' not found (and JIT load failed)"
+
+        # Phase 67: Update LRU order (mark as recently used)
+        self._touch_skill(skill_name)
 
         # HOT RELOAD FIX: Clear command cache to get fresh function references
         # Even if mtime hasn't changed, cache may have stale function objects
@@ -344,6 +488,7 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
 
         # Try O(1) cache lookup first
         command = self._command_cache.get(cache_key)
+        skill = None
 
         # If not in cache, look up directly
         if command is None:
@@ -362,14 +507,28 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
                 available = list(skill.commands.keys())
                 return f"Error: Command '{command_name}' not found in '{skill_name}'. Available: {available}"
 
-        # Execute
-        args = args or {}
-        result = await command.execute(args)
+        # Get skill reference for caching
+        if skill is None:
+            skill = self._skills.get(skill_name)
 
-        if result.success:
-            return result.output
-        else:
-            return f"Error: {result.error}"
+        args = args or {}
+
+        # Phase 61: Check result cache before execution
+        if skill is not None:
+            cached_output = self._try_get_cached_result(skill, command, args)
+            if cached_output is not None:
+                _get_logger().debug("Cache hit", skill=skill_name, command=command_name)
+                return cached_output
+
+        # Execute command
+        result = await command.execute(args)
+        output_str = result.output if result.success else f"Error: {result.error}"
+
+        # Phase 61: Store in cache if successful and caching is enabled
+        if skill is not None and result.success:
+            self._store_cached_result(skill, command, args, output_str)
+
+        return output_str
 
     def _get_skill_context(self, skill_name: str) -> str:
         """Get skill context via Repomix."""
@@ -384,6 +543,53 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
             return f"No context available for '{skill_name}'"
 
         return skill.context_cache.get() or f"# {skill_name}\n\nNo context available."
+
+    # =========================================================================
+    # Phase 67: Semantic Search (for Ghost Tool Injection)
+    # =========================================================================
+
+    async def search_skills(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+        """
+        Search for skills matching the query using semantic search.
+
+        Phase 67: Used by Ghost Tool Injection to find relevant unloaded tools.
+
+        Args:
+            query: Natural language query describing the task
+            limit: Maximum number of results to return
+
+        Returns:
+            List of matching skill dicts with id, name, description, score
+        """
+        from agent.core.vector_store import get_vector_memory
+
+        try:
+            vm = get_vector_memory()
+            results = await vm.search_tools_hybrid(query, limit=limit)
+
+            # Transform results to match expected format
+            transformed: list[dict[str, Any]] = []
+            for r in results:
+                metadata = r.get("metadata", {})
+                transformed.append(
+                    {
+                        "id": r.get("id", ""),
+                        "name": metadata.get("skill_name", r.get("id", "").split(".")[0]),
+                        "description": r.get("content", ""),
+                        "score": 1.0 - r.get("distance", 1.0),
+                        "metadata": metadata,
+                    }
+                )
+
+            _get_logger().debug(
+                "Skill search completed",
+                query=query[:50],
+                results=len(transformed),
+            )
+            return transformed
+        except Exception as e:
+            _get_logger().warning("Skill search failed", error=str(e))
+            return []
 
     # =========================================================================
     # Query Interface
@@ -543,6 +749,8 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
         2. Clears command cache entries
         3. Recursively cleans sys.modules (removes submodules like scripts/*)
         4. Notifies observers to update MCP tool list
+
+        Phase 67: Also removes from LRU tracking.
         """
         from ..protocols import _get_logger
 
@@ -557,6 +765,10 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
 
         # Clear mtime cache
         self._mtime_cache.pop(skill_name, None)
+
+        # Phase 67: Remove from LRU tracking
+        if skill_name in self._lru_order:
+            self._lru_order.remove(skill_name)
 
         # Phase 36.4: Recursive sys.modules cleanup
         # This ensures submodules like `agent.skills.git.scripts.log` are also killed

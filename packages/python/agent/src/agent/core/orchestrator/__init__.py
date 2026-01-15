@@ -12,6 +12,7 @@ Atomic module structure for easier maintenance:
 - tools.py: Tool registry
 - state.py: State persistence
 - graph.py: LangGraph integration
+- dynamic_builder.py: Phase 61 Dynamic Workflow Builder
 
 Usage:
     from agent.core.orchestrator import Orchestrator
@@ -36,6 +37,11 @@ from agent.core.orchestrator.config import (
     DEFAULT_FEEDBACK_ENABLED,
 )
 
+from agent.core.orchestrator.dynamic_builder import (
+    DynamicGraphBuilder,
+    NodeMetadata,
+)
+
 __all__ = [
     # Core
     "Orchestrator",
@@ -49,4 +55,7 @@ __all__ = [
     # Config
     "DEFAULT_MAX_RETRIES",
     "DEFAULT_FEEDBACK_ENABLED",
+    # Phase 61: Dynamic Workflow Builder
+    "DynamicGraphBuilder",
+    "NodeMetadata",
 ]

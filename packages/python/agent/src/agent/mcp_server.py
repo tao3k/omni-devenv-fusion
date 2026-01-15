@@ -210,58 +210,63 @@ async def handle_list_tools() -> list[Tool]:
     """
     List all available tools from loaded skills.
 
+    Phase 69: Uses Adaptive Loader for Dynamic Context Injection.
+    Returns a default robust set (Core + Top Generic Tools).
+    Claude can use skill.search_tools to discover more tools.
+
     CRITICAL: This is called immediately after MCP connection.
     If skills aren't loaded yet, we MUST block and wait to prevent
     Claude from receiving an empty tool list (which causes Bash downgrade).
     """
+    from agent.core.adaptive_loader import get_adaptive_loader
+
+    # Phase 69: Use adaptive loader for dynamic context
+    loader = get_adaptive_loader()
+
+    # Block until at least core skills are loaded
     from agent.core.skill_manager import get_skill_manager
 
     manager = get_skill_manager()
 
-    # [Fix Timing Issue] Block until at least core skills are loaded
     if not manager._loaded:
         logger.info("⏳ Tools requested but skills not ready. Loading synchronously...")
         await manager.load_all()
 
+    # Phase 69: Get default robust tool set (Core + Top Generic via empty query)
+    logger.info("🧠 [Phase 69] Loading dynamic context tools...")
+    active_tools = await loader.get_context_tools(
+        user_query="",  # Empty query returns global top tools
+        dynamic_limit=20,  # Slightly more for MCP since we don't have user context
+    )
+
     tools = []
 
-    # Get all loaded skills and their commands
-    for skill_name in manager.list_loaded():
-        skill_info = manager.get_info(skill_name)
-        if not skill_info:
-            continue
+    # Convert adaptive loader results to MCP Tool format
+    for tool in active_tools:
+        tool_name = tool.get("name", "unknown")
+        description = tool.get("description", "") or f"Execute {tool_name}"
+        input_schema = tool.get("input_schema", "{}")
 
-        # Get commands for this skill
-        commands = manager.get_commands(skill_name)
-        for cmd_name in commands:
-            cmd = manager.get_command(skill_name, cmd_name)
-            if cmd is None:
-                continue
+        # Parse input_schema (could be string or dict)
+        if isinstance(input_schema, str):
+            try:
+                import json
 
-            # Original name (skill.command format)
-            original_name = f"{skill_name}.{cmd_name}"
+                input_schema = json.loads(input_schema)
+            except (json.JSONDecodeError, TypeError):
+                input_schema = {"type": "object", "properties": {}, "required": []}
+        elif not isinstance(input_schema, dict):
+            input_schema = {"type": "object", "properties": {}, "required": []}
 
-            # Apply Native Mimicry transformation
-            tool_name, enhanced_desc = _get_tool_name(
-                original_name, cmd.description or f"Execute {skill_name}.{cmd_name}"
+        tools.append(
+            Tool(
+                name=tool_name,
+                description=description,
+                inputSchema=input_schema,
             )
+        )
 
-            # Parse input schema from command config
-            input_schema = getattr(cmd, "input_schema", {}) or {
-                "type": "object",
-                "properties": {},
-                "required": [],
-            }
-
-            tools.append(
-                Tool(
-                    name=tool_name,
-                    description=enhanced_desc,
-                    inputSchema=input_schema,
-                )
-            )
-
-    logger.info(f"📋 [Tools] Listed {len(tools)} tools")
+    logger.info(f"📋 [Tools] Listed {len(tools)} tools (dynamic context)")
     return tools
 
 
@@ -293,27 +298,22 @@ async def _notify_tools_changed(skill_name: str, change_type: str):
 
 async def _update_search_index(skill_name: str, change_type: str):
     """
-    Phase 36.5: Index Sync observer for ChromaDB.
+    Phase 66: Index Sync observer for Rust-backed VectorMemory.
 
     Keeps the vector search index in sync with runtime skill changes.
-    This is the bridge between Phase 36.2 (Vector Discovery) and Phase 36.4 (Hot Reload).
+    Uses Rust-backed sync_skills() for incremental updates based on file hashes.
 
     Args:
         skill_name: Name of the skill that changed
         change_type: "load", "unload", or "reload"
     """
     try:
-        from agent.core.skill_discovery import index_single_skill, remove_skill_from_index
+        from agent.core.skill_discovery import reindex_skills_from_manifests
 
-        if change_type in ("load", "reload"):
-            # Index the skill (or re-index on reload)
-            success = await index_single_skill(skill_name)
-            if not success:
-                logger.warning(f"⚠️ [Index Sync] Failed to index skill: {skill_name}")
-
-        elif change_type == "unload":
-            # Remove from index
-            await remove_skill_from_index(skill_name)
+        # With Rust-backed sync_skills, we just trigger incremental sync
+        # which uses file hashes to determine what changed
+        result = await reindex_skills_from_manifests()
+        logger.info(f"🔄 [Index Sync] Sync completed: {result.get('stats', {})}")
 
     except Exception as e:
         logger.warning(f"⚠️ [Index Sync] Error updating index for {skill_name}: {e}")

@@ -496,8 +496,9 @@ When the task is complete, output: TASK_COMPLETE
 
 
 async def interactive_mode():
-    """Interactive CLI mode for OmniAgent."""
+    """Interactive CLI mode for OmniAgent with Dynamic Context Injection (Phase 69)."""
     from rich.console import Console
+    from agent.core.adaptive_loader import get_adaptive_loader
 
     console = Console()
 
@@ -506,6 +507,8 @@ async def interactive_mode():
     console.print("Type 'exit' or 'quit' to end the session.")
     console.print()
 
+    # Phase 69: Initialize adaptive loader for dynamic tool loading
+    loader = get_adaptive_loader()
     agent = OmniAgent()
 
     while True:
@@ -517,6 +520,18 @@ async def interactive_mode():
             if not user_input:
                 continue
 
+            # Phase 69: Dynamic Context Injection - Analyze intent & load relevant tools
+            console.print("[dim]🧠 Analyzing intent & loading tools...[/dim]")
+
+            active_tools = await loader.get_context_tools(user_input, dynamic_limit=15)
+
+            # Debug: Show loaded tools (first 5)
+            tool_names = [t.get("name", "unknown") for t in active_tools]
+            console.print(
+                f"[dim]🛠️  Active Tools ({len(tool_names)}): {', '.join(tool_names[:5])}...[/dim]"
+            )
+
+            # Run agent with dynamic tools
             result = await agent.run(user_input)
             console.print(f"\n Agent: {result}")
 

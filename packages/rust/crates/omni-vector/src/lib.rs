@@ -341,26 +341,37 @@ impl VectorStore {
             return Err(VectorStoreError::TableNotFound(table_name.to_string()));
         }
 
+        if file_paths.is_empty() {
+            return Ok(());
+        }
+
         let mut dataset = Dataset::open(table_path.to_string_lossy().as_ref())
             .await
             .map_err(VectorStoreError::LanceDB)?;
 
-        // Delete by file_path using LIKE pattern matching on metadata
-        // Match pattern: `"file_path":"<path>"`
-        for path in file_paths {
-            // Escape special SQL characters in the path for LIKE
-            let escaped = path
-                .replace('\\', "\\\\")
-                .replace('%', "\\%")
-                .replace('_', "\\_")
-                .replace('\'', "\\'");
-            let pattern = format!("%\"file_path\":\"{}\"%", escaped);
-            let query = format!("{} LIKE '{}'", METADATA_COLUMN, pattern);
-            dataset
-                .delete(&query)
-                .await
-                .map_err(VectorStoreError::LanceDB)?;
-        }
+        // Phase 67 optimization: Single query with OR conditions instead of N queries
+        // Build condition: (metadata LIKE '%"file_path":"path1"%') OR (metadata LIKE '%"file_path":"path2"%') ...
+        let conditions: Vec<String> = file_paths
+            .iter()
+            .map(|path| {
+                // Escape special SQL characters for LIKE
+                let escaped = path
+                    .replace('\\', "\\\\")
+                    .replace('%', "\\%")
+                    .replace('_', "\\_")
+                    .replace('\'', "\\'");
+                format!(
+                    "{} LIKE '%\"file_path\":\"{}\"%'",
+                    METADATA_COLUMN, escaped
+                )
+            })
+            .collect();
+
+        let query = conditions.join(" OR ");
+        dataset
+            .delete(&query)
+            .await
+            .map_err(VectorStoreError::LanceDB)?;
 
         Ok(())
     }

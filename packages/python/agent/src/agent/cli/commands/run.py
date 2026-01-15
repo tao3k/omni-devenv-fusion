@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import typer
+from typing import Optional
 
 from common.lib import setup_import_paths
 
@@ -12,6 +13,7 @@ setup_import_paths()
 run_app = typer.Typer(
     name="run",
     help="Execute task via CCA Runtime (Omni Loop)",
+    invoke_without_command=True,
 )
 
 
@@ -30,7 +32,7 @@ def print_banner():
 
 @run_app.callback()
 def run_callback(ctx: typer.Context):
-    """Default: Enter interactive REPL mode."""
+    """Default: Enter interactive REPL mode when no command is specified."""
     # Only run REPL when no subcommand is provided
     if ctx.invoked_subcommand is None:
         print_banner()

@@ -28,6 +28,11 @@ from agent.core.session import SessionManager
 from agent.core.state import get_checkpointer, create_initial_state
 from agent.core.graph import get_graph, OmniGraph
 
+# Phase 61: Dynamic Workflow imports
+from agent.core.skill_manager import SkillManager
+from agent.core.orchestrator.dynamic_builder import DynamicGraphBuilder
+from agent.core.planner.planner import Planner
+
 # Lazy Logger Initialization
 _cached_logger = None
 
@@ -84,6 +89,11 @@ class Orchestrator:
 
     Phase 34: LangGraph Cognitive Graph (opt-in)
     - Replaces procedural loop with state machine
+
+    Phase 61: Dynamic Workflow Builder
+    - WorkflowArchitect generates blueprints from goals
+    - DynamicGraphBuilder compiles graphs at runtime
+    - dispatch_dynamic() enables intent-to-execution flow
     """
 
     def __init__(
@@ -149,6 +159,11 @@ class Orchestrator:
             "orchestrator": None,
         }
 
+        # Phase 61: Dynamic Workflow Components
+        # Initialize SkillManager for dynamic graph execution
+        self.skill_manager = SkillManager()
+        available_tools = self.skill_manager.list_available()
+        self.planner = Planner(self.inference, available_tools)
         logger.bind(
             session_id=self._session_id,
             feedback_enabled=feedback_enabled,
@@ -200,6 +215,88 @@ class Orchestrator:
 
         # Standard dispatch
         return await self._dispatch_standard(user_query, history)
+
+    async def dispatch_dynamic(self, user_query: str) -> str:
+        """Phase 61: Dynamic Graph Execution Mode.
+
+        This method uses the Planner's WorkflowArchitect to design a workflow
+        blueprint, then compiles and executes it using DynamicGraphBuilder.
+
+        Flow:
+        1. Architect: Generate Blueprint (LLM)
+        2. Build: Compile Graph (DynamicGraphBuilder)
+        3. Execute: Run (LangGraph)
+
+        Args:
+            user_query: The user's request.
+
+        Returns:
+            Agent's response content from graph execution.
+        """
+        logger = _get_logger()
+        logger.bind(session_id=self._session_id, query_preview=user_query[:50])
+        logger.info("Starting dynamic dispatch")
+
+        try:
+            # Step 1: Generate Blueprint from LLM
+            blueprint = await self.planner.create_dynamic_workflow(user_query)
+
+            # Step 2: Build Graph from Blueprint
+            builder = DynamicGraphBuilder(self.skill_manager)
+
+            # Add nodes
+            for node in blueprint.nodes:
+                if node.type == "skill":
+                    # Parse skill.command
+                    if "." in node.target:
+                        skill_name, cmd_name = node.target.split(".", 1)
+                    else:
+                        skill_name = node.target
+                        cmd_name = node.target
+
+                    builder.add_skill_node(
+                        node.id,
+                        skill_name,
+                        cmd_name,
+                        fixed_args=node.fixed_args,
+                        state_input=node.state_inputs,
+                    )
+
+            # Add edges
+            for edge in blueprint.edges:
+                if edge.condition:
+                    # Conditional edges would need a condition function
+                    # For now, use simple edge
+                    builder.add_edge(edge.source, edge.target)
+                else:
+                    builder.add_edge(edge.source, edge.target)
+
+            # Set entry point and compile
+            builder.set_entry_point(blueprint.entry_point)
+            graph = builder.compile()
+
+            # Step 3: Execute Graph
+            initial_state = {
+                "messages": [{"role": "user", "content": user_query}],
+                "context_ids": [],
+                "current_plan": "",
+                "error_count": 0,
+                "workflow_state": {},
+            }
+
+            result = await graph.ainvoke(initial_state)
+
+            logger.info(
+                "Dynamic dispatch completed",
+                workflow=blueprint.name,
+                nodes=len(blueprint.nodes),
+            )
+
+            return str(result)
+
+        except Exception as e:
+            logger.error("Dynamic dispatch failed", error=str(e), exc_info=True)
+            return f"Error executing dynamic workflow: {e}"
 
     # Delegate to sub-module functions
     _dispatch_standard = dispatch_standard

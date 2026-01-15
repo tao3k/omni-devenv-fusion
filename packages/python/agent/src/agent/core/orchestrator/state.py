@@ -3,11 +3,173 @@ agent/core/orchestrator/state.py
 State Persistence for Orchestrator.
 
 Phase 34: GraphState persistence with StateCheckpointer.
+Phase 63: ContextCompressor for context overflow handling.
 """
 
 from typing import Dict, Any, List
+from dataclasses import dataclass
 
 from agent.core.state import create_initial_state
+
+
+@dataclass
+class ContextCompressor:
+    """Compress context when approaching token limits.
+
+    Phase 63: Hierarchical Working Memory compression.
+
+    This class provides intelligent context compression that:
+    - Preserves system prompt and key decisions
+    - Summarizes conversation history
+    - Keeps tool outputs and their results
+    - Removes redundant information
+    """
+
+    # Token thresholds for triggering compression
+    WARNING_THRESHOLD: int = 8000  # Start warning at 8k tokens
+    COMPRESS_THRESHOLD: int = 12000  # Compress at 12k tokens
+
+    # Compression ratios
+    HISTORY_COMPRESSION_RATIO: float = 0.3  # Keep 30% of history
+    KEEP_LATEST_MESSAGES: int = 10  # Always keep last 10 messages
+
+    def should_compress(self, message_count: int, estimated_tokens: int) -> bool:
+        """Determine if compression is needed.
+
+        Args:
+            message_count: Number of messages in context
+            estimated_tokens: Estimated token count
+
+        Returns:
+            True if compression is recommended
+        """
+        return estimated_tokens > self.COMPRESS_THRESHOLD
+
+    def compress_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Compress message history while preserving key information.
+
+        Args:
+            messages: List of conversation messages
+
+        Returns:
+            Compressed message list
+        """
+        if len(messages) <= self.KEEP_LATEST_MESSAGES:
+            return messages
+
+        # Always keep system messages
+        system_messages = [m for m in messages if m.get("role") == "system"]
+
+        # Keep recent messages
+        recent_messages = messages[-self.KEEP_LATEST_MESSAGES :]
+
+        # Summarize older messages
+        older_messages = messages[len(system_messages) : -self.KEEP_LATEST_MESSAGES]
+
+        if not older_messages:
+            return system_messages + recent_messages
+
+        # Create summary of older messages
+        summary_content = self._summarize_message_batch(older_messages)
+
+        summary_message = {
+            "role": "system",
+            "content": f"[Earlier conversation summarized: {summary_content}]",
+            "_compressed": True,
+            "_original_count": len(older_messages),
+        }
+
+        return system_messages + [summary_message] + recent_messages
+
+    def compress_state(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Compress a GraphState for token limit management.
+
+        Args:
+            state: GraphState dictionary
+
+        Returns:
+            Compressed state
+        """
+        messages = state.get("messages", [])
+
+        # Estimate tokens (rough approximation)
+        estimated_tokens = self._estimate_tokens(messages)
+
+        if not self.should_compress(len(messages), estimated_tokens):
+            return state
+
+        # Compress messages
+        compressed_messages = self.compress_messages(messages)
+
+        # Create compressed state
+        compressed_state = dict(state)
+        compressed_state["messages"] = compressed_messages
+        compressed_state["_compression_applied"] = True
+        compressed_state["_original_message_count"] = len(messages)
+        compressed_state["_compressed_message_count"] = len(compressed_messages)
+
+        return compressed_state
+
+    def _summarize_message_batch(self, messages: list[dict[str, Any]]) -> str:
+        """Summarize a batch of messages.
+
+        Args:
+            messages: List of messages to summarize
+
+        Returns:
+            Summary string
+        """
+        if not messages:
+            return "no messages"
+
+        # Count by type
+        user_count = sum(1 for m in messages if m.get("role") == "user")
+        assistant_count = sum(1 for m in messages if m.get("role") == "assistant")
+        tool_count = sum(1 for m in messages if m.get("role") == "tool")
+
+        topics = self._extract_topics(messages)
+
+        return f"{user_count} user messages, {assistant_count} assistant responses, {tool_count} tool calls; topics: {', '.join(topics)}"
+
+    def _extract_topics(self, messages: list[dict[str, Any]]) -> list[str]:
+        """Extract main topics from messages.
+
+        Args:
+            messages: List of messages
+
+        Returns:
+            List of topic keywords
+        """
+        topics = set()
+
+        for message in messages:
+            content = message.get("content", "")
+            # Simple keyword extraction
+            if "file" in content.lower():
+                topics.add("file operations")
+            if "code" in content.lower() or "function" in content.lower():
+                topics.add("code")
+            if "test" in content.lower():
+                topics.add("testing")
+            if "error" in content.lower() or "fail" in content.lower():
+                topics.add("errors")
+            if "git" in content.lower() or "commit" in content.lower():
+                topics.add("version control")
+
+        return list(topics)[:5]  # Limit to 5 topics
+
+    def _estimate_tokens(self, messages: list[dict[str, Any]]) -> int:
+        """Rough token estimation for messages.
+
+        Args:
+            messages: List of messages
+
+        Returns:
+            Estimated token count
+        """
+        total_chars = sum(len(str(m.get("content", ""))) for m in messages)
+        # Rough estimate: 4 characters per token on average
+        return total_chars // 4
 
 
 def load_state(self) -> None:

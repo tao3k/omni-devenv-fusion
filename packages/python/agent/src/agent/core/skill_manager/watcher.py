@@ -65,6 +65,10 @@ class SkillSyncHandler(FileSystemEventHandler):
         logger.info(f"file_change_detected: {rel_path}")
 
         try:
+            # [NEW] Syntax check pre-flight - catches SyntaxError without crashing
+            if not self._validate_syntax(src_path):
+                return  # Skip files with syntax errors
+
             # Use fresh VectorStore instance (thread-safe)
             # Note: sync_skills is async, so we need to run it in an event loop
             vm = get_vector_memory()
@@ -77,8 +81,27 @@ class SkillSyncHandler(FileSystemEventHandler):
                 logger.info(
                     f"auto_sync_complete: +{stats.get('added', 0)} ~{stats.get('modified', 0)} -{stats.get('deleted', 0)}"
                 )
+        except SyntaxError as e:
+            # Should not reach here since _validate_syntax handles it
+            logger.warning(f"syntax_error_in_sync: {e}")
         except Exception as e:
             logger.error(f"auto_sync_failed: {e}")
+
+    def _validate_syntax(self, file_path: Path) -> bool:
+        """
+        Validate Python syntax before sync.
+
+        Returns True if the file has valid Python syntax, False if it has
+        SyntaxError (which should be ignored to prevent Watcher crash).
+        """
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                source = f.read()
+            compile(source, str(file_path), "exec")
+            return True
+        except SyntaxError as e:
+            logger.warning(f"syntax_error_detected_ignoring: {file_path} - {e}")
+            return False
 
 
 class BackgroundWatcher:

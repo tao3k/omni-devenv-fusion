@@ -2,112 +2,149 @@
 
 ## Overview
 
-Template skill demonstrating **Trinity Architecture** with **Router-Controller** pattern.
+Template skill demonstrating **Trinity Architecture v2.0** with **scripts/commands.py** pattern (Phase 63+).
 
 ## Development Workflow
 
 ```
-1. _template/                    # Start: Copy this template
+_template/                    # Start: Copy this template
    │
-2. tools.py                     # Step 1: ROUTER (just dispatches)
+2. scripts/                   # Step 1: COMMANDS (actual implementation)
+   ├── __init__.py            #    Dynamic module loader
+   └── commands.py            #    @skill_script decorated functions
    │
-3. scripts/                     # Step 2: CONTROLLER (actual logic)
-   ├── __init__.py
-   ├── command.py               # Command implementations
-   └── rendering.py             # Template rendering (optional)
+3. tests/                     # Step 2: TESTS (zero-config pytest)
+   └── test_template_commands.py
    │
-4. tests/                       # Step 3: TESTS (zero-config pytest)
-   └── test_commands.py
+4. references/                # Step 3: DOCUMENTATION
+   └── skill-workflow.md
    │
-5. references/                  # Step 4: DOCUMENTATION
-   └── skill-workflow.md        # Command documentation
+5. README.md                  # Step 4: User documentation
    │
-6. README.md                    # Step 5: User documentation
-   │
-7. SKILL.md                     # Step 6: LLM context & manifest
+6. SKILL.md                   # Step 5: LLM context & manifest
 ```
 
 ---
 
-## Step 1: ROUTER (`tools.py`)
+## Step 1: COMMANDS (`scripts/commands.py`)
 
-Lightweight dispatcher - only imports from scripts:
+Commands are defined directly with `@skill_script` decorator:
 
 ```python
-from agent.skills.decorators import skill_command
+from agent.skills.decorators import skill_script
 
-@skill_command(name="example", category="read", description="Brief desc")
-def example(param: str = "default") -> str:
+@skill_script(
+    name="my_command",
+    category="read",
+    description="Brief description",
+    inject_root=True,  # Optional: inject project root
+)
+async def my_command(param: str = "default") -> str:
     """Detailed docstring."""
-    from agent.skills._template.scripts import example as mod
-    return mod.example_command(param)
-```
-
----
-
-## Step 2: CONTROLLER (`scripts/`)
-
-Actual implementation - fully isolated namespace:
-
-```python
-# scripts/example.py
-def example_command(param: str = "default") -> str:
-    """Actual implementation."""
     return f"Result: {param}"
 ```
 
+**No tools.py needed** - this is the single source of truth.
+
 ---
 
-## Step 3: TESTS (`tests/`)
+## Step 2: TESTS (`tests/`)
 
-**Critical:** When adding or modifying scripts/ files, you MUST create corresponding tests.
+**Critical:** When adding commands, create corresponding tests.
 
-### Test Naming Convention
+### Test Structure
 
 ```
 tests/
-├── test_commands.py           # Command existence & metadata tests
-└── test_example.py            # Test for scripts/example.py
+└── test_template_commands.py    # Test file for commands.py
 ```
 
 ### Test Pattern
 
 ```python
 """
-tests/test_example.py
+tests/test_template_commands.py
 
-Auto-generated when scripts/example.py is created.
+Usage: uv run pytest assets/skills/_template/tests/ -v
 """
 import pytest
 import inspect
+import sys
+import types
+import importlib.util
+from pathlib import Path
 
-from common.skills_path import SKILLS_DIR
+
+def _setup_template_package_context():
+    """Set up package hierarchy in sys.modules for template skill."""
+    tests_dir = Path(__file__).parent
+    template_dir = tests_dir.parent
+    skills_root = template_dir.parent
+    project_root = skills_root.parent.parent
+
+    # Ensure 'agent' package exists
+    if "agent" not in sys.modules:
+        agent_src = project_root / "packages/python/agent/src/agent"
+        agent_pkg = types.ModuleType("agent")
+        agent_pkg.__path__ = [str(agent_src)]
+        sys.modules["agent"] = agent_pkg
+
+    # Ensure 'agent.skills' package exists
+    if "agent.skills" not in sys.modules:
+        skills_pkg = types.ModuleType("agent.skills")
+        skills_pkg.__path__ = [str(skills_root)]
+        sys.modules["agent.skills"] = skills_pkg
+
+    # Ensure 'agent.skills._template' package exists
+    template_pkg_name = "agent.skills._template"
+    if template_pkg_name not in sys.modules:
+        template_pkg = types.ModuleType(template_pkg_name)
+        template_pkg.__path__ = [str(template_dir)]
+        template_pkg.__file__ = str(template_dir / "__init__.py")
+        sys.modules[template_pkg_name] = template_pkg
+
+    # Ensure 'agent.skills._template.scripts' package exists
+    scripts_pkg_name = "agent.skills._template.scripts"
+    if scripts_pkg_name not in sys.modules:
+        scripts_dir = template_dir / "scripts"
+        scripts_pkg = types.ModuleType(scripts_pkg_name)
+        scripts_pkg.__path__ = [str(scripts_dir)]
+        scripts_pkg.__file__ = str(scripts_dir / "__init__.py")
+        sys.modules[scripts_pkg_name] = scripts_pkg
 
 
-def test_example_command_exists(my_skill):
+_setup_template_package_context()
+
+
+def test_example_exists():
     """Verify example command exists and is callable."""
-    assert hasattr(my_skill, "example")
-    assert callable(my_skill.example)
+    from agent.skills._template.scripts import commands
+
+    assert hasattr(commands, "example")
+    assert callable(commands.example)
 
 
-def test_example_command_execution(my_skill):
-    """Test example command execution."""
-    result = my_skill.example(param="test")
-    assert "test" in result if hasattr(result, "data") else isinstance(result, str)
+def test_example_with_options_exists():
+    """Verify example_with_options command exists."""
+    from agent.skills._template.scripts import commands
+
+    assert hasattr(commands, "example_with_options")
+    assert callable(commands.example_with_options)
+
+
+def test_process_data_exists():
+    """Verify process_data command exists."""
+    from agent.skills._template.scripts import commands
+
+    assert hasattr(commands, "process_data")
+    assert callable(commands.process_data)
 ```
 
 ---
 
-## Step 4: DOCUMENTATION (`references/`)
+## Step 3: DOCUMENTATION (`references/`)
 
-**Critical:** When adding new commands, you MUST create documentation.
-
-### Documentation Structure
-
-```
-references/
-└── skill-workflow.md          # Command documentation (required)
-```
+**Critical:** When adding new commands, create documentation.
 
 ### Documentation Template (`references/skill-workflow.md`)
 
@@ -138,13 +175,13 @@ references/
 
 ---
 
-## Step 5: User Docs (`README.md`)
+## Step 4: User Docs (`README.md`)
 
 Update with usage examples and command reference.
 
 ---
 
-## Step 6: LLM Context (`SKILL.md`)
+## Step 5: LLM Context (`SKILL.md`)
 
 Update frontmatter and system prompts for LLM context.
 
@@ -152,12 +189,11 @@ Update frontmatter and system prompts for LLM context.
 
 ## Complete Development Checklist
 
-When adding a new command `my_command` in `scripts/my_command.py`:
+When adding a new command `my_command` in `scripts/commands.py`:
 
-- [ ] **Router**: Add `tools.my_command()` decorator in `tools.py`
-- [ ] **Controller**: Implement `scripts/my_command.py`
-- [ ] **Tests**: Create `tests/test_my_command.py`
-- [ ] **Docs**: Create `references/skill-workflow.md` or update existing
+- [ ] **Command**: Add `@skill_script` decorated function in `scripts/commands.py`
+- [ ] **Tests**: Add test in `tests/test_template_commands.py`
+- [ ] **Docs**: Update `references/skill-workflow.md`
 - [ ] **User Docs**: Update `README.md` with command reference
 - [ ] **LLM Context**: Update `SKILL.md` if needed
 - [ ] **Validate**: Run `just validate`
@@ -170,7 +206,7 @@ When adding a new command `my_command` in `scripts/my_command.py`:
 
 - Use `template.example` for basic operations
 - Use `template.process_data` for data processing
-- Follow the Router-Controller pattern for new commands
+- Define commands directly in `scripts/commands.py`
 
 ### Examples
 
@@ -202,27 +238,18 @@ When adding a new command `my_command` in `scripts/my_command.py`:
 
 This skill template follows the **"Python Zenith" Engineering Protocol**:
 
-### Router Pattern (`tools.py`)
+### Command Pattern (`scripts/commands.py`)
 
 ```python
-from agent.skills.decorators import skill_command
+from agent.skills.decorators import skill_script
 
-@skill_command(
-    name="example",
+@skill_script(
+    name="my_command",
     category="read",
     description="Brief description",
 )
-def example(param: str = "default") -> str:
+async def my_command(param: str = "default") -> str:
     """Detailed docstring."""
-    from agent.skills._template.scripts import example as example_mod
-    return example_mod.example_command(param)
-```
-
-### Controller Pattern (`scripts/example.py`)
-
-```python
-def example_command(param: str = "default") -> str:
-    """Actual implementation."""
     return f"Result: {param}"
 ```
 
@@ -232,7 +259,7 @@ def example_command(param: str = "default") -> str:
 
 - **Import time:** Uses lazy initialization for fast loading
 - **Execution:** O(1) command lookup via SkillManager cache
-- **Hot reload:** Automatically reloads when `tools.py` or `scripts/*.py` is modified
+- **Hot reload:** Automatically reloads when `scripts/commands.py` is modified
 - **Namespace isolation:** Each skill's scripts are in separate packages
 
 ---
@@ -245,8 +272,7 @@ cp -r assets/skills/_template assets/skills/my_skill
 
 # Update SKILL.md frontmatter with new name/description
 
-# Add commands in tools.py (router)
-# Add implementations in scripts/ (controllers)
+# Add commands in scripts/commands.py (with @skill_script decorator)
 # Add tests in tests/ (required!)
 # Add docs in references/ (required!)
 ```
@@ -257,81 +283,17 @@ cp -r assets/skills/_template assets/skills/my_skill
 
 Skills use **zero-configuration testing** via the Pytest plugin.
 
-### Test Structure
-
-```
-my_skill/
-├── tests/                    # Required: Skill-specific tests
-│   ├── test_commands.py     # Test file pattern: test_*.py
-│   └── test_my_command.py   # Tests for scripts/my_command.py
-└── tools.py                 # Your skill commands
-```
-
-### Writing Tests
-
-```python
-"""
-tests/test_my_command.py
-
-Usage:
-    def test_my_command(my_skill):  # 'my_skill' fixture auto-injected
-        assert hasattr(my_skill, "my_command")
-"""
-
-import pytest
-import inspect
-
-# SSOT: Use common.skills_path for path resolution
-from common.skills_path import SKILLS_DIR
-
-
-def test_my_command_exists(my_skill):
-    """Verify my_command exists and is callable."""
-    assert hasattr(my_skill, "my_command")
-    assert callable(my_skill.my_command)
-
-
-def test_commands_have_metadata(my_skill):
-    """All commands should have @skill_command metadata."""
-    for name, func in inspect.getmembers(my_skill, inspect.isfunction):
-        if hasattr(func, "_is_skill_command"):
-            assert hasattr(func, "_skill_config")
-            config = func._skill_config
-            assert "name" in config
-            assert "category" in config
-
-
-def test_my_command_execution(my_skill):
-    """Test command execution."""
-    result = my_skill.my_command(param="value")
-
-    # Handle CommandResult wrapper
-    if hasattr(result, "data"):
-        result = result.data if result.success else result.error
-
-    assert isinstance(result, str)
-```
-
-### Available Fixtures
-
-| Fixture        | Description                                  |
-| -------------- | -------------------------------------------- |
-| `my_skill`     | The skill module (tools.py loaded as module) |
-| `project_root` | Project root directory (git toplevel)        |
-| `skills_root`  | Skills directory (assets/skills)             |
-| `temp_dir`     | Temporary directory for tests                |
-
 ### Running Tests
 
 ```bash
 # Run skill-specific tests
-uv run pytest assets/skills/my_skill/tests/ -v
+uv run pytest assets/skills/_template/tests/ -v
 
 # Run all skill tests
 uv run pytest assets/skills/ -v
 
 # Run via omni CLI (if testing_protocol loaded)
-omni skill test my_skill
+omni skill test template
 
 # Run all skills
 omni skill test --all
@@ -340,20 +302,19 @@ omni skill test --all
 ### Best Practices
 
 1. **Test existence first**: `test_*_exists()` for each command
-2. **Test metadata**: Verify `@skill_command` decorators are present
-3. **Test execution**: Use CommandResult wrapper pattern
-4. **Use fixtures**: Leverage auto-injected `project_root`, `temp_dir`
-5. **SSOT paths**: Use `SKILLS_DIR()` for path resolution
-6. **Always test**: When scripts/ is modified, tests/ MUST be updated
+2. **Test callability**: Verify functions are callable
+3. **Use package context:** Set up sys.modules for imports
+4. **SSOT paths:** Use relative path computation from `__file__`
+5. **Always test:** When commands are modified, tests MUST be updated
 
 ### Example Test Output
 
 ```
 $ uv run pytest assets/skills/_template/tests/ -v
 
-assets/skills/_template/tests/test_template_commands.py::test_example_command_exists PASSED
+assets/skills/_template/tests/test_template_commands.py::test_example_exists PASSED
+assets/skills/_template/tests/test_template_commands.py::test_example_with_options_exists PASSED
 assets/skills/_template/tests/test_template_commands.py::test_process_data_exists PASSED
-assets/skills/_template/tests/test_template_commands.py::test_commands_have_metadata PASSED
 ============================== 3 passed in 0.05s ===============================
 ```
 

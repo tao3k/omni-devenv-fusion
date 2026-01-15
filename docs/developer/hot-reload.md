@@ -1,20 +1,30 @@
-# Hot Reload (Phase 36.5)
+# Hot Reload (Phase 36.5 → Phase 67 Simplified)
 
-> Skill hot-reload with syntax validation and safety checks.
+> **Phase 67**: Simplified for JIT/Meta-Agent Era. Removed syntax validation - Python import catches errors, Meta-Agent handles recovery.
+
+## Phase 67 Changes
+
+| Feature              | Before (Phase 36.5)    | After (Phase 67) |
+| -------------------- | ---------------------- | ---------------- |
+| Syntax validation    | `py_compile.compile()` | ❌ Removed       |
+| Transaction rollback | ✅ Yes                 | ❌ Removed       |
+| Lines of code        | 216                    | 145              |
+| Error handling       | Fail-safe              | Fail-fast        |
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      SkillManager                           │
-│  ┌─────────────────┐    ┌─────────────────┐                │
-│  │  _ensure_fresh  │───▶│  _validate_syntax│               │
-│  │  (mtime check)  │    │  (py_compile)    │               │
-│  └─────────────────┘    └─────────────────┘                │
-│           │                      │                          │
-│           ▼                      ▼                          │
-│     Load skill or           Abort if syntax               │
-│     reload existing         error (safe mode)             │
+│  ┌─────────────────┐                                        │
+│  │  _ensure_fresh  │───▶ Direct reload (no validation)     │
+│  │  (mtime check)  │                                        │
+│  └─────────────────┘                                        │
+│           │                                                 │
+│           ▼                                                 │
+│     Load skill or                                           │
+│     reload existing                                         │
+│     (Python import catches errors)                          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -34,36 +44,44 @@ should_reload = tools_mtime >= skill.mtime or scripts_mtime >= skill.mtime
 - **scripts/\*.py**: All Python files in `scripts/` directory checked
 - Uses `>=` comparison (not `>`) to catch simultaneous edits
 
-### 2. Syntax Validation (Safety Gate)
-
-Before reloading, `py_compile.compile()` validates syntax:
+### 2. Modification Detection (Unchanged)
 
 ```python
-def _validate_syntax(skill_path: Path) -> bool:
-    # Check tools.py
-    py_compile.compile(tools_path, doraise=True)
-
-    # Check all scripts/*.py
-    for py_file in scripts_path.glob("*.py"):
-        if not py_file.name.startswith("_"):
-            py_compile.compile(py_file, doraise=True)
+# In HotReloadMixin._ensure_fresh()
+scripts_mtime = max(f.stat().st_mtime for f in scripts_path.glob("*.py"))
 ```
 
-**Why?** Prevents destroying a working skill when new code has syntax errors.
+- **scripts/\*.py**: All Python files in `scripts/` directory checked
+- Uses `>` comparison (cached_mtime vs current_mtime)
 
-### 3. Transactional Reload Cycle
+### 3. Simplified Reload Cycle
 
 ```
-1. Validate syntax (if fails: abort, keep old skill)
-2. Unload old skill:
+1. Unload old skill:
    - Remove from _skills dict
    - Clear command cache entries
    - Clear sys.modules for this skill
-3. Load fresh version:
+2. Load fresh version:
    - Import new modules
    - Parse @skill_command decorators
-   - Register MCP tools
-4. Notify observers (single "reload" event)
+3. If import fails: Error propagates, Meta-Agent handles recovery
+```
+
+**Phase 67 Philosophy**: Fail fast. Python's import mechanism catches syntax errors naturally. The Meta-Agent can then self-repair the code.
+
+### 4. Lazy Logger
+
+To avoid ~100ms import overhead at startup, the logger is initialized lazily:
+
+```python
+_cached_logger: Any = None
+
+def _get_logger() -> Any:
+    global _cached_logger
+    if _cached_logger is None:
+        import structlog
+        _cached_logger = structlog.get_logger(__name__)
+    return _cached_logger
 ```
 
 ## What Can Be Reloaded
@@ -169,18 +187,16 @@ logging.basicConfig(level=logging.DEBUG)
 ### Test Coverage
 
 - **mtime detection**: Verify `scripts/*.py` changes trigger reload
-- **syntax validation**: Confirm syntax errors abort reload
 - **cache clearing**: Ensure old code doesn't persist
-- **transaction safety**: Verify old skill preserved on syntax error
+- **error propagation**: Syntax errors propagate to caller (Meta-Agent)
 
 ## Troubleshooting
 
 ### Changes Not Taking Effect
 
 1. **Check file path**: Ensure modifying `<skill>/scripts/*.py` or `<skill>/tools.py`
-2. **Check syntax**: Run `python -m py_compile <file>` to validate
-3. **Enable logging**: Watch for reload messages
-4. **Restart MCP**: If metadata changed, restart is required
+2. **Enable logging**: Watch for reload messages
+3. **Restart MCP**: If metadata changed, restart is required
 
 ### "Skill not found" After Reload
 

@@ -40,6 +40,7 @@ from dataclasses import dataclass
 # In uv workspace, 'common' package is available directly
 from common.gitops import get_project_root
 from common.cache_path import CACHE_DIR
+from common.skills_path import SKILLS_DIR
 
 # Lazy imports to avoid slow module loading
 _cached_omni_vector: Any = None
@@ -462,6 +463,207 @@ class VectorMemory:
             _get_logger().error("Failed to get tools by skill", skill=skill_name, error=str(e))
             return []
 
+    async def search_tools_hybrid(
+        self,
+        query: str,
+        keywords: list[str] | None = None,
+        limit: int = 15,
+    ) -> list[dict[str, Any]]:
+        """
+        Search tools using hybrid search (vector + keywords).
+
+        Phase 67: Intent-Driven Tool Loading
+
+        This method combines:
+        - Vector similarity search (semantic matching)
+        - Keyword boosting (exact term matching)
+
+        Args:
+            query: Natural language query describing what the user needs.
+            keywords: Optional explicit keywords to boost relevance.
+                     Example: ["git", "commit"] for git commit related tools.
+            limit: Maximum number of results to return (default: 15, max: 50).
+
+        Returns:
+            List of tool dictionaries with keys:
+            - id: Tool name (e.g., "git.commit")
+            - content: Tool description
+            - metadata: Tool metadata dict with keys:
+                - skill_name: Parent skill name
+                - tool_name: Function name
+                - file_path: Source file path
+                - input_schema: JSON string of tool schema
+                - keywords: List of indexed keywords
+                - docstring: Function docstring
+            - distance: Hybrid score (lower = better match)
+
+        Example:
+            results = await vm.search_tools_hybrid(
+                "git commit changes",
+                keywords=["git", "commit"],
+                limit=10
+            )
+        """
+        import json
+
+        store = self._ensure_store()
+        if not store:
+            _get_logger().warning("Vector memory not available for search_tools_hybrid")
+            return []
+
+        keywords = keywords or []
+        table_name = "skills"
+
+        try:
+            # Generate embedding for query
+            query_vector = self._embed_query(query)
+            if query_vector is None:
+                return []
+
+            # Perform hybrid search (Rust side)
+            # Note: Need to check if search_hybrid is exposed
+            if hasattr(store, "search_hybrid"):
+                results = store.search_hybrid(table_name, query_vector, keywords, limit)
+            else:
+                # Fallback to regular search if hybrid not available
+                results = store.search(table_name, query_vector, limit)
+
+            if not results:
+                return []
+
+            # Parse results
+            parsed_results: list[dict[str, Any]] = []
+            for json_str in results:
+                try:
+                    result = json.loads(json_str)
+                    parsed_results.append(
+                        {
+                            "id": result.get("id", ""),
+                            "content": result.get("content", ""),
+                            "metadata": result.get("metadata", {}),
+                            "distance": result.get("distance", 1.0),
+                        }
+                    )
+                except json.JSONDecodeError:
+                    continue
+
+            _get_logger().info(
+                "Hybrid tool search completed",
+                query=query[:50],
+                keywords=keywords,
+                results=len(parsed_results),
+            )
+
+            return parsed_results
+
+        except Exception as e:
+            _get_logger().error("search_tools_hybrid failed", error=str(e))
+            return []
+
+    async def search_knowledge_hybrid(
+        self,
+        query: str,
+        keywords: list[str] | None = None,
+        limit: int = 5,
+        table_name: str = "knowledge",
+    ) -> list[dict[str, Any]]:
+        """
+        Search project knowledge using hybrid search (vector + keywords).
+
+        Phase 70: The Knowledge Matrix - Knowledge Search
+
+        This method searches the knowledge base (docs, specs, memory)
+        for relevant information based on user queries.
+
+        Args:
+            query: Natural language query describing what information is needed.
+            keywords: Optional explicit keywords to boost relevance.
+                     Example: ["git", "commit", "规范"] for git commit rules.
+            limit: Maximum number of results (default: 5).
+            table_name: Table to search (default: "knowledge").
+
+        Returns:
+            List of knowledge chunk dictionaries with keys:
+            - id: Chunk ID (e.g., "docs/workflow.md#chunk-2")
+            - content: Full chunk text content
+            - preview: Truncated preview
+            - distance: Similarity score (lower = better)
+            - metadata: Dict with doc_path, title, section, etc.
+
+        Example:
+            results = await vm.search_knowledge_hybrid(
+                "我们的 git commit 规范是什么",
+                keywords=["git", "commit", "规范"],
+                limit=3
+            )
+        """
+        import json
+
+        store = self._ensure_store()
+        if not store:
+            _get_logger().warning("Vector memory not available for search_knowledge_hybrid")
+            return []
+
+        keywords = keywords or []
+
+        try:
+            # Generate embedding for query
+            query_vector = self._embed_query(query)
+            if query_vector is None:
+                return []
+
+            # Perform hybrid search
+            if hasattr(store, "search_hybrid"):
+                results = store.search_hybrid(table_name, query_vector, keywords, limit)
+            else:
+                # Fallback to regular search
+                results = store.search(table_name, query_vector, limit)
+
+            if not results:
+                return []
+
+            # Parse results
+            parsed_results: list[dict[str, Any]] = []
+            for json_str in results:
+                try:
+                    result = json.loads(json_str)
+                    # Parse metadata
+                    metadata = result.get("metadata", {})
+                    if isinstance(metadata, str):
+                        try:
+                            metadata = json.loads(metadata)
+                        except json.JSONDecodeError:
+                            metadata = {}
+
+                    parsed_results.append(
+                        {
+                            "id": result.get("id", ""),
+                            "content": result.get("content", ""),
+                            "preview": result.get("preview", result.get("content", "")[:200]),
+                            "distance": result.get("distance", 1.0),
+                            "metadata": metadata,
+                            "doc_id": result.get("doc_id", ""),
+                            "doc_path": metadata.get("doc_path", ""),
+                            "title": metadata.get("title", ""),
+                            "section": metadata.get("section", ""),
+                        }
+                    )
+                except json.JSONDecodeError:
+                    continue
+
+            _get_logger().info(
+                "Hybrid knowledge search completed",
+                query=query[:50],
+                keywords=keywords,
+                results=len(parsed_results),
+            )
+
+            return parsed_results
+
+        except Exception as e:
+            _get_logger().error("search_knowledge_hybrid failed", error=str(e))
+            return []
+
     async def index_skill_tools(self, base_path: str, table_name: str = "skills") -> int:
         """
         Index all skill tools from scripts into the vector store.
@@ -621,8 +823,8 @@ class VectorMemory:
             Dict with keys: added, modified, deleted, total
         """
         import json
-        import hashlib
         from dataclasses import dataclass
+        from pathlib import Path
 
         store = self._ensure_store()
         if not store:
@@ -637,12 +839,25 @@ class VectorMemory:
 
         stats = SyncStats()
 
+        # Phase 67: Use SKILLS_DIR for consistent path handling
+        # Convert all paths to absolute resolved form for comparison
+        base_path_resolved = str(SKILLS_DIR().resolve())
+
+        def normalize_path(p: str) -> str:
+            """Normalize path to absolute resolved form using SKILLS_DIR."""
+            try:
+                return str((SKILLS_DIR() / p).resolve())
+            except Exception:
+                return p
+
         try:
             # Step 1: Get existing file hashes from DB
             _get_logger().info("Fetching existing file hashes from database...")
             existing_json = store.get_all_file_hashes(table_name)
             existing: Dict[str, Dict] = json.loads(existing_json) if existing_json else {}
-            existing_paths = set(existing.keys())
+            # Normalize existing paths for comparison
+            existing_normalized = {normalize_path(p): v for p, v in existing.items()}
+            existing_paths = set(existing_normalized.keys())
 
             _get_logger().debug(f"Found {len(existing_paths)} existing tools in database")
 
@@ -660,7 +875,14 @@ class VectorMemory:
                 except json.JSONDecodeError:
                     continue
 
-            current_paths = {t.get("file_path", "") for t in current_tools if t.get("file_path")}
+            # Normalize current paths and update tools with normalized paths
+            current_paths = set()
+            for tool in current_tools:
+                orig_path = tool.get("file_path", "")
+                norm_path = normalize_path(orig_path)
+                tool["file_path"] = norm_path
+                current_paths.add(norm_path)
+
             _get_logger().debug(f"Found {len(current_tools)} tools in filesystem")
 
             # Step 3: Compute Diff
@@ -676,12 +898,12 @@ class VectorMemory:
 
                 if path not in existing_paths:
                     to_add.append(tool)
-                elif existing_paths and path in existing:
-                    db_hash = existing[path].get("hash", "")
+                elif existing_paths and path in existing_normalized:
+                    db_hash = existing_normalized[path].get("hash", "")
                     if db_hash != current_hash:
                         to_update.append(tool)
 
-            # Find deleted files
+            # Find deleted files (using normalized paths for comparison)
             to_delete_paths = existing_paths - current_paths
 
             _get_logger().info(
@@ -692,18 +914,25 @@ class VectorMemory:
 
             # Delete stale records
             if to_delete_paths:
-                paths_to_delete = list(to_delete_paths)
-                _get_logger().info(f"Deleting {len(paths_to_delete)} stale tools...")
-                store.delete_by_file_path(paths_to_delete, table_name)
-                stats.deleted = len(paths_to_delete)
+                # Map normalized paths back to original paths in DB
+                paths_to_delete = []
+                for norm_path in to_delete_paths:
+                    if norm_path in existing_normalized:
+                        # Find the original path that maps to this normalized one
+                        for orig_path, data in existing.items():
+                            if normalize_path(orig_path) == norm_path:
+                                paths_to_delete.append(orig_path)
+                                break
+
+                if paths_to_delete:
+                    _get_logger().info(f"Deleting {len(paths_to_delete)} stale tools...")
+                    store.delete_by_file_path(paths_to_delete, table_name)
+                    stats.deleted = len(paths_to_delete)
 
             # Process added/modified tools
             work_items = to_add + to_update
             if work_items:
                 _get_logger().info(f"Processing {len(work_items)} changed tools...")
-
-                # Import schema extractor
-                from agent.scripts.extract_schema import extract_function_schema
 
                 # Build documents for indexing
                 ids = []
@@ -715,24 +944,16 @@ class VectorMemory:
                     ids.append(tool_name)
                     contents.append(tool.get("description", tool_name))
 
-                    # Generate input schema using Python
-                    file_path = tool.get("file_path", "")
-                    func_name = tool.get("function_name", "")
-
-                    input_schema = "{}"
-                    if file_path and func_name:
-                        try:
-                            schema = extract_function_schema(file_path, func_name)
-                            input_schema = json.dumps(schema, ensure_ascii=False)
-                        except Exception as e:
-                            _get_logger().warning(f"Failed to extract schema for {tool_name}: {e}")
+                    # Use input_schema from Rust scanner (already extracted)
+                    # Phase 67 optimization: Avoid expensive Python schema extraction
+                    input_schema = tool.get("input_schema", "{}")
 
                     # Build metadata
                     metadata = {
                         "skill_name": tool.get("skill_name", ""),
                         "tool_name": tool.get("tool_name", ""),
-                        "file_path": file_path,
-                        "function_name": func_name,
+                        "file_path": tool.get("file_path", ""),
+                        "function_name": tool.get("function_name", ""),
                         "execution_mode": tool.get("execution_mode", "script"),
                         "keywords": tool.get("keywords", []),
                         "file_hash": tool.get("file_hash", ""),
@@ -768,6 +989,149 @@ class VectorMemory:
 
             traceback.print_exc()
             return {"added": 0, "modified": 0, "deleted": 0, "total": 0}
+
+    # =========================================================================
+    # Phase 71: Memory Support
+    # =========================================================================
+
+    async def add_memory(self, record: dict[str, Any]) -> bool:
+        """
+        Add a single memory record to the memory table.
+
+        Phase 71: The Memory Mesh - Episodic Memory Storage.
+
+        Args:
+            record: Dict with fields:
+                - id: Unique identifier
+                - text: Text for embedding
+                - metadata: JSON-serializable metadata
+                - type: Should be "memory"
+                - timestamp: ISO timestamp
+
+        Returns:
+            True if successful
+        """
+        from agent.core.types import VectorTable
+
+        try:
+            # Extract fields from record
+            record_id = record.get("id", "")
+            text = record.get("text", "")
+            metadata = record.get("metadata", {})
+
+            # Convert metadata to JSON string if dict
+            if isinstance(metadata, dict):
+                import json
+
+                metadata_str = json.dumps(metadata, ensure_ascii=False)
+            else:
+                metadata_str = str(metadata)
+
+            # Use existing add method with collection="memory"
+            # Store as dict that can be retrieved directly
+            success = await self.add(
+                documents=[text],
+                ids=[record_id],
+                collection=VectorTable.MEMORY.value,
+                metadatas=[metadata],
+            )
+
+            if success:
+                _get_logger().debug("Memory added", id=record_id)
+
+            return success
+
+        except Exception as e:
+            _get_logger().error("Failed to add memory", error=str(e))
+            return False
+
+    async def search_memory(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+        """
+        Search memories using semantic similarity.
+
+        Phase 71: The Memory Mesh - Episodic Memory Retrieval.
+
+        Args:
+            query: Natural language query
+            limit: Maximum results (default: 5, max: 20)
+
+        Returns:
+            List of memory records with id, content, distance, metadata
+        """
+        import json
+
+        from agent.core.types import VectorTable
+
+        store = self._ensure_store()
+        if not store:
+            _get_logger().warning("Vector memory not available for search_memory")
+            return []
+
+        table_name = VectorTable.MEMORY.value
+        limit = min(max(1, limit), 20)  # Clamp between 1 and 20
+
+        try:
+            # Generate embedding for query
+            query_vector = self._embed_query(query)
+            if query_vector is None:
+                return []
+
+            # Perform search
+            raw_results = store.search(table_name, query_vector, limit)
+
+            # Parse results
+            results: list[dict[str, Any]] = []
+            for r in raw_results:
+                try:
+                    # Handle both dict and raw tuple formats from Rust
+                    if isinstance(r, dict):
+                        record_id = r.get("id", "")
+                        content = r.get("content", r.get("text", ""))
+                        distance = r.get("distance", 1.0)
+                        raw_metadata = r.get("metadata")
+                    else:
+                        # Fallback for tuple format: (id, content, distance, metadata)
+                        record_id = r[0] if len(r) > 0 else ""
+                        content = r[1] if len(r) > 1 else ""
+                        distance = r[2] if len(r) > 2 else 1.0
+                        raw_metadata = r[3] if len(r) > 3 else None
+
+                    # Parse metadata from JSON string
+                    metadata = {}
+                    if raw_metadata:
+                        if isinstance(raw_metadata, str):
+                            try:
+                                metadata = json.loads(raw_metadata)
+                            except json.JSONDecodeError:
+                                pass
+                        elif isinstance(raw_metadata, dict):
+                            metadata = raw_metadata
+
+                    results.append(
+                        {
+                            "id": record_id,
+                            "content": content,
+                            "text": content,
+                            "distance": distance,
+                            "metadata": metadata,
+                            "timestamp": metadata.get("timestamp", ""),
+                            "outcome": metadata.get("outcome", ""),
+                        }
+                    )
+                except (json.JSONDecodeError, TypeError, IndexError):
+                    continue
+
+            _get_logger().debug(
+                "Memory search completed",
+                query=query[:50],
+                results=len(results),
+            )
+
+            return results
+
+        except Exception as e:
+            _get_logger().error("Failed to search memory", error=str(e))
+            return []
 
 
 # Singleton accessor

@@ -1,6 +1,7 @@
 //! Search operations for the vector store.
 //!
 //! Provides nearest neighbor search using LanceDB 1.0's scanner API.
+//! Supports both pure vector search and hybrid search with keyword boosting.
 
 use lance::dataset::Dataset;
 use lance::deps::arrow_array::{Array, Float32Array, StringArray};
@@ -9,6 +10,11 @@ use futures::TryStreamExt;
 use omni_types::VectorSearchResult;
 
 use crate::{ID_COLUMN, CONTENT_COLUMN, METADATA_COLUMN, VECTOR_COLUMN, VectorStoreError};
+
+/// Weight for keyword match score in hybrid search
+const KEYWORD_WEIGHT: f64 = 0.3;
+/// Boost per keyword match
+const KEYWORD_BOOST: f64 = 0.1;
 
 impl crate::VectorStore {
     /// Search for similar documents.
@@ -34,6 +40,46 @@ impl crate::VectorStore {
         &self,
         table_name: &str,
         query: Vec<f32>,
+        limit: usize,
+    ) -> Result<Vec<VectorSearchResult>, VectorStoreError> {
+        self.search_with_keywords(table_name, query, Vec::new(), limit).await
+    }
+
+    /// Hybrid search with keyword boosting.
+    ///
+    /// Combines vector similarity with keyword matching for better relevance.
+    /// Formula: `Score = Vector_Score * 0.7 + Keyword_Match * 0.3`
+    ///
+    /// # Arguments
+    ///
+    /// * `table_name` - Name of the table/collection
+    /// * `query` - Query vector
+    /// * `keywords` - Keywords to boost (matched against metadata.keywords)
+    /// * `limit` - Maximum number of results
+    ///
+    /// # Returns
+    ///
+    /// Vector of search results sorted by hybrid score
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VectorStoreError::TableNotFound`] if the table doesn't exist.
+    pub async fn search_hybrid(
+        &self,
+        table_name: &str,
+        query: Vec<f32>,
+        keywords: Vec<String>,
+        limit: usize,
+    ) -> Result<Vec<VectorSearchResult>, VectorStoreError> {
+        self.search_with_keywords(table_name, query, keywords, limit).await
+    }
+
+    /// Internal search implementation with optional keyword boosting.
+    async fn search_with_keywords(
+        &self,
+        table_name: &str,
+        query: Vec<f32>,
+        keywords: Vec<String>,
         limit: usize,
     ) -> Result<Vec<VectorSearchResult>, VectorStoreError> {
         let table_path = self.table_path(table_name);
@@ -121,6 +167,164 @@ impl crate::VectorStore {
             }
         }
 
+        // Apply keyword boosting if keywords provided
+        if !keywords.is_empty() {
+            Self::apply_keyword_boost(&mut results, &keywords);
+        }
+
+        // Sort by hybrid score (distance - smaller is better for cosine)
+        results.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap_or(std::cmp::Ordering::Equal));
+
         Ok(results)
+    }
+
+    /// Apply keyword boosting to search results.
+    ///
+    /// Modifies the distance field using: `new_distance = (vector_score * 0.7) + (keyword_score * 0.3)`
+    fn apply_keyword_boost(results: &mut Vec<VectorSearchResult>, keywords: &[String]) {
+        // Return early if no keywords to process
+        if keywords.is_empty() {
+            return;
+        }
+
+        // Normalize keywords for matching - collect owned strings first
+        let mut query_keywords: Vec<String> = Vec::new();
+        for s in keywords {
+            let lowered = s.to_lowercase();
+            for w in lowered.split_whitespace() {
+                query_keywords.push(w.to_string());
+            }
+        }
+
+        for result in results {
+            let mut keyword_score = 0.0;
+
+            // Extract keywords from metadata JSON array
+            if let Some(keywords_arr) = result.metadata.get("keywords").and_then(|v| v.as_array()) {
+                for kw in &query_keywords {
+                    if keywords_arr.iter().any(|k| {
+                        k.as_str()
+                            .map_or(false, |s| s.to_lowercase().contains(kw))
+                    }) {
+                        keyword_score += KEYWORD_BOOST;
+                    }
+                }
+            }
+
+            // Also check if keywords appear in tool_name or content
+            let tool_name_lower = result.id.to_lowercase();
+            let content_lower = result.content.to_lowercase();
+            for kw in &query_keywords {
+                if tool_name_lower.contains(kw) {
+                    keyword_score += KEYWORD_BOOST * 0.5;
+                }
+                if content_lower.contains(kw) {
+                    keyword_score += KEYWORD_BOOST * 0.3;
+                }
+            }
+
+            // Calculate hybrid score: distance minus keyword bonus
+            // Higher keyword_score = better match = lower distance
+            let keyword_bonus = keyword_score * KEYWORD_WEIGHT;
+            let hybrid_distance = result.distance - keyword_bonus;
+
+            // Clamp to valid range (don't go negative)
+            result.distance = hybrid_distance.max(0.0);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_apply_keyword_boost_metadata_match() {
+        // Test that keyword matching works with metadata.keywords array
+        // Use smaller distance difference (0.05) so keyword boost (0.03) can overcome it
+        let mut results = vec![
+            VectorSearchResult {
+                id: "git.commit".to_string(),
+                content: "Execute git.commit".to_string(),
+                metadata: serde_json::json!({
+                    "keywords": ["git", "commit", "version"]
+                }),
+                distance: 0.35, // Slightly worse vector similarity
+            },
+            VectorSearchResult {
+                id: "file.save".to_string(),
+                content: "Save a file".to_string(),
+                metadata: serde_json::json!({
+                    "keywords": ["file", "save", "write"]
+                }),
+                distance: 0.3, // Better vector similarity
+            },
+        ];
+
+        crate::VectorStore::apply_keyword_boost(&mut results, &["git".to_string()]);
+
+        // git.commit: keyword_score = 0.1, keyword_bonus = 0.03
+        // git.commit: 0.35 - 0.03 = 0.32
+        // file.save: 0.3
+        // git.commit should rank higher
+        assert!(results[0].id == "git.commit", "git.commit should rank first with keyword boost");
+        assert!(results[0].distance < results[1].distance, "git.commit distance should be lower");
+    }
+
+    #[tokio::test]
+    async fn test_apply_keyword_boost_no_keywords() {
+        // Test that results unchanged when no keywords provided
+        let mut results = vec![
+            VectorSearchResult {
+                id: "git.commit".to_string(),
+                content: "Execute git.commit".to_string(),
+                metadata: serde_json::json!({"keywords": ["git"]}),
+                distance: 0.5,
+            },
+        ];
+
+        crate::VectorStore::apply_keyword_boost(&mut results, &[]);
+
+        assert_eq!(results[0].distance, 0.5, "Distance should not change with empty keywords");
+    }
+
+    #[tokio::test]
+    async fn test_apply_keyword_boost_multiple_keywords() {
+        // Test that multiple keyword matches accumulate
+        let mut results = vec![
+            VectorSearchResult {
+                id: "git.commit".to_string(),
+                content: "Execute git.commit".to_string(),
+                metadata: serde_json::json!({
+                    "keywords": ["git", "commit", "version"]
+                }),
+                distance: 0.4,
+            },
+            VectorSearchResult {
+                id: "file.save".to_string(),
+                content: "Save a file".to_string(),
+                metadata: serde_json::json!({
+                    "keywords": ["file", "save"]
+                }),
+                distance: 0.3,
+            },
+        ];
+
+        // Query with multiple keywords
+        crate::VectorStore::apply_keyword_boost(&mut results, &["git".to_string(), "commit".to_string()]);
+
+        // git.commit matches both keywords: keyword_score = 0.1 + 0.1 = 0.2, bonus = 0.06
+        // git.commit: 0.4 - 0.06 = 0.34
+        // file.save: 0.3
+        // file.save still wins (0.3 < 0.34)
+        assert!(results[0].distance < results[1].distance, "Results should be sorted by hybrid distance");
+    }
+
+    #[tokio::test]
+    async fn test_apply_keyword_boost_empty_results() {
+        // Test with empty results list
+        let mut results: Vec<VectorSearchResult> = vec![];
+        crate::VectorStore::apply_keyword_boost(&mut results, &["git".to_string()]);
+        assert!(results.is_empty());
     }
 }

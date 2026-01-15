@@ -73,6 +73,9 @@ class SkillLoaderMixin:
             inject_settings = config.get("inject_settings", [])
             retry_on = config.get("retry_on", (ConnectionError, TimeoutError))
             max_attempts = config.get("max_attempts", 3)
+            # Phase 61: Caching config
+            cache_ttl = config.get("cache_ttl", 0.0)
+            pure = config.get("pure", False)
 
             commands[cmd_name] = SkillCommand(
                 name=cmd_name,
@@ -86,6 +89,9 @@ class SkillLoaderMixin:
                 _inject_settings=inject_settings,
                 _retry_on=retry_on,
                 _max_attempts=max_attempts,
+                # Phase 61: Caching fields
+                cache_ttl=cache_ttl,
+                pure=pure,
             )
 
         return commands

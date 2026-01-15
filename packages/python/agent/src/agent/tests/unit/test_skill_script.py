@@ -97,6 +97,36 @@ class TestSkillScriptDecorator:
         assert config is not None
         assert config["description"] == "This is the description from docstring."
 
+    # Phase 61: Caching tests
+    def test_skill_script_cache_ttl(self) -> None:
+        """Verify @skill_script stores cache_ttl in config."""
+
+        @skill_script(
+            description="Cached command",
+            cache_ttl=60.0,
+            pure=True,
+        )
+        def cached_func() -> str:
+            """A cached function."""
+            return "result"
+
+        config = get_script_config(cached_func)
+        assert config is not None
+        assert config["cache_ttl"] == 60.0
+        assert config["pure"] is True
+
+    def test_skill_script_cache_defaults(self) -> None:
+        """Verify @skill_script has correct caching defaults."""
+
+        @skill_script()
+        def uncached_func() -> str:
+            """A function without caching."""
+            return "result"
+
+        config = get_script_config(uncached_func)
+        assert config["cache_ttl"] == 0.0
+        assert config["pure"] is False
+
 
 class TestSkillCommandDecorator:
     """Tests for existing @skill_command (ensure backward compatibility)."""

@@ -106,6 +106,9 @@ def skill_command(
     # Retry Configuration
     retry_on: tuple[type[Exception], ...] = (ConnectionError, TimeoutError),
     max_attempts: int = 3,
+    # Phase 61: Caching support
+    cache_ttl: float = 0.0,
+    pure: bool = False,
 ):
     """
     [Macro] Mark a function as an exposed skill command with optional DI.
@@ -114,6 +117,7 @@ def skill_command(
     - Structured CommandResult output
     - Automatic retry for transient failures
     - Context-aware logging
+    - Phase 61: Result caching with TTL
 
     Args:
         name: Override command name (default: function name)
@@ -124,6 +128,8 @@ def skill_command(
                          Keys are converted to snake_case kwargs (e.g. git_path)
         retry_on: Tuple of exception types to retry on
         max_attempts: Maximum retry attempts (default: 3)
+        cache_ttl: Cache time-to-live in seconds (0 = disabled)
+        pure: Whether the function is side-effect free (improves caching safety)
 
     Usage:
         @skill_command(category="git", description="Check git status")
@@ -134,6 +140,9 @@ def skill_command(
 
         @skill_command(category="git", inject_settings=["git.user", "git.email"])
         def setup_config(git_user: str = None, git_email: str = None): ...
+
+        @skill_command(cache_ttl=60.0, pure=True)
+        def read_config(): ...  # Read-only operation, cached for 60s
     """
 
     def decorator(func: Callable) -> Callable:
@@ -146,6 +155,9 @@ def skill_command(
             "retry_on": retry_on,
             "max_attempts": max_attempts,
             "input_schema": _get_param_schema(func),
+            # Phase 61: Caching metadata
+            "cache_ttl": cache_ttl,
+            "pure": pure,
         }
 
         # 2. Sync Wrapper with Structured Logging
@@ -504,6 +516,9 @@ def skill_script(
     # Retry Configuration
     retry_on: tuple[type[Exception], ...] = (ConnectionError, TimeoutError),
     max_attempts: int = 3,
+    # Phase 61: Caching support
+    cache_ttl: float = 0.0,
+    pure: bool = False,
 ):
     """
     [Macro] Mark a function in scripts/*.py as an exposed skill command.
@@ -515,6 +530,7 @@ def skill_script(
     - Auto-generates tool name from function name (e.g., commit -> "git.commit")
     - Stores full metadata for MCP tool registration
     - Supports dependency injection and retry logic
+    - Phase 61: Supports result caching with TTL
 
     Args:
         name: Override command name (default: function name)
@@ -524,6 +540,8 @@ def skill_script(
         inject_settings: List of setting keys to inject
         retry_on: Tuple of exception types to retry on
         max_attempts: Maximum retry attempts
+        cache_ttl: Cache time-to-live in seconds (0 = disabled)
+        pure: Whether the function is side-effect free (improves caching safety)
 
     Usage (in assets/skills/git/scripts/commit.py):
 
@@ -532,6 +550,7 @@ def skill_script(
         @skill_script(
             description="Commit staged changes",
             category="write",
+            cache_ttl=60.0,  # Cache result for 60 seconds
         )
         def commit(message: str) -> str:
             '''Commit changes to git repository.'''
@@ -552,6 +571,9 @@ def skill_script(
             "input_schema": _get_param_schema(func),
             "inject_root": inject_root,
             "inject_settings": inject_settings or [],
+            # Phase 61: Caching metadata
+            "cache_ttl": cache_ttl,
+            "pure": pure,
         }
 
         # Return the original function (no wrapper for script commands)

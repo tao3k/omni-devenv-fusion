@@ -20,7 +20,8 @@ ALLOWED_COMMANDS: list[str] = []
 DANGEROUS_PATTERNS = [
     (r"rm\s+-rf\s+/", "rm -rf / - Deletes entire filesystem"),
     (r"rm\s+-rf\s+/\w+", "rm -rf /{path} - Dangerous recursive delete"),
-    (r":\(\)\s*\|", "Process substitution - may bypass security"),
+    (r":\(\)\s*\{", "Fork bomb definition - recursive function"),
+    (r"\{\s*:\s*\|\s*:\s*&\s*\}", "Fork bomb execution pattern"),
     (r"\$\(.*\)", "Command substitution - complex execution"),
     (r"`[^`]+`", "Backtick command substitution - complex execution"),
     (r">\s*/dev/", "Redirect to device - potential DoS"),
@@ -38,7 +39,6 @@ DANGEROUS_PATTERNS = [
     (r"chmod\s+\+[xs]", "Add executable permission - privilege escalation"),
     (r"chown", "Change ownership - privilege escalation"),
     (r"sudo\s+rm", "sudo rm - high risk operation"),
-    (r"fork\s* bomb", "Fork bomb - DoS attack"),
 ]
 
 

@@ -1,7 +1,10 @@
 # Skills Documentation
 
-> **Phase 65: Reactive Indexing** | **Phase 64: Incremental Sync** | **Phase 52: The Surgeon** | **Phase 47: The Iron Lung** | **Phase 46: The Neural Bridge** | **Phase 45: Rust Core Integration** | **Phase 44: Experiential Agent** | **Phase 43: Holographic Agent** | **Phase 41: Wisdom-Aware Routing** | **Phase 40: Automated Reinforcement Loop** | **Phase 39: Self-Evolving Feedback Loop** | **Phase 36.6: Production Stability** | **Phase 36.5: Hot Reload & Index Sync** | **Phase 36: Trinity v2.0** | **Phase 35.3: Pure MCP Server** | **Phase 35.2: Cascading Templates** | **Phase 35.1: Simplified Test Framework** | **Phase 34: Cognitive System** | **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
+> **Phase 71: The Memory Mesh** | **Phase 70: The Knowledge Matrix** | **Phase 67: The Adaptive Loader** | **Phase 65: Reactive Indexing** | **Phase 64: Incremental Sync** | **Phase 52: The Surgeon** | **Phase 47: The Iron Lung** | **Phase 46: The Neural Bridge** | **Phase 45: Rust Core Integration** | **Phase 44: Experiential Agent** | **Phase 43: Holographic Agent** | **Phase 41: Wisdom-Aware Routing** | **Phase 40: Automated Reinforcement Loop** | **Phase 39: Self-Evolving Feedback Loop** | **Phase 36.6: Production Stability** | **Phase 36.5: Hot Reload & Index Sync** | **Phase 36: Trinity v2.0** | **Phase 35.3: Pure MCP Server** | **Phase 35.2: Cascading Templates** | **Phase 35.1: Simplified Test Framework** | **Phase 34: Cognitive System** | **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
 
+> **Phase 71**: Cognitive Trinity Complete - Episodic Memory
+> **Phase 70**: Unified Knowledge Index for Context-Aware AI Agents
+> **Phase 67**: JIT Loading + Ghost Tools + LRU Unloading (Infinite Toolbox)
 > **Phase 65**: Auto-sync on file save + O(1) MCP tool listing
 > **Phase 64**: Fast incremental sync (~0.2s) vs full reindex (~5s)
 > **Phase 46**: Type unification between Rust and Python (SSOT via omni-types)
@@ -1459,6 +1462,158 @@ vim assets/skills/git/scripts/commit.py
 | `agent/core/skill_manager/watcher.py` | SkillSyncHandler, BackgroundWatcher |
 | `agent/cli/commands/skill.py`         | `skill watch` command               |
 | `agent/mcp_server.py`                 | Watcher lifecycle integration       |
+
+---
+
+## Phase 67: The Adaptive Loader (Infinite Toolbox)
+
+> **Status**: Implemented | **Date**: 2026-01-14
+
+Phase 67 transforms the Agent from "preload everything" to "infinite toolbox" architecture. Skills load on-demand, LLM sees ghost tools, and memory is managed via LRU.
+
+### Key Features
+
+| Feature                   | Description                              |
+| ------------------------- | ---------------------------------------- |
+| **JIT Loading**           | Skills load on first use, not at startup |
+| **Ghost Tools**           | LLM sees unloaded tools as schemas       |
+| **LRU Unloading**         | Memory-efficient garbage collection      |
+| **Simplified Hot Reload** | Lean, fast-reaction code updates         |
+
+### 1. JIT Loading
+
+Skills are loaded on first use via `_try_jit_load()`:
+
+```python
+# Before Phase 67: Skills pre-loaded at startup (slow)
+# After Phase 67: JIT load on first call
+
+await sm.run('git', 'status', {})  # First call: JIT loads git
+await sm.run('git', 'log', {})     # Second call: already loaded
+```
+
+**Strategy**:
+
+1. Direct path lookup via `SKILLS_DIR.definition_file()` (fastest)
+2. Fallback to semantic search if skill moved
+
+### 2. Ghost Tool Injection
+
+The LLM can "see" unloaded skills through Ghost Tool schemas:
+
+```python
+from agent.core.context_builder import fetch_ghost_tools, merge_tool_definitions
+
+# Context builder flow
+loaded_tools = get_mcp_tools()  # From MCP server
+ghost_tools = await fetch_ghost_tools(user_query, skill_manager, limit=5)
+all_tools = merge_tool_definitions(loaded_tools, ghost_tools)
+
+# LLM receives tools with [GHOST] prefix for unloaded ones
+```
+
+**Ghost Tool Schema**:
+
+```json
+{
+  "name": "git.revert",
+  "description": "[GHOST] Revert commits (Auto-loads on use)",
+  "input_schema": { ... },
+  "attributes": { "ghost": true, "score": 0.85 }
+}
+```
+
+When LLM calls a ghost tool, `SkillManager.run()` intercepts and JIT loads the skill.
+
+### 3. Adaptive Unloading (LRU)
+
+Memory footprint is controlled via LRU garbage collection:
+
+```python
+# Configuration
+sm._max_loaded_skills = 15      # Max skills in memory
+sm._pinned_skills = {           # Never unloaded
+    "filesystem", "terminal", "writer", "git", "note_taker"
+}
+sm._lru_order = ["git", "terminal", "filesystem"]  # Usage order
+```
+
+**Behavior**:
+
+- When `len(_skills) > _max_loaded_skills`, oldest non-pinned skills are unloaded
+- Core skills (filesystem, terminal, etc.) are protected
+- LRU order updated on every `run()` call
+
+### 4. Simplified Hot Reload
+
+Phase 67 simplifies hot reload by removing pre-validation:
+
+| Feature              | Before                 | After     |
+| -------------------- | ---------------------- | --------- |
+| Syntax validation    | `py_compile.compile()` | Removed   |
+| Transaction rollback | Complex safety checks  | Fail fast |
+| Lines of code        | 216                    | 145       |
+
+**Philosophy**: If code has syntax errors, let Python import fail. The Meta-Agent can self-repair.
+
+### Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Phase 67: The Adaptive Loader            │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  User Query → Ghost Tool Injection → LLM sees:             │
+│                              - Loaded tools                 │
+│                              - Ghost tools (schemas)        │
+│                                                              │
+│  LLM calls ghost.tool → SkillManager.run() → JIT Load     │
+│                              ↓                              │
+│  Execute & Update LRU → Memory Check → Unload Oldest      │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Verification
+
+```bash
+# Test Ghost Tools
+uv run python -c "
+from agent.core.context_builder import fetch_ghost_tools
+from agent.core.skill_manager import SkillManager
+import asyncio
+
+async def test():
+    sm = SkillManager()
+    ghosts = await fetch_ghost_tools('git commit', sm, limit=5)
+    print(f'Found {len(ghosts)} ghost tools')
+
+asyncio.run(test())
+"
+
+# Test JIT + LRU
+uv run python -c "
+from agent.core.skill_manager import SkillManager
+import asyncio
+
+async def test():
+    sm = SkillManager()
+    print(f'Max skills: {sm._max_loaded_skills}')
+    print(f'Pinned: {sm._pinned_skills}')
+    await sm.run('git', 'status', {})
+    print(f'Loaded: {len(sm._skills)}, LRU: {sm._lru_order}')
+
+asyncio.run(test())
+"
+```
+
+### Related Files
+
+| File                                     | Purpose               |
+| ---------------------------------------- | --------------------- |
+| `agent/core/context_builder.py`          | Ghost Tool Injection  |
+| `agent/core/skill_manager/manager.py`    | JIT Loading + LRU     |
+| `agent/core/skill_manager/hot_reload.py` | Simplified Hot Reload |
 
 ---
 

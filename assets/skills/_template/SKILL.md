@@ -2,7 +2,7 @@
 # === Omni-Dev Fusion Skill Manifest ===
 name: _template
 version: 1.0.0
-description: Template skill for new capabilities - demonstrates Trinity Architecture with Isolated Sandbox
+description: Template skill for new capabilities - demonstrates Trinity Architecture v2.0
 authors: ["omni-dev-fusion"]
 license: Apache-2.0
 execution_mode: library
@@ -24,43 +24,49 @@ When working with the Template skill:
 
 - Use `template.example` for basic operations
 - Use `template.process_data` for data processing tasks
-- Remember to follow the Router-Controller pattern
-- All implementation lives in scripts/ directory
+- All commands are defined in `scripts/commands.py` with @skill_script decorator
+- No tools.py needed - this is the single source of truth
 ```
 
-## Trinity Architecture Context (Phase 36)
+## Trinity Architecture v2.0 Context (Phase 63+)
 
-This skill operates within the **Trinity Architecture** with **Controller Layer Pattern**:
+This skill operates within the **Trinity Architecture v2.0** with **scripts/commands.py** pattern:
 
 ```
 _template/
 ├── SKILL.md           # Metadata + System Prompts
-├── tools.py           # Router (dispatch only)
-└── scripts/           # Controllers (isolated implementation)
-    ├── __init__.py    # Package marker (required!)
-    ├── example.py     # Atomic implementations
-    └── ...
+├── scripts/           # Commands (Phase 63+)
+│   ├── __init__.py    # Dynamic module loader (importlib.util)
+│   └── commands.py    # @skill_script decorated functions
+└── tests/             # Test files
 ```
 
 | Component   | Description                                                   |
 | ----------- | ------------------------------------------------------------- |
-| **Code**    | `tools.py` + `scripts/` - Hot-reloaded via ModuleLoader       |
+| **Code**    | `scripts/commands.py` - Hot-reloaded via ModuleLoader         |
 | **Context** | `@omni("template.help")` - Full skill context via Repomix XML |
 | **State**   | `SKILL.md` - Skill metadata in YAML Frontmatter               |
 
-## Why Isolated Sandbox?
+## Why scripts/commands.py Pattern?
 
-For large-scale deployments (100+ skills), namespace conflicts are inevitable:
+Phase 63+ simplifies the skill architecture:
 
-- `git/scripts/utils.py` vs `docker/scripts/utils.py`
-- `python/scripts/status.py` vs `docker/scripts/status.py`
+**Old (Phase 36):**
 
-**Solution**: Each skill's `scripts/` is an isolated Python package:
+- `tools.py` - Router with `@skill_command` decorators
+- `scripts/*.py` - Implementation functions
 
-- `agent.skills.git.scripts.status` ← Git's status
-- `agent.skills.docker.scripts.status` ← Docker's status
+**New (Phase 63+):**
 
-These are **completely different objects** in memory.
+- `scripts/commands.py` - Commands with `@skill_script` decorators
+- No `tools.py` needed
+
+**Benefits:**
+
+- Single source of truth
+- No router-indirection layer
+- Easier to understand and maintain
+- Hot-reload works directly on commands
 
 ## ODF-EP Protocol Awareness
 
@@ -77,20 +83,18 @@ All core skill modules follow the **"Python Zenith" Engineering Protocol**:
 
 Use `_template` as a scaffold for new skills:
 
-### Development Workflow (Phase 36)
+### Development Workflow (Phase 63+)
 
 ```
 1. _template/                    # Start: Copy this template
    │
-2. tools.py                     # Step 1: ROUTER (dispatch only)
+2. scripts/                     # Step 1: COMMANDS (actual logic)
    │
-3. scripts/                     # Step 2: CONTROLLER (actual logic)
+3. tests/                       # Step 2: TESTS (zero-config)
    │
-4. tests/                       # Step 3: TESTS (zero-config)
+4. README.md                    # Step 3: User documentation
    │
-5. README.md                    # Step 4: User documentation
-   │
-6. SKILL.md                     # Step 5: LLM context & manifest
+5. SKILL.md                     # Step 4: LLM context & manifest
 ```
 
 ### Step 1: Copy Template
@@ -99,45 +103,36 @@ Use `_template` as a scaffold for new skills:
 cp -r assets/skills/_template assets/skills/my_new_skill
 ```
 
-### Step 2: Add Commands (`tools.py` - Router Layer)
+### Step 2: Add Commands (`scripts/commands.py`)
 
 ```python
-from agent.skills.decorators import skill_command
+from agent.skills.decorators import skill_script
 
-@skill_command(
+@skill_script(
     name="my_command",
     category="read",
     description="Brief description",
 )
-def my_command(param: str) -> str:
+async def my_command(param: str) -> str:
     """Detailed docstring."""
-    from agent.skills.my_new_skill.scripts import example as example_mod
-    return example_mod.my_implementation(param)
+    return f"Result: {param}"
 ```
 
 **Note:** Command name is just `my_command`, not `my_new_skill.my_command`. MCP Server auto-prefixes.
 
-### Step 3: Add Implementation (`scripts/example.py` - Controller Layer)
+### Step 3: Add Tests (`tests/test_*.py`)
 
 ```python
-# scripts/example.py
-def my_implementation(param: str) -> str:
-    """Actual implementation."""
-    return f"Result: {param}"
+def test_my_command_exists():
+    from agent.skills.my_new_skill.scripts import commands
+    assert hasattr(commands, "my_command")
 ```
 
-### Step 4: Add Tests (`tests/test_*.py`)
-
-```python
-def test_my_command_exists(my_new_skill):
-    assert hasattr(my_new_skill, "my_command")
-```
-
-### Step 5: Update Documentation (`README.md`)
+### Step 4: Update Documentation (`README.md`)
 
 Add usage examples and command reference.
 
-### Step 6: Update Manifest (`SKILL.md`)
+### Step 5: Update Manifest (`SKILL.md`)
 
 Edit the frontmatter:
 
@@ -150,57 +145,24 @@ routing_keywords: ["keyword1", "keyword2"]
 ---
 ```
 
-### Step 7: (Optional) Add Jinja2 Templates
-
-For structured output:
-
-```bash
-mkdir -p assets/templates/my_new_skill/
-# Add *.j2 template files
-```
-
-### 6. (Optional) Subprocess Mode - Sidecar Execution Pattern
+### Step 6: (Optional) Subprocess Mode - Sidecar Execution Pattern
 
 For heavy/conflicting dependencies (e.g., `crawl4ai`, `playwright`), use the **Sidecar Pattern**:
 
 ```
 assets/skills/my_skill/
 ├── pyproject.toml        # Skill dependencies (uv isolation)
-├── tools.py              # Lightweight shim (no heavy imports!)
 └── scripts/
+    ├── __init__.py       # Module loader
     └── engine.py         # Heavy implementation (imports OK here!)
 ```
 
 **Step A: Create `pyproject.toml`** (copied from `_template/pyproject.toml`)
 
-**Step B: Write lightweight `tools.py` shim**
+**Step B: Write `scripts/engine.py`** (heavy imports allowed!)
 
 ```python
-# tools.py - Router (lightweight, no heavy imports!)
-from pathlib import Path
-from agent.skills.decorators import skill_command
-from common.isolation import run_skill_script
-
-def _get_skill_dir() -> Path:
-    return Path(__file__).parent
-
-@skill_command
-def my_command(param: str) -> dict:
-    """
-    My command description.
-    """
-    return run_skill_script(
-        skill_dir=_get_skill_dir(),
-        script_name="engine.py",
-        args={"param": param},
-        timeout=60,
-    )
-```
-
-**Step C: Write heavy `scripts/engine.py`** (imports OK here!)
-
-```python
-# scripts/engine.py - Controller (heavy imports allowed!)
+# scripts/engine.py - Heavy implementation
 import json
 from heavy_lib import do_work  # This works!
 
@@ -214,20 +176,45 @@ if __name__ == "__main__":
     main(sys.argv[1] if sys.argv[1:] else "")
 ```
 
+**Step C: Write `scripts/__init__.py`** (lightweight shim)
+
+```python
+# scripts/__init__.py - Lightweight loader
+import importlib.util
+from pathlib import Path
+import subprocess
+import json
+
+_scripts_dir = Path(__file__).parent
+
+def run_engine(param: str) -> dict:
+    """Run engine.py as subprocess."""
+    engine_path = _scripts_dir / "engine.py"
+    result = subprocess.run(
+        ["python", str(engine_path), param],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    return json.loads(result.stdout)
+```
+
 **Why This Pattern?**
 
-| Layer               | What                 | Why                    |
-| ------------------- | -------------------- | ---------------------- |
-| `tools.py`          | Lightweight shim     | Main agent stays clean |
-| `scripts/engine.py` | Heavy implementation | Can import anything    |
-| `pyproject.toml`    | Dependencies         | uv manages isolation   |
+| Layer                 | What                 | Why                    |
+| --------------------- | -------------------- | ---------------------- |
+| `scripts/__init__.py` | Lightweight loader   | Main agent stays clean |
+| `scripts/engine.py`   | Heavy implementation | Can import anything    |
+| `pyproject.toml`      | Dependencies         | uv manages isolation   |
 
 ## Quick Reference
 
-| Command            | Category | Description             |
-| ------------------ | -------- | ----------------------- |
-| `template.example` | read     | Example command         |
-| `template.help`    | view     | Show full skill context |
+| Command                         | Category | Description             |
+| ------------------------------- | -------- | ----------------------- |
+| `template.example`              | read     | Example command         |
+| `template.example_with_options` | read     | Example with options    |
+| `template.process_data`         | write    | Process data strings    |
+| `template.help`                 | view     | Show full skill context |
 
 ## Related Documentation
 

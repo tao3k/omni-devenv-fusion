@@ -510,10 +510,7 @@ impl From<&omni_vector::ToolRecord> for PyToolRecord {
             skill_name: record.skill_name.clone(),
             file_path: record.file_path.clone(),
             function_name: record.function_name.clone(),
-            execution_mode: match record.execution_mode {
-                omni_vector::ExecutionMode::Legacy => "legacy".to_string(),
-                omni_vector::ExecutionMode::Script => "script".to_string(),
-            },
+            execution_mode: record.execution_mode.clone(),
             keywords: record.keywords.clone(),
             input_schema: record.input_schema.clone(),
             docstring: record.docstring.clone(),
@@ -594,6 +591,48 @@ impl PyVectorStore {
             let store = VectorStore::new(&path, Some(dimension)).await
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
             let results = store.search(&table_name, query, limit).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            // Return JSON strings for easier Python processing
+            let json_results: Vec<String> = results
+                .into_iter()
+                .map(|r| serde_json::to_string(&r).unwrap_or_default())
+                .collect();
+            Ok(json_results)
+        })
+    }
+
+    /// Phase 67: Hybrid search with keyword boosting.
+    ///
+    /// Combines vector similarity with keyword matching for better relevance.
+    /// Formula: Score = Vector_Score * 0.7 + Keyword_Match * 0.3
+    ///
+    /// Args:
+    ///   table_name: Name of the table
+    ///   query: Query vector for semantic search
+    ///   keywords: Keywords to boost (matched against metadata.keywords)
+    ///   limit: Maximum number of results
+    ///
+    /// Returns:
+    ///   List of JSON strings representing search results
+    fn search_hybrid(
+        &self,
+        table_name: String,
+        query: Vec<f32>,
+        keywords: Vec<String>,
+        limit: usize,
+    ) -> PyResult<Vec<String>> {
+        let path = self.path.clone();
+        let dimension = self.dimension;
+        let query = query.clone();
+        let keywords = keywords.clone();
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        rt.block_on(async {
+            let store = VectorStore::new(&path, Some(dimension)).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            let results = store.search_hybrid(&table_name, query, keywords, limit).await
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
             // Return JSON strings for easier Python processing
             let json_results: Vec<String> = results

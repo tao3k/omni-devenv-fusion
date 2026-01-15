@@ -1536,6 +1536,140 @@ print(f"Read {len(content)} bytes")
 
 ---
 
+## Phase 70: The Knowledge Matrix
+
+> **Phase 70**: Unified Knowledge Index for Context-Aware AI Agents
+
+Phase 69 completed **Skill RAG** (dynamic tool loading). Phase 70 extends this to **Knowledge RAG** - a unified matrix for indexing and searching project documentation, specifications, and memory.
+
+### Architecture Overview
+
+```
+                    ┌─────────────────────────────────────┐
+                    │         The Knowledge Matrix         │
+                    └─────────────────────────────────────┘
+                                    │
+          ┌─────────────────────────┼─────────────────────────┐
+          ▼                         ▼                         ▼
+   ┌─────────────┐          ┌─────────────┐          ┌─────────────┐
+   │   Skills    │          │  Knowledge  │          │   Memory    │
+   │   Table     │          │   Table     │          │   Table     │
+   └─────────────┘          └─────────────┘          └─────────────┘
+   └─────────────────────────┴─────────────────────────┘
+                    │                 │
+                    ▼                 ▼
+           ┌─────────────────┐ ┌─────────────────┐
+           │ Tool Discovery  │ │  Doc Search     │
+           │ (skill.search)  │ │  (knowledge.*)  │
+           └─────────────────┘ └─────────────────┘
+```
+
+### Key Components
+
+| Component              | Purpose                       | Data Source              |
+| ---------------------- | ----------------------------- | ------------------------ |
+| **Knowledge Indexer**  | Scan and chunk Markdown files | `docs/`, `assets/specs/` |
+| **Hybrid Search**      | Vector + keyword search       | LanceDB                  |
+| **DocRecord/DocChunk** | Data models for indexing      | Pydantic dataclasses     |
+
+### Key Functions
+
+```python
+from agent.core.knowledge.indexer import scan_markdown_files, sync_knowledge
+
+# Scan docs directory
+records = scan_markdown_files("docs/")
+
+# Sync with incremental updates
+stats = await sync_knowledge(store, "docs/", table_name="knowledge")
+# Returns: {"added": N, "updated": N, "deleted": N, "total": N}
+```
+
+### Related Specs
+
+- `assets/specs/phase70_the_knowledge_matrix.md`
+
+---
+
+## Phase 71: The Memory Mesh
+
+> **Phase 71**: Episodic Memory for Self-Learning Agents
+
+Phase 71 completes the **Cognitive Trinity** by adding episodic memory - the ability for the Agent to remember past experiences and learn from them.
+
+### Cognitive Trinity Complete
+
+| Component     | Capability                     | Phase | Data Source                    |
+| ------------- | ------------------------------ | ----- | ------------------------------ |
+| **Skills**    | "I know how to do"             | 69 ✅ | `assets/skills/*/scripts/*.py` |
+| **Knowledge** | "I know what that is"          | 70 ✅ | `docs/`, `assets/specs/`       |
+| **Memory**    | "I remember doing that before" | 71 ✅ | VectorDB (LanceDB)             |
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    MemoryInterceptor (Runtime Hook)                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Task Execution                                                             │
+│       ↓                                                                    │
+│  ┌─────────────────────────────────────────────────────┐                   │
+│  │  before_execution(user_input)                       │                   │
+│  │  - Retrieve relevant memories from vector store     │ ← Context Injection│
+│  │  - Return formatted memories for LLM context        │                   │
+│  └─────────────────────────────────────────────────────┘                   │
+│       ↓                                                                    │
+│  Agent receives memories in system prompt                                   │
+│       ↓                                                                    │
+│  Task Execution (with memory context)                                       │
+│       ↓                                                                    │
+│  ┌─────────────────────────────────────────────────────┐                   │
+│  │  after_execution(user_input, tool_calls, success)   │                   │
+│  │  - Generate reflection (success summary or error)   │ ← Memory Recording│
+│  │  - Store experience in vector store                 │                   │
+│  └─────────────────────────────────────────────────────┘                   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Components
+
+| Component                      | Purpose                 | File                    |
+| ------------------------------ | ----------------------- | ----------------------- |
+| **InteractionLog**             | Episode data model      | `memory/types.py`       |
+| **MemoryManager**              | Write/retrieve memories | `memory/manager.py`     |
+| **MemoryInterceptor**          | Runtime hook for memory | `memory/interceptor.py` |
+| **AdaptiveLoader Integration** | Memory injection        | `adaptive_loader.py`    |
+
+### Usage Example
+
+```python
+from agent.core.memory.manager import get_memory_manager
+
+mm = get_memory_manager()
+
+# Record experience
+await mm.add_experience(
+    user_query="git commit fails with lock",
+    tool_calls=["git.commit"],
+    outcome="failure",
+    error_msg="index.lock exists",
+    reflection="Solution: rm .git/index.lock"
+)
+
+# Recall relevant experiences
+memories = await mm.recall("git commit lock")
+for m in memories:
+    print(f"[{m.outcome}] {m.reflection}")
+```
+
+### Related Specs
+
+- `assets/specs/phase71_the_memory_mesh.md`
+
+---
+
 ## Next Steps
 
 - See `docs/skills.md` for skill implementation guide

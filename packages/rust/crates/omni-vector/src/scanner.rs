@@ -28,6 +28,8 @@ pub struct ToolRecord {
     pub file_path: String,
     /// Function name in the Python file
     pub function_name: String,
+    /// Execution mode (e.g., "script", "library")
+    pub execution_mode: String,
     /// Keywords for vector search
     pub keywords: Vec<String>,
     /// SHA256 hash of file content (for incremental indexing)
@@ -190,6 +192,7 @@ impl ScriptScanner {
                         skill_name: skill_name.to_string(),
                         file_path: file_path.clone(),
                         function_name: func_name,
+                        execution_mode: "script".to_string(),
                         keywords: vec![skill_name.to_string(), tool_name.clone()],
                         file_hash: file_hash.clone(),
                         input_schema: "{}".to_string(),

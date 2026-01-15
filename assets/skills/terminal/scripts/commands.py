@@ -150,3 +150,35 @@ Please analyze it to find:
 async def inspect_environment() -> str:
     """Check the current execution environment."""
     return f"OS: {platform.system()}, CWD: {os.getcwd()}"
+
+
+@skill_script(
+    name="run_command",
+    category="workflow",
+    description="Run a shell command and return output.",
+    inject_root=True,
+)
+async def run_command(command: str, args: Optional[list[str]] = None, timeout: int = 60) -> str:
+    """
+    Run a shell command and return stdout/stderr.
+
+    Usage:
+    - run_command(command="git", args=["status"])
+    - run_command(command="git status")
+    """
+    if args is None:
+        args = []
+
+    # Handle command string with args like "git status"
+    if " " in command:
+        parts = command.split()
+        command = parts[0]
+        extra_args = parts[1:]
+        if extra_args:
+            args = extra_args + args
+
+    # Import from controller layer
+    from agent.skills.terminal.scripts import engine
+
+    result = engine.run_command(command, args, timeout=timeout)
+    return engine.format_result(result, command, args)

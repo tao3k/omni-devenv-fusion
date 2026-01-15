@@ -441,9 +441,40 @@ post_mortem:
   confidence_threshold: 0.8
 
 # =============================================================================
-# Phase 28: Safe Ingestion / Immune System
+# Phase 68-69: Adaptive Context Injection (Dynamic Tool Loading)
 # =============================================================================
-# Security layer for downloading and executing third-party skills
+# Configuration for "Core + Dynamic" tool loading strategy
+# Reduces token consumption by loading only relevant tools per request
+
+adaptive:
+  # Core Tools - Always present in LLM context (life support system)
+  # CRITICAL: skill.search_tools MUST be included - enables tool discovery
+  core_tools:
+    - "skill.search_tools" # [CRITICAL] Tool discovery - Agent finds other tools
+    - "memory.add_note" # Memory - Save insights
+    - "memory.search_memory" # Memory - Recall past context
+    - "task.update" # Task management
+    - "knowledge.get_development_context" # System context
+
+  # Limits
+  dynamic_tools_limit: 15 # Max dynamic tools per request
+  min_core_tools: 3 # Minimum guaranteed tools
+
+  # Re-ranking
+  rerank_threshold: 20 # If tools found > this, re-rank by score
+
+  # Caching
+  schema_cache_ttl: 300 # Tool schema cache TTL (seconds)
+
+  # Features
+  auto_optimize: true # Enable automatic context optimization
+
+# =============================================================================
+# LLM Context Limits
+# =============================================================================
+context:
+  max_schema_tokens: 4000 # Max tokens for tool schemas
+  avg_schema_tokens: 250 # Est. tokens per tool schema
 
 security:
   # Enable/disable security scanning (default: true)

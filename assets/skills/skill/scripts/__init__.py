@@ -5,6 +5,7 @@ Contains atomic implementations for skill-related commands:
 - discovery.py: Skill discovery and suggestion (Phase 63)
 - templates.py: Cascading template management
 - list_tools.py: List registered MCP tools
+- search_tools.py: Intent-driven tool search (Phase 67)
 """
 
 from .discovery import (
@@ -23,6 +24,7 @@ from .templates import (
     format_info_result,
 )
 from .list_tools import format_tools_list
+from .search_tools import search_tools, format_search_result
 
 __all__ = [
     # Discovery commands
@@ -39,4 +41,7 @@ __all__ = [
     "format_eject_result",
     "format_info_result",
     "format_tools_list",
+    # Search commands (Phase 67)
+    "search_tools",
+    "format_search_result",
 ]

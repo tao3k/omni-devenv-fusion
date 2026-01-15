@@ -1,114 +1,172 @@
 """
-Template Skill Tests - Zero Configuration (Phase 35.1)
+Template Skill Tests - Phase 35.1
 
-This file demonstrates how to write tests for YOUR skill.
-
-Copy this file to your skill's tests/ directory and update:
-1. Rename 'test_template_commands.py' to 'test_my_skill_commands.py'
-2. Replace 'template' with your skill name (e.g., 'my_skill')
-3. Update tests to match your commands
-
-For the _template itself, we test using the 'skill' fixture (skill management skill).
-
-Run Tests:
+Usage:
     uv run pytest assets/skills/_template/tests/ -v
-    uv run pytest assets/skills/ -v
     omni skill test _template
+
+Tests cover:
+- example: Example command with parameter
+- example_with_options: Example with optional parameters
+- process_data: Process a list of data strings
 """
 
 import pytest
 import inspect
+import sys
+import types
+import importlib.util
+from pathlib import Path
 
-# SSOT: Use common.skills_path for path resolution
-from common.skills_path import SKILLS_DIR
+
+def _setup_template_package_context():
+    """Set up the package hierarchy in sys.modules for template skill."""
+    tests_dir = Path(__file__).parent  # assets/skills/_template/tests
+    template_dir = tests_dir.parent  # assets/skills/_template
+    skills_root = template_dir.parent  # assets/skills
+    project_root = skills_root.parent.parent  # project root
+
+    # Ensure 'agent' package exists
+    if "agent" not in sys.modules:
+        agent_src = project_root / "packages/python/agent/src/agent"
+        agent_pkg = types.ModuleType("agent")
+        agent_pkg.__path__ = [str(agent_src)]
+        agent_pkg.__file__ = str(agent_src / "__init__.py")
+        sys.modules["agent"] = agent_pkg
+
+    # Ensure 'agent.skills' package exists
+    if "agent.skills" not in sys.modules:
+        skills_pkg = types.ModuleType("agent.skills")
+        skills_pkg.__path__ = [str(skills_root)]
+        skills_pkg.__file__ = str(skills_root / "__init__.py")
+        sys.modules["agent.skills"] = skills_pkg
+
+    # Ensure 'agent.skills._template' package exists
+    template_pkg_name = "agent.skills._template"
+    if template_pkg_name not in sys.modules:
+        template_pkg = types.ModuleType(template_pkg_name)
+        template_pkg.__path__ = [str(template_dir)]
+        template_pkg.__file__ = str(template_dir / "__init__.py")
+        sys.modules[template_pkg_name] = template_pkg
+
+    # Ensure 'agent.skills._template.scripts' package exists
+    scripts_pkg_name = "agent.skills._template.scripts"
+    if scripts_pkg_name not in sys.modules:
+        scripts_dir = template_dir / "scripts"
+        scripts_pkg = types.ModuleType(scripts_pkg_name)
+        scripts_pkg.__path__ = [str(scripts_dir)]
+        scripts_pkg.__file__ = str(scripts_dir / "__init__.py")
+        sys.modules[scripts_pkg_name] = scripts_pkg
+
+    # Pre-load decorators module for @skill_script support
+    decorators_name = "agent.skills.decorators"
+    if decorators_name not in sys.modules:
+        decorators_path = project_root / "packages/python/agent/src/agent/skills/decorators.py"
+        if decorators_path.exists():
+            spec = importlib.util.spec_from_file_location(decorators_name, str(decorators_path))
+            if spec and spec.loader:
+                decorators_mod = importlib.util.module_from_spec(spec)
+                sys.modules[decorators_name] = decorators_mod
+                spec.loader.exec_module(decorators_mod)
+
+
+# Setup package context before importing
+_setup_template_package_context()
 
 
 # =============================================================================
-# For your skill: Copy and customize these patterns
-# =============================================================================
-
-"""
-Example: Testing your own skill
-
-my_skill/tests/test_my_skill_commands.py:
-
-def test_my_command_exists(my_skill):  # 'my_skill' fixture auto-injected
-    assert hasattr(my_skill, "my_command")
-    assert callable(my_skill.my_command)
-
-
-def test_commands_have_metadata(my_skill):
-    for name, func in inspect.getmembers(my_skill, inspect.isfunction):
-        if hasattr(func, "_is_skill_command"):
-            assert hasattr(func, "_skill_config")
-"""
-
-
-# =============================================================================
-# Tests for the skill management skill (using 'skill' fixture)
+# Command Existence Tests
 # =============================================================================
 
 
-def test_skill_discover_exists(skill):
-    """The discover command should exist in skill tools."""
-    assert hasattr(skill, "discover")
-    assert callable(skill.discover)
+def test_example_exists():
+    """Verify example command exists and is callable."""
+    from agent.skills._template.scripts import commands
+
+    assert hasattr(commands, "example")
+    assert callable(commands.example)
 
 
-def test_skill_suggest_exists(skill):
-    """The suggest command should exist."""
-    assert hasattr(skill, "suggest")
-    assert callable(skill.suggest)
+def test_example_with_options_exists():
+    """Verify example_with_options command exists."""
+    from agent.skills._template.scripts import commands
+
+    assert hasattr(commands, "example_with_options")
+    assert callable(commands.example_with_options)
 
 
-def test_skill_jit_install_exists(skill):
-    """The jit_install command should exist."""
-    assert hasattr(skill, "jit_install")
-    assert callable(skill.jit_install)
+def test_process_data_exists():
+    """Verify process_data command exists."""
+    from agent.skills._template.scripts import commands
+
+    assert hasattr(commands, "process_data")
+    assert callable(commands.process_data)
 
 
-def test_skill_templates_exists(skill):
-    """The templates command should exist."""
-    assert hasattr(skill, "templates")
-    assert callable(skill.templates)
+# =============================================================================
+# Command Execution Tests
+# =============================================================================
 
 
-def test_skill_list_index_exists(skill):
-    """The list_index command should exist."""
-    assert hasattr(skill, "list_index")
-    assert callable(skill.list_index)
+def test_example_default_param():
+    """Test example command with default parameter."""
+    from agent.skills._template.scripts import commands
 
-
-def test_skill_commands_have_metadata(skill):
-    """All skill commands should have @skill_command metadata."""
-    for name, func in inspect.getmembers(skill, inspect.isfunction):
-        if hasattr(func, "_is_skill_command"):
-            assert hasattr(func, "_skill_config")
-            config = func._skill_config
-            assert "name" in config
-            assert "category" in config
-
-
-def test_skill_tools_py_has_commands(skill):
-    """skill/tools.py should have @skill_command decorated functions."""
-    commands = [
-        name
-        for name, func in inspect.getmembers(skill, inspect.isfunction)
-        if hasattr(func, "_is_skill_command")
-    ]
-    assert len(commands) > 0
-    assert "templates" in commands
-    assert "discover" in commands
-    assert "suggest" in commands
-
-
-def test_skill_templates_returns_string(skill):
-    """templates command should return a string."""
-    result = skill.templates(skill_name="git", action="list")
-
-    # Handle CommandResult wrapper from @skill_command
-    if hasattr(result, "data"):
-        result = result.data if result.success else result.error
-
+    result = commands.example()
     assert isinstance(result, str)
-    assert "git" in result.lower()
+    assert "Example" in result
+
+
+def test_example_custom_param():
+    """Test example command with custom parameter."""
+    from agent.skills._template.scripts import commands
+
+    result = commands.example(param="test_value")
+    assert isinstance(result, str)
+    assert "test_value" in result
+
+
+def test_example_with_options_defaults():
+    """Test example_with_options with default values."""
+    from agent.skills._template.scripts import commands
+
+    result = commands.example_with_options()
+    assert isinstance(result, dict)
+    assert result["enabled"] is True
+    assert result["value"] == 42
+
+
+def test_example_with_options_custom():
+    """Test example_with_options with custom values."""
+    from agent.skills._template.scripts import commands
+
+    result = commands.example_with_options(enabled=False, value=100)
+    assert isinstance(result, dict)
+    assert result["enabled"] is False
+    assert result["value"] == 100
+
+
+def test_process_data_no_filter():
+    """Test process_data without filtering empty strings."""
+    from agent.skills._template.scripts import commands
+
+    data = ["a", "", "b", "", "c"]
+    result = commands.process_data(data, filter_empty=False)
+    assert result == ["a", "", "b", "", "c"]
+
+
+def test_process_data_with_filter():
+    """Test process_data with empty string filtering."""
+    from agent.skills._template.scripts import commands
+
+    data = ["a", "", "b", "", "c"]
+    result = commands.process_data(data, filter_empty=True)
+    assert result == ["a", "b", "c"]
+
+
+def test_process_data_empty_list():
+    """Test process_data with empty input list."""
+    from agent.skills._template.scripts import commands
+
+    result = commands.process_data([])
+    assert result == []

@@ -52,6 +52,8 @@ try:
 except ImportError:
     pass
 
+from common.skills_path import SKILLS_DIR
+
 TARGET_SKILL_DIR = SKILLS_DIR("stress_test_skill")
 TOOLS_FILE = TARGET_SKILL_DIR / "tools.py"
 REPOMIX_FILE = TARGET_SKILL_DIR / "repomix.json"
@@ -63,34 +65,22 @@ logging.basicConfig(
 logger = logging.getLogger("stress_test")
 
 
-def setup_dummy_skill():
-    """Initialize a temporary skill for testing."""
-    if TARGET_SKILL_DIR.exists():
-        shutil.rmtree(TARGET_SKILL_DIR)
-
-    TARGET_SKILL_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Write atomic Repomix config (tests context stability)
-    REPOMIX_FILE.write_text(
-        '{"output": {"style": "xml"}, "include": ["tools.py"]}', encoding="utf-8"
-    )
-
-    # Write initial tools code
-    write_tool_version(0)
-    print(f"✅ Setup dummy skill at: {TARGET_SKILL_DIR}")
+SCRIPT_FILE = TARGET_SKILL_DIR / "scripts" / "ping.py"
 
 
-def write_tool_version(version: int):
-    """Dynamically modify tools.py, simulating developer saving files."""
-    content = f'''
+def write_script_version(version: int):
+    """Dynamically modify scripts/ping.py, simulating developer saving files."""
+    content = f'''"""Ping script for stress testing - Version {version}"""
 import time
-from assets.skills.decorators import skill_command
+from agent.skills.decorators import skill_script
 
 # Version: {version}
 # Timestamp: {time.time()}
 
-@skill_command(
-    category="stress",
+
+@skill_script(
+    name="ping",
+    category="general",
     description="Ping Pong Test - verifies hot-reload works"
 )
 def ping(delay: float = 0.0) -> str:
@@ -101,7 +91,61 @@ def ping(delay: float = 0.0) -> str:
         time.sleep(delay)
     return "pong_v{version}"
 '''
-    TOOLS_FILE.write_text(content, encoding="utf-8")
+    SCRIPT_FILE.write_text(content, encoding="utf-8")
+
+
+def write_tool_version(version: int):
+    """Legacy function - kept for reference but now uses scripts pattern."""
+    write_script_version(version)
+
+
+def setup_dummy_skill():
+    """Initialize a temporary skill for testing (Phase 63+ scripts pattern)."""
+    if TARGET_SKILL_DIR.exists():
+        shutil.rmtree(TARGET_SKILL_DIR)
+
+    TARGET_SKILL_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Write SKILL.md definition (required for JIT load + indexing)
+    SKILL_MD = TARGET_SKILL_DIR / "SKILL.md"
+    SKILL_MD.write_text(
+        """---
+name: stress_test_skill
+version: 1.0.0
+---
+
+# stress_test_skill
+
+> Phase 67 Stress Test Skill - Verifies JIT Loading + Hot Reload
+
+## Description
+A dummy skill created by the Iron Trinity stress test. It validates:
+- JIT loading on first use
+- Hot reload on file modification
+- Concurrent access thread-safety
+
+## Commands
+
+### ping
+Returns version string to verify reload happened.
+
+**Category**: stress
+**Description**: Ping Pong Test - verifies hot-reload works
+""",
+        encoding="utf-8",
+    )
+
+    # Phase 63+: Use scripts/ directory with @skill_script decorator
+    scripts_dir = TARGET_SKILL_DIR / "scripts"
+    scripts_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create scripts/__init__.py
+    scripts_init = scripts_dir / "__init__.py"
+    scripts_init.write_text('"""Stress test skill scripts."""', encoding="utf-8")
+
+    # Write initial ping script
+    write_script_version(0)
+    print(f"✅ Setup dummy skill at: {TARGET_SKILL_DIR}")
 
 
 async def chaos_monkey(duration: int = 5):
@@ -211,7 +255,7 @@ async def main():
     from agent.core.skill_manager import SkillManager
 
     # Create a fresh manager to discover our new skill
-    manager = SkillManager(skills_dir=SKILLS_DIR)
+    manager = SkillManager()
     manager.load_skills()
 
     res = await manager.run("stress_test_skill", "ping")
