@@ -1,8 +1,9 @@
 """
 agent/core/registry/loader.py
-Phase 35.3: Skill Loader
+Phase 63: Skill Loader with scripts/ support
 
 Module loading with spec-based loading and hot-reload support.
+Supports both legacy tools.py and new scripts/__init__.py patterns.
 Pure MCP Server compatible (no FastMCP dependency).
 """
 
@@ -24,8 +25,9 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
-# Marker attribute for @skill_command decorated functions
+# Marker attributes for @skill_command and @skill_script decorated functions
 _SKILL_COMMAND_MARKER = "_is_skill_command"
+_SKILL_SCRIPT_MARKER = "_is_skill_script"
 
 
 class SkillLoader:
@@ -47,6 +49,7 @@ class SkillLoader:
         """
         Dynamically load a skill into the MCP server.
         Supports HOT RELOAD.
+        Phase 63: Supports both scripts/__init__.py and tools.py.
         """
         # Get manifest
         manifest = self.registry.get_skill_manifest(skill_name)
@@ -69,28 +72,30 @@ class SkillLoader:
         if not success:
             return False, msg
 
-        # Locate the tools file
-        tools_module = manifest_dict.get("tools_module", f"agent.skills.{skill_name}.tools")
+        # Phase 63: Support scripts/ directory (preferred) and tools.py (legacy)
+        scripts_dir = self.registry.skills_dir / skill_name / "scripts"
+        tools_path = self.registry.skills_dir / skill_name / "tools.py"
 
-        # Handle both "agent.skills" and "assets.skills" prefixes
-        if tools_module.startswith("agent.skills."):
-            tools_module = "assets.skills." + tools_module[len("agent.skills.") :]
-
-        relative_path = tools_module.replace(".", "/") + ".py"
-        source_path = self.registry.project_root / relative_path
-
-        if not source_path.exists():
-            return False, f"Source file not found: {source_path}"
+        if scripts_dir.exists() and (scripts_dir / "__init__.py").exists():
+            # New scripts/ pattern (Phase 63+)
+            source_path = scripts_dir / "__init__.py"
+            tools_module = f"agent.skills.{skill_name}.scripts"
+        elif tools_path.exists():
+            # Legacy tools.py pattern
+            source_path = tools_path
+            tools_module = f"agent.skills.{skill_name}.tools"
+        else:
+            return False, f"No scripts/__init__.py or tools.py found for {skill_name}"
 
         # Load the module
         try:
             module = self._load_module_from_path(tools_module, source_path)
 
-            # Check for @skill_command decorated functions
+            # Check for @skill_command or @skill_script decorated functions
             skill_commands = self._extract_commands(module)
 
             if not skill_commands:
-                return False, f"Module has no @skill_command decorated functions."
+                return False, f"Module has no @skill_command or @skill_script decorated functions."
 
             # Register (store as dict for compatibility)
             manifest_dict = manifest if isinstance(manifest, dict) else manifest.model_dump()
@@ -144,17 +149,25 @@ class SkillLoader:
         return loader.load_module(module_name, file_path, reload=True)
 
     def _extract_commands(self, module: types.ModuleType) -> list[str]:
-        """Extract @skill_command decorated function names."""
+        """Extract @skill_command or @skill_script decorated function names."""
         commands = []
         for name in dir(module):
             if name.startswith("_"):
                 continue
             obj = getattr(module, name)
-            if callable(obj) and hasattr(obj, _SKILL_COMMAND_MARKER):
+            if callable(obj) and (
+                hasattr(obj, _SKILL_COMMAND_MARKER) or hasattr(obj, _SKILL_SCRIPT_MARKER)
+            ):
                 commands.append(name)
         return commands
 
     def load_module(self, skill_name: str, source_path: Path) -> types.ModuleType:
-        """Load a skill module from a specific path."""
-        module_name = f"agent.skills.{skill_name}.tools"
+        """Load a skill module from a specific path.
+
+        Phase 63: Determines module name based on path type.
+        """
+        if "scripts" in str(source_path):
+            module_name = f"agent.skills.{skill_name}.scripts"
+        else:
+            module_name = f"agent.skills.{skill_name}.tools"
         return self._load_module_from_path(module_name, source_path)

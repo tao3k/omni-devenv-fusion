@@ -2,10 +2,17 @@
 skill/scripts/ - Skill Management Scripts
 
 Contains atomic implementations for skill-related commands:
+- discovery.py: Skill discovery and suggestion (Phase 63)
 - templates.py: Cascading template management
 - list_tools.py: List registered MCP tools
 """
 
+from .discovery import (
+    discover,
+    suggest,
+    jit_install,
+    list_index,
+)
 from .templates import (
     list_templates,
     get_template_info,
@@ -18,6 +25,12 @@ from .templates import (
 from .list_tools import format_tools_list
 
 __all__ = [
+    # Discovery commands
+    "discover",
+    "suggest",
+    "jit_install",
+    "list_index",
+    # Template commands
     "list_templates",
     "get_template_info",
     "get_template_source",

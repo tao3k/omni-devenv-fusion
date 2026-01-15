@@ -467,6 +467,8 @@ class VectorMemory:
         Index all skill tools from scripts into the vector store.
 
         Phase 63: Uses Rust scanner to discover @skill_script decorated functions.
+        Note: This method uses placeholder schemas. Use index_skill_tools_with_schema()
+        for full schema extraction.
 
         Args:
             base_path: Base path containing skills (e.g., "assets/skills")
@@ -487,6 +489,285 @@ class VectorMemory:
         except Exception as e:
             _get_logger().error("Failed to index skill tools", error=str(e))
             return 0
+
+    async def index_skill_tools_with_schema(
+        self, base_path: str, table_name: str = "skills"
+    ) -> int:
+        """
+        Index all skill tools with full schema extraction.
+
+        Phase 64: Uses Rust scanner to discover tools, then Python to extract
+        parameter schemas using the agent.scripts.extract_schema module.
+
+        This is the preferred method for production use as it provides proper
+        schema information for tool discovery and validation.
+
+        Args:
+            base_path: Base path containing skills (e.g., "assets/skills")
+            table_name: Table to store tools (default: "skills")
+
+        Returns:
+            Number of tools indexed
+        """
+        import json
+        import hashlib
+
+        store = self._ensure_store()
+        if not store:
+            _get_logger().warning("Vector memory not available for index_skill_tools_with_schema")
+            return 0
+
+        try:
+            # Step 1: Scan for tools using Rust (gets file paths, function names)
+            tool_jsons = store.scan_skill_tools_raw(base_path)
+            if not tool_jsons:
+                _get_logger().info("No tools found in scripts")
+                return 0
+
+            _get_logger().info(f"Scanned {len(tool_jsons)} tools from scripts")
+
+            # Step 2: Import schema extractor
+            from agent.scripts.extract_schema import extract_function_schema
+
+            # Step 3: Build documents for indexing
+            ids = []
+            contents = []
+            metadatas = []
+
+            for tool_json in tool_jsons:
+                try:
+                    tool = json.loads(tool_json)
+                except json.JSONDecodeError:
+                    continue
+
+                tool_name = f"{tool.get('skill_name', '')}.{tool.get('tool_name', '')}"
+                ids.append(tool_name)
+
+                # Use description as content
+                contents.append(tool.get("description", tool_name))
+
+                # Generate input schema using Python
+                file_path = tool.get("file_path", "")
+                func_name = tool.get("function_name", "")
+
+                input_schema = "{}"
+                if file_path and func_name:
+                    try:
+                        schema = extract_function_schema(file_path, func_name)
+                        input_schema = json.dumps(schema, ensure_ascii=False)
+                    except Exception as e:
+                        _get_logger().warning(f"Failed to extract schema for {tool_name}: {e}")
+
+                # Compute file hash for incremental updates
+                file_hash = ""
+                if file_path:
+                    try:
+                        content = Path(file_path).read_text(encoding="utf-8")
+                        file_hash = hashlib.sha256(content.encode()).hexdigest()
+                    except Exception:
+                        pass
+
+                # Build metadata
+                metadata = {
+                    "skill_name": tool.get("skill_name", ""),
+                    "tool_name": tool.get("tool_name", ""),
+                    "file_path": file_path,
+                    "function_name": func_name,
+                    "execution_mode": tool.get("execution_mode", "script"),
+                    "keywords": tool.get("keywords", []),
+                    "file_hash": file_hash,
+                    "input_schema": input_schema,
+                    "docstring": tool.get("docstring", ""),
+                }
+                metadatas.append(json.dumps(metadata, ensure_ascii=False))
+
+            # Step 4: Generate embeddings and add to store
+            if not ids:
+                return 0
+
+            # Generate simple embeddings (in production, use actual embeddings)
+            vectors = self.batch_embed(contents)
+
+            # Add to store
+            store.add_documents(table_name, ids, vectors, contents, metadatas)
+
+            _get_logger().info(f"Indexed {len(ids)} skill tools with schemas", base_path=base_path)
+            return len(ids)
+
+        except Exception as e:
+            _get_logger().error("Failed to index skill tools with schema", error=str(e))
+            import traceback
+
+            traceback.print_exc()
+            return 0
+
+    async def sync_skills(self, base_path: str, table_name: str = "skills") -> dict:
+        """
+        Incrementally sync skill tools with the database.
+
+        Phase 64: Efficient incremental update using file hash comparison.
+
+        This method:
+        1. Fetches current DB state (path -> hash mapping)
+        2. Scans filesystem for current state (using Rust scanner)
+        3. Computes diff: Added, Modified, Deleted
+        4. Executes minimal updates
+
+        Args:
+            base_path: Base path containing skills (e.g., "assets/skills")
+            table_name: Table to store tools (default: "skills")
+
+        Returns:
+            Dict with keys: added, modified, deleted, total
+        """
+        import json
+        import hashlib
+        from dataclasses import dataclass
+
+        store = self._ensure_store()
+        if not store:
+            _get_logger().warning("Vector memory not available for sync_skills")
+            return {"added": 0, "modified": 0, "deleted": 0, "total": 0}
+
+        @dataclass
+        class SyncStats:
+            added: int = 0
+            modified: int = 0
+            deleted: int = 0
+
+        stats = SyncStats()
+
+        try:
+            # Step 1: Get existing file hashes from DB
+            _get_logger().info("Fetching existing file hashes from database...")
+            existing_json = store.get_all_file_hashes(table_name)
+            existing: Dict[str, Dict] = json.loads(existing_json) if existing_json else {}
+            existing_paths = set(existing.keys())
+
+            _get_logger().debug(f"Found {len(existing_paths)} existing tools in database")
+
+            # Step 2: Scan current filesystem using Rust scanner
+            _get_logger().info("Scanning filesystem for skill tools...")
+            current_jsons = store.scan_skill_tools_raw(base_path)
+            if not current_jsons:
+                _get_logger().info("No tools found in skills directory")
+                return {"added": 0, "modified": 0, "deleted": 0, "total": 0}
+
+            current_tools = []
+            for tool_json in current_jsons:
+                try:
+                    current_tools.append(json.loads(tool_json))
+                except json.JSONDecodeError:
+                    continue
+
+            current_paths = {t.get("file_path", "") for t in current_tools if t.get("file_path")}
+            _get_logger().debug(f"Found {len(current_tools)} tools in filesystem")
+
+            # Step 3: Compute Diff
+            to_add = []
+            to_update = []
+
+            for tool in current_tools:
+                path = tool.get("file_path", "")
+                current_hash = tool.get("file_hash", "")
+
+                if not path:
+                    continue
+
+                if path not in existing_paths:
+                    to_add.append(tool)
+                elif existing_paths and path in existing:
+                    db_hash = existing[path].get("hash", "")
+                    if db_hash != current_hash:
+                        to_update.append(tool)
+
+            # Find deleted files
+            to_delete_paths = existing_paths - current_paths
+
+            _get_logger().info(
+                f"Diff results: +{len(to_add)} added, ~{len(to_update)} modified, -{len(to_delete_paths)} deleted"
+            )
+
+            # Step 4: Execute Updates
+
+            # Delete stale records
+            if to_delete_paths:
+                paths_to_delete = list(to_delete_paths)
+                _get_logger().info(f"Deleting {len(paths_to_delete)} stale tools...")
+                store.delete_by_file_path(paths_to_delete, table_name)
+                stats.deleted = len(paths_to_delete)
+
+            # Process added/modified tools
+            work_items = to_add + to_update
+            if work_items:
+                _get_logger().info(f"Processing {len(work_items)} changed tools...")
+
+                # Import schema extractor
+                from agent.scripts.extract_schema import extract_function_schema
+
+                # Build documents for indexing
+                ids = []
+                contents = []
+                metadatas = []
+
+                for tool in work_items:
+                    tool_name = f"{tool.get('skill_name', '')}.{tool.get('tool_name', '')}"
+                    ids.append(tool_name)
+                    contents.append(tool.get("description", tool_name))
+
+                    # Generate input schema using Python
+                    file_path = tool.get("file_path", "")
+                    func_name = tool.get("function_name", "")
+
+                    input_schema = "{}"
+                    if file_path and func_name:
+                        try:
+                            schema = extract_function_schema(file_path, func_name)
+                            input_schema = json.dumps(schema, ensure_ascii=False)
+                        except Exception as e:
+                            _get_logger().warning(f"Failed to extract schema for {tool_name}: {e}")
+
+                    # Build metadata
+                    metadata = {
+                        "skill_name": tool.get("skill_name", ""),
+                        "tool_name": tool.get("tool_name", ""),
+                        "file_path": file_path,
+                        "function_name": func_name,
+                        "execution_mode": tool.get("execution_mode", "script"),
+                        "keywords": tool.get("keywords", []),
+                        "file_hash": tool.get("file_hash", ""),
+                        "input_schema": input_schema,
+                        "docstring": tool.get("docstring", ""),
+                    }
+                    metadatas.append(json.dumps(metadata, ensure_ascii=False))
+
+                # Generate embeddings and add to store
+                vectors = self.batch_embed(contents)
+                store.add_documents(table_name, ids, vectors, contents, metadatas)
+
+                stats.added = len(to_add)
+                stats.modified = len(to_update)
+
+            # Calculate total
+            stats.total = len(current_tools)
+
+            _get_logger().info(
+                f"Sync complete: +{stats.added} added, ~{stats.modified} modified, -{stats.deleted} deleted, {stats.total} total"
+            )
+
+            return {
+                "added": stats.added,
+                "modified": stats.modified,
+                "deleted": stats.deleted,
+                "total": stats.total,
+            }
+
+        except Exception as e:
+            _get_logger().error("Failed to sync skill tools", error=str(e))
+            import traceback
+
+            traceback.print_exc()
+            return {"added": 0, "modified": 0, "deleted": 0, "total": 0}
 
 
 # Singleton accessor

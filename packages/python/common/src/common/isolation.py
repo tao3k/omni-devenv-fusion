@@ -115,53 +115,21 @@ def run_skill_script(
             env=env,
         )
 
-        # Parse stdout only (stderr contains crawler logs)
+        # Parse stdout - engine.py outputs clean JSON
         stdout = result.stdout.strip()
 
         if not stdout:
             return {"success": True, "content": "", "metadata": {}}
 
-        # Split by lines
-        lines = stdout.split("\n")
-
-        # Find the first line that is valid JSON metadata
-        # Metadata lines contain: success, url, error, metadata fields
-        metadata = {}
-        content_start_idx = 0
-
-        for idx, line in enumerate(lines):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                potential = _json_loads(line)
-                # Check if this looks like metadata (has success/url)
-                if "success" in potential or "url" in potential:
-                    metadata = potential
-                    content_start_idx = idx + 1
-                    break
-            except (ValueError, TypeError):
-                continue
-
-        if metadata:
-            # Content is everything after the metadata line
-            content = "\n".join(lines[content_start_idx:]).strip()
-            # Extract outer fields and inner metadata separately
-            outer_metadata = {
-                "success": metadata.get("success"),
-                "url": metadata.get("url"),
-                "error": metadata.get("error"),
-            }
-            inner_metadata = metadata.get("metadata", {})
-            # Merge: outer fields + inner metadata dict
-            final_metadata = {k: v for k, v in outer_metadata.items() if v is not None}
-            final_metadata.update(inner_metadata if isinstance(inner_metadata, dict) else {})
+        try:
+            result_data = _json_loads(stdout)
+            # Engine outputs {"success": true, "content": "...", "metadata": {...}}
             return {
-                "success": metadata.get("success", True),
-                "content": content,
-                "metadata": final_metadata,
+                "success": result_data.get("success", True),
+                "content": result_data.get("content", ""),
+                "metadata": result_data.get("metadata", {}),
             }
-        else:
+        except (ValueError, TypeError):
             # Fallback: treat entire stdout as content
             return {"success": True, "content": stdout, "metadata": {}}
 

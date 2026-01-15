@@ -1,42 +1,19 @@
 //! omni-vector - High-Performance Embedded Vector Database using LanceDB
 //!
-//! # Features
-//!
-//! - **Embedded**: No server required, runs directly on local filesystem
-//! - **Arrow-Native**: Uses Apache Arrow for zero-copy data handling
-//! - **High Performance**: Written in Rust with `LanceDB` for blazing fast ANN search
-//! - **Async-First**: Built on tokio for concurrent operations
-//!
 //! # Architecture (ODF-REP Compliant)
 //!
 //! ```text
 //! omni-vector/src/
 //! ├── lib.rs         # Main module and VectorStore
 //! ├── error.rs       # VectorStoreError enum
-//! ├── reader.rs      # Record batch utilities
 //! ├── search.rs      # Search operations
-//! └── index.rs       # Index creation operations
+//! ├── index.rs       # Index creation operations
+//! └── scanner.rs     # Script scanning (Phase 62)
 //! ```
 //!
-//! # Example
+//! Uses [omni-lance][omni_lance] for RecordBatch utilities.
 //!
-//! ```rust,ignore
-//! use omni_vector::VectorStore;
-//!
-//! let store = VectorStore::new(".cache/omni-vector").await?;
-//!
-//! // Add documents with embeddings
-//! store.add_documents(
-//!     "skills",
-//!     vec!["skill-1".to_string()],
-//!     vec![vec![0.1; 1536]],
-//!     vec!["Content".to_string()],
-//!     vec![r#"{"keywords": "test"}"#.to_string()],
-//! ).await?;
-//!
-//! // Search
-//! let results = store.search("skills", vec![0.1; 1536], 5).await?;
-//! ```
+//! [omni_lance]: ../omni_lance/index.html
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -50,20 +27,10 @@ use lance::deps::arrow_schema::ArrowError;
 use tokio::sync::Mutex;
 
 // ============================================================================
-// Constants
+// Re-exports from omni-lance
 // ============================================================================
 
-/// Default embedding dimension (`OpenAI` Ada-002)
-pub const DEFAULT_DIMENSION: usize = 1536;
-
-/// Vector column name
-pub const VECTOR_COLUMN: &str = "vector";
-/// ID column name
-pub const ID_COLUMN: &str = "id";
-/// Content column name
-pub const CONTENT_COLUMN: &str = "content";
-/// Metadata column name
-pub const METADATA_COLUMN: &str = "metadata";
+pub use omni_lance::{VectorRecordBatchReader, ID_COLUMN, VECTOR_COLUMN, CONTENT_COLUMN, METADATA_COLUMN, DEFAULT_DIMENSION, extract_string, extract_optional_string};
 
 // ============================================================================
 // Vector Store Implementation
@@ -349,6 +316,137 @@ impl VectorStore {
         Ok(())
     }
 
+    /// Delete documents by file path.
+    ///
+    /// Note: file_path is stored in the metadata JSON column as a string.
+    /// We use LIKE pattern matching to find records where metadata contains
+    /// the file path in the expected JSON format: `"file_path":"<path>"`
+    ///
+    /// # Arguments
+    ///
+    /// * `table_name` - Name of the table/collection
+    /// * `file_paths` - File paths to delete
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VectorStoreError::TableNotFound`] if the table doesn't exist.
+    pub async fn delete_by_file_path(
+        &self,
+        table_name: &str,
+        file_paths: Vec<String>,
+    ) -> Result<(), VectorStoreError> {
+        let table_path = self.table_path(table_name);
+
+        if !table_path.exists() {
+            return Err(VectorStoreError::TableNotFound(table_name.to_string()));
+        }
+
+        let mut dataset = Dataset::open(table_path.to_string_lossy().as_ref())
+            .await
+            .map_err(VectorStoreError::LanceDB)?;
+
+        // Delete by file_path using LIKE pattern matching on metadata
+        // Match pattern: `"file_path":"<path>"`
+        for path in file_paths {
+            // Escape special SQL characters in the path for LIKE
+            let escaped = path
+                .replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_")
+                .replace('\'', "\\'");
+            let pattern = format!("%\"file_path\":\"{}\"%", escaped);
+            let query = format!("{} LIKE '{}'", METADATA_COLUMN, pattern);
+            dataset
+                .delete(&query)
+                .await
+                .map_err(VectorStoreError::LanceDB)?;
+        }
+
+        Ok(())
+    }
+
+    /// Get all file hashes from a table for incremental sync.
+    ///
+    /// Returns a JSON string of file_path -> file_hash mapping.
+    ///
+    /// # Arguments
+    ///
+    /// * `table_name` - Name of the table/collection
+    ///
+    /// # Returns
+    ///
+    /// JSON string of path-hash mapping, or empty dict if table doesn't exist.
+    pub async fn get_all_file_hashes(&self, table_name: &str) -> Result<String, VectorStoreError> {
+        use futures::TryStreamExt;
+        use lance::deps::arrow_array::Array;
+
+        let table_path = self.table_path(table_name);
+
+        if !table_path.exists() {
+            return Ok("{}".to_string());
+        }
+
+        let dataset = Dataset::open(table_path.to_string_lossy().as_ref())
+            .await
+            .map_err(VectorStoreError::LanceDB)?;
+
+        // Create scanner to read id and metadata columns
+        // file_path and file_hash are stored in metadata JSON
+        let mut scanner = dataset.scan();
+        scanner.project(&[ID_COLUMN, METADATA_COLUMN])?;
+
+        let mut stream = scanner
+            .try_into_stream()
+            .await
+            .map_err(VectorStoreError::LanceDB)?;
+
+        let mut hash_map = std::collections::HashMap::new();
+
+        while let Some(batch) = stream
+            .try_next()
+            .await
+            .map_err(VectorStoreError::LanceDB)?
+        {
+            let metadata_col = batch.column_by_name(METADATA_COLUMN);
+            let id_col = batch.column_by_name(ID_COLUMN);
+
+            if let (Some(meta_col), Some(id_c)) = (metadata_col, id_col) {
+                use lance::deps::arrow_array::StringArray;
+
+                if let Some(metas) = meta_col.as_any().downcast_ref::<StringArray>() {
+                    for i in 0..batch.num_rows() {
+                        if metas.is_null(i) {
+                            continue;
+                        }
+
+                        let metadata_str = metas.value(i);
+                        let id = id_c.as_any().downcast_ref::<StringArray>()
+                            .map(|arr| arr.value(i).to_string())
+                            .unwrap_or_default();
+
+                        // Parse metadata JSON to extract file_path and file_hash
+                        if let Ok(metadata) = serde_json::from_str::<serde_json::Value>(&metadata_str) {
+                            if let (Some(path), Some(hash)) = (
+                                metadata.get("file_path").and_then(|v| v.as_str()),
+                                metadata.get("file_hash").and_then(|v| v.as_str()),
+                            ) {
+                                hash_map.insert(
+                                    path.to_string(),
+                                    serde_json::json!({
+                                        "hash": hash.to_string(),
+                                        "id": id
+                                    }),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        serde_json::to_string(&hash_map).map_err(|e| VectorStoreError::from(anyhow::anyhow!("{}", e)))
+    }
+
     /// Count documents in a table.
     ///
     /// # Arguments
@@ -405,12 +503,10 @@ impl VectorStore {
 // ============================================================================
 
 pub use error::VectorStoreError;
-pub use reader::{extract_optional_string, extract_string, VectorRecordBatchReader};
-pub use scanner::{ScriptScanner, ToolRecord, ExecutionMode};
+pub use scanner::{ScriptScanner, ToolRecord};
 
 mod error;
 mod index;
-mod reader;
 mod search;
 mod scanner;
 
@@ -466,7 +562,7 @@ impl crate::VectorStore {
             .map(|t| t.description.clone())
             .collect();
 
-        // Create metadata JSON
+        // Create metadata JSON with file_hash (input_schema will be added by Python if needed)
         let metadatas: Vec<String> = tools.iter()
             .map(|t| {
                 serde_json::json!({
@@ -474,8 +570,9 @@ impl crate::VectorStore {
                     "tool_name": t.tool_name,
                     "file_path": t.file_path,
                     "function_name": t.function_name,
-                    "execution_mode": t.execution_mode,
                     "keywords": t.keywords,
+                    "file_hash": t.file_hash,
+                    "input_schema": "{}",  // Placeholder - Python can update this
                     "docstring": t.docstring,
                 }).to_string()
             })
@@ -488,7 +585,8 @@ impl crate::VectorStore {
                 // Simple hash-based embedding for demonstration
                 // In production, use: embedding_model.encode(content)
                 let mut vec = vec![0.0; dimension];
-                let hash = id.bytes().fold(0u64, |acc, b| acc * 31 + b as u64);
+                // Use wrapping_mul to avoid overflow panic on long IDs
+                let hash = id.bytes().fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
                 for (i, v) in vec.iter_mut().enumerate() {
                     *v = ((hash >> (i % 64)) as f32 / u64::MAX as f32) * 0.1;
                 }
@@ -527,5 +625,48 @@ impl crate::VectorStore {
         // 3. Filter by skill_name in metadata
         // 4. Deserialize and return ToolRecords
         Ok(vec![])
+    }
+
+    /// Scan for skill tools without indexing (returns raw tool records as JSON).
+    ///
+    /// This method discovers @skill_script decorated functions without
+    /// attempting schema extraction. Use this when you want to do schema
+    /// extraction in Python with proper import context.
+    ///
+    /// # Arguments
+    ///
+    /// * `base_path` - Base directory containing skills (e.g., "assets/skills")
+    ///
+    /// # Returns
+    ///
+    /// Vector of JSON strings representing tool records
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if scanning fails.
+    pub fn scan_skill_tools_raw(&self, base_path: &str) -> Result<Vec<String>, VectorStoreError> {
+        use std::path::Path;
+
+        let scanner = ScriptScanner::new();
+        let skills_path = Path::new(base_path);
+
+        if !skills_path.exists() {
+            log::warn!("Skills directory not found: {}", base_path);
+            return Ok(vec![]);
+        }
+
+        let tools = scanner.scan_all(skills_path).map_err(|e| {
+            VectorStoreError::from(anyhow::anyhow!("Failed to scan skills: {}", e))
+        })?;
+
+        // Convert to JSON strings
+        let json_tools: Vec<String> = tools
+            .into_iter()
+            .map(|t| serde_json::to_string(&t).unwrap_or_default())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        log::info!("Scanned {} skill tools", json_tools.len());
+        Ok(json_tools)
     }
 }

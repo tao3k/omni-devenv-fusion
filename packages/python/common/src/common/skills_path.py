@@ -197,7 +197,9 @@ def load_skill_module(
     module_name: Optional[str] = None,
 ) -> object:
     """
-    Load a skill module directly from its tools.py file.
+    Load a skill module.
+
+    Phase 63: Supports both scripts/__init__.py and tools.py patterns.
 
     Replaces the verbose pattern:
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "assets/skills/git"))
@@ -217,7 +219,7 @@ def load_skill_module(
         The loaded module object
 
     Raises:
-        FileNotFoundError: If tools.py not found
+        FileNotFoundError: If neither scripts/__init__.py nor tools.py found
     """
     if project_root is None:
         from common.gitops import get_project_root
@@ -225,10 +227,19 @@ def load_skill_module(
         project_root = get_project_root()
 
     # Use SKILLS_DIR to get the path (already resolved with project_root)
-    tools_path = SKILLS_DIR(skill=skill_name, filename="tools.py")
+    skills_dir = SKILLS_DIR()
+    scripts_dir = skills_dir / skill_name / "scripts"
+    tools_path = skills_dir / skill_name / "tools.py"
 
-    if not tools_path.exists():
-        raise FileNotFoundError(f"Skill tools.py not found: {tools_path}")
+    # Phase 63: Prefer scripts/__init__.py over tools.py
+    if scripts_dir.exists() and (scripts_dir / "__init__.py").exists():
+        source_path = scripts_dir / "__init__.py"
+    elif tools_path.exists():
+        source_path = tools_path
+    else:
+        raise FileNotFoundError(
+            f"Skill module not found for '{skill_name}': no scripts/__init__.py or tools.py"
+        )
 
     if module_name is None:
         module_name = f"_test_skill_{skill_name}"
@@ -238,9 +249,9 @@ def load_skill_module(
         del sys.modules[module_name]
 
     # Load the module from file
-    spec = importlib.util.spec_from_file_location(module_name, tools_path)
+    spec = importlib.util.spec_from_file_location(module_name, source_path)
     if spec is None:
-        raise ImportError(f"Cannot load spec for {tools_path}")
+        raise ImportError(f"Cannot load spec for {source_path}")
 
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module

@@ -1,9 +1,9 @@
 # Skills Documentation
 
-> **Phase 52: The Surgeon** | **Phase 47: The Iron Lung** | **Phase 46: The Neural Bridge** | **Phase 45: Rust Core Integration** | **Phase 44: Experiential Agent** | **Phase 43: Holographic Agent** | **Phase 41: Wisdom-Aware Routing** | **Phase 40: Automated Reinforcement Loop** | **Phase 39: Self-Evolving Feedback Loop** | **Phase 36.6: Production Stability** | **Phase 36.5: Hot Reload & Index Sync** | **Phase 36: Trinity v2.0** | **Phase 35.3: Pure MCP Server** | **Phase 35.2: Cascading Templates** | **Phase 35.1: Simplified Test Framework** | **Phase 34: Cognitive System** | **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
+> **Phase 65: Reactive Indexing** | **Phase 64: Incremental Sync** | **Phase 52: The Surgeon** | **Phase 47: The Iron Lung** | **Phase 46: The Neural Bridge** | **Phase 45: Rust Core Integration** | **Phase 44: Experiential Agent** | **Phase 43: Holographic Agent** | **Phase 41: Wisdom-Aware Routing** | **Phase 40: Automated Reinforcement Loop** | **Phase 39: Self-Evolving Feedback Loop** | **Phase 36.6: Production Stability** | **Phase 36.5: Hot Reload & Index Sync** | **Phase 36: Trinity v2.0** | **Phase 35.3: Pure MCP Server** | **Phase 35.2: Cascading Templates** | **Phase 35.1: Simplified Test Framework** | **Phase 34: Cognitive System** | **Phase 33: SKILL.md Unified Format** | **Phase 32: Import Optimization** | **Phase 29: Unified Skill Manager**
 
-> **Phase 52**: AST-based structural code editing with dry-run support. "Preview twice, apply once."
-> **Phase 47**: Safe I/O (binary detection, size limits) + BPE tokenization (100-250x faster)
+> **Phase 65**: Auto-sync on file save + O(1) MCP tool listing
+> **Phase 64**: Fast incremental sync (~0.2s) vs full reindex (~5s)
 > **Phase 46**: Type unification between Rust and Python (SSOT via omni-types)
 > **Phase 45**: Rust workspace with high-performance omni-sniffer (libgit2, 30x speedup)
 > **Phase 44**: Skill-level episodic memory from harvested insights
@@ -408,6 +408,10 @@ User Request
 omni skill reindex
 omni skill reindex --clear    # Full rebuild
 
+# Fast incremental sync (detect changes)
+omni skill sync
+omni skill sync --json        # JSON output for scripting
+
 # Show index statistics
 omni skill index-stats
 ```
@@ -416,6 +420,67 @@ omni skill index-stats
 
 - [Developer Guide](../developer/discover.md) - Detailed discovery architecture
 - [Testing Guide](../developer/testing.md) - Discovery flow tests
+
+---
+
+## Phase 64: Incremental Sync
+
+> **Fast Skill Tool Synchronization** - Sync detects file changes without full rebuild.
+
+### Overview
+
+Starting with Phase 64, skill tools can be updated using two strategies:
+
+| Command              | Speed | Use Case                                    |
+| -------------------- | ----- | ------------------------------------------- |
+| `omni skill sync`    | ~0.2s | Fast incremental updates after file changes |
+| `omni skill reindex` | ~2s   | Full rebuild when index is corrupted        |
+
+### Sync Algorithm
+
+```
+1. Get existing file hashes from database
+2. Scan filesystem for current tools (Rust scanner)
+3. Compute diff:
+   - Added: path not in DB
+   - Modified: path exists but hash differs
+   - Deleted: path in DB but not in filesystem
+4. Execute minimal updates
+```
+
+### Usage
+
+```bash
+# Fast sync (detect changes since last index)
+omni skill sync
+omni skill sync --json           # Machine-readable output
+
+# Full rebuild (drop and recreate index)
+omni skill reindex
+omni skill reindex --clear       # Explicit clear (default)
+```
+
+### Performance
+
+| Scenario         | reindex | sync  |
+| ---------------- | ------- | ----- |
+| 1 file changed   | ~2s     | ~0.2s |
+| 10 files changed | ~2s     | ~0.3s |
+| First run        | ~2s     | ~2s   |
+
+### When to Use Each
+
+**Use `sync` when:**
+
+- After modifying a skill script
+- After adding a new skill
+- During development workflow
+
+**Use `reindex` when:**
+
+- Index is corrupted or inconsistent
+- Schema has changed
+- First time setup
 
 ---
 
@@ -1309,6 +1374,91 @@ assets/skills/crawl4ai/
 2. **Version Isolation**: Each skill can use different library versions
 3. **Hot Swappable**: Add/remove skills without restarting
 4. **Security**: Limited blast radius for compromised code
+
+---
+
+## Phase 65: Reactive Indexing & Zero-Compute MCP
+
+> **Auto感知 (The Watcher)** - File save triggers automatic sync.<br>
+> **极速响应 (The Reader)** - O(1) MCP tool listing from LanceDB.
+
+### Overview
+
+Phase 65 introduces automatic skill synchronization when files change, plus optimized MCP server startup with direct LanceDB reads.
+
+### Key Features
+
+| Feature            | Description                                              |
+| ------------------ | -------------------------------------------------------- |
+| **Skill Watcher**  | `watchdog`-based file monitoring with 1s debounce        |
+| **Auto-Sync**      | Filesystem changes trigger `sync_skills()` automatically |
+| **MCP Lifecycle**  | Watcher starts/stops with MCP server                     |
+| **O(1) Tool List** | Direct LanceDB read for `list_tools`                     |
+
+### CLI Commands
+
+```bash
+# Start file watcher (blocking mode)
+omni skill watch
+
+# Output:
+# 2024-01-15 10:30:45,123 - INFO - file_change_detected: git/scripts/commit.py
+# 2024-01-15 10:30:45,234 - INFO - auto_sync_complete: +0 ~1 -0
+```
+
+### MCP Server Integration
+
+The watcher is automatically integrated with `omni mcp start`:
+
+```python
+# mcp_server.py
+from agent.core.skill_manager.watcher import (
+    start_global_watcher,
+    stop_global_watcher
+)
+
+@asynccontextmanager
+async def server_lifespan():
+    # Startup
+    start_global_watcher()
+    yield
+    # Shutdown
+    stop_global_watcher()
+```
+
+### Development Workflow
+
+```bash
+# Terminal 1: Start MCP server (with auto-sync)
+omni mcp start
+
+# Terminal 2: Edit a skill file
+vim assets/skills/git/scripts/commit.py
+# (save file)
+
+# Terminal 1: See auto-sync log
+# 2024-01-15 10:30:45,123 - INFO - file_change_detected: commit.py
+# 2024-01-15 10:30:45,234 - INFO - auto_sync_complete: +0 ~1 -0
+
+# Terminal 3: Query agent uses updated tool immediately
+@omni("git.commit", {"message": "fix bug"})
+```
+
+### Performance Comparison
+
+| Aspect             | Before Phase 65          | After Phase 65        |
+| ------------------ | ------------------------ | --------------------- |
+| File change → sync | Manual `omni skill sync` | Automatic on save     |
+| MCP list_tools     | ~100ms (vector search)   | ~1ms (direct DB read) |
+| Developer workflow | 2-3 commands per change  | 1 command (save file) |
+
+### Related Files
+
+| File                                  | Purpose                             |
+| ------------------------------------- | ----------------------------------- |
+| `agent/core/skill_manager/watcher.py` | SkillSyncHandler, BackgroundWatcher |
+| `agent/cli/commands/skill.py`         | `skill watch` command               |
+| `agent/mcp_server.py`                 | Watcher lifecycle integration       |
 
 ---
 

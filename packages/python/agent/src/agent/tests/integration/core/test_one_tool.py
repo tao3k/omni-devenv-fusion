@@ -387,7 +387,10 @@ class TestSkillPathUtilities:
     """Demonstrate SKILLS_DIR callable using settings.yaml via git toplevel."""
 
     def test_skills_dir_callable(self):
-        """Verify SKILLS_DIR(skill="git") returns correct path from settings.yaml using git toplevel."""
+        """Verify SKILLS_DIR(skill="git") returns correct path from settings.yaml using git toplevel.
+
+        Phase 63: Tests scripts/ directory instead of tools.py.
+        """
         from common.skills_path import SKILLS_DIR
         from common.gitops import get_project_root
 
@@ -397,12 +400,12 @@ class TestSkillPathUtilities:
         # Callable access with keyword args
         assert SKILLS_DIR(skill="git") == expected_git_path
 
-        # With filename
-        expected_tools_path = expected_git_path / "tools.py"
-        assert SKILLS_DIR(skill="git", filename="tools.py") == expected_tools_path
+        # Phase 63: Check for scripts/__init__.py instead of tools.py
+        expected_scripts_path = expected_git_path / "scripts" / "__init__.py"
+        assert SKILLS_DIR(skill="git", filename="scripts/__init__.py") == expected_scripts_path
 
         # Verify the path exists
-        assert (SKILLS_DIR(skill="git", filename="tools.py")).exists()
+        assert expected_scripts_path.exists()
 
     def test_skills_dir_base_path(self):
         """Verify SKILLS_DIR() returns base skills path from settings.yaml."""

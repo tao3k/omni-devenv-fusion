@@ -37,8 +37,13 @@ _manager: SkillManager | None = None
 _skill_manager: SkillManager | None = None  # Alias for backward compatibility
 
 
-def get_skill_manager() -> SkillManager:
-    """Get the global skill manager instance."""
+def get_skill_manager(lazy: bool = False) -> SkillManager:
+    """Get the global skill manager instance.
+
+    Args:
+        lazy: If True, don't auto-load all skills. Useful for CLI to avoid
+              verbose output. Call load_skill() or load_all() explicitly.
+    """
     global _manager, _skill_manager
     if _manager is None:
         _manager = SkillManager()
@@ -51,8 +56,9 @@ def get_skill_manager() -> SkillManager:
         loader._ensure_parent_packages()
         loader._preload_decorators()
 
-    # Load all skills if not already loaded (fix: skills weren't preloaded)
-    if not _manager._loaded:
+    # Load all skills if not already loaded (default behavior)
+    # Set lazy=True to skip auto-loading (for CLI to reduce output)
+    if not lazy and not _manager._loaded:
         _manager.load_all()
 
     # Sync the alias

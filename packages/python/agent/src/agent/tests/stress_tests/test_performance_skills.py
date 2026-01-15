@@ -17,7 +17,10 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch, AsyncMock
 
 # Import omni helper (Phase 35.3)
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add the skills test directory to path for imports
+skills_test_dir = Path(__file__).parent.parent / "integration" / "skills"
+if str(skills_test_dir) not in sys.path:
+    sys.path.insert(0, str(skills_test_dir))
 from test_skills import omni
 
 

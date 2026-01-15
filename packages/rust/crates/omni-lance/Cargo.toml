@@ -1,0 +1,14 @@
+[package]
+name = "omni-lance"
+version.workspace = true
+edition.workspace = true
+description = "LanceDB RecordBatch utilities"
+authors = ["Omni-DevEnv Team"]
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+lance = "1.0"
+
+[lints]
+workspace = true

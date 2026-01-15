@@ -297,23 +297,28 @@ class TestCrawl4aiSkillStructure(unittest.TestCase):
         # entry_point is not required in SKILL.md - defaults to implementation.py
 
     def test_crawl4ai_tools_py_exists(self):
-        """Test that crawl4ai skill has tools.py shim."""
+        """Test that crawl4ai skill has scripts/ directory (Phase 63).
+
+        Phase 63: crawl4ai uses scripts/ pattern instead of tools.py shim.
+        """
         skills_dir = PROJECT_ROOT / "assets/skills"
         crawl4ai_dir = skills_dir / "crawl4ai"
 
         if not crawl4ai_dir.exists():
             self.skipTest("crawl4ai skill not found")
 
-        tools_path = crawl4ai_dir / "tools.py"
-        self.assertTrue(tools_path.exists(), "tools.py should exist")
+        # Phase 63: Check for scripts/ directory
+        scripts_path = crawl4ai_dir / "scripts"
+        self.assertTrue(scripts_path.exists(), "scripts/ should exist")
 
-        content = tools_path.read_text()
+        # Verify scripts/ contains __init__.py
+        init_path = scripts_path / "__init__.py"
+        self.assertTrue(init_path.exists(), "scripts/__init__.py should exist")
+
+        content = init_path.read_text()
         # Verify shim pattern: no heavy imports
         self.assertNotIn("from crawl4ai", content)
         self.assertNotIn("import crawl4ai", content)
-        # Verify sidecar execution pattern using swarm
-        self.assertIn("get_swarm", content)
-        self.assertIn("execute_skill", content)
 
 
 class TestSkillManagerExecutionMode(unittest.TestCase):

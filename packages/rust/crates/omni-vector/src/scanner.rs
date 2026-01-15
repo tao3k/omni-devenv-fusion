@@ -10,18 +10,10 @@ use std::path::Path;
 use walkdir::WalkDir;
 use serde::{Deserialize, Serialize};
 use anyhow::Result;
-use omni_ast::{MatcherExt, Pattern, SupportLang, LanguageExt};
+use sha2::{Sha256, Digest};
+use hex;
 
-/// Execution mode for discovered tools
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum ExecutionMode {
-    /// Legacy mode: from tools.py
-    #[serde(rename = "legacy")]
-    Legacy,
-    /// Script mode: from scripts/*.py
-    #[serde(rename = "script")]
-    Script,
-}
+use omni_ast::{MatcherExt, Pattern, SupportLang, LanguageExt};
 
 /// A discovered tool from script scanning
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,11 +28,11 @@ pub struct ToolRecord {
     pub file_path: String,
     /// Function name in the Python file
     pub function_name: String,
-    /// How this tool was discovered
-    pub execution_mode: ExecutionMode,
     /// Keywords for vector search
     pub keywords: Vec<String>,
-    /// JSON schema for tool parameters (placeholder for Phase 62)
+    /// SHA256 hash of file content (for incremental indexing)
+    pub file_hash: String,
+    /// JSON schema for tool parameters (filled by Python extractor)
     pub input_schema: String,
     /// Raw docstring content
     pub docstring: String,
@@ -121,14 +113,20 @@ impl ScriptScanner {
         let file_path = path.to_string_lossy().to_string();
         let mut tools = Vec::new();
 
+        // Compute SHA256 hash for incremental indexing
+        let mut hasher = Sha256::new();
+        hasher.update(content.as_bytes());
+        let file_hash = hex::encode(hasher.finalize());
+
         // Use ast-grep to find ONLY function definitions decorated with @skill_script
         let lang: SupportLang = "py".parse().expect("Python language should be supported");
         let root = lang.ast_grep(&content);
         let root_node = root.root();
 
         // Pattern to match @skill_script decorator
-        // Match the decorator call with any arguments
-        let decorator_pattern = r#"@skill_script($$$)"#;
+        // Note: AST sees it as skill_script(...) Call, not @skill_script(...)
+        // The @ is Python syntax, the function name in AST is 'skill_script'
+        let decorator_pattern = r#"skill_script($$$)"#;
 
         let search_decorator = Pattern::try_new(decorator_pattern, lang)
             .map_err(|e| anyhow::anyhow!("Failed to parse decorator pattern: {}", e))?;
@@ -192,8 +190,8 @@ impl ScriptScanner {
                         skill_name: skill_name.to_string(),
                         file_path: file_path.clone(),
                         function_name: func_name,
-                        execution_mode: ExecutionMode::Script,
                         keywords: vec![skill_name.to_string(), tool_name.clone()],
+                        file_hash: file_hash.clone(),
                         input_schema: "{}".to_string(),
                         docstring,
                     });
@@ -295,7 +293,6 @@ def example() -> str:
         let hello_tool = &tools[0];
         assert_eq!(hello_tool.tool_name, "test_skill.hello");
         assert_eq!(hello_tool.description, "Execute test_skill.hello");
-        assert_eq!(hello_tool.execution_mode, ExecutionMode::Script);
         assert_eq!(hello_tool.function_name, "hello");
 
         let example_tool = &tools[1];

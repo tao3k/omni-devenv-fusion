@@ -3,12 +3,14 @@ runner.py - Skill Execution Runner
 
 Phase 35.2: Modular CLI Architecture
 Phase 40: Automated Reinforcement Loop
+Phase 62: JIT Skill Loader - Uses SkillManager for command execution
 
 Provides skill execution logic with:
-- Dynamic module loading
+- Dynamic module loading via SkillManager
 - Async/sync bridging
 - Result formatting
 - [Phase 40] Automatic feedback recording on success
+- [Phase 62] Supports both tools.py and scripts/*.py patterns
 
 UNIX Philosophy:
 - Logs go to stderr (visible to user, ignored by pipes)
@@ -17,10 +19,9 @@ UNIX Philosophy:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import sys
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 from rich.panel import Panel
 
@@ -56,17 +57,17 @@ def run_skills(
         from agent.core.skill_manager import get_skill_manager
 
         skill_manager = get_skill_manager()
-        skills = skill_manager.skills
+        skill_manager.load_all()  # Ensure all skills are loaded
 
         err_console.print()
         err_console.print(Panel("# 🛠️ Available Skills", style="bold blue"))
         err_console.print()
 
-        for name, skill in sorted(skills.items()):
+        for name, skill in sorted(skill_manager.skills.items()):
             err_console.print(f"## {name}")
             err_console.print(f"- **Commands**: {len(skill.commands)}")
             for cmd_name in list(skill.commands.keys())[:5]:
-                err_console.print(f"  - `{name}.{cmd_name}`")
+                err_console.print(f"  - `{cmd_name}`")
             if len(skill.commands) > 5:
                 err_console.print(f"  - ... and {len(skill.commands) - 5} more")
             err_console.print()
@@ -87,11 +88,6 @@ def run_skills(
     skill_name = parts[0]
     cmd_name = "_".join(parts[1:])
 
-    skill_path = SKILLS_DIR(skill=skill_name, filename="tools.py")
-    if not skill_path.exists():
-        err_console.print(Panel(f"Skill not found: {skill_name}", title="❌ Error", style="red"))
-        raise typer.Exit(1)
-
     # Parse args if provided
     cmd_args = {}
     if len(commands) > 1:
@@ -106,49 +102,65 @@ def run_skills(
                 raise typer.Exit(1)
 
     # Extract log_handler from cmd_args if present
-    extracted_log_handler = cmd_args.pop("log_handler", None)
-    effective_log_handler = log_handler or extracted_log_handler
+    cmd_args.pop("log_handler", None)
 
-    # Dynamically import and call using ModuleLoader for proper package context
-    from agent.core.module_loader import ModuleLoader
+    # Use SkillManager for command execution (supports both tools.py and scripts/*.py)
+    from agent.core.skill_manager import get_skill_manager
+    from agent.core.skill_loader import get_skill_loader
 
-    loader = ModuleLoader(SKILLS_DIR())
-    loader._ensure_parent_packages()
-    loader._preload_decorators()
+    # Lazy mode: Don't auto-load all skills for faster CLI startup
+    skill_manager = get_skill_manager(lazy=True)
 
-    module_name = f"agent.skills.{skill_name}.tools"
-    module = loader.load_module(module_name, str(skill_path))
+    # Fast path: Try to get skill path from pre-indexed data (avoids directory scan)
+    skill_path = None
+    loader = get_skill_loader()
+    if loader.is_indexed():
+        # Skills already indexed, get path from index (fast!)
+        skill_path = loader.get_skill_path(skill_name)
 
-    func_name = f"{skill_name}_{cmd_name}" if cmd_name else cmd_name
-    func = getattr(module, func_name, None)
+    if skill_path is None:
+        # Fallback: Use directory lookup (handles unindexed or new skills)
+        skill_path = SKILLS_DIR(skill=skill_name)
+    if not skill_path.exists():
+        err_console.print(Panel(f"Skill not found: {skill_name}", title="❌ Error", style="red"))
+        raise typer.Exit(1)
 
-    if func is None:
-        func = getattr(module, cmd_name, None)
+    # Load only the requested skill
+    skill_manager.load_skill(skill_path)
 
-    if func is None:
+    # Check if command exists
+    command = skill_manager.get_command(skill_name, cmd_name)
+    if command is None:
+        # Try alternate naming
+        alt_name = f"{skill_name}_{cmd_name}"
+        command = skill_manager.get_command(skill_name, alt_name)
+
+    if command is None:
+        # Get available commands for error message
+        skill = skill_manager.skills.get(skill_name)
+        available = list(skill.commands.keys()) if skill else []
         err_console.print(
-            Panel(f"Command not found: {skill_name}.{cmd_name}", title="❌ Error", style="red")
+            Panel(
+                f"Command not found: {skill_name}.{cmd_name}. Available: {available}",
+                title="❌ Error",
+                style="red",
+            )
         )
         raise typer.Exit(1)
 
-    # Execute function (handle both sync and async)
-    import inspect
+    # Execute command via SkillManager (handles async/sync and script mode)
+    import asyncio
 
-    raw_result = func(**cmd_args) if cmd_args else func()
-
-    # Handle async functions
-    if inspect.iscoroutinefunction(func):
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(raw_result)
-        finally:
-            loop.close()
-    else:
-        result = raw_result
+    try:
+        # Check if execute method returns a coroutine
+        result = command.execute(cmd_args)
+        if asyncio.iscoroutine(result):
+            result = asyncio.run(result)
+    except Exception as e:
+        err_console.print(Panel(f"Execution error: {e}", title="❌ Error", style="red"))
+        raise typer.Exit(1)
 
     # [Phase 40] Record successful execution as positive feedback
-    # This helps the system learn which skills are useful for which queries
     _record_cli_success(cmd, skill_name)
 
     # Print result with smart formatting

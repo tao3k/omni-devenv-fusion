@@ -695,6 +695,41 @@ impl PyVectorStore {
         })
     }
 
+    /// Phase 64: Scan for skill tools without indexing (sync version).
+    ///
+    /// This method discovers @skill_script decorated functions without
+    /// attempting schema extraction. Returns raw tool records as JSON strings
+    /// that can be processed by Python for schema extraction.
+    ///
+    /// Args:
+    ///   base_path: Base directory containing skills (e.g., "assets/skills")
+    ///
+    /// Returns:
+    ///   List of JSON strings representing tool records
+    fn scan_skill_tools_raw(&self, base_path: String) -> PyResult<Vec<String>> {
+        use std::path::Path;
+
+        // Use the omni-vector scanner directly
+        let scanner = omni_vector::ScriptScanner::new();
+        let skills_path = Path::new(&base_path);
+
+        if !skills_path.exists() {
+            return Ok(vec![]);
+        }
+
+        let tools = scanner.scan_all(skills_path)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+        // Convert to JSON strings
+        let json_tools: Vec<String> = tools
+            .into_iter()
+            .map(|t| serde_json::to_string(&t).unwrap_or_default())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        Ok(json_tools)
+    }
+
     /// Phase 62: Get all tools for a skill.
     ///
     /// Args:
@@ -719,6 +754,55 @@ impl PyVectorStore {
                 .map(|t| serde_json::to_string(&t).unwrap_or_default())
                 .collect();
             Ok(json_tools)
+        })
+    }
+
+    /// Phase 64: Get all file hashes from the database for incremental sync.
+    ///
+    /// Args:
+    ///   table_name: Name of the table (default: "skills")
+    ///
+    /// Returns:
+    ///   JSON string of path -> {hash, id} mapping
+    fn get_all_file_hashes(&self, table_name: Option<String>) -> PyResult<String> {
+        let path = self.path.clone();
+        let dimension = self.dimension;
+        let table_name = table_name.unwrap_or_else(|| "skills".to_string());
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        rt.block_on(async {
+            let store = VectorStore::new(&path, Some(dimension)).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            store.get_all_file_hashes(&table_name)
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        })
+    }
+
+    /// Phase 64: Delete documents by file path.
+    ///
+    /// Args:
+    ///   file_paths: List of file paths to delete
+    ///   table_name: Name of the table (default: "skills")
+    ///
+    /// Returns:
+    ///   Ok(()) on success
+    fn delete_by_file_path(&self, file_paths: Vec<String>, table_name: Option<String>) -> PyResult<()> {
+        let path = self.path.clone();
+        let dimension = self.dimension;
+        let table_name = table_name.unwrap_or_else(|| "skills".to_string());
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        rt.block_on(async {
+            let store = VectorStore::new(&path, Some(dimension)).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            store.delete_by_file_path(&table_name, file_paths)
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
         })
     }
 }

@@ -122,19 +122,29 @@ def _load_skill_module_for_test(skill_name: str):
 
     This is optimized for tests - uses module_loader context manager
     which pre-loads decorators and handles parent packages.
+
+    Phase 63: Loads from scripts/ instead of tools.py
     """
     from agent.core.module_loader import module_loader
 
-    skill_tools_path = SKILLS_DIR(skill=skill_name, filename="tools.py")
+    # Check for scripts/ directory first (Phase 63)
+    scripts_dir = SKILLS_DIR(skill=skill_name, filename="scripts")
 
-    if not skill_tools_path.exists():
-        raise FileNotFoundError(f"Skill tools not found: {skill_tools_path}")
+    if scripts_dir.exists():
+        # Load from scripts/__init__.py which re-exports from scripts/*.py
+        module_name = f"agent.skills.{skill_name}.scripts"
+        skill_path = scripts_dir / "__init__.py"
+    else:
+        # Fallback to tools.py (legacy support for git skill)
+        skill_path = SKILLS_DIR(skill=skill_name, filename="tools.py")
+        module_name = f"agent.skills.{skill_name}.tools"
 
-    module_name = f"agent.skills.{skill_name}.tools"
+    if not skill_path.exists():
+        raise FileNotFoundError(f"Skill module not found: {skill_path}")
 
     # Use module_loader context manager for proper import setup (pre-loads decorators)
     with module_loader(SKILLS_DIR()) as loader:
-        module = loader.load_module(module_name, skill_tools_path)
+        module = loader.load_module(module_name, skill_path)
 
     return module
 
@@ -309,19 +319,29 @@ class TestSpecBasedLoading:
         assert "not found" in message.lower()
 
     def test_template_loads_with_spec_based_loading(self, registry_fixture, real_mcp):
-        """_template can now be loaded with spec-based loading (unlike importlib.import_module)."""
-        # With spec-based loading, _template can be loaded
+        """_template can be discovered but cannot be loaded (no @skill_script functions).
+
+        Phase 63: _template is a skeleton skill, not a real skill.
+        It can be discovered but loading fails because it has no commands.
+        """
+        # _template can be discovered
+        available = registry_fixture.list_available_skills()
+        assert "_template" in available
+
+        # But loading fails because _template has no @skill_script decorated functions
         success, message = registry_fixture.load_skill("_template", real_mcp)
-        # This should succeed with spec-based loading
-        assert success is True
-        assert "_template" in registry_fixture.loaded_skills
+        assert success is False
+        assert "no @skill_command or @skill_script decorated functions" in message
 
 
 class TestHotReload:
     """Test hot reload functionality."""
 
     def test_hot_reload_reloads_module(self, registry_fixture, real_mcp):
-        """Loading same skill again should re-execute module code."""
+        """Loading same skill again should re-execute module code.
+
+        Phase 63: Tests hot reload by modifying scripts/ files.
+        """
         import asyncio
         import agent.core.registry as sr_module
         from common.skills_path import SKILLS_DIR
@@ -338,15 +358,16 @@ class TestHotReload:
         assert "[HOT-RELOADED]" not in original_result
 
         # Modify file content (simulate code change)
-        tools_path = SKILLS_DIR(skill="filesystem", filename="tools.py")
-        original_content = tools_path.read_text()
+        scripts_path = SKILLS_DIR(skill="filesystem", filename="scripts")
+        io_py_path = scripts_path / "io.py"
+        original_content = io_py_path.read_text()
 
         # Add a marker to the function (match the exact line including \n)
         new_content = original_content.replace(
             "return f\"Directory Listing for '{path}':\\n\"",
             "return f\"[HOT-RELOADED] Directory Listing for '{path}':\\n\"",
         )
-        tools_path.write_text(new_content)
+        io_py_path.write_text(new_content)
 
         try:
             # Force reload by clearing cache and reloading
@@ -365,7 +386,7 @@ class TestHotReload:
 
         finally:
             # Restore original content
-            tools_path.write_text(original_content)
+            io_py_path.write_text(original_content)
 
     def test_double_load_handles_gracefully(self, registry_fixture, real_mcp):
         """Loading same skill twice should be safe."""
@@ -473,7 +494,10 @@ class TestSkillManagerOmniCLI:
 
 
 class TestFilesystemSkill:
-    """Test filesystem skill operations."""
+    """Test filesystem skill operations.
+
+    Phase 63: Functions are in scripts/io.py, loaded via scripts/__init__.py
+    """
 
     @pytest.mark.asyncio
     async def test_list_directory_operation(self, isolated_registry, mock_mcp_server):
@@ -498,13 +522,13 @@ class TestFilesystemSkill:
         assert "version" in result
 
     @pytest.mark.asyncio
-    async def test_write_file_operation(self, isolated_registry, mock_mcp_server, temp_dir):
+    async def test_write_file_operation(self, isolated_registry, mock_mcp_server, tmp_path):
         """Test write_file function."""
         isolated_registry.load_skill("filesystem", mock_mcp_server)
         module = isolated_registry.module_cache["filesystem"]
 
         # Write to a temp file
-        test_path = temp_dir / "test_write.txt"
+        test_path = tmp_path / "test_write.txt"
         result = await module.write_file(str(test_path), "test content 123")
         result = unwrap_command_result(result)
         assert "Successfully wrote" in result

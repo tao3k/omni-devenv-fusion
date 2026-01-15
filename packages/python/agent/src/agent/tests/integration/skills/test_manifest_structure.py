@@ -116,9 +116,13 @@ def test_skill_manifest_version_format(skill_dir: Path):
     ids=[p.name for p in _ALL_SKILLS],
 )
 def test_skill_has_tools_py(skill_dir: Path):
-    """Every skill must have a tools.py file."""
-    tools_file = skill_dir / "tools.py"
-    assert tools_file.exists(), f"{skill_dir.name}: tools.py not found"
+    """Every skill must have a scripts/ directory with Python files."""
+    scripts_dir = skill_dir / "scripts"
+    # Check for scripts/ directory with at least one .py file (excluding __init__.py)
+    has_scripts = scripts_dir.exists() and any(
+        f.suffix == ".py" and f.name != "__init__.py" for f in scripts_dir.iterdir()
+    )
+    assert has_scripts, f"{skill_dir.name}: scripts/*.py not found (Phase 63: scripts/ required)"
 
 
 @pytest.mark.parametrize(
@@ -143,15 +147,19 @@ def test_skill_directory_not_empty(skill_dir: Path):
     ids=[p.name for p in _ALL_SKILLS],
 )
 def test_skill_tools_py_valid_python(skill_dir: Path):
-    """tools.py files should be valid Python syntax."""
-    tools_file = skill_dir / "tools.py"
-    if tools_file.exists():
-        with open(tools_file) as f:
-            content = f.read()
-        try:
-            ast.parse(content)
-        except SyntaxError as e:
-            pytest.fail(f"{skill_dir.name}/tools.py has syntax error: {e}")
+    """scripts/*.py files should be valid Python syntax."""
+    scripts_dir = skill_dir / "scripts"
+    if scripts_dir.exists():
+        for script_file in scripts_dir.glob("*.py"):
+            if script_file.name != "__init__.py":
+                with open(script_file) as f:
+                    content = f.read()
+                try:
+                    ast.parse(content)
+                except SyntaxError as e:
+                    pytest.fail(
+                        f"{skill_dir.name}/scripts/{script_file.name} has syntax error: {e}"
+                    )
 
 
 # =============================================================================

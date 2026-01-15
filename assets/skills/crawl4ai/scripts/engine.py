@@ -6,7 +6,7 @@ This script runs in an isolated uv environment, allowing heavy dependencies
 like crawl4ai without polluting the main agent runtime.
 
 Output Format:
-    JSON to stdout: {"status": "success", "data": result} or {"status": "error", "error": msg}
+    JSON to stdout: {"success": true, "content": "...", "metadata": {...}}
 
 Architecture:
     - Heavy imports are lazy-loaded inside functions
@@ -28,10 +28,15 @@ Usage:
 
 import asyncio
 import json
+import sys
+import io
 from typing import Optional
 
-# Use local Shim decorator - no agent package dependency
-from .utils import skill_script
+# Use absolute import for uv run compatibility
+try:
+    from .utils import skill_script
+except ImportError:
+    from utils import skill_script
 
 
 @skill_script(
@@ -60,24 +65,30 @@ async def crawl_url(
     # Lazy import - only happens in isolated environment
     from crawl4ai import AsyncWebCrawler
 
+    # Capture stdout during crawl to prevent progress bars from polluting JSON output
+    old_stdout = sys.stdout
+    sys.stdout = io.StringIO()
+
     try:
         async with AsyncWebCrawler(verbose=False) as crawler:
             result = await crawler.arun(url=url)
 
-            output = {
-                "success": result.success,
-                "url": result.url,
-                "content": result.markdown if fit_markdown else result.raw_markdown,
-                "error": result.error_message or "",
-                "metadata": {
-                    "title": result.metadata.get("title") if result.metadata else None,
-                    "description": result.metadata.get("description") if result.metadata else None,
-                },
-            }
+        # Discard captured stdout (progress bars)
+        sys.stdout = old_stdout
 
-            return output
+        return {
+            "success": result.success,
+            "url": result.url,
+            "content": result.markdown if fit_markdown else result.raw_markdown,
+            "error": result.error_message or "",
+            "metadata": {
+                "title": result.metadata.get("title") if result.metadata else None,
+                "description": result.metadata.get("description") if result.metadata else None,
+            },
+        }
 
     except Exception as e:
+        sys.stdout = old_stdout
         return {
             "success": False,
             "url": url,
@@ -88,8 +99,8 @@ async def crawl_url(
 
 
 @skill_script(
-    name="check_ready",
-    description="Check if crawler dependencies are properly installed.",
+    name="check_crawler_ready",
+    description="Check if the crawler skill is properly configured and ready.",
 )
 async def check_crawler_ready() -> dict:
     """
@@ -108,20 +119,47 @@ async def check_crawler_ready() -> dict:
         return {"ready": False, "error": str(e)}
 
 
-# CLI entry point for direct testing
 def main():
-    """CLI entry point - reads JSON args from stdin."""
-    import sys
+    """CLI entry point - supports both stdin JSON and command line args."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Crawl4AI Engine")
+    parser.add_argument("--url", type=str, help="URL to crawl")
+    parser.add_argument(
+        "--fit_markdown", type=str, default="true", help="Clean markdown (true/false)"
+    )
+    parser.add_argument("--stdin", action="store_true", help="Read JSON from stdin")
+
+    args = parser.parse_args()
+
+    # Parse URL and fit_markdown
+    url = ""
+    fit_markdown = True
+
+    if args.stdin and not sys.stdin.isatty():
+        # Read JSON from stdin (for uv run with pipe)
+        try:
+            stdin_data = sys.stdin.read()
+            if stdin_data.strip():
+                json_args = json.loads(stdin_data)
+                url = json_args.get("url", "")
+                fit_markdown = json_args.get("fit_markdown", True)
+        except json.JSONDecodeError:
+            pass
+    else:
+        # Use command line args (for run_skill_script)
+        url = args.url or ""
+        fit_markdown = args.fit_markdown.lower() == "true" if args.fit_markdown else True
+
+    if not url:
+        print(json.dumps({"success": False, "error": "Missing URL"}, default=str))
+        return
 
     try:
-        args = json.loads(sys.stdin.read())
-        url = args.get("url", "")
-        fit_markdown = args.get("fit_markdown", True)
-
         result = asyncio.run(crawl_url(url, fit_markdown))
-        print(json.dumps({"status": "success", "data": result}, default=str))
+        print(json.dumps(result, default=str))
     except Exception as e:
-        print(json.dumps({"status": "error", "error": str(e)}, default=str))
+        print(json.dumps({"success": False, "error": str(e)}, default=str))
 
 
 if __name__ == "__main__":

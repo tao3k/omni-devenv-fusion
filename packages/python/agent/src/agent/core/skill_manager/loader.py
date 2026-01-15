@@ -2,10 +2,8 @@
 src/agent/core/skill_manager/loader.py
 Skill loading and command extraction.
 
-Contains:
-- Command extraction from @skill_command decorated functions
-- Command extraction from @skill_script decorated functions (scripts/*.py)
-- Module loading utilities
+Phase 63: Only supports scripts/*.py pattern with @skill_script decorator.
+Removes legacy tools.py + @skill_command support.
 """
 
 from __future__ import annotations
@@ -25,16 +23,13 @@ class SkillLoaderMixin:
     """
     Mixin providing skill loading and command extraction capabilities.
 
-    Used by SkillManager to extract commands from skill modules.
-    Supports both:
-    - @skill_command: tools.py style (router layer)
-    - @skill_script: Direct script decoration (no tools.py needed)
+    Phase 63: Only supports scripts/*.py with @skill_script decorator.
+    Legacy tools.py + @skill_command support has been removed.
     """
 
     # These should be defined in the parent class
     _module_loader: ModuleLoader | None
     skills_dir: Path
-    _SKILL_COMMAND_MARKER: str
 
     def _get_module_loader(self) -> ModuleLoader:
         """Get or create the module loader."""
@@ -43,35 +38,6 @@ class SkillLoaderMixin:
             self._module_loader._ensure_parent_packages()
             self._module_loader._preload_decorators()
         return self._module_loader
-
-    def _extract_commands(self, module: Any, skill_name: str) -> dict[str, SkillCommand]:
-        """Extract @skill_command decorated functions from a module."""
-        commands: dict[str, SkillCommand] = {}
-
-        for name, obj in inspect.getmembers(module):
-            if not inspect.isfunction(obj):
-                continue
-
-            if not hasattr(obj, self._SKILL_COMMAND_MARKER):
-                continue
-
-            # Get config from decorator
-            config = getattr(obj, "_skill_config", {})
-            cmd_name = config.get("name") or name
-            description = config.get("description", "") or self._get_docstring(obj)
-            category = config.get("category", "general")
-            input_schema = config.get("input_schema", {})
-
-            commands[cmd_name] = SkillCommand(
-                name=cmd_name,
-                func=obj,
-                description=description,
-                category=SkillCategory(category),
-                _skill_name=skill_name,
-                input_schema=input_schema,
-            )
-
-        return commands
 
     def _extract_script_commands(
         self,
@@ -136,10 +102,35 @@ class SkillLoaderMixin:
         """
         # Create module name: agent.skills.git.scripts.commit
         module_name = f"agent.skills.{skill_name}.scripts.{script_file.stem}"
+        package_name = f"agent.skills.{skill_name}.scripts"
+        parent_package = f"agent.skills.{skill_name}"
 
         # Check if already loaded
         if module_name in sys.modules:
             return sys.modules[module_name]
+
+        # Ensure parent package is in sys.modules for relative imports
+        if parent_package not in sys.modules:
+            parent_spec = importlib.util.spec_from_file_location(
+                parent_package,
+                self.skills_dir / skill_name / "__init__.py",
+            )
+            if parent_spec:
+                parent_module = importlib.util.module_from_spec(parent_spec)
+                sys.modules[parent_package] = parent_module
+
+        # Also ensure scripts package is registered for .utils style imports
+        if package_name not in sys.modules:
+            scripts_init = self.skills_dir / skill_name / "scripts" / "__init__.py"
+            if scripts_init.exists():
+                package_spec = importlib.util.spec_from_file_location(
+                    package_name,
+                    scripts_init,
+                )
+                if package_spec:
+                    package_module = importlib.util.module_from_spec(package_spec)
+                    package_module.__path__ = [str(scripts_init.parent)]
+                    sys.modules[package_name] = package_module
 
         # Use importlib to load the module
         spec = importlib.util.spec_from_file_location(
@@ -150,6 +141,11 @@ class SkillLoaderMixin:
             raise ImportError(f"Cannot load module from {script_file}")
 
         module = importlib.util.module_from_spec(spec)
+
+        # Set up package context for relative imports (e.g., from .utils import ...)
+        module.__package__ = package_name
+        module.__file__ = str(script_file)
+
         sys.modules[module_name] = module
         spec.loader.exec_module(module)
 
@@ -183,10 +179,8 @@ class SkillLoaderMixin:
                 module = self._load_script_module(skill_name, script_file)
                 script_commands = self._extract_script_commands(module, skill_name)
 
-                # Prefix command names with skill name
-                for cmd_name, cmd in script_commands.items():
-                    full_cmd_name = f"{skill_name}.{cmd_name}"
-                    commands[full_cmd_name] = cmd
+                # Merge script commands (no prefix - _rebuild_command_cache handles that)
+                commands.update(script_commands)
 
             except Exception as e:
                 # Log but continue - one broken script shouldn't fail the whole skill

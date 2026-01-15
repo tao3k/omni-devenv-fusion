@@ -61,18 +61,61 @@ def _setup_skill_package_context(skill_name: str, skills_root: Path):
 
 
 def load_skill_module(skill_name: str):
-    """Load a skill module for testing with proper package context."""
+    """Load a skill module for testing with proper package context.
+
+    Phase 63: Loads from scripts/ instead of tools.py.
+    Handles both __init__.py and scripts/*.py files.
+    """
     from common.skills_path import SKILLS_DIR
 
     skills_dir = SKILLS_DIR()
-    tools_path = skills_dir / skill_name / "tools.py"
+    scripts_dir = skills_dir / skill_name / "scripts"
 
     # Set up package context BEFORE loading (enables agent.skills.git.scripts imports)
     _setup_skill_package_context(skill_name, skills_dir)
 
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location(f"{skill_name}_tools", str(tools_path))
+    # Phase 63: Check if __init__.py has content, otherwise look for scripts/*.py
+    init_path = scripts_dir / "__init__.py" if scripts_dir.exists() else None
+
+    if init_path and init_path.exists():
+        init_content = init_path.read_text().strip()
+        if init_content:
+            # __init__.py has content, load it
+            tools_path = init_path
+            module_name = f"{skill_name}_scripts"
+        else:
+            # __init__.py is empty, try to find the main script file
+            # Look for a script file that matches the skill name or has the main functions
+            script_files = list(scripts_dir.glob("*.py"))
+            script_files = [f for f in script_files if f.name not in ("__init__.py", "__pycache__")]
+
+            if script_files:
+                # Use the first non-init script file as the main module
+                tools_path = script_files[0]
+                module_name = f"{skill_name}_{script_files[0].stem}"
+            else:
+                raise FileNotFoundError(f"No script files found in {scripts_dir}")
+    elif scripts_dir.exists():
+        # No __init__.py, look for script files
+        script_files = list(scripts_dir.glob("*.py"))
+        script_files = [f for f in script_files if f.name not in ("__init__.py", "__pycache__")]
+
+        if script_files:
+            tools_path = script_files[0]
+            module_name = f"{skill_name}_{script_files[0].stem}"
+        else:
+            raise FileNotFoundError(f"No script files found in {scripts_dir}")
+    else:
+        # Fallback to tools.py (legacy support for git skill)
+        tools_path = skills_dir / skill_name / "tools.py"
+        module_name = f"{skill_name}_tools"
+
+    if not tools_path.exists():
+        raise FileNotFoundError(f"Skill module not found: {tools_path}")
+
+    spec = importlib.util.spec_from_file_location(module_name, str(tools_path))
     module = importlib.util.module_from_spec(spec)
     # Set __package__ for proper import resolution
     module.__package__ = f"agent.skills.{skill_name}"
@@ -80,8 +123,11 @@ def load_skill_module(skill_name: str):
     return module
 
 
-class TestSkillCommandDecorators:
-    """Test @skill_command decorator functionality."""
+class TestSkillScriptDecorators:
+    """Test @skill_script decorator functionality (Phase 63).
+
+    Note: Uses _is_skill_script marker and _script_config (not _skill_config).
+    """
 
     @pytest.fixture
     def terminal_module(self):
@@ -94,53 +140,53 @@ class TestSkillCommandDecorators:
         return load_skill_module("filesystem")
 
     def test_run_task_has_marker(self, terminal_module):
-        """run_task should have _is_skill_command marker."""
-        assert hasattr(terminal_module.run_task, "_is_skill_command")
-        assert terminal_module.run_task._is_skill_command is True
+        """run_task should have _is_skill_script marker."""
+        assert hasattr(terminal_module.run_task, "_is_skill_script")
+        assert terminal_module.run_task._is_skill_script is True
 
     def test_run_task_has_config(self, terminal_module):
-        """run_task should have _skill_config."""
-        assert hasattr(terminal_module.run_task, "_skill_config")
-        config = terminal_module.run_task._skill_config
+        """run_task should have _script_config."""
+        assert hasattr(terminal_module.run_task, "_script_config")
+        config = terminal_module.run_task._script_config
         assert config["name"] == "run_task"
         assert config["category"] == "workflow"
 
     def test_read_file_has_marker(self, filesystem_module):
-        """read_file should have _is_skill_command marker."""
-        assert hasattr(filesystem_module.read_file, "_is_skill_command")
-        assert filesystem_module.read_file._is_skill_command is True
+        """read_file should have _is_skill_script marker."""
+        assert hasattr(filesystem_module.read_file, "_is_skill_script")
+        assert filesystem_module.read_file._is_skill_script is True
 
     def test_read_file_has_config(self, filesystem_module):
-        """read_file should have _skill_config."""
-        assert hasattr(filesystem_module.read_file, "_skill_config")
-        config = filesystem_module.read_file._skill_config
+        """read_file should have _script_config."""
+        assert hasattr(filesystem_module.read_file, "_script_config")
+        config = filesystem_module.read_file._script_config
         assert config["name"] == "read_file"
         assert config["category"] == "read"
 
     def test_write_file_has_config(self, filesystem_module):
-        """write_file should have _skill_config."""
-        assert hasattr(filesystem_module.write_file, "_skill_config")
-        config = filesystem_module.write_file._skill_config
+        """write_file should have _script_config."""
+        assert hasattr(filesystem_module.write_file, "_script_config")
+        config = filesystem_module.write_file._script_config
         assert config["name"] == "write_file"
         assert config["category"] == "write"
 
     def test_list_directory_has_config(self, filesystem_module):
-        """list_directory should have _skill_config."""
-        assert hasattr(filesystem_module.list_directory, "_skill_config")
-        config = filesystem_module.list_directory._skill_config
+        """list_directory should have _script_config."""
+        assert hasattr(filesystem_module.list_directory, "_script_config")
+        config = filesystem_module.list_directory._script_config
         assert config["name"] == "list_directory"
         assert config["category"] == "read"
 
     def test_search_files_has_config(self, filesystem_module):
-        """search_files should have _skill_config."""
-        assert hasattr(filesystem_module.search_files, "_skill_config")
-        config = filesystem_module.search_files._skill_config
+        """search_files should have _script_config."""
+        assert hasattr(filesystem_module.search_files, "_script_config")
+        config = filesystem_module.search_files._script_config
         assert config["name"] == "search_files"
         assert config["category"] == "read"
 
     def test_get_file_info_has_config(self, filesystem_module):
-        """get_file_info should have _skill_config."""
-        assert hasattr(filesystem_module.get_file_info, "_skill_config")
-        config = filesystem_module.get_file_info._skill_config
+        """get_file_info should have _script_config."""
+        assert hasattr(filesystem_module.get_file_info, "_script_config")
+        config = filesystem_module.get_file_info._script_config
         assert config["name"] == "get_file_info"
         assert config["category"] == "read"

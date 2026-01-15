@@ -904,3 +904,328 @@ cat .memory/routing_feedback.json
 - [Skills Overview](../skills.md) - Complete skill documentation
 - `assets/specs/phase39_self_evolving_feedback_loop.md`
 - `assets/specs/phase40_automated_reinforcement_loop.md`
+
+---
+
+## Phase 64: Incremental Sync vs Full Reindex
+
+> **0.2s Performance** - Diff-based incremental sync for rapid iteration.
+
+### Overview
+
+Phase 64 introduces `omni skill sync`, a high-performance incremental update that only processes changed files. This is contrasted with `omni skill reindex` which performs a full rebuild.
+
+### Sync vs Reindex Comparison
+
+| Aspect        | `omni skill sync`           | `omni skill reindex`     |
+| ------------- | --------------------------- | ------------------------ |
+| **Speed**     | ~0.2s                       | ~5-10s                   |
+| **Algorithm** | Diff (mtime + content hash) | Full scan + rebuild      |
+| **Use Case**  | CLI quick sync, Auto-watch  | Manual rebuild, Recovery |
+| **Memory**    | O(1) per file               | O(N) all at once         |
+
+### The Diff Algorithm
+
+```python
+def sync_skills(self, skills_dir: str, source: str) -> SyncStats:
+    """
+    1. Scan all .skill.md files in skills_dir
+    2. For each file:
+       - Check mtime (fast path: skip if unchanged)
+       - Compute content hash (accurate: detect renames)
+    3. Compare against tracked files in LanceDB
+    4. Batch operations: delete → upsert → commit
+    5. Return diff stats
+    """
+    # Step 1: Scan and hash
+    scanned = self._scan_manifest_files(skills_dir)
+
+    # Step 2: Get tracked files from LanceDB
+    tracked = self._get_tracked_files(source)
+
+    # Step 3: Compute diff
+    added = scanned - tracked
+    deleted = tracked - scanned
+    modified = tracked ∩ scanned
+
+    # Step 4: Batch operations
+    stats = self._batch_sync(added, modified, deleted)
+
+    return stats
+```
+
+### CLI Commands
+
+```bash
+# Incremental sync (fast, recommended for development)
+omni skill sync
+
+# Full reindex (slow, use for recovery or initial setup)
+omni skill reindex
+
+# Force full rebuild
+omni skill reindex --clear
+
+# Verbose output
+omni skill sync -v
+omni skill reindex -v
+```
+
+### Output Examples
+
+**Sync (Incremental)**:
+
+```
+=== Quick Sync ===
+Scanned: 92 files
+Tracked: 86 files
+Diff: +1 added, ~0 modified, -0 deleted
+Sync complete: +1 added, ~0 modified, -0 deleted, 86 total
+```
+
+**Reindex (Full)**:
+
+```
+=== Full Reindex ===
+Scanning assets/skills...
+Indexed 92 skills (72 local, 20 remote)
+Reindex complete: 92 total
+```
+
+### Performance Comparison
+
+| Scenario          | Sync Time | Reindex Time | Speedup |
+| ----------------- | --------- | ------------ | ------- |
+| No changes        | 0.05s     | 5.2s         | 104x    |
+| 1 file modified   | 0.2s      | 5.2s         | 26x     |
+| 10 files modified | 0.4s      | 5.3s         | 13x     |
+| Initial setup     | N/A       | 5.5s         | 1x      |
+
+### Related Files
+
+| File                                       | Purpose                        |
+| ------------------------------------------ | ------------------------------ |
+| `agent/core/vector_store.py`               | `sync_skills()` implementation |
+| `packages/rust/crates/omni-vector/src/...` | RustLanceDB backend            |
+| `agent/cli/commands/skill.py`              | CLI commands                   |
+
+---
+
+## Phase 65: Reactive Indexing & Zero-Compute MCP
+
+> **Auto感知 (The Watcher)** - File save triggers automatic sync.<br>
+> **极速响应 (The Reader)** - O(1) MCP tool listing from LanceDB.
+
+### Overview
+
+Phase 65 introduces automatic skill synchronization when files change, plus optimized MCP server startup with direct LanceDB reads.
+
+### Skill Watcher Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    omni mcp start                                │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     MCPServer.lifespan()                         │
+├─────────────────────────────────────────────────────────────────┤
+│  1. Initial Sync: sync_skills()                                 │
+│  2. Start Watcher: BackgroundWatcher.start()                    │
+│     ↓ (background thread)                                       │
+│  3. MCP Server Running (Stdio/SSE)                              │
+└─────────────────────────────────────────────────────────────────┘
+           │                    │
+           │ on_file_change     │ list_tools()
+           ▼                    ▼
+┌─────────────────────┐   ┌─────────────────────┐
+│  SkillSyncHandler   │   │   LanceDB (O(1))    │
+│  → sync_skills()    │   │   直接返回 Schema   │
+└─────────────────────┘   └─────────────────────┘
+```
+
+### File Watcher Implementation
+
+**`agent/core/skill_manager/watcher.py`**:
+
+```python
+import asyncio
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+from agent.core.vector_store import get_vector_memory
+
+logger = logging.getLogger(__name__)
+
+class SkillSyncHandler(FileSystemEventHandler):
+    """Listens for file changes and triggers incremental sync."""
+
+    def __init__(self, skills_dir: str):
+        self.skills_dir = skills_dir
+        self.last_sync = 0
+        self.cooldown = 1.0  # 1 second debounce
+
+    def on_any_event(self, event):
+        if event.is_directory:
+            return
+
+        filename = Path(event.src_path).name
+        # Ignore non-Python files and temp files
+        if not filename.endswith(".py") or filename.startswith("__"):
+            return
+
+        # Debounce: ignore events within cooldown
+        current_time = time.time()
+        if current_time - self.last_sync < self.cooldown:
+            return
+
+        self.last_sync = current_time
+        logger.info(f"file_change_detected: {filename}")
+
+        try:
+            vm = get_vector_memory()
+            stats = asyncio.run(vm.sync_skills(self.skills_dir, "skills"))
+
+            if any(v > 0 for v in [stats.get("added", 0),
+                                   stats.get("modified", 0),
+                                   stats.get("deleted", 0)]):
+                logger.info(f"auto_sync_complete: +{stats.get('added', 0)} "
+                           f"~{stats.get('modified', 0)} -{stats.get('deleted', 0)}")
+        except Exception as e:
+            logger.error(f"auto_sync_failed: {e}")
+```
+
+### CLI Watch Command
+
+```bash
+# Start file watcher (blocking mode)
+omni skill watch
+
+# Output:
+# 2024-01-15 10:30:45,123 - INFO - file_change_detected: git/scripts/commit.py
+# 2024-01-15 10:30:45,234 - INFO - auto_sync_complete: +0 ~1 -0
+```
+
+### MCP Server Integration
+
+**`agent/mcp_server.py`**:
+
+```python
+from agent.core.skill_manager.watcher import (
+    start_global_watcher,
+    stop_global_watcher
+)
+
+@asynccontextmanager
+async def server_lifespan():
+    """MCP Server lifecycle management."""
+    # Startup
+    logger.info("mcp_server_starting")
+
+    # Initial sync
+    try:
+        vm = get_vector_memory()
+        await vm.sync_skills("assets/skills", "skills")
+    except Exception as e:
+        logger.error("initial_sync_failed", error=str(e))
+
+    # Start Watcher
+    start_global_watcher()
+
+    yield
+
+    # Shutdown
+    logger.info("mcp_server_shutting_down")
+    stop_global_watcher()
+```
+
+### Zero-Compute Tool Listing
+
+Direct LanceDB read for O(1) `list_tools` performance:
+
+```python
+async def list_tools(self):
+    """
+    O(1) Speed: Direct LanceDB read, no Python imports, no inspect.
+    """
+    # Direct from LanceDB - no vector search overhead
+    records = self.vector_store.scan_skill_tools_raw("assets/skills")
+
+    tools = []
+    for rec_json in records:
+        tool = json.loads(rec_json)
+        tools.append({
+            "name": tool["tool_name"],
+            "description": tool["description"],
+            "inputSchema": json.loads(tool["input_schema_json"])
+        })
+
+    return tools
+```
+
+### Usage Flow
+
+```bash
+# Terminal 1: Start MCP server (with auto-sync)
+omni mcp start
+
+# Terminal 2: Edit a skill file
+#   assets/skills/git/scripts/commit.py
+#   (save file)
+
+# Terminal 1: See auto-sync log
+# 2024-01-15 10:30:45,123 - INFO - file_change_detected: commit.py
+# 2024-01-15 10:30:45,234 - INFO - auto_sync_complete: +0 ~1 -0
+
+# Terminal 3: Query agent
+# User: "@omni(git.commit, message="fix bug")"
+# Agent: Uses updated commit tool immediately
+```
+
+### Configuration
+
+**Dependencies**:
+
+```toml
+# pyproject.toml
+[project.dependencies]
+watchdog = ">=3.0.0"
+```
+
+**Settings** (in `common/settings.py`):
+
+```python
+DEFAULT_SETTINGS = {
+    "skills": {
+        "path": "assets/skills",
+        "watch_enabled": True,
+    },
+    "watcher": {
+        "cooldown_seconds": 1.0,
+    }
+}
+```
+
+### Benefits
+
+| Aspect             | Before Phase 65          | After Phase 65           |
+| ------------------ | ------------------------ | ------------------------ |
+| File change → sync | Manual `omni skill sync` | Automatic on save        |
+| MCP list_tools     | ~100ms (vector search)   | ~1ms (direct DB read)    |
+| Developer workflow | 2-3 commands per change  | 1 command (save file)    |
+| Tool list refresh  | Manual trigger           | Automatic on file change |
+
+### Related Files
+
+| File                                       | Purpose                             |
+| ------------------------------------------ | ----------------------------------- |
+| `agent/core/skill_manager/watcher.py`      | SkillSyncHandler, BackgroundWatcher |
+| `agent/cli/commands/skill.py`              | `skill watch` command               |
+| `agent/mcp_server.py`                      | Watcher lifecycle integration       |
+| `packages/rust/crates/omni-vector/src/...` | Rust delete with LIKE pattern       |
+
+### See Also
+
+- [Skills Overview](../skills.md) - Complete skill documentation
+- `assets/specs/phase64_incremental_sync.md`
+- `assets/specs/phase65_reactive_indexing.md`

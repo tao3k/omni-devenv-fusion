@@ -407,3 +407,147 @@ print('Module paths set up')
 - [CLI Reference](../reference/cli.md) - User-facing CLI documentation
 - [Skills Documentation](../skills.md) - Skill architecture
 - [Trinity Architecture](../explanation/trinity-architecture.md) - Technical deep dive
+
+---
+
+## Use Cases
+
+### UC-1: Quick Git Commit with Smart Message
+
+```bash
+# Stage all changes and generate commit message
+omni git.smart_commit action=start
+
+# After LLM analyzes, approve with message
+omni git.smart_commit action=approve workflow_id=1 message="feat(core): add JIT skill loader for heavy skills"
+```
+
+**Output**: Creates commit with security scan + pre-commit hooks
+
+---
+
+### UC-2: Web Crawling from CLI
+
+```bash
+# Simple crawl (tool name: crawl_webpage)
+omni skill run crawl4ai.crawl_webpage url="https://example.com"
+
+# With options (JSON format)
+omni skill run crawl4ai.crawl_webpage '{"url": "https://news.ycombinator.com", "fit_markdown": true}' --json
+
+# Check if crawler is ready
+omni skill run crawl4ai.check_crawler_ready
+```
+
+**Output**: Markdown content from the webpage
+
+---
+
+### UC-3: Check Repository State
+
+```bash
+# Quick status
+omni git.git_status
+
+# Detailed status with staged/unstaged files
+omni git.git_status_detailed
+
+# Check current branch
+omni git.current_branch
+```
+
+---
+
+### UC-4: Route Query to Best Skill
+
+```bash
+# Auto-route a natural language query
+omni route invoke "commit my changes with message 'fix bug'"
+
+# With verbose output to see reasoning
+omni route invoke "run tests" --verbose
+
+# JSON output for scripting
+omni route invoke "show me recent commits" --json
+```
+
+---
+
+### UC-5: Save Learning to Memory
+
+```bash
+# Direct note saving
+omni memory.save_memory content="Use scope 'nix' for flake-related changes" metadata='{"tags": ["nix", "flake"], "category": "snippet"}'
+```
+
+---
+
+### UC-6: MCP Server for Claude Code
+
+```bash
+# Start SSE server (default, for Claude Code CLI)
+omni mcp --host 127.0.0.1 --port 3000
+
+# Stdio mode (for Claude Desktop)
+omni mcp --transport stdio
+
+# Background server
+omni mcp --port 3000 &
+```
+
+---
+
+### UC-7: Skill Development Workflow
+
+```bash
+# 1. List available skills
+omni skill list
+
+# 2. Check skill status
+omni skill status
+
+# 3. Run specific skill
+omni skill run git.log limit=5
+
+# 4. Debug with verbose
+omni skill run testing.test_project --verbose
+```
+
+---
+
+### UC-8: Interactive Agent Mode
+
+```bash
+# Start CCA loop with Omni Agent
+omni run exec "Fix the login bug in auth.py"
+
+# Or use interactive mode
+omni run interactive
+```
+
+---
+
+### UC-9: Batch Operations
+
+```bash
+# Multiple git operations
+omni git.add_all && omni git.commit message="update" && omni git.git_status
+
+# Pipeline with jq for JSON processing
+omni git.log --json | jq '.[] | select(.message | contains("feat"))'
+```
+
+---
+
+### UC-10: Development Debugging
+
+```bash
+# Full routing debug
+omni route status
+
+# Verbose skill execution
+omni skill run git.status --verbose 2>&1 | head -50
+
+# Check environment state
+omni route invoke "what files changed" --verbose
+```

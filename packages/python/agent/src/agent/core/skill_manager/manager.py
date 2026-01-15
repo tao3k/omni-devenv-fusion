@@ -13,7 +13,7 @@ import logging
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, ClassVar
+from typing import TYPE_CHECKING, Any, Callable
 
 from common.mcp_core.lazy_cache.repomix_cache import RepomixCache
 
@@ -84,9 +84,6 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
         "_background_tasks",  # Phase 36.6: Track background tasks to prevent GC
     )
 
-    # Registry marker for @skill_command decorated functions
-    _SKILL_COMMAND_MARKER: ClassVar[str] = "_is_skill_command"
-
     def __init__(self, skills_dir: Path | None = None) -> None:
         """
         Initialize the skill manager.
@@ -139,7 +136,10 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
     # =========================================================================
 
     def discover(self) -> list[Path]:
-        """Discover all skill directories with SKILL.md."""
+        """Discover all skill directories with SKILL.md.
+
+        Only supports scripts/*.py pattern (Phase 63+).
+        """
         if not self.skills_dir.exists():
             _get_logger().warning("Skills directory not found", path=str(self.skills_dir))
             return []
@@ -149,15 +149,18 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
             if not entry.is_dir():
                 continue
 
-            # Check for SKILL.md
+            # Check for SKILL.md (required for all skills)
             if not self._manifest_loader.skill_file_exists(entry):
                 continue
 
-            tools_path = entry / "tools.py"
-            if tools_path.exists():
+            # Check for scripts/*.py
+            scripts_dir = entry / "scripts"
+            has_scripts = scripts_dir.exists() and any(scripts_dir.glob("*.py"))
+
+            if has_scripts:
                 skills.append(entry)
             else:
-                _get_logger().debug("Skipping - no tools.py", skill=entry.name)
+                _get_logger().debug("Skipping - no scripts/*.py", skill=entry.name)
 
         _get_logger().info("Discovered skills", count=len(skills))
         return skills
@@ -177,9 +180,8 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
         """
         Load a skill from a path.
 
-        Supports two loading modes:
-        1. tools.py mode (legacy): Load from tools.py with @skill_command
-        2. script mode (Phase 62): Load from scripts/*.py with @skill_script
+        Only supports scripts/*.py pattern (Phase 63+).
+        Uses @skill_script decorated functions from scripts/*.py.
 
         Args:
             skill_path: Path to the skill directory
@@ -216,34 +218,17 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
         # Check execution mode
         execution_mode = metadata.execution_mode
 
-        # Determine loading mode and extract commands
+        # Only load from scripts/*.py
         commands: dict[str, SkillCommand] = {}
-        tools_path = skill_path / "tools.py"
         scripts_dir = skill_path / "scripts"
-        module = None
         mtime = 0.0
 
-        # Mode 1: tools.py exists - load from tools.py (legacy mode)
-        if tools_path.exists():
-            module_name = f"agent.skills.{skill_name}.tools"
-
-            try:
-                loader = self._get_module_loader()
-                module = loader.load_module(module_name, tools_path, reload=reload)
-                commands = self._extract_commands(module, skill_name)
-                mtime = tools_path.stat().st_mtime
-            except Exception as e:
-                _get_logger().error("Failed to load tools.py", skill=skill_name, error=str(e))
-                # Continue to try script mode
-
-        # Mode 2: scripts/*.py exists - load from scripts (Phase 62)
+        # Load from scripts/*.py (Phase 63+)
         if scripts_dir.exists() and any(scripts_dir.glob("*.py")):
             script_commands = self._extract_commands_from_scripts(skill_name, scripts_dir)
 
             if script_commands:
-                # Merge script commands (script commands take precedence if name conflicts)
-                for cmd_name, cmd in script_commands.items():
-                    commands[cmd_name] = cmd
+                commands = script_commands
 
                 # Update mtime based on scripts
                 try:
@@ -269,11 +254,11 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin):
             manifest=manifest,
             commands=commands,
             module_name=f"agent.skills.{skill_name}",
-            path=tools_path if tools_path.exists() else scripts_dir,
+            path=scripts_dir,
             mtime=mtime,
             execution_mode=execution_mode,
             _context_path=context_path,  # Lazy loaded
-            _module=module,
+            _module=None,
         )
 
         self._skills[skill_name] = skill

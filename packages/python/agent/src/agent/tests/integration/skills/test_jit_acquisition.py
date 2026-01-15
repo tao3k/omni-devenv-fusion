@@ -259,8 +259,17 @@ class TestSkillCommands:
     """Test that skill commands are properly registered via One Tool."""
 
     def test_omni_function_exists(self):
-        """omni function should be importable from test_skills."""
-        # omni is now imported from test_skills (Phase 35.3)
+        """omni function should be importable from test_skills module."""
+        # Phase 35.3: omni is defined in test_skills.py module
+        import sys
+        from pathlib import Path
+
+        # Add the test directory to sys.path
+        test_dir = Path(__file__).parent
+        if str(test_dir) not in sys.path:
+            sys.path.insert(0, str(test_dir))
+
+        # Import omni from test_skills module
         from test_skills import omni
 
         assert callable(omni), "omni should be callable"

@@ -406,6 +406,19 @@ class SkillLoader:
         """Get a skill by name."""
         return self._skills.get(name)
 
+    def get_skill_path(self, name: str) -> Optional[Path]:
+        """Get the path to a skill directory from pre-indexed data.
+
+        This avoids directory scanning when the skill is already indexed.
+        Falls back to None if skill not found in index.
+        """
+        skill = self._skills.get(name)
+        if skill and skill.module_path:
+            path = Path(skill.module_path)
+            if path.exists():
+                return path
+        return None
+
     def list_all_skills(self) -> List[str]:
         """List all indexed skill names."""
         return list(self._skills.keys())

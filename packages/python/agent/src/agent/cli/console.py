@@ -76,31 +76,28 @@ def print_result(result: Any, is_tty: bool = False, json_output: bool = False) -
     - stderr: Logs, progress, metadata (visible to user, invisible to pipes)
 
     Args:
-        result: The skill execution result (CommandResult or dict)
+        result: The skill execution result (ExecutionResult, CommandResult, or dict)
         is_tty: Whether stdout is a terminal
         json_output: If True, output raw JSON to stdout
     """
-    import json
-
-    if json_output:
-        # JSON mode: Output full result as JSON to stdout
-        if hasattr(result, "model_dump"):
+    # Handle ExecutionResult from SkillCommand.execute
+    if hasattr(result, "model_dump"):
+        # Pydantic model (ExecutionResult)
+        if json_output:
             sys.stdout.write(result.model_dump_json(indent=2) + "\n")
-        else:
-            sys.stdout.write(json.dumps(result, indent=2, default=str) + "\n")
-        return
-
-    # Extract content from result (handle CommandResult from @skill_command)
-    content = ""
-    metadata = {}
-
-    if hasattr(result, "data") and result.data is not None:
+            return
+        content = result.output
+        metadata = {"success": result.success, "duration_ms": result.duration_ms}
+        if result.error:
+            metadata["error"] = result.error
+    elif hasattr(result, "data") and result.data is not None:
         # CommandResult object from @skill_command decorator
         if isinstance(result.data, dict):
             content = result.data.get("content", result.data.get("markdown", ""))
             metadata = result.data.get("metadata", {})
         else:
             content = str(result.data)
+            metadata = {}
     elif isinstance(result, dict):
         # Handle CommandResult format: data.content / data.metadata
         if "data" in result and isinstance(result["data"], dict):
@@ -112,6 +109,10 @@ def print_result(result: Any, is_tty: bool = False, json_output: bool = False) -
             metadata = result.get("metadata", {})
     elif isinstance(result, str):
         content = result
+        metadata = {}
+    else:
+        content = str(result)
+        metadata = {}
 
     # [TTY Mode]
     if is_tty:

@@ -8,12 +8,14 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-# Core engine: LanceDB - use bundled arrow types via lance::deps
+# LanceDB core
 lance = "1.0"
-# lance = { version = "1.0", default-features = false, features = [] }
 lance-arrow = "1.0"
 lance-index = "1.0"
 lance-linalg = "1.0"
+
+# RecordBatch utilities (extracted to omni-lance)
+omni-lance = { path = "../omni-lance" }
 
 # Async runtime
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "fs"] }
@@ -32,9 +34,13 @@ anyhow = "1.0"
 serde = { workspace = true }
 serde_json = "1.0"
 
-# Script scanning (Phase 62) - using omni-ast (unified ast-grep v0.40.5)
+# Script scanning (Phase 62)
 omni-ast = { path = "../omni-ast" }
 walkdir = "2.5"
+
+# Hashing for incremental indexing
+sha2 = "0.10"
+hex = "0.4"
 
 # Reuse our common types
 omni-types = { path = "../omni-types" }

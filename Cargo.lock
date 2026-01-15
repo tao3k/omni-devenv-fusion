@@ -4451,6 +4451,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "omni-lance"
+version = "0.1.0"
+dependencies = [
+ "lance",
+]
+
+[[package]]
 name = "omni-security"
 version = "0.1.0"
 dependencies = [
@@ -4510,6 +4517,7 @@ dependencies = [
  "anyhow",
  "dashmap 7.0.0-rc2",
  "futures",
+ "hex",
  "lance",
  "lance-arrow",
  "lance-index",
@@ -4517,9 +4525,11 @@ dependencies = [
  "log",
  "omni-ast",
  "omni-io",
+ "omni-lance",
  "omni-types",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "thiserror 2.0.17",
  "tokio",

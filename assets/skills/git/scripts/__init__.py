@@ -17,5 +17,20 @@ Usage in tools.py:
 Each script module is directly importable as agent.skills.git.scripts.<module_name>
 """
 
-# Re-export commonly used functions for convenience
-# Note: Individual modules can also be imported directly
+from agent.skills.git.scripts import status
+from agent.skills.git.scripts import commit as commit_module
+
+# Re-export status functions
+git_status = status.git_status
+git_status_detailed = status.git_status_detailed
+current_branch = status.current_branch
+has_staged_files = status.has_staged_files
+has_unstaged_files = status.has_unstaged_files
+
+# Re-export commit functions
+commit = commit_module.commit
+commit_with_amend = commit_module.commit_with_amend
+commit_no_verify = commit_module.commit_no_verify
+get_last_commit = commit_module.get_last_commit
+get_last_commit_msg = commit_module.get_last_commit_msg
+revert = commit_module.revert

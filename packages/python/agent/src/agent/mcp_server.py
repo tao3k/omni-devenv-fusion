@@ -113,11 +113,24 @@ async def server_lifespan():
     manager.subscribe(_update_search_index)
     logger.info("🔍 [Lifecycle] Index Sync observer registered (ChromaDB)")
 
+    # Phase 65: Start Skill Watcher for auto-sync
+    from agent.core.skill_manager.watcher import start_global_watcher
+
+    try:
+        start_global_watcher()
+        logger.info("👀 [Lifecycle] Skill Watcher started (auto-sync)")
+    except Exception as e:
+        logger.warning(f"⚠️  [Lifecycle] Skill Watcher failed to start: {e}")
+
     logger.info("✅ [Lifecycle] Server ready")
 
     try:
         yield
     finally:
+        # Phase 65: Stop Skill Watcher
+        from agent.core.skill_manager.watcher import stop_global_watcher
+
+        stop_global_watcher()
         logger.info("🛑 [Lifecycle] Shutting down...")
 
 
