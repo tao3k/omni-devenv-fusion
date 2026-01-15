@@ -1,6 +1,6 @@
 # agent/core/schema/__init__.py
 """
-Phase 11: The Neural Matrix - PydanticAI Schema Definitions
+ The Neural Matrix - PydanticAI Schema Definitions
 
 Type-safe schemas for RAG-enhanced self-evolving system.
 Uses Pydantic for structured AI outputs and LangGraph for workflow state machines.
@@ -74,10 +74,10 @@ _schema_registry = {
     # Routing
     "RouterDomain": ".routing",
     "RouterSuggestion": ".routing",
-    # Phase 12: Harvester
+    #  Harvester
     "KnowledgeCategory": ".harvester",
     "HarvestedInsight": ".harvester",
-    # Phase 13: Skill
+    #  Skill
     "SkillDependencies": ".skill",
     "SkillManifest": ".skill",
 }

@@ -2,8 +2,8 @@
 agent/core/orchestrator/state.py
 State Persistence for Orchestrator.
 
-Phase 34: GraphState persistence with StateCheckpointer.
-Phase 63: ContextCompressor for context overflow handling.
+ GraphState persistence with StateCheckpointer.
+ ContextCompressor for context overflow handling.
 """
 
 from typing import Dict, Any, List
@@ -16,7 +16,7 @@ from agent.core.state import create_initial_state
 class ContextCompressor:
     """Compress context when approaching token limits.
 
-    Phase 63: Hierarchical Working Memory compression.
+     Hierarchical Working Memory compression.
 
     This class provides intelligent context compression that:
     - Preserves system prompt and key decisions

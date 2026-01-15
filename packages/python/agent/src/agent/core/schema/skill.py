@@ -1,5 +1,5 @@
 # schema/skill.py
-# Phase 13: Skill Architecture
+#  Skill Architecture
 
 from typing import List, Optional
 

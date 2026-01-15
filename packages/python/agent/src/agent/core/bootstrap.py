@@ -1,7 +1,7 @@
 """
 src/agent/core/bootstrap.py
 System boot sequence and background task initialization.
-Phase 35.3: Config-driven skill preloading for pure MCP Server.
+ Config-driven skill preloading for pure MCP Server.
 """
 
 import sys

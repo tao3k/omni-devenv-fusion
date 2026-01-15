@@ -27,12 +27,14 @@ from .commands import (
     register_mcp_command,
     register_route_command,
     register_run_command,
+    register_ingest_command,
 )
 
 register_skill_command(app)
 register_mcp_command(app)
-register_route_command(app)  # Phase 41: Wisdom-Aware Routing
-register_run_command(app)  # Phase 56: Omni Loop
+register_route_command(app)  # Wisdom-Aware Routing
+register_run_command(app)  # Omni Loop
+register_ingest_command(app)  # Ingest knowledge/skills
 
 
 __all__ = ["app", "main"]

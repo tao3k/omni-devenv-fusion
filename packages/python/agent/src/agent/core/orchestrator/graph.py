@@ -2,7 +2,7 @@
 agent/core/orchestrator/graph.py
 LangGraph Cognitive Graph Integration for Orchestrator.
 
-Phase 34: Dispatch using LangGraph cognitive state machine.
+ Dispatch using LangGraph cognitive state machine.
 Plan -> Execute -> Reflect cycle with conditional edges.
 """
 
@@ -20,7 +20,7 @@ async def dispatch_graph_mode(
     """
     Dispatch using LangGraph cognitive state machine.
 
-    Phase 34: Replaces procedural dispatch loop with graph-based execution.
+     Replaces procedural dispatch loop with graph-based execution.
     Uses plan -> execute -> reflect cycle with conditional edges.
 
     Args:
@@ -40,10 +40,10 @@ async def dispatch_graph_mode(
         graph_mode=True,
     ).info("graph_dispatch_started")
 
-    # Phase 18: Start task visualization
+    #  Start task visualization
     self.ux.start_task(user_query)
 
-    # Phase 19: Log user input to session
+    #  Log user input to session
     self.session.log("user", "user", user_query)
 
     try:
@@ -54,10 +54,10 @@ async def dispatch_graph_mode(
             context=context,
         )
 
-        # Phase 18: Show result
+        #  Show result
         self.ux.print_agent_response(result.content, "Graph Output")
 
-        # Phase 19: Log to session
+        #  Log to session
         usage = CostEstimator.estimate(user_query, result.content)
         self.session.log("graph_action", "omni_graph", result.content, usage)
 

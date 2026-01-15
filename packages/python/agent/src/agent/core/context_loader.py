@@ -1,14 +1,14 @@
 """
 src/agent/core/context_loader.py
 
-Phase 48: Hyper-Context Loader (Rust Accelerated).
-Phase 13.8: Configuration-Driven Context (Legacy)
+ Hyper-Context Loader (Rust Accelerated).
+ Configuration-Driven Context (Legacy)
 
 Upgraded to use omni_core_rs for:
 - Safe file reading with binary detection and size limits
 - GIL release pattern for concurrent file operations
 
-[Phase 48.1] Legacy fallback removed - Full Rust adoption.
+ Legacy fallback removed - Full Rust adoption.
 """
 
 import subprocess
@@ -17,8 +17,9 @@ import structlog
 
 from common.config.settings import get_setting
 from common.gitops import get_project_root
+from common.prj_dirs import PRJ_CACHE
 
-# [Phase 48] Import Rust Core
+# Import Rust Core
 import omni_core_rs
 
 logger = structlog.get_logger(__name__)
@@ -30,8 +31,8 @@ DEFAULT_MAX_FILE_SIZE = 100 * 1024
 class ContextLoader:
     """
     Load and combine system prompts from configuration and local overrides.
-    Phase 48: Rust-accelerated file reading with safety checks.
-    [Phase 48.1] Pure Rust implementation - no legacy fallback.
+     Rust-accelerated file reading with safety checks.
+     Pure Rust implementation - no legacy fallback.
     """
 
     def __init__(self, max_file_size: int = DEFAULT_MAX_FILE_SIZE):
@@ -56,7 +57,7 @@ class ContextLoader:
                 logger.warning(f"Prompt file not found: {full_path}")
             return ""
 
-        # [Phase 48] Pure Rust path - no fallback
+        # Pure Rust path - no fallback
         try:
             return omni_core_rs.read_file_safe(str(full_path), self.max_file_size)
         except Exception as e:
@@ -102,7 +103,7 @@ class ContextLoader:
     def get_combined_system_prompt(self) -> str:
         """
         Combine System Core Prompt + User Custom Prompt.
-        Phase 13.9: Auto-inject Git status for zero-click awareness.
+         Auto-inject Git status for zero-click awareness.
 
         Returns:
             Combined prompt string ready for MCP server initialization.
@@ -112,10 +113,10 @@ class ContextLoader:
         core_content = self._read_file_safe(core_path)
 
         # 2. Load User Custom (The Preferences) - from settings.yaml
-        user_path = get_setting("prompts.user_custom_path", ".cache/user_custom.md")
+        user_path = get_setting("prompts.user_custom_path", str(PRJ_CACHE("user_custom.md")))
         user_content = self._read_file_safe(user_path)
 
-        # 3. [Phase 13.9] Inject Git Status (Context Injection)
+        # 3.  Inject Git Status (Context Injection)
         git_status = self._get_git_status_summary()
 
         # 4. Combine with placeholders

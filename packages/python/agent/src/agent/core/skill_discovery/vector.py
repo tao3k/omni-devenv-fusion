@@ -1,8 +1,8 @@
 """
 src/agent/core/skill_discovery/vector.py
-Phase 36: Vector-Enhanced Skill Discovery (ChromaDB)
-Phase 37: Cognitive Indexing & Adaptive Routing
-Phase 39: Self-Evolving Feedback Loop (Harvester Integration)
+ Vector-Enhanced Skill Discovery (ChromaDB)
+ Cognitive Indexing & Adaptive Routing
+ Self-Evolving Feedback Loop (Harvester Integration)
 
 Semantic Skill Discovery using ChromaDB for intelligent matching.
 Features:
@@ -10,7 +10,7 @@ Features:
 - Hybrid search: vector + keyword boosting (Base + Boost model)
 - Fuzzy keyword matching (substring, stemming)
 - Sigmoid score calibration for better distribution
-- [Phase 39] Feedback-based reinforcement learning
+-  Feedback-based reinforcement learning
 """
 
 from __future__ import annotations
@@ -23,15 +23,15 @@ from .indexing import SKILL_REGISTRY_COLLECTION
 
 logger = structlog.get_logger(__name__)
 
-# [Phase 37.2] Hybrid search configuration
+# Hybrid search configuration
 HYBRID_RECALL_FACTOR = 4  # Multiply limit by this factor for initial recall
 
-# [Phase 38] Scoring calibration
+# Scoring calibration
 KEYWORD_BONUS = 0.15  # Bonus for keyword match (additive, not multiplicative)
 MIN_CONFIDENCE = 0.3  # Minimum score floor
 MAX_CONFIDENCE = 0.95  # Maximum score ceiling (leave room for "certain")
 
-# [Phase 38.1] Verb-priority boost - core action verbs get extra weight
+# Verb-priority boost - core action verbs get extra weight
 CORE_ACTION_VERBS = {
     "commit",
     "push",
@@ -67,7 +67,7 @@ VERB_PRIORITY_BONUS = 0.10  # Extra bonus when matching core verbs
 
 def _get_feedback_boost_safe(query: str, skill_id: str) -> float:
     """
-    [Phase 39] Safely get feedback boost without crashing on import errors.
+     Safely get feedback boost without crashing on import errors.
 
     This function wraps the Harvester's get_feedback_boost to handle
     cases where the module hasn't been initialized yet.
@@ -90,7 +90,7 @@ def _get_feedback_boost_safe(query: str, skill_id: str) -> float:
 
 def _sigmoid_calibration(score: float) -> float:
     """
-    [Phase 38] Apply sigmoid calibration to stretch score distribution.
+     Apply sigmoid calibration to stretch score distribution.
 
     This helps if the embedding model outputs compressed scores.
     Sigmoid: f(x) = 1 / (1 + exp(-k*(x - offset)))
@@ -112,14 +112,14 @@ def _sigmoid_calibration(score: float) -> float:
 
 def _fuzzy_keyword_match(query_tokens: set[str], skill_keywords: set[str]) -> tuple[int, bool]:
     """
-    [Phase 38] Fuzzy keyword matching with verb priority detection.
+     Fuzzy keyword matching with verb priority detection.
 
     Matches considering:
     1. Exact match (highest priority)
     2. Substring match (query contains keyword or vice versa)
     3. Stemming approximation (removes common suffixes like 's', 'ing', 'ed')
 
-    [Phase 38.1] Also detects if a core action verb was matched.
+     Also detects if a core action verb was matched.
 
     Args:
         query_tokens: Tokenized user query
@@ -172,7 +172,7 @@ def _fuzzy_keyword_match(query_tokens: set[str], skill_keywords: set[str]) -> tu
 
             if matched:
                 matches += 1
-                # [Phase 38.1] Check if the matched token is a core verb
+                # Check if the matched token is a core verb
                 if q_lower in CORE_ACTION_VERBS or stem_word(q_lower) in CORE_ACTION_VERBS:
                     verb_matched = True
                 break  # Move to next query token
@@ -219,8 +219,8 @@ class VectorSkillDiscovery:
         """
         Search skills using hybrid search (vector + keyword boosting).
 
-        Phase 37.2: Combines vector similarity with fuzzy keyword matching.
-        Phase 38: Uses "Base + Boost" scoring model (not weighted average).
+         Combines vector similarity with fuzzy keyword matching.
+         Uses "Base + Boost" scoring model (not weighted average).
 
         Scoring Formula:
             base_score = vector_similarity (0.0 - 1.0)
@@ -270,10 +270,10 @@ class VectorSkillDiscovery:
                 # Convert distance to vector similarity score (0.0 - 1.0)
                 raw_vector_score = max(0.0, min(1.0, 1.0 - res.distance))
 
-                # [Phase 38] Apply sigmoid calibration to stretch scores
+                # Apply sigmoid calibration to stretch scores
                 vector_score = _sigmoid_calibration(raw_vector_score)
 
-                # [Phase 38] Fuzzy keyword matching
+                # Fuzzy keyword matching
                 skill_keywords_str = res.metadata.get("keywords", "")
                 skill_keywords = set(
                     kw.strip().lower() for kw in skill_keywords_str.split(",") if kw.strip()
@@ -283,15 +283,15 @@ class VectorSkillDiscovery:
                 keyword_matches, verb_matched = _fuzzy_keyword_match(query_tokens, skill_keywords)
                 keyword_bonus = keyword_matches * KEYWORD_BONUS
 
-                # [Phase 38.1] Extra bonus for matching core action verbs
+                # Extra bonus for matching core action verbs
                 verb_bonus = VERB_PRIORITY_BONUS if verb_matched else 0.0
 
-                # [Phase 39] Feedback-based reinforcement learning
+                # Feedback-based reinforcement learning
                 # Get learned boost/penalty from past user interactions
                 skill_id = res.metadata.get("id", res.id)
                 feedback_bonus = _get_feedback_boost_safe(query, skill_id)
 
-                # [Phase 38] Base + Boost scoring model
+                # Base + Boost scoring model
                 # Don't penalize good vector matches; add bonus for keyword hits
                 final_score = vector_score + keyword_bonus + verb_bonus + feedback_bonus
 

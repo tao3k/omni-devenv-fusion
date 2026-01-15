@@ -1,6 +1,6 @@
 """
 agent/core/embedding.py
-Phase 53.5: The Encoder - High-performance Text Embedding.
+ The Encoder - High-performance Text Embedding.
 
 Provides semantic text embedding using FastEmbed (local) or OpenAI API.
 Used by Memory Skill and other components for semantic search.

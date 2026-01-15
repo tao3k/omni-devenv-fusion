@@ -2,14 +2,14 @@
 src/agent/core/context_compressor.py
 Context Compression Utilities for MCP Server.
 
-Phase 48: Hyper-Context Compressor (Rust Accelerated).
-Phase 19.7 → Phase 21: Migrated from ClaudeCodeAdapter to MCP Server.
+ Hyper-Context Compressor (Rust Accelerated).
+ →  Migrated from ClaudeCodeAdapter to MCP Server.
 Now serves as the "Token Gatekeeper" for RAG search results.
 
-[Phase 48.1] Updated: Use direct tiktoken instead of omni_core_rs wrapper.
+ Updated: Use direct tiktoken instead of omni_core_rs wrapper.
 Reason: tiktoken is already Rust, PyO3 wrapper adds ~18x overhead.
 
-[Phase 57] Architecture Note:
+ Architecture Note:
 - Python tiktoken calls tiktoken-rs directly (optimized FFI)
 - omni_tokenizer Rust crate still exists for internal Rust operations
 - Fused operations (read+count+truncate) implemented in Rust when needed
@@ -20,7 +20,7 @@ import tiktoken
 
 from common.config.settings import get_setting
 
-# [Phase 48.1] Direct tiktoken - faster than Rust wrapper via PyO3
+# Direct tiktoken - faster than Rust wrapper via PyO3
 _ENCODER = tiktoken.get_encoding("cl100k_base")
 
 # Default settings (fallbacks when settings.yaml not available)
@@ -31,8 +31,8 @@ class ContextCompressor:
     """
     Lightweight context compression for MCP server RAG results.
 
-    Phase 48: Uses direct tiktoken (Rust) for accurate BPE tokenization.
-    Phase 48.1: Removed omni_core_rs wrapper - direct FFI is faster.
+     Uses direct tiktoken (Rust) for accurate BPE tokenization.
+     Removed omni_core_rs wrapper - direct FFI is faster.
 
     Prevents token explosion and attention dilution when Claude
     queries the knowledge base via MCP tools.
@@ -58,7 +58,7 @@ class ContextCompressor:
 
     def count_tokens(self, text: str) -> int:
         """
-        [Phase 48.1] Accurate token counting using direct tiktoken.
+         Accurate token counting using direct tiktoken.
         Uses cl100k_base encoding (GPT-4/3.5 standard).
         Direct FFI to tiktoken-rs is faster than PyO3 wrapper.
         """
@@ -75,7 +75,7 @@ class ContextCompressor:
 
     def truncate(self, text: str, max_tokens: int) -> str:
         """
-        [Phase 48.1] Precision token-level truncation using direct tiktoken.
+         Precision token-level truncation using direct tiktoken.
         Truncates at BPE boundary (no UTF-8 corruption).
         """
         if not text:

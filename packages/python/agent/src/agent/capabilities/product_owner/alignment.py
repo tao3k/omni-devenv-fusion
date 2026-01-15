@@ -14,9 +14,10 @@ Phase 32: Modularized from product_owner.py
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from common.config.settings import get_setting
+from common.mcp_core.reference_library import get_reference_path
 
 
 # =============================================================================
@@ -45,10 +46,13 @@ class DesignDocsCache:
             DesignDocsCache._loaded = True
 
     def _load_design_docs(self):
-        """Load design documents from docs/ directory."""
+        """Load design documents from docs/ directory (SSOT: references.yaml)."""
         self._docs = {}
 
-        docs_dir = Path("docs")
+        # SSOT: references.yaml for design docs directory
+        from common.gitops import get_project_root
+
+        docs_dir = get_project_root() / get_reference_path("design_docs.dir")
         if not docs_dir.exists():
             return
 
@@ -114,6 +118,18 @@ def _scan_standards() -> str:
     return "\n".join(context) if context else "No standards found."
 
 
+def _get_reference_docs() -> list[str]:
+    """Get reference document paths (SSOT: references.yaml)."""
+    from common.gitops import get_project_root
+
+    base = get_project_root()
+    return [
+        str(base / get_reference_path("design_docs.dir") / "design-philosophy.md"),
+        str(base / get_reference_path("design_docs.dir") / "mcp-architecture-roadmap.md"),
+        get_reference_path("standards.feature_lifecycle"),
+    ]
+
+
 def _get_recommendations(results: Dict) -> List[str]:
     """Generate recommendations based on alignment results."""
     recs = []
@@ -147,7 +163,7 @@ async def verify_design_alignment(
     - Roadmap (docs/explanation/*.md)
     - Architecture (docs/explanation/mcp-architecture-roadmap.md)
     """
-    from common.mcp_core import InferenceClient
+    from common.gitops import get_project_root
 
     results = {
         "philosophy": {"aligned": True, "notes": []},
@@ -167,7 +183,8 @@ async def verify_design_alignment(
 
     # Check roadmap
     if check_roadmap:
-        roadmap_files = list(Path("docs").glob("*roadmap*")) + list(Path("docs").glob("*vision*"))
+        docs_path = get_project_root() / get_reference_path("design_docs.dir")
+        roadmap_files = list(docs_path.glob("*roadmap*")) + list(docs_path.glob("*vision*"))
         in_roadmap = False
         for rf in roadmap_files:
             content = rf.read_text().lower()
@@ -201,11 +218,7 @@ async def verify_design_alignment(
             "feature": feature_description,
             "checks": results,
             "recommendations": _get_recommendations(results),
-            "reference_docs": [
-                "docs/explanation/design-philosophy.md",
-                "docs/explanation/mcp-architecture-roadmap.md",
-                "assets/standards/feature-lifecycle.md",
-            ],
+            "reference_docs": _get_reference_docs(),  # SSOT: references.yaml
         },
         indent=2,
     )
@@ -213,7 +226,7 @@ async def verify_design_alignment(
 
 async def get_feature_requirements(complexity_level: str = "L2") -> str:
     """Get complete requirements for implementing a feature of given complexity."""
-    from .complexity import COMPLEXITY_LEVELS, TEST_REQUIREMENTS
+    from .complexity import COMPLEXITY_LEVELS, TEST_REQUIREMENTS, _get_checklist
 
     level = complexity_level.upper()
     if level not in ["L1", "L2", "L3", "L4"]:
@@ -241,7 +254,7 @@ async def get_feature_requirements(complexity_level: str = "L2") -> str:
     )
 
 
-async def check_doc_sync(changed_files: List[str] = None) -> str:
+async def check_doc_sync(changed_files: Optional[List[str]] = None) -> str:
     """Verify that documentation is updated when code changes."""
     from .complexity import get_changed_files
 

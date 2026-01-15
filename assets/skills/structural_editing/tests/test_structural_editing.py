@@ -1,28 +1,38 @@
 """
-src/agent/tests/test_structural_editing.py
-Phase 52: The Surgeon - Structural Code Refactoring Tests
+Tests for structural_editing skill (Phase 52: The Surgeon).
 
 Tests for AST-based code modification using omni-core-rs Rust bindings.
 Implements the "Surgical Precision" philosophy with dry-run capability.
 
 Covers:
-1. Unit tests for structural_replace (content-based operations)
-2. Integration tests for structural_preview/apply (file-based operations)
+1. Unit tests for replace (content-based operations)
+2. Integration tests for preview/apply (file-based operations)
 3. Multi-language support (Python, Rust, JavaScript, TypeScript)
 4. Pattern syntax variations ($NAME, $$, $$$ARGS)
 5. Error handling and edge cases
 6. Dry-run verification (preview does not modify files)
+7. Skill registration and command availability
 """
 
 import pytest
 import tempfile
 import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+
+
+def _get_structural_skill():
+    """Load and return structural_editing skill."""
+    from agent.core.skill_manager import get_skill_manager
+
+    manager = get_skill_manager()
+    if not manager._loaded:
+        manager.load_all()
+
+    return manager.skills.get("structural_editing")
 
 
 class TestStructuralReplace:
-    """Unit tests for structural_replace (content-based operations)."""
+    """Unit tests for replace (content-based operations)."""
 
     def test_simple_function_rename_python(self):
         """Test renaming a function in Python content."""
@@ -89,7 +99,6 @@ pub struct OldName {
 
 let x = OldName { field: 1 };
 """
-        # Rust struct rename needs to match the pattern correctly
         result = omni_core_rs.structural_replace(
             content, "pub struct OldName", "pub struct NewName", "rust"
         )
@@ -112,7 +121,6 @@ let x = OldName { field: 1 };
         """Test renaming in JavaScript content."""
         import omni_core_rs
 
-        # Use JavaScript function renaming (which we know works)
         content = "const result = oldFunc(1, 2);"
         result = omni_core_rs.structural_replace(
             content, "oldFunc($$$ARGS)", "newFunc($$$ARGS)", "javascript"
@@ -423,55 +431,55 @@ class TestGetEditInfo:
 
     def test_get_edit_info_returns_dict(self):
         """Test that get_edit_info returns capability info."""
-        # Import from the skill module directly
-        import sys
-        import importlib.util
-        from pathlib import Path
+        skill = _get_structural_skill()
+        assert skill is not None
 
-        skill_path = (
-            Path(__file__).parent.parent.parent.parent / "assets/skills/structural_editing/tools.py"
-        )
-        if not skill_path.exists():
-            pytest.skip("structural_editing tools.py not found")
+        # Find get_edit_info command
+        cmd = None
+        for name, c in skill.commands.items():
+            if name.endswith("_get_edit_info") or name == "get_edit_info":
+                cmd = c
+                break
 
-        spec = importlib.util.spec_from_file_location("structural_editing_tools", skill_path)
-        assert spec is not None, "Failed to load module spec"
-        module = importlib.util.module_from_spec(spec)
-        sys.modules["structural_editing_tools"] = module
-        spec.loader.exec_module(module)
-        info = module.get_edit_info()
-
-        assert isinstance(info, dict)
-        assert info["name"] == "structural_editing"
-        assert info["version"] == "1.0.0"
-        assert "rust_available" in info
-        assert "supported_languages" in info
-        assert "python" in info["supported_languages"]
-        assert "rust" in info["supported_languages"]
-        assert info["phase"] == "Phase 52: The Surgeon"
+        assert cmd is not None
+        # The command is a function, call it
+        result = cmd.func()
+        assert isinstance(result, dict)
+        assert result["name"] == "structural_editing"
+        assert "rust_available" in result
+        assert "supported_languages" in result
+        assert "python" in result["supported_languages"]
+        assert "rust" in result["supported_languages"]
 
 
-class TestSkillAvailability:
+class TestSkillRegistration:
     """Test skill loading and availability."""
 
-    def test_structural_editing_skill_loadable(self, skill_manager_fixture):
+    def test_structural_editing_skill_loaded(self):
         """Test that structural_editing skill can be loaded."""
-        skill_manager_fixture.load_skills()
+        skill = _get_structural_skill()
+        assert skill is not None
 
-        assert "structural_editing" in skill_manager_fixture.skills
-
-    def test_structural_editing_has_commands(self, skill_manager_fixture):
+    def test_structural_editing_has_commands(self):
         """Test that structural_editing has expected commands."""
-        skill_manager_fixture.load_skills()
+        skill = _get_structural_skill()
+        assert skill is not None
 
-        structural_skill = skill_manager_fixture.skills.get("structural_editing")
-        assert structural_skill is not None
-
-        # commands is a dict mapping command_name -> function
-        command_names = list(structural_skill.commands.keys())
+        command_names = list(skill.commands.keys())
         assert len(command_names) >= 3
 
-        # Check for key commands
-        assert "structural_replace" in command_names
-        assert "structural_preview" in command_names
-        assert "structural_apply" in command_names
+        # Check for key commands (registered via @skill_script name parameter)
+        # Names are like "structural_editing_replace" -> displayed as "replace"
+        command_names_str = " ".join(command_names)
+        assert "replace" in command_names_str
+        assert "preview" in command_names_str
+        assert "apply" in command_names_str
+
+    def test_commands_have_valid_schemas(self):
+        """Verify all commands have valid input schemas."""
+        skill = _get_structural_skill()
+        assert skill is not None
+
+        for cmd_name, cmd in skill.commands.items():
+            assert isinstance(cmd.input_schema, dict)
+            assert "properties" in cmd.input_schema

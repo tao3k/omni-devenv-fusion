@@ -1,6 +1,6 @@
 """
 src/agent/core/skill_discovery/indexing.py
-Phase 66: The Librarian - Adapter for VectorMemory.
+ The Librarian - Adapter for VectorMemory.
 
 This module is a lightweight adapter that connects SkillManager to the
 Rust-backed VectorMemory (LanceDB) for semantic skill discovery.

@@ -1,11 +1,11 @@
 """
 src/agent/core/skill_manager/observer.py
-Phase 36.4/36.5: Observer pattern and debounced notifications.
+/36.5: Observer pattern and debounced notifications.
 
 Contains:
 - Observer pattern for hot-reload change notifications
 - Debounced notifications (200ms batching)
-- GC protection for background tasks (Phase 36.6)
+- GC protection for background tasks
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ class ObserverMixin:
 
     def _fire_and_forget(self, coro: asyncio.coroutine) -> asyncio.Task:
         """
-        Phase 36.6: Fire-and-forget with GC protection.
+         Fire-and-forget with GC protection.
 
         Creates a background task and adds it to _background_tasks set.
         When the task completes, it's automatically removed from the set.
@@ -74,7 +74,7 @@ class ObserverMixin:
 
     async def _debounced_notify(self) -> None:
         """
-        Phase 36.5: Actually notify all observers after debounce delay.
+         Actually notify all observers after debounce delay.
 
         This is called after 200ms debounce delay to batch multiple
         skill changes into a single notification.
@@ -98,7 +98,7 @@ class ObserverMixin:
             for cb in self._observers:
                 try:
                     if asyncio.iscoroutinefunction(cb):
-                        # Phase 36.6: Use fire-and-forget with GC protection
+                        #  Use fire-and-forget with GC protection
                         self._fire_and_forget(cb(skill_name, change_type))
                     else:
                         cb(skill_name, change_type)
@@ -109,7 +109,7 @@ class ObserverMixin:
 
     def _notify_change(self, skill_name: str, change_type: str = "load") -> None:
         """
-        Phase 36.5: Debounced notification of skill change.
+         Debounced notification of skill change.
 
         Instead of notifying immediately, this batches multiple rapid
         skill changes (e.g., loading 10 skills) into a single notification

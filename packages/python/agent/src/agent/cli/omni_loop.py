@@ -1,138 +1,105 @@
 #!/usr/bin/env python3
 """
 agent/cli/omni_loop.py
-Phase 56: The Omni Loop CLI.
-
-User-friendly CLI for the CCA Runtime Integration.
-
-Usage:
-    omni                              # Interactive REPL (default)
-    omni "Fix the login bug"          # Run single task
-    omni -i                           # Interactive mode (explicit)
-    omni -s 10 "Refactor auth.py"     # With custom steps
+[Omni-Dev 1.0] Enriched output with tool stats and token metrics.
 """
-
 from __future__ import annotations
-
 import argparse
 import asyncio
 import sys
-
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
-
+from rich.table import Table
+from rich.box import ROUNDED
 from common.lib import setup_import_paths
 
-# Setup paths
 setup_import_paths()
+console = Console()
 
 
 def print_banner():
     """Print CCA runtime banner."""
-    console = Console()
     banner = Text()
     banner.append(" CCA Runtime ", style="bold green")
     banner.append("• ", style="dim")
-    banner.append("Omni Loop (Phase 56)", style="italic")
-    banner.append("\n")
-    banner.append("Integrates ContextOrchestrator, Note-Taker, and Rust tools", style="dim")
-
-    console.print(Panel(banner, expand=False))
+    banner.append("Omni Loop (v1.0)", style="italic")
+    console.print(Panel(banner, expand=False, border_style="green"))
 
 
-async def run_task(task: str, max_steps: int = 20):
+def _print_enrich_result(task: str, result: str, agent):
+    """Print enriched session report with stats."""
+    # 1. Stats
+    tool_counts = {}
+    tokens = 0
+    for msg in agent.history:
+        tokens += len(msg.get("content", "") or "") // 4
+        if msg.get("tool_calls"):
+            for tc in msg["tool_calls"]:
+                name = tc["function"]["name"]
+                tool_counts[name] = tool_counts.get(name, 0) + 1
+
+    # 2. Grid layout
+    grid = Table.grid(expand=True)
+    grid.add_column()
+    grid.add_row(f"[bold cyan]Task:[/bold cyan] {task}")
+    grid.add_row(f"[bold dim]Session ID:[/bold dim] {agent.session_id}")
+    grid.add_row("")
+
+    # Metrics table
+    metrics = Table(show_header=True, header_style="bold magenta", box=ROUNDED)
+    metrics.add_column("Metric")
+    metrics.add_column("Value", style="yellow")
+    metrics.add_row("Steps", str(agent.step_count))
+    metrics.add_row("Tools", str(sum(tool_counts.values())))
+    metrics.add_row("Est. Tokens", f"~{tokens}")
+    grid.add_row(metrics)
+    grid.add_row("")
+
+    # Tool breakdown
+    if tool_counts:
+        t_table = Table(title="Tool Usage", show_header=False, box=ROUNDED)
+        t_table.add_column("Tool")
+        t_table.add_column("Count", justify="right")
+        for tool, count in tool_counts.items():
+            t_table.add_row(tool, f"[bold green]{count}[/bold green]")
+        grid.add_row(t_table)
+        grid.add_row("")
+
+    # Reflection
+    grid.add_row("[bold green]Reflection & Outcome:[/bold green]")
+    grid.add_row(result)
+
+    console.print(Panel(grid, title="✨ CCA Session Report ✨", border_style="green", expand=False))
+
+
+async def run_task(task: str, max_steps: int):
     """Run a single task through the CCA loop."""
     from agent.core.omni_agent import OmniAgent
 
-    console = Console()
-
     print_banner()
-
-    console.print(f"\n[bold]🚀 Starting Task:[/bold] {task}")
-    console.print(f"[dim]Max steps: {max_steps}[/dim]\n")
+    console.print(f"\n[bold]🚀 Starting:[/bold] {task}\n")
 
     agent = OmniAgent()
     result = await agent.run(task, max_steps)
-
-    console.print(Panel(result, title="Result", expand=False))
-
+    _print_enrich_result(task, result, agent)
     return result
 
 
 def main():
     """Main CLI entry point."""
-    parser = argparse.ArgumentParser(
-        description="CCA Runtime - Omni Loop (Phase 56)",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        prog="omni",
-        epilog="""
-Examples:
-    omni                              # Interactive REPL
-    omni "Fix the login bug"          # Run single task
-    omni -i                           # Interactive mode
-    omni -s 10 "Refactor auth.py"     # With custom steps
-        """,
-    )
+    parser = argparse.ArgumentParser(prog="omni", description="CCA Runtime - Omni Loop")
+    parser.add_argument("task", nargs="?", help="Task to execute")
+    parser.add_argument("-s", "--steps", type=int, default=1, help="Max steps (default: 1)")
+    args, _ = parser.parse_known_args()
 
-    # Positional task argument (optional)
-    parser.add_argument(
-        "task",
-        nargs="?",
-        default=None,
-        help="Task to execute (omit for interactive mode)",
-    )
-
-    parser.add_argument(
-        "-s",
-        "--steps",
-        type=int,
-        default=20,
-        help="Maximum steps (default: 20)",
-    )
-
-    parser.add_argument(
-        "-i",
-        "--interactive",
-        action="store_true",
-        help="Enter interactive REPL mode",
-    )
-
-    parser.add_argument(
-        "--repl",
-        action="store_true",
-        help="Enter interactive REPL mode (alias for -i)",
-    )
-
-    args = parser.parse_args()
-
-    # Handle interactive mode flags
-    if args.interactive or args.repl:
+    if args.task:
+        asyncio.run(run_task(args.task, args.steps))
+    else:
         from agent.core.omni_agent import interactive_mode
-
         print_banner()
         asyncio.run(interactive_mode())
-        return 0
-
-    # Handle task mode
-    if args.task:
-        try:
-            asyncio.run(run_task(args.task, args.steps))
-            return 0
-        except KeyboardInterrupt:
-            print("\nInterrupted.")
-            return 130
-        except Exception as e:
-            print(f"\nError: {e}")
-            return 1
-
-    # Default: Interactive mode
-    from agent.core.omni_agent import interactive_mode
-
-    print_banner()
-    asyncio.run(interactive_mode())
-    return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

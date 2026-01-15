@@ -1,6 +1,6 @@
 """
 agent/core/meta_agent/harvester.py
-Phase 64: The Meta-Agent - Skill Harvester
+ The Meta-Agent - Skill Harvester
 
 Analyzes session notes to identify frequently-used patterns
 and suggests/creates reusable skills.
@@ -48,7 +48,7 @@ TOOL_PATTERNS = [
 
 class SkillHarvester:
     """
-    Phase 64: Skill Harvester.
+     Skill Harvester.
 
     Analyzes session notes to identify patterns that should be
     extracted into reusable skills.

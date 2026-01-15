@@ -52,11 +52,11 @@ When working with knowledge management:
 
 ## Key Directories
 
-| Directory                     | Purpose                               |
-| ----------------------------- | ------------------------------------- |
-| `assets/knowledge/sessions/`  | Session summaries (auto-generated)    |
-| `assets/knowledge/harvested/` | Extracted reusable knowledge          |
-| `assets/knowledge/patterns/`  | Identified patterns and anti-patterns |
+| Directory                     | Purpose                                         |
+| ----------------------------- | ----------------------------------------------- |
+| `.data/knowledge/sessions/`   | Session summaries (auto-generated, git-ignored) |
+| `assets/knowledge/harvested/` | Extracted reusable knowledge                    |
+| `assets/knowledge/patterns/`  | Identified patterns and anti-patterns           |
 
 ## Related Documentation
 

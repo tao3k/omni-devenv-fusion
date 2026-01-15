@@ -18,7 +18,12 @@ A conversation history containing:
 
 ## Your Output: JSON Schema
 
+**CRITICAL: Output ONLY raw JSON. No markdown code blocks. No explanations. No preamble.**
+
 You MUST output a valid JSON object containing a list of notes:
+
+````json
+{"notes": [...]}
 
 ```json
 {
@@ -32,7 +37,7 @@ You MUST output a valid JSON object containing a list of notes:
     }
   ]
 }
-```
+````
 
 ---
 
@@ -150,6 +155,7 @@ Structure:
 - **Vague notes:** "Be careful with errors" → Reject, rewrite as "Handle `ValueError` from `parse_config()` by checking if key exists first"
 - **Trivial observations:** "Python is dynamically typed" → Not useful, skip
 - **Missing context:** Notes that can't be understood without reading the full history
+- **Markdown code blocks:** NEVER wrap JSON in `json or ` markers - output raw JSON only
 
 ---
 
@@ -159,11 +165,15 @@ Structure:
 
 ````json
 {
-  "title": "PyO3 Python::attach vs with_gil deprecation",
-  "category": "hindsight",
-  "content": "## Problem\n\n```\nwarning: use of deprecated associated function `pyo3::Python::with_gil`\n```\n\n## Root Cause\n\nPyO3 0.23+ deprecated `Python::with_gil` in favor of `Python::attach`.\n\n## Solution\n\nChanged all:\n```python\nPython::with_gil(|py| { ... })\n```\nTo:\n```python\nPython::attach(|_py| { ... })\n```\n\n## Anti-Pattern\n\n- Don't use deprecated PyO3 APIs\n- Always check `Cargo.toml` for pyo3 version constraints",
-  "tags": ["rust", "pyo3", "python-bindings", "deprecation"],
-  "related_files": ["packages/rust/crates/omni-vector/src/lib.rs"]
+  "notes": [
+    {
+      "title": "PyO3 Python::attach vs with_gil deprecation",
+      "category": "hindsight",
+      "content": "## Problem\n\n```\nwarning: use of deprecated associated function `pyo3::Python::with_gil`\n```\n\n## Root Cause\n\nPyO3 0.23+ deprecated `Python::with_gil` in favor of `Python::attach`.\n\n## Solution\n\nChanged all:\n```python\nPython::with_gil(|py| { ... })\n```\nTo:\n```python\nPython::attach(|_py| { ... })\n```\n\n## Anti-Pattern\n\n- Don't use deprecated PyO3 APIs\n- Always check `Cargo.toml` for pyo3 version constraints",
+      "tags": ["rust", "pyo3", "python-bindings", "deprecation"],
+      "related_files": ["packages/rust/crates/omni-vector/src/lib.rs"]
+    }
+  ]
 }
 ````
 
@@ -171,11 +181,15 @@ Structure:
 
 ```json
 {
-  "title": "Had an error with Python",
-  "category": "insight",
-  "content": "I was trying to build the Python bindings and there was a warning about deprecated functions. I fixed it by changing the code.",
-  "tags": ["python"],
-  "related_files": []
+  "notes": [
+    {
+      "title": "Had an error with Python",
+      "category": "insight",
+      "content": "I was trying to build the Python bindings and there was a warning about deprecated functions. I fixed it by changing the code.",
+      "tags": ["python"],
+      "related_files": []
+    }
+  ]
 }
 ```
 

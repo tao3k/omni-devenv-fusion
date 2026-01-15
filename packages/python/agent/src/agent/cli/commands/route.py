@@ -1,7 +1,7 @@
 """
-route.py - Phase 41: Wisdom-Aware Routing Command
+route.py -  Wisdom-Aware Routing Command
 
-Phase 41: Test and demonstrate wisdom-aware routing by querying
+ Test and demonstrate wisdom-aware routing by querying
 the SemanticRouter with knowledge injection from harvested insights.
 
 Usage:
@@ -24,7 +24,7 @@ from ..console import err_console, cli_log_handler
 
 route_app = typer.Typer(
     name="route",
-    help="Phase 41: Test wisdom-aware routing",
+    help=" Test wisdom-aware routing",
     add_completion=False,
 )
 
@@ -50,7 +50,7 @@ def route_invoke(
     logger = structlog.get_logger(__name__)
 
     err_console.print()
-    err_console.print(Panel(f"Phase 41: Wisdom-Aware Routing", style="bold blue"))
+    err_console.print(Panel(f" Wisdom-Aware Routing", style="bold blue"))
     err_console.print()
 
     async def run_route():
@@ -135,19 +135,17 @@ def route_invoke(
                 "confidence": result.confidence,
                 "reasoning": result.reasoning,
                 "wisdom_enabled": not no_wisdom,
-                "env_snapshot": result.env_snapshot,  # [Phase 42]
+                "env_snapshot": result.env_snapshot,  #
             }
             err_console.print(json.dumps(output, indent=2, ensure_ascii=False))
         else:
             # Query info
             err_console.print(Panel(f"Query: {query}", title="Input", style="blue"))
 
-            # [Phase 42] Environment State
+            # Environment State
             env_snapshot = getattr(result, "env_snapshot", None)
             if env_snapshot:
-                env_panel = Panel(
-                    env_snapshot, title="[Phase 42] Environment State", style="dim cyan"
-                )
+                env_panel = Panel(env_snapshot, title=" Environment State", style="dim cyan")
                 err_console.print(env_panel)
                 err_console.print()
 
@@ -260,7 +258,7 @@ def route_status():
     Show Phase 41 Wisdom-Aware Routing status.
     """
     err_console.print()
-    err_console.print(Panel("Phase 41: Wisdom-Aware Routing Status", style="bold blue"))
+    err_console.print(Panel(" Wisdom-Aware Routing Status", style="bold blue"))
 
     # Check vector store
     async def check_status():
@@ -312,9 +310,9 @@ def route_status():
         err_console.print("  ✓ Wisdom-Aware Routing: Enabled by default")
         err_console.print("  ✓ Parallel Knowledge Retrieval: Active")
         err_console.print("  ✓ Lesson Formatting: Working")
-        err_console.print("  ✓ Feedback Store (Phase 39): Active")
-        err_console.print("  ✓ Automated Reinforcement (Phase 40): Active")
-        err_console.print("  ✓ The Grand Bazaar (Phase 60): Semantic Tool Routing Active")
+        err_console.print("  ✓ Feedback Store : Active")
+        err_console.print("  ✓ Automated Reinforcement : Active")
+        err_console.print("  ✓ The Grand Bazaar : Semantic Tool Routing Active")
 
     except Exception as e:
         err_console.print(Panel(f"Status check failed: {e}", title="Error", style="red"))

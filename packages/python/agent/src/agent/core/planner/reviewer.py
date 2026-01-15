@@ -1,5 +1,5 @@
 """
-Phase 61: Cognitive Scaffolding - Reviewer
+ Cognitive Scaffolding - Reviewer
 
 Reflexion/evaluation logic for task outcomes.
 遵循 ODF-EP 标准:

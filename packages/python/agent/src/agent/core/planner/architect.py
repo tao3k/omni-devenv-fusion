@@ -1,6 +1,6 @@
 """
 src/agent/core/planner/architect.py
-Phase 61: Workflow Architect - Generates Dynamic Graph Blueprints.
+ Workflow Architect - Generates Dynamic Graph Blueprints.
 
 This module provides the WorkflowArchitect class that uses LLM to generate
 executable workflow blueprints from user goals. It bridges the gap between

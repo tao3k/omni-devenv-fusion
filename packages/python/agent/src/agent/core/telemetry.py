@@ -2,8 +2,8 @@
 src/agent/core/telemetry.py
 Telemetry Module - Token Usage and Cost Estimation.
 
-Phase 19: The Black Box
-Phase 57: Updated to use direct tiktoken for accurate BPE counting.
+ The Black Box
+ Updated to use direct tiktoken for accurate BPE counting.
 
 Features:
 - Token usage tracking (input/output/total)
@@ -27,7 +27,7 @@ from typing import Optional
 import tiktoken
 from pydantic import BaseModel
 
-# [Phase 57] Direct tiktoken - faster than Rust wrapper via PyO3
+# Direct tiktoken - faster than Rust wrapper via PyO3
 _ENCODER = tiktoken.get_encoding("cl100k_base")
 
 
@@ -53,7 +53,7 @@ class CostEstimator:
     """
     Estimate LLM call costs based on token usage.
 
-    [Phase 57] Uses direct tiktoken for accurate BPE counting.
+     Uses direct tiktoken for accurate BPE counting.
     Uses cl100k_base encoding (GPT-4/3.5 standard).
 
     Default pricing based on Claude 3.5 Sonnet:
@@ -76,7 +76,7 @@ class CostEstimator:
         """
         Count tokens using direct tiktoken (accurate BPE counting).
 
-        [Phase 57] Updated from heuristic estimation to accurate BPE counting.
+         Updated from heuristic estimation to accurate BPE counting.
         Uses cl100k_base encoding (GPT-4/3.5 standard) directly.
 
         Args:
@@ -160,7 +160,7 @@ class SessionTelemetry:
     """
     Accumulate telemetry across a session.
 
-    Phase 19: Tracks total cost and token usage for the entire session.
+     Tracks total cost and token usage for the entire session.
     """
 
     def __init__(self):

@@ -1,8 +1,8 @@
 """
-agent/core/skill_generator.py - Phase 33/64 Skill Template Generator
+agent/core/skill_generator.py - /64 Skill Template Generator
 
 Uses Jinja2 templates to generate new skills from the _template directory.
-Phase 64: Extended with LLM-driven skill generation from natural language requirements.
+ Extended with LLM-driven skill generation from natural language requirements.
 
 Supports both interactive CLI use and programmatic skill creation.
 """
@@ -156,14 +156,14 @@ def create_skill(
 
 
 # =============================================================================
-# Phase 64: LLM-Driven Skill Generation
+#  LLM-Driven Skill Generation
 # =============================================================================
 
 
 class LLMSkillGenerator:
     """
-    Phase 64: LLM-Driven Skill Generator.
-    Phase 65: Added self-repair loop with validation and refinement.
+     LLM-Driven Skill Generator.
+     Added self-repair loop with validation and refinement.
 
     Uses LLM to analyze natural language requirements and generate
     complete skill implementations automatically. Validates and refines
@@ -198,7 +198,7 @@ class LLMSkillGenerator:
         """
         Generate a complete skill from a natural language requirement.
 
-        Phase 65: Added optional validation and self-repair loop.
+         Added optional validation and self-repair loop.
 
         Args:
             requirement: User's natural language requirement
@@ -289,7 +289,7 @@ class LLMSkillGenerator:
                     error=str(e),
                 )
 
-        # Step 5: Validate and refine (Phase 65)
+        # Step 5: Validate and refine
         validated = False
         validation_attempts = 1
 

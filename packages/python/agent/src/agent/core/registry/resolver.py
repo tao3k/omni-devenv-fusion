@@ -1,6 +1,6 @@
 """
 agent/core/registry/resolver.py
-Phase 29: Version Resolver
+ Version Resolver
 
 Multi-strategy skill version resolution.
 """

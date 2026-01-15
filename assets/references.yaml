@@ -105,8 +105,19 @@ harvested_knowledge:
   description: "Long-term knowledge extracted from development sessions"
 
 # =============================================================================
-# Knowledge Cache References (Internal)
+# CLI Documentation References
 # =============================================================================
+cli:
+  doc: "docs/developer/cli.md"
+  description: "CLI command reference and usage guide"
+  commands:
+    route: "docs/developer/cli.md#phase-4142-route-command"
+    ingest: "docs/developer/cli.md#ingest-command"
+  ingest_commands:
+    - "knowledge"
+    - "skills"
+    - "all"
+    - "status"
 knowledge_caches:
   git_protocol:
     class: "GitWorkflowCache"
@@ -122,3 +133,54 @@ knowledge_caches:
     sources:
       - "agent/standards/lang-python.md"
       - "agent/standards/lang-nix.md"
+
+# =============================================================================
+# Context & Orchestrator References (SSOT)
+# =============================================================================
+context:
+  system_context: "docs/llm/system_context.xml"
+  skill_index: "docs/llm/skill_index.json"
+  architecture_docs_dir: "docs/human/architecture"
+  description: "Context orchestrator and LLM system paths"
+
+# =============================================================================
+# Design Documents References (SSOT)
+# =============================================================================
+design_docs:
+  dir: "docs"
+  description: "Design documents directory"
+
+# =============================================================================
+# Knowledge Directories References (SSOT)
+# =============================================================================
+knowledge_dirs:
+  - path: "assets/knowledge"
+    domain: "knowledge"
+    description: "Project knowledge base"
+  - path: "assets/how-to"
+    domain: "workflow"
+    description: "How-to guides"
+  - path: "docs/explanation"
+    domain: "architecture"
+    description: "Architecture docs"
+  - path: "assets/skills/knowledge/standards"
+    domain: "standards"
+    description: "Coding standards"
+
+# =============================================================================
+# Prompts References (SSOT)
+# =============================================================================
+prompts:
+  system_core: "assets/prompts/system_core.md"
+  user_custom: ".cache/user_custom.md"
+  description: "Prompt templates and custom prompts"
+
+# =============================================================================
+# How-to Guides References (SSOT)
+# =============================================================================
+howto:
+  gitops: "assets/how-to/gitops.md"
+  testing_workflows: "assets/how-to/testing-workflows.md"
+  documentation_workflow: "assets/how-to/documentation-workflow.md"
+  agent_native: "assets/how-to/agent-native-development.md"
+  description: "How-to guide paths"

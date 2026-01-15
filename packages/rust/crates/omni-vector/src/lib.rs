@@ -322,14 +322,38 @@ impl VectorStore {
     /// We use LIKE pattern matching to find records where metadata contains
     /// the file path in the expected JSON format: `"file_path":"<path>"`
     ///
+    /// Delete documents by their file_path in metadata.
+    ///
+    /// This function scans the table and matches `file_path` from metadata JSON,
+    /// then deletes by ID. This approach is chosen over SQL LIKE because:
+    ///
+    /// - **SQL LIKE has underscore escaping issues**: `_` in paths like
+    ///   `temp_skill/scripts/hello.py` would be interpreted as single-character
+    ///   wildcard, causing incorrect matches.
+    ///   - Incorrect: `WHERE file_path LIKE '%temp\_skill%'` (underscore escaped)
+    ///   - Incorrect: `WHERE file_path LIKE '%temp_skill%'` (underscore as wildcard)
+    /// - **JSON field access is unreliable**: `metadata:file_path` queries may not
+    ///   work consistently across LanceDB versions.
+    /// - **Scanning is reliable**: We read all IDs and file_paths, then match in
+    ///   Rust where the semantics are well-defined.
+    ///
     /// # Arguments
     ///
     /// * `table_name` - Name of the table/collection
-    /// * `file_paths` - File paths to delete
+    /// * `file_paths` - Exact file paths to delete (must match metadata["file_path"])
     ///
     /// # Errors
     ///
     /// Returns [`VectorStoreError::TableNotFound`] if the table doesn't exist.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// store.delete_by_file_path(
+    ///     "skills",
+    ///     vec!["temp_skill/scripts/hello.py".to_string()]
+    /// ).await?;
+    /// ```
     pub async fn delete_by_file_path(
         &self,
         table_name: &str,
@@ -349,29 +373,72 @@ impl VectorStore {
             .await
             .map_err(VectorStoreError::LanceDB)?;
 
-        // Phase 67 optimization: Single query with OR conditions instead of N queries
-        // Build condition: (metadata LIKE '%"file_path":"path1"%') OR (metadata LIKE '%"file_path":"path2"%') ...
-        let conditions: Vec<String> = file_paths
-            .iter()
-            .map(|path| {
-                // Escape special SQL characters for LIKE
-                let escaped = path
-                    .replace('\\', "\\\\")
-                    .replace('%', "\\%")
-                    .replace('_', "\\_")
-                    .replace('\'', "\\'");
-                format!(
-                    "{} LIKE '%\"file_path\":\"{}\"%'",
-                    METADATA_COLUMN, escaped
-                )
-            })
-            .collect();
+        // Create a HashSet for O(1) lookup - handles paths with underscores correctly
+        let file_paths_set: std::collections::HashSet<String> =
+            file_paths.iter().cloned().collect();
 
-        let query = conditions.join(" OR ");
-        dataset
-            .delete(&query)
+        // Scan the table and find IDs matching the file paths
+        // We scan instead of using SQL LIKE because:
+        // 1. LIKE's underscore (_) is a single-character wildcard
+        // 2. Escaping underscore (\_) doesn't work reliably
+        // 3. JSON path queries are version-dependent
+        let mut scanner = dataset.scan();
+        scanner.project(&[ID_COLUMN, METADATA_COLUMN])?;
+
+        let mut stream = scanner
+            .try_into_stream()
             .await
             .map_err(VectorStoreError::LanceDB)?;
+
+        let mut ids_to_delete: Vec<String> = Vec::new();
+
+        use futures::TryStreamExt;
+        while let Some(batch) = stream
+            .try_next()
+            .await
+            .map_err(VectorStoreError::LanceDB)?
+        {
+            use lance::deps::arrow_array::{Array, StringArray};
+
+            let metadata_col = batch.column_by_name(METADATA_COLUMN);
+            let id_col = batch.column_by_name(ID_COLUMN);
+
+            if let (Some(meta_col), Some(id_c)) = (metadata_col, id_col) {
+                if let Some(metas) = meta_col.as_any().downcast_ref::<StringArray>() {
+                    for i in 0..batch.num_rows() {
+                        if metas.is_null(i) {
+                            continue;
+                        }
+
+                        let metadata_str = metas.value(i);
+                        let id = id_c.as_any().downcast_ref::<StringArray>()
+                            .map(|arr| arr.value(i).to_string())
+                            .unwrap_or_default();
+
+                        // Parse metadata JSON and check file_path
+                        if let Ok(metadata) = serde_json::from_str::<serde_json::Value>(&metadata_str) {
+                            if let Some(file_path) = metadata.get("file_path").and_then(|v| v.as_str()) {
+                                if file_paths_set.contains(file_path) {
+                                    ids_to_delete.push(id);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Delete by IDs if any found
+        if !ids_to_delete.is_empty() {
+            eprintln!("DEBUG delete_by_file_path: deleting {} ids", ids_to_delete.len());
+            for id in &ids_to_delete {
+                eprintln!("  - {}", id);
+            }
+            dataset
+                .delete(&format!("{} IN ('{}')", ID_COLUMN, ids_to_delete.join("','")))
+                .await
+                .map_err(VectorStoreError::LanceDB)?;
+        }
 
         Ok(())
     }
@@ -679,5 +746,156 @@ impl crate::VectorStore {
 
         log::info!("Scanned {} skill tools", json_tools.len());
         Ok(json_tools)
+    }
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Test that LIKE query escaping handles underscores in paths correctly.
+    /// Paths like "temp_skill/scripts/hello.py" contain underscores that should NOT be escaped.
+    #[tokio::test]
+    async fn test_delete_by_file_path_with_underscores() {
+        // Create a temporary directory for the test database
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("test_delete");
+
+        // Create vector store (VectorStore::new is async)
+        let store = VectorStore::new(db_path.to_str().unwrap(), Some(1536)).await.unwrap();
+
+        // Add a document with a path containing underscores
+        let test_id = "test_tool.test_function";
+        let test_content = "Test content for delete";
+        let test_path = "temp_skill/scripts/hello.py";  // Contains underscore
+        let test_metadata = serde_json::json!({
+            "skill_name": "test_tool",
+            "tool_name": "test_function",
+            "file_path": test_path,
+            "function_name": "test_function",
+            "keywords": ["test"],
+            "file_hash": "abc123",
+            "input_schema": "{}",
+            "docstring": "Test function"
+        }).to_string();
+
+        // Add the document (use add_documents with single element)
+        store.add_documents(
+            "test_table",
+            vec![test_id.to_string()],
+            vec![vec![0.1; 1536]],
+            vec![test_content.to_string()],
+            vec![test_metadata],
+        ).await.unwrap();
+
+        // Verify it's there
+        let count_before = store.count("test_table").await.unwrap();
+        assert_eq!(count_before, 1, "Document should be added");
+
+        // Delete by file path (with underscore)
+        store.delete_by_file_path(
+            "test_table",
+            vec![test_path.to_string()],
+        ).await.unwrap();
+
+        // Verify it's deleted
+        let count_after = store.count("test_table").await.unwrap();
+        assert_eq!(count_after, 0, "Document should be deleted after calling delete_by_file_path");
+    }
+
+    /// Test deleting multiple paths with various special characters
+    #[tokio::test]
+    async fn test_delete_by_file_path_multiple_paths() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("test_multi_delete");
+
+        let store = VectorStore::new(db_path.to_str().unwrap(), Some(1536)).await.unwrap();
+
+        // Add multiple documents with different path formats
+        let paths_and_ids = vec![
+            ("path_with_underscore/file.py", "skill1.func1"),
+            ("path/with/slashes/file.py", "skill2.func2"),
+            ("path%with%percent/file.py", "skill3.func3"),
+        ];
+
+        for (path, id) in &paths_and_ids {
+            let metadata = serde_json::json!({
+                "file_path": path,
+                "skill_name": "test",
+                "tool_name": "test",
+            }).to_string();
+
+            store.add_documents(
+                "multi_test",
+                vec![id.to_string()],
+                vec![vec![0.1; 1536]],
+                vec!["content".to_string()],
+                vec![metadata],
+            ).await.unwrap();
+        }
+
+        let count_before = store.count("multi_test").await.unwrap();
+        assert_eq!(count_before, 3);
+
+        // Delete all paths
+        let paths: Vec<String> = paths_and_ids.iter().map(|(p, _)| p.to_string()).collect();
+        store.delete_by_file_path("multi_test", paths).await.unwrap();
+
+        let count_after = store.count("multi_test").await.unwrap();
+        assert_eq!(count_after, 0);
+    }
+
+    /// Regression test: Verify delete works with paths that look like SQL LIKE patterns.
+    ///
+    /// This test exists because SQL LIKE treats `_` as a single-character wildcard.
+    /// For example, `LIKE '%temp_skill%'` would match "tempXskill" but not "temp_skill"
+    /// if the underscore is treated as wildcard. Our implementation uses exact string
+    /// matching via HashSet, avoiding this SQL pitfall.
+    ///
+    /// Paths that could break naive SQL LIKE implementations:
+    /// - `temp_skill/scripts/hello.py` (underscore)
+    /// - `path%with%percent/file.py` (percent sign)
+    /// - `path.with.dots/file.py` (dots)
+    #[tokio::test]
+    async fn test_delete_regression_sql_like_patterns() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("test_regression");
+
+        let store = VectorStore::new(db_path.to_str().unwrap(), Some(1536)).await.unwrap();
+
+        // These paths contain characters that have special meaning in SQL LIKE
+        let problematic_paths = vec![
+            "my_skill/scripts/utils.py",
+            "path%with%percent/script.js",
+            "dir.with.dots/config.yaml",
+        ];
+
+        for (i, path) in problematic_paths.iter().enumerate() {
+            let metadata = serde_json::json!({
+                "file_path": path,
+                "skill_name": format!("skill_{}", i),
+                "tool_name": "test_func",
+            }).to_string();
+
+            store.add_documents(
+                "regression_test",
+                vec![format!("skill_{}.test_func", i)],
+                vec![vec![0.1; 1536]],
+                vec!["content".to_string()],
+                vec![metadata],
+            ).await.unwrap();
+        }
+
+        // Delete all problematic paths
+        let paths: Vec<String> = problematic_paths.iter().map(|s| s.to_string()).collect();
+        store.delete_by_file_path("regression_test", paths).await.unwrap();
+
+        // Verify all deleted
+        let count = store.count("regression_test").await.unwrap();
+        assert_eq!(count, 0, "All paths with SQL-like special chars should be deleted");
     }
 }

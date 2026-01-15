@@ -1,5 +1,5 @@
 # schema/harvester.py
-# Phase 12: The Cycle of Evolution (Harvester)
+#  The Cycle of Evolution (Harvester)
 
 from enum import Enum
 from typing import List, Optional

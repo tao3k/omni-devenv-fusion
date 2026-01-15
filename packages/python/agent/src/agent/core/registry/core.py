@@ -1,6 +1,6 @@
 """
 agent/core/registry/core.py
-Phase 35.3: SkillRegistry Core
+ SkillRegistry Core
 
 Core registry class - handles initialization, discovery, and state management.
 Pure MCP Server compatible (no FastMCP dependency).
@@ -215,7 +215,7 @@ class SkillRegistry:
         return tools
 
     # =========================================================================
-    # Preloading (Phase 13.10)
+    # Preloading
     # =========================================================================
 
     def get_preload_skills(self) -> list[str]:
@@ -257,7 +257,7 @@ class SkillRegistry:
         return loader.load_skill(skill_name, mcp)
 
     # =========================================================================
-    # Context (Phase 25)
+    # Context
     # =========================================================================
 
     def get_skill_context(self, skill_name: str, use_diff: bool = False) -> str:
@@ -301,7 +301,7 @@ class SkillRegistry:
         return "\n".join(combined)
 
     # =========================================================================
-    # Remote Installation (Phase 26)
+    # Remote Installation
     # =========================================================================
 
     def install_remote_skill(

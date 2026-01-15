@@ -2,8 +2,8 @@
 src/agent/core/router/sniffer.py
 Context Sniffer - The Sensory System of the Router.
 
-Phase 42: Python Implementation (Subprocess based).
-Phase 45: Hybrid Architecture (Rust Core + Python Fallback).
+ Python Implementation (Subprocess based).
+ Hybrid Architecture (Rust Core + Python Fallback).
 """
 
 import asyncio
@@ -17,7 +17,7 @@ from common.gitops import get_project_root
 
 logger = structlog.get_logger(__name__)
 
-# [Phase 45] Try importing Rust Accelerator
+# Try importing Rust Accelerator
 try:
     import omni_core_rs
 
@@ -42,7 +42,7 @@ class ContextSniffer:
         self._use_rust = RUST_AVAILABLE
 
     # -------------------------------------------------------------------------
-    # Phase 45: Rust Accelerator Path
+    #  Rust Accelerator Path
     # -------------------------------------------------------------------------
     async def _get_snapshot_rust(self) -> str:
         """DELEGATE TO RUST CORE (Release the Kraken)."""
@@ -55,7 +55,7 @@ class ContextSniffer:
             return await self._get_snapshot_python()
 
     # -------------------------------------------------------------------------
-    # Phase 42: Python Fallback Path (Legacy)
+    #  Python Fallback Path (Legacy)
     # -------------------------------------------------------------------------
     async def _get_git_status_python(self) -> str:
         """
@@ -143,7 +143,7 @@ class ContextSniffer:
 
         duration_ms = (time.perf_counter() - start_time) * 1000
 
-        # Performance Logging (Phase 45.4 Verification)
+        # Performance Logging ( Verification)
         if duration_ms > 100:
             logger.warning(f"Sniffer ({method}) slow", duration_ms=f"{duration_ms:.2f}ms")
         else:

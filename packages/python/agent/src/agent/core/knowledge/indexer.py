@@ -1,6 +1,6 @@
 """
 agent/core/knowledge/indexer.py
-Phase 70: The Knowledge Matrix - Markdown Document Indexer
+ The Knowledge Matrix - Markdown Document Indexer
 
 Indexes Markdown documents into LanceDB for semantic search.
 

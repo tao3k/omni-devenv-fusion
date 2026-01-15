@@ -2,11 +2,11 @@
 src/agent/core/agents/reviewer.py
 Reviewer Agent - Quality Gatekeeper for Code Review.
 
-Phase 14 Enhancement:
+ Enhancement:
 - Context Narrowing: Reviewer only sees quality-related tools
 - Mission Brief: Focused on review, testing, and commit decisions
 
-Phase 15 Enhancement:
+ Enhancement:
 - audit(): Auto-review other agents' output (Feedback Loop)
 
 Skills (Narrow Context):
@@ -26,7 +26,7 @@ Usage:
         relevant_files=["packages/python/agent/src/agent/core/router.py"]
     )
 
-    # Phase 15: Audit Coder's output
+    #  Audit Coder's output
     audit = await agent.audit(task, coder_response)
 """
 
@@ -107,7 +107,7 @@ class ReviewerAgent(BaseAgent):
         self, mission_brief: str, constraints: List[str] = None, relevant_files: List[str] = None
     ) -> AgentContext:
         """
-        Phase 16: Reviewer doesn't need RAG - it uses its own quality tools.
+         Reviewer doesn't need RAG - it uses its own quality tools.
 
         Reviewer focuses on auditing current output, not retrieving project knowledge.
         """
@@ -161,7 +161,7 @@ class ReviewerAgent(BaseAgent):
         self, task: str, agent_output: str, context: Dict[str, Any] = None
     ) -> AuditResult:
         """
-        Phase 15: Audit another agent's output (Feedback Loop).
+         Audit another agent's output (Feedback Loop).
 
         This is the core of the Virtuous Cycle - Reviewer checks Coder's work
         before it's returned to the user.
@@ -268,7 +268,7 @@ class ReviewerAgent(BaseAgent):
         """
         Build the audit system prompt for quality review.
 
-        Phase 15: This is where quality gates are enforced.
+         This is where quality gates are enforced.
         """
         prompt_parts = [
             "# ROLE: Quality Assurance Lead",

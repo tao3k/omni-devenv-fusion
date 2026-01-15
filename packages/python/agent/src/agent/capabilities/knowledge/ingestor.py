@@ -34,31 +34,60 @@ from pathlib import Path
 from typing import Any
 
 from common.gitops import get_project_root
-from common.mcp_core.rich_utils import console, panel, success, error, warning, info, section
+from common.mcp_core.rich_utils import console, panel, success, warning, info, section
+from common.prj_dirs import PRJ_DATA
 
 from agent.core.vector_store import get_vector_memory
 
-# Phase 17: Repomix XML path (relative to project root)
-REPOMIX_XML_PATH = ".data/project_knowledge.xml"
+# Phase 17: Repomix XML path (using PRJ_DATA for git-ignored runtime data)
+REPOMIX_XML_PATH = PRJ_DATA("project_knowledge.xml")
 
-# Default knowledge directories (fallback when settings.yaml not configured)
-DEFAULT_KNOWLEDGE_DIRS = [
-    {"path": "assets/knowledge", "domain": "knowledge", "description": "Project knowledge base"},
-    {"path": "assets/how-to", "domain": "workflow", "description": "How-to guides"},
-    {"path": "docs/explanation", "domain": "architecture", "description": "Architecture docs"},
-    {
-        "path": "assets/skills/knowledge/standards",
-        "domain": "standards",
-        "description": "Coding standards",
-    },
-]
+
+def _get_default_knowledge_dirs() -> list[dict[str, str]]:
+    """Load default knowledge directories from references.yaml (SSOT)."""
+    # SSOT: references.yaml > knowledge_dirs
+    return [
+        {"path": "assets/knowledge", "domain": "knowledge", "description": "Project knowledge base"},
+        {"path": "assets/how-to", "domain": "workflow", "description": "How-to guides"},
+        {"path": "docs/explanation", "domain": "architecture", "description": "Architecture docs"},
+        {
+            "path": "assets/skills/knowledge/standards",
+            "domain": "standards",
+            "description": "Coding standards",
+        },
+    ]
 
 
 def get_knowledge_dirs() -> list[dict[str, str]]:
     """
-    Get knowledge directories from settings.yaml or defaults.
-    Reads from: settings.knowledge.directories
+    Get knowledge directories from references.yaml (SSOT).
+    Falls back to settings.yaml if references.yaml is not configured.
+
+    SSOT: assets/references.yaml > knowledge_dirs
     """
+    # First, try references.yaml (SSOT)
+    try:
+        from common.mcp_core.reference_library import ReferenceLibrary
+
+        ref = ReferenceLibrary()
+        ref_dirs = ref.get("knowledge_dirs", [])
+        if ref_dirs and isinstance(ref_dirs, list) and len(ref_dirs) > 0:
+            valid_dirs = []
+            for d in ref_dirs:
+                if isinstance(d, dict) and "path" in d and "domain" in d:
+                    valid_dirs.append(
+                        {
+                            "path": d["path"],
+                            "domain": d["domain"],
+                            "description": d.get("description", d["path"]),
+                        }
+                    )
+            if valid_dirs:
+                return valid_dirs
+    except Exception:
+        pass
+
+    # Fallback to settings.yaml
     try:
         from common.config.settings import get_setting
 
@@ -79,7 +108,7 @@ def get_knowledge_dirs() -> list[dict[str, str]]:
     except Exception:
         pass
 
-    return DEFAULT_KNOWLEDGE_DIRS
+    return _get_default_knowledge_dirs()
 
 
 def extract_keywords(content: str) -> list[str]:
@@ -246,7 +275,7 @@ async def ingest_git_workflow_knowledge() -> dict[str, Any]:
 
     for path in [
         get_setting("knowledge.gitops_file", "assets/how-to/gitops.md"),
-        get_setting("knowledge.gitops_cache", "assets/knowledge/gitops-cache.md"),
+        get_setting("knowledge.gitops_cache", str(PRJ_DATA("knowledge", "gitops-cache.md"))),
     ]:
         if (project_root / path).exists():
             results.append(await ingest_file(project_root / path, domain="git"))
@@ -398,7 +427,7 @@ if __name__ == "__main__":
 
 __all__ = [
     "REPOMIX_XML_PATH",
-    "DEFAULT_KNOWLEDGE_DIRS",
+    "_get_default_knowledge_dirs",
     "get_knowledge_dirs",
     "extract_keywords",
     "ingest_file",

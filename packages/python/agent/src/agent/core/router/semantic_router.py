@@ -2,12 +2,12 @@
 src/agent/core/router/semantic_router.py
 Semantic Router - Tool selection with Mission Brief Protocol.
 
-Phase 14: Routes user requests to appropriate Skills.
-Phase 14.5: Uses Semantic Cortex for fuzzy matching.
-Phase 36.2: Virtual Loading via Vector Discovery (local skills only).
-Phase 37.3: Adaptive Confidence based on Score Gap.
-Phase 41: Wisdom-Aware Routing - Inject past lessons from harvested knowledge.
-Phase 42: State-Aware Routing - Inject environment state (Git, active context).
+Routes user requests to appropriate Skills using:
+- Semantic Cortex for fuzzy matching
+- Virtual Loading via Vector Discovery (local skills only)
+- Adaptive Confidence based on Score Gap
+- Wisdom-Aware Routing - Inject past lessons from harvested knowledge
+- State-Aware Routing - Inject environment state (Git, active context)
 
 Usage:
     # SemanticRouter is defined in this file
@@ -28,7 +28,7 @@ from agent.core.router.models import RoutingResult
 if TYPE_CHECKING:
     from common.mcp_core.inference.client import InferenceClient
 
-# [Phase 37.3] Adaptive confidence configuration
+# Adaptive confidence configuration
 CONFIDENCE_HIGH_GAP = 0.15  # Gap > 15% = High confidence boost
 CONFIDENCE_LOW_GAP = 0.05  # Gap < 5% = Low confidence penalty
 CONFIDENCE_MAX_BOOST = 1.15  # Max boost multiplier for high distinctiveness
@@ -39,8 +39,8 @@ _cached_inference_client: Any = None
 _cached_cache: Any = None
 _cached_cortex: Any = None
 _cached_vector_discovery: Any = None
-_cached_librarian: Any = None  # [Phase 41] Lazy Librarian for wisdom retrieval
-_cached_sniffer: Any = None  # [Phase 42] Lazy ContextSniffer for environment state
+_cached_librarian: Any = None  #    # Lazy Librarian for wisdom retrieval
+_cached_sniffer: Any = None  #    # Lazy ContextSniffer for environment state
 
 # Lazy logger - defer structlog.get_logger() to avoid ~100ms import cost
 _cached_logger: Any = None
@@ -57,7 +57,7 @@ def _get_logger() -> Any:
 
 
 def _get_vector_discovery() -> Any:
-    """Get VectorSkillDiscovery lazily (Phase 36.2)."""
+    """Get VectorSkillDiscovery lazily (Virtual Loading)."""
     global _cached_vector_discovery
     if _cached_vector_discovery is None:
         from agent.core.skill_discovery import VectorSkillDiscovery
@@ -67,7 +67,7 @@ def _get_vector_discovery() -> Any:
 
 
 def _get_librarian() -> Any:
-    """[Phase 41] Get Librarian function lazily for wisdom retrieval."""
+    """# Get Librarian function lazily for wisdom retrieval."""
     global _cached_librarian
     if _cached_librarian is None:
         from agent.capabilities.knowledge.librarian import consult_knowledge_base
@@ -77,7 +77,7 @@ def _get_librarian() -> Any:
 
 
 def _get_sniffer() -> Any:
-    """[Phase 42] Get ContextSniffer lazily for environment state detection."""
+    """# Get ContextSniffer lazily for environment state detection."""
     global _cached_sniffer
     if _cached_sniffer is None:
         from agent.core.router.sniffer import get_sniffer
@@ -232,27 +232,27 @@ class SemanticRouter:
     """
     The Orchestrator's Brain: Routes requests and generates mission briefs.
 
-    Phase 14 Enhancement:
+    Semantic Routing Enhancement:
     - Now generates mission_brief for context distillation
     - Hive Mind Cache for instant routing on repeated queries
     - Returns RoutingResult instead of raw dict
 
-    Phase 14.5 Enhancement:
+    Semantic Cortex Enhancement:
     - Semantic Cortex: Vector-based fuzzy matching cache
     - "Fix bug" ≈ "Fix the bug" (same routing result)
     - Learns from past routing decisions
 
-    Phase 36.2 Enhancement (Virtual Loading):
+    Virtual Loading Enhancement:
     - Cold Path: When LLM routing fails or is weak, search local skills only
     - Uses VectorSkillDiscovery to find relevant but unloaded local skills
     - Remote skills are NOT searched (installation not yet implemented)
 
-    Phase 41 Enhancement (Wisdom-Aware Routing):
+    Wisdom-Aware Routing Enhancement:
     - Injects past lessons from harvested knowledge into routing prompt
     - Consults Librarian for relevant lessons before generating Mission Brief
     - Mission Brief now includes operational wisdom from past mistakes
 
-    Phase 42 Enhancement (State-Aware Routing):
+    State-Aware Routing Enhancement:
     - Injects real-time environment state into routing prompt
     - Uses ContextSniffer to detect Git status and active context
     - Prevents hallucinated actions by grounding routing in current reality
@@ -265,7 +265,7 @@ class SemanticRouter:
         cache_ttl: int = 3600,
         use_semantic_cache: bool = True,
         use_vector_fallback: bool = True,
-        use_wisdom_routing: bool = True,  # [Phase 41] Enable wisdom-aware routing
+        use_wisdom_routing: bool = True,  # Enable wisdom-aware routing
     ):
         self.registry = get_skill_registry()
         self._inference = inference_client
@@ -274,9 +274,9 @@ class SemanticRouter:
         self._use_semantic_cache = use_semantic_cache
         self._use_vector_fallback = use_vector_fallback
         self._vector_discovery = None
-        self._librarian = None  # [Phase 41] Lazy Librarian
+        self._librarian = None  # Lazy Librarian
         self._use_wisdom_routing = use_wisdom_routing
-        self._sniffer = None  # [Phase 42] Lazy ContextSniffer
+        self._sniffer = None  # Lazy ContextSniffer
 
     @property
     def inference(self) -> Any:
@@ -322,7 +322,7 @@ class SemanticRouter:
 
     @property
     def vector_discovery(self) -> Any:
-        """Lazy VectorSkillDiscovery accessor (Phase 36.2)."""
+        """Lazy VectorSkillDiscovery accessor (Virtual Loading)."""
         if self._vector_discovery is None:
             self._vector_discovery = _get_vector_discovery()
         return self._vector_discovery
@@ -334,7 +334,7 @@ class SemanticRouter:
 
     @property
     def librarian(self) -> Any:
-        """[Phase 41] Lazy Librarian accessor for wisdom retrieval."""
+        """# Lazy Librarian accessor for wisdom retrieval."""
         if self._librarian is None:
             self._librarian = _get_librarian()
         return self._librarian
@@ -346,7 +346,7 @@ class SemanticRouter:
 
     @property
     def sniffer(self) -> Any:
-        """[Phase 42] Lazy ContextSniffer accessor for environment state."""
+        """# Lazy ContextSniffer accessor for environment state."""
         if self._sniffer is None:
             self._sniffer = _get_sniffer()
         return self._sniffer
@@ -357,7 +357,7 @@ class SemanticRouter:
         self._sniffer = value
 
     def _format_lessons(self, knowledge_results: Dict[str, Any]) -> str:
-        """[Phase 41] Format retrieved lessons for the routing prompt."""
+        """Format retrieved lessons for the routing prompt."""
         if not knowledge_results.get("success") or not knowledge_results.get("results"):
             return "No relevant past lessons found."
 
@@ -410,7 +410,7 @@ class SemanticRouter:
         Cache Lookup Order:
         1. Semantic Cortex (fuzzy match): "Fix bug" ≈ "Fix the bug"
         2. Exact Match Cache (fast): "run tests" (exact string match)
-        3. Vector Fallback (Phase 36.2): Search local skills for better matches
+        3. Vector Fallback (Virtual Loading): Search local skills for better matches
 
         Args:
             user_query: The user's request
@@ -420,25 +420,25 @@ class SemanticRouter:
         Returns:
             RoutingResult with skills, mission_brief, reasoning, and metadata
         """
-        # 🧠 Phase 14.5: Semantic Cortex Check (Fuzzy Matching)
+        # 🧠  Semantic Cortex Check (Fuzzy Matching)
         if use_cache and self.semantic_cortex:
             recalled = await self.semantic_cortex.recall(user_query)
             if recalled is not None:
                 return recalled
 
-        # 🐝 Phase 14: Exact Match Cache (Fast, but rigid)
+        # 🐝 Exact Match Cache (Fast, but rigid)
         if use_cache:
             cached = self.cache.get(user_query)
             if cached is not None:
                 return cached
 
-        # [Phase 41+42] Parallel: Build menu, retrieve wisdom, AND sniff environment
+            # Parallel: Build menu, retrieve wisdom, AND sniff environment
         menu_task = asyncio.to_thread(self._build_routing_menu)
         knowledge_task = None
         sniffer_task = None
 
         if self._use_wisdom_routing:
-            # [Phase 41] Retrieve relevant lessons from harvested knowledge
+            # Retrieve relevant lessons from harvested knowledge
             knowledge_task = asyncio.create_task(
                 self.librarian(
                     query=user_query,
@@ -447,13 +447,13 @@ class SemanticRouter:
                 )
             )
 
-        # [Phase 42] Get environment state snapshot (parallel, non-blocking)
+            # Get environment state snapshot (parallel, non-blocking)
         sniffer_task = asyncio.create_task(self.sniffer.get_snapshot())
 
         # Wait for menu building (blocking, but fast)
         menu_text = await menu_task
 
-        # [Phase 41] Get wisdom lessons (parallel, non-blocking)
+        # Get wisdom lessons (parallel, non-blocking)
         lessons_text = "No relevant past lessons found."
         if knowledge_task:
             try:
@@ -468,7 +468,7 @@ class SemanticRouter:
                 _get_logger().warning("Knowledge retrieval failed", error=str(e))
                 lessons_text = "No relevant past lessons found."
 
-        # [Phase 42] Get environment snapshot (parallel, non-blocking)
+        # Get environment snapshot (parallel, non-blocking)
         env_snapshot = "Environment: Unknown"
         try:
             env_snapshot = await sniffer_task
@@ -492,10 +492,10 @@ class SemanticRouter:
 AVAILABLE SKILLS (WORKERS):
 {menu_text}
 
-[Phase 41] RELEVANT PAST LESSONS (Apply These):
+        ## RELEVANT PAST LESSONS (Apply These):
 {lessons_text}
 
-[Phase 42] CURRENT ENVIRONMENT STATE:
+        ## CURRENT ENVIRONMENT STATE:
 {env_snapshot}
 
 ROUTING RULES:
@@ -511,7 +511,7 @@ ROUTING RULES:
 10. If the request is about terminal/shell commands, use 'terminal'
 11. If the request is about general conversation, use 'writer' or 'knowledge'
 
-[Phase 42] ENVIRONMENT-AWARE RULES:
+        ## ENVIRONMENT-AWARE RULES:
 - If user asks to "commit" and modified files are shown, include modified files in brief
 - If workspace has uncommitted changes that might be relevant, acknowledge them in brief
 - Use the git branch/status info to contextualize routing decisions
@@ -519,7 +519,7 @@ ROUTING RULES:
 MISSION BRIEF GUIDELINES (Commander's Intent - NOT Step-by-Step):
 - Write COMMANDER'S INTENT: Tell the Worker WHAT goal to achieve and WHAT constraints to follow
 - REFERENCE relevant lessons from PAST LESSONS section in your brief
-- [Phase 42] REFERENCE current ENVIRONMENT STATE when relevant (e.g., modified files, branch context)
+-         - REFERENCE current ENVIRONMENT STATE when relevant (e.g., modified files, branch context)
 - If a lesson mentions a pitfall, explicitly mention it in constraints
 - AVOID step-by-step procedures: Let the Worker decide tool order based on context
 - Be GENERAL and PATH-INDEPENDENT: This brief will be CACHED for future similar requests
@@ -557,7 +557,7 @@ Route this request and provide a mission brief."""
             mission_brief="Handle the user's general request. Ask for clarification if needed.",
             reasoning=f"Routing failed: {result.get('error', 'Unknown error')}. Using safe defaults.",
             confidence=0.0,
-            env_snapshot=env_snapshot,  # [Phase 42] Include environment snapshot
+            env_snapshot=env_snapshot,  # Include environment snapshot
         )
 
         if not result["success"]:
@@ -582,10 +582,10 @@ Route this request and provide a mission brief."""
                     "reasoning", "Skill selected based on request analysis."
                 ),
                 confidence=confidence,
-                env_snapshot=env_snapshot,  # [Phase 42] Include environment snapshot
+                env_snapshot=env_snapshot,  # Include environment snapshot
             )
 
-            # 🔥 Phase 36.2: Cold Path - Virtual Loading
+            # 🔥        # Cold Path - Virtual Loading
             # If low confidence, fallback to generic skills, or weak route, try vector search
             is_weak_route = (
                 not valid_skills  # No valid skills found
@@ -601,7 +601,7 @@ Route this request and provide a mission brief."""
             # 🐝 Store in Hive Mind Cache (Exact Match)
             self.cache.set(user_query, routing_result)
 
-            # 🧠 Phase 14.5: Store in Semantic Cortex (Fuzzy Matching)
+            # 🧠        # Store in Semantic Cortex (Fuzzy Matching)
             if self.semantic_cortex:
                 await self.semantic_cortex.learn(user_query, routing_result)
 
@@ -612,13 +612,13 @@ Route this request and provide a mission brief."""
 
     async def _try_vector_fallback(self, query: str, result: RoutingResult) -> None:
         """
-        Phase 36.2: Search local skills via vector store for better routing.
-        Phase 37.3: Adaptive Confidence based on Score Gap.
+         Search local skills via vector store for better routing.
+         Adaptive Confidence based on Score Gap.
 
         This is the "Cold Path" - used when LLM routing fails or is weak.
         1. First search LOCAL (installed) skills
         2. If no local skills found, search REMOTE skills and return suggestions
-        3. [Phase 37.3] Calculate adaptive confidence based on score gap
+        3. Calculate adaptive confidence based on score gap
 
         Args:
             query: The user query
@@ -638,7 +638,7 @@ Route this request and provide a mission brief."""
 
             # 2. If no local skills found, search remote skills for suggestions
             if not new_candidates:
-                # Search remote skills (Phase 36.8: Auto-trigger skill.suggest logic)
+                # Search remote skills (Auto-trigger skill.suggest logic)
                 remote_suggestions = await self.vector_discovery.search(
                     query=query,
                     limit=5,
@@ -689,7 +689,7 @@ Route this request and provide a mission brief."""
             # Update result with suggestions
             result.suggested_skills = suggested_ids
 
-            # [Phase 39] Build reasoning with boost details
+            # Build reasoning with boost details
             reasoning_parts = [f"Found relevant local skills: {', '.join(suggested_ids)}."]
 
             # Check for feedback influence
@@ -712,7 +712,7 @@ Route this request and provide a mission brief."""
 
             result.reasoning += " [Vector Fallback] " + " ".join(reasoning_parts)
 
-            # [Phase 37.3] Adaptive Confidence based on Score Gap
+            # Adaptive Confidence based on Score Gap
             # Calculate the gap between top and second result
             if len(new_candidates) >= 2:
                 top_score = new_candidates[0].get("score", 0.0)

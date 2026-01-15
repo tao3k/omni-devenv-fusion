@@ -1,9 +1,9 @@
 """
 src/agent/core/skill_discovery/local.py
-Phase 27: Legacy Local Skill Discovery (JSON Index)
+ Legacy Local Skill Discovery (JSON Index)
 
 Uses a local index (known_skills.json) for skill discovery.
-This is kept for backward compatibility but Phase 36 uses VectorSkillDiscovery.
+This is kept for backward compatibility but  uses VectorSkillDiscovery.
 """
 
 from __future__ import annotations

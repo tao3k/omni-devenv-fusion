@@ -2,7 +2,7 @@
 src/agent/core/ux.py
 UXManager - Glass Cockpit for Omni Orchestrator
 
-Phase 18: The Glass Cockpit (Sidecar Dashboard Pattern)
+ The Glass Cockpit (Sidecar Dashboard Pattern)
 - Real-time TUI for agent state visualization
 - Rich-powered terminal output
 - Visual audit feedback and RAG knowledge display
@@ -291,7 +291,7 @@ class UXManager:
         """
         Display remote skill suggestions with installation instructions.
 
-        Phase 36.8: When no local skills match, suggest remote skills.
+         When no local skills match, suggest remote skills.
         """
         if self._should_emit():
             self._emit("show_skill_suggestions", suggestions=suggestions)
@@ -529,7 +529,7 @@ class UXManager:
     def _render_show_skill_suggestions(self, suggestions: List[Dict[str, Any]]) -> None:
         """Display remote skill suggestions with installation instructions.
 
-        Phase 36.8: When no local skills match, suggest remote skills.
+        When no local skills match, suggest remote skills.
         """
         if not suggestions:
             return

@@ -1,6 +1,6 @@
 """
 src/agent/core/skill_discovery/reconciliation.py
-Phase 66: Startup Reconciliation (Simplified)
+ Startup Reconciliation (Simplified)
 
 With Rust-backed sync_skills(), phantom skills are automatically handled.
 sync_skills uses file hashes to determine what exists on disk.
@@ -15,7 +15,7 @@ logger = structlog.get_logger(__name__)
 
 async def reconcile_index(loaded_skills: list[str]) -> dict[str, int]:
     """
-    Phase 66: Simplified startup reconciliation.
+     Simplified startup reconciliation.
 
     With Rust-backed sync_skills(), the reconciliation is simple:
     trigger incremental sync and it will automatically:

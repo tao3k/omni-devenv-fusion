@@ -1,6 +1,6 @@
 """
 agent/core/note_taker.py
-Phase 54: The Note-Taker (CCA F2 - Meta Agent).
+ The Note-Taker (CCA F2 - Meta Agent).
 
 Distills execution trajectories into structured wisdom notes.
 Stores them in the Librarian (LanceDB) for future retrieval.
@@ -60,7 +60,7 @@ class NoteTaker:
         from agent.core.note_taker import get_note_taker
 
         taker = get_note_taker()
-        result = taker.distill_and_save(conversation_history)
+        result = await taker.distill_and_save(conversation_history)
     """
 
     _instance: Optional["NoteTaker"] = None
@@ -81,6 +81,40 @@ class NoteTaker:
 
         logger.info("Note-Taker initialized")
 
+    def _clean_json_content(self, content: str) -> str:
+        """Extract clean JSON from markdown code blocks or text.
+
+        LLM often wraps JSON in ```json code blocks. This extracts the actual JSON.
+        Also handles cases where LLM adds extra text before/after the JSON.
+        """
+        # Try to extract from ```json code block
+        if "```json" in content:
+            # Find content between ```json and ```
+            start = content.find("```json") + len("```json")
+            end = content.find("```", start)
+            if end != -1:
+                return content[start:end].strip()
+
+        # Try to extract from ``` code block (no language specified)
+        if "```" in content:
+            start = content.find("```") + len("```")
+            # Skip potential language specifier
+            first_newline = content.find("\n", start)
+            if first_newline != -1 and first_newline < start + 10:
+                start = first_newline + 1
+            end = content.find("```", start)
+            if end != -1:
+                return content[start:end].strip()
+
+        # Try to find JSON object in text
+        first_brace = content.find("{")
+        last_brace = content.rfind("}")
+        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+            return content[first_brace : last_brace + 1].strip()
+
+        # Return original if no extraction worked
+        return content
+
     def _format_history(self, history: List[Dict[str, str]]) -> str:
         """Convert history list to transcript string."""
         lines = []
@@ -93,8 +127,11 @@ class NoteTaker:
             lines.append(f"[{role}]\n{content}")
         return "\n\n".join(lines)
 
-    async def _call_llm_async(self, transcript: str) -> List[Dict[str, Any]]:
-        """Call LLM asynchronously to generate notes from transcript."""
+    async def _call_llm(self, transcript: str) -> List[Dict[str, Any]]:
+        """Call LLM to generate notes from transcript.
+
+        This is now fully async - no sync wrapper needed.
+        """
         client = self.llm_client
         if client is None:
             logger.warning("No LLM client available, using dummy notes")
@@ -116,17 +153,26 @@ class NoteTaker:
             content = result["content"]
             logger.debug(f"LLM response length: {len(content)} chars")
 
-            # Parse JSON response
-            parsed = json.loads(content)
+            # Clean JSON content (remove markdown code blocks if present)
+            cleaned_content = self._clean_json_content(content)
 
-            # Handle both {"notes": [...]} and direct [...]
-            if isinstance(parsed, dict) and "notes" in parsed:
-                return parsed["notes"]
-            elif isinstance(parsed, list):
+            # Parse JSON response
+            parsed = json.loads(cleaned_content)
+
+            # [FIX] Handle weird LLM output formats like {'command': ...}
+            if isinstance(parsed, dict):
+                if "command" in parsed and "notes" not in parsed:
+                    logger.warning(f"Note-Taker: LLM hallucinated a command output, ignoring")
+                    return []
+                if "notes" in parsed:
+                    return parsed["notes"]
+
+            # Handle direct list format
+            if isinstance(parsed, list):
                 return parsed
-            else:
-                logger.warning(f"Unexpected LLM response format: {parsed}")
-                return []
+
+            logger.warning(f"Unexpected LLM response format: {str(parsed)[:100]}")
+            return []
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse LLM response as JSON: {e}")
@@ -134,25 +180,6 @@ class NoteTaker:
         except Exception as e:
             logger.error(f"LLM call failed: {e}")
             return []
-
-    def _call_llm(self, transcript: str) -> List[Dict[str, Any]]:
-        """Synchronous wrapper for _call_llm_async.
-
-        Handles both sync and async contexts by checking for running event loop.
-        """
-        import asyncio
-
-        try:
-            # Check if there's already a running event loop
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            # No running loop, safe to use asyncio.run()
-            return asyncio.run(self._call_llm_async(transcript))
-
-        # Already in async context - cannot use run_until_complete
-        # Fall back to dummy notes to avoid event loop errors
-        logger.warning("Note-Taker: Already in async context, using dummy notes")
-        return self._generate_dummy_notes(transcript)
 
     def _generate_dummy_notes(self, transcript: str) -> List[Dict[str, Any]]:
         """Generate basic notes when LLM is unavailable."""
@@ -183,8 +210,8 @@ class NoteTaker:
 
         return notes
 
-    async def _save_notes_async(self, notes: List[Dict[str, Any]]) -> int:
-        """Save notes to the Librarian via Memory Skill (async version)."""
+    async def _save_notes(self, notes: List[Dict[str, Any]]) -> int:
+        """Save notes to the Librarian via Memory Skill (fully async)."""
         try:
             # Use load_skill_module to load memory tools
             memory_tools = load_skill_module("memory")
@@ -219,22 +246,7 @@ class NoteTaker:
             logger.error(f"Failed to save notes to Librarian: {e}")
             return 0
 
-    def _save_notes(self, notes: List[Dict[str, Any]]) -> int:
-        """Save notes to the Librarian via Memory Skill using SKILLS_DIR()."""
-        import asyncio
-
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            # No running loop, safe to use asyncio.run()
-            return asyncio.run(self._save_notes_async(notes))
-
-        # Already in async context - we're being called from sync context but loop exists
-        # This shouldn't happen in normal use, but handle it gracefully
-        logger.warning("Note-Taker: save_memory called in async context from sync wrapper")
-        return 0
-
-    def distill_and_save(self, history: List[Dict[str, str]]) -> str:
+    async def distill_and_save(self, history: List[Dict[str, str]]) -> str:
         """
         Analyze session history and save generated notes to the Librarian.
 
@@ -254,7 +266,7 @@ class NoteTaker:
 
         # Step 2: Generate notes via LLM
         logger.info("Note-Taker: Calling LLM to generate wisdom notes...")
-        notes = self._call_llm(transcript)
+        notes = await self._call_llm(transcript)
 
         if not notes:
             logger.info("Note-Taker: No significant insights found.")
@@ -262,7 +274,7 @@ class NoteTaker:
 
         # Step 3: Save to Librarian
         logger.info(f"Note-Taker: Saving {len(notes)} notes to Librarian...")
-        saved_count = self._save_notes(notes)
+        saved_count = await self._save_notes(notes)
 
         # Categorize for reporting
         categories = {}
@@ -274,21 +286,21 @@ class NoteTaker:
 
         return f"Note-Taker: Distilled {saved_count} notes [{category_str}] and saved to memory."
 
-    def distill_single(self, content: str, category: str = "insight") -> str:
+    async def distill_single(self, content: str, category: str = "insight") -> str:
         """
         Convenience method to distill a single piece of content.
 
         Args:
             content: Text to analyze
-            category: Category hint (insight, hindsight, bug_fix, etc.) - not used, for future
+            category: Category hint (insight, hindsight, bug_fix, etc.)
 
         Returns:
-            Saved note ID or error message
+            Summary message about what was saved
         """
         # Wrap in minimal history format
         history = [{"role": "user", "content": content}]
 
-        return self.distill_and_save(history)
+        return await self.distill_and_save(history)
 
 
 # Singleton accessor

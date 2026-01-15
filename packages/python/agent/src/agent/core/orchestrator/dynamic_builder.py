@@ -1,6 +1,6 @@
 """
 src/agent/core/orchestrator/dynamic_builder.py
-Phase 61: Dynamic Workflow Builder for Runtime Graph Construction.
+ Dynamic Workflow Builder for Runtime Graph Construction.
 
 This module provides a fluent API to construct LangGraph state graphs dynamically
 based on agent reasoning. It abstracts away the complexity of node wrapping

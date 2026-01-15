@@ -1,7 +1,7 @@
 """
 agent/core/protocols.py
-Phase 29: Unified Skill Protocols
-Phase 33: ODF-EP v6.0 Core Refactoring
+ Unified Skill Protocols
+ ODF-EP v6.0 Core Refactoring
 
 Provides type-safe abstractions for the skill system.
 All skill components implement these protocols for interchangeability.
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from agent.core.schemas import SkillManifest
 
 # =============================================================================
-# Lazy Logger Initialization (Phase 32 Import Optimization)
+# Lazy Logger Initialization ( Import Optimization)
 # =============================================================================
 
 _cached_logger = None
@@ -80,7 +80,7 @@ class SkillCategory(str, Enum):
 
 
 class ExecutionMode(str, Enum):
-    """Skill execution modes (Phase 28.1)."""
+    """Skill execution modes ."""
 
     LIBRARY = "library"  # Load in main process
     SUBPROCESS = "subprocess"  # Execute via uv run
@@ -240,7 +240,7 @@ class ISkillRegistry(Protocol):
 
 @runtime_checkable
 class ISecurityGate(Protocol):
-    """Protocol for security validation (Phase 28)."""
+    """Protocol for security validation ."""
 
     __slots__ = ()
 

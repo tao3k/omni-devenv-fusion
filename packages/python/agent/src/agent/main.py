@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-agent/main.py - Phase 25 One Tool CLI
+agent/main.py - Omni CLI
 
 A CLI wrapper for calling @omni commands directly from terminal.
 Works with Claude Code CLI and any other terminal.
@@ -24,7 +24,7 @@ from pathlib import Path
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Phase 25 One Tool CLI - Execute @omni commands",
+        description="Omni CLI - Execute @omni commands",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

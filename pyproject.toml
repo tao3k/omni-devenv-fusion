@@ -55,7 +55,7 @@ indent-style = "space"
 addopts = "-p agent.testing.plugin --tb=short"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-testpaths = ["packages/python/agent/tests", "assets/skills"]
+testpaths = ["packages/python/agent/src/agent/tests", "assets/skills"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

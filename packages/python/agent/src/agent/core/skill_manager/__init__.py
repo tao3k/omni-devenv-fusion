@@ -1,6 +1,6 @@
 """
 src/agent/core/skill_manager/
-Phase 29: Unified Skill Manager Package
+ Unified Skill Manager Package
 
 Atomic modules following ODF patterns:
 - models.py: SkillCommand, Skill DTOs

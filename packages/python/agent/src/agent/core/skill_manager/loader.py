@@ -2,7 +2,7 @@
 src/agent/core/skill_manager/loader.py
 Skill loading and command extraction.
 
-Phase 63: Only supports scripts/*.py pattern with @skill_script decorator.
+ Only supports scripts/*.py pattern with @skill_script decorator.
 Removes legacy tools.py + @skill_command support.
 """
 
@@ -23,7 +23,7 @@ class SkillLoaderMixin:
     """
     Mixin providing skill loading and command extraction capabilities.
 
-    Phase 63: Only supports scripts/*.py with @skill_script decorator.
+     Only supports scripts/*.py with @skill_script decorator.
     Legacy tools.py + @skill_command support has been removed.
     """
 
@@ -73,7 +73,7 @@ class SkillLoaderMixin:
             inject_settings = config.get("inject_settings", [])
             retry_on = config.get("retry_on", (ConnectionError, TimeoutError))
             max_attempts = config.get("max_attempts", 3)
-            # Phase 61: Caching config
+            #  Caching config
             cache_ttl = config.get("cache_ttl", 0.0)
             pure = config.get("pure", False)
 
@@ -89,7 +89,7 @@ class SkillLoaderMixin:
                 _inject_settings=inject_settings,
                 _retry_on=retry_on,
                 _max_attempts=max_attempts,
-                # Phase 61: Caching fields
+                #  Caching fields
                 cache_ttl=cache_ttl,
                 pure=pure,
             )

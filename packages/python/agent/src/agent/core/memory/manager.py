@@ -1,6 +1,6 @@
 """
 agent/core/memory/manager.py
-Phase 71: The Memory Mesh - Memory Manager
+ The Memory Mesh - Memory Manager
 
 Provides episodic memory storage and retrieval capabilities.
 

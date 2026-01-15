@@ -1,6 +1,6 @@
 """
 agent/core/security/manifest_validator.py
-Phase 33: SKILL.md Validator for skill permission audit.
+ SKILL.md Validator for skill permission audit.
 
 Validates skill SKILL.md for dangerous permissions.
 """

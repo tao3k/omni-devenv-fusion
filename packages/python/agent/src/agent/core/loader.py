@@ -1,6 +1,6 @@
 """
 agent/core/loader.py
-Phase 29: Unified Skill Loader Pipeline
+ Unified Skill Loader Pipeline
 
 Complete pipeline: Discover → Validate → Install → Load → Register
 
@@ -386,14 +386,14 @@ class SkillLoader:
             )
 
     # =========================================================================
-    # Hot Reload (Phase 36.4)
+    # Hot Reload
     # =========================================================================
 
     def reload(self, skill_name: str) -> LoadResult:
         """
         Hot reload a skill.
 
-        Phase 36.4: Performs surgical reload:
+         Performs surgical reload:
         1. Identifies the skill path
         2. Unloads the skill via Manager (recursive sys.modules cleanup)
         3. Re-runs the full Load pipeline

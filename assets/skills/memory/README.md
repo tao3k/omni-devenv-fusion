@@ -4,175 +4,166 @@
 
 ## Purpose
 
-The **Memory Skill** is the **Hippocampus Interface** - it enables vector-based memory storage and retrieval via ChromaDB.
+The **Memory Skill** is the **Hippocampus Interface** - it enables vector-based memory storage and retrieval via LanceDB + FastEmbed.
 
 **It does NOT:**
-
 - Execute commands
 - Edit files
 - Make decisions
 
 **It ONLY:**
-
-- Stores insights as vectors in ChromaDB
+- Stores insights as vectors in LanceDB
 - Retrieves memories via semantic search
-- Logs episodes for session tracking
+- Loads skill manifests for capability discovery
 
-## When to Use
+## Architecture
 
-### After Learning Something New
+```
+┌─────────────────────────────────────────────────────────┐
+│  Memory Skill (The Hippocampus Interface)               │
+│  ├── save_memory() → Vectorize & Store (LanceDB)       │
+│  ├── search_memory() → Embed query & Search             │
+│  ├── load_skill() → Load skill manifest into memory     │
+│  └── get_memory_stats() → Memory statistics             │
+└────────────────────┬────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────┐
+│  LanceDB Vector Store                                   │
+│  • Dimension: 384 (BGE-small-en-v1.5)                   │
+│  • Path: .cache/memory/lancedb                          │
+│  • Index: IVF-FLAT                                      │
+└─────────────────────────────────────────────────────────┘
+```
+
+## Usage Examples
+
+### Store an Insight
 
 ```python
 # Store a reusable insight
-remember_insight(content="Use scope 'nix' for flake-related changes", domain="git")
+result = await save_memory(
+    content="Always use semantic versioning for git tags. Format: v1.2.3",
+    metadata={"domain": "git", "source": "test"}
+)
+# Returns: "Saved memory [a1b2c3d4]: Always use semantic versioning..."
 ```
 
-### After Completing a Significant Action
+### Search for Past Learning
 
 ```python
-# Log what you did
-log_episode(action="Refactored skill registry", result="Skills now load from settings.yaml", context="packages/python/agent/src/agent/core/skill_registry.py")
+# Search for relevant memories
+result = await search_memory(
+    query="git tags semantic versioning rule",
+    limit=5
+)
+# Returns: "Found 2 matches for 'git tags semantic versioning rule':\n- [Score: 0.8921] ..."
 ```
 
-### When You Need to Remember
+### Load Skill Manifest
 
 ```python
-# Search for past learnings
-recall("how to add a new skill")
-recall("git commit format")
-recall("nixfmt error solution")
-```
-
-### At End of Session (Consolidation)
-
-```python
-# Harvest key learnings
-harvest_session_insight(context_summary="Implemented knowledge skill for context injection", files_changed=["agent/skills/knowledge/tools.py"])
+# Load a skill's capabilities into memory
+result = await load_skill("git")
+# Returns: "✅ Skill 'git' loaded into semantic memory."
 ```
 
 ## Tools Reference
 
-| Tool                         | Purpose                 | When to Call                |
-| ---------------------------- | ----------------------- | --------------------------- |
-| `remember_insight()`         | Store reusable learning | After discovering a pattern |
-| `log_episode()`              | Log session action      | After completing work       |
-| `recall()`                   | Semantic search         | When you need to remember   |
-| `list_harvested_knowledge()` | Show all insights       | Periodic review             |
-| `harvest_session_insight()`  | Consolidate session     | End of significant session  |
-| `get_memory_stats()`         | Memory statistics       | Diagnostics                 |
+| Tool | Purpose | When to Call |
+|------|---------|--------------|
+| `save_memory` | Store reusable insight | After discovering a pattern |
+| `search_memory` | Semantic search | When you need to remember |
+| `load_skill` | Index skill manifest | During skill sync |
+| `index_memory` | Optimize search index | After bulk imports |
+| `get_memory_stats` | Memory statistics | Diagnostics |
 
-## Output Examples
+## External Usage (e.g., NoteTaker)
 
-### remember_insight()
+The Memory skill can be loaded externally via `load_skill_module`:
 
-```
-✅ Insight stored in Hippocampus:
-[Domain: git]
-"Use scope 'nix' for flake changes..."
-```
+```python
+from common.skills_path import load_skill_module
 
-### recall()
+memory = load_skill_module("memory")
 
-```
-🧠 **Hippocampus Recall**:
-[1] [git] Use scope 'nix' for flake changes
----
-[2] [workflow] Always run 'just validate' before committing
+# Direct function calls
+await memory.save_memory(content, metadata)
+await memory.search_memory(query, limit)
 ```
 
-### get_memory_stats()
+## Path Configuration
 
-```
-🧠 **Memory Statistics**
-Semantic memories (insights): 12
-Episodic memories (actions): 47
-```
-
-## Memory Architecture
-
-**Path Configuration (settings.yaml):**
-
+**settings.yaml:**
 ```yaml
 memory:
-  path: "" # Empty = use prj-spec: {git_toplevel}/.cache/{project}/.memory/
+  path: ""  # Empty = use default: .cache/{project}/.memory/
 ```
 
-**Default Path (prj-spec):**
-
+**Default Path:**
 ```
-{git_toplevel}/.cache/{project}/.memory/
-├── chroma_db/              # ChromaDB persistent storage
-│   ├── semantic_knowledge/ # Insights, learnings, rules
-│   └── episodic_memory/    # Session actions, episodes
-└── active_context/         # Active context (RAM)
-
-┌─────────────────────────────────────────────────────────┐
-│  ChromaDB (Persistent Vector Store)                     │
-│  ├── semantic_knowledge: Insights, learnings, rules     │
-│  └── episodic_memory: Session actions, episodes         │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│  Memory Skill (The Hippocampus Interface)               │
-│  ├── remember_insight() → Vectorize & Store             │
-│  ├── recall() → Embed query & Search                    │
-│  └── log_episode() → Store action/result                │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│  LLM Context                                             │
-│  "I remember that from session..."                      │
-└─────────────────────────────────────────────────────────┘
+{git_toplevel}/.cache/{project}/memory/lancedb/
 ```
 
 ## Anti-Patterns
 
-### ❌ Don't: Use memory as a todo list
+### Don't: Use memory as a todo list
 
 ```python
 # WRONG - Memory is for learnings, not tasks
-remember_insight(content="Fix bug #123")
+save_memory(content="Fix bug #123")
 ```
 
-### ✅ Do: Use memory for reusable knowledge
+### Do: Use memory for reusable knowledge
 
 ```python
 # CORRECT - Capture what you learned
-remember_insight(content="The project uses Conventional Commits with scopes from cog.toml", domain="git")
+save_memory(
+    content="The project uses Conventional Commits with scopes from cog.toml",
+    metadata={"domain": "git"}
+)
 ```
 
-### ❌ Don't: Log every tiny action
+### Don't: Log every tiny action
 
 ```python
 # WRONG - Too granular
-log_episode(action="Opened file", result="Success")
+save_memory(content="Opened file")
 ```
 
-### ✅ Do: Log significant episodes
+### Do: Log significant insights
 
 ```python
-# CORRECT - Log meaningful actions
-log_episode(action="Refactored git skill", result="Removed smart_commit, simplified to executor mode", context="agent/skills/git/tools.py")
+# CORRECT - Log meaningful learnings
+save_memory(
+    content="The project requires 'just validate' before any commit",
+    metadata={"domain": "git", "source": "workflow"}
+)
 ```
 
 ## Integration with Other Skills
 
 ### Knowledge + Memory
 
-```
-# First get context (knowledge skill)
+```python
+# Get context (knowledge skill)
 context = get_development_context()
-# Then store what you learned (memory skill)
-remember_insight("Remember: knowledge skill must be preloaded first", domain="architecture")
+
+# Store what you learned (memory skill)
+await save_memory(
+    "Remember: knowledge skill must be preloaded first",
+    metadata={"domain": "architecture"}
+)
 ```
 
-### Terminal + Memory
+### NoteTaker + Memory
 
+```python
+# NoteTaker uses memory.save_memory() to persist wisdom notes
+# Automatically called at end of OmniAgent session
 ```
-# Execute something
-result = run_task("just validate")
-# Log the outcome
-log_episode(action="Ran just validate", result=result[:100])
-```
+
+## See Also
+
+- [SKILL.md](SKILL.md) - Full routing policy and command reference
+- [scripts/memory.py](scripts/memory.py) - Implementation

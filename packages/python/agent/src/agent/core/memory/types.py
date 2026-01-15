@@ -1,6 +1,6 @@
 """
 agent/core/memory/types.py
-Phase 71: The Memory Mesh - Memory Schema Definitions
+ The Memory Mesh - Memory Schema Definitions
 
 Defines structured types for episodic memory storage in LanceDB.
 

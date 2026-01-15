@@ -1,5 +1,5 @@
 """
-Phase 61: Cognitive Scaffolding - Executor
+ Cognitive Scaffolding - Executor
 
 Task execution loop for Plan-and-Execute pattern.
 遵循 ODF-EP 标准:

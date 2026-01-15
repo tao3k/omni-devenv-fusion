@@ -32,14 +32,14 @@ async def dispatch_standard(
 
     logger = structlog.get_logger(__name__)
 
-    # === Phase 1: Hive Routing ===
+    # ===  Hive Routing ===
     self.ux.start_routing()
     route = await self.router.route_to_agent(
         query=user_query, context=str(history) if history else "", use_cache=True
     )
     self.ux.stop_routing()
 
-    # Phase 18: Show routing result
+    #  Show routing result
     self.ux.show_routing_result(
         agent_name=route.target_agent,
         mission_brief=route.task_brief or user_query,
@@ -47,7 +47,7 @@ async def dispatch_standard(
         from_cache=route.from_cache,
     )
 
-    # Phase 36.8: Auto-trigger SemanticRouter for skill-level routing
+    #  Auto-trigger SemanticRouter for skill-level routing
     # This happens in parallel - skill routing is independent of agent routing
     try:
         router = get_router()
@@ -70,7 +70,7 @@ async def dispatch_standard(
             error=str(e),
         ).warning("skill_routing_failed")
 
-    # Phase 19: Log routing decision with cost estimate
+    #  Log routing decision with cost estimate
     route_info = {
         "target_agent": route.target_agent,
         "task_brief": route.task_brief,
@@ -88,7 +88,7 @@ async def dispatch_standard(
         from_cache=route.from_cache,
     ).info("routing_decision")
 
-    # === Phase 2: Agent Instantiation ===
+    # ===  Agent Instantiation ===
     target_agent_class = self.agent_map.get(route.target_agent)
 
     if not target_agent_class:
@@ -111,7 +111,7 @@ async def dispatch_standard(
         tool_count=len(tools),
     ).debug("agent_instantiated")
 
-    # === Phase 3: Execution with Mission Brief ===
+    # ===  Execution with Mission Brief ===
     task_brief = route.task_brief or user_query
 
     logger.bind(
@@ -120,7 +120,7 @@ async def dispatch_standard(
         brief_preview=task_brief[:50],
     ).debug("executing_agent")
 
-    # Phase 15: Feedback Loop for Coder tasks
+    #  Feedback Loop for Coder tasks
     if self.feedback_enabled and route.target_agent == "coder":
         return await self._execute_with_feedback_loop(
             user_query=user_query,
@@ -143,18 +143,18 @@ async def dispatch_standard(
         )
         self.ux.stop_execution()
 
-        # Phase 18: Show RAG sources
+        #  Show RAG sources
         if result.rag_sources:
             self.ux.show_rag_hits(result.rag_sources)
 
-        # Phase 18: Show agent response
+        #  Show agent response
         self.ux.print_agent_response(result.content, f"{target_agent_class.name.upper()} Output")
 
-        # Phase 19: Log agent output
+        #  Log agent output
         agent_usage = CostEstimator.estimate(task_brief + user_query, result.content)
         self.session.log("agent_action", target_agent_class.name, result.content, agent_usage)
 
-        # Phase 34: Update GraphState with agent response
+        #  Update GraphState with agent response
         self._update_state({"messages": [{"role": "assistant", "content": result.content}]})
 
         logger.bind(

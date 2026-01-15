@@ -54,15 +54,16 @@ def _fallback_replace(content: str, pattern: str, replacement: str) -> str:
 
 
 @skill_script(
-    name="structural_replace",
+    name="replace",
     category="write",
     description="Perform structural replace on content using AST patterns.",
 )
 def structural_replace(
-    content: str,
     pattern: str,
     replacement: str,
     language: str,
+    content: str | None = None,
+    path: str | None = None,
 ) -> str:
     """
     Perform structural replace on content using AST patterns.
@@ -74,14 +75,27 @@ def structural_replace(
     AX Philosophy: "The Surgeon operates with precision, not force."
 
     Args:
-        content: Source code content to modify
         pattern: ast-grep pattern to match (e.g., "connect($ARGS)")
         replacement: Replacement pattern (e.g., "async_connect($ARGS)")
         language: Programming language (python, rust, javascript, typescript)
+        content: Source code content to modify (optional if path provided)
+        path: Path to file to modify (optional if content provided)
 
     Returns:
         Formatted string showing diff and edit locations.
     """
+    # Get content from path if provided
+    if path and not content:
+        from pathlib import Path as PathLib
+
+        file_path = PathLib(path)
+        if not file_path.exists():
+            return f"Error: File not found: {path}"
+        content = file_path.read_text()
+
+    if not content:
+        return "Error: Either content or path must be provided"
+
     if not RUST_AVAILABLE:
         return _fallback_replace(content, pattern, replacement)
 
@@ -98,7 +112,7 @@ def structural_replace(
 
 
 @skill_script(
-    name="structural_preview",
+    name="preview",
     category="read",
     description="Preview structural replace on a file without modifying it.",
 )
@@ -131,7 +145,7 @@ def structural_preview(
 
 
 @skill_script(
-    name="structural_apply",
+    name="apply",
     category="write",
     description="Apply structural replace to a file (MODIFIES THE FILE).",
 )

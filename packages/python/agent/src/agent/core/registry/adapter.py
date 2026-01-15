@@ -1,6 +1,6 @@
 """
 agent/core/registry/adapter.py
-Phase 34: Unified Manifest Adapter - SKILL.md Enhancement
+ Unified Manifest Adapter - SKILL.md Enhancement
 
 Extends the existing SkillManifestLoader with:
 - Smart default injection for Omni-specific fields

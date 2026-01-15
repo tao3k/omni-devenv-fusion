@@ -1,7 +1,7 @@
 """
 agent/core/adaptive_loader.py
-Phase 68-69: Dynamic Context Injection - Adaptive Tool Loader
-Phase 71: Memory Integration
+-69: Dynamic Context Injection - Adaptive Tool Loader
+ Memory Integration
 
 Implements "Core + Dynamic" tool loading strategy:
 - Core Tools: Always present (life support for Agent)
@@ -23,7 +23,7 @@ from typing import Any
 
 from common.config.settings import get_setting
 
-# Lazy imports for memory (Phase 71)
+# Lazy imports for memory
 _cached_memory_interceptor: Any = None
 
 _cached_logger: Any = None
@@ -158,7 +158,7 @@ def get_core_tool_schemas() -> list[dict[str, Any]]:
 
 class AdaptiveLoader:
     """
-    Phase 68: Adaptive Tool Loader.
+     Adaptive Tool Loader.
 
     Implements "Core + Dynamic" loading strategy:
     1. Always includes Core Tools (life support)
@@ -326,7 +326,7 @@ class AdaptiveLoader:
         """
         Get relevant past experiences for context injection.
 
-        Phase 71: The Memory Mesh - Retrieves similar past experiences
+         The Memory Mesh - Retrieves similar past experiences
         to help the agent learn from previous interactions.
 
         Args:
@@ -377,7 +377,7 @@ class AdaptiveLoader:
         """
         Record a new experience to memory.
 
-        Phase 71: Called after task execution to store the experience.
+         Called after task execution to store the experience.
 
         Args:
             user_query: The original user query

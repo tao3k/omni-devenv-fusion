@@ -2,8 +2,8 @@
 src/agent/core/session.py
 Session Manager - The Black Box Recorder.
 
-Phase 19: The Black Box
-Phase 33: ODF-EP v6.0 Core Refactoring
+ The Black Box
+ ODF-EP v6.0 Core Refactoring
 
 Handles persistence of the agent's stream of consciousness.
 
@@ -52,7 +52,7 @@ from common.gitops import get_project_root
 from agent.core.telemetry import TokenUsage, SessionTelemetry
 
 # =============================================================================
-# Lazy Logger Initialization (Phase 32 Import Optimization)
+# Lazy Logger Initialization ( Import Optimization)
 # =============================================================================
 
 _cached_logger = None
@@ -139,7 +139,7 @@ class SessionState(BaseModel):
 
 class SessionManager:
     """
-    Phase 19: The Black Box.
+     The Black Box.
 
     Manages session persistence and provides:
     - Append-only event logging to JSONL

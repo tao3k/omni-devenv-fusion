@@ -32,8 +32,10 @@ def summarize_session(
     Returns:
         Dict with success status and path to generated summary
     """
-    # Ensure knowledge directory exists
-    knowledge_dir = Path("assets/knowledge/sessions")
+    # Ensure knowledge directory exists (git-ignored runtime data)
+    from common.prj_dirs import PRJ_DATA
+
+    knowledge_dir = PRJ_DATA / "knowledge" / "sessions"
     knowledge_dir.mkdir(parents=True, exist_ok=True)
 
     # Extract session data

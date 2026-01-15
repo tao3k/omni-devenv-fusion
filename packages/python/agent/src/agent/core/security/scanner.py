@@ -1,6 +1,6 @@
 """
 agent/core/security/scanner.py
-Phase 28: Security Scanner for skill code analysis.
+ Security Scanner for skill code analysis.
 
 Detects dangerous code patterns using regex and AST analysis.
 """

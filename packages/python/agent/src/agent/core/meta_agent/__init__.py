@@ -1,6 +1,6 @@
 """
 agent/core/meta_agent/__init__.py
-Phase 64: The Meta-Agent (Self-Evolution & JIT)
+ The Meta-Agent (Self-Evolution & JIT)
 
 Meta-Agent enables the Agent to:
 1. Generate new skills on-demand using LLM

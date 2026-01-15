@@ -1,6 +1,6 @@
 """
 agent/core/registry/jit.py
-Phase 29: JIT Skill Acquisition
+ JIT Skill Acquisition
 
 Just-in-Time skill installation and discovery.
 """
@@ -107,7 +107,7 @@ def jit_install_skill(
             from agent.core.registry.loader import SkillLoader
 
             loader = SkillLoader(registry)
-            # Phase 35.3: No MCP server needed for loading
+            #  No MCP server needed for loading
             success, load_msg = loader.load_skill(skill_name, mcp=None)
             loaded = success
         except Exception as e:

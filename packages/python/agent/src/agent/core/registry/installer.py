@@ -1,6 +1,6 @@
 """
 agent/core/registry/installer.py
-Phase 29: Remote Installer
+ Remote Installer
 
 Handle remote skill installation and updates using libvcs + GitPython.
 """

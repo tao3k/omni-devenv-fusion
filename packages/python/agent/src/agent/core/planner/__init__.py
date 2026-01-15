@@ -1,5 +1,5 @@
 """
-Phase 61: Cognitive Scaffolding - Planner Module
+ Cognitive Scaffolding - Planner Module
 
 Planner, Executor, and Hierarchical Memory for long-horizon tasks.
 """

@@ -20,7 +20,7 @@ Usage:
 
 from .ingestor import (
     REPOMIX_XML_PATH,
-    DEFAULT_KNOWLEDGE_DIRS,
+    _get_default_knowledge_dirs,
     get_knowledge_dirs,
     extract_keywords,
     ingest_file,
@@ -31,6 +31,9 @@ from .ingestor import (
     ingest_from_repomix_xml,
     main,
 )
+
+# Backward compatibility alias
+DEFAULT_KNOWLEDGE_DIRS = _get_default_knowledge_dirs()
 
 from .librarian import (
     consult_knowledge_base,
@@ -45,6 +48,7 @@ __all__ = [
     # From ingestor
     "REPOMIX_XML_PATH",
     "DEFAULT_KNOWLEDGE_DIRS",
+    "_get_default_knowledge_dirs",
     "get_knowledge_dirs",
     "extract_keywords",
     "ingest_file",

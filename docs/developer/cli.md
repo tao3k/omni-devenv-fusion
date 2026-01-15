@@ -1,10 +1,8 @@
 # CLI Developer Guide
 
-> **Phase 42: State-Aware Routing** | **Phase 41: Wisdom-Aware Routing** | **Phase 40: Automated Reinforcement Loop** | **Phase 35.2: Modular CLI Architecture** | **Phase 35.1: Simplified Test Framework**
+> **Status**: Active | **Last Updated**: 2026-01-15
 
-> **Phase 42**: CLI route command now displays environment state from ContextSniffer.
-
-## Phase 41/42: Route Command
+## Route Command
 
 The `omni route` command tests and demonstrates the Semantic Router with wisdom-aware and state-aware routing.
 
@@ -74,7 +72,72 @@ Confidence: 0.95
 
 ---
 
-## Phase 40: Automatic Feedback Recording
+## Ingest Command
+
+The `omni ingest` command indexes content into vector store for search and retrieval.
+
+### Commands
+
+| Command     | Description                         |
+| ----------- | ----------------------------------- |
+| `knowledge` | Index documentation into knowledge table |
+| `skills`    | Index skills into skills table      |
+| `all`       | Index knowledge and skills          |
+| `status`    | Show ingest status                  |
+
+### Options
+
+| Option            | Description                     |
+| ----------------- | ------------------------------- |
+| `--dir, -d`       | Documentation directory (knowledge) |
+| `--clear, -c`     | Clear existing index first (skills/all) |
+| `--json, -j`      | Output as JSON                  |
+| `--verbose, -v`   | Show detailed logs              |
+
+### Examples
+
+```bash
+# Index documentation (default: docs/)
+omni ingest knowledge
+
+# Index custom directory
+omni ingest knowledge --dir assets/how-to
+
+# Index skills (with full rebuild)
+omni ingest skills --clear
+
+# Index everything
+omni ingest all
+
+# Check status
+omni ingest status
+```
+
+### Output Example
+
+```
+$ omni ingest knowledge --json
+{
+  "knowledge": {
+    "added": 32,
+    "updated": 0,
+    "deleted": 0,
+    "total": 32
+  }
+}
+```
+
+### Related Files
+
+| File                                   | Purpose                                    |
+| -------------------------------------- | ------------------------------------------ |
+| `agent/cli/commands/ingest.py`         | Ingest command implementation              |
+| `agent/core/knowledge/indexer.py`      | Markdown document indexer                  |
+| `agent/core/vector_store.py`           | Vector store for indexing                  |
+
+---
+
+## Automatic Feedback Recording
 
 When a skill command executes successfully via CLI, the system automatically records positive feedback:
 

@@ -3,22 +3,19 @@ assets/skills/knowledge/scripts/search_docs.py
 Phase 70: The Knowledge Matrix - Project Knowledge Search Tool
 
 Provides semantic + keyword search over project documentation.
-
-Usage:
-    @omni("knowledge.search_project_knowledge", {"query": "git commit 规范", "limit": 3})
+[Omni-Dev 1.0] Added safety check for missing knowledge table.
 """
 
 from __future__ import annotations
 
 import json
-
 from agent.skills.decorators import skill_script
 
 
 @skill_script(
     name="search_project_knowledge",
-    description="[Knowledge RAG] Search project documentation, specs, and guides using hybrid search (semantic + keywords). Use this to find project rules, architecture decisions, and technical documentation.",
-    category="read",
+    description="[Knowledge RAG] Search project documentation, specs, and guides using hybrid search. Use this for architecture, conventions, and how-to guides.",
+    category="knowledge",
 )
 async def search_project_knowledge(
     query: str,
@@ -28,41 +25,16 @@ async def search_project_knowledge(
     """
     Search the project knowledge base for relevant documentation.
 
-    **When to use:**
-    - User asks about project conventions, standards, or rules
-    - User wants to understand architecture or design decisions
-    - User needs to reference technical documentation
-    - User asks "what is our X policy?" or "how do we do Y?"
-
-    **Examples:**
-    - "What's our git commit workflow?"
-    - "Show me the coding standards"
-    - "How do we handle PR reviews?"
-    - "What are the architecture principles?"
-
-    Args:
-        query: Natural language question about the project.
-              Example: "git commit 规范是什么", "coding standards"
-        limit: Maximum results to return (default: 5, max: 10)
-        keywords: Optional keywords to boost relevance.
-                 Example: ["git", "commit"] for git-related docs
-
-    Returns:
-        JSON string containing matching knowledge chunks with:
-        - content: Full chunk text
-        - preview: Truncated preview
-        - doc_path: Source file path
-        - title: Document title
-        - section: Section title
-        - distance: Relevance score (lower = better)
-
-    Usage:
-        @omni("knowledge.search_project_knowledge", {"query": "git commit 规范", "limit": 3})
+    Returns: JSON string with results or advice if table missing.
     """
+    # [FIX] Force convert limit to int, prevent TypeError caused by LLM passing string
+    try:
+        limit = int(limit)
+    except (ValueError, TypeError):
+        limit = 5
     limit = min(max(1, limit), 10)  # Clamp between 1 and 10
     keywords = keywords or []
 
-    # Import here to avoid slow startup
     from agent.core.vector_store import get_vector_memory
 
     vm = get_vector_memory()
@@ -81,7 +53,7 @@ async def search_project_knowledge(
                 {
                     "query": query,
                     "results": [],
-                    "message": "No matching knowledge found. Try different keywords or a broader query.",
+                    "message": "No matching knowledge found in documentation. Try searching memory/experience instead.",
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -97,9 +69,7 @@ async def search_project_knowledge(
                     "doc_path": r.get("doc_path", ""),
                     "title": r.get("title", ""),
                     "section": r.get("section", ""),
-                    "score": round(
-                        1.0 - r.get("distance", 1.0), 3
-                    ),  # Convert distance to similarity
+                    "score": round(1.0 - r.get("distance", 1.0), 3),
                 }
             )
 
@@ -113,6 +83,16 @@ async def search_project_knowledge(
         return json.dumps(response, ensure_ascii=False, indent=2)
 
     except Exception as e:
+        error_msg = str(e)
+        # [FIX] Handle missing table gracefully
+        if "Table not found" in error_msg or "knowledge" in error_msg.lower():
+            return json.dumps({
+                "query": query,
+                "error": "Knowledge Base Not Initialized",
+                "message": "The documentation index (knowledge table) is empty. Please run 'omni ingest' to build it.",
+                "suggestion": "Try using 'search_memory' to find past experiences instead."
+            }, indent=2)
+
         error_response = {
             "query": query,
             "error": str(e),
@@ -122,24 +102,18 @@ async def search_project_knowledge(
 
 
 def format_knowledge_results(json_output: str) -> str:
-    """
-    Format knowledge search results as markdown for display.
-
-    Args:
-        json_output: Raw JSON output from search_project_knowledge.
-
-    Returns:
-        Formatted markdown string.
-    """
+    """Format knowledge search results as markdown for display."""
     try:
         data = json.loads(json_output)
 
         if "error" in data:
-            return f"**Search Error**: {data['error']}"
+            msg = data.get('message', '')
+            sugg = data.get('suggestion', '')
+            return f"**Knowledge Search Error**: {data['error']}\n\n{msg}\n{sugg}"
 
         results = data.get("results", [])
         if not results:
-            return "**No matching knowledge found**"
+            return f"**No documentation found for**: `{data.get('query')}`"
 
         lines = [
             f"# Knowledge Search Results",

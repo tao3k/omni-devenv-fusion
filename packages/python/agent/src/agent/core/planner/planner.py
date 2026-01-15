@@ -1,5 +1,5 @@
 """
-Phase 61: Cognitive Scaffolding - Planner
+ Cognitive Scaffolding - Planner
 
 Main Planner class for task decomposition and planning.
 遵循 ODF-EP 标准:
@@ -26,7 +26,7 @@ class Planner:
     The Planner uses LLM-based decomposition to break down user goals
     into ordered, independent tasks that can be executed by the Executor.
 
-    Phase 61: Also provides dynamic workflow generation via WorkflowArchitect.
+     Also provides dynamic workflow generation via WorkflowArchitect.
 
     Attributes:
         decomposer: TaskDecomposer instance for decomposition.
@@ -53,7 +53,7 @@ class Planner:
             model=model,
         )
 
-        # Phase 61: Workflow Architect for dynamic graph generation
+        #  Workflow Architect for dynamic graph generation
         self.architect = WorkflowArchitect(
             inference_client=inference_client,
             tools=available_tools,
@@ -204,7 +204,7 @@ class Planner:
             "status": plan.status.value,
         }
 
-    # Phase 61: Dynamic Workflow Methods
+    #  Dynamic Workflow Methods
     async def create_dynamic_workflow(
         self,
         goal: str,
@@ -225,7 +225,7 @@ class Planner:
         logger.info(f"Creating dynamic workflow for: {goal[:50]}...")
         return await self.architect.design_workflow(goal, context or "")
 
-    # Phase 63: Knowledge Retrieval Methods
+    #  Knowledge Retrieval Methods
     async def load_relevant_knowledge(
         self,
         query: str,
@@ -233,7 +233,7 @@ class Planner:
     ) -> str:
         """Load relevant past knowledge for the query.
 
-        Phase 63: Long-term memory retrieval for new sessions.
+         Long-term memory retrieval for new sessions.
 
         Args:
             query: The query to search knowledge for.
@@ -243,8 +243,9 @@ class Planner:
             Markdown-formatted relevant knowledge, or empty string if none found.
         """
         from pathlib import Path
+        from common.prj_dirs import PRJ_DATA
 
-        knowledge_dir = Path("assets/knowledge/harvested")
+        knowledge_dir = PRJ_DATA("knowledge", "harvested")
         if not knowledge_dir.exists():
             return ""
 

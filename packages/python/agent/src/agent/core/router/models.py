@@ -2,7 +2,7 @@
 src/agent/core/router/models.py
 Router Models - Data structures for routing decisions.
 
-Phase 14: Models for both Tool Routing (SemanticRouter) and Agent Routing (HiveRouter).
+ Models for both Tool Routing (SemanticRouter) and Agent Routing (HiveRouter).
 
 Usage:
     # Models are self-contained, no imports needed
@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 
 # =============================================================================
-# Phase 14: Tool Routing Models
+#  Tool Routing Models
 # =============================================================================
 
 
@@ -31,11 +31,11 @@ class RoutingResult:
     - mission_brief: Actionable directive for the Worker
     - reasoning: Audit trail of why these skills were chosen
     - confidence: Routing confidence (0.0-1.0)
-    - suggested_skills: Skills found via Vector Fallback (Phase 36.2) - LOCAL only
-    - remote_suggestions: Remote skills found that need installation (Phase 36.8)
+    - suggested_skills: Skills found via Vector Fallback  - LOCAL only
+    - remote_suggestions: Remote skills found that need installation
     - from_cache: Whether this was a cache hit
     - timestamp: When routing decision was made
-    - env_snapshot: Environment state from ContextSniffer (Phase 42)
+    - env_snapshot: Environment state from ContextSniffer
     """
 
     selected_skills: List[str]
@@ -43,10 +43,10 @@ class RoutingResult:
     reasoning: str
     confidence: float = 0.5
     suggested_skills: List[str] = field(default_factory=list)
-    remote_suggestions: List[Dict[str, Any]] = field(default_factory=list)  # Phase 36.8
+    remote_suggestions: List[Dict[str, Any]] = field(default_factory=list)  #
     from_cache: bool = False
     timestamp: float = field(default_factory=time.time)
-    env_snapshot: str = ""  # [Phase 42] Environment state snapshot
+    env_snapshot: str = ""  # Environment state snapshot
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -63,7 +63,7 @@ class RoutingResult:
 
 
 # =============================================================================
-# Phase 14: Agent Routing Models
+#  Agent Routing Models
 # =============================================================================
 
 
@@ -117,10 +117,10 @@ class AgentRoute(BaseModel):
     - target_agent: Which agent should handle this request
     - confidence: How confident the routing decision is
     - reasoning: Why this agent was chosen
-    - task_brief: Commander's Intent for the agent (Phase 14)
+    - task_brief: Commander's Intent for the agent
     - constraints: List of constraints for the task
     - relevant_files: Files relevant to the task
-    - from_cache: Whether this was a cache hit (Phase 18)
+    - from_cache: Whether this was a cache hit
     """
 
     target_agent: str  # "coder", "reviewer", "orchestrator"
@@ -129,7 +129,7 @@ class AgentRoute(BaseModel):
     task_brief: str = ""
     constraints: List[str] = []
     relevant_files: List[str] = []
-    from_cache: bool = False  # Phase 18: Cache hit indicator
+    from_cache: bool = False  #  Cache hit indicator
 
 
 # =============================================================================

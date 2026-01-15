@@ -11,6 +11,7 @@
 - [Test Structure](#test-structure)
 - [Rust Tests](#rust-tests)
 - [Python Tests](#python-tests)
+- [Pytest Plugin for Skill Tests](#pytest-plugin-for-skill-tests)
 - [Utilities](#utilities)
 - [Fixtures Reference](#fixtures-reference)
 - [Testing Patterns](#testing-patterns)
@@ -136,6 +137,395 @@ python -m pytest packages/python/agent/src/agent/tests/ -v --durations=10
 | ----------------------- | ----------------------------------- |
 | `test_kernel_stress.py` | Kernel resilience, load latency     |
 | `test_system_stress.py` | System-wide stress, RAG performance |
+
+### Sync Tests (Phase 68+)
+
+| File                        | Tests                                        |
+| --------------------------- | -------------------------------------------- |
+| `test_vector_store_sync.py` | Path normalization, idempotency, consistency |
+
+#### Key Sync Test Classes
+
+| Class                     | Purpose                                  |
+| ------------------------- | ---------------------------------------- |
+| `TestSyncDiffAlgorithm`   | Pure function tests for diff logic       |
+| `TestPathNormalization`   | Path format handling (absolute/relative) |
+| `TestSyncIdempotency`     | Running sync twice should be stable      |
+| `TestSyncPathConsistency` | DB paths match filesystem paths          |
+| `TestSyncEdgeCases`       | Empty DB/filesystem, special chars       |
+
+#### Running Sync Tests
+
+```bash
+# Run all sync tests
+python -m pytest packages/python/agent/src/agent/tests/unit/test_vector_store_sync.py -v
+
+# Run only path normalization tests
+python -m pytest packages/python/agent/src/agent/tests/unit/test_vector_store_sync.py::TestPathNormalization -v
+
+# Run idempotency tests (integration)
+python -m pytest packages/python/agent/src/agent/tests/unit/test_vector_store_sync.py::TestSyncIdempotency -v
+```
+
+---
+
+## Pytest Plugin for Skill Tests
+
+> Phase 63+: First-class pytest plugin that automatically discovers and registers skill fixtures.
+> Inspired by Prefect's test harness pattern - no conftest.py needed!
+
+### Quick Start
+
+Add the plugin to your `pyproject.toml`:
+
+```toml
+[tool.pytest.ini_options]
+pytest_plugins = ["agent.testing.plugin"]
+```
+
+### Automatic Skill Fixtures
+
+The plugin automatically scans `assets/skills/` and creates fixtures for each skill:
+
+```python
+# Test file: assets/skills/git/tests/test_git.py
+
+def test_git_status(git):
+    """Directly use 'git' fixture - loaded automatically!"""
+    result = git.status()
+    assert result.success
+
+def test_git_init(git):
+    """Another skill fixture - works the same way"""
+    result = git.init()
+    assert result.success
+```
+
+### Fixture Names
+
+| Fixture Name         | Skill Module                      | Description           |
+| -------------------- | --------------------------------- | --------------------- |
+| `git`                | `agent.skills.git`                | Git operations skill  |
+| `filesystem`         | `agent.skills.filesystem`         | File I/O skill        |
+| `knowledge`          | `agent.skills.knowledge`          | RAG knowledge skill   |
+| `structural_editing` | `agent.skills.structural_editing` | AST refactoring skill |
+
+### Reserved Fixture Names
+
+Some names conflict with pytest built-ins. Use `skills.git` instead:
+
+```python
+# WRONG - conflicts with pytest fixture
+def test_git_status(git):
+    pass
+
+# CORRECT - use skills prefix
+def test_git_status(skills):
+    skills.git.status()
+```
+
+---
+
+### SkillsContext - Unified Access
+
+Access all skills via the `skills` fixture with IDE type hints:
+
+```python
+def test_multiple_skills(skills):
+    """Access all skills through unified context"""
+    # Git operations
+    git_status = skills.git.status()
+
+    # File operations
+    skills.filesystem.read_file("path/to/file")
+
+    # Knowledge search
+    results = skills.knowledge.search("query")
+```
+
+---
+
+### Skill Test Patterns
+
+#### Pattern 1: Direct Skill Fixture
+
+```python
+# assets/skills/git/tests/test_git.py
+
+def test_status_returns_info(git):
+    """Simple test using git fixture directly"""
+    result = git.status()
+    assert result.success is True
+    assert isinstance(result.data, dict)
+```
+
+#### Pattern 2: Multiple Skills
+
+```python
+def test_file_and_git_workflow(filesystem, git):
+    """Test workflow spanning multiple skills"""
+    # Read file content
+    content = filesystem.read_file("README.md")
+
+    # Git operations
+    git.init()
+    git.add("README.md")
+```
+
+#### Pattern 3: SkillsContext (recommended for type hints)
+
+```python
+def test_complex_workflow(skills):
+    """Use SkillsContext for better IDE support"""
+    # All skills available with autocomplete
+    status = skills.git.status()
+    files = skills.filesystem.list_directory(".")
+
+    # Chain operations
+    if status.data.get("clean"):
+        skills.git.commit("Auto-save")
+```
+
+---
+
+### Skill Fixture API
+
+Each skill fixture provides:
+
+| Property         | Type               | Description              |
+| ---------------- | ------------------ | ------------------------ |
+| `skill.name`     | str                | Skill name (e.g., "git") |
+| `skill.commands` | dict[str, Command] | Available commands       |
+| `skill.metadata` | SkillMetadata      | Skill metadata           |
+
+#### Command Object
+
+```python
+# Access skill commands
+git = git_fixture  # or skills.git
+
+# List available commands
+for name, cmd in git.commands.items():
+    print(f"  {name}: {cmd.description}")
+
+# Call command directly
+result = git.commands["status"].func()
+```
+
+---
+
+### Base Fixtures
+
+The plugin provides these base fixtures automatically:
+
+| Fixture        | Type          | Description                  |
+| -------------- | ------------- | ---------------------------- |
+| `skills_root`  | Path          | `assets/skills/` directory   |
+| `project_root` | Path          | Project root directory       |
+| `skills`       | SkillsContext | Unified access to all skills |
+| `skills_dir`   | Path          | Alias for `skills_root`      |
+
+```python
+def test_paths(skills_root, project_root):
+    """Base fixtures for path operations"""
+    assert skills_root.name == "skills"
+    assert (project_root / "assets/skills").exists()
+```
+
+---
+
+### Writing Skill Integration Tests
+
+Place skill tests in the skill's `tests/` directory:
+
+```
+assets/skills/
+├── git/
+│   ├── scripts/
+│   │   └── status.py
+│   ├── tests/
+│   │   ├── __init__.py
+│   │   └── test_git.py        # Skill-specific tests
+│   └── SKILL.md
+```
+
+#### Example: Complete Skill Test File
+
+```python
+"""Tests for git skill."""
+
+import pytest
+
+
+def _get_git_skill():
+    """Helper to get git skill (alternative to fixture)."""
+    from agent.core.skill_manager import get_skill_manager
+
+    manager = get_skill_manager()
+    if not manager._loaded:
+        manager.load_all()
+    return manager.skills.get("git")
+
+
+class TestGitStatus:
+    """Tests for git status command."""
+
+    def test_status_returns_result(self, git):
+        """Test that status command returns expected structure."""
+        result = git.status()
+
+        assert result.success
+        assert hasattr(result, 'data')
+
+    def test_status_contains_branch(self, git):
+        """Test that status includes branch info."""
+        result = git.status()
+
+        if result.success:
+            assert "branch" in result.data or "current_branch" in result.data
+
+
+class TestGitSkillRegistration:
+    """Tests for skill loading and registration."""
+
+    def test_git_skill_loaded(self, git):
+        """Verify git skill is properly loaded."""
+        assert git is not None
+        assert git.name == "git"
+
+    def test_git_has_expected_commands(self, git):
+        """Verify git has expected commands registered."""
+        command_names = list(git.commands.keys())
+
+        assert len(command_names) >= 3
+        assert "status" in command_names
+        assert "init" in command_names
+
+    def test_commands_have_valid_schemas(self, git):
+        """Verify all commands have valid input schemas."""
+        for cmd_name, cmd in git.commands.items():
+            assert isinstance(cmd.input_schema, dict)
+            assert "properties" in cmd.input_schema
+```
+
+---
+
+### Running Skill Tests
+
+```bash
+# Run all skill tests
+uv run pytest assets/skills/*/tests/ -v
+
+# Run specific skill tests
+uv run pytest assets/skills/git/tests/ -v
+
+# Run single test file
+uv run pytest assets/skills/git/tests/test_git.py::TestGitStatus::test_status_returns_result -v
+
+# Run with coverage
+uv run pytest assets/skills/*/tests/ --cov=agent.skills
+```
+
+---
+
+### Test Data
+
+Place test data in the skill's `tests/test_data/` directory:
+
+```
+assets/skills/structural_editing/
+├── scripts/
+├── tests/
+│   ├── test_structural_editing.py
+│   ├── test_data/
+│   │   ├── sample.py
+│   │   ├── sample.rs
+│   │   └── sample.js
+```
+
+```python
+from pathlib import Path
+
+def _get_test_file(name):
+    """Get path to test file in test_data directory."""
+    return Path(__file__).parent / "test_data" / name
+
+
+def test_with_sample_file(git):
+    """Test using sample file from test_data."""
+    sample_file = _get_test_file("sample.py")
+    content = sample_file.read_text()
+
+    # Use content in test
+    assert "def" in content
+```
+
+---
+
+### Troubleshooting
+
+#### Issue: Fixture Not Found
+
+**Symptom**: `Fixture 'xxx' not found`
+
+**Solution**: Ensure the skill exists in `assets/skills/`:
+
+```bash
+ls assets/skills/  # Check skill directories
+```
+
+#### Issue: Import Error for agent.skills
+
+**Symptom**: `ImportError: attempted relative import with no known parent package`
+
+**Cause**: The plugin handles this automatically, but tests outside the pytest plugin context may fail.
+
+**Solution**: Use SkillManager directly:
+
+```python
+from agent.core.skill_manager import get_skill_manager
+
+def test_skill():
+    manager = get_skill_manager()
+    skill = manager.skills.get("git")
+```
+
+#### Issue: Skill Has No Scripts
+
+**Symptom**: `Skill 'xxx' has no scripts/*.py (tools.py pattern removed)`
+
+**Cause**: Skill doesn't have `scripts/*.py` files with `@skill_script` decorators.
+
+**Solution**: Ensure skill follows Phase 63+ structure:
+
+```
+assets/skills/git/
+├── scripts/
+│   ├── __init__.py
+│   ├── status.py      # Has @skill_script decorator
+│   └── init.py        # Has @skill_script decorator
+└── SKILL.md
+```
+
+#### Issue: Command Returns None
+
+**Symptom**: Command fixture exists but returns None
+
+**Cause**: Skill failed to load or command function is None.
+
+**Solution**: Check skill loading:
+
+```python
+from agent.core.skill_manager import get_skill_manager
+
+manager = get_skill_manager()
+skill = manager.skills.get("git")
+
+if skill:
+    print(f"Commands: {list(skill.commands.keys())}")
+else:
+    print("Skill failed to load")
+```
 
 ---
 

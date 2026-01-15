@@ -209,6 +209,9 @@ def _register_skill_fixture(skill_name: str, skills_root: Path):
     """
     Dynamically create and register a fixture for a skill.
 
+    Phase 63+ only: Only supports scripts/*.py pattern with @skill_script decorators.
+    Legacy tools.py pattern is no longer supported.
+
     Collision Detection:
         - Checks against RESERVED_FIXTURES and PYTEST_BUILTIN_FIXTURES
         - Logs warning if skill name conflicts with pytest built-ins
@@ -226,33 +229,28 @@ def _register_skill_fixture(skill_name: str, skills_root: Path):
 
     @pytest.fixture(name=skill_name, scope="function")
     def _skill_fixture():
-        """Dynamic fixture that loads skill/tools.py on demand."""
-        tools_path = skills_root / skill_name / "tools.py"
-        if not tools_path.exists():
-            pytest.skip(f"Skill '{skill_name}' missing tools.py")
+        """Dynamic fixture that loads skill via SkillManager.
+
+        Phase 63+ only: skills/*/scripts/*.py with @skill_script decorators.
+        """
+        scripts_path = skills_root / skill_name / "scripts"
+
+        if not scripts_path.exists() or not any(scripts_path.glob("*.py")):
+            pytest.skip(f"Skill '{skill_name}' has no scripts/*.py (tools.py pattern removed)")
 
         # Set up package context BEFORE loading (enables agent.skills.git.scripts imports)
         _setup_skill_package_context(skill_name, skills_root)
 
-        module_name = f"_skill_{skill_name}_module"
-        spec = importlib.util.spec_from_file_location(module_name, str(tools_path))
-        if spec is None or spec.loader is None:
-            pytest.skip(f"Skill '{skill_name}' cannot be loaded")
+        # Phase 63+ mode: scripts/*.py with @skill_script
+        from agent.core.skill_manager import get_skill_manager
 
-        # Check if already loaded
-        if module_name in sys.modules:
-            return sys.modules[module_name]
+        manager = get_skill_manager()
+        skill = manager.skills.get(skill_name)
+        if skill is None:
+            pytest.skip(f"Skill '{skill_name}' failed to load")
+        return skill
 
-        # Load and cache
-        module = importlib.util.module_from_spec(spec)
-        # Set __package__ for proper import resolution
-        module.__package__ = f"agent.skills.{skill_name}"
-        sys.modules[module_name] = module
-        spec.loader.exec_module(module)
-        return module
-
-    # Black magic: Register fixture globally so pytest can find it
-    # This makes `def test_xxx(git):` work without any imports
+    # Register fixture globally
     setattr(sys.modules[__name__], skill_name, _skill_fixture)
 
 

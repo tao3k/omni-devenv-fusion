@@ -1,0 +1,188 @@
+# Omni Loop (CCA Runtime)
+
+> **Status**: Active (Current)
+> **Version**: v1.0 | 2026-01-15
+
+## Overview
+
+Omni Loop is the **CCA (Cognitive Code Agent) Runtime** that integrates all system components into a cohesive agent execution environment.
+
+### Core Components
+
+| Component      | Module                        | Purpose                                  |
+| -------------- | ----------------------------- | ---------------------------------------- |
+| **Conductor**  | `context_orchestrator.py`     | Layered context assembly                 |
+| **Librarian**  | `vector_store.py`             | Semantic memory & knowledge              |
+| **Note-Taker** | `note_taker.py`               | Session reflection & wisdom distillation |
+| **JIT Loader** | `skill_manager/jit_loader.py` | Just-in-time skill loading               |
+
+## CCA Cycle
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      CCA Runtime Cycle                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│    ┌──────────┐    ┌──────────┐    ┌──────────┐               │
+│    │ Observe  │ ─► │  Orient  │ ─► │  Decide  │               │
+│    │ Context  │    │  Route   │    │  LLM     │               │
+│    └──────────┘    └──────────┘    └──────────┘               │
+│         ▲                                     │                │
+│         │                                     ▼                │
+│    ┌──────────┐    ┌──────────┐    ┌──────────┐               │
+│    │ Reflect  │ ◄── │   Act    │ ◄── │  Tool    │               │
+│    │  Wisdom  │    │ Execute  │    │  Call    │               │
+│    └──────────┘    └──────────┘    └──────────┘               │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Cycle Phases
+
+1. **Observe**: Build layered context (skills + knowledge + memory)
+2. **Orient**: Semantic routing to select appropriate skills
+3. **Decide**: LLM reasoning with context
+4. **Act**: Execute tools via JIT loader
+5. **Reflect**: Distill wisdom and save to memory
+
+## Trinity Architecture Integration
+
+Omni Loop implements the **Trinity Architecture** with three logical roles:
+
+| Role             | Responsibility         | Example Tools             |
+| ---------------- | ---------------------- | ------------------------- |
+| **Orchestrator** | Planning & Strategy    | Context assembly, Routing |
+| **Coder**        | Reading & Writing      | File operations, Search   |
+| **Executor**     | Execution & Operations | Git, Terminal, Shell      |
+
+## CLI Usage
+
+### Interactive REPL
+
+```bash
+uv run omni run repl
+# Enter interactive mode for continuous task execution
+```
+
+### Single Task Execution
+
+```bash
+uv run omni run exec "fix the bug" --steps 3
+# Execute a single task with max 3 steps
+```
+
+### Available Options
+
+| Option        | Description                         |
+| ------------- | ----------------------------------- |
+| `-s, --steps` | Maximum steps (default: 1, max: 20) |
+
+## Ingest Command
+
+Index content into vector store for search and retrieval:
+
+```bash
+# Index documentation
+omni ingest knowledge                    # Index docs/ (default)
+omni ingest knowledge --dir assets/how-to  # Custom directory
+
+# Index skills
+omni ingest skills                       # Index skill tools
+omni ingest skills --clear               # Full rebuild
+
+# Index everything
+omni ingest all                          # Knowledge + Skills
+
+# Check status
+omni ingest status                       # Show ingest status
+omni ingest status --json                # JSON output
+```
+
+### Ingest Options
+
+| Command     | Options                          | Description                  |
+| ----------- | -------------------------------- | ---------------------------- |
+| `knowledge` | `--dir`, `--json`, `--verbose`   | Index Markdown documentation |
+| `skills`    | `--clear`, `--json`, `--verbose` | Index skill tools            |
+| `all`       | `--clear`, `--json`, `--verbose` | Index all content            |
+| `status`    | `--json`                         | Show ingest status           |
+
+## Enriched Output
+
+Omni Loop produces a **CCA Session Report** with detailed metrics:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                  ✨ CCA Session Report ✨                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Task: fix the bug                                               │
+│  Session ID: abc123                                             │
+│                                                                 │
+│  ┌────────────────┬────────────────┐                           │
+│  │ Metric         │ Value          │                           │
+│  ├────────────────┼────────────────┤                           │
+│  │ Steps          │ 3              │                           │
+│  │ Tools          │ 5              │                           │
+│  │ Est. Tokens    │ ~1250          │                           │
+│  └────────────────┴────────────────┘                           │
+│                                                                 │
+│  ┌────────────────┬────────────────┐                           │
+│  │ Tool           │ Count          │                           │
+│  ├────────────────┼────────────────┤                           │
+│  │ git_status     │ 1              │                           │
+│  │ read_file      │ 2              │                           │
+│  │ edit_file      │ 2              │                           │
+│  └────────────────┴────────────────┘                           │
+│                                                                 │
+│  Reflection & Outcome:                                          │
+│  Fixed the off-by-one error in the loop counter.               │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Report Metrics
+
+| Metric          | Description                     |
+| --------------- | ------------------------------- |
+| **Steps**       | Number of execution steps taken |
+| **Tools**       | Total tool invocations          |
+| **Est. Tokens** | Estimated token consumption     |
+| **Tool Usage**  | Per-tool invocation counts      |
+
+## Trinity Loop (Knowledge → Memory)
+
+Omni Loop implements a complete read/write cycle:
+
+```
+1. Agent calls knowledge.search_project_knowledge
+   └─ Returns: docs + hint "Try memory.search_memory"
+
+2. Per system_context.xml, agent calls memory.search_memory
+   └─ Returns: past experiences with similar patterns
+
+3. Agent uses context to solve task
+
+4. After completion, Note-Taker distills wisdom
+   └─ Saves to memory via save_memory
+```
+
+## File Structure
+
+```
+packages/python/agent/src/agent/core/
+├── omni_agent.py           # Main CCA runtime
+├── context_orchestrator.py # Layered context assembly
+├── note_taker.py          # Session reflection
+├── vector_store.py        # Semantic memory
+└── skill_manager/
+    ├── jit_loader.py      # JIT skill loading
+    └── watcher.py         # File change detection
+```
+
+## Related Documentation
+
+- [Trinity Core](trinity-core.md) (Architecture foundation)
+- [Knowledge Matrix](knowledge-matrix.md) (Documentation RAG)
+- [Memory Mesh](memory-mesh.md) (Episodic memory)
+- [Skill Standard](skill-standard.md) (Skill format)

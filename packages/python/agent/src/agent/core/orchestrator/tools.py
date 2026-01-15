@@ -2,7 +2,7 @@
 agent/core/orchestrator/tools.py
 Tool Registry for Agent Dependency Injection.
 
-Phase 19: Maps skill tools to agent capabilities using the Skill Registry.
+ Maps skill tools to agent capabilities using the Skill Registry.
 """
 
 from typing import Dict, Any

@@ -1,6 +1,6 @@
 """
 agent/mcp_server.py
-Phase 35.3: High-Performance MCP Server (Official SDK)
+ High-Performance MCP Server (Official SDK)
 
 Architecture:
 - Pure mcp.server.Server (no FastMCP overhead)
@@ -83,7 +83,7 @@ def json_loads(data: str | bytes) -> Any:
 server = Server("omni-agent")
 
 
-# --- Execute Tool (Phase 36: Trinity v2.0) ---
+# --- Execute Tool ( Trinity v2.0) ---
 
 
 @server.list_tools()
@@ -91,7 +91,7 @@ async def handle_list_tools() -> list[Tool]:
     """
     List all available tools from loaded skills plus the execute meta-tool.
 
-    Phase 36: The execute tool is a meta-tool that allows executing any skill command
+     The execute tool is a meta-tool that allows executing any skill command
     via the pattern execute("skill.command", {"arg": "value"}).
     """
     from agent.core.skill_manager import get_skill_manager
@@ -105,10 +105,25 @@ async def handle_list_tools() -> list[Tool]:
     tools: list[Tool] = []
 
     # Step 1: Add all skill commands from SkillManager (Phase 73 fix)
+    # Format: skill.command (only replace first underscore with dot)
     seen_names: set[str] = set()
     for skill_name, skill in manager.skills.items():
         for cmd_name, cmd in skill.commands.items():
-            full_name = f"{skill_name}.{cmd_name}"
+            # Strip skill prefix if present (e.g., "git_commit" -> "commit")
+            if cmd_name.startswith(f"{skill_name}_"):
+                # Remove skill prefix: "git_commit" -> "commit"
+                base_name = cmd_name[len(skill_name) + 1 :]
+            elif cmd_name.startswith(f"{skill_name}."):
+                # Already has skill prefix with dot: "git.status" -> "status"
+                base_name = cmd_name[len(skill_name) + 1 :]
+            else:
+                # No skill prefix, use as-is
+                base_name = cmd_name
+
+            # Only replace first underscore with dot for skill.command format
+            # Keep remaining underscores intact: "commit_no_verify" stays as-is
+            full_name = f"{skill_name}.{base_name}"
+
             if full_name in seen_names:
                 continue
             seen_names.add(full_name)
@@ -179,7 +194,7 @@ async def server_lifespan():
         logger.warning(f"⚠️  [Lifecycle] Skill preload failed: {e}")
         # Continue - skills can be loaded on-demand
 
-    # Phase 36.5: Register Hot-Reload Observers
+    #  Register Hot-Reload Observers
     # This ensures MCP clients receive tool list updates and vector index stays in sync
     from agent.core.skill_manager import get_skill_manager
 
@@ -193,7 +208,7 @@ async def server_lifespan():
     manager.subscribe(_update_search_index)
     logger.info("🔍 [Lifecycle] Index Sync observer registered (ChromaDB)")
 
-    # Phase 65: Start Skill Watcher for auto-sync
+    #  Start Skill Watcher for auto-sync
     from agent.core.skill_manager.watcher import start_global_watcher
 
     try:
@@ -207,7 +222,7 @@ async def server_lifespan():
     try:
         yield
     finally:
-        # Phase 65: Stop Skill Watcher
+        #  Stop Skill Watcher
         from agent.core.skill_manager.watcher import stop_global_watcher
 
         stop_global_watcher()
@@ -287,7 +302,7 @@ def _get_tool_name(original_name: str, description: str = "") -> tuple[str, str]
 
 async def _notify_tools_changed(skill_name: str, change_type: str):
     """
-    Phase 36.5: Observer callback for skill changes.
+     Observer callback for skill changes.
 
     Called when SkillManager loads/unloads/reloads skills.
     Triggers MCP client to refresh tool list via send_tool_list_changed().
@@ -317,7 +332,7 @@ _index_sync_lock: bool = False
 
 async def _update_search_index(skill_name: str, change_type: str):
     """
-    Phase 66: Index Sync observer for Rust-backed VectorMemory.
+     Index Sync observer for Rust-backed VectorMemory.
 
     Keeps the vector search index in sync with runtime skill changes.
     Uses Rust-backed sync_skills() for incremental updates based on file hashes.

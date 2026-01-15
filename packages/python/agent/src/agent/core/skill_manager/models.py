@@ -1,12 +1,12 @@
 """
 src/agent/core/skill_manager/models.py
-Phase 29: Skill Manager Models - DTOs for skill commands and skills.
+ Skill Manager Models - DTOs for skill commands and skills.
 
 Contains:
 - SkillCommand: A single command exposed by a skill
 - Skill: A loaded skill with commands and context
 
-Phase 62: Added script mode support for @skill_script decorated commands.
+ Added script mode support for @skill_script decorated commands.
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ class SkillCommand:
     Note: We don't inherit from ISkillCommand protocol here to avoid
     dataclass field ordering issues with Protocol base classes.
 
-    Phase 62: Supports script mode for @skill_script decorated functions
+     Supports script mode for @skill_script decorated functions
     with built-in dependency injection and retry logic.
     """
 
@@ -60,14 +60,14 @@ class SkillCommand:
     category: str = "general"
     _skill_name: str = ""
     input_schema: dict[str, Any] = field(default_factory=dict)
-    # Phase 62: Script mode fields
+    #  Script mode fields
     _script_mode: bool = False
     _inject_root: bool = False
     _inject_settings: list[str] = field(default_factory=list)
     _retry_on: tuple[type[Exception], ...] = (ConnectionError, TimeoutError)
     _max_attempts: int = 3
 
-    # Phase 61: Caching support
+    #  Caching support
     cache_ttl: float = 0.0  # Time-to-live in seconds. 0 = no caching.
     pure: bool = False  # If True, implies side-effect free and safely cacheable.
 

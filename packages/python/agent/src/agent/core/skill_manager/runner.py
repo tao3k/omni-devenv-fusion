@@ -1,6 +1,6 @@
 """
 src/agent/core/skill_manager/runner.py
-Phase 62: Script Mode Runner for Sandboxed Subprocess Execution.
+ Script Mode Runner for Sandboxed Subprocess Execution.
 
 Provides isolated subprocess execution for skills that need:
 - Dependency isolation (separate venv/environment)
@@ -95,7 +95,7 @@ class ScriptModeRunner:
         try:
             # Check if we should run in subprocess
             # For now, always run in-process for simplicity
-            # Phase 62: Could add execution_mode check here
+            #  Could add execution_mode check here
             logger.debug(f"Running {command} in-process (skill at {skill_path})")
 
             result = await self._run_in_process(command, args)

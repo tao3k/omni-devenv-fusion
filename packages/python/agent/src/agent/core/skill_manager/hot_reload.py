@@ -1,7 +1,7 @@
 """
 src/agent/core/skill_manager/hot_reload.py
-Phase 29: Hot Reload Mixin.
-Phase 67: Simplified for JIT/Meta-Agent Era (Removed syntax validation).
+ Hot Reload Mixin.
+ Simplified for JIT/Meta-Agent Era (Removed syntax validation).
 
 Simplified hot reload that relies on:
 - Python's native import mechanism for error handling
@@ -33,7 +33,7 @@ class HotReloadMixin:
     """
     Mixin for checking and reloading skills when files change.
 
-    Simplified in Phase 67:
+    Simplified in
     - Removed _validate_syntax() - Python import will catch errors
     - Simplified _reload_skill() - direct reload, failures propagate up
     - Keep _ensure_fresh() - core mtime-based trigger mechanism
@@ -54,7 +54,7 @@ class HotReloadMixin:
         """
         Check if a skill needs reloading and reload it if necessary.
 
-        Phase 67: Simplified - only checks mtime, no syntax validation.
+         Simplified - only checks mtime, no syntax validation.
 
         Args:
             skill_name: Name of the skill to check
@@ -108,7 +108,7 @@ class HotReloadMixin:
         """
         Reload a skill after detecting file changes.
 
-        Phase 67: Simplified - direct unload + reload, failures propagate.
+         Simplified - direct unload + reload, failures propagate.
 
         Args:
             skill: The skill object to reload

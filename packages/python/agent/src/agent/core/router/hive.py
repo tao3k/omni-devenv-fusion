@@ -2,7 +2,7 @@
 src/agent/core/router/hive.py
 Hive Router - Agent Delegation Routing.
 
-Phase 14 Enhancement:
+ Enhancement:
 - Routes requests to appropriate Specialist Agents (not just tools)
 - Uses Semantic Cortex for fuzzy matching
 - Integrates with SemanticRouter for backward compatibility
@@ -109,7 +109,7 @@ class HiveRouter:
         cache_key = f"{query}:{context[:100]}" if context else query
         if use_cache and cache_key in self._cache:
             cached_route = self._cache[cache_key]
-            # Phase 18: Mark as from cache for UX display
+            #  Mark as from cache for UX display
             cached_route.from_cache = True
             return cached_route
 

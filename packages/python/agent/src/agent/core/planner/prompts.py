@@ -1,5 +1,5 @@
 """
-Phase 61: Cognitive Scaffolding - Planner Prompts
+ Cognitive Scaffolding - Planner Prompts
 
 Prompt templates for task decomposition and planning.
 遵循 ODF-EP 标准:

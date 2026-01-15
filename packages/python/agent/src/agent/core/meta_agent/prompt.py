@@ -1,6 +1,6 @@
 """
 agent/core/meta_agent/prompt.py
-Phase 64: The Meta-Agent - LLM Prompt Templates
+ The Meta-Agent - LLM Prompt Templates
 
 Provides structured prompts for LLM-driven skill generation.
 遵循 ODF-EP 标准:

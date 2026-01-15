@@ -1,6 +1,6 @@
 """
 agent/core/registry/context.py
-Phase 35.3: Context Builder
+ Context Builder
 
 Build skill context from SKILL.md (definition file) with diff support.
 """

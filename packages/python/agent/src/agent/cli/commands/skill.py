@@ -1,8 +1,8 @@
 """
 skill.py - Skill Command Group
 
-Phase 35.2: Modular CLI Architecture
-Phase 36: Vector-Enhanced Discovery
+ Modular CLI Architecture
+ Vector-Enhanced Discovery
 Phase 37/38: Hybrid Search & Scoring
 
 Provides full skill management commands:
@@ -13,12 +13,12 @@ Provides full skill management commands:
 - info: Show skill information
 - install: Install a skill from URL
 - update: Update an installed skill
-- test: Test skills (Phase 35.1)
-- check: Validate skill structure (Phase 35.2)
-- templates: Manage skill templates (Phase 35.2)
-- create: Create a new skill from template (Phase 35.2)
-- reindex: Reindex skills into vector store (Phase 36)
-- index-stats: Show index statistics (Phase 36)
+- test: Test skills
+- check: Validate skill structure
+- templates: Manage skill templates
+- create: Create a new skill from template
+- reindex: Reindex skills into vector store
+- index-stats: Show index statistics
 """
 
 from __future__ import annotations
@@ -203,7 +203,7 @@ def skill_update(
 
 
 # =============================================================================
-# Skill Testing (Phase 35.1)
+# Skill Testing
 # =============================================================================
 
 
@@ -237,7 +237,7 @@ def skill_test(
 
 
 # =============================================================================
-# Skill Structure Validation (Phase 35.2)
+# Skill Structure Validation
 # =============================================================================
 
 
@@ -264,7 +264,7 @@ def skill_check(
 
 
 # =============================================================================
-# Skill Templates Management (Phase 35.2)
+# Skill Templates Management
 # =============================================================================
 
 
@@ -319,7 +319,7 @@ def skill_templates(
 
 
 # =============================================================================
-# Create New Skill (Phase 35.2)
+# Create New Skill
 # =============================================================================
 
 

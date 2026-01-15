@@ -1,5 +1,5 @@
 """
-Phase 61: Cognitive Scaffolding - Structured Tracing
+ Cognitive Scaffolding - Structured Tracing
 
 Observability for Plan-and-Execute pattern.
 遵循 ODF-EP 标准:

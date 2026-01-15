@@ -2,17 +2,17 @@
 src/agent/core/agents/base.py
 Base Agent - Core Engine with Holographic OODA Loop.
 
-Phase 14 Enhancement:
+Context & Tool Loading Enhancement:
 - Context Injection: Converts TaskBrief to System Prompt
 - Tool Loading: Dynamically loads skills based on agent type
 - Mission Brief Protocol: Physical implementation of telepathic link
 
-Phase 19 Enhancement:
+Dependency Injection & ReAct Enhancement:
 - Dependency Injection: Accepts inference engine and tools
 - ReAct Loop Support: Base implementation for think->act->observe
-- UX Event Emission: Emits events for Glass Cockpit (Phase 18)
+- UX Event Emission: Emits events for Glass Cockpit
 
-Phase 43 Enhancement (The Holographic Agent):
+Holographic Agent Enhancement:
 - Continuous State Injection (CSI): Injects live environment snapshot (Git, Files)
   into the System Prompt at EVERY step of the ReAct loop.
 - Agent OODA Loop: Enables agent to "see" the consequences of its actions immediately.
@@ -35,16 +35,16 @@ from pydantic import BaseModel
 from agent.core.registry import get_skill_registry
 from agent.core.vector_store import get_vector_memory, SearchResult
 
-# [Phase 43] Import Sniffer for Holographic Context
+# Import Sniffer for Holographic Context
 from agent.core.router.sniffer import get_sniffer
 
-# [Phase 44] Import Librarian for Skill-Level Memory
+# Import Librarian for Skill-Level Memory
 from agent.capabilities.knowledge.librarian import get_skill_lessons
 
 logger = structlog.get_logger(__name__)
 
 
-# UX Event Log Path (Phase 18: Glass Cockpit)
+# UX Event Log Path (Glass Cockpit)
 # Use project-specific cache directory
 def _get_ux_event_log_path() -> Path:
     """Get UX event log path from project cache directory."""
@@ -58,7 +58,7 @@ def _get_ux_event_log_path() -> Path:
 
 def _emit_ux_event(event_type: str, agent_name: str, payload: dict):
     """
-    Emit UX event for Glass Cockpit (Phase 18).
+    Emit UX event for Glass Cockpit.
 
     Writes events to project .cache/omni_ux_events.jsonl for the Sidecar Dashboard.
 
@@ -91,8 +91,8 @@ class AgentContext(BaseModel):
     mission_brief: str
     constraints: List[str] = []
     relevant_files: List[str] = []
-    knowledge_context: str = ""  # Phase 16: RAG knowledge injection
-    rag_sources: List[Dict[str, Any]] = []  # Phase 18: RAG sources for UX
+    knowledge_context: str = ""  # RAG knowledge injection
+    rag_sources: List[Dict[str, Any]] = []  # RAG sources for UX
 
 
 class AgentResult(BaseModel):
@@ -103,10 +103,10 @@ class AgentResult(BaseModel):
     tool_calls: List[Dict[str, Any]] = []
     message: str = ""
     confidence: float = 0.5
-    # Phase 15: Feedback Loop fields
+    # Feedback Loop fields
     audit_result: Optional[Dict[str, Any]] = None
     needs_review: bool = False
-    # Phase 16: RAG sources (for UX visualization)
+    # RAG sources (for UX visualization)
     rag_sources: List[Dict[str, Any]] = []
 
 
@@ -123,13 +123,13 @@ class AuditResult(BaseModel):
 class BaseAgent(ABC):
     """
     Abstract base class for all specialist agents in The Hive.
-    Now equipped with Phase 43 Holographic Perception.
+    Now equipped with Holographic Perception.
 
-    Phase 19: Dependency Injection
+    Dependency Injection
     - inference: LLM engine for cognitive capabilities
     - tools: Dict of callable tools for action execution
 
-    Phase 43: Holographic Agent
+    Holographic Agent
     - sniffer: ContextSniffer for real-time environment state
     - CSI: Continuous State Injection into ReAct loop
 
@@ -168,7 +168,7 @@ class BaseAgent(ABC):
         self.tools = tools or {}
         self._action_history: List[Dict] = []  # Track ReAct actions
 
-        # [Phase 43] Initialize Sensory System (ContextSniffer)
+        # Initialize Sensory System (ContextSniffer)
         self.sniffer = get_sniffer()
 
     async def prepare_context(
@@ -176,13 +176,13 @@ class BaseAgent(ABC):
         mission_brief: str,
         constraints: List[str] = None,
         relevant_files: List[str] = None,
-        enable_rag: bool = True,  # Phase 16: Control RAG per agent
+        enable_rag: bool = True,  # Control RAG per agent
     ) -> AgentContext:
         """
-        ⚡️ Core: Convert TaskBrief to System Prompt (Phase 14 Physical Implementation).
-        Phase 16: Injects relevant project knowledge from VectorStore.
-        Phase 18: Returns RAG sources for UX visualization.
-        Phase 44: Injects skill-level experiential memory.
+        ⚡️ Core: Convert TaskBrief to System Prompt (Physical Implementation).
+        Injects relevant project knowledge from VectorStore.
+        Returns RAG sources for UX visualization.
+        Injects skill-level experiential memory.
 
         Args:
             mission_brief: The Commander's Intent from HiveRouter
@@ -199,13 +199,13 @@ class BaseAgent(ABC):
         # 2. Get skill prompts (capabilities) from registry
         skill_prompts = self._get_skill_capabilities()
 
-        # 3. Phase 16: Retrieve relevant knowledge from VectorStore
+        # 3. Retrieve relevant knowledge from VectorStore
         knowledge_context = ""
-        rag_sources = []  # Phase 18: For UX display
+        rag_sources = []  # For UX display
         if enable_rag:
             knowledge_context, rag_sources = await self._retrieve_relevant_knowledge(mission_brief)
 
-        # 4. Phase 44: Retrieve skill-level experiential lessons
+        # 4. Retrieve skill-level experiential lessons
         skill_lessons = await self._get_agent_skill_lessons()
 
         # 5. Build Telepathic System Prompt with knowledge injection
@@ -215,7 +215,7 @@ class BaseAgent(ABC):
             constraints=constraints or [],
             relevant_files=relevant_files or [],
             knowledge_context=knowledge_context,
-            skill_lessons=skill_lessons,  # Phase 44: Experiential memory
+            skill_lessons=skill_lessons,  # Experiential memory
         )
 
         return AgentContext(
@@ -225,7 +225,7 @@ class BaseAgent(ABC):
             constraints=constraints or [],
             relevant_files=relevant_files or [],
             knowledge_context=knowledge_context,
-            rag_sources=rag_sources,  # Phase 18: For UX display
+            rag_sources=rag_sources,  # For UX display
         )
 
     def _get_skill_tools(self) -> List[Dict[str, Any]]:
@@ -270,7 +270,7 @@ class BaseAgent(ABC):
         self, query: str, n_results: int = 3
     ) -> tuple[str, list[dict]]:
         """
-        Phase 16: Retrieve relevant project knowledge from VectorStore.
+        Retrieve relevant project knowledge from VectorStore.
 
         This enables "Active RAG" - the agent automatically fetches relevant
         project documentation, coding standards, and patterns before execution.
@@ -326,7 +326,7 @@ class BaseAgent(ABC):
 
     async def _get_agent_skill_lessons(self) -> str:
         """
-        [Phase 44] Retrieve experiential lessons for the agent's default skills.
+         Retrieve experiential lessons for the agent's default skills.
 
         Searches the vector store for harvested insights (past mistakes, pitfalls,
         best practices) that are relevant to the agent's skills.
@@ -350,15 +350,15 @@ class BaseAgent(ABC):
         skill_prompts: str,
         constraints: List[str],
         relevant_files: List[str],
-        knowledge_context: str = "",  # Phase 16: RAG knowledge
-        skill_lessons: str = "",  # Phase 44: Experiential memory
+        knowledge_context: str = "",  # RAG knowledge
+        skill_lessons: str = "",  # Experiential memory
     ) -> str:
         """
         Build the telepathic system prompt with Mission Brief.
 
-        Phase 14: "Prompt is Policy" - The Brief IS the contract.
-        Phase 16: Injects relevant project knowledge from VectorStore.
-        Phase 44: Injects skill-level experiential memory (past mistakes, pitfalls).
+         "Prompt is Policy" - The Brief IS the contract.
+        Injects relevant project knowledge from VectorStore.
+        Injects skill-level experiential memory (past mistakes, pitfalls).
         """
         prompt_parts = [
             f"# ROLE: {self.role}",
@@ -372,11 +372,11 @@ class BaseAgent(ABC):
             "",
         ]
 
-        # Phase 16: Inject knowledge if available
+        # Inject knowledge if available
         if knowledge_context:
             prompt_parts.extend([knowledge_context, ""])
 
-        # Phase 44: Inject skill-level experiential memory
+        # Inject skill-level experiential memory
         if skill_lessons:
             prompt_parts.extend([skill_lessons, ""])
 
@@ -402,7 +402,7 @@ class BaseAgent(ABC):
                 "- If unclear, ask for clarification",
                 "- Learn from success and failures for future tasks",
                 "",
-                "## 📡 [Phase 43] HOLOGRAPHIC AWARENESS",
+                "## 📡  HOLOGRAPHIC AWARENESS",
                 "- You will receive a LIVE ENVIRONMENT SNAPSHOT at the start of each reasoning cycle",
                 "- The snapshot shows current Git status (branch, modified files)",
                 "- It also shows active context (what files are currently being worked on)",
@@ -446,7 +446,7 @@ class BaseAgent(ABC):
         # Execute (placeholder - actual LLM call would go here)
         result = await self._execute_with_llm(task=task, context=ctx, history=chat_history or [])
 
-        # Phase 18: Include RAG sources for UX display
+        # Include RAG sources for UX display
         result.rag_sources = ctx.rag_sources
 
         logger.info(f"✅ [{self.name}] Complete: confidence={result.confidence}")
@@ -472,7 +472,7 @@ class BaseAgent(ABC):
         )
 
     # =========================================================================
-    # Phase 19: ReAct Loop Support
+    # ReAct Loop Support
     # =========================================================================
 
     async def _run_react_loop(
@@ -482,15 +482,15 @@ class BaseAgent(ABC):
         max_steps: int = 5,
     ) -> AgentResult:
         """
-        Run ReAct (Reasoning + Action) loop with Phase 43 Holographic Perception.
+        Run ReAct (Reasoning + Action) loop with Holographic Perception.
 
         ReAct Pattern (Upgraded to OODA):
-        1. Observe: Get live environment snapshot (Phase 43)
+        1. Observe: Get live environment snapshot
         2. Orient: LLM reasons with current state
         3. Act: Execute tool if needed
         4. Observe: Get result, repeat
 
-        Phase 43: Every iteration injects the live environment snapshot
+        Every iteration injects the live environment snapshot
         into the system prompt, so the agent "sees" the consequences of
         its actions immediately (e.g., git status change, file deletion).
 
@@ -520,7 +520,7 @@ class BaseAgent(ABC):
         )
 
         for step in range(max_steps):
-            # [Phase 43] 📸 HOLOGRAPHIC CONTEXT INJECTION
+            # 📸 HOLOGRAPHIC CONTEXT INJECTION
             # Capture the live environment state BEFORE thinking.
             # This ensures the agent sees the result of previous actions
             # (e.g., git status change, file created/deleted).
@@ -553,7 +553,7 @@ class BaseAgent(ABC):
             try:
                 # Call LLM with DYNAMIC system prompt (includes environment snapshot)
                 result = await self.inference.complete(
-                    system_prompt=dynamic_system_prompt,  # [Phase 43] Updated with CSI
+                    system_prompt=dynamic_system_prompt,  # Updated with CSI
                     user_query=user_content,
                     messages=current_messages,  # Use full conversation history
                     tools=tool_schemas if step == 0 else [],  # Only send tools on first call

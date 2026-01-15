@@ -362,12 +362,12 @@ lint:
 [group('validate')]
 test:
     @echo "Running all tests in parallel (3 workers for stability)..."
-    @uv run pytest packages/python/agent/src/agent/tests/ -n 3 --ignore=packages/python/agent/src/agent/tests/stress_tests -v
+    @uv run pytest packages/python/agent/src/agent/tests/ -n 3 --ignore=stress_tests -v
 
 [group('validate')]
 test-sequential:
     @echo "Running all tests sequentially (for debugging)..."
-    @uv run pytest packages/python/agent/src/agent/tests/ -v --ignore=packages/python/agent/src/agent/tests/stress_tests
+    @uv run pytest packages/python/agent/src/agent/tests/ -v --ignore=stress_tests
 
 [group('validate')]
 vulture:
@@ -375,48 +375,14 @@ vulture:
     @uvx vulture || echo "Dead code detected - review above items"
 
 [group('validate')]
-test-skills-parallel:
-    @echo "Running skills tests in parallel..."
-    @uv run pytest packages/python/agent/src/agent/tests/test_skills_full.py -n auto -v
-
-[group('validate')]
 test-stress:
     @echo "Running stress tests (slow)..."
-    @uv run pytest packages/python/agent/src/agent/tests/stress_tests/ -v
+    @uv run pytest packages/python/agent/tests/stress_tests/ -v
 
-# ==============================================================================
-# MCP/SKILL TESTS
-# ==============================================================================
-
-[group('mcp')]
-test-mcp:
-    @echo "=== MCP Server Tests ==="
-    @python -m compileall packages/python/agent/src/agent
-    @echo "Syntax check: OK"
-    @timeout 3 python -u packages/python/agent/src/agent/main.py 2>&1 || echo "Server startup: OK"
-    @echo ""
-    @echo "=== Skill Tests ==="
-    @uv run pytest packages/python/agent/src/agent/tests/test_skills_full.py packages/python/agent/src/agent/tests/test_mcp_dependencies.py -v
-
-[group('mcp')]
+[group('skills')]
 test-skills:
-    @echo "=== Skill Architecture Tests ==="
-    @uv run pytest packages/python/agent/src/agent/tests/test_skills_full.py -v
-
-[group('mcp')]
-test-skills-workflow:
-    @echo "=== Skill Workflow Tests ==="
-    @uv run pytest packages/python/agent/src/agent/tests/test_skills.py::TestSkillManagerOmniCLI -v
-
-[group('mcp')]
-test-git-security:
-    @echo "=== Git Security Tests ==="
-    @uv run pytest packages/python/agent/src/agent/tests/test_git_security.py -v
-
-[group('mcp')]
-test-mcp-all: test-mcp test-skills test-git-security
-    @echo ""
-    @echo "=== All MCP/Skill Tests Passed! ==="
+    @echo "Running skill tests..."
+    @uv run pytest assets/skills/ -v
 
 # ==============================================================================
 # CHANGELOG MANAGEMENT

@@ -1,6 +1,6 @@
 """
 agent/skills/decorators.py
-Phase 34: Reflexion Loop - Enhanced Skill Command Decorator
+ Reflexion Loop - Enhanced Skill Command Decorator
 
 Extends Phase 25.1 Omni Skill Macros with:
 - CommandResult: Structured output with retry metadata
@@ -106,7 +106,7 @@ def skill_command(
     # Retry Configuration
     retry_on: tuple[type[Exception], ...] = (ConnectionError, TimeoutError),
     max_attempts: int = 3,
-    # Phase 61: Caching support
+    #  Caching support
     cache_ttl: float = 0.0,
     pure: bool = False,
 ):
@@ -117,7 +117,7 @@ def skill_command(
     - Structured CommandResult output
     - Automatic retry for transient failures
     - Context-aware logging
-    - Phase 61: Result caching with TTL
+    -  Result caching with TTL
 
     Args:
         name: Override command name (default: function name)
@@ -155,7 +155,7 @@ def skill_command(
             "retry_on": retry_on,
             "max_attempts": max_attempts,
             "input_schema": _get_param_schema(func),
-            # Phase 61: Caching metadata
+            #  Caching metadata
             "cache_ttl": cache_ttl,
             "pure": pure,
         }
@@ -287,7 +287,7 @@ def skill_command(
 
 
 # =============================================================================
-# Structure Validation (Phase 35.1)
+# Structure Validation
 # =============================================================================
 
 
@@ -497,7 +497,7 @@ def _get_param_schema(func: Callable) -> dict:
 
 
 # =============================================================================
-# Skill Script Decorator (Phase 62: Metadata-Driven Architecture)
+# Skill Script Decorator ( Metadata-Driven Architecture)
 # =============================================================================
 # Direct decorator for scripts/*.py files - no tools.py router layer needed.
 # Auto-detects skill name from file path and registers directly with SkillManager.
@@ -516,7 +516,7 @@ def skill_script(
     # Retry Configuration
     retry_on: tuple[type[Exception], ...] = (ConnectionError, TimeoutError),
     max_attempts: int = 3,
-    # Phase 61: Caching support
+    #  Caching support
     cache_ttl: float = 0.0,
     pure: bool = False,
 ):
@@ -530,7 +530,7 @@ def skill_script(
     - Auto-generates tool name from function name (e.g., commit -> "git.commit")
     - Stores full metadata for MCP tool registration
     - Supports dependency injection and retry logic
-    - Phase 61: Supports result caching with TTL
+    -  Supports result caching with TTL
 
     Args:
         name: Override command name (default: function name)
@@ -571,7 +571,7 @@ def skill_script(
             "input_schema": _get_param_schema(func),
             "inject_root": inject_root,
             "inject_settings": inject_settings or [],
-            # Phase 61: Caching metadata
+            #  Caching metadata
             "cache_ttl": cache_ttl,
             "pure": pure,
         }

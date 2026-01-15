@@ -2,7 +2,7 @@
 agent/core/graph.py
 The Cognitive Graph - LangGraph implementation for Omni.
 
-Phase 34: Replaces procedural loops with a state machine.
+ Replaces procedural loops with a state machine.
 Uses ODF-EP v6.0 Pillars (Pydantic, Tenacity, Observability).
 
 Architecture:

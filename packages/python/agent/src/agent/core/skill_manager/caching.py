@@ -1,6 +1,6 @@
 """
 src/agent/core/skill_manager/caching.py
-Phase 61: Tool Result Caching Mixin.
+ Tool Result Caching Mixin.
 
 Implements intelligent caching for skill commands to reduce redundant IO.
 Key components:

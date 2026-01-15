@@ -1,6 +1,6 @@
 """
 agent/core/router/router.py
-Phase 67: Adaptive Context - Intent-Driven Tool Loading
+ Adaptive Context - Intent-Driven Tool Loading
 
 Router for intent-driven tool loading using hybrid search.
 

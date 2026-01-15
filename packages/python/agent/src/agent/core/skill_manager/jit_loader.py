@@ -1,6 +1,6 @@
 """
 agent/core/skill_manager/jit_loader.py
-Phase 63: JIT Skill Loader - Robust Dynamic Execution
+ JIT Skill Loader - Robust Dynamic Execution
 
 Features:
 1. Dynamic module loading without global sys.path pollution
@@ -86,7 +86,7 @@ class JITSkillLoader:
     """
     Just-In-Time Skill Loader.
 
-    Phase 63: Replaces tools.py-based loading with direct script execution.
+     Replaces tools.py-based loading with direct script execution.
 
     Features:
     - Dynamic module loading from file paths
@@ -135,7 +135,7 @@ class JITSkillLoader:
                 "input_schema": {"type": "object", "properties": {}},
             }
 
-    def execute_tool(self, record: ToolRecord, arguments: Dict[str, Any]) -> Any:
+    async def execute_tool(self, record: ToolRecord, arguments: Dict[str, Any]) -> Any:
         """
         Execute a tool with the given arguments.
 
@@ -150,6 +150,8 @@ class JITSkillLoader:
         Returns:
             Result of the function execution
         """
+        import asyncio
+
         skill_path = Path(record.file_path).parent.parent  # assets/skills/<skill>
 
         # Check for Heavy Skill isolation (pyproject.toml indicates isolated env)
@@ -158,7 +160,13 @@ class JITSkillLoader:
 
         # Default: In-process execution
         func = self._load_function(record.file_path, record.function_name, record.skill_name)
-        return func(**arguments)
+        result = func(**arguments)
+
+        # Handle async functions - await the coroutine
+        if asyncio.iscoroutine(result):
+            result = await result
+
+        return result
 
     def _execute_isolated(
         self, record: ToolRecord, arguments: Dict[str, Any], skill_path: Path

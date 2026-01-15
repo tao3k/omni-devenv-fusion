@@ -1,7 +1,7 @@
 # mcp-server/context_builder.py
 """
-Phase 14: Context Builder - Mission Brief Injection
-Phase 67: Ghost Tool Injection (Adaptive Loader)
+ Context Builder - Mission Brief Injection
+ Ghost Tool Injection (Adaptive Loader)
 
 Provides utilities to assemble worker context with mission briefs.
 """
@@ -24,7 +24,7 @@ def build_mission_injection(routing_result: RoutingResult) -> str:
     This is the "Telepathic Link" - the mission brief that tells the worker
     exactly what to do, bypassing the need for the worker to reanalyze intent.
 
-    Phase 36.8: Also includes remote skill suggestions when available.
+     Also includes remote skill suggestions when available.
 
     Args:
         routing_result: The routing result from SemanticRouter
@@ -44,7 +44,7 @@ def build_mission_injection(routing_result: RoutingResult) -> str:
     else:
         indicator = "🔴 LOW CONFIDENCE"
 
-    # Phase 36.8: Add remote skill suggestions
+    #  Add remote skill suggestions
     suggestions_block = ""
     if routing_result.remote_suggestions:
         suggestion_lines = []
@@ -134,7 +134,7 @@ async def route_and_build_context(
     """
     Convenience function: Route request AND build worker context in one call.
 
-    This is the main entry point for the Phase 14 workflow:
+    This is the main entry point for the  workflow:
     1. Route (SemanticRouter) -> 2. Brief -> 3. Build Context
 
     Args:
@@ -185,7 +185,7 @@ def format_context_for_llm(
 
 
 # =============================================================================
-# Phase 67: Ghost Tool Injection (Adaptive Loader)
+#  Ghost Tool Injection (Adaptive Loader)
 # =============================================================================
 
 

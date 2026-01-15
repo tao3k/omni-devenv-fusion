@@ -27,7 +27,29 @@ This is the complete engineering protocol for this project:
 ## Essential Commands
 
 - `just validate` - fmt, lint, test
+- `just build-rust-dev` - Build Rust debug bindings (fast iteration)
 - `/mcp enable orchestrator` - Reconnect omni mcp
+
+---
+
+## Rust/Python Cross-Language Development
+
+> **Read First**: [Project Execution Standard](../reference/project-execution-standard.md)
+
+When debugging issues between Rust and Python (e.g., SQL query mismatches), follow the **strict workflow**:
+
+```
+Rust Implementation → Add Rust Test → cargo test PASSED
+                 ↓
+Python Integration → Add Python Test → pytest PASSED
+                 ↓
+Build & Verify → just build-rust-dev → Full integration test
+```
+
+**Key points**:
+- Rust tests are ~0.3s, Python `uv run omni ...` is ~30s
+- Always add Rust tests before modifying Rust code
+- Use `just build-rust-dev` for fast iteration
 
 ---
 

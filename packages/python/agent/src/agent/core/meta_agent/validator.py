@@ -1,6 +1,6 @@
 """
 src/agent/core/meta_agent/validator.py
-Phase 65: Sandbox Validator for generated skills.
+ Sandbox Validator for generated skills.
 
 Executes generated skills and tests in an isolated environment
 to verify code correctness before saving to the skills directory.
@@ -212,7 +212,7 @@ async def validate_and_refine(
     """
     Validate skill code and refine if necessary using the Meta skill.
 
-    This is the main entry point for Phase 65's self-repair loop.
+    This is the main entry point for 's self-repair loop.
 
     Args:
         skill_name: Name of the skill

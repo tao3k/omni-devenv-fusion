@@ -1,6 +1,6 @@
 """
 agent/core/state.py
-Phase 34: Persistent State Machine - ReAct Checkpoint System
+ Persistent State Machine - ReAct Checkpoint System
 
 Extends existing SessionManager with LangGraph-style checkpoint persistence:
 - GraphState: TypedDict for ReAct state (messages, context, plan, error_count)

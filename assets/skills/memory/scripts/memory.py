@@ -173,9 +173,20 @@ async def save_memory(content: str, metadata: Optional[Dict[str, Any]] = None) -
         doc_id = str(uuid.uuid4())
         vector = _get_embedding(content)
 
-        # Add timestamp to metadata
+        # [FIX] Robust metadata handling - handle str, None, or dict
         if metadata is None:
             metadata = {}
+        elif isinstance(metadata, str):
+            try:
+                # LLM sometimes passes JSON string instead of dict
+                metadata = json.loads(metadata)
+            except (json.JSONDecodeError, TypeError):
+                metadata = {"raw_metadata": metadata}
+        elif not isinstance(metadata, dict):
+            # Handle other unexpected types
+            metadata = {"raw_metadata": str(metadata)}
+
+        # Add timestamp to metadata (after ensuring it's a dict)
         metadata["timestamp"] = time.time()
 
         store.add_documents(DEFAULT_TABLE, [doc_id], [vector], [content], [json.dumps(metadata)])

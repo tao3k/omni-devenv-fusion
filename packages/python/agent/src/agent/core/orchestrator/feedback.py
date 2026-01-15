@@ -2,8 +2,8 @@
 agent/core/orchestrator/feedback.py
 Feedback Loop for Orchestrator.
 
-Phase 15: Virtuous Cycle - Coder executes -> Reviewer audits -> Self-correction.
-Phase 40: Automated Reinforcement Loop - Record feedback on task success.
+ Virtuous Cycle - Coder executes -> Reviewer audits -> Self-correction.
+ Automated Reinforcement Loop - Record feedback on task success.
 """
 
 from typing import Dict, Any, List
@@ -13,7 +13,7 @@ from agent.core.agents.reviewer import ReviewerAgent
 from agent.core.telemetry import CostEstimator
 
 
-# [Phase 40] Safe import for feedback recording
+# Safe import for feedback recording
 def _record_feedback_safe(query: str, skill_id: str, success: bool) -> None:
     """
     Safely record routing feedback without blocking main execution.
@@ -54,7 +54,7 @@ async def execute_with_feedback_loop(
     history: List[Dict[str, Any]],
 ) -> str:
     """
-    Execute with Phase 15 Feedback Loop and Phase 18 UX.
+    Execute with  Feedback Loop and  UX.
 
     The Virtuous Cycle:
     1. Execute CoderAgent
@@ -80,7 +80,7 @@ async def execute_with_feedback_loop(
     audit_history = []
 
     for attempt in range(1, self.max_retries + 1):
-        # Phase 18: Show correction loop entry
+        #  Show correction loop entry
         self.ux.show_correction_loop(attempt, self.max_retries)
         logger.bind(
             session_id=self._session_id,
@@ -89,7 +89,7 @@ async def execute_with_feedback_loop(
             max_retries=self.max_retries,
         ).info("execution_attempt")
 
-        # Phase 19: Log attempt start
+        #  Log attempt start
         self.session.log(
             "agent_action",
             worker.name,
@@ -109,16 +109,16 @@ async def execute_with_feedback_loop(
             )
             self.ux.stop_execution()
 
-            # Phase 18: Show RAG sources
+            #  Show RAG sources
             if result.rag_sources:
                 self.ux.show_rag_hits(result.rag_sources)
 
-            # Phase 18: Show agent response
+            #  Show agent response
             self.ux.print_agent_response(
                 result.content, f"{worker.name.upper()} Output (Attempt {attempt})"
             )
 
-            # Phase 19: Log agent output with cost
+            #  Log agent output with cost
             agent_usage = CostEstimator.estimate(task_brief + user_query, result.content)
             self.session.log(
                 "agent_action",
@@ -153,7 +153,7 @@ async def execute_with_feedback_loop(
             },
         )
 
-        # Phase 18: Show audit result
+        #  Show audit result
         self.ux.show_audit_result(
             approved=audit_result.approved,
             feedback=audit_result.feedback,
@@ -161,7 +161,7 @@ async def execute_with_feedback_loop(
             suggestions=audit_result.suggestions,
         )
 
-        # Phase 19: Log audit result
+        #  Log audit result
         audit_entry = {
             "attempt": attempt,
             "approved": audit_result.approved,
@@ -187,7 +187,7 @@ async def execute_with_feedback_loop(
                 attempt=attempt,
             ).info("audit_passed")
 
-            # [Phase 40] Reinforcement Learning: Record positive feedback
+            # Reinforcement Learning: Record positive feedback
             # When Reviewer approves, this is a high-value signal that the routing was correct.
             # We record this so future queries will be more confident about this skill.
             _record_feedback_safe(user_query, worker.name, success=True)

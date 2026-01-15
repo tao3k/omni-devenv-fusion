@@ -1,6 +1,6 @@
 """
 agent/core/types.py
-Phase 70: The Knowledge Matrix - Type Definitions
+ The Knowledge Matrix - Type Definitions
 
 Common types for vector store tables and knowledge management.
 """

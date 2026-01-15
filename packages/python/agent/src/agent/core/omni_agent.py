@@ -1,6 +1,6 @@
 """
 agent/core/omni_agent.py
-Phase 56: The Omni Loop (CCA Runtime Integration).
+CCA Runtime Loop (Omni Loop).
 
 Integrates ContextOrchestrator, NoteTaker, and all Rust-accelerated tools
 into a cohesive CCA runtime loop.
@@ -46,12 +46,12 @@ class OmniAgent:
     """
     The Omni Loop Agent - CCA Runtime Integration.
 
-    Phase 56: Integrates all CCA components into a cohesive runtime.
+    Integrates all CCA components into a cohesive runtime.
 
     Components:
-    - Conductor (Phase 55): ContextOrchestrator for layered context assembly
-    - Librarian (Phase 53): VectorStore for semantic memory
-    - Note-Taker (Phase 54): Session reflection and wisdom distillation
+    - Conductor: ContextOrchestrator for layered context assembly
+    - Librarian: VectorStore for semantic memory
+    - Note-Taker: Session reflection and wisdom distillation
     - ToolRegistry: Skills loaded from filesystem
 
     CCA Loop:
@@ -78,12 +78,12 @@ class OmniAgent:
         self.session_id: str = f"cca-{Path.cwd().name}-{id(self)}"
         self.history: List[Dict[str, str]] = []
         self.step_count: int = 0
-        self.max_steps: int = 20
+        self.max_steps: int = 1
 
-        # [Phase 55] The Conductor - Hierarchical Context Orchestration
+        # The Conductor - Hierarchical Context Orchestration
         self.orchestrator: ContextOrchestrator = get_context_orchestrator()
 
-        # [Phase 54] The Note-Taker - Meta-cognitive reflection
+        # The Note-Taker - Meta-cognitive reflection
         self.note_taker: NoteTaker = get_note_taker()
 
         # Hive Router for agent delegation
@@ -119,7 +119,7 @@ class OmniAgent:
     def _load_tools(self) -> None:
         """Load all available tools from skills.
 
-        Phase 63: Uses Rust scanner to discover @skill_script decorated functions
+        Uses Rust scanner to discover @skill_script decorated functions
         and creates wrapper functions that use JIT loader for execution.
         """
         if self._tools:
@@ -127,7 +127,7 @@ class OmniAgent:
 
         logger.info("OmniAgent: Loading tools...")
 
-        # Try to load tools from Rust scanner (Phase 63)
+        # Try to load tools from Rust scanner
         try:
             import omni_core_rs
             from agent.core.skill_manager.jit_loader import (
@@ -135,6 +135,10 @@ class OmniAgent:
                 ToolRecord,
             )
             from common.skills_path import SKILLS_DIR
+
+            # Check if scan_skill_tools is available
+            if not hasattr(omni_core_rs, "scan_skill_tools"):
+                raise AttributeError("scan_skill_tools not available in omni_core_rs")
 
             # Use SKILLS_DIR() to get the correct skills path from settings.yaml
             skills_path = str(SKILLS_DIR())
@@ -158,7 +162,7 @@ class OmniAgent:
 
                     def make_wrapper(rec: ToolRecord):
                         async def wrapper(**kwargs):
-                            return loader.execute_tool(rec, kwargs)
+                            return await loader.execute_tool(rec, kwargs)
 
                         return wrapper
 
@@ -171,8 +175,10 @@ class OmniAgent:
 
                 logger.info(f"Loaded {len(self._tools)} tools from Rust scanner")
 
-        except ImportError:
-            logger.warning("omni_core_rs not available, falling back to registry")
+        except (ImportError, AttributeError):
+            logger.warning(
+                "omni_core_rs not available or scan_skill_tools missing, falling back to registry"
+            )
 
             # Fallback: Load from skill registry (legacy)
             from agent.core.registry import get_skill_tools
@@ -228,23 +234,26 @@ class OmniAgent:
             schema_count=len(self._tool_schemas),
         )
 
-    def _build_cca_context(self, task: str) -> str:
+    async def _build_cca_context(self, task: str) -> str:
         """
-        [Phase 55] The Conductor: Build layered context using ContextOrchestrator.
+        [Step 4] The Conductor: Async Context Assembly.
 
         This assembles:
         - Layer 1: System Persona + Scratchpad
-        - Layer 2: Environment Snapshot (omni-sniffer)
-        - Layer 3: Associative Memories (Librarian)
-        - Layer 4: Code Maps (omni-tags)
-        - Layer 5: Raw Code Content (truncated)
+        - Layer 2: Available Skills (skill_index.json)
+        - Layer 3: Project Knowledge (Docs)
+        - Layer 4: Associative Memories (Vector Store)
+        - Layer 5: Environment State (omni-sniffer)
+        - Layer 6: Code Maps (omni-tags)
+        - Layer 7: Raw Code Content (truncated)
 
         Returns:
             Complete context string for LLM
         """
-        logger.info("OmniAgent: Building CCA context via Conductor...")
+        logger.info("OmniAgent: Building CCA context via Async Conductor...")
 
-        context = self.orchestrator.build_prompt(
+        # CHANGE: Added await for async build_prompt
+        context = await self.orchestrator.build_prompt(
             task=task,
             history=self.history,
         )
@@ -307,7 +316,7 @@ class OmniAgent:
 
     async def _llm_reason(self, task: str, system_context: str) -> Dict[str, Any]:
         """
-        [Phase 3] Decide: Call LLM with CCA context.
+        Decide: Call LLM with CCA context.
 
         Args:
             task: The user's task
@@ -357,7 +366,7 @@ When the task is complete, output: TASK_COMPLETE
 
     async def _reflect(self) -> str:
         """
-        [Phase 5] Reflect: Trigger Note-Taker to distill wisdom.
+        Reflect: Trigger Note-Taker to distill wisdom.
 
         Analyzes the session trajectory and stores insights in Librarian.
         """
@@ -366,7 +375,8 @@ When the task is complete, output: TASK_COMPLETE
         if not self.history:
             return "No history to reflect on."
 
-        report = self.note_taker.distill_and_save(self.history)
+        # [FIX] Added await for async distill_and_save
+        report = await self.note_taker.distill_and_save(self.history)
         logger.info("OmniAgent: Reflection complete", report=report)
 
         return report
@@ -383,7 +393,7 @@ When the task is complete, output: TASK_COMPLETE
 
         Args:
             task: The user's task description
-            max_steps: Maximum steps (default: 20)
+            max_steps: Maximum steps (default: 1)
 
         Returns:
             Final result or summary
@@ -406,16 +416,17 @@ When the task is complete, output: TASK_COMPLETE
 
         try:
             while self.step_count < self.max_steps:
+                current_step = self.step_count + 1
                 logger.info(
                     "OmniAgent: Step",
-                    step=self.step_count + 1,
+                    step=current_step,
                     total=self.max_steps,
                 )
 
-                # [Phase 1-2] Observe + Orient: Build layered context
-                system_context = self._build_cca_context(task)
+                # Observe + Orient: Build layered context (Step 4: Async)
+                system_context = await self._build_cca_context(task)
 
-                # [Phase 3] Decide: LLM reasoning
+                # Decide: LLM reasoning
                 response = await self._llm_reason(task, system_context)
                 content = response.get("content", "")
                 tool_calls = response.get("tool_calls", [])
@@ -424,7 +435,7 @@ When the task is complete, output: TASK_COMPLETE
                 assistant_msg = {"role": "assistant", "content": content}
                 self.history.append(assistant_msg)
 
-                # [Phase 4] Act: Execute tool calls
+                # Act: Execute tool calls
                 if tool_calls:
                     logger.info(
                         "OmniAgent: Executing tools",
@@ -445,7 +456,7 @@ When the task is complete, output: TASK_COMPLETE
 
                 # Check for completion
                 if self._is_complete(content):
-                    logger.info("OmniAgent: Task completed", step=self.step_count + 1)
+                    logger.info("OmniAgent: Task completed", step=current_step)
                     break
 
                 self.step_count += 1
@@ -453,15 +464,16 @@ When the task is complete, output: TASK_COMPLETE
             else:
                 logger.warning("OmniAgent: Max steps reached", max_steps=self.max_steps)
 
-            # [Phase 5] Reflect: Distill wisdom
+            # Reflect: Distill wisdom
             reflection = await self._reflect()
 
-            # Build final summary
+            # Build final summary - actual steps executed = step_count + 1 (unless max reached)
+            actual_steps = min(self.step_count + 1, self.max_steps)
             summary = f"""
 ## CCA Loop Complete
 
 **Task:** {task}
-**Steps:** {self.step_count + 1}
+**Steps:** {actual_steps}
 **Reflection:** {reflection}
 """
 
@@ -496,18 +508,18 @@ When the task is complete, output: TASK_COMPLETE
 
 
 async def interactive_mode():
-    """Interactive CLI mode for OmniAgent with Dynamic Context Injection (Phase 69)."""
+    """Interactive CLI mode for OmniAgent with Dynamic Context Injection."""
     from rich.console import Console
     from agent.core.adaptive_loader import get_adaptive_loader
 
     console = Console()
 
-    console.print(" CCA Runtime - Omni Loop (Phase 56)")
+    console.print(" CCA Runtime - Omni Loop")
     console.print("=" * 50)
     console.print("Type 'exit' or 'quit' to end the session.")
     console.print()
 
-    # Phase 69: Initialize adaptive loader for dynamic tool loading
+    # Initialize adaptive loader for dynamic tool loading
     loader = get_adaptive_loader()
     agent = OmniAgent()
 
@@ -520,7 +532,7 @@ async def interactive_mode():
             if not user_input:
                 continue
 
-            # Phase 69: Dynamic Context Injection - Analyze intent & load relevant tools
+            # Dynamic Context Injection - Analyze intent & load relevant tools
             console.print("[dim]🧠 Analyzing intent & loading tools...[/dim]")
 
             active_tools = await loader.get_context_tools(user_input, dynamic_limit=15)

@@ -1,6 +1,6 @@
 """
 agent/core/module_loader.py
-Phase 29: Clean Module Loader
+ Clean Module Loader
 
 Context manager for pollution-free module loading.
 Eliminates complex sys.modules manipulation with a clean interface.

@@ -1,6 +1,6 @@
 """
 src/agent/core/installer.py
-Phase 26: Skill Installer using GitPython + subprocess
+ Skill Installer using GitPython + subprocess
 
 Features:
 - Smart stash & update for dirty repos
@@ -117,7 +117,7 @@ class SkillInstaller:
             if subpath:
                 self._configure_sparse_checkout(target_dir, subpath, refresh=True)
 
-            # Phase 28: Security scan before continuing
+            #  Security scan before continuing
             security_result = self._security_scan(target_dir, repo_url)
             if not security_result["passed"]:
                 raise SkillInstallError(
@@ -479,7 +479,7 @@ class SkillInstaller:
 
     def _security_scan(self, target_dir: Path, repo_url: str) -> dict:
         """
-        Phase 28: Security scan for newly installed skill.
+         Security scan for newly installed skill.
 
         Args:
             target_dir: Directory of the installed skill

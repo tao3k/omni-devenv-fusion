@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from common.prj_dirs import PRJ_DATA
+
 
 def save(
     category: str,
@@ -36,8 +38,8 @@ def save(
     if category not in valid_categories:
         category = "notes"
 
-    # Ensure knowledge directory exists
-    knowledge_dir = Path("assets/knowledge/harvested") / category
+    # Ensure knowledge directory exists (using PRJ_DATA for runtime data)
+    knowledge_dir = PRJ_DATA("knowledge", "harvested", category)
     knowledge_dir.mkdir(parents=True, exist_ok=True)
 
     # Create filename from title
@@ -98,7 +100,7 @@ def search(
         categories = ["patterns", "solutions", "errors", "techniques", "notes"]
 
     for cat in categories:
-        knowledge_dir = Path(f"assets/knowledge/harvested/{cat}")
+        knowledge_dir = PRJ_DATA("knowledge", "harvested", cat)
         if not knowledge_dir.exists():
             continue
 
@@ -142,7 +144,7 @@ Found {len(results)} matching entries:
 
 def _update_index(category: str, title: str, tags: list[str], path: str) -> None:
     """Update the knowledge index for a category."""
-    index_dir = Path("assets/knowledge/index")
+    index_dir = PRJ_DATA("knowledge", "index")
     index_dir.mkdir(parents=True, exist_ok=True)
 
     index_file = index_dir / f"{category}.json"

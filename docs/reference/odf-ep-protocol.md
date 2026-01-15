@@ -1,7 +1,7 @@
 # ODF-EP (Python Zenith) Engineering Protocol
 
 > Omni-DevEnv Fusion Engineering Protocol
-> Version: v1.0 | Last Updated: 2026-01-08
+> Version: v1.1 | Last Updated: 2026-01-15
 
 ---
 
@@ -65,6 +65,8 @@ PROJECT_ROOT = get_setting("project.root", fallback=Path.cwd())
 
 #### 2. Use SSOT Utilities for Path Resolution
 
+**Skills Directory (SKILLS_DIR)**:
+
 ```python
 from common.skills_path import SKILLS_DIR
 
@@ -79,6 +81,34 @@ SKILLS_DIR("git", path="templates")
 SKILLS_DIR("git", path="scripts")
 ```
 
+**Runtime Data Directories (PRJ_SPEC - PRJ_DATA, PRJ_CACHE)**:
+
+```python
+from common.prj_dirs import PRJ_DATA, PRJ_CACHE, PRJ_CONFIG
+
+# Runtime data (git-ignored)
+session_dir = PRJ_DATA("knowledge", "sessions")
+harvested_dir = PRJ_DATA("knowledge", "harvested")
+
+# Cache directories
+cache_file = PRJ_CACHE("user_custom.md")
+
+# Config directories
+config_file = PRJ_CONFIG("settings.json")
+```
+
+**Environment Variables (from direnv)**:
+| Variable | Default | Purpose |
+| ------------ | ---------- | ------------------------------ |
+| `PRJ_ROOT` | - | Project root |
+| `PRJ_DATA` | `.data` | Runtime data (git-ignored) |
+| `PRJ_CACHE` | `.cache` | Cache files |
+| `PRJ_CONFIG` | `.config` | Configuration files |
+| `PRJ_RUNTIME`| `.run` | Runtime artifacts |
+| `PRJ_PATH` | `.bin` | Executable binaries |
+
+````
+
 #### 3. Configuration Drives Behavior
 
 ```python
@@ -88,7 +118,7 @@ TIMEOUT = 120
 # GOOD
 from common.config.settings import get_setting
 timeout = get_setting("mcp.timeout", 120)
-```
+````
 
 #### 4. Cascading Configuration Pattern
 
@@ -107,22 +137,43 @@ skill_templates = SKILLS_DIR(skill_name, path="templates")
 
 ### SSOT Utilities Reference
 
+#### Skills Directory (SKILLS_DIR)
+
 | Utility                                   | Purpose                  | Returns                               |
 | ----------------------------------------- | ------------------------ | ------------------------------------- |
 | `SKILLS_DIR()`                            | Base skills directory    | `Path("assets/skills")`               |
 | `SKILLS_DIR("skill_name")`                | Specific skill directory | `Path("assets/skills/git")`           |
 | `SKILLS_DIR("skill_name", path="subdir")` | Subpath within skill     | `Path("assets/skills/git/templates")` |
-| `get_setting("key", default)`             | Config value             | Typed value from settings.yaml        |
-| `get_project_root()`                      | Git toplevel             | `Path` to repository root             |
+
+#### Runtime Data Directories (PRJ_SPEC - PRJ_DIRS)
+
+| Utility               | Purpose             | Returns                            |
+| --------------------- | ------------------- | ---------------------------------- |
+| `PRJ_DATA`            | Base data directory | `Path(".data")`                    |
+| `PRJ_DATA("subdir")`  | Data subdirectory   | `Path(".data/knowledge")`          |
+| `PRJ_DATA("a", "b")`  | Nested path         | `Path(".data/knowledge/sessions")` |
+| `PRJ_CACHE("file")`   | Cache file          | `Path(".cache/file.json")`         |
+| `PRJ_CONFIG("file")`  | Config file         | `Path(".config/settings.json")`    |
+| `PRJ_RUNTIME("file")` | Runtime file        | `Path(".run/process.json")`        |
+
+#### Configuration & Project
+
+| Utility                       | Purpose      | Returns                        |
+| ----------------------------- | ------------ | ------------------------------ |
+| `get_setting("key", default)` | Config value | Typed value from settings.yaml |
+| `get_project_root()`          | Git toplevel | `Path` to repository root      |
 
 ### Anti-Patterns
 
-| Anti-Pattern          | Example                           | Fix             |
-| --------------------- | --------------------------------- | --------------- |
-| Hardcoded path        | `"/Users/..."`                    | `get_setting()` |
-| `__file__` navigation | `Path(__file__).parent.parent`    | `SKILLS_DIR()`  |
-| Scattered config      | Same value in 3 files             | SSOT            |
-| Environment detection | `if os.path.exists("/nix/store")` | `get_setting()` |
+| Anti-Pattern           | Example                           | Fix             |
+| ---------------------- | --------------------------------- | --------------- |
+| Hardcoded path         | `"/Users/..."`                    | `get_setting()` |
+| `__file__` navigation  | `Path(__file__).parent.parent`    | `SKILLS_DIR()`  |
+| Scattered config       | Same value in 3 files             | SSOT            |
+| Environment detection  | `if os.path.exists("/nix/store")` | `get_setting()` |
+| Hardcoded runtime data | `Path(".data/knowledge")`         | `PRJ_DATA()`    |
+| Hardcoded cache path   | `Path(".cache/user_custom.md")`   | `PRJ_CACHE()`   |
+| Hardcoded assets path  | `Path("assets/knowledge/...")`    | `PRJ_DATA()`    |
 
 ---
 
@@ -182,6 +233,7 @@ from pydantic import BaseModel
 # Local - absolute from common/
 from common.gitops import get_project_root
 from common.skills_path import SKILLS_DIR
+from common.prj_dirs import PRJ_DATA, PRJ_CACHE
 
 # Local - relative within skill
 from .scripts.rendering import render_template
@@ -208,12 +260,12 @@ from .scripts.rendering import render_template
 
 ### Module Boundaries
 
-| Layer                              | Purpose                | Examples                                          |
-| ---------------------------------- | ---------------------- | ------------------------------------------------- |
-| `common/`                          | Shared utilities, SSOT | `gitops.py`, `skills_path.py`, `settings.py`      |
-| `agent/skills/{skill}/`            | Skill implementation   | `git/`, `filesystem/`, `skill/`                   |
-| `agent/core/`                      | Core agent logic       | `skill_manager.py`, `orchestrator.py`, `swarm.py` |
-| `packages/python/agent/src/agent/` | Agent packages         | `cli.py`, `tests/`                                |
+| Layer                              | Purpose                | Examples                                                    |
+| ---------------------------------- | ---------------------- | ----------------------------------------------------------- |
+| `common/`                          | Shared utilities, SSOT | `gitops.py`, `skills_path.py`, `prj_dirs.py`, `settings.py` |
+| `agent/skills/{skill}/`            | Skill implementation   | `git/`, `filesystem/`, `skill/`                             |
+| `agent/core/`                      | Core agent logic       | `skill_manager.py`, `orchestrator.py`, `swarm.py`           |
+| `packages/python/agent/src/agent/` | Agent packages         | `cli.py`, `tests/`                                          |
 
 ### Agent Runtime Swarm (ARS)
 
@@ -481,7 +533,7 @@ agent/tests/
 
 ### Key Principles
 
-1. **No Path Hacking** - Use `SKILLS_DIR()`, `get_project_root()`
+1. **No Path Hacking** - Use `SKILLS_DIR()`, `PRJ_DATA()`, `get_project_root()`
 2. **No For Loops** - Use `@pytest.mark.parametrize`
 3. **No Manual Dicts** - Use `polyfactory` factories
 
@@ -650,15 +702,20 @@ Closes #123
 from common.skills_path import SKILLS_DIR
 from common.config.settings import get_setting
 from common.gitops import get_project_root
+from common.prj_dirs import PRJ_DATA, PRJ_CACHE
 
 skills = SKILLS_DIR("git")
 timeout = get_setting("mcp.timeout", 120)
 project_root = get_project_root()
+session_dir = PRJ_DATA("knowledge", "sessions")
+cache_file = PRJ_CACHE("user_custom.md")
 
 # DON'T ❌
 Path(__file__).parent.parent
 "/Users/..." or "/home/..."
 os.path.expanduser("~")
+Path(".data/knowledge")          # Hardcoded runtime data
+Path(".cache/user_custom.md")    # Hardcoded cache path
 ```
 
 ### Code Style

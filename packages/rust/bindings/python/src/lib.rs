@@ -866,7 +866,7 @@ impl PyVectorStore {
     ///
     /// Returns:
     ///   Ok(()) on success
-    fn delete_by_file_path(&self, file_paths: Vec<String>, table_name: Option<String>) -> PyResult<()> {
+    fn delete_by_file_path(&self, table_name: Option<String>, file_paths: Vec<String>) -> PyResult<()> {
         let path = self.path.clone();
         let dimension = self.dimension;
         let table_name = table_name.unwrap_or_else(|| "skills".to_string());

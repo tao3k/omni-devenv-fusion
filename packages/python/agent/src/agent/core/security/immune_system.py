@@ -1,6 +1,6 @@
 """
 agent/core/security/immune_system.py
-Phase 28: Immune System - Central security decision engine.
+ Immune System - Central security decision engine.
 
 Makes security decisions based on SecurityReport and ValidationResult.
 """

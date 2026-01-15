@@ -1,6 +1,6 @@
 """
 agent/core/registry/__init__.py
-Phase 29: Skill Registry Module
+ Skill Registry Module
 
 Modular skill registry with separated concerns:
 - core.py: Core registry class
@@ -40,7 +40,7 @@ def get_skill_tools(skill_name: str) -> dict[str, Any]:
     """
     Get all @skill_command decorated tools from a loaded skill.
 
-    Phase 19: Enables ReAct loop to access dynamically loaded skill tools.
+     Enables ReAct loop to access dynamically loaded skill tools.
     """
     registry = get_skill_registry()
     return registry.get_skill_tools(skill_name)

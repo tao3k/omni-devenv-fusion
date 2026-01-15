@@ -1,5 +1,5 @@
 # schema/memory.py
-# RAG Neural Memory (Phase 11 New)
+# RAG Neural Memory ( New)
 
 from typing import List, Optional
 

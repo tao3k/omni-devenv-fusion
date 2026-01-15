@@ -1,5 +1,5 @@
 """
-Phase 61: Cognitive Scaffolding - Task Decomposer
+ Cognitive Scaffolding - Task Decomposer
 
 LLM-based task decomposition for complex goals.
 遵循 ODF-EP 标准:

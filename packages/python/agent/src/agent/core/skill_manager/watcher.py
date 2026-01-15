@@ -1,6 +1,6 @@
 """
 src/agent/core/skill_manager/watcher.py
-Phase 65: Reactive Indexing - File system watcher for auto-sync.
+ Reactive Indexing - File system watcher for auto-sync.
 
 Uses watchdog to detect file changes in skills directory and
 automatically triggers incremental sync via sync_skills().

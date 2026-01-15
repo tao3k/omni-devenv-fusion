@@ -1,6 +1,6 @@
 """
 agent/core/skill_loader.py
-Phase 60: The Grand Bazaar - Semantic Tool Routing & Dynamic Skill Loading
+ The Grand Bazaar - Semantic Tool Routing & Dynamic Skill Loading
 
 Dynamic tool loading system that:
 1. Indexes all available skills into vector store
@@ -65,7 +65,7 @@ class SkillLoader:
     """
     Skill Loader - Indexes and retrieves skills for semantic routing.
 
-    Phase 60: The Grand Bazaar
+     The Grand Bazaar
 
     Features:
     - Scans assets/skills/ for all SKILL.md files

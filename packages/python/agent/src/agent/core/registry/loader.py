@@ -1,6 +1,6 @@
 """
 agent/core/registry/loader.py
-Phase 63: Skill Loader with scripts/ support
+ Skill Loader with scripts/ support
 
 Module loading with spec-based loading and hot-reload support.
 Supports both legacy tools.py and new scripts/__init__.py patterns.
@@ -49,7 +49,7 @@ class SkillLoader:
         """
         Dynamically load a skill into the MCP server.
         Supports HOT RELOAD.
-        Phase 63: Supports both scripts/__init__.py and tools.py.
+         Supports both scripts/__init__.py and tools.py.
         """
         # Get manifest
         manifest = self.registry.get_skill_manifest(skill_name)
@@ -72,12 +72,12 @@ class SkillLoader:
         if not success:
             return False, msg
 
-        # Phase 63: Support scripts/ directory (preferred) and tools.py (legacy)
+        #  Support scripts/ directory (preferred) and tools.py (legacy)
         scripts_dir = self.registry.skills_dir / skill_name / "scripts"
         tools_path = self.registry.skills_dir / skill_name / "tools.py"
 
         if scripts_dir.exists() and (scripts_dir / "__init__.py").exists():
-            # New scripts/ pattern (Phase 63+)
+            # New scripts/ pattern (+)
             source_path = scripts_dir / "__init__.py"
             tools_module = f"agent.skills.{skill_name}.scripts"
         elif tools_path.exists():
@@ -164,7 +164,7 @@ class SkillLoader:
     def load_module(self, skill_name: str, source_path: Path) -> types.ModuleType:
         """Load a skill module from a specific path.
 
-        Phase 63: Determines module name based on path type.
+        Determines module name based on path type.
         """
         if "scripts" in str(source_path):
             module_name = f"agent.skills.{skill_name}.scripts"

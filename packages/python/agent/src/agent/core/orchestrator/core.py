@@ -2,12 +2,12 @@
 agent/core/orchestrator/core.py
 Orchestrator - The Central Switchboard.
 
-Phase 14: Coordinates flow between User -> Router -> Specialized Agents
-Phase 15: Implements Virtuous Cycle (Feedback Loop)
-Phase 18: Glass Cockpit Integration
-Phase 19: The Black Box (SessionManager)
-Phase 33: ODF-EP v6.0 Core Refactoring
-Phase 34: LangGraph Cognitive Graph (opt-in)
+Coordinates flow between User -> Router -> Specialized Agents
+Implements Virtuous Cycle (Feedback Loop)
+Glass Cockpit Integration
+The Black Box (SessionManager)
+ODF-EP v6.0 Core Refactoring
+LangGraph Cognitive Graph (opt-in)
 
 Usage:
     from agent.core.orchestrator import Orchestrator
@@ -28,7 +28,7 @@ from agent.core.session import SessionManager
 from agent.core.state import get_checkpointer, create_initial_state
 from agent.core.graph import get_graph, OmniGraph
 
-# Phase 61: Dynamic Workflow imports
+# Dynamic Workflow imports
 from agent.core.skill_manager import SkillManager
 from agent.core.orchestrator.dynamic_builder import DynamicGraphBuilder
 from agent.core.planner.planner import Planner
@@ -68,29 +68,29 @@ class Orchestrator:
     The Central Switchboard.
     Coordinates the flow between User -> Router -> Specialized Agents.
 
-    Phase 15: Implements the Virtuous Cycle (Feedback Loop):
+    Implements the Virtuous Cycle (Feedback Loop):
     1. Route: Consult HiveRouter for agent delegation
     2. Execute: Worker agent runs with Mission Brief
     3. Audit: Reviewer checks output (for Coder tasks)
     4. Self-Correct: Retry with feedback if audit fails
     5. Return: Quality-assured result to user
 
-    Phase 18: Glass Cockpit Integration:
+    Glass Cockpit Integration:
     - Uses UXManager for beautiful terminal visualization
     - Shows routing, RAG knowledge, and audit results in real-time
 
-    Phase 19: The Black Box:
+    The Black Box:
     - SessionManager for session persistence and telemetry
     - Records all decisions, actions, and costs for traceability
 
-    Phase 33: ODF-EP v6.0
+    ODF-EP v6.0
     - Uses Pydantic Shield DTOs
     - Context-aware logging with logger.bind()
 
-    Phase 34: LangGraph Cognitive Graph (opt-in)
+    LangGraph Cognitive Graph (opt-in)
     - Replaces procedural loop with state machine
 
-    Phase 61: Dynamic Workflow Builder
+    Dynamic Workflow Builder
     - WorkflowArchitect generates blueprints from goals
     - DynamicGraphBuilder compiles graphs at runtime
     - dispatch_dynamic() enables intent-to-execution flow
@@ -110,7 +110,7 @@ class Orchestrator:
 
         Args:
             inference_engine: Optional inference engine for LLM calls
-            feedback_enabled: Enable Phase 15 feedback loop (default: True)
+            feedback_enabled: Enable feedback loop (default: True)
             max_retries: Maximum self-correction retries (default: 2)
             session_id: Optional session ID for resumption
             checkpointer: Optional StateCheckpointer for state persistence
@@ -118,7 +118,7 @@ class Orchestrator:
         """
         logger = _get_logger()
 
-        # Phase 19: Auto-create inference client if not provided
+        # Auto-create inference client if not provided
         if inference_engine is None:
             try:
                 from common.mcp_core.inference import InferenceClient
@@ -134,15 +134,15 @@ class Orchestrator:
         self.max_retries = max_retries
         self.ux = get_ux_manager()
 
-        # Phase 19: SessionManager for persistence and telemetry
+        # SessionManager for persistence and telemetry
         self.session = SessionManager(session_id=session_id)
         self._session_id = self.session.session_id
 
-        # Phase 34: State Checkpointer
+        # State Checkpointer
         self._checkpointer = checkpointer or get_checkpointer()
         self._load_state()
 
-        # Phase 34: LangGraph Cognitive Graph
+        # LangGraph Cognitive Graph
         self.use_graph_mode = use_graph_mode
         if use_graph_mode:
             self._graph: OmniGraph = get_graph()
@@ -159,7 +159,7 @@ class Orchestrator:
             "orchestrator": None,
         }
 
-        # Phase 61: Dynamic Workflow Components
+        # Dynamic Workflow Components
         # Initialize SkillManager for dynamic graph execution
         self.skill_manager = SkillManager()
         available_tools = self.skill_manager.list_available()
@@ -182,7 +182,7 @@ class Orchestrator:
         context: Dict[str, Any] = None,
     ) -> str:
         """
-        Main Dispatch Loop with Phase 15 Feedback Loop and Phase 18 UX.
+        Main Dispatch Loop with Feedback Loop and UX.
 
         Args:
             user_query: The user's request
@@ -198,18 +198,18 @@ class Orchestrator:
             query_preview=user_query[:50],
         ).debug("dispatch_started")
 
-        # Phase 18: Start task visualization
+        # Start task visualization
         self.ux.start_task(user_query)
 
         logger.bind(session_id=self._session_id).info("orchestrator_processing_request")
 
-        # Phase 19: Log user input to session
+        # Log user input to session
         self.session.log("user", "user", user_query)
 
-        # Phase 34: Update GraphState with user message
+        # Update GraphState with user message
         self._update_state({"messages": [{"role": "user", "content": user_query}]})
 
-        # Phase 34: Use LangGraph cognitive graph if enabled
+        # Use LangGraph cognitive graph if enabled
         if self.use_graph_mode and self._graph is not None:
             return await self._dispatch_graph_mode(user_query, history, context)
 
@@ -217,7 +217,7 @@ class Orchestrator:
         return await self._dispatch_standard(user_query, history)
 
     async def dispatch_dynamic(self, user_query: str) -> str:
-        """Phase 61: Dynamic Graph Execution Mode.
+        """Dynamic Graph Execution Mode.
 
         This method uses the Planner's WorkflowArchitect to design a workflow
         blueprint, then compiles and executes it using DynamicGraphBuilder.

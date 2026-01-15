@@ -38,6 +38,8 @@ class TestListToolsRegression:
 
         This was the Phase 73 bug: get_context_tools(user_query="") only returned
         Core Tools from settings.yaml, silently dropping all other skill commands.
+
+        Commands are formatted as "skill.command" (skill prefix stripped).
         """
         from agent.mcp_server import handle_list_tools
 
@@ -47,9 +49,18 @@ class TestListToolsRegression:
         # All loaded skill commands must be in the list
         for skill_name, skill in loaded_manager.skills.items():
             for cmd_name in skill.commands.keys():
-                expected_tool = f"{skill_name}.{cmd_name}"
+                # Apply same conversion logic as handle_list_tools
+                if cmd_name.startswith(f"{skill_name}_"):
+                    base = cmd_name[len(skill_name) + 1 :]
+                elif cmd_name.startswith(f"{skill_name}."):
+                    base = cmd_name[len(skill_name) + 1 :]
+                else:
+                    base = cmd_name
+                expected_tool = f"{skill_name}.{base}"
+
                 assert expected_tool in tool_names, (
                     f"Skill command missing from list_tools: {expected_tool}. "
+                    f"Original cmd_name was: {cmd_name}. "
                     "This indicates a regression where only Core Tools are returned."
                 )
 

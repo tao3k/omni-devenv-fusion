@@ -1,5 +1,5 @@
 """
-Phase 61: Cognitive Scaffolding - Planner Schemas
+ Cognitive Scaffolding - Planner Schemas
 
 Task, Plan, and Episode data structures for the Planner module.
 遵循 ODF-EP 标准:
@@ -287,7 +287,7 @@ class Episode(BaseModel):
 
 
 # =============================================================================
-# Phase 61: Dynamic Workflow Schemas
+#  Dynamic Workflow Schemas
 # =============================================================================
 
 

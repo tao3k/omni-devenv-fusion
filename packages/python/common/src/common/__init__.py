@@ -43,4 +43,22 @@ def __getattr__(name: str):
 
         return getattr(cache_path, name)
 
+    # Lazy load prj_dirs (PRJ_SPEC directories)
+    if name in (
+        "PRJ_DIRS",
+        "PRJ_DATA",
+        "PRJ_CACHE",
+        "PRJ_CONFIG",
+        "PRJ_RUNTIME",
+        "PRJ_PATH",
+        "get_prj_dir",
+        "get_data_dir",
+        "get_cache_dir",
+        "get_config_dir",
+        "get_runtime_dir",
+    ):
+        from . import prj_dirs
+
+        return getattr(prj_dirs, name)
+
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

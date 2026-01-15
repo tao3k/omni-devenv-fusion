@@ -1,6 +1,6 @@
 """
 src/agent/core/skill_manager/graph_skill.py
-Phase 62: GraphSkill Base Class for Standardized Subgraph Skills.
+ GraphSkill Base Class for Standardized Subgraph Skills.
 
 Provides a base class for skills that can be used as LangGraph subgraphs.
 Enables "Agent calling Agent" nesting capability.
@@ -35,7 +35,7 @@ class GraphSkill(ABC):
     """
     Base class for skills that can be executed as LangGraph subgraphs.
 
-    Phase 62: Enables "Agent calling Agent" nesting capability.
+     Enables "Agent calling Agent" nesting capability.
     Each GraphSkill is a self-contained workflow that can be composed
     into larger graphs.
 

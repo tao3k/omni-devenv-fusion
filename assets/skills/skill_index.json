@@ -1,0 +1,1098 @@
+[
+  {
+    "name": "\"software_engineering\"",
+    "description": "\"The foundation of engineering mindset. Focuses on architecture, system patterns, and universal code navigation.\"",
+    "version": "\"1.0.0\"",
+    "path": "assets/skills/software_engineering",
+    "tools": [],
+    "routing_keywords": "",
+    "intents": [],
+    "authors": ["omni-dev-fusion"],
+    "docs_available": {
+      "skill_md": true,
+      "readme": true,
+      "guide": false,
+      "prompts": false,
+      "tests": false
+    },
+    "oss_compliant": [],
+    "compliance_details": ["SKILL.md", "README.md"]
+  },
+  {
+    "name": "\"python_engineering\"",
+    "description": "\"Python development utilities including linting, testing, and Pydantic standards\"",
+    "version": "\"1.0.0\"",
+    "path": "assets/skills/python_engineering",
+    "tools": [],
+    "routing_keywords": "",
+    "intents": [],
+    "authors": ["omni-dev-fusion"],
+    "docs_available": {
+      "skill_md": true,
+      "readme": true,
+      "guide": false,
+      "prompts": false,
+      "tests": false
+    },
+    "oss_compliant": [],
+    "compliance_details": ["SKILL.md", "README.md"]
+  },
+  {
+    "name": "\"code_navigation\"",
+    "description": "\"Navigate and search codebase structure using AST maps and patterns. Reduce context usage by 10-50x.\"",
+    "version": "\"1.1.0\"",
+    "path": "assets/skills/code_navigation",
+    "tools": [
+      {
+        "name": "outline_file",
+        "description": "Generate a high-level outline (skeleton) of a source file. Reduces context usage by providing symbolic representation instead of full content. AX Philosophy: \"Map over Territory\" - understand structur"
+      },
+      {
+        "name": "count_symbols",
+        "description": "Count the number of symbols (classes, functions, etc.) in a file. Useful for quickly assessing file complexity before reading.  if not RUST_AVAILABLE: return {\"error\": \"omni_core_rs not available\"} tr"
+      },
+      {
+        "name": "search_code",
+        "description": "Search for AST patterns in a single file using ast-grep syntax. Unlike text search (grep), this searches for CODE PATTERNS, not strings. Perfect for finding specific code constructs like function call"
+      },
+      {
+        "name": "search_directory",
+        "description": "Search for AST patterns recursively in a directory. Unlike naive grep, this uses AST patterns for precise, semantic matching.  if not RUST_AVAILABLE: return \"Error: Rust bindings (omni_core_rs) not av"
+      }
+    ],
+    "routing_keywords": "",
+    "intents": [],
+    "authors": ["omni-dev-fusion"],
+    "docs_available": {
+      "skill_md": true,
+      "readme": false,
+      "guide": false,
+      "prompts": false,
+      "tests": true
+    },
+    "oss_compliant": false,
+    "compliance_details": ["SKILL.md", "scripts", "tests"]
+  },
+  {
+    "name": "\"documentation\"",
+    "description": "\"Specialized skill for creating, updating, and indexing project documentation.\"",
+    "version": "\"1.0.0\"",
+    "path": "assets/skills/documentation",
+    "tools": [],
+    "routing_keywords": "",
+    "intents": [],
+    "authors": ["omni-dev-fusion"],
+    "docs_available": {
+      "skill_md": true,
+      "readme": true,
+      "guide": false,
+      "prompts": false,
+      "tests": false
+    },
+    "oss_compliant": [],
+    "compliance_details": ["SKILL.md", "README.md"]
+  },
+  {
+    "name": "crawl4ai",
+    "description": "High-performance web crawler skill using Sidecar Execution Pattern",
+    "version": "0.1.0",
+    "path": "assets/skills/crawl4ai",
+    "tools": [
+      {
+        "name": "main",
+        "description": "CLI entry point - supports both stdin JSON and command line args. import argparse parser = argparse.ArgumentParser(description=\"Crawl4AI Engine\") parser.add_argument(\"--url\", type=str, help=\"URL to cr"
+      },
+      {
+        "name": "skill_script",
+        "description": "Dummy decorator for Heavy Skills. This decorator: 1. Preserves the original function signature and docstring 2. Marks the function for Rust Scanner detection 3. Stores metadata for potential runtime u"
+      }
+    ],
+    "routing_keywords": [],
+    "intents": "",
+    "authors": [],
+    "docs_available": {
+      "skill_md": true,
+      "readme": false,
+      "guide": false,
+      "prompts": false,
+      "tests": false
+    },
+    "oss_compliant": false,
+    "compliance_details": ["SKILL.md", "scripts"]
+  },
+  {
+    "name": "\"memory\"",
+    "description": "\"The Hippocampus Interface - Vector-based Memory for LLM\"",
+    "version": "\"1.0.0\"",
+    "path": "assets/skills/memory",
+    "tools": [
+      {
+        "name": "_get_memory_path",
+        "description": "Get memory root path. from common.cache_path import CACHE_DIR from common.settings import get_setting custom_path = get_setting(\"memory.path\", \"\") if custom_path: return Path(custom_path) return CACHE"
+      },
+      {
+        "name": "_get_store",
+        "description": "Lazily initialize and return the VectorStore. global _cached_store, RUST_AVAILABLE if _cached_store is not None: return _cached_store try: import omni_core_rs embedding_dimension = 384  # Default for "
+      },
+      {
+        "name": "_get_embedding",
+        "description": "[Phase 53.5] Real Semantic Embedding using FastEmbed or OpenAI. Falls back to DummyEmbedding if real embedding service fails.  try: from agent.core.embedding import get_embedding_service service = get"
+      },
+      {
+        "name": "_load_skill_manifest",
+        "description": "Load a skill's manifest and prompts. from common.settings import get_setting from common.gitops import get_project_root skills_path = get_setting(\"skills.path\", \"assets/skills\") project_root = get_pro"
+      }
+    ],
+    "routing_keywords": "",
+    "intents": [],
+    "authors": ["omni-dev-fusion"],
+    "docs_available": {
+      "skill_md": true,
+      "readme": true,
+      "guide": false,
+      "prompts": false,
+      "tests": true
+    },
+    "oss_compliant": true,
+    "compliance_details": ["SKILL.md", "README.md", "scripts", "tests"]
+  },
+  {
+    "name": "\"Skill Manager\"",
+    "description": "\"Manage skills - discover, install, and update from remote repositories\"",
+    "version": "\"1.0.0\"",
+    "path": "assets/skills/skill",
+    "tools": [
+      {
+        "name": "format_search_result",
+        "description": "Format search results as markdown for display. Args: json_output: Raw JSON output from search_tools. Returns: Formatted markdown string.  try: data = json.loads(json_output) if \"error\" in data: return"
+      },
+      {
+        "name": "_get_discovery",
+        "description": "Get VectorSkillDiscovery instance (lazy loaded). from agent.core.skill_discovery import VectorSkillDiscovery return VectorSkillDiscovery() @skill_script( name=\"discover\", category=\"workflow\", descript"
+      },
+      {
+        "name": "jit_install",
+        "description": "Just-in-Time Skill Installation. Args: skill_id: Skill ID to install auto_load: Whether to load after install Returns: Installation status  from mcp.types import Tool return f\"Installing skill: {skill"
+      },
+      {
+        "name": "get_template_dirs",
+        "description": "Get template directories for a skill. Returns: Dict with \"user\" and \"skill\" keys mapping to Path objects  project_root = get_project_root() templates_config = get_setting(\"assets.templates_dir\", \"asse"
+      },
+      {
+        "name": "list_templates",
+        "description": "List all available templates for a skill. Args: skill_name: Name of the skill (e.g., \"git\", \"docker\") Returns: Dict mapping template_name -> {\"source\": \"user|skill\", \"path\": absolute_path}  dirs = get"
+      },
+      {
+        "name": "get_template_info",
+        "description": "Get information about a specific template. Args: skill_name: Name of the skill template_name: Template filename (e.g., \"commit_message.j2\") Returns: Dict with source, path, or None if not found  templ"
+      },
+      {
+        "name": "get_template_source",
+        "description": "Get the source code of a template. Args: skill_name: Name of the skill template_name: Template filename Returns: Template content or None if not found  info = get_template_info(skill_name, template_na"
+      },
+      {
+        "name": "eject_template",
+        "description": "Copy a skill default template to user directory. Args: skill_name: Name of the skill template_name: Template filename (e.g., \"commit_message.j2\") Returns: Dict with status, message, and path  dirs = g"
+      },
+      {
+        "name": "format_template_list",
+        "description": "Format template list for display. Args: skill_name: Name of the skill Returns: Formatted markdown string  templates = list_templates(skill_name) dirs = get_template_dirs(skill_name) if not templates: "
+      },
+      {
+        "name": "format_eject_result",
+        "description": "Format eject result for display. Args: skill_name: Name of the skill template_name: Template filename Returns: Formatted markdown string  result = eject_template(skill_name, template_name) if result[\""
+      },
+      {
+        "name": "format_info_result",
+        "description": "Format template info for display. Args: skill_name: Name of the skill template_name: Template filename Returns: Formatted markdown string  info = get_template_info(skill_name, template_name) if not in"
+      },
+      {
+        "name": "list_tools",
+        "description": "Format a list of all registered MCP tools. Args: compact: If True, show minimal output (name only) Returns: Formatted markdown string with all tools  from agent.core.skill_manager import get_skill_man"
+      },
+      {
+        "name": "format_tools_list",
+        "description": "Alias for list_tools for backward compatibility. return list_tools(compact)"
+      }
+    ],
+    "routing_keywords": ["skill", "discovery", "install", "jit"],
+    "intents": [],
+    "authors": ["omni-dev"],
+    "docs_available": {
+      "skill_md": true,
+      "readme": true,
+      "guide": false,
+      "prompts": false,
+      "tests": true
+    },
+    "oss_compliant": true,
+    "compliance_details": ["SKILL.md", "README.md", "scripts", "tests"]
+  },
+  {
+    "name": "\"structural_editing\"",
+    "description": "\"Surgical code refactoring using AST patterns. Modify code with precision, not regex. Dry-run supported.\"",
+    "version": "\"1.0.0\"",
+    "path": "assets/skills/structural_editing",
+    "tools": [
+      {
+        "name": "_fallback_replace",
+        "description": "Fallback implementation using simple string replace. This is less precise than AST-based matching but provides basic functionality.  literal_pattern = re.sub(r\"\\$\\w+\", \".*?\", pattern) try: matches = l"
+      },
+      {
+        "name": "structural_replace",
+        "description": "Perform structural replace on content using AST patterns. Unlike regex replace, this understands code structure: - Pattern \"connect($ARGS)\" matches function calls, not strings containing \"connect\" - V"
+      },
+      {
+        "name": "structural_preview",
+        "description": "Preview structural replace on a file without modifying it. Always use this before structural_apply to verify changes are correct. AX Philosophy: \"Preview twice, apply once.\"  if not RUST_AVAILABLE: re"
+      },
+      {
+        "name": "structural_apply",
+        "description": "Apply structural replace to a file (MODIFIES THE FILE). **CAUTION**: This modifies the file in place. Always use structural_preview first. AX Philosophy: \"The Surgeon cuts only where necessary.\"  if n"
+      },
+      {
+        "name": "refactor_repository",
+        "description": "MASS REFACTORING TOOL. Change code patterns across the ENTIRE repository. This is the \"nuclear option\" - it processes thousands of files in parallel using Rust's rayon thread pool.  if not RUST_AVAILA"
+      },
+      {
+        "name": "get_edit_info",
+        "description": "Get information about the structural editing capability.  return { \"name\": \"structural_editing\", \"version\": \"1.1.0\", \"rust_available\": RUST_AVAILABLE, \"supported_languages\": [\"python\", \"rust\", \"javasc"
+      }
+    ],
+    "routing_keywords": "",
+    "intents": [],
+    "authors": ["omni-dev-fusion"],
+    "docs_available": {
+      "skill_md": true,
+      "readme": false,
+      "guide": false,
+      "prompts": false,
+      "tests": false
+    },
+    "oss_compliant": false,
+    "compliance_details": ["SKILL.md", "scripts"]
+  },
+  {
+    "name": "_template",
+    "description": "Template skill for new capabilities - demonstrates Trinity Architecture with Isolated Sandbox",
+    "version": "1.0.0",
+    "path": "assets/skills/test-skill",
+    "tools": [
+      {
+        "name": "example",
+        "description": "An example command for the template skill.  from agent.skills._template.scripts import example as example_mod return example_mod.example_command(param) @skill_script( name=\"example_with_options\", cate"
+      },
+      {
+        "name": "example_with_options",
+        "description": "Example command with optional parameters.  from agent.skills._template.scripts import example as example_mod return example_mod.example_with_options(enabled=enabled, value=value) @skill_script( name=\""
+      },
+      {
+        "name": "process_data",
+        "description": "Process a list of data strings.  from agent.skills._template.scripts import example as example_mod result = example_mod.process_data(data, filter_empty=filter_empty) return { \"processed\": result, \"cou"
+      }
+    ],
+    "routing_keywords": ["template", "new skill", "create skill", "scaffold"],
+    "intents": [],
+    "authors": ["omni-dev-fusion"],
+    "docs_available": {
+      "skill_md": true,
+      "readme": true,
+      "guide": false,
+      "prompts": false,
+      "tests": false
+    },
+    "oss_compliant": true,
+    "compliance_details": ["SKILL.md", "README.md", "scripts"]
+  },
+  {
+    "name": "meta",
+    "description": "Self-evolution and code refinement capabilities (The Alchemist).",
+    "version": "1.0.0",
+    "path": "assets/skills/meta",
+    "tools": [
+      {
+        "name": "_clean_code_block",
+        "description": "Helper to strip markdown fences if present. content = content.strip() if content.startswith(\"```python\"): content = content[9:] elif content.startswith(\"```\"): content = content[3:] if content.endswit"
+      }
+    ],
+    "routing_keywords": [],
+    "intents": [],
+    "authors": [],
+    "docs_available": {
+      "skill_md": true,
+      "readme": false,
+      "guide": false,
+      "prompts": false,
+      "tests": false
+    },
+    "oss_compliant": false,
+    "compliance_details": ["SKILL.md", "scripts"]
+  },
+  {
+    "name": "\"terminal\"",
+    "description": "\"Execute system commands and shell scripts. Use with extreme caution.\"",
+    "version": "\"1.0.0\"",
+    "path": "assets/skills/terminal",
+    "tools": [
+      {
+        "name": "check_dangerous_patterns",
+        "description": "Check if a command contains dangerous patterns. full_command = f\"{command} {' '.join(args)}\" for pattern, description in DANGEROUS_PATTERNS: if re.search(pattern, full_command, re.IGNORECASE): return "
+      },
+      {
+        "name": "run_command",
+        "description": "Execute a command with safety checks. Args: command: Command to execute args: Command arguments timeout: Timeout in seconds Returns: Dict with exit_code, stdout, stderr, duration_ms  if ALLOWED_COMMAN"
+      },
+      {
+        "name": "format_result",
+        "description": "Format execution result for display. output = [] if result.get(\"stdout\"): output.append(result[\"stdout\"]) if result.get(\"stderr\"): output.append(f\"STDERR:\\n{result['stderr']}\") if result.get(\"exit_cod"
+      },
+      {
+        "name": "_is_git_commit_blocked",
+        "description": "Check if command is a blocked git commit operation. cmd_lower = command.lower() if \"git commit\" in cmd_lower: return True, ( \"PROHIBITED: Direct 'git commit' is disabled in Terminal.\\n\" \"Use the 'git_"
+      }
+    ],
+    "routing_keywords": "",
+    "intents": [],
+    "authors": ["omni-dev-fusion"],
+    "docs_available": {
+      "skill_md": true,
+      "readme": true,
+      "guide": false,
+      "prompts": false,
+      "tests": true
+    },
+    "oss_compliant": true,
+    "compliance_details": ["SKILL.md", "README.md", "scripts", "tests"]
+  },
+  {
+    "name": "\"filesystem\"",
+    "description": "\"Safe file operations (read, write, list, search) with codebase awareness.\"",
+    "version": "\"1.0.0\"",
+    "path": "assets/skills/filesystem",
+    "tools": [
+      {
+        "name": "_validate_syntax",
+        "description": "Validate syntax for Python and Nix files. if filepath.endswith(\".py\"): try: import ast ast.parse(content) return True, \"\" except SyntaxError as e: return False, f\"Python syntax error at line {e.lineno"
+      },
+      {
+        "name": "_create_backup",
+        "description": "Create a .bak backup of existing file. try: backup_path = filepath.with_suffix(filepath.suffix + \".bak\") shutil.copy2(filepath, backup_path) return True except Exception: return False @skill_script( n"
+      },
+      {
+        "name": "_convert_path_to_relative",
+        "description": "Convert absolute path to relative path if within project. is_safe, error_msg, normalized = normalize_path(path) if not is_safe: raise ValueError(error_msg) return normalized @skill_script( name=\"ast_s"
+      }
+    ],
+    "routing_keywords": "",
+    "intents": [],
+    "authors": ["omni-dev-fusion"],
+    "docs_available": {
+      "skill_md": true,
+      "readme": true,
+      "guide": false,
+      "prompts": false,
+      "tests": false
+    },
+    "oss_compliant": true,
+    "compliance_details": ["SKILL.md", "README.md", "scripts"]
+  },
+  {
+    "name": "\"testing\"",
+    "description": "\"Run unit tests and analyze test results using Pytest.\"",
+    "version": "\"1.0.0\"",
+    "path": "assets/skills/testing",
+    "tools": [],
+    "routing_keywords": "",
+    "intents": [],
+    "authors": ["omni-dev-fusion"],
+    "docs_available": {
+      "skill_md": true,
+      "readme": true,
+      "guide": false,
+      "prompts": false,
+      "tests": false
+    },
+    "oss_compliant": [],
+    "compliance_details": ["SKILL.md", "README.md"]
+  },
+  {
+    "name": "\"writer\"",
+    "description": "\"Writing quality tools for enforcing project writing standards.\"",
+    "version": "\"1.0.0\"",
+    "path": "assets/skills/writer",
+    "tools": [
+      {
+        "name": "_load_styles",
+        "description": "Load all writing style guidelines from skills/writer/writing-style/*.md skill_dir = SKILLS_DIR(\"writer\") style_dir = skill_dir / \"writing-style\" if not style_dir.exists(): WritingStyleCache._guideline"
+      },
+      {
+        "name": "get_guidelines",
+        "description": "Get combined guidelines text. if not cls._loaded: _ = cls() cls._instance._load_styles() return cls._guidelines @classmethod"
+      },
+      {
+        "name": "get_guidelines_dict",
+        "description": "Get guidelines as dict for structured access. if not cls._loaded: _ = cls() cls._instance._load_styles() return cls._guidelines_dict.copy() CLUTTER_WORDS: Dict[str, str] = { r\"\\butilize\\b\": \"use\", r\"\\"
+      },
+      {
+        "name": "_check_passive_voice",
+        "description": "Detect passive voice in a line. violations = [] for pattern in PASSIVE_VOICE_PATTERNS: if re.search(pattern, line, re.IGNORECASE): match = re.search(pattern, line, re.IGNORECASE) if match: violations."
+      }
+    ],
+    "routing_keywords": "",
+    "intents": [],
+    "authors": ["omni-dev-fusion"],
+    "docs_available": {
+      "skill_md": true,
+      "readme": true,
+      "guide": false,
+      "prompts": false,
+      "tests": false
+    },
+    "oss_compliant": true,
+    "compliance_details": ["SKILL.md", "README.md", "scripts"]
+  },
+  {
+    "name": "\"knowledge\"",
+    "description": "\"Project Cortex - Structural Knowledge Injection for LLM\"",
+    "version": "\"1.0.0\"",
+    "path": "assets/skills/knowledge",
+    "tools": [
+      {
+        "name": "_load_standards",
+        "description": "Load all language standards from skills/knowledge/standards/. skill_dir = SKILLS_DIR(\"knowledge\") standards_dir = skill_dir / \"standards\" if not standards_dir.exists(): return for std_file in standard"
+      },
+      {
+        "name": "get_standard",
+        "description": "Get standards for a language. return self._standards.get(lang, \"\")"
+      },
+      {
+        "name": "get_all_standards",
+        "description": "Get all loaded standards. return self._standards.copy() _standards_cache = StandardsCache()"
+      },
+      {
+        "name": "_get_language_from_path",
+        "description": "Detect language from file extension. path = Path(file_path) ext = path.suffix.lower() return EXT_TO_LANG.get(ext)"
+      },
+      {
+        "name": "_extract_relevant_standards",
+        "description": "Extract standards sections relevant to the task. task_words = set(re.findall(r\"\\w+\", task.lower())) common_words = {\"the\", \"a\", \"an\", \"to\", \"for\", \"in\", \"add\", \"file\", \"use\", \"code\"} lines = standard."
+      },
+      {
+        "name": "_get_project_name",
+        "description": "Extract project name from pyproject.toml. project_root = get_project_root() pyproject = project_root / \"pyproject.toml\" if pyproject.exists(): try: with open(pyproject, \"rb\") as f: data = tomllib.load"
+      },
+      {
+        "name": "_load_scopes",
+        "description": "Load valid git scopes from cog.toml. from common.settings import get_setting try: cog_toml_path = Path(get_setting(\"config.cog_toml\", \"cog.toml\")) if cog_toml_path.exists(): with open(cog_toml_path, \""
+      },
+      {
+        "name": "_analyze_lefthook",
+        "description": "Analyze lefthook configuration to determine active guardrails. from common.settings import get_setting hooks = [] lefthook_yaml = Path(get_setting(\"config.lefhook_yaml\", \"lefthook.yml\")) if lefthook_y"
+      },
+      {
+        "name": "_get_writing_style",
+        "description": "Get writing style configuration. return { \"language\": \"english_only\", \"commit_language\": \"english_only\", \"max_sentence_length\": 25, \"list_max_items\": 4, }"
+      },
+      {
+        "name": "_get_architecture_summary",
+        "description": "Get high-level architecture description. return { \"pattern\": \"Skill-Centric Architecture\", \"mcp_servers\": [\"orchestrator\", \"coder\"], \"key_directories\": { \"assets/\": \"LLM context (how-to, standards, sp"
+      },
+      {
+        "name": "_search_docs",
+        "description": "Search documentation for a topic. from common.gitops import get_project_root docs_dir = get_project_root() / \"docs\" if not docs_dir.exists(): return f\"No docs directory found for topic '{topic}'.\" top"
+      },
+      {
+        "name": "_read_file_content",
+        "description": "Read file content safely. from common.gitops import get_project_root try: project_root = get_project_root() file_path = Path(path) if not file_path.is_absolute(): file_path = project_root / file_path "
+      },
+      {
+        "name": "format_knowledge_results",
+        "description": "Format knowledge search results as markdown for display. Args: json_output: Raw JSON output from search_project_knowledge. Returns: Formatted markdown string.  try: data = json.loads(json_output) if \""
+      }
+    ],
+    "routing_keywords": "",
+    "intents": [],
+    "authors": ["omni-dev-fusion"],
+    "docs_available": {
+      "skill_md": true,
+      "readme": true,
+      "guide": false,
+      "prompts": false,
+      "tests": true
+    },
+    "oss_compliant": true,
+    "compliance_details": ["SKILL.md", "README.md", "scripts", "tests"]
+  },
+  {
+    "name": "\"testing_protocol\"",
+    "description": "\"Testing workflow tools following Modified-Code Protocol for intelligent test selection.\"",
+    "version": "\"1.0.0\"",
+    "path": "assets/skills/testing_protocol",
+    "tools": [
+      {
+        "name": "get_git_status",
+        "description": "Get git status for changed files. try: result = subprocess.run( [\"git\", \"diff\", \"--cached\", \"--name-only\"], capture_output=True, text=True ) staged = result.stdout.strip().split(\"\\n\") if result.stdout"
+      },
+      {
+        "name": "categorize_changes",
+        "description": "Categorize changes by type. categories = { \"docs_only\": True, \"mcp_server\": False, \"tool_router\": False, \"nix_config\": False, \"code_changes\": False, } doc_extensions = {\".md\", \".txt\", \".rst\", \".adoc\"}"
+      }
+    ],
+    "routing_keywords": "",
+    "intents": [],
+    "authors": ["omni-dev-fusion"],
+    "docs_available": {
+      "skill_md": true,
+      "readme": true,
+      "guide": false,
+      "prompts": false,
+      "tests": false
+    },
+    "oss_compliant": true,
+    "compliance_details": ["SKILL.md", "README.md", "scripts"]
+  },
+  {
+    "name": "note_taker",
+    "description": "Persistent memory system for summarizing sessions and managing knowledge - The Scribe's Ledger",
+    "version": "1.0.0",
+    "path": "assets/skills/note_taker",
+    "tools": [
+      {
+        "name": "update_knowledge_base",
+        "description": "Save knowledge entry to the knowledge base. Args: category: Knowledge category (patterns, solutions, errors, techniques) title: Title of the knowledge entry content: Markdown content of the knowledge "
+      },
+      {
+        "name": "search_notes",
+        "description": "Search notes and knowledge entries. Args: query: Search query string category: Optional category filter limit: Maximum number of results Returns: Dict with search results  results = [] query_lower = q"
+      },
+      {
+        "name": "_update_index",
+        "description": "Update the knowledge index for a category. index_dir = Path(\"assets/knowledge/index\") index_dir.mkdir(parents=True, exist_ok=True) index_file = index_dir / f\"{category}.json\" if index_file.exists(): i"
+      },
+      {
+        "name": "_parse_frontmatter",
+        "description": "Parse YAML frontmatter from markdown content. frontmatter = {} if content.startswith(\"---\"): end_marker = content.find(\"---\", 3) if end_marker != -1: yaml_content = content[3:end_marker].strip() for l"
+      },
+      {
+        "name": "_get_snippet",
+        "description": "Get a snippet around the match. idx = content.find(query) if idx == -1: return \"\" start = max(0, idx - context_chars) end = min(len(content), idx + len(query) + context_chars) snippet = content[start:"
+      },
+      {
+        "name": "save",
+        "description": "Save knowledge entry to the knowledge base. Args: category: Knowledge category (patterns, solutions, errors, techniques) title: Title of the knowledge entry content: Markdown content of the knowledge "
+      },
+      {
+        "name": "search",
+        "description": "Search notes and knowledge entries. Args: query: Search query string category: Optional category filter limit: Maximum number of results Returns: Markdown-formatted search results  from agent.core.ski"
+      },
+      {
+        "name": "_update_index",
+        "description": "Update the knowledge index for a category. index_dir = Path(\"assets/knowledge/index\") index_dir.mkdir(parents=True, exist_ok=True) index_file = index_dir / f\"{category}.json\" if index_file.exists(): i"
+      },
+      {
+        "name": "_parse_frontmatter",
+        "description": "Parse YAML frontmatter from markdown content. frontmatter = {} if content.startswith(\"---\"): end_marker = content.find(\"---\", 3) if end_marker != -1: yaml_content = content[3:end_marker].strip() for l"
+      },
+      {
+        "name": "summarize_session",
+        "description": "Extract key decisions, failures, and solutions from session trajectory. Args: session_id: Unique identifier for this session trajectory: List of execution steps with decisions and outcomes include_fai"
+      },
+      {
+        "name": "_extract_goal",
+        "description": "Extract the session goal from trajectory. for step in trajectory: if step.get(\"type\") == \"goal\": return step.get(\"content\", \"Unknown goal\") return \"Goal not explicitly recorded\""
+      },
+      {
+        "name": "_extract_decisions",
+        "description": "Extract decision points from trajectory. decisions = [] for step in trajectory: if step.get(\"type\") == \"decision\": decisions.append( { \"title\": step.get(\"title\", \"Decision\"), \"context\": step.get(\"cont"
+      },
+      {
+        "name": "_extract_failures",
+        "description": "Extract failed approaches from trajectory. failures = [] for step in trajectory: if step.get(\"type\") == \"failure\": failures.append( { \"approach\": step.get(\"approach\", \"Unknown approach\"), \"reason\": st"
+      },
+      {
+        "name": "_extract_files",
+        "description": "Extract file modifications from trajectory. files = [] for step in trajectory: if step.get(\"type\") == \"file_change\": files.append( { \"path\": step.get(\"path\", \"\"), \"description\": step.get(\"description\""
+      },
+      {
+        "name": "_extract_insights",
+        "description": "Extract key insights from trajectory. insights = [] for step in trajectory: if step.get(\"type\") == \"insight\": insights.append(step.get(\"content\", \"\")) return insights if __name__ == \"__main__\": import"
+      },
+      {
+        "name": "summarize",
+        "description": "Generate markdown summary from session trajectory. Args: session_id: Unique identifier for this session trajectory: List of execution steps with decisions and outcomes include_failures: Whether to inc"
+      },
+      {
+        "name": "_extract_goal",
+        "description": "Extract the session goal from trajectory. for step in trajectory: if step.get(\"type\") == \"goal\": return step.get(\"content\", \"Unknown goal\") return \"Goal not explicitly recorded\""
+      },
+      {
+        "name": "_extract_decisions",
+        "description": "Extract decision points from trajectory. decisions = [] for step in trajectory: if step.get(\"type\") == \"decision\": decisions.append( { \"title\": step.get(\"title\", \"Decision\"), \"context\": step.get(\"cont"
+      },
+      {
+        "name": "_extract_failures",
+        "description": "Extract failed approaches from trajectory. failures = [] for step in trajectory: if step.get(\"type\") == \"failure\": failures.append( { \"approach\": step.get(\"approach\", \"Unknown approach\"), \"reason\": st"
+      },
+      {
+        "name": "_extract_files",
+        "description": "Extract file modifications from trajectory. files = [] for step in trajectory: if step.get(\"type\") == \"file_change\": files.append( { \"path\": step.get(\"path\", \"\"), \"description\": step.get(\"description\""
+      },
+      {
+        "name": "_extract_insights",
+        "description": "Extract key insights from trajectory. insights = [] for step in trajectory: if step.get(\"type\") == \"insight\": insights.append(step.get(\"content\", \"\")) return insights"
+      }
+    ],
+    "routing_keywords": "",
+    "intents": [],
+    "authors": ["omni-dev-fusion"],
+    "docs_available": {
+      "skill_md": true,
+      "readme": false,
+      "guide": false,
+      "prompts": false,
+      "tests": false
+    },
+    "oss_compliant": false,
+    "compliance_details": ["SKILL.md", "scripts"]
+  },
+  {
+    "name": "\"advanced_search\"",
+    "description": "\"High-performance code search using ripgrep with structured results.\"",
+    "version": "\"1.0.0\"",
+    "path": "assets/skills/advanced_search",
+    "tools": [
+      {
+        "name": "_build_ripgrep_command",
+        "description": "Build ripgrep command with proper arguments. cmd = [\"rg\", \"--color=never\", \"--heading\", \"-n\"] if not include_hidden: cmd.append(\"--hidden=false\") if file_type: cmd.extend([\"-t\", file_type]) cmd.extend"
+      },
+      {
+        "name": "_parse_ripgrep_output",
+        "description": "Parse ripgrep output into structured SearchResult objects. results: list[SearchResult] = [] if not output.strip(): return results lines = output.split(\"\\n\") current_file = \"\" for line in lines: if not"
+      }
+    ],
+    "routing_keywords": "",
+    "intents": [],
+    "authors": ["omni-dev-fusion"],
+    "docs_available": {
+      "skill_md": true,
+      "readme": true,
+      "guide": false,
+      "prompts": false,
+      "tests": false
+    },
+    "oss_compliant": true,
+    "compliance_details": ["SKILL.md", "README.md", "scripts"]
+  },
+  {
+    "name": "\"git\"",
+    "description": "\"Git integration with LangGraph workflow support, Smart Commit V2, and Spec-Awareness\"",
+    "version": "\"2.0.0\"",
+    "path": "assets/skills/git",
+    "tools": [
+      {
+        "name": "node_prepare",
+        "description": "Prepare stage: Stage files, extract diff, run security scan. This node does the \"dirty work\" and prepares data for LLM analysis. The actual analysis and message generation happens in LLM's cognitive s"
+      },
+      {
+        "name": "_get_valid_scopes",
+        "description": "Get valid scopes from cog.toml. try: from common.config.settings import get_setting from common.gitops import get_project_root root = get_project_root() cog_path = root / get_setting(\"config.cog_toml\""
+      },
+      {
+        "name": "_fix_scope_in_message",
+        "description": "Fix invalid scope in commit message using valid scopes. import re match = re.match(r\"^(\\w+)\\(([^)]+)\\):\\s*(.+)$\", message.strip()) if not match: return message  # Can't parse, return as-is commit_type"
+      },
+      {
+        "name": "_get_staged_files",
+        "description": "Get currently staged files. result = subprocess.run( [\"git\", \"diff\", \"--cached\", \"--name-only\"], capture_output=True, text=True, cwd=cwd, ) return set(f.strip() for f in result.stdout.splitlines() if "
+      },
+      {
+        "name": "_get_unstaged_files",
+        "description": "Get unstaged (modified but not staged) files. result = subprocess.run( [\"git\", \"diff\", \"--name-only\"], capture_output=True, text=True, cwd=cwd, ) return set(f.strip() for f in result.stdout.splitlines"
+      },
+      {
+        "name": "_try_commit",
+        "description": "Try to commit and return (success, result). Returns: (True, commit_hash) on success (False, error_message) on failure  result = subprocess.run( [\"git\", \"commit\", \"-m\", message], capture_output=True, t"
+      },
+      {
+        "name": "node_execute",
+        "description": "Execute stage: Perform the actual git commit with retry logic. Retry strategy: 1. First try: Re-stage all modified tracked files, then commit 2. If lefthook reformatted: Re-stage only reformatted file"
+      },
+      {
+        "name": "route_after_prepare",
+        "description": "Route after prepare stage based on preparation results. Returns: \"execute\" if all checks passed (will interrupt before execute) \"END\" if there are issues (empty, security_violation, error)  status = s"
+      },
+      {
+        "name": "build_workflow",
+        "description": "Build the Smart Commit Workflow StateGraph. Flow: prepare -> (interrupt) -> execute The graph interrupts before 'execute' node, allowing: 1. LLM to receive the diff and staged files 2. LLM to analyze "
+      },
+      {
+        "name": "start_workflow",
+        "description": "Start a new smart commit workflow. Runs the graph until it reaches the interrupt point (before execute). Args: project_root: Project root path workflow_id: Unique ID for this workflow session Returns:"
+      },
+      {
+        "name": "approve_workflow",
+        "description": "Approve a pending commit and resume the workflow. Args: message: LLM-generated commit message workflow_id: Same workflow ID used when starting Returns: Final state after commit execution  config = {\"c"
+      },
+      {
+        "name": "reject_workflow",
+        "description": "Reject/cancel a pending commit. Args: workflow_id: Same workflow ID used when starting Returns: Final state after rejection  config = {\"configurable\": {\"thread_id\": workflow_id}} _workflow.update_stat"
+      },
+      {
+        "name": "get_workflow_status",
+        "description": "Get the current status of a workflow. Args: workflow_id: The workflow checkpoint ID Returns: Current state or None if not found  config = {\"configurable\": {\"thread_id\": workflow_id}} snapshot = _workf"
+      },
+      {
+        "name": "format_review_card",
+        "description": "Generate a review card from the current state for LLM consumption. This format is designed to be passed back to the LLM for analysis and message generation. Args: state: Current CommitState Returns: F"
+      },
+      {
+        "name": "add",
+        "description": "Stage files for commit. return _run([\"git\", \"add\"] + files)"
+      },
+      {
+        "name": "add_all",
+        "description": "Stage all changes. return _run([\"git\", \"add\", \".\"])"
+      },
+      {
+        "name": "add_pattern",
+        "description": "Stage files matching a pattern. return _run([\"git\", \"add\", pattern])"
+      },
+      {
+        "name": "reset",
+        "description": "Unstage files. return _run([\"git\", \"reset\"] + files)"
+      },
+      {
+        "name": "reset_all",
+        "description": "Unstage all files. return _run([\"git\", \"reset\"])"
+      },
+      {
+        "name": "reset_soft",
+        "description": "Soft reset to a commit. return _run([\"git\", \"reset\", \"--soft\", commit])"
+      },
+      {
+        "name": "_get_search_paths",
+        "description": "Get template search paths for cascading loader. Returns: List of paths [skill_default, user_override, ...]  project_root = get_project_root() skill_templates_dir = SKILLS_DIR(\"git\", path=\"templates\") "
+      },
+      {
+        "name": "_get_jinja_env",
+        "description": "Get cached Jinja2 environment with cascading loader. Search Path (Priority: High -> Low): 1. Skill Defaults: assets/skills/git/templates/ 2. User Overrides: assets/templates/git/ Jinja2 loads first ma"
+      },
+      {
+        "name": "render_commit_message",
+        "description": "Render commit message using cascading Jinja2 template. Template resolution: - First checks: assets/skills/git/templates/commit_message.j2 (skill default) - Falls back to: assets/templates/git/commit_m"
+      },
+      {
+        "name": "render_workflow_result",
+        "description": "Render workflow execution result. Template resolution: - First checks: assets/skills/git/templates/workflow_result.j2 (skill default) - Falls back to: assets/templates/git/workflow_result.j2 (user ove"
+      },
+      {
+        "name": "render_error",
+        "description": "Render error message for LLM parsing. Template resolution: - First checks: assets/skills/git/templates/error_message.j2 (skill default) - Falls back to: assets/templates/git/error_message.j2 (user ove"
+      },
+      {
+        "name": "list_templates",
+        "description": "List all available git templates with their source locations. Returns: Dict mapping template_name -> {\"source\": \"user|skill\", \"path\": absolute_path}  env = _get_jinja_env() search_paths = _get_search_"
+      },
+      {
+        "name": "get_template_info",
+        "description": "Get information about a specific template. Args: template_name: Template filename (e.g., \"commit_message.j2\") Returns: Dict with source, path, or None if not found  templates = list_templates() return"
+      },
+      {
+        "name": "get_template_source",
+        "description": "Get the source code of a template (for debugging). try: env = _get_jinja_env() template = env.get_template(template_name) return template.source except jinja2.TemplateNotFound: return None"
+      },
+      {
+        "name": "render_template",
+        "description": "Render any Jinja2 template with cascading support. Template resolution: - First checks: assets/templates/git/ (user override) - Falls back to: assets/skills/git/templates/ (skill default) Args: templa"
+      },
+      {
+        "name": "get_log",
+        "description": "Show recent commit history. return _run([\"git\", \"log\", f\"-n{n}\", \"--oneline\"])"
+      },
+      {
+        "name": "get_log_detailed",
+        "description": "Show recent commits with full details. return _run([\"git\", \"-n\", str(n), \"--pretty=format:%H%n%s%n%b%n---\"])"
+      },
+      {
+        "name": "search_log",
+        "description": "Search commit messages. return _run([\"git\", \"log\", f\"-n{n}\", \"--grep\", pattern, \"--oneline\"])"
+      },
+      {
+        "name": "get_file_history",
+        "description": "Show commit history for a specific file. return _run([\"git\", \"log\", f\"-n{n}\", \"--oneline\", \"--\", file_path])"
+      },
+      {
+        "name": "list_remotes",
+        "description": "Show remote repositories. return _run([\"git\", \"remote\", \"-v\"])"
+      },
+      {
+        "name": "get_remote_url",
+        "description": "Get URL for a specific remote. return _run([\"git\", \"remote\", \"get-url\", remote_name])"
+      },
+      {
+        "name": "add_remote",
+        "description": "Add a remote repository. return _run([\"git\", \"remote\", \"add\", name, url])"
+      },
+      {
+        "name": "remove_remote",
+        "description": "Remove a remote. return _run([\"git\", \"remote\", \"remove\", name])"
+      },
+      {
+        "name": "set_remote_url",
+        "description": "Set remote URL. return _run([\"git\", \"remote\", \"set-url\", name, url])"
+      },
+      {
+        "name": "_run",
+        "description": "Run command and return stdout, stderr, returncode. result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd) return result.stdout.strip(), result.stderr.strip(), result.returncode @skill_s"
+      },
+      {
+        "name": "commit",
+        "description": "Commit staged changes. stdout, stderr, rc = _run([\"git\", \"commit\", \"-m\", message], cwd=project_root) if rc == 0: return f\"\u2705 Commit created successfully\" return f\"\u274c Commit failed: {stdout} {stderr}\" @s"
+      },
+      {
+        "name": "commit_with_amend",
+        "description": "Amend the previous commit with a new message. stdout, stderr, rc = _run([\"git\", \"commit\", \"--amend\", \"-m\", message], cwd=project_root) if rc == 0: return f\"\u2705 Commit amended successfully\" return f\"\u274c Am"
+      },
+      {
+        "name": "commit_no_verify",
+        "description": "Commit without pre-commit hooks. stdout, stderr, rc = _run([\"git\", \"commit\", \"--no-verify\", \"-m\", message], cwd=project_root) if rc == 0: return f\"\u2705 Commit created (no-verify)\" return f\"\u274c Commit faile"
+      },
+      {
+        "name": "get_last_commit",
+        "description": "Get the last commit hash. stdout, _, rc = _run([\"git\", \"rev-parse\", \"HEAD\"], cwd=project_root) return stdout if rc == 0 else \"\" @skill_script( name=\"git_last_commit_msg\", description=\"Get the last com"
+      },
+      {
+        "name": "get_last_commit_msg",
+        "description": "Get the last commit message. stdout, _, _ = _run([\"git\", \"log\", \"-1\", \"--pretty=%B\"], cwd=project_root) return stdout @skill_script( name=\"git_revert\", description=\"Revert a specific commit.\", )"
+      },
+      {
+        "name": "revert",
+        "description": "Revert a specific commit. cmd = [\"git\", \"revert\"] if no_commit: cmd.append(\"--no-commit\") cmd.append(commit) stdout, stderr, rc = _run(cmd, cwd=project_root) if rc == 0: return f\"\u2705 Revert initiated su"
+      },
+      {
+        "name": "stash_save",
+        "description": "Stash working directory changes. cmd = [\"git\", \"stash\", \"push\"] if msg: cmd.extend([\"-m\", msg]) return _run(cmd)"
+      },
+      {
+        "name": "stash_pop",
+        "description": "Apply and remove last stash. return _run([\"git\", \"stash\", \"pop\"])"
+      },
+      {
+        "name": "stash_list",
+        "description": "List all stashes. return _run([\"git\", \"stash\", \"list\"])"
+      },
+      {
+        "name": "stash_drop",
+        "description": "Drop a specific stash. return _run([\"git\", \"stash\", \"drop\", f\"stash@{index}\"])"
+      },
+      {
+        "name": "stash_show",
+        "description": "Show stash contents. return _run([\"git\", \"stash\", \"show\", f\"stash@{index}\"])"
+      },
+      {
+        "name": "list_branches",
+        "description": "List all git branches. return _run([\"git\", \"branch\", \"-a\"])"
+      },
+      {
+        "name": "current_branch",
+        "description": "Get current branch name. return _run([\"git\", \"branch\", \"--show-current\"]) or \"detached\""
+      },
+      {
+        "name": "create_branch",
+        "description": "Create a new branch. if checkout: return _run([\"git\", \"checkout\", \"-b\", branch_name]) return _run([\"git\", \"branch\", branch_name])"
+      },
+      {
+        "name": "delete_branch",
+        "description": "Delete a branch. cmd = [\"git\", \"branch\"] if force: cmd.append(\"-D\") else: cmd.append(\"-d\") cmd.append(branch_name) return _run(cmd)"
+      },
+      {
+        "name": "create_initial_state",
+        "description": "Factory function to create initial CommitState. Args: project_root: Path to project root workflow_id: Unique ID for state persistence Returns: Initialized CommitState  return { \"project_root\": project"
+      },
+      {
+        "name": "get_diff",
+        "description": "Show working directory or staged changes. cmd = [\"git\", \"diff\"] if staged: cmd.append(\"--staged\") if filename: cmd.append(filename) return _run(cmd)"
+      },
+      {
+        "name": "get_diff_stat",
+        "description": "Show diff statistics. cmd = [\"git\", \"diff\", \"--stat\"] if staged: cmd.append(\"--staged\") return _run(cmd)"
+      },
+      {
+        "name": "get_staged_diff",
+        "description": "Get all staged changes. return _run([\"git\", \"diff\", \"--cached\"])"
+      },
+      {
+        "name": "get_staged_diff_stat",
+        "description": "Get staged diff statistics. return _run([\"git\", \"diff\", \"--cached\", \"--stat\"])"
+      },
+      {
+        "name": "node_check_env",
+        "description": "Check the current Git environment. Returns: Dict with is_dirty, current_branch, and files_changed  try: status_output = git_status(short=True) is_dirty = bool(status_output and status_output.strip()) "
+      },
+      {
+        "name": "node_stash",
+        "description": "Stash current changes. Returns: Dict with stashed_hash  try: message = f\"Auto-stash by Omni Living Skill - {state.intent}\" result = git_stash_save(message) stashed_hash = None for line in result.split"
+      },
+      {
+        "name": "node_switch_branch",
+        "description": "Switch to the target branch. Returns: Dict with success status and result message  if not state.target_branch: return { \"error_message\": \"No target branch specified\", \"current_step\": WorkflowStep.ERRO"
+      },
+      {
+        "name": "node_add",
+        "description": "Stage all changes for commit. Returns: Dict with success status  try: result = git_add(\".\") return { \"current_step\": WorkflowStep.ADD.value, \"result_message\": result or \"All changes staged\", } except "
+      },
+      {
+        "name": "node_commit",
+        "description": "Commit staged changes. Returns: Dict with commit_hash and result message  if not state.commit_message: return { \"error_message\": \"No commit message provided\", \"current_step\": WorkflowStep.ERROR.value,"
+      },
+      {
+        "name": "node_pop_stash",
+        "description": "Apply stashed changes and remove from stash. Returns: Dict with result message  if not state.stashed_hash: return { \"result_message\": \"No stashed changes to apply\", \"current_step\": WorkflowStep.POP.va"
+      },
+      {
+        "name": "route_by_intent",
+        "description": "Route to the appropriate workflow based on user intent. Args: state: Current GitWorkflowState Returns: Next node name  intent = state.intent.lower() if intent in (\"hotfix\", \"pr\"): return \"handle_dirty"
+      },
+      {
+        "name": "route_dirty_branch",
+        "description": "Route based on whether the working tree is dirty. Args: state: Current GitWorkflowState Returns: Next node name  if state.is_dirty: return \"stash\" return \"switch_branch\""
+      },
+      {
+        "name": "route_after_switch",
+        "description": "Route after branch switch based on intent. Args: state: Current GitWorkflowState Returns: Next node name  intent = state.intent.lower() if intent == \"hotfix\" and state.stashed_hash: return \"add\" elif "
+      },
+      {
+        "name": "route_after_commit",
+        "description": "Route after commit based on whether we need to pop stash. Args: state: Current GitWorkflowState Returns: Next node name  if state.stashed_hash and state.intent.lower() == \"hotfix\": return \"pop_stash\" "
+      },
+      {
+        "name": "create_workflow",
+        "description": "Create the Git workflow StateGraph. Returns: Configured StateGraph ready to be compiled  workflow = StateGraph(GitWorkflowState) workflow.add_node(\"check_env\", node_check_env) workflow.add_node(\"stash"
+      },
+      {
+        "name": "format_workflow_result",
+        "description": "Format the workflow result using Jinja2 template. Args: state: The final GitWorkflowState Returns: Formatted result string from template  if state.error_message: return render_error( error_type=\"workf"
+      },
+      {
+        "name": "_run",
+        "description": "Run command and return stdout, stderr, returncode. result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd) return result.stdout.strip(), result.stderr.strip(), result.returncode"
+      },
+      {
+        "name": "_check_sensitive_files",
+        "description": "Check for potentially sensitive files in staged changes. sensitive_patterns = [ \"*.env*\", \"*.pem\", \"*.key\", \"*.secret\", \"*.credentials*\", \"*.psd\", \"*.ai\", \"*.sketch\", \"*.fig\", \"id_rsa*\", \"id_ed25519*\""
+      },
+      {
+        "name": "_get_cog_scopes",
+        "description": "Read allowed scopes from cog.toml. try: from common.config.settings import get_setting from common.gitops import get_project_root root = project_root or get_project_root() cog_path = root / get_settin"
+      },
+      {
+        "name": "_validate_and_fix_scope",
+        "description": "Validate scope against cog.toml and auto-fix if close match. valid_scopes = _get_cog_scopes(project_root) if not valid_scopes: return True, scope, [] scope_lower = scope.lower() valid_scopes_lower = ["
+      },
+      {
+        "name": "_check_lefthook",
+        "description": "Run lefthook pre-commit checks. Returns: Tuple of (success, report_message, lefthook_output)  if not shutil.which(\"lefthook\"): return True, \"\", \"\" lh_version, _, _ = _run([\"lefthook\", \"--version\"], cw"
+      },
+      {
+        "name": "prepare_commit",
+        "description": "[Phase 1] Prepare for commit: stage, lefthook, re-stage, return diff. Args: project_root: Project root path (auto-injected via inject_root) message: Optional commit message for scope validation Return"
+      },
+      {
+        "name": "format_prepare_result",
+        "description": "Format the prepare_commit result for LLM consumption. Constructs complete output including security status in Controller Layer. LLM should always see security feedback (passed or warning). Args: prep_"
+      },
+      {
+        "name": "stage_and_scan",
+        "description": "Stage files and capture diff for LLM analysis. Workflow: 1. git add . - Stage ALL files (including untracked) 2. Check sensitive files - UNSTAGE them (not just warn) 3. Run lefthook pre-commit (may re"
+      },
+      {
+        "name": "create_initial_state",
+        "description": "Factory function to create an initial GitWorkflowState. Args: intent: The high-level user intent target_branch: Target branch for the operation commit_message: Commit message if applicable **kwargs: A"
+      },
+      {
+        "name": "format_state_for_output",
+        "description": "Format the workflow state for human-readable output. Args: state: The GitWorkflowState to format Returns: Formatted string representation  lines = [ f\"=== Git Workflow State ===\", f\"Intent: {state.int"
+      },
+      {
+        "name": "_run",
+        "description": "Execute a git command and return output and returncode. result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd) return result.stdout.strip(), result.returncode @skill_script( name=\"statu"
+      },
+      {
+        "name": "status",
+        "description": "Check git status in project directory. return _run([\"git\", \"status\", \"--short\"], cwd=project_root)[0] or \"Clean working tree\" @skill_script(name=\"git_status_detailed\", description=\"Get detailed git st"
+      },
+      {
+        "name": "git_status_detailed",
+        "description": "Get detailed git status. return _run([\"git\", \"status\"], cwd=project_root)[0] @skill_script(name=\"git_current_branch\", description=\"Get the current branch name.\")"
+      },
+      {
+        "name": "current_branch",
+        "description": "Get current branch name. branch, rc = _run([\"git\", \"rev-parse\", \"--abbrev-ref\", \"HEAD\"], cwd=project_root) return branch if rc == 0 else \"\" @skill_script( name=\"git_has_staged\", description=\"Check if "
+      },
+      {
+        "name": "has_staged_files",
+        "description": "Check if there are staged files. staged, rc = _run([\"git\", \"diff\", \"--cached\", \"--name-only\"], cwd=project_root) if rc == 0 and staged: return True, staged.split(\"\\n\") return False, [] @skill_script( "
+      },
+      {
+        "name": "has_unstaged_files",
+        "description": "Check if there are unstaged files. unstaged, rc = _run([\"git\", \"diff\", \"--name-only\"], cwd=project_root) if rc == 0 and unstaged: return True, unstaged.split(\"\\n\") return False, []"
+      },
+      {
+        "name": "list_tags",
+        "description": "List all git tags. return _run([\"git\", \"tag\", \"-l\"])"
+      },
+      {
+        "name": "create_tag",
+        "description": "Create an annotated tag. cmd = [\"git\", \"tag\"] if msg: cmd.extend([\"-m\", msg]) cmd.append(name) return _run(cmd)"
+      },
+      {
+        "name": "delete_tag",
+        "description": "Delete a tag. return _run([\"git\", \"tag\", \"-d\", name])"
+      },
+      {
+        "name": "get_tag_commit",
+        "description": "Get the commit for a specific tag. return _run([\"git\", \"rev-parse\", tag])"
+      }
+    ],
+    "routing_keywords": [],
+    "intents": "",
+    "authors": ["omni-dev-fusion"],
+    "docs_available": {
+      "skill_md": true,
+      "readme": true,
+      "guide": false,
+      "prompts": false,
+      "tests": true
+    },
+    "oss_compliant": true,
+    "compliance_details": ["SKILL.md", "README.md", "scripts", "tests"]
+  },
+  {
+    "name": "\"code_insight\"",
+    "description": "\"Static analysis capabilities for codebase introspection\"",
+    "version": "\"1.0.0\"",
+    "path": "assets/skills/code_insight",
+    "tools": [
+      {
+        "name": "_is_tool_decorator",
+        "description": "Check if a decorator is @tool or @mcp.tool. if isinstance(decorator, ast.Name) and decorator.id == \"tool\": return True if isinstance(decorator, ast.Attribute) and decorator.attr == \"tool\": return True"
+      },
+      {
+        "name": "visit_FunctionDef",
+        "description": "Find all @tool decorated functions in a Python file.  root = get_project_root() target = (root / file_path).resolve() if not str(target).startswith(str(root)): return \"Error: Access denied to paths ou"
+      }
+    ],
+    "routing_keywords": "",
+    "intents": [],
+    "authors": ["omni-dev-fusion"],
+    "docs_available": {
+      "skill_md": true,
+      "readme": true,
+      "guide": false,
+      "prompts": false,
+      "tests": false
+    },
+    "oss_compliant": true,
+    "compliance_details": ["SKILL.md", "README.md", "scripts"]
+  }
+]

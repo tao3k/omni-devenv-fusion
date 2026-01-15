@@ -2,11 +2,11 @@
 src/agent/core/agents/coder.py
 Coder Agent - Primary Executor for Code Operations.
 
-Phase 14 Enhancement:
+ Enhancement:
 - Context Narrowing: Coder only sees code-related tools
 - Mission Brief: Focused on implementation, refactoring, bug fixes
 
-Phase 19 Enhancement:
+ Enhancement:
 - ReAct Loop: Think -> Act -> Observe for intelligent code generation
 - Tool Injection: Uses filesystem tools (read_file, write_file, etc.)
 
@@ -49,7 +49,7 @@ class CoderAgent(BaseAgent):
     """
     Primary Executor Agent - Specializes in code writing and modification.
 
-    Phase 19: Now with ReAct Loop and Tool Injection!
+     Now with ReAct Loop and Tool Injection!
 
     The Coder focuses on:
     - Writing new code
@@ -143,7 +143,7 @@ class CoderAgent(BaseAgent):
         """
         Execute coding task with LLM using ReAct loop.
 
-        Phase 19: Full ReAct implementation with tool support.
+         Full ReAct implementation with tool support.
 
         The loop:
         1. Think: LLM decides what tool to use
