@@ -177,7 +177,7 @@ class VectorMemory:
             query: The search query (will be embedded)
             n_results: Number of results to return
             collection: Optional table name (defaults to project_knowledge)
-            where_filter: Optional metadata filter (not yet implemented in omni-vector)
+            where_filter: Optional metadata filter (e.g., {"domain": "python"})
 
         Returns:
             List of SearchResult objects sorted by similarity
@@ -195,8 +195,13 @@ class VectorMemory:
             if query_vector is None:
                 return []
 
-            # Perform similarity search
-            results = store.search(table_name, query_vector, n_results)
+            # Perform similarity search (with or without filter)
+            if where_filter:
+                # Use search_filtered when filter is provided
+                filter_json = json.dumps(where_filter)
+                results = store.search_filtered(table_name, query_vector, n_results, filter_json)
+            else:
+                results = store.search(table_name, query_vector, n_results)
 
             if not results:
                 return []
@@ -853,8 +858,13 @@ class VectorMemory:
         try:
             # Step 1: Get existing file hashes from DB
             _get_logger().info("Fetching existing file hashes from database...")
-            existing_json = store.get_all_file_hashes(table_name)
-            existing: Dict[str, Dict] = json.loads(existing_json) if existing_json else {}
+            # Check if method exists (for backward compatibility with older Rust binaries)
+            if hasattr(store, "get_all_file_hashes"):
+                existing_json = store.get_all_file_hashes(table_name)
+                existing: Dict[str, Dict] = json.loads(existing_json) if existing_json else {}
+            else:
+                _get_logger().warning("get_all_file_hashes not available, using empty state")
+                existing = {}
             # Normalize existing paths for comparison
             existing_normalized = {normalize_path(p): v for p, v in existing.items()}
             existing_paths = set(existing_normalized.keys())

@@ -15,7 +15,7 @@ from agent.skills.decorators import skill_script
 @skill_script(
     name="search_tools",
     description="[CRITICAL] Search for available tools using semantic + keyword matching. MUST call this if you cannot find a suitable tool in your current context.",
-    category="system",
+    category="general",
 )
 async def search_tools(
     query: str,

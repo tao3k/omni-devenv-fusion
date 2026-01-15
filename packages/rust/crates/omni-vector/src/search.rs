@@ -28,6 +28,7 @@ impl crate::VectorStore {
     /// * `table_name` - Name of the table/collection
     /// * `query` - Query vector
     /// * `limit` - Maximum number of results
+    /// * `where_filter` - Optional metadata filter (e.g., `{"domain": "python"}`)
     ///
     /// # Returns
     ///
@@ -42,7 +43,33 @@ impl crate::VectorStore {
         query: Vec<f32>,
         limit: usize,
     ) -> Result<Vec<VectorSearchResult>, VectorStoreError> {
-        self.search_with_keywords(table_name, query, Vec::new(), limit).await
+        self.search_with_keywords(table_name, query, Vec::new(), limit, None).await
+    }
+
+    /// Search with metadata filtering.
+    ///
+    /// # Arguments
+    ///
+    /// * `table_name` - Name of the table/collection
+    /// * `query` - Query vector
+    /// * `limit` - Maximum number of results
+    /// * `where_filter` - Optional metadata filter as JSON string (e.g., `{"domain": "python"}`)
+    ///
+    /// # Returns
+    ///
+    /// Vector of search results filtered by metadata
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VectorStoreError::TableNotFound`] if the table doesn't exist.
+    pub async fn search_filtered(
+        &self,
+        table_name: &str,
+        query: Vec<f32>,
+        limit: usize,
+        where_filter: Option<String>,
+    ) -> Result<Vec<VectorSearchResult>, VectorStoreError> {
+        self.search_with_keywords(table_name, query, Vec::new(), limit, where_filter).await
     }
 
     /// Hybrid search with keyword boosting.
@@ -56,6 +83,7 @@ impl crate::VectorStore {
     /// * `query` - Query vector
     /// * `keywords` - Keywords to boost (matched against metadata.keywords)
     /// * `limit` - Maximum number of results
+    /// * `where_filter` - Optional metadata filter as JSON string
     ///
     /// # Returns
     ///
@@ -71,16 +99,17 @@ impl crate::VectorStore {
         keywords: Vec<String>,
         limit: usize,
     ) -> Result<Vec<VectorSearchResult>, VectorStoreError> {
-        self.search_with_keywords(table_name, query, keywords, limit).await
+        self.search_with_keywords(table_name, query, keywords, limit, None).await
     }
 
-    /// Internal search implementation with optional keyword boosting.
+    /// Internal search implementation with optional keyword boosting and metadata filtering.
     async fn search_with_keywords(
         &self,
         table_name: &str,
         query: Vec<f32>,
         keywords: Vec<String>,
         limit: usize,
+        where_filter: Option<String>,
     ) -> Result<Vec<VectorSearchResult>, VectorStoreError> {
         let table_path = self.table_path(table_name);
 
@@ -99,7 +128,7 @@ impl crate::VectorStore {
         // Create scanner and execute nearest neighbor search
         let mut scanner = dataset.scan();
         scanner
-            .nearest(VECTOR_COLUMN, &query_arr, limit)
+            .nearest(VECTOR_COLUMN, &query_arr, limit * 3) // Fetch more to account for filtering
             .map_err(VectorStoreError::LanceDB)?;
 
         // Get results as stream
@@ -107,6 +136,12 @@ impl crate::VectorStore {
             .try_into_stream()
             .await
             .map_err(VectorStoreError::LanceDB)?;
+
+        // Parse where_filter if provided
+        let filter_conditions = where_filter
+            .as_ref()
+            .map(|f| serde_json::from_str::<serde_json::Value>(f).ok())
+            .flatten();
 
         let mut results = Vec::new();
 
@@ -158,6 +193,13 @@ impl crate::VectorStore {
                     serde_json::Value::Null
                 };
 
+                // Apply where_filter if specified
+                if let Some(ref conditions) = filter_conditions {
+                    if !Self::matches_filter(&metadata, conditions) {
+                        continue; // Skip this result
+                    }
+                }
+
                 results.push(VectorSearchResult {
                     id: ids.value(i).to_string(),
                     content: contents.value(i).to_string(),
@@ -175,7 +217,65 @@ impl crate::VectorStore {
         // Sort by hybrid score (distance - smaller is better for cosine)
         results.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap_or(std::cmp::Ordering::Equal));
 
+        // Limit results after sorting
+        results.truncate(limit);
+
         Ok(results)
+    }
+
+    /// Check if a metadata value matches the filter conditions.
+    fn matches_filter(metadata: &serde_json::Value, conditions: &serde_json::Value) -> bool {
+        match conditions {
+            serde_json::Value::Object(obj) => {
+                // Check each condition
+                for (key, value) in obj {
+                    // Handle nested keys like "domain"
+                    let meta_value = if key.contains('.') {
+                        // Support dot notation for nested values
+                        let parts: Vec<&str> = key.split('.').collect();
+                        let mut current = metadata.clone();
+                        for part in parts {
+                            if let serde_json::Value::Object(map) = current {
+                                current = map.get(part).cloned().unwrap_or(serde_json::Value::Null);
+                            } else {
+                                return false;
+                            }
+                        }
+                        Some(current)
+                    } else {
+                        metadata.get(key).cloned()
+                    };
+
+                    // Check if the value matches
+                    if let Some(meta_val) = meta_value {
+                        // Handle different value types
+                        match (&meta_val, value) {
+                            (serde_json::Value::String(mv), serde_json::Value::String(v)) => {
+                                if mv != v { return false; }
+                            }
+                            (serde_json::Value::Number(mv), serde_json::Value::Number(v)) => {
+                                if mv != v { return false; }
+                            }
+                            (serde_json::Value::Bool(mv), serde_json::Value::Bool(v)) => {
+                                if mv != v { return false; }
+                            }
+                            _ => {
+                                // Try string comparison for non-exact matches
+                                let meta_str_val = meta_val.to_string();
+                                let value_str_val = value.to_string();
+                                let meta_str = meta_str_val.trim_matches('"');
+                                let value_str = value_str_val.trim_matches('"');
+                                if meta_str != value_str { return false; }
+                            }
+                        }
+                    } else {
+                        return false; // Key not found in metadata
+                    }
+                }
+                true
+            }
+            _ => true, // Invalid filter, don't filter anything
+        }
     }
 
     /// Apply keyword boosting to search results.
@@ -326,5 +426,106 @@ mod tests {
         let mut results: Vec<VectorSearchResult> = vec![];
         crate::VectorStore::apply_keyword_boost(&mut results, &["git".to_string()]);
         assert!(results.is_empty());
+    }
+
+    // =========================================================================
+    // Tests for matches_filter function
+    // =========================================================================
+
+    #[test]
+    fn test_matches_filter_string_exact() {
+        let metadata = serde_json::json!({"domain": "python"});
+        let conditions = serde_json::json!({"domain": "python"});
+        assert!(crate::VectorStore::matches_filter(&metadata, &conditions));
+    }
+
+    #[test]
+    fn test_matches_filter_string_mismatch() {
+        let metadata = serde_json::json!({"domain": "python"});
+        let conditions = serde_json::json!({"domain": "testing"});
+        assert!(!crate::VectorStore::matches_filter(&metadata, &conditions));
+    }
+
+    #[test]
+    fn test_matches_filter_number() {
+        let metadata = serde_json::json!({"count": 42});
+        let conditions = serde_json::json!({"count": 42});
+        assert!(crate::VectorStore::matches_filter(&metadata, &conditions));
+    }
+
+    #[test]
+    fn test_matches_filter_boolean() {
+        let metadata = serde_json::json!({"enabled": true});
+        let conditions = serde_json::json!({"enabled": true});
+        assert!(crate::VectorStore::matches_filter(&metadata, &conditions));
+    }
+
+    #[test]
+    fn test_matches_filter_missing_key() {
+        let metadata = serde_json::json!({"domain": "python"});
+        let conditions = serde_json::json!({"missing_key": "value"});
+        assert!(!crate::VectorStore::matches_filter(&metadata, &conditions));
+    }
+
+    #[test]
+    fn test_matches_filter_multiple_conditions_all_match() {
+        let metadata = serde_json::json!({
+            "domain": "python",
+            "type": "function"
+        });
+        let conditions = serde_json::json!({
+            "domain": "python",
+            "type": "function"
+        });
+        assert!(crate::VectorStore::matches_filter(&metadata, &conditions));
+    }
+
+    #[test]
+    fn test_matches_filter_multiple_conditions_one_mismatch() {
+        let metadata = serde_json::json!({
+            "domain": "python",
+            "type": "function"
+        });
+        let conditions = serde_json::json!({
+            "domain": "python",
+            "type": "class"
+        });
+        assert!(!crate::VectorStore::matches_filter(&metadata, &conditions));
+    }
+
+    #[test]
+    fn test_matches_filter_nested_key() {
+        let metadata = serde_json::json!({
+            "config": {
+                "domain": "python"
+            }
+        });
+        let conditions = serde_json::json!({
+            "config.domain": "python"
+        });
+        assert!(crate::VectorStore::matches_filter(&metadata, &conditions));
+    }
+
+    #[test]
+    fn test_matches_filter_null_metadata() {
+        let metadata = serde_json::Value::Null;
+        let conditions = serde_json::json!({"domain": "python"});
+        assert!(!crate::VectorStore::matches_filter(&metadata, &conditions));
+    }
+
+    #[test]
+    fn test_matches_filter_empty_conditions() {
+        let metadata = serde_json::json!({"domain": "python"});
+        let conditions = serde_json::json!({});
+        // Empty conditions should match everything
+        assert!(crate::VectorStore::matches_filter(&metadata, &conditions));
+    }
+
+    #[test]
+    fn test_matches_filter_non_object_conditions() {
+        let metadata = serde_json::json!({"domain": "python"});
+        let conditions = serde_json::json!("invalid");
+        // Non-object conditions should match everything
+        assert!(crate::VectorStore::matches_filter(&metadata, &conditions));
     }
 }

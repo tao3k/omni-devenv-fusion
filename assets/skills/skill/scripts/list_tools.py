@@ -2,8 +2,14 @@
 List all registered MCP tools from loaded skills.
 """
 
+from agent.skills.decorators import skill_script
 
-def format_tools_list(compact: bool = False) -> str:
+
+@skill_script(
+    name="list_tools",
+    description="[CRITICAL] List all registered MCP tools with their names, descriptions, and usage. Use this to discover available capabilities.",
+)
+def list_tools(compact: bool = False) -> str:
     """
     Format a list of all registered MCP tools.
 
@@ -67,3 +73,8 @@ def format_tools_list(compact: bool = False) -> str:
     lines.append('**Usage**: `@omni("skill.command", {{"arg": "value"}})`')
 
     return "\n".join(lines)
+
+
+def format_tools_list(compact: bool = False) -> str:
+    """Alias for list_tools for backward compatibility."""
+    return list_tools(compact)

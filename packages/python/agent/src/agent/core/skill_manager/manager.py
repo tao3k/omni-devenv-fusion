@@ -793,6 +793,39 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin, ResultCacheM
 
         return True
 
+    def reload(self, skill_name: str) -> bool | None:
+        """
+        Reload a skill by name (unload + load).
+
+        Phase 36.4: Hot reload support for dynamic skill updates.
+
+        Args:
+            skill_name: Name of the skill to reload
+
+        Returns:
+            True if skill was successfully reloaded, False if not found,
+            None if skill was not loaded to begin with
+        """
+        # Check if skill is currently loaded
+        if skill_name not in self._skills:
+            _get_logger().warning("Cannot reload: skill not loaded", skill=skill_name)
+            return None
+
+        # Unload the current instance
+        self.unload(skill_name)
+
+        # Discover and reload the skill
+        skill_path = self._discover_single(skill_name)
+        if skill_path is None:
+            _get_logger().warning("Cannot reload: skill path not found", skill=skill_name)
+            return False
+
+        # Load the skill (force reload)
+        self.load_skill(skill_path, reload=True)
+
+        _get_logger().info("Skill reloaded", skill=skill_name)
+        return True
+
 
 __all__ = [
     "SkillManager",

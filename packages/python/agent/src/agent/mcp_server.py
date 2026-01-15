@@ -43,7 +43,9 @@ except ImportError:
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.server.sse import SseServerTransport
-from mcp.types import Tool, TextContent
+from mcp.server.lowlevel import NotificationOptions
+from mcp.server.models import InitializationOptions
+from mcp.types import Tool, TextContent, ToolAnnotations
 
 # Web Server (For SSE)
 from starlette.applications import Starlette
@@ -79,6 +81,84 @@ def json_loads(data: str | bytes) -> Any:
 
 # --- Server Instance ---
 server = Server("omni-agent")
+
+
+# --- Execute Tool (Phase 36: Trinity v2.0) ---
+
+
+@server.list_tools()
+async def handle_list_tools() -> list[Tool]:
+    """
+    List all available tools from loaded skills plus the execute meta-tool.
+
+    Phase 36: The execute tool is a meta-tool that allows executing any skill command
+    via the pattern execute("skill.command", {"arg": "value"}).
+    """
+    from agent.core.skill_manager import get_skill_manager
+
+    manager = get_skill_manager()
+
+    if not manager._loaded:
+        logger.info("⏳ Tools requested but skills not ready. Loading synchronously...")
+        await manager.load_all()
+
+    tools: list[Tool] = []
+
+    # Step 1: Add all skill commands from SkillManager (Phase 73 fix)
+    seen_names: set[str] = set()
+    for skill_name, skill in manager.skills.items():
+        for cmd_name, cmd in skill.commands.items():
+            full_name = f"{skill_name}.{cmd_name}"
+            if full_name in seen_names:
+                continue
+            seen_names.add(full_name)
+
+            # Build input schema from SkillCommand
+            input_schema = cmd.input_schema if isinstance(cmd.input_schema, dict) else {}
+
+            tools.append(
+                Tool(
+                    name=full_name,
+                    description=cmd.description or f"Execute {full_name}",
+                    inputSchema=input_schema
+                    or {"type": "object", "properties": {}, "required": []},
+                )
+            )
+
+    logger.info(f"📋 [Tools] Listed {len(tools)} skill commands from {len(manager.skills)} skills")
+
+    # Step 2: Add omni meta-tool for skill command execution
+    tools.append(
+        Tool(
+            name="omni",
+            title="Execute Skill Command",
+            description="Execute a skill command. Usage: omni(skill_command='git.status', arguments={})",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "skill_command": {
+                        "type": "string",
+                        "description": "Skill command in 'skill.command' format (e.g., 'git.status', 'terminal.run_task')",
+                    },
+                    "arguments": {
+                        "type": "object",
+                        "description": "Arguments for the skill command as a JSON object",
+                        "additionalProperties": True,
+                    },
+                },
+                "required": ["skill_command"],
+                "additionalProperties": False,
+            },
+            annotations=ToolAnnotations(
+                readOnlyHint=False,
+                destructiveHint=False,
+                idempotentHint=False,
+            ),
+        )
+    )
+
+    logger.info(f"📋 [Tools] Listed {len(tools)} tools total")
+    return tools
 
 
 # --- Lifecycle Management --
@@ -205,71 +285,6 @@ def _get_tool_name(original_name: str, description: str = "") -> tuple[str, str]
     return tool_name, enhanced_desc
 
 
-@server.list_tools()
-async def handle_list_tools() -> list[Tool]:
-    """
-    List all available tools from loaded skills.
-
-    Phase 69: Uses Adaptive Loader for Dynamic Context Injection.
-    Returns a default robust set (Core + Top Generic Tools).
-    Claude can use skill.search_tools to discover more tools.
-
-    CRITICAL: This is called immediately after MCP connection.
-    If skills aren't loaded yet, we MUST block and wait to prevent
-    Claude from receiving an empty tool list (which causes Bash downgrade).
-    """
-    from agent.core.adaptive_loader import get_adaptive_loader
-
-    # Phase 69: Use adaptive loader for dynamic context
-    loader = get_adaptive_loader()
-
-    # Block until at least core skills are loaded
-    from agent.core.skill_manager import get_skill_manager
-
-    manager = get_skill_manager()
-
-    if not manager._loaded:
-        logger.info("⏳ Tools requested but skills not ready. Loading synchronously...")
-        await manager.load_all()
-
-    # Phase 69: Get default robust tool set (Core + Top Generic via empty query)
-    logger.info("🧠 [Phase 69] Loading dynamic context tools...")
-    active_tools = await loader.get_context_tools(
-        user_query="",  # Empty query returns global top tools
-        dynamic_limit=20,  # Slightly more for MCP since we don't have user context
-    )
-
-    tools = []
-
-    # Convert adaptive loader results to MCP Tool format
-    for tool in active_tools:
-        tool_name = tool.get("name", "unknown")
-        description = tool.get("description", "") or f"Execute {tool_name}"
-        input_schema = tool.get("input_schema", "{}")
-
-        # Parse input_schema (could be string or dict)
-        if isinstance(input_schema, str):
-            try:
-                import json
-
-                input_schema = json.loads(input_schema)
-            except (json.JSONDecodeError, TypeError):
-                input_schema = {"type": "object", "properties": {}, "required": []}
-        elif not isinstance(input_schema, dict):
-            input_schema = {"type": "object", "properties": {}, "required": []}
-
-        tools.append(
-            Tool(
-                name=tool_name,
-                description=description,
-                inputSchema=input_schema,
-            )
-        )
-
-    logger.info(f"📋 [Tools] Listed {len(tools)} tools (dynamic context)")
-    return tools
-
-
 async def _notify_tools_changed(skill_name: str, change_type: str):
     """
     Phase 36.5: Observer callback for skill changes.
@@ -296,6 +311,10 @@ async def _notify_tools_changed(skill_name: str, change_type: str):
         logger.warning(f"⚠️ [Hot Reload] Notification failed: {e}")
 
 
+# Global lock to prevent overlapping index syncs
+_index_sync_lock: bool = False
+
+
 async def _update_search_index(skill_name: str, change_type: str):
     """
     Phase 66: Index Sync observer for Rust-backed VectorMemory.
@@ -307,16 +326,27 @@ async def _update_search_index(skill_name: str, change_type: str):
         skill_name: Name of the skill that changed
         change_type: "load", "unload", or "reload"
     """
+    global _index_sync_lock
+
+    # Prevent overlapping syncs
+    if _index_sync_lock:
+        logger.debug("[Index Sync] Skipping - sync already in progress")
+        return
+
+    _index_sync_lock = True
     try:
         from agent.core.skill_discovery import reindex_skills_from_manifests
 
         # With Rust-backed sync_skills, we just trigger incremental sync
         # which uses file hashes to determine what changed
         result = await reindex_skills_from_manifests()
-        logger.info(f"🔄 [Index Sync] Sync completed: {result.get('stats', {})}")
+        stats = result.get("stats", {})
+        logger.info(f"🔄 [Index Sync] Sync completed: {stats}")
 
     except Exception as e:
         logger.warning(f"⚠️ [Index Sync] Error updating index for {skill_name}: {e}")
+    finally:
+        _index_sync_lock = False
 
 
 @server.call_tool()
@@ -324,7 +354,8 @@ async def handle_call_tool(name: str, arguments: dict | None) -> list[TextConten
     """
     Execute a tool via SkillManager.
 
-    Supports both:
+    Supports:
+    - @omni("skill.command", {"arg": "value"}) - Meta-tool for skill execution
     - Native alias format: "run_command" -> resolves to "terminal.run_task"
     - Original format: "terminal.run_task"
     """
@@ -350,7 +381,66 @@ async def handle_call_tool(name: str, arguments: dict | None) -> list[TextConten
         fixed_args[key] = value
     args = fixed_args
 
+    logger.info(f"🔨 [Tool] Executing: {name}, args: {args}")
+
     try:
+        # Handle @omni meta-tool
+        if name == "omni":
+            skill_command = args.get("skill_command")
+            if not skill_command:
+                return [
+                    TextContent(
+                        type="text", text="❌ Missing 'skill_command' argument for @omni tool."
+                    )
+                ]
+
+            # Extract skill.command from the first argument
+            if "." in skill_command:
+                parts = skill_command.split(".", 1)
+                skill_name = parts[0]
+                command_name = parts[1]
+            else:
+                return [
+                    TextContent(
+                        type="text",
+                        text=f"❌ Invalid skill_command: {skill_command}. Use 'skill.command' format.",
+                    )
+                ]
+
+            # Get the actual arguments (everything except skill_command)
+            # If "arguments" key exists, unpack it to top-level (flatten the structure)
+            command_args = {}
+            for k, v in args.items():
+                if k == "skill_command":
+                    continue
+                elif k == "arguments" and isinstance(v, dict):
+                    # Unpack nested arguments: {"arguments": {"command": "echo", "args": [...]}} -> {"command": "echo", "args": [...]}
+                    command_args.update(v)
+                else:
+                    command_args[k] = v
+
+            # Resolve alias if needed
+            alias_reverse = _get_alias_reverse_map()
+            original_name = skill_command
+            if skill_command in alias_reverse:
+                original_name = alias_reverse[skill_command]
+                logger.info(f"🔄 [Tool] Resolved alias '{skill_command}' -> '{original_name}'")
+
+            # Re-parse with resolved name
+            if "." in original_name:
+                parts = original_name.split(".", 1)
+                skill_name = parts[0]
+                command_name = parts[1]
+
+            logger.info(
+                f"🔨 [Tool] Executing {skill_name}.{command_name} with args: {command_args}"
+            )
+
+            # Execute via SkillManager
+            manager = get_skill_manager()
+            result = await manager.run(skill_name, command_name, command_args)
+            return [TextContent(type="text", text=result)]
+
         original_name = name
 
         # Resolve alias to original name using config-driven reverse map
@@ -434,7 +524,18 @@ async def _run_stdio():
                 await server.run(
                     read_stream,
                     write_stream,
-                    server.create_initialization_options(),
+                    InitializationOptions(
+                        server_name="omni-agent",
+                        server_version="1.0.0",
+                        capabilities=server.get_capabilities(
+                            notification_options=NotificationOptions(
+                                tools_changed=True,
+                                prompts_changed=True,
+                                resources_changed=True,
+                            ),
+                            experimental_capabilities={},
+                        ),
+                    ),
                 )
             except Exception as e:
                 logger.critical(f"💥 Stdio server crashed: {e}", exc_info=True)
@@ -451,7 +552,18 @@ async def _run_sse(host: str, port: int, keepalive_interval: int):
             await server.run(
                 streams[0],
                 streams[1],
-                server.create_initialization_options(),
+                InitializationOptions(
+                    server_name="omni-agent",
+                    server_version="1.0.0",
+                    capabilities=server.get_capabilities(
+                        notification_options=NotificationOptions(
+                            tools_changed=True,
+                            prompts_changed=True,
+                            resources_changed=True,
+                        ),
+                        experimental_capabilities={},
+                    ),
+                ),
             )
 
     async def handle_messages(request: Request):

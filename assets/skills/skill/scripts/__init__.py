@@ -23,7 +23,7 @@ from .templates import (
     format_eject_result,
     format_info_result,
 )
-from .list_tools import format_tools_list
+from .list_tools import list_tools, format_tools_list
 from .search_tools import search_tools, format_search_result
 
 __all__ = [
@@ -41,6 +41,8 @@ __all__ = [
     "format_eject_result",
     "format_info_result",
     "format_tools_list",
+    # Tool list command
+    "list_tools",
     # Search commands (Phase 67)
     "search_tools",
     "format_search_result",

@@ -60,17 +60,18 @@ class HotReloadMixin:
             skill_name: Name of the skill to check
 
         Returns:
-            True if skill is loaded and fresh, False if not found
+            True if skill is loaded (even if path doesn't exist), False if not found
         """
         skill = self._skills.get(skill_name)
         if skill is None:
             _get_logger().debug("Skill not in memory", skill=skill_name)
             return False
 
-        # Check if scripts directory exists
+        # Check if scripts directory exists - if not, skip hot reload check
+        # The skill is still usable even if path was deleted (e.g., in tests)
         if not skill.path or not skill.path.exists():
-            _get_logger().warning("Skill path deleted", skill=skill_name)
-            return False
+            _get_logger().debug("Skill path not found, skipping hot reload", skill=skill_name)
+            return True
 
         try:
             # Get max mtime of all .py files in scripts/

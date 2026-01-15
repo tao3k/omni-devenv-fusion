@@ -319,19 +319,19 @@ class TestSpecBasedLoading:
         assert "not found" in message.lower()
 
     def test_template_loads_with_spec_based_loading(self, registry_fixture, real_mcp):
-        """_template can be discovered but cannot be loaded (no @skill_script functions).
+        """_template can be loaded since Phase 63 (it has @skill_script commands).
 
-        Phase 63: _template is a skeleton skill, not a real skill.
-        It can be discovered but loading fails because it has no commands.
+        Phase 63+: _template is a skeleton skill that demonstrates the scripts/ pattern.
+        It can be discovered AND loaded because it has example commands.
         """
         # _template can be discovered
         available = registry_fixture.list_available_skills()
         assert "_template" in available
 
-        # But loading fails because _template has no @skill_script decorated functions
+        # _template can now be loaded because it has @skill_script decorated functions
         success, message = registry_fixture.load_skill("_template", real_mcp)
-        assert success is False
-        assert "no @skill_command or @skill_script decorated functions" in message
+        assert success is True, f"Expected _template to load successfully, got: {message}"
+        assert "_template" in registry_fixture.loaded_skills
 
 
 class TestHotReload:

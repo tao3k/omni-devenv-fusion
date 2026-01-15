@@ -18,7 +18,7 @@ from agent.skills.decorators import skill_script
 @skill_script(
     name="search_project_knowledge",
     description="[Knowledge RAG] Search project documentation, specs, and guides using hybrid search (semantic + keywords). Use this to find project rules, architecture decisions, and technical documentation.",
-    category="knowledge",
+    category="read",
 )
 async def search_project_knowledge(
     query: str,

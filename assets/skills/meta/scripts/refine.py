@@ -11,7 +11,6 @@ from agent.skills.decorators import skill_script
 @skill_script(
     description="Analyze test failure and generate fixed code",
     category="evolution",
-    inject_inference=True,  # Phase 65: AI Injection
     inject_root=True,  # To read the prompt file
 )
 async def refine_code(

@@ -20,6 +20,7 @@ from typing import Any
 
 import structlog
 
+from common.config_paths import get_project_root
 from common.skills_path import SKILLS_DIR
 
 logger = structlog.get_logger(__name__)
@@ -58,10 +59,11 @@ class SkillHarvester:
         Initialize the harvester.
 
         Args:
-            sessions_dir: Directory containing session notes (defaults to knowledge/sessions)
+            sessions_dir: Directory containing session notes (defaults to .data/knowledge/sessions)
         """
         if sessions_dir is None:
-            self.sessions_dir = SKILLS_DIR().parent / "knowledge" / "sessions"
+            # Sessions are runtime data, stored in .data/ (git-ignored)
+            self.sessions_dir = get_project_root() / ".data" / "knowledge" / "sessions"
         else:
             self.sessions_dir = sessions_dir
 

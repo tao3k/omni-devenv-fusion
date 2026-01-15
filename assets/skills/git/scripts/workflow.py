@@ -17,7 +17,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
 from .state import GitWorkflowState, WorkflowStep
-from .status import git_status as _git_status
+from .status import status as git_status
 from .branch import list_branches as _git_branch, create_branch as _git_checkout
 from . import stash
 from . import add
@@ -395,7 +395,7 @@ async def run_git_workflow(
     intent: str,
     target_branch: str = "",
     commit_message: str = "",
-    checkpoint_id: Optional[str] = None,
+    resume_id: Optional[str] = None,
     config: Optional[Dict[str, Any]] = None,
 ) -> GitWorkflowState:
     """
@@ -405,7 +405,7 @@ async def run_git_workflow(
         intent: The high-level user intent
         target_branch: Target branch for operations
         commit_message: Commit message for commit operations
-        checkpoint_id: Optional checkpoint ID for resumption
+        resume_id: Optional resume ID for state persistence
         config: Optional LangGraph configuration
 
     Returns:
@@ -415,10 +415,10 @@ async def run_git_workflow(
         intent=intent,
         target_branch=target_branch,
         commit_message=commit_message,
-        checkpoint_id=checkpoint_id,
+        resume_id=resume_id,
     )
 
-    thread_config = {"configurable": {"thread_id": checkpoint_id or "default"}}
+    thread_config = {"configurable": {"thread_id": resume_id or "default"}}
     if config:
         thread_config.update(config)
 

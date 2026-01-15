@@ -52,7 +52,9 @@ class TestHiveRouter:
     @pytest.fixture
     def router(self):
         """Create a fresh HiveRouter without cortex."""
-        return HiveRouter(semantic_cortex=None)
+        r = HiveRouter(semantic_cortex=None)
+        r._cache.clear()  # Clear cache from previous tests
+        return r
 
     def test_router_initialization(self, router):
         """Test router initializes with correct defaults."""
@@ -165,7 +167,11 @@ class TestHiveRouterSemanticRouting:
 
     @pytest.fixture
     def router_with_cortex(self, mock_cortex):
-        return HiveRouter(semantic_cortex=mock_cortex)
+        """Create router with mocked cortex (sets cortex on singleton)."""
+        router = HiveRouter(semantic_cortex=mock_cortex)
+        # Set cortex directly on the singleton instance (bypasses singleton init check)
+        router.cortex = mock_cortex
+        return router
 
     @pytest.mark.asyncio
     async def test_semantic_routing_no_match(self, router_with_cortex, mock_cortex):

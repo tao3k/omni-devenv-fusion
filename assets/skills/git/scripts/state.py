@@ -94,10 +94,8 @@ class GitWorkflowState(BaseModel):
     success: bool = Field(default=False, description="Whether the workflow completed successfully")
     result_message: str = Field(default="", description="Human-readable result of the operation")
 
-    # Metadata for checkpoint/resume
-    checkpoint_id: Optional[str] = Field(
-        default=None, description="Checkpoint ID for state persistence"
-    )
+    # Metadata for checkpoint/resume (renamed from checkpoint_id to avoid LangGraph conflict)
+    resume_id: Optional[str] = Field(default=None, description="Resume ID for state persistence")
     retry_count: int = Field(default=0, description="Number of retry attempts for the current step")
 
     class Config:

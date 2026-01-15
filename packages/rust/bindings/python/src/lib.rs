@@ -601,6 +601,44 @@ impl PyVectorStore {
         })
     }
 
+    /// Search with metadata filtering.
+    ///
+    /// Args:
+    ///   table_name: Name of the table
+    ///   query: Query vector for semantic search
+    ///   limit: Maximum number of results
+    ///   where_filter: Optional JSON filter (e.g., {"domain": "python"})
+    ///
+    /// Returns:
+    ///   List of JSON strings representing search results
+    fn search_filtered(
+        &self,
+        table_name: String,
+        query: Vec<f32>,
+        limit: usize,
+        where_filter: Option<String>,
+    ) -> PyResult<Vec<String>> {
+        let path = self.path.clone();
+        let dimension = self.dimension;
+        let query = query.clone();
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        rt.block_on(async {
+            let store = VectorStore::new(&path, Some(dimension)).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            let results = store.search_filtered(&table_name, query, limit, where_filter).await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            // Return JSON strings for easier Python processing
+            let json_results: Vec<String> = results
+                .into_iter()
+                .map(|r| serde_json::to_string(&r).unwrap_or_default())
+                .collect();
+            Ok(json_results)
+        })
+    }
+
     /// Phase 67: Hybrid search with keyword boosting.
     ///
     /// Combines vector similarity with keyword matching for better relevance.

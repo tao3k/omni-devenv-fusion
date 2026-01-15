@@ -392,14 +392,20 @@ execution_mode: "subprocess"
         (self.skill_dir / "SKILL.md").write_text(skill_md)
 
         manager = SkillManager(skills_dir=self.temp_dir)
-        manager._register_skill(self.skill_dir)
+        # Use load_skill instead of non-existent _register_skill
+        skill = manager.load_skill(self.skill_dir)
+        self.assertIsNotNone(skill)
 
+        # Get info BEFORE tearDown removes the path
         info = manager.get_skill_info("test_skill")
         self.assertIsNotNone(info)
-        # get_skill_info doesn't include execution_mode by default
-        # but the skill object has it
-        skill = manager.skills.get("test_skill")
-        self.assertEqual(skill.execution_mode, "subprocess")
+        self.assertIn("execution_mode", info)
+        self.assertEqual(info["execution_mode"], "subprocess")
+
+        # Also verify via skill object (still available after path is deleted)
+        skill_obj = manager.skills.get("test_skill")
+        self.assertIsNotNone(skill_obj)
+        self.assertEqual(skill_obj.execution_mode.value, "subprocess")
 
 
 if __name__ == "__main__":

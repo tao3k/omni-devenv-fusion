@@ -343,7 +343,7 @@ class TestSystemEndurance:
             await memory.add(
                 documents=[insight_doc],
                 ids=[f"marathon_{i}"],
-                metadatas={"type": "harvested", "turn": i},
+                metadatas=[{"type": "harvested", "turn": i}],
                 collection=col_name,
             )
 

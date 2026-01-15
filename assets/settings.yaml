@@ -449,8 +449,15 @@ post_mortem:
 adaptive:
   # Core Tools - Always present in LLM context (life support system)
   # CRITICAL: skill.search_tools MUST be included - enables tool discovery
+  # Phase 72: Added terminal and filesystem tools for essential operations
   core_tools:
+    - "terminal.run_command" # Terminal - Shell command execution
+    - "terminal.run_task" # Terminal - Safe development task runner
+    - "filesystem.read_file" # Filesystem - Read file contents
+    - "filesystem.write_file" # Filesystem - Write file contents
+    - "filesystem.search_files" # Filesystem - Search for files
     - "skill.search_tools" # [CRITICAL] Tool discovery - Agent finds other tools
+    - "skill.list_tools" # [CRITICAL] List all registered tools - Discover available capabilities
     - "memory.add_note" # Memory - Save insights
     - "memory.search_memory" # Memory - Recall past context
     - "task.update" # Task management

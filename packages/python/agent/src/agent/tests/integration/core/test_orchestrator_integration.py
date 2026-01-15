@@ -37,7 +37,6 @@ class TestOrchestratorDispatch:
                 reasoning="Keyword match: coding task",
                 task_brief="Fix the bug in router.py",
                 constraints=["Run tests after fix"],
-                relevant_files=["router.py"],
             )
         )
 
@@ -70,7 +69,6 @@ class TestOrchestratorDispatch:
                 reasoning="Keyword match: review task",
                 task_brief="Review the changes in main.py",
                 constraints=["Check tests", "Verify lint"],
-                relevant_files=["main.py"],
             )
         )
 

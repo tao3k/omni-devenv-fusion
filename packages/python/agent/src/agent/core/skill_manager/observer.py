@@ -45,6 +45,11 @@ class ObserverMixin:
         """
         from ..protocols import _get_logger
 
+        # Prevent duplicate registrations
+        if callback in self._observers:
+            _get_logger().debug("Observer already registered, skipping duplicate")
+            return
+
         self._observers.append(callback)
         _get_logger().info("Observer subscribed", total=len(self._observers))
 

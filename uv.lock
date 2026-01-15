@@ -1942,6 +1942,7 @@ source = { editable = "." }
 dev = [
     { name = "omni-dev-fusion-agent" },
     { name = "omni-dev-fusion-common" },
+    { name = "polyfactory" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-xdist" },
@@ -1955,6 +1956,7 @@ dev = [
 dev = [
     { name = "omni-dev-fusion-agent", editable = "packages/python/agent" },
     { name = "omni-dev-fusion-common", editable = "packages/python/common" },
+    { name = "polyfactory", specifier = ">=3.2.0" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
     { name = "pytest-xdist", specifier = ">=3.6.1" },
@@ -1988,7 +1990,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "polyfactory" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-xdist" },
@@ -2018,7 +2019,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "polyfactory", specifier = ">=2.0.0" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-asyncio", specifier = ">=0.25.0" },
     { name = "pytest-xdist", specifier = ">=3.6.0" },

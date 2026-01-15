@@ -26,6 +26,9 @@ from common.skills_path import SKILLS_DIR
 
 logger = logging.getLogger(__name__)
 
+# Global lock to prevent overlapping syncs
+_watcher_sync_lock = False
+
 
 class SkillSyncHandler(FileSystemEventHandler):
     """
@@ -35,6 +38,7 @@ class SkillSyncHandler(FileSystemEventHandler):
     - Ignores directories and non-Python files
     - Debounces rapid changes (1s cooldown)
     - Thread-safe: uses fresh VectorStore instance per sync
+    - Prevents overlapping syncs with global lock
     """
 
     def __init__(self, skills_dir: str):
@@ -43,6 +47,8 @@ class SkillSyncHandler(FileSystemEventHandler):
         self.cooldown = 1.0  # 1 second debounce
 
     def on_any_event(self, event):
+        global _watcher_sync_lock
+
         if event.is_directory:
             return
 
@@ -60,10 +66,16 @@ class SkillSyncHandler(FileSystemEventHandler):
         if current_time - self.last_sync < self.cooldown:
             return
 
+        # Prevent overlapping syncs
+        if _watcher_sync_lock:
+            logger.debug("Watcher sync skipped - sync already in progress")
+            return
+
         self.last_sync = current_time
         rel_path = str(src_path.relative_to(self.skills_dir))
         logger.info(f"file_change_detected: {rel_path}")
 
+        _watcher_sync_lock = True
         try:
             # [NEW] Syntax check pre-flight - catches SyntaxError without crashing
             if not self._validate_syntax(src_path):
@@ -86,6 +98,8 @@ class SkillSyncHandler(FileSystemEventHandler):
             logger.warning(f"syntax_error_in_sync: {e}")
         except Exception as e:
             logger.error(f"auto_sync_failed: {e}")
+        finally:
+            _watcher_sync_lock = False
 
     def _validate_syntax(self, file_path: Path) -> bool:
         """

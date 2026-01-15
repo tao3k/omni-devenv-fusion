@@ -19,10 +19,10 @@ def _run(cmd: list[str], cwd: Optional[Path] = None) -> Tuple[str, int]:
 
 
 @skill_script(
-    name="git_status",
+    name="status",
     description="Check git status in project directory. Returns short status format.",
 )
-def git_status(project_root: Path = None) -> str:
+def status(project_root: Path = None) -> str:
     """Check git status in project directory."""
     return _run(["git", "status", "--short"], cwd=project_root)[0] or "Clean working tree"
 

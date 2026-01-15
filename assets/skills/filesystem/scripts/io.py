@@ -103,7 +103,6 @@ def _create_backup(filepath: Path) -> bool:
     name="read_file",
     category="read",
     description="Read a single file with line numbering.",
-    inject_root=True,
 )
 async def read_file(file_path: str) -> str:
     """

@@ -23,14 +23,14 @@ class TestSkillHarvester:
         assert harvester.sessions_dir == custom_dir
 
     def test_harvester_default_session_dir(self):
-        """Test harvester uses default session directory."""
+        """Test harvester uses default session directory in .data/ (git-ignored)."""
         from agent.core.meta_agent.harvester import SkillHarvester
 
-        with patch("agent.core.meta_agent.harvester.SKILLS_DIR") as mock_skills:
-            mock_skills.return_value = Path("/project/assets/skills")
+        with patch("agent.core.meta_agent.harvester.get_project_root") as mock_root:
+            mock_root.return_value = Path("/project")
             harvester = SkillHarvester()
 
-            expected = Path("/project/assets/knowledge/sessions")
+            expected = Path("/project/.data/knowledge/sessions")
             assert harvester.sessions_dir == expected
 
     def test_extract_tool_patterns_detects_git(self):

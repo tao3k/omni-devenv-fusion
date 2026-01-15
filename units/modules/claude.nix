@@ -67,7 +67,7 @@ in
     omni = {
       type = "stdio";
       # url = "http://0.0.0.0:3002/sse";
-      command = "omni";
+      command = "omniAgent";
       args = [
         "mcp"
         "--transport"

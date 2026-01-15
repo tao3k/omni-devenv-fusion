@@ -398,16 +398,24 @@ if __name__ == "__main__":
             return "boolean"
         if annotation is list:
             return "array"
-        if annotation is dict:
-            return "object"
-        # Handle Optional[X] and Union[X, Y]
+
+        # Handle generic types like list[str], List[str], etc.
         origin = getattr(annotation, "__origin__", None)
+        if origin is list:
+            return "array"
+
+        # Handle Optional[X] and Union[X, Y]
         if origin is Union:
             args = getattr(annotation, "__args__", ())
             for arg in args:
                 if arg is type(None):
                     continue
+                # Recursively handle the non-None type (which could be list[str])
                 return self._python_type_to_json(arg)
+
+        if annotation is dict:
+            return "object"
+
         return "string"
 
 
