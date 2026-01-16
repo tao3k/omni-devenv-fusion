@@ -1,7 +1,7 @@
 # Omni-DevEnv Testing System - Developer Guide
 
 > Test system architecture, patterns, and maintenance guidelines.
-> Last Updated: 2026-01-15 (Phase 67+)
+> Last Updated: 2026-01-15
 
 ---
 
@@ -138,7 +138,7 @@ python -m pytest packages/python/agent/src/agent/tests/ -v --durations=10
 | `test_kernel_stress.py` | Kernel resilience, load latency     |
 | `test_system_stress.py` | System-wide stress, RAG performance |
 
-### Sync Tests (Phase 68+)
+### Sync Tests
 
 | File                        | Tests                                        |
 | --------------------------- | -------------------------------------------- |
@@ -171,7 +171,7 @@ python -m pytest packages/python/agent/src/agent/tests/unit/test_vector_store_sy
 
 ## Pytest Plugin for Skill Tests
 
-> Phase 63+: First-class pytest plugin that automatically discovers and registers skill fixtures.
+> First-class pytest plugin that automatically discovers and registers skill fixtures.
 > Inspired by Prefect's test harness pattern - no conftest.py needed!
 
 ### Quick Start
@@ -496,7 +496,7 @@ def test_skill():
 
 **Cause**: Skill doesn't have `scripts/*.py` files with `@skill_script` decorators.
 
-**Solution**: Ensure skill follows Phase 63+ structure:
+**Solution**: Ensure skill follows current structure:
 
 ```
 assets/skills/git/

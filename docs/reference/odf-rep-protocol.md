@@ -1,6 +1,6 @@
 # ODF-REP: Rust Engineering Protocol
 
-> **Version:** 1.1 (Phase 52)
+> **Version:** 1.1
 > **Toolchain:** `nightly-2026-01-12`
 > **Philosophy:** Atomic, Fearless, Zero-Cost.
 

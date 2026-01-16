@@ -130,7 +130,7 @@ runner.report(result, ReportFormat.MARKDOWN)
 | `stability_passed` | STABILITY   | Number of passed stability tests |
 | `stability_failed` | STABILITY   | Number of failed stability tests |
 
-## Phase 9: Code Intelligence Suite
+## Code Intelligence Suite
 
 Tests AST-based code intelligence features:
 

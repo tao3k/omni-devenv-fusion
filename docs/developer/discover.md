@@ -1,12 +1,12 @@
-# Phase 36.2: Vector-Enhanced Skill Discovery
+# Vector-Enhanced Skill Discovery
 
-> **Phase 41: Wisdom-Aware Routing** | **Phase 40: Automated Reinforcement** | **Phase 39: Self-Evolving Feedback** | **Phase 36.8: Auto-Route Discovery** | **Phase 36.5: Hot Reload** | **Phase 36.2: Vector-Enhanced Discovery**
+> **Core Capabilities**: Wisdom-Aware Routing | Automated Reinforcement | Self-Evolving Feedback | Auto-Route Discovery | Hot Reload | Vector-Enhanced Discovery
 
 > **Virtual Loading** - Intelligent skill discovery using ChromaDB vector search.
 
 ## Overview
 
-Phase 36.2 introduces **Vector-Enhanced Skill Discovery**, enabling semantic matching between user requests and available skills. This system bridges the gap between "what users ask for" and "what skills can do" even when keywords don't exactly match.
+**Vector-Enhanced Skill Discovery** enables semantic matching between user requests and available skills. This system bridges the gap between "what users ask for" and "what skills can do" even when keywords don't exactly match.
 
 ### Key Capabilities
 
@@ -390,13 +390,13 @@ The `installed_only=True` default ensures:
 
 ---
 
-## Phase 36.5: Hot Reload & Index Sync
+## Hot Reload & Index Sync
 
 > **Zero-Downtime Skill Reloading** - Bridge between Vector Discovery and Runtime.
 
 ### Overview
 
-Phase 36.5 connects the Vector Discovery system (Phase 36.2) with Hot Reload (Phase 36.4), ensuring the ChromaDB index stays in sync with runtime skill changes.
+Connects the Vector Discovery system with Hot Reload, ensuring the ChromaDB index stays in sync with runtime skill changes.
 
 ### Architecture
 
@@ -420,7 +420,7 @@ Phase 36.5 connects the Vector Discovery system (Phase 36.2) with Hot Reload (Ph
 
 ### Observer Pattern
 
-**Callback Signature (Phase 36.5)**:
+**Callback Signature**:
 
 ```python
 # (skill_name: str, change_type: str) -> None
@@ -517,7 +517,7 @@ await remove_skill_from_index("git")
 
 ---
 
-## Phase 36.6: Production Stability
+## Production Stability
 
 > **Production Hardening** - Optimizations for 100+ skill scale.
 
@@ -557,11 +557,11 @@ for skill_name, change_type in changes:
 **Solution**: Use ChromaDB's atomic `upsert` operation.
 
 ```python
-# Before (Phase 36.5): Two separate operations
+# Before (Legacy): Two separate operations
 collection.delete(ids=[skill_id])
 collection.add(documents=[...], ids=[skill_id])
 
-# After (Phase 36.6): Single atomic operation
+# After (Current): Single atomic operation
 collection.upsert(
     documents=[semantic_text],
     ids=[skill_id],
@@ -617,7 +617,7 @@ from agent.core.skill_discovery import reconcile_index
 async def server_lifespan():
     # ... load skills ...
 
-    # Phase 36.6: Reconcile index
+    # Reconcile index
     loaded = manager.list_loaded()
     stats = await reconcile_index(loaded)
     logger.info(f"🔄 [Reconciliation] {stats}")
@@ -656,13 +656,13 @@ uv run pytest packages/python/agent/src/agent/tests/scenarios/test_hot_reload.py
 
 ---
 
-## Phase 36.8: Auto-Route Skill Discovery
+## Auto-Route Skill Discovery
 
 > **Auto-Trigger Skill Discovery** - When users express intent through natural language, the system can automatically discover and prepare skills.
 
 ### Overview
 
-Phase 36.8 introduces `skill.auto_route`, a unified command that:
+introduces `skill.auto_route`, a unified command that:
 
 1. Searches for matching skills (local + remote)
 2. Auto-loads unloaded local skills
@@ -748,7 +748,7 @@ User: "update documentation"
 
 ### Index Optimization
 
-Phase 36.8 also improves vector index quality:
+also improves vector index quality:
 
 **1. Rich Semantic Documents**
 
@@ -805,24 +805,24 @@ similarity = max(0.0, min(1.0, raw_score))
 | `assets/skills/skill/tools.py`           | `skill.auto_route` implementation |
 | `agent/core/skill_discovery/indexing.py` | Rich document building            |
 | `agent/core/vector_store.py`             | Cosine distance configuration     |
-| `assets/skills/skill/tests/...`          | Phase 36.8 tests                  |
+| `assets/skills/skill/tests/...`          | Auto-Route tests                  |
 
 ---
 
-## Phase 39: Feedback Boost in Vector Search
+## Feedback Boost in Vector Search
 
 > **Self-Evolving Discovery** - Vector search now includes feedback boost from past successful routings.
 
 ### Overview
 
-Phase 39 integrates the FeedbackStore with vector search to boost scores based on learned experience:
+integrates the FeedbackStore with vector search to boost scores based on learned experience:
 
 ```python
 # vector.py - hybrid_search with feedback boost
 def hybrid_search(query: str, limit: int = 5) -> list[dict]:
     # ... base vector + keyword search ...
 
-    # Phase 39: Add feedback boost
+    # Add feedback boost
     for skill in results:
         feedback_bonus = get_feedback_boost(query, skill["id"])
         skill["score"] += feedback_bonus
@@ -872,7 +872,7 @@ omni git.status     # → {"git.status": {"git": 0.2}}
 omni git.status     # → {"git.status": {"git": 0.3}} (max)
 ```
 
-### Time-Based Decay (Phase 40)
+### Time-Based Decay
 
 Scores decay by 1% each time they are read to prevent stale data from dominating:
 
@@ -907,13 +907,13 @@ cat .memory/routing_feedback.json
 
 ---
 
-## Phase 64: Incremental Sync vs Full Reindex
+## Incremental Sync vs Full Reindex
 
 > **0.2s Performance** - Diff-based incremental sync for rapid iteration.
 
 ### Overview
 
-Phase 64 introduces `omni skill sync`, a high-performance incremental update that only processes changed files. This is contrasted with `omni skill reindex` which performs a full rebuild.
+introduces `omni skill sync`, a high-performance incremental update that only processes changed files. This is contrasted with `omni skill reindex` which performs a full rebuild.
 
 ### Sync vs Reindex Comparison
 
@@ -1011,14 +1011,14 @@ Reindex complete: 92 total
 
 ---
 
-## Phase 65: Reactive Indexing & Zero-Compute MCP
+## Reactive Indexing & Zero-Compute MCP
 
 > **Auto感知 (The Watcher)** - File save triggers automatic sync.<br>
 > **极速响应 (The Reader)** - O(1) MCP tool listing from LanceDB.
 
 ### Overview
 
-Phase 65 introduces automatic skill synchronization when files change, plus optimized MCP server startup with direct LanceDB reads.
+introduces automatic skill synchronization when files change, plus optimized MCP server startup with direct LanceDB reads.
 
 ### Skill Watcher Architecture
 
@@ -1208,7 +1208,7 @@ DEFAULT_SETTINGS = {
 
 ### Benefits
 
-| Aspect             | Before Phase 65          | After Phase 65           |
+| Aspect             | Before (Legacy)          | Current                  |
 | ------------------ | ------------------------ | ------------------------ |
 | File change → sync | Manual `omni skill sync` | Automatic on save        |
 | MCP list_tools     | ~100ms (vector search)   | ~1ms (direct DB read)    |

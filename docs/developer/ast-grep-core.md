@@ -1,6 +1,6 @@
 # ast-grep-core 0.40.5 Developer Guide
 
-> Based on Phase 50: The Cartographer migration experience
+> Based on the Cartographer migration experience
 >
 > **See also**: [AST-Based Code Navigation and Search](../reference/ast-grep.md) for full CCA-aligned implementation guide.
 
@@ -370,8 +370,8 @@ impl<'tree, D: Doc> NodeMatch<'tree, D> {
 ## 8. Related Files
 
 - `packages/rust/crates/omni-tags/src/lib.rs` - Implementation example
-- `packages/rust/crates/omni-vector/src/scanner.rs` - Real-world @skill_script discovery (Phase 62/63)
+- `packages/rust/crates/omni-vector/src/scanner.rs` - Real-world @skill_script discovery
 - `packages/rust/crates/omni-ast/src/scan.rs` - Pattern matching utilities
 - `packages/rust/crates/omni-tags/Cargo.toml` - Dependency configuration
-- `assets/specs/phase50_cca_navigation.md` - Phase 50 specification
-- `assets/specs/phase62_script_scanner.md` - Script Scanner specification
+- `assets/specs/cca_navigation.md` - Code navigation specification
+- `assets/specs/script_scanner.md` - Script Scanner specification

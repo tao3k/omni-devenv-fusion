@@ -1,10 +1,10 @@
 # Routing Architecture
 
-> **Phase 42: State-Aware Routing** | **Phase 41: Wisdom-Aware Routing** | **Phase 40: Automated Reinforcement Loop** | **Phase 39: Self-Evolving Feedback** | **Phase 36.8: Auto-Route Discovery** | **Phase 36.5: Hot Reload Integration** | **Phase 36.2: Vector-Enhanced Discovery**
+> **Core Capabilities**: Wisdom-Aware Routing | State-Aware Routing | Self-Evolving Feedback | Auto-Route Discovery | Hot Reload Integration | Vector-Enhanced Discovery
 
-## Phase 41: Wisdom-Aware Routing
+## Wisdom-Aware Routing
 
-> **Phase 41**: Inject past lessons from harvested knowledge into Mission Briefs.
+Inject past lessons from harvested knowledge into Mission Briefs.
 
 ### Overview
 
@@ -14,7 +14,7 @@ The routing system now retrieves relevant lessons from `harvested/*.md` and inje
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    Phase 41: Wisdom-Aware Routing                            │
+│                         Wisdom-Aware Routing                                │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  User Query                                                                  │
@@ -76,17 +76,17 @@ can be unreliable (per past session lesson).
 
 ### Related Files
 
-| File                                           | Purpose                                  |
-| ---------------------------------------------- | ---------------------------------------- |
-| `agent/core/router/semantic_router.py`         | Librarian integration, lesson formatting |
-| `agent/capabilities/knowledge/librarian.py`    | `consult_knowledge_base` function        |
-| `assets/specs/phase41_wisdom_aware_routing.md` | Phase 41 spec                            |
+| File                                        | Purpose                                  |
+| ------------------------------------------- | ---------------------------------------- |
+| `agent/core/router/semantic_router.py`      | Librarian integration, lesson formatting |
+| `agent/capabilities/knowledge/librarian.py` | `consult_knowledge_base` function        |
+| `assets/specs/wisdom_aware_routing.md`      | Wisdom-Aware Routing spec                |
 
 ---
 
-## Phase 42: State-Aware Routing
+## State-Aware Routing
 
-> **Phase 42**: Ground routing in reality - prevent hallucinated actions by detecting environment state.
+Ground routing in reality - prevent hallucinated actions by detecting environment state.
 
 ### Overview
 
@@ -96,7 +96,7 @@ The routing system now detects real-time environment state (Git status, active c
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    Phase 42: State-Aware Routing                             │
+│                         State-Aware Routing                                 │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  User Query                                                                  │
@@ -159,7 +159,7 @@ print(result.env_snapshot)
 $ omni route invoke "commit my changes" --verbose
 
 # Output includes environment state panel:
-╭──────────────────────── [Phase 42] Environment State ────────────────────────╮
+╭──────────────────────── Environment State ────────────────────────╮
 │ [ENVIRONMENT STATE]                                                          │
 │ - Branch: main | Modified: 51 files (M assets/references.yaml, ...)          │
 │ - Active Context: Empty                                                      │
@@ -189,9 +189,9 @@ $ omni route invoke "commit my changes" --verbose
 
 ---
 
-## Phase 39/40: Self-Evolving Feedback Loop
+## Self-Evolving Feedback Loop
 
-> **Phase 40**: The system now **learns from experience**. Successful routing decisions boost future confidence automatically.
+The system now **learns from experience**. Successful routing decisions boost future confidence automatically.
 
 ### Overview
 
@@ -199,7 +199,7 @@ The routing system now includes a feedback loop that learns from successful rout
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    Phase 39/40: Self-Evolving Routing                        │
+│                    Self-Evolving Routing                        │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  User Query → Semantic Router → Skill Execution → Feedback Recording        │
@@ -313,7 +313,7 @@ The Routing System is responsible for translating user requests into the right s
 │         │                                                                   │
 │         ▼                                                                   │
 │  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │ 4️⃣ Vector Fallback (Cold Path) [Phase 36.2]                            │  │
+│  │ 4️⃣ Vector Fallback (Cold Path)                            │  │
 │  │    ChromaDB semantic search → suggested_skills                         │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
@@ -384,7 +384,7 @@ result = await router.route(
 # - confidence: 0.95
 ```
 
-### Vector Fallback (Cold Path) [Phase 36.2]
+### Vector Fallback (Cold Path)
 
 **Purpose**: Semantic search when LLM routing is weak.
 
@@ -444,7 +444,7 @@ Boost confidence by 0.15
 │  ├─ test_generate_mission_brief         ✅ Brief generation                 │
 │  └─ test_no_valid_skills                ✅ Empty skill handling             │
 │                                                                             │
-│  CATEGORY 4: Vector Fallback (Cold Path) [Phase 36.2]                       │
+│  CATEGORY 4: Vector Fallback (Cold Path)                       │
 │  ├─ test_scenario2_cold_path_virtual_loading     ✅ Vector fallback         │
 │  ├─ test_scenario5_vector_filtering              ✅ installed_only filter   │
 │  ├─ test_scenario6_cache_hit                     ✅ Cache + Vector combo    │
@@ -456,7 +456,7 @@ Boost confidence by 0.15
 │  ├─ test_explicit_tool_discover          ✅ Discovery tool rendering        │
 │  └─ test_scenario4_ambiguous_graceful_fail        ✅ Graceful degradation   │
 │                                                                             │
-│  CATEGORY 6: Hot Reload Integration [Phase 36.5]                            │
+│  CATEGORY 6: Hot Reload Integration                            │
 │  ├─ test_reload_orchestration            ✅ Skill reload flow               │
 │  ├─ test_manager_reload_method           ✅ Manager reload implementation   │
 │  ├─ test_observer_pattern_basic          ✅ Observer registration           │
@@ -591,7 +591,7 @@ manifest = registry.get_skill_manifest("git")
 # }
 ```
 
-## Hot Reload Integration [Phase 36.5]
+## Hot Reload Integration
 
 When a skill is reloaded, the routing system is updated automatically:
 
@@ -639,7 +639,7 @@ uv run pytest packages/python/agent/src/agent/tests/scenarios/test_hot_reload.py
 uv run pytest packages/python/agent/src/agent/tests/ -k "routing or cortex or router" -v
 ```
 
-## Phase 36.8: Auto-Route Skill Discovery
+## Auto-Route Skill Discovery
 
 **Auto-Trigger Skill Discovery** - When users express intent through natural language, the system can automatically discover and prepare skills.
 
@@ -731,13 +731,13 @@ User: "Analyze this pcap file"
 | `agent/core/router/semantic_cortex.py`         | Fuzzy cache implementation         |
 | `agent/core/router/models.py`                  | RoutingResult, HiveMindCache       |
 | `agent/core/skill_manager.py`                  | SkillManager with observer pattern |
-| `agent/core/skill_discovery.py`                | VectorSkillDiscovery (Phase 36.2)  |
+| `agent/core/skill_discovery.py`                | VectorSkillDiscovery               |
 | `agent/tests/test_semantic_cortex.py`          | Cortex tests                       |
 | `agent/tests/scenarios/test_discovery_flow.py` | Discovery flow tests               |
 | `agent/tests/scenarios/test_hot_reload.py`     | Hot reload tests                   |
 
 ## See Also
 
-- [Skill Discovery](../developer/discover.md) - Phase 36.2 Vector-Enhanced Discovery
+- [Skill Discovery](../developer/discover.md) - Vector-Enhanced Discovery
 - [Trinity Architecture](../explanation/trinity-architecture.md) - System architecture
 - [Skills Overview](../skills.md) - Skill implementation guide

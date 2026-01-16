@@ -1,8 +1,8 @@
 # mcp_core Architecture
 
-> **Phase 30: Modular Architecture** | **Phase 31: Performance Optimization** | **Phase 32: Import Optimization** | **Phase 36: Trinity v2.0**
+> **Architecture**: Modular Design | Performance Optimized | Import Optimized | Trinity v2.0 Compatible
 
-> **Important (Phase 36)**: The `mcp_core/execution/` module has been **DELETED**. Execution is now handled by `skills/terminal/tools.py`. Protocol definitions remain for compatibility.
+> **Important**: The `mcp_core/execution/` module has been **DELETED**. Execution is now handled by `skills/terminal/tools.py`. Protocol definitions remain for compatibility.
 
 Shared library providing common functionality for orchestrator and coder MCP servers.
 
@@ -21,7 +21,7 @@ common/mcp_core/
 ├── api/                  # API key management
 └── instructions/         # Project instructions loader
 
-# DELETED (Phase 36)
+# DELETED (Trinity v2.0)
 # execution/              # Moved to skills/terminal/tools.py
 ```
 
@@ -53,7 +53,7 @@ mock_executor: ISafeExecutor = MagicMock()
 - `IEnvironmentLoader` - Environment variable loading
 - `IMCPLogger` - Structured logging
 
-### execution/ (DELETED - Phase 36)
+### execution/ (DELETED - Trinity v2.0)
 
 > **Migration**: Execution is now handled by `skills/terminal/tools.py`
 
@@ -228,7 +228,7 @@ from mcp_core import get_setting
 
 ## Path Utilities (common.skills_path)
 
-A centralized module for skill path handling (Phase 32):
+A centralized module for skill path handling:
 
 ```python
 from common.skills_path import SKILLS_DIR, load_skill_module
@@ -297,7 +297,7 @@ from mcp_core.inference import InferenceClient
 
 ## Performance Optimizations
 
-### Phase 32: Import Optimizations
+### Import Optimizations
 
 **Key Optimizations:**
 
@@ -360,7 +360,7 @@ from mcp_core.inference import InferenceClient
        return self._context_cache
    ```
 
-### Phase 31: Pre-compiled Regex
+### Pre-compiled Regex
 
 Location: `mcp_core/execution/security.py`
 
@@ -390,14 +390,14 @@ Per ODEP 80/20 matrix:
 
 ## Version History
 
-| Version | Date       | Changes                                       |
-| ------- | ---------- | --------------------------------------------- |
-| 2.4.0   | 2026-01-10 | Phase 36: Trinity v2.0 - `execution/` DELETED |
-| 2.3.0   | 2026-01-07 | Phase 32: Path utilities (SKILLS_DIR)         |
-| 2.2.0   | 2026-01-07 | Phase 32: Import optimizations (117x faster)  |
-| 2.1.0   | 2026-01-07 | Phase 31: Performance optimizations           |
-| 2.0.0   | 2026-01-07 | Phase 30: Fully modular architecture          |
-| 1.0.0   | Earlier    | Monolithic single-file modules                |
+| Version | Date       | Changes                             |
+| ------- | ---------- | ----------------------------------- |
+| 2.4.0   | 2026-01-10 | Trinity v2.0 - `execution/` DELETED |
+| 2.3.0   | 2026-01-07 | Path utilities (SKILLS_DIR)         |
+| 2.2.0   | 2026-01-07 | Import optimizations (117x faster)  |
+| 2.1.0   | 2026-01-07 | Performance optimizations           |
+| 2.0.0   | 2026-01-07 | Fully modular architecture          |
+| 1.0.0   | Earlier    | Monolithic single-file modules      |
 
 ## Testing
 
@@ -414,7 +414,7 @@ uv run pytest packages/python/agent/src/agent/tests/stress_tests/test_performanc
 
 ## Backward Compatibility
 
-> **Phase 36 Breaking Change**: `mcp_core.execution` module is removed. Use `skills/terminal` instead.
+> **Breaking Change**: `mcp_core.execution` module is removed. Use `skills/terminal` instead.
 
 ```python
 # BEFORE (no longer works)

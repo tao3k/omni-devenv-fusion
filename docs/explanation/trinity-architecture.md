@@ -1787,7 +1787,7 @@ Execute command function
 | First `@omni("skill.help")` | ~100-500ms | Repomix execution               |
 | Subsequent help calls       | <1ms       | Cache read                      |
 
-## File Structure (Phase 35.2)
+## File Structure (Legacy)
 
 ```
 packages/python/agent/src/agent/core/
@@ -1822,9 +1822,9 @@ assets/skills/<skill>/
 └── repomix.json          # Atomic context config (optional)
 ```
 
-## Phase 25 → Phase 29 Evolution
+## Trinity v1 Evolution
 
-| Aspect                 | Phase 25.3                 | Phase 35.3                                            |
+| Aspect                 | Trinity v1                 | Trinity v2                                            |
 | ---------------------- | -------------------------- | ----------------------------------------------------- |
 | **Architecture**       | Trinity                    | Trinity + Protocols + Pure MCP Server                 |
 | **MCP Server**         | FastMCP                    | `mcp.server.Server` (no FastMCP)                      |
@@ -1837,7 +1837,7 @@ assets/skills/<skill>/
 | **Performance**        | Standard asyncio           | uvloop (SSE) + orjson                                 |
 | **Testing**            | Manual fixtures            | Zero-config pytest plugin (auto-discovers fixtures)   |
 
-## Phase 35.2: Sidecar Execution Pattern
+## Sidecar Execution Pattern
 
 For skills with heavy dependencies (e.g., `crawl4ai`, `playwright`), use the **Sidecar Execution Pattern**:
 
@@ -1908,7 +1908,7 @@ async def crawl(url: str):
 
 ## Integration Points
 
-### With Pure MCP Server (`mcp_server.py`, Phase 35.3)
+### With Pure MCP Server (`mcp_server.py`)
 
 ```python
 from mcp.server import Server
@@ -1985,7 +1985,7 @@ Without `repomix.json`, dynamic config is generated with defaults.
 
 ---
 
-## Production Validation (Phase 29)
+## Production Validation
 
 The Trinity architecture has been validated under extreme stress conditions.
 
@@ -2016,7 +2016,7 @@ The Trinity architecture has been validated under extreme stress conditions.
 
 ### Conclusion
 
-> **The Trinity Architecture is SOLID (Phase 29).**
+> **The Trinity Architecture is SOLID.**
 
 Production-ready for high-concurrency environments with:
 

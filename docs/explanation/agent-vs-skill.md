@@ -62,7 +62,7 @@ This encapsulates "thinking" in a black-box function. This works in simple Chain
 
 ## 2. Context & Responsibility
 
-In **Phase 15 (Reflexion Loop)**, Reviewer's responsibility isn't just "output a comment"—it's the **Gatekeeper** role.
+In the **Reflexion Loop**, Reviewer's responsibility isn't just "output a comment"—it's the **Gatekeeper** role.
 
 ### ReviewerAgent Workflow
 
@@ -72,7 +72,7 @@ flowchart TD
     Orchestrator -- Task Brief --> Coder[👷 CoderAgent]
     Coder -- Code --> Orchestrator
 
-    subgraph Phase 15 Loop
+    subgraph Reflexion Loop
         Orchestrator -- Audit Request --> Reviewer[🕵️ ReviewerAgent]
         Reviewer -- Uses --> Skill1[🔧 git skill]
         Reviewer -- Uses --> Skill2[🔧 testing skill]
@@ -147,7 +147,7 @@ agent/skills/
 ├── testing/
 └── audit_standards/          # Optional: Review standards as a "skill"
     ├── prompts.md            # Defines quality criteria
-    └── SKILL.yaml            # Skill metadata (Phase 33)
+    └── SKILL.yaml            # Skill metadata
 ```
 
 ReviewerAgent loads `audit_standards` just like any other skill.
@@ -188,5 +188,5 @@ This follows **Orchestrator-Workers** pattern—Reviewer is a "prosecutor" with 
 ## Related Documentation
 
 - [Orchestrator Architecture](../reference/mcp-orchestrator.md)
-- [Phase 15: Reflexion Loop](phase15-reflexion-loop.md)
+- [Reflexion Loop](phase15-reflexion-loop.md)
 - [Skill Registry Pattern](../reference/skill-registry.md)

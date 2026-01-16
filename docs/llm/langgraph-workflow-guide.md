@@ -169,6 +169,189 @@ async def retry_logic(state):
 builder.add_command_node("handle_result", retry_logic)
 ```
 
+## Pattern 7: SQLite State Persistence (Workflow Tracking)
+
+Use when you need state to persist across skill module reloads.
+
+```python
+import sqlite3
+import uuid
+from pathlib import Path
+
+_DB_PATH = Path.home() / ".cache" / "project" / "workflows.db"
+
+def _get_state_db() -> sqlite3.Connection:
+    """Get or create SQLite connection for workflow state."""
+    _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(_DB_PATH), check_same_thread=False)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS workflow_states (
+            workflow_id TEXT PRIMARY KEY,
+            state TEXT,
+            updated_at REAL
+        )
+    """)
+    return conn
+
+def _save_workflow_state(workflow_id: str, state: dict) -> None:
+    """Save workflow state to SQLite."""
+    import json
+    conn = _get_state_db()
+    state_json = json.dumps(state)
+    updated_at = __import__("time").time()
+    conn.execute(
+        "REPLACE INTO workflow_states (workflow_id, state, updated_at) VALUES (?, ?, ?)",
+        (workflow_id, state_json, updated_at)
+    )
+    conn.commit()
+    conn.close()
+
+def _get_workflow_state(workflow_id: str) -> Optional[dict]:
+    """Retrieve workflow state from SQLite."""
+    import json
+    conn = _get_state_db()
+    cursor = conn.execute(
+        "SELECT state FROM workflow_states WHERE workflow_id = ?",
+        (workflow_id,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return json.loads(row[0])
+    return None
+```
+
+**Usage in workflow:**
+
+```python
+async def _start_workflow_async() -> Dict[str, Any]:
+    wf_id = str(uuid.uuid4())[:8]
+    state = {"workflow_id": wf_id, "status": "prepared"}
+    _save_workflow_state(wf_id, state)
+    return state
+
+async def _get_status_async(workflow_id: str) -> Optional[Dict[str, Any]]:
+    return _get_workflow_state(workflow_id)
+```
+
+## Pattern 8: Template-Based Output Rendering
+
+Use Jinja2 templates for consistent, structured output formatting.
+
+**Template file** (`skills/git/templates/prepare_result.j2`):
+
+```jinja2
+### Commit Analysis
+
+| Field           | Value               |
+| --------------- | ------------------- |
+| **Type**        | `{{ commit_type }}` |
+| **Scope**       | `{{ commit_scope }}`{% if scope_warning %} ⚠️{% endif %} |
+
+#### Files to commit ({{ staged_file_count }})
+
+{%- for f in staged_files[:20] %}
+- `{{ f }}`
+{%- endfor %}
+
+#### Message
+
+{{ message }}
+
+---
+*Generated with Claude Code*
+```
+
+**Rendering function** (`skills/git/scripts/rendering.py`):
+
+```python
+from functools import lru_cache
+import jinja2
+from common.skills_path import SKILLS_DIR
+from common.config.settings import get_setting
+
+@lru_cache(maxsize=1)
+def _get_jinja_env() -> jinja2.Environment:
+    search_paths = [
+        SKILLS_DIR("git", path="templates"),  # Skill default
+        get_setting("assets.templates_dir") / "git",  # User override
+    ]
+    return jinja2.Environment(
+        loader=jinja2.FileSystemLoader([p for p in search_paths if p.exists()]),
+        autoescape=False,
+        trim_blocks=True,
+    )
+
+def render_template(template_name: str, **context) -> str:
+    """Render any Jinja2 template with cascading support."""
+    env = _get_jinja_env()
+    template = env.get_template(template_name)
+    return template.render(**context)
+```
+
+**Usage in workflow:**
+
+```python
+from .rendering import render_template
+
+async def start_commit_workflow() -> str:
+    return render_template(
+        "prepare_result.j2",
+        commit_type="feat",
+        commit_scope="git-workflow",
+        commit_description="Smart Commit workflow",
+        has_staged=True,
+        staged_files=["file1.py", "file2.py"],
+        staged_file_count=2,
+        message="Ready to commit"
+    )
+```
+
+**Cascading template pattern:**
+
+```
+User Override: assets/templates/git/prepare_result.j2  (highest priority)
+Skill Default: assets/skills/git/templates/prepare_result.j2  (fallback)
+```
+
+## Pattern 9: Scope Validation with cog.toml
+
+Validate commit scopes against project configuration.
+
+```python
+from pathlib import Path
+import re
+
+def _get_cog_scopes(project_root: Path) -> List[str]:
+    """Read allowed scopes from cog.toml."""
+    cog_path = project_root / "cog.toml"
+    if cog_path.exists():
+        content = cog_path.read_text()
+        match = re.search(r"scopes\s*=\s*\[([^\]]+)\]", content, re.DOTALL)
+        if match:
+            scopes_str = match.group(1)
+            return re.findall(r'"([^"]+)"', scopes_str)
+    return []
+
+def _validate_scope(scope: str, valid_scopes: List[str]) -> tuple:
+    """Validate scope and suggest fixes."""
+    scope_lower = scope.lower()
+    if scope_lower in [s.lower() for s in valid_scopes]:
+        return True, scope, []
+
+    # Find close matches
+    from difflib import get_close_matches
+    matches = get_close_matches(scope_lower, [s.lower() for s in valid_scopes], n=1, cutoff=0.6)
+    if matches:
+        original_casing = valid_scopes[[s.lower() for s in valid_scopes].index(matches[0])]
+        return True, original_casing, [f"Auto-fixed to '{original_casing}'"]
+    return False, scope, [f"Scope not in cog.toml. Allowed: {', '.join(valid_scopes)}"]
+
+# Usage
+valid_scopes = _get_cog_scopes(root)
+is_valid, fixed_scope, warnings = _validate_scope("git-workflow", valid_scopes)
+```
+
 ## State Design
 
 ### Good State Design
@@ -221,66 +404,6 @@ state_output={
 | `verb_noun` | `check_status`, `validate_input`   | Function nodes       |
 | `verb_noun` | `review_changes`, `approve_commit` | Interrupt nodes      |
 | `verb_noun` | `route_request`, `decide_action`   | Command/router nodes |
-
-## Common Mistakes to Avoid
-
-### Mistake 1: Forgetting Entry Point
-
-```python
-# Wrong - graph has no entry point
-builder.add_skill_node("a", "skill", "cmd")
-builder.add_skill_node("b", "skill", "cmd")
-builder.add_edge("a", "b")
-# graph.compile() will fail!
-
-# Correct
-builder.set_entry_point("a")
-```
-
-### Mistake 2: Missing State Schema for Parallel Writes
-
-```python
-# Wrong - parallel nodes overwrite each other
-builder.add_skill_node("task1", "skill", "cmd")  # Writes to "results"
-builder.add_skill_node("task2", "skill", "cmd")  # Overwrites "results"!
-
-# Correct - use reducer
-from agent.core.orchestrator.state_utils import create_reducer_state_schema
-import operator
-
-schema = create_reducer_state_schema(GraphState, {"results": operator.add})
-builder = DynamicGraphBuilder(skill_manager, state_schema=schema)
-```
-
-### Mistake 3: No Interrupt for Destructive Operations
-
-```python
-# Wrong - commits directly
-builder.add_skill_node("commit", "git", "commit")
-
-# Correct - pauses for approval
-builder.add_interrupt_node("approve", "Approve this commit?")
-builder.add_sequence("approve", "commit")
-graph.compile(interrupt_before=["commit"])
-```
-
-### Mistake 4: Complex Logic in Routing Function
-
-```python
-# Wrong - too complex
-def route(state):
-    if (state.get("a") and not state.get("b")) or \
-       (state.get("c") and state.get("d")) or \
-       state.get("e") == "special":
-        return "path1"
-    # ... 50 more lines
-
-# Correct - use command node with async function
-async def smart_router(state):
-    # Can use async, call other skills, etc.
-    result = await analyze_state(state)
-    return Command(goto=result["next_node"])
-```
 
 ## Complete Example: Smart Commit Workflow
 
@@ -346,6 +469,117 @@ builder.set_entry_point("prepare")
 graph = builder.compile(interrupt_before=["commit"])
 ```
 
+## Complete Example: Template-Based Smart Commit (No LangGraph)
+
+For simpler workflows, use direct template rendering with SQLite state:
+
+```python
+# skills/git/scripts/graph_workflow.py
+import sqlite3
+import uuid
+from pathlib import Path
+from typing import Dict, Any, Optional
+
+from .rendering import render_template, render_commit_message
+from .prepare import _get_cog_scopes
+
+_DB_PATH = Path.home() / ".cache" / "omni-devenv-fusion" / "workflows.db"
+
+def _get_state_db() -> sqlite3.Connection:
+    _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(_DB_PATH), check_same_thread=False)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS workflow_states (
+            workflow_id TEXT PRIMARY KEY,
+            state TEXT,
+            updated_at REAL
+        )
+    """)
+    return conn
+
+def _save_workflow_state(workflow_id: str, state: Dict[str, Any]) -> None:
+    import json
+    conn = _get_state_db()
+    conn.execute(
+        "REPLACE INTO workflow_states VALUES (?, ?, ?)",
+        (workflow_id, json.dumps(state), __import__("time").time())
+    )
+    conn.commit()
+    conn.close()
+
+def _get_workflow_state(workflow_id: str) -> Optional[Dict[str, Any]]:
+    import json
+    conn = _get_state_db()
+    row = conn.execute(
+        "SELECT state FROM workflow_states WHERE workflow_id = ?",
+        (workflow_id,)
+    ).fetchone()
+    conn.close()
+    return json.loads(row[0]) if row else None
+
+async def _start_smart_commit_async() -> Dict[str, Any]:
+    from agent.core.skill_manager.manager import SkillManager
+    skill_manager = SkillManager()
+    wf_id = str(uuid.uuid4())[:8]
+
+    # Run stage_and_scan
+    result = await skill_manager.run("git", "stage_and_scan", {})
+    staged_files = result.get("staged_files", [])
+    diff = result.get("diff", "")
+
+    # Scope validation
+    valid_scopes = _get_cog_scopes(Path("."))
+    scope_warning = f"Valid scopes: {', '.join(valid_scopes)}" if valid_scopes else ""
+
+    state = {
+        "workflow_id": wf_id,
+        "staged_files": staged_files,
+        "diff_content": diff,
+        "status": "prepared" if staged_files else "empty",
+        "scope_warning": scope_warning,
+    }
+    _save_workflow_state(wf_id, state)
+    return state
+
+async def _approve_smart_commit_async(message: str, workflow_id: str) -> Dict[str, Any]:
+    from agent.core.skill_manager.manager import SkillManager
+    skill_manager = SkillManager()
+
+    # Execute commit
+    result = await skill_manager.run("git", "git_commit", {"message": message})
+
+    _save_workflow_state(workflow_id, {"status": "approved", "final_message": message})
+
+    return {"status": "committed", "final_message": message}
+
+# Skill command with template rendering
+from agent.skills.decorators import skill_script
+
+@skill_script(name="smart_commit", category="workflow")
+async def smart_commit(action: str = "start", workflow_id: str = "", message: str = "") -> str:
+    if action == "start":
+        result = await _start_smart_commit_async()
+        return render_template(
+            "prepare_result.j2",
+            commit_type="feat",
+            commit_scope="git-workflow",
+            commit_description="Smart Commit workflow",
+            has_staged=bool(result["staged_files"]),
+            staged_files=result["staged_files"],
+            staged_file_count=len(result["staged_files"]),
+            scope_warning=result.get("scope_warning", ""),
+            lefthook_report="",
+            message=f"**Workflow ID**: `{result['workflow_id']}`\n\nReady to approve.",
+        )
+    elif action == "approve":
+        result = await _approve_smart_commit_async(message, workflow_id)
+        return render_commit_message(
+            subject=message,
+            status="committed",
+            workflow_id=workflow_id,
+        )
+```
+
 ## Decision Flowchart
 
 ```
@@ -369,20 +603,32 @@ Need state persistence?
 Need human approval?
 ├── Yes → compile(interrupt_before=["node"])
 └── No → compile()
+
+Need structured output?
+├── Yes → Use Jinja2 templates with render_template()
+└── No → Return raw string
+
+Need cross-reload persistence?
+├── Yes → Use SQLite state store
+└── No → Use in-memory dict
 ```
 
 ## Quick Reference
 
-| Need            | Method                    |
-| --------------- | ------------------------- |
-| Execute skill   | `add_skill_node()`        |
-| Custom logic    | `add_function_node()`     |
-| Pause for human | `add_interrupt_node()`    |
-| Dynamic routing | `add_command_node()`      |
-| Connect nodes   | `add_edge()`              |
-| Linear flow     | `add_sequence()`          |
-| Branching       | `add_conditional_edges()` |
-| Parallel        | `add_send_branch()`       |
-| Start point     | `set_entry_point()`       |
-| Build graph     | `compile()`               |
-| Show graph      | `visualize()`             |
+| Need               | Method/Pattern                                     |
+| ------------------ | -------------------------------------------------- |
+| Execute skill      | `add_skill_node()`                                 |
+| Custom logic       | `add_function_node()`                              |
+| Pause for human    | `add_interrupt_node()`                             |
+| Dynamic routing    | `add_command_node()`                               |
+| Connect nodes      | `add_edge()`                                       |
+| Linear flow        | `add_sequence()`                                   |
+| Branching          | `add_conditional_edges()`                          |
+| Parallel           | `add_send_branch()`                                |
+| Start point        | `set_entry_point()`                                |
+| Build graph        | `compile()`                                        |
+| Show graph         | `visualize()`                                      |
+| Template rendering | `render_template()`                                |
+| Commit message     | `render_commit_message()`                          |
+| SQLite persistence | `_save_workflow_state()` / `_get_workflow_state()` |
+| Scope validation   | `_get_cog_scopes()` / `_validate_scope()`          |

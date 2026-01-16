@@ -1,6 +1,6 @@
 # DynamicGraphBuilder - LangGraph Workflow Builder
 
-> Dynamic workflow construction using fluent API. Phase 61 implementation.
+> Dynamic workflow construction using fluent API.
 
 ## Overview
 

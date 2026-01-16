@@ -98,6 +98,9 @@ def render_commit_message(
     security_status: str = "No sensitive files detected",
     security_issues: Optional[List[str]] = None,
     error: str = "",
+    workflow_id: str = "",
+    commit_type: str = "feat",
+    commit_scope: str = "general",
 ) -> str:
     """
     Render commit message using cascading Jinja2 template.
@@ -116,6 +119,9 @@ def render_commit_message(
         security_status: Security scan result message
         security_issues: List of security issues (for security_violation status)
         error: Error message (for error/failed status)
+        workflow_id: Workflow ID for tracking (optional)
+        commit_type: Conventional commit type (feat, fix, refactor, etc.)
+        commit_scope: Commit scope (e.g., git-workflow, core, etc.)
 
     Returns:
         Formatted commit message with verification badge
@@ -133,6 +139,9 @@ def render_commit_message(
         security_status=security_status,
         security_issues=security_issues or [],
         error=error,
+        workflow_id=workflow_id,
+        commit_type=commit_type,
+        commit_scope=commit_scope,
         timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     )
 

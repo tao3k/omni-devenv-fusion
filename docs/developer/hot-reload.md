@@ -1,15 +1,15 @@
-# Hot Reload (Phase 36.5 → Phase 67 Simplified)
+# Hot Reload
 
-> **Phase 67**: Simplified for JIT/Meta-Agent Era. Removed syntax validation - Python import catches errors, Meta-Agent handles recovery.
+Simplified for JIT/Meta-Agent Era. Removed syntax validation - Python import catches errors, Meta-Agent handles recovery.
 
-## Phase 67 Changes
+## Changes
 
-| Feature              | Before (Phase 36.5)    | After (Phase 67) |
-| -------------------- | ---------------------- | ---------------- |
-| Syntax validation    | `py_compile.compile()` | ❌ Removed       |
-| Transaction rollback | ✅ Yes                 | ❌ Removed       |
-| Lines of code        | 216                    | 145              |
-| Error handling       | Fail-safe              | Fail-fast        |
+| Feature              | Before (Legacy)        | Current    |
+| -------------------- | ---------------------- | ---------- |
+| Syntax validation    | `py_compile.compile()` | ❌ Removed |
+| Transaction rollback | ✅ Yes                 | ❌ Removed |
+| Lines of code        | 216                    | 145        |
+| Error handling       | Fail-safe              | Fail-fast  |
 
 ## Architecture
 
@@ -67,7 +67,7 @@ scripts_mtime = max(f.stat().st_mtime for f in scripts_path.glob("*.py"))
 3. If import fails: Error propagates, Meta-Agent handles recovery
 ```
 
-**Phase 67 Philosophy**: Fail fast. Python's import mechanism catches syntax errors naturally. The Meta-Agent can then self-repair the code.
+**Philosophy**: Fail fast. Python's import mechanism catches syntax errors naturally. The Meta-Agent can then self-repair the code.
 
 ### 4. Lazy Logger
 

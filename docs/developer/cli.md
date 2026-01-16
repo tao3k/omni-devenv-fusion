@@ -46,7 +46,7 @@ $ omni route invoke "commit my changes" --verbose
 ╭─────────────────────────────────── Input ────────────────────────────────────╮
 │ Query: commit my changes                                                     │
 ╰──────────────────────────────────────────────────────────────────────────────╯
-╭──────────────────────── [Phase 42] Environment State ────────────────────────╮
+╭──────────────────────── Environment State ────────────────────────╮
 │ [ENVIRONMENT STATE]                                                          │
 │ - Branch: main | Modified: 51 files (M assets/references.yaml, ...)          │
 │ - Active Context: Empty                                                      │
@@ -258,7 +258,7 @@ agent/cli/
 └── commands/
     ├── __init__.py
     ├── skill.py         # Skill command group (run, list, etc.)
-    └── route.py         # Route command (Phase 41/42)
+    └── route.py         # Route command
 ```
 
 ---

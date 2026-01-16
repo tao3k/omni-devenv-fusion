@@ -1,74 +1,67 @@
 {#
-# git/prepare_result.j2 - Commit Preparation Result Template
-#
-# Renders commit preparation workflow results with structured output.
-# Used by prepare_commit command for /commit workflow.
-#
-# Cascade Pattern: User Override > Skill Default
-# User Override: assets/templates/git/prepare_result.j2
-# Skill Default: assets/skills/git/templates/prepare_result.j2
+# git/prepare_result.j2 - Commit Preparation Result Template (Phase 36.9)
 #
 #}
-<commit_preparation>
-    <status>{{ 'success' if success else 'failure' }}</status>
-    <checks_passed>{{ 'true' if checks_passed else 'false' }}</checks_passed>
-    <timestamp>{{ timestamp }}</timestamp>
-{%- if message %}
-    <commit_message>
-        <type>{{ commit_type }}</type>
-{%- if commit_scope %}
-        <scope>{{ commit_scope }}</scope>
-{%- endif %}
-        <description>{{ commit_description }}</description>
-    </commit_message>
-{%- endif %}
-{%- if scope_warning %}
-    <scope_warning>{{ scope_warning }}</scope_warning>
-{%- endif %}
-{%- if lefthook_report %}
-    <lefthook_report>
-{{ lefthook_report | indent(4, true) }}
-    </lefthook_report>
-{%- endif %}
-{%- if security_warning %}
-    <security_warning>
-{{ security_warning | indent(4, true) }}
-    </security_warning>
-{%- endif %}
-{%- if has_staged %}
-    <staged_files>
-        <count>{{ staged_file_count }}</count>
-{%- for f in staged_files %}
-{%- if f %}
-        <file>{{ f }}</file>
-{%- endif %}
-{%- endfor %}
-    </staged_files>
-{%- endif %}
-{%- if has_unstaged %}
-    <unstaged_files>
-{%- for f in unstaged_files %}
-{%- if f %}
-        <file>{{ f }}</file>
-{%- endif %}
-{%- endfor %}
-    </unstaged_files>
-{%- endif %}
-{%- if staged_diff_stats %}
-    <diff_stats>
-{{ staged_diff_stats | indent(4, true) }}
-    </diff_stats>
-{%- endif %}
-{%- if staged_diff %}
-    <diff>
-{{ staged_diff | indent(4, true) }}
-    </diff>
-{%- endif %}
-{%- if results %}
-    <results>
-{%- for r in results %}
-        <result>{{ r }}</result>
-{%- endfor %}
-    </results>
-{%- endif %}
-</commit_preparation>
+
+## Raw Data
+
+{% if valid_scopes %}
+**Valid Scopes**: {{ valid_scopes|join(', ') }}
+{% endif %}
+
+{% if scope_warning %}
+{{ scope_warning }}
+{% endif %}
+
+**{{ staged_file_count }} Files to commit**
+
+{% for f in staged_files[:15] %}
+- `{{ f }}`
+{% endfor %}
+{% if staged_file_count > 15 %}
+- ... and {{ staged_file_count - 15 }} more files
+{% endif %}
+
+{% if diff_content %}
+**Diff Preview**:
+{{ diff_content[:2000] }}
+{% endif %}
+
+{% if valid_scopes %}
+**Scope Notice**: Use ONLY scopes from the list above.
+{% endif %}
+
+---
+
+## Commit Analysis Reporter
+
+### 📋 Commit Analysis
+
+| Field           | Value               |
+| --------------- | ------------------- |
+| **Type**        | `feat` (or fix, refactor, docs, style, test, chore) |
+| **Scope**       | `git-workflow` (pick from Valid Scopes) |
+| **Description** | _REPLACE_WITH_SHORT_DESCRIPTION_ |
+
+#### 📁 Files to commit ({{ staged_file_count }})
+
+{% for f in staged_files[:15] %}
+- `{{ f }}`
+{% endfor %}
+{% if staged_file_count > 15 %}
+- ... and {{ staged_file_count - 15 }} more files
+{% endif %}
+
+#### 📝 Message
+
+**Subject:**
+
+feat(git-workflow): _REPLACE_WITH_DESCRIPTION_
+
+**Body:**
+- _REPLACE_WITH_CHANGE_DETAIL_1
+- _REPLACE_WITH_CHANGE_DETAIL_2
+
+---
+
+**Please confirm:** Reply **Yes** to commit, **No** to cancel.
