@@ -91,6 +91,9 @@ class OmniAgent:
 
         # Tool registry (skills)
         self._tools: Dict[str, Any] = {}
+        self._tool_aliases: Dict[
+            str, str
+        ] = {}  # alias -> full_name (e.g., "list_directory" -> "filesystem.list_directory")
         self._tool_schemas: List[Dict] = []
 
         # LLM Client (lazy init)
@@ -170,6 +173,13 @@ class OmniAgent:
 
                     # Store as a callable with metadata
                     self._tools[tool_name] = wrapper_func
+
+                    # Create alias: "filesystem.list_directory" -> "list_directory"
+                    if "." in tool_name:
+                        alias = tool_name.split(".", 1)[1]  # Get the part after first dot
+                        if alias not in self._tool_aliases:
+                            self._tool_aliases[alias] = tool_name
+                            logger.debug(f"Created alias: {alias} -> {tool_name}")
 
                     logger.debug(f"Loaded tool: {tool_name}")
 
@@ -287,9 +297,15 @@ class OmniAgent:
         )
 
         # Find and execute the tool
-        if tool_name in self._tools:
+        # First try exact match, then try alias
+        resolved_name = tool_name
+        if tool_name not in self._tools and tool_name in self._tool_aliases:
+            resolved_name = self._tool_aliases[tool_name]
+            logger.debug(f"Resolved alias: {tool_name} -> {resolved_name}")
+
+        if resolved_name in self._tools:
             try:
-                tool_fn = self._tools[tool_name]
+                tool_fn = self._tools[resolved_name]
                 result = tool_fn(**tool_input)
 
                 # Handle async results FIRST before string conversion
@@ -300,14 +316,20 @@ class OmniAgent:
 
                 logger.info(
                     "OmniAgent: Tool completed",
-                    tool=tool_name,
+                    tool=resolved_name,
+                    original_tool=tool_name,
                     result_preview=result_str[:100],
                 )
                 return result_str
 
             except Exception as e:
-                error_msg = f"Tool '{tool_name}' failed: {str(e)}"
-                logger.error("OmniAgent: Tool failed", tool=tool_name, error=str(e))
+                error_msg = f"Tool '{resolved_name}' failed: {str(e)}"
+                logger.error(
+                    "OmniAgent: Tool failed",
+                    tool=resolved_name,
+                    original_tool=tool_name,
+                    error=str(e),
+                )
                 return f"Error: {error_msg}"
         else:
             warning_msg = f"Unknown tool: {tool_name}"

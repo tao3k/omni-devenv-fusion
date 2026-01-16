@@ -30,7 +30,7 @@ from agent.core.graph import get_graph, OmniGraph
 
 # Dynamic Workflow imports
 from agent.core.skill_manager import SkillManager
-from agent.core.orchestrator.dynamic_builder import DynamicGraphBuilder
+from agent.core.orchestrator.builder import DynamicGraphBuilder
 from agent.core.planner.planner import Planner
 
 # Lazy Logger Initialization

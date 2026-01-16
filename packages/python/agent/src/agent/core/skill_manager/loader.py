@@ -96,12 +96,13 @@ class SkillLoaderMixin:
 
         return commands
 
-    def _load_script_module(self, skill_name: str, script_file: Path) -> Any:
+    def _load_script_module(self, skill_name: str, script_file: Path, reload: bool = False) -> Any:
         """Dynamically load a script module.
 
         Args:
             skill_name: Name of the skill (e.g., "git")
             script_file: Path to the script file (e.g., commit.py)
+            reload: If True, force reload even if already loaded
 
         Returns:
             The loaded Python module
@@ -113,7 +114,11 @@ class SkillLoaderMixin:
 
         # Check if already loaded
         if module_name in sys.modules:
-            return sys.modules[module_name]
+            if reload:
+                # Remove cached module to force reload
+                del sys.modules[module_name]
+            else:
+                return sys.modules[module_name]
 
         # Ensure parent package is in sys.modules for relative imports
         if parent_package not in sys.modules:
@@ -161,12 +166,14 @@ class SkillLoaderMixin:
         self,
         skill_name: str,
         scripts_dir: Path,
+        reload: bool = False,
     ) -> dict[str, SkillCommand]:
         """Extract all @skill_script commands from a skill's scripts directory.
 
         Args:
             skill_name: Name of the skill
             scripts_dir: Path to the scripts directory
+            reload: If True, force reload of all script modules
 
         Returns:
             Dict mapping command name -> SkillCommand
@@ -182,7 +189,7 @@ class SkillLoaderMixin:
                 continue
 
             try:
-                module = self._load_script_module(skill_name, script_file)
+                module = self._load_script_module(skill_name, script_file, reload=reload)
                 script_commands = self._extract_script_commands(module, skill_name)
 
                 # Merge script commands (no prefix - _rebuild_command_cache handles that)

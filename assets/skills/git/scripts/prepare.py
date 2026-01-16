@@ -395,7 +395,14 @@ def format_prepare_result(prep_result: Dict[str, Any]) -> str:
 # Smart Commit Workflow Functions (Phase 36.7)
 # ==============================================================================
 
+from agent.skills.decorators import skill_script
 
+
+@skill_script(
+    name="stage_and_scan",
+    description="Stage files and run security scan for commit preparation",
+    category="workflow",
+)
 def stage_and_scan(root_dir: str = ".") -> dict:
     """
     Stage files and capture diff for LLM analysis.

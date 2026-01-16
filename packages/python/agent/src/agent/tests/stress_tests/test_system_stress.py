@@ -27,7 +27,7 @@ from unittest.mock import MagicMock, AsyncMock, patch
 from agent.core.registry import get_skill_registry
 from agent.core.vector_store import get_vector_memory
 from agent.core.schema import HarvestedInsight, KnowledgeCategory
-from mcp.server.fastmcp import FastMCP
+from mcp.server import Server
 
 
 # -----------------------------------------------------------------------------
@@ -49,7 +49,7 @@ def system_components():
     test_collection_name = f"stress_test_{int(time.time())}"
 
     # 3. Mock MCP
-    mcp = MagicMock(spec=FastMCP)
+    mcp = MagicMock(spec=Server)
     mcp.tool = MagicMock(return_value=lambda x: x)
 
     yield registry, memory, mcp, test_collection_name

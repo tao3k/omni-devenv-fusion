@@ -411,7 +411,9 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin, ResultCacheM
 
         # Load from scripts/*.py ()
         if scripts_dir.exists() and any(scripts_dir.glob("*.py")):
-            script_commands = self._extract_commands_from_scripts(skill_name, scripts_dir)
+            script_commands = self._extract_commands_from_scripts(
+                skill_name, scripts_dir, reload=reload
+            )
 
             if script_commands:
                 commands = script_commands

@@ -4,18 +4,16 @@
 
 This skill provides git operations with **Smart Commit Protocol** for clean, safe commits.
 
-## Architecture (Phase 35.3)
+## Architecture (Phase 63+)
 
 ```
 assets/skills/git/
 ├── SKILL.md              # Skill manifest + LLM context
-├── tools.py              # Router Layer (MCP tools)
 ├── README.md             # This file
-├── scripts/              # Controller Layer (isolated implementations)
+├── scripts/              # @skill_script decorated commands
 │   ├── __init__.py
-│   ├── prepare.py        # prepare_commit with validation
 │   ├── commit.py         # commit operations
-│   ├── rendering.py      # Jinja2 template rendering
+│   ├── graph_workflow.py # Smart Commit workflow (LangGraph)
 │   └── ...
 ├── templates/            # Cascading templates
 │   ├── commit_message.j2
@@ -168,14 +166,13 @@ scopes = [
 
 ## File Locations
 
-| Path                                     | Purpose                  |
-| ---------------------------------------- | ------------------------ |
-| `assets/skills/git/tools.py`             | Router Layer (MCP tools) |
-| `assets/skills/git/scripts/prepare.py`   | prepare_commit logic     |
-| `assets/skills/git/scripts/rendering.py` | Template rendering       |
-| `assets/skills/git/templates/`           | Default templates        |
-| `assets/templates/git/`                  | User override templates  |
-| `cog.toml`                               | Scope configuration      |
+| Path                                          | Purpose                 |
+| --------------------------------------------- | ----------------------- |
+| `assets/skills/git/scripts/commit.py`         | Commit commands         |
+| `assets/skills/git/scripts/graph_workflow.py` | Smart Commit workflow   |
+| `assets/skills/git/templates/`                | Default templates       |
+| `assets/templates/git/`                       | User override templates |
+| `cog.toml`                                    | Scope configuration     |
 
 ---
 

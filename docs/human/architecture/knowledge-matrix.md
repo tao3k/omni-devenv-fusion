@@ -316,12 +316,12 @@ asyncio.run(test())
 
 ## 9. Comparison: Skills vs Knowledge
 
-| Aspect           | Skills (Tool Discovery)      | Knowledge (Docs Search)        |
-| ---------------- | ---------------------------- | ------------------------------ |
-| **Target**       | Tool discovery               | Documentation search           |
-| **Source**       | Python scripts (\*.py)       | Markdown files (\*.md)         |
-| **Unit**         | Function                     | Section/Paragraph              |
-| **Index Key**    | tool_name (e.g., git.commit) | doc_id#chunk-N                 |
+| Aspect           | Skills (Tool Discovery)      | Knowledge (Docs Search)            |
+| ---------------- | ---------------------------- | ---------------------------------- |
+| **Target**       | Tool discovery               | Documentation search               |
+| **Source**       | Python scripts (\*.py)       | Markdown files (\*.md)             |
+| **Unit**         | Function                     | Section/Paragraph                  |
+| **Index Key**    | tool_name (e.g., git.commit) | doc_id#chunk-N                     |
 | **Primary Tool** | skill.search_tools           | knowledge.search_project_knowledge |
 | **Core Tool**    | skill.search_tools           | knowledge.get_development_context  |
 

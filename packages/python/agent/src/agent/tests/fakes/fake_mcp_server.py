@@ -1,7 +1,7 @@
 """
 Fake MCP Server for Testing.
 
-A mock FastMCP server that simulates MCP tool registration and execution.
+A mock MCP server that simulates tool registration and execution.
 """
 
 from typing import Any, Callable, Dict, List, Optional
@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 class FakeMCPServer:
     """
-    Fake MCP server for testing without a real FastMCP instance.
+    Fake MCP server for testing without a real MCP Server instance.
 
     Simulates tool registration, prompt listing, and resource management.
 

@@ -1,29 +1,15 @@
 # Stress Test Framework
 
-> **Status**: Legacy - Phase 9 era documentation
-> **Current Approach**: See [Testing Guide](../developer/testing.md) for Phase 35.1 zero-configuration testing
+> **Status**: Legacy - Historical documentation
+> **Current Approach**: See [Testing Guide](../developer/testing.md) for zero-configuration testing
 
 A modular, extensible stress testing framework for MCP servers and agents.
 
 ## Overview
 
-The stress test framework provides a standardized way to test performance, stability, and logic depth across different phases of development.
+The stress test framework provides a standardized way to test performance, stability, and logic depth.
 
-## Architecture
-
-```
-mcp-server/tests/              # Outdated path - actual: packages/python/agent/tests/
-├── test_stress.py              # Main entry point (just stress-test)
-├── test_phase9_stress.py       # Phase 9 standalone entry point
-└── stress/
-    ├── __init__.py             # Core framework
-    ├── core/
-    │   └── fixtures.py         # Test data generators
-    └── suites/
-        └── phase9.py           # Phase 9 test suite
-```
-
-> **Note**: The above structure is from Phase 9. The current Phase 35.1 approach uses a Pytest plugin at `packages/python/agent/src/agent/testing/plugin.py` with zero-configuration tests in `assets/skills/*/tests/`.
+> **Note**: The above structure is legacy. The current approach uses a Pytest plugin at `packages/python/agent/src/agent/testing/plugin.py` with zero-configuration tests in `assets/skills/*/tests/`.
 
 ### Core Components
 
@@ -44,8 +30,8 @@ mcp-server/tests/              # Outdated path - actual: packages/python/agent/t
 # Run all stress test suites
 just stress-test
 
-# Run Phase 9 only
-python mcp-server/tests/test_phase9_stress.py
+# Current approach: Run skill tests
+uv run pytest assets/skills/ -v
 ```
 
 ### Programmatic
@@ -154,7 +140,7 @@ Tests AST-based code intelligence features:
 
 ## Best Practices
 
-These practices applied to the Phase 9 stress test framework. For Phase 35.1 testing, see [Testing Guide](../developer/testing.md).
+These practices applied to the legacy stress test framework. For current testing, see [Testing Guide](../developer/testing.md).
 
 1. **Tag Tests**: Use tags to filter and organize tests
 2. **Isolate Tests**: Each test should be independent
@@ -164,16 +150,16 @@ These practices applied to the Phase 9 stress test framework. For Phase 35.1 tes
 
 ---
 
-## Current Testing (Phase 35.1)
+## Current Testing Approach
 
 For the current zero-configuration testing approach:
 
-| Aspect            | Legacy (Phase 9)            | Current (Phase 35.1)                         |
-| ----------------- | --------------------------- | -------------------------------------------- |
-| **Test Location** | `mcp-server/tests/stress/`  | `assets/skills/*/tests/`                     |
-| **Configuration** | `conftest.py` per directory | None (Pytest plugin auto-loads)              |
-| **Fixtures**      | Manual registration         | Auto-injected by plugin                      |
-| **Skill Tests**   | Not supported               | Native via `git`, `knowledge`, etc. fixtures |
+| Aspect            | Legacy                      | Current                         |
+| ----------------- | --------------------------- | ------------------------------- |
+| **Test Location** | `mcp-server/tests/stress/`  | `assets/skills/*/tests/`        |
+| **Configuration** | `conftest.py` per directory | None (Pytest plugin auto-loads) |
+| **Fixtures**      | Manual registration         | Auto-injected by plugin         |
+| **Skill Tests**   | Not supported               | Native via `git`, etc. fixtures |
 
 **Quick Start (Current)**:
 

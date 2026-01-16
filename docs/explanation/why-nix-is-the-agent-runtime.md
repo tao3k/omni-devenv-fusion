@@ -1,6 +1,6 @@
 # Why Nix Is the Agent Runtime
 
-> **Status**: ⚠️ LEGACY - Historical rationale (Phase 1-5), preserved for context
+> **Status**: LEGACY - Historical rationale, preserved for context
 > **Note**: Nix is still used for system-level dependencies
 
 ---

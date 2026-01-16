@@ -7,11 +7,13 @@
 The **Memory Skill** is the **Hippocampus Interface** - it enables vector-based memory storage and retrieval via LanceDB + FastEmbed.
 
 **It does NOT:**
+
 - Execute commands
 - Edit files
 - Make decisions
 
 **It ONLY:**
+
 - Stores insights as vectors in LanceDB
 - Retrieves memories via semantic search
 - Loads skill manifests for capability discovery
@@ -70,13 +72,13 @@ result = await load_skill("git")
 
 ## Tools Reference
 
-| Tool | Purpose | When to Call |
-|------|---------|--------------|
-| `save_memory` | Store reusable insight | After discovering a pattern |
-| `search_memory` | Semantic search | When you need to remember |
-| `load_skill` | Index skill manifest | During skill sync |
-| `index_memory` | Optimize search index | After bulk imports |
-| `get_memory_stats` | Memory statistics | Diagnostics |
+| Tool               | Purpose                | When to Call                |
+| ------------------ | ---------------------- | --------------------------- |
+| `save_memory`      | Store reusable insight | After discovering a pattern |
+| `search_memory`    | Semantic search        | When you need to remember   |
+| `load_skill`       | Index skill manifest   | During skill sync           |
+| `index_memory`     | Optimize search index  | After bulk imports          |
+| `get_memory_stats` | Memory statistics      | Diagnostics                 |
 
 ## External Usage (e.g., NoteTaker)
 
@@ -95,12 +97,14 @@ await memory.search_memory(query, limit)
 ## Path Configuration
 
 **settings.yaml:**
+
 ```yaml
 memory:
-  path: ""  # Empty = use default: .cache/{project}/.memory/
+  path: "" # Empty = use default: .cache/{project}/.memory/
 ```
 
 **Default Path:**
+
 ```
 {git_toplevel}/.cache/{project}/memory/lancedb/
 ```

@@ -78,21 +78,21 @@ The `omni ingest` command indexes content into vector store for search and retri
 
 ### Commands
 
-| Command     | Description                         |
-| ----------- | ----------------------------------- |
+| Command     | Description                              |
+| ----------- | ---------------------------------------- |
 | `knowledge` | Index documentation into knowledge table |
-| `skills`    | Index skills into skills table      |
-| `all`       | Index knowledge and skills          |
-| `status`    | Show ingest status                  |
+| `skills`    | Index skills into skills table           |
+| `all`       | Index knowledge and skills               |
+| `status`    | Show ingest status                       |
 
 ### Options
 
-| Option            | Description                     |
-| ----------------- | ------------------------------- |
-| `--dir, -d`       | Documentation directory (knowledge) |
-| `--clear, -c`     | Clear existing index first (skills/all) |
-| `--json, -j`      | Output as JSON                  |
-| `--verbose, -v`   | Show detailed logs              |
+| Option          | Description                             |
+| --------------- | --------------------------------------- |
+| `--dir, -d`     | Documentation directory (knowledge)     |
+| `--clear, -c`   | Clear existing index first (skills/all) |
+| `--json, -j`    | Output as JSON                          |
+| `--verbose, -v` | Show detailed logs                      |
 
 ### Examples
 
@@ -129,11 +129,11 @@ $ omni ingest knowledge --json
 
 ### Related Files
 
-| File                                   | Purpose                                    |
-| -------------------------------------- | ------------------------------------------ |
-| `agent/cli/commands/ingest.py`         | Ingest command implementation              |
-| `agent/core/knowledge/indexer.py`      | Markdown document indexer                  |
-| `agent/core/vector_store.py`           | Vector store for indexing                  |
+| File                              | Purpose                       |
+| --------------------------------- | ----------------------------- |
+| `agent/cli/commands/ingest.py`    | Ingest command implementation |
+| `agent/core/knowledge/indexer.py` | Markdown document indexer     |
+| `agent/core/vector_store.py`      | Vector store for indexing     |
 
 ---
 

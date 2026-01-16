@@ -47,7 +47,11 @@ def _get_default_knowledge_dirs() -> list[dict[str, str]]:
     """Load default knowledge directories from references.yaml (SSOT)."""
     # SSOT: references.yaml > knowledge_dirs
     return [
-        {"path": "assets/knowledge", "domain": "knowledge", "description": "Project knowledge base"},
+        {
+            "path": "assets/knowledge",
+            "domain": "knowledge",
+            "description": "Project knowledge base",
+        },
         {"path": "assets/how-to", "domain": "workflow", "description": "How-to guides"},
         {"path": "docs/explanation", "domain": "architecture", "description": "Architecture docs"},
         {

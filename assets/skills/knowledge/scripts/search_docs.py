@@ -86,12 +86,15 @@ async def search_project_knowledge(
         error_msg = str(e)
         # [FIX] Handle missing table gracefully
         if "Table not found" in error_msg or "knowledge" in error_msg.lower():
-            return json.dumps({
-                "query": query,
-                "error": "Knowledge Base Not Initialized",
-                "message": "The documentation index (knowledge table) is empty. Please run 'omni ingest' to build it.",
-                "suggestion": "Try using 'search_memory' to find past experiences instead."
-            }, indent=2)
+            return json.dumps(
+                {
+                    "query": query,
+                    "error": "Knowledge Base Not Initialized",
+                    "message": "The documentation index (knowledge table) is empty. Please run 'omni ingest' to build it.",
+                    "suggestion": "Try using 'search_memory' to find past experiences instead.",
+                },
+                indent=2,
+            )
 
         error_response = {
             "query": query,
@@ -107,8 +110,8 @@ def format_knowledge_results(json_output: str) -> str:
         data = json.loads(json_output)
 
         if "error" in data:
-            msg = data.get('message', '')
-            sugg = data.get('suggestion', '')
+            msg = data.get("message", "")
+            sugg = data.get("suggestion", "")
             return f"**Knowledge Search Error**: {data['error']}\n\n{msg}\n{sugg}"
 
         results = data.get("results", [])

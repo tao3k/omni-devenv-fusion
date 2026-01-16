@@ -96,30 +96,20 @@ This document describes the workflow and commands for the Template skill.
 
 ## Implementation Details
 
-### Router Pattern
+### @skill_script Pattern
 
-Commands in `tools.py` are lightweight dispatchers:
+Commands in `scripts/commands.py` are decorated with `@skill_script`:
 
 ```python
-from agent.skills.decorators import skill_command
+from agent.skills.decorators import skill_script
 
-@skill_command(name="example", category="read", description="Brief desc")
-def example(param: str = "default") -> str:
+@skill_script(name="example", category="read", description="Brief desc")
+async def example(param: str = "default") -> str:
     """Detailed docstring."""
-    from agent.skills._template.scripts import example as mod
-    return mod.example_command(param)
-```
-
-### Controller Pattern
-
-Implementations are in `scripts/` with full namespace isolation:
-
-```python
-# scripts/example.py
-def example_command(param: str = "default") -> str:
-    """Actual implementation."""
     return f"Result: {param}"
 ```
+
+All logic is in the same file - no router/controller separation needed.
 
 ---
 

@@ -909,7 +909,7 @@ class VectorMemory:
 
         try:
             # Step 1: Get existing file hashes from DB
-            _get_logger().info("Fetching existing file hashes from database...")
+            _get_logger().debug("Fetching existing file hashes from database...")
             # Check if method exists (for backward compatibility with older Rust binaries)
             if hasattr(store, "get_all_file_hashes"):
                 existing_json = store.get_all_file_hashes(table_name)
@@ -924,10 +924,10 @@ class VectorMemory:
             _get_logger().debug(f"Found {len(existing_paths)} existing tools in database")
 
             # Step 2: Scan current filesystem using Rust scanner
-            _get_logger().info("Scanning filesystem for skill tools...")
+            _get_logger().debug("Scanning filesystem for skill tools...")
             current_jsons = store.scan_skill_tools_raw(base_path)
             if not current_jsons:
-                _get_logger().info("No tools found in skills directory")
+                _get_logger().debug("No tools found in skills directory")
                 return {"added": 0, "modified": 0, "deleted": 0, "total": 0}
 
             current_tools = []
@@ -970,7 +970,7 @@ class VectorMemory:
             # Find deleted files (using normalized paths for comparison)
             to_delete_paths = existing_paths - current_paths
 
-            _get_logger().info(
+            _get_logger().debug(
                 f"Diff results: +{len(to_add)} added, ~0 modified, -{len(to_delete_paths)} deleted"
             )
 
@@ -987,14 +987,14 @@ class VectorMemory:
                             paths_to_delete.append(orig_path)
 
                 if paths_to_delete:
-                    _get_logger().info(f"Deleting {len(paths_to_delete)} stale tools...")
+                    _get_logger().debug(f"Deleting {len(paths_to_delete)} stale tools...")
                     store.delete_by_file_path(table_name, paths_to_delete)
                     stats.deleted = len(paths_to_delete)
 
             # Process added tools only (no hash-based modification detection)
             work_items = to_add
             if work_items:
-                _get_logger().info(f"Processing {len(work_items)} changed tools...")
+                _get_logger().debug(f"Processing {len(work_items)} changed tools...")
 
                 # Build documents for indexing
                 ids = []
@@ -1037,9 +1037,15 @@ class VectorMemory:
             # Calculate total
             total = len(current_tools)
 
-            _get_logger().info(
-                f"Sync complete: +{stats.added} added, ~{stats.modified} modified, -{stats.deleted} deleted, {total} total"
-            )
+            # Only log at info level if there were actual changes
+            if stats.added > 0 or stats.modified > 0 or stats.deleted > 0:
+                _get_logger().info(
+                    f"Sync complete: +{stats.added} added, ~{stats.modified} modified, -{stats.deleted} deleted, {total} total"
+                )
+            else:
+                _get_logger().debug(
+                    f"Sync complete: +{stats.added} added, ~{stats.modified} modified, -{stats.deleted} deleted, {total} total"
+                )
 
             return {
                 "added": stats.added,

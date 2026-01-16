@@ -3,7 +3,7 @@ agent/core/registry/core.py
  SkillRegistry Core
 
 Core registry class - handles initialization, discovery, and state management.
-Pure MCP Server compatible (no FastMCP dependency).
+Pure MCP Server compatible.
 """
 
 from __future__ import annotations
@@ -222,7 +222,7 @@ class SkillRegistry:
         """Get list of skills to preload from settings."""
         return get_setting("skills.preload", [])
 
-    def preload_all(self, mcp: FastMCP) -> tuple[int, list[str]]:
+    def preload_all(self, mcp: "Server") -> tuple[int, list[str]]:
         """Load all preload skills from settings."""
         from agent.core.registry.loader import SkillLoader
 
@@ -244,7 +244,7 @@ class SkillRegistry:
 
         return len(loaded), loaded
 
-    def load_skill(self, skill_name: str, mcp: "FastMCP | None" = None) -> tuple[bool, str]:
+    def load_skill(self, skill_name: str, mcp: "Server | None" = None) -> tuple[bool, str]:
         """
         Load a skill (convenience method - delegates to SkillLoader).
 

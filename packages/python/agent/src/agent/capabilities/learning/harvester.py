@@ -12,11 +12,6 @@ This module implements the "learning" loop of the Agentic OS:
 
 Phase 32: Modularized from harvester.py
 
-Usage (as MCP tools):
-    from agent.capabilities.learning.harvester import register_harvester_tools
-    mcp = FastMCP(...)
-    register_harvester_tools(mcp)
-
 Usage (as standalone functions):
     from agent.capabilities.learning.harvester import harvest_session_insight
     result = await harvest_session_insight(context_summary="...", files_changed=[...])

@@ -109,7 +109,9 @@ def exec_cmd(
         grid.add_row("[bold green]Reflection & Outcome:[/bold green]")
         grid.add_row(result)
 
-        console.print(Panel(grid, title="✨ CCA Session Report ✨", border_style="green", expand=False))
+        console.print(
+            Panel(grid, title="✨ CCA Session Report ✨", border_style="green", expand=False)
+        )
 
     async def _run():
         console.print(f"\n[bold]🚀 Starting:[/bold] {task}")

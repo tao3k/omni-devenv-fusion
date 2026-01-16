@@ -78,6 +78,8 @@ class SkillCommand:
 
     def _prepare_args(self, args: dict[str, Any]) -> dict[str, Any]:
         """Prepare arguments with dependency injection for script mode."""
+        import inspect
+
         from common.config_paths import get_project_root
         from common.config.settings import get_setting
 
@@ -86,14 +88,22 @@ class SkillCommand:
 
         prepared = dict(args)
 
-        # Inject project root if requested
-        if self._inject_root and "project_root" not in prepared:
+        # Get function signature to validate accepted parameters
+        sig = inspect.signature(self.func)
+        accepted_params = set(sig.parameters.keys())
+
+        # Inject project root if requested AND function accepts it
+        if (
+            self._inject_root
+            and "project_root" not in prepared
+            and "project_root" in accepted_params
+        ):
             prepared["project_root"] = get_project_root()
 
-        # Inject settings if requested
+        # Inject settings if requested AND function accepts them
         for key in self._inject_settings:
             arg_name = key.replace(".", "_")
-            if arg_name not in prepared:
+            if arg_name not in prepared and arg_name in accepted_params:
                 try:
                     prepared[arg_name] = get_setting(key)
                 except Exception:

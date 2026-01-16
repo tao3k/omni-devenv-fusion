@@ -26,7 +26,7 @@ authors: ["omni-dev-fusion"]
 execution_mode: "library"
 ---
 
-You have loaded the **Structural Editing Skill** (Phase 52: The Surgeon).
+You have loaded the **Structural Editing Skill**.
 
 ## Philosophy: Surgical Precision
 
@@ -42,7 +42,7 @@ Unlike naive find-and-replace, this skill uses AST-based pattern matching:
 
 ```
 +-------------------------------------------------------------+
-|            Phase 52: The Surgeon - Structural Editing      |
+|            Structural Editing Skill                          |
 +-------------------------------------------------------------+
 |  ┌─────────────────────────────────────────────────────┐   |
 |  |           omni-edit (Rust Core)                      |   |

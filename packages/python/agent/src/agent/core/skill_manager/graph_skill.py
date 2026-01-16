@@ -24,7 +24,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..orchestrator.dynamic_builder import DynamicGraphBuilder
+    from ..orchestrator.builder import DynamicGraphBuilder
     from .manager import SkillManager
     from ..planner.schemas import WorkflowBlueprint
 
@@ -99,7 +99,7 @@ class GraphSkill(ABC):
         Returns:
             Compiled LangGraph graph
         """
-        from ..orchestrator.dynamic_builder import DynamicGraphBuilder
+        from ..orchestrator.builder import DynamicGraphBuilder
 
         builder = DynamicGraphBuilder(self._skill_manager)
         self.build_graph(builder)
@@ -217,7 +217,7 @@ def create_graph_skill_from_blueprint(
     Returns:
         GraphSkill instance that can execute the blueprint
     """
-    from ..orchestrator.dynamic_builder import DynamicGraphBuilder
+    from ..orchestrator.builder import DynamicGraphBuilder
 
     class DynamicGraphSkill(GraphSkill):
         name = blueprint.name

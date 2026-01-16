@@ -64,10 +64,10 @@ in
       };
     };
 
-    omni = {
+    omniAgent = {
       type = "stdio";
       # url = "http://0.0.0.0:3002/sse";
-      command = "omniAgent";
+      command = "omni";
       args = [
         "mcp"
         "--transport"

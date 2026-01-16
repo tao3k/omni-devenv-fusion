@@ -1,6 +1,6 @@
 # Design Philosophy
 
-> **Status**: ⚠️ PARTIALLY LEGACY - Core principles still valid, but Phase 25+ updates needed
+> **Status**: Historical document - Core principles still valid, but superseded by current Trinity Architecture
 > **See Also**: `trinity-architecture.md` for current architecture
 
 ---
@@ -11,11 +11,11 @@
 
 The fundamental separation in Fusion:
 
-| Layer          | Purpose        | Files                                     |
-| -------------- | -------------- | ----------------------------------------- |
-| **Brain**      | Rules, routing | `prompts.md` (LLM reads when skill loads) |
-| **Muscle**     | Execution      | `tools.py` (blind, stateless)             |
-| **Guardrails** | Validation     | Lefthook, Cog, Pre-commit                 |
+| Layer          | Purpose        | Files                                   |
+| -------------- | -------------- | --------------------------------------- |
+| **Brain**      | Rules, routing | `SKILL.md` (LLM reads when skill loads) |
+| **Muscle**     | Execution      | `scripts/commands.py` (@skill_script)   |
+| **Guardrails** | Validation     | Lefthook, Cog, Pre-commit               |
 
 **Key insight:** Code is mechanism (how), prompts are policy (what/when).
 
@@ -80,25 +80,25 @@ This project defines three clear patterns for how AI agents interact with projec
 
 | Pattern            | When LLM reads... | Purpose                             |
 | ------------------ | ----------------- | ----------------------------------- |
-| **Skill Loading**  | `agent/skills/`   | Load capability packages to **act** |
+| **Skill Loading**  | `assets/skills/`  | Load capability packages to **act** |
 | **Memory Loading** | `agent/`          | Follow rules to **act**             |
 | **Document Query** | `docs/`           | Find info to **answer** questions   |
 
 ### Pattern 1: Skill Loading
 
-When LLM needs to **perform** a task, it loads a Skill from `agent/skills/`:
+When LLM needs to **perform** a task, it loads a Skill from `assets/skills/`:
 
 ```
 User: "Help me commit these changes"
-→ LLM loads: agent/skills/git/
-→ LLM acts: follows prompts.md + uses tools.py
+→ LLM loads: assets/skills/git/
+→ LLM acts: follows SKILL.md + uses @skill_script commands
 ```
 
 A Skill contains:
 
-- `prompts.md` - Rules and routing (LLM reads when skill loads)
-- `tools.py` - Atomic execution (blind, stateless)
-- `commit-workflow.md` - Workflow documentation (optional)
+- `SKILL.md` - Rules and routing (LLM reads when skill loads)
+- `scripts/commands.py` - @skill_script decorated commands
+- `references/` - Workflow documentation (optional)
 
 ### Pattern 2: Memory Loading
 
@@ -122,7 +122,7 @@ User: "What is the git flow?"
 
 ## The Evolution: From Agent-Centric to Skill-Centric to One Tool
 
-### Agent-Centric (Phases 1-12)
+### Agent-Centric (Legacy)
 
 ```
 Orchestrator (The Brain) ← All tools loaded always
@@ -132,7 +132,7 @@ Hardcoded tool sets (Git + Python + Docker + K8s + ...)
 Problem: Context bloat as tools increase
 ```
 
-### Skill-Centric (Phase 13-24)
+### Skill-Centric
 
 ```
 Runtime (No fixed personality)
@@ -144,7 +144,7 @@ Skills: git, terminal, filesystem, testing_protocol...
 Solution: Constant context cost regardless of skill count
 ```
 
-### One Tool Architecture (Phase 25)
+### One Tool Architecture
 
 ```
 Single MCP Entry Point: @omni
@@ -158,18 +158,18 @@ Dispatches to: skill.command() function
 
 **The Shift:**
 
-| Dimension     | Agent-Centric     | Skill-Centric         | One Tool (Phase 25)   |
+| Dimension     | Agent-Centric     | Skill-Centric         | One Tool              |
 | ------------- | ----------------- | --------------------- | --------------------- |
 | **Core Unit** | Tools (functions) | Skills (packages)     | Commands              |
 | **Interface** | 100+ MCP tools    | 100+ MCP tools        | 1 MCP tool            |
 | **Syntax**    | `git_status()`    | `@omni("git.status")` | `@omni("git.status")` |
-| **Extension** | Add tools         | Add skill directory   | Add command to skill  |
+| **Extension** | Add tools         | Add skill directory   | Add @skill_script     |
 
 ## Why This Separation?
 
 | Directory         | Audience     | Content                                       |
 | ----------------- | ------------ | --------------------------------------------- |
-| `agent/skills/`   | LLM (Claude) | Composable capability packages                |
+| `assets/skills/`  | LLM (Claude) | Composable capability packages                |
 | `agent/` (legacy) | LLM (Claude) | Rules, protocols, standards - for AI behavior |
 | `docs/`           | Users        | Manuals, tutorials, explanations - for humans |
 
@@ -178,17 +178,17 @@ Dispatches to: skill.command() function
 LLMs often "hallucinate" by skipping project-specific rules when answering questions.
 By separating documentation into three audiences:
 
-- **`agent/skills/`**: Self-contained packages - "load this to do X"
+- **`assets/skills/`**: Self-contained packages - "load this to do X"
 - **`agent/`**: Explicitly tells LLM "this is for you, read before acting"
 - **`docs/`**: Clearly marked as "for users", LLM can reference it when answering
 
 This forces the LLM to:
 
-1. Use `load_skill()` when **acting** with a composable capability
-2. Use `load_*_memory` tools when **acting** with legacy rules
-3. Use `read_docs` tool when **answering** (finds information)
+1. Use skill commands when **acting** with a composable capability
+2. Use memory loading tools when **acting** with legacy rules
+3. Use read docs tool when **answering** (finds information)
 
-## Key Tools (Phase 25)
+## Key Tools
 
 | Tool                     | Pattern       | Purpose                           |
 | ------------------------ | ------------- | --------------------------------- |
@@ -202,25 +202,25 @@ All tools are accessed through the single `@omni` MCP tool with the format:
 - `@omni("skill.command")` - Execute a skill command
 - `@omni("skill")` - Show skill help
 
-## The Skill Anatomy (Phase 25)
+## The Skill Anatomy
 
 Every skill follows a standardized structure:
 
 ```
-agent/skills/{skill_name}/
-├── prompts.md           # Rules & routing (LLM reads when skill loads)
-├── tools.py             # Atomic execution (blind, stateless)
-└── commit-workflow.md   # Workflow documentation (optional)
+assets/skills/{skill_name}/
+├── SKILL.md              # Rules & routing (LLM reads when skill loads)
+├── scripts/commands.py   # @skill_script decorated commands
+└── references/           # Workflow documentation (optional)
 ```
 
-### Phase 25: One Tool Architecture
+### One Tool Architecture
 
-In Phase 25, all skills are accessed through a single MCP entry point:
+All skills are accessed through a single MCP entry point:
 
 ```python
-@omni("git.status")           # Dispatches to git.git_status()
-@omni("git.prepare_commit")   # Dispatches to git.prepare_commit()
-@omni("file.read", {...})     # Dispatches to filesystem.read_file()
+@omni("git.status")           # Dispatches to git.status command
+@omni("git.commit")           # Dispatches to git.commit command
+@omni("filesystem.read")      # Dispatches to filesystem.read command
 ```
 
 **No more tool bloat:** Claude sees one tool, not 100+ functions.
@@ -241,17 +241,10 @@ Run `/commit` to trigger the smart commit workflow with lefthook and cog integra
 
 ## Documentation Sources
 
-| Source                              | Purpose                   | Audience    |
-| ----------------------------------- | ------------------------- | ----------- |
-| `agent/skills/*/prompts.md`         | Skill rules & routing     | LLM         |
-| `agent/skills/*/tools.py`           | Atomic execution          | LLM         |
-| `agent/skills/*/commit-workflow.md` | Workflow documentation    | LLM         |
-| `.claude/commands/*.md`             | Slash command templates   | Claude Code |
-| `agent/how-to/`                     | Process guides (legacy)   | LLM         |
-| `agent/standards/`                  | Language conventions      | LLM         |
-| `assets/specs/`                     | Feature specifications    | LLM         |
-| `docs/`                             | User-facing documentation | Users       |
-
----
-
-_See [CLAUDE.md](../../CLAUDE.md) for quick reference and [agent/instructions/project-conventions.md](../agent/instructions/project-conventions.md) for LLM-specific instructions._
+| Source                        | Purpose                 | Audience    |
+| ----------------------------- | ----------------------- | ----------- |
+| `assets/skills/*/SKILL.md`    | Skill rules & routing   | LLM         |
+| `assets/skills/*/scripts/`    | Atomic execution        | LLM         |
+| `assets/skills/*/references/` | Workflow documentation  | LLM         |
+| `.claude/commands/*.md`       | Slash command templates | Claude Code |
+| `agent/how-to/`               | Process guides (legacy) | LLM         |

@@ -1,6 +1,6 @@
 # MCP Python SDK Best Practices
 
-> Phase 35.3: Pure MCP Server Architecture
+> Pure MCP Server Architecture
 
 This document records best practices for developing MCP Servers using the [MCP Python SDK](https://modelcontextprotocol.github.io/python-sdk/api/) with Omni's pure `mcp.server.Server` implementation.
 
@@ -10,7 +10,7 @@ This document records best practices for developing MCP Servers using the [MCP P
 
 ### Why Pure Server?
 
-Phase 35.3 moved from FastMCP to pure `mcp.server.Server` for:
+Omni uses pure `mcp.server.Server` instead of FastMCP for:
 
 - Direct control over tool listing/execution
 - Explicit error handling for TaskGroup
@@ -209,7 +209,7 @@ async def run_mcp_server(transport: str = "stdio"):
 
 ---
 
-## 7. Directory Structure Reference (Phase 35.3)
+## 7. Directory Structure Reference
 
 ```
 src/
@@ -223,8 +223,7 @@ src/
     └── skills/                # Skill modules
         └── {skill}/
             ├── SKILL.md       # Skill manifest + rules
-            ├── tools.py       # @skill_command decorated functions
-            └── scripts/       # Atomic implementations
+            └── scripts/       # @skill_script decorated commands
 ```
 
 ---

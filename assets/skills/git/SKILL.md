@@ -50,117 +50,61 @@ intents:
 authors: ["omni-dev-fusion"]
 ---
 
-# Git Skill Policy
+# Git Skill
 
 > **Code is Mechanism, Prompt is Policy**
 
-## Trinity Architecture Context
+## Architecture
 
-This skill is part of Phase 25.3 Trinity Architecture:
+This skill uses `@skill_script` decorator in `scripts/*.py` files.
+Commands are automatically exposed via MCP as `git.command_name`.
 
-- **Code**: Tools auto hot-reload when `tools.py` is modified
-- **Context**: Use `@omni("git.help")` to get full skill context (XML via Repomix)
-- **State**: `Skill` registry tracks mtime, commands, and context cache
+## Available Commands
 
-For implementation details, see `tools.py` or run `@omni("git.help")`.
+| Command            | Description                                             |
+| ------------------ | ------------------------------------------------------- |
+| `git.status`       | Show working tree status                                |
+| `git.stage_all`    | Stage all changes (with security scan)                  |
+| `git.commit`       | Commit staged changes                                   |
+| `git.smart_commit` | Smart Commit workflow (stage → scan → approve → commit) |
+| `git.push`         | Push to remote                                          |
+| `git.log`          | Show commit logs                                        |
 
-## Skill Structure (Role Clarity)
+## Smart Commit Workflow
 
-| File         | Role                     | When to Read                   |
-| ------------ | ------------------------ | ------------------------------ |
-| `prompts.md` | **Rules & Router Logic** | When skill loads (LLM context) |
-| `guide.md`   | Procedural Knowledge     | Implementation reference       |
-| `tools.py`   | Atomic Execution         | Blind operation                |
+Use `git.smart_commit` for secure, human-in-the-loop commits:
 
----
+```python
+# Step 1: Start workflow
+git.smart_commit(action="start")
+# Returns workflow_id and diff preview
 
-## Router Logic
-
-### Critical Operations (Use MCP Tools)
-
-| Operation | Tool                  | When                       |
-| --------- | --------------------- | -------------------------- |
-| Commit    | `git_commit(message)` | User says "commit", "save" |
-| Push      | `git_push()`          | After successful commit    |
-
-### Safe Operations (Use Claude-native bash)
-
-| Operation       | Command             | Why             |
-| --------------- | ------------------- | --------------- |
-| Status          | `git status`        | Read-only, safe |
-| Diff (staged)   | `git diff --cached` | Read-only, safe |
-| Diff (unstaged) | `git diff`          | Read-only, safe |
-| Log             | `git log`           | Read-only, safe |
-
-### Staging (Use MCP Tool)
-
-| Operation | Tool              | Why                                       |
-| --------- | ----------------- | ----------------------------------------- |
-| Stage all | `git_stage_all()` | **LLM security scan** for sensitive files |
-
-**When user says "commit": System automatically runs:**
-
-1. `git add -A` → call `git_stage_all()` (NOT bash)
-2. LLM scans for sensitive files (.env, credentials, secrets, tokens)
-3. If sensitive files detected → ⚠️ Alert user:
-   - [c] Continue staging anyway
-   - [s] Skip sensitive files
-   - [a] Abort
-4. If safe → auto-stage files
-5. Then show commit analysis for confirmation
-6. Then execute `git_commit(message="...")`
-
----
-
-## Authorization Protocol
-
-When user says "commit":
-
-1. **Show Commit Analysis** (required):
-   ```
-   Type: feat/fix/docs/style/refactor/test/chore
-   Scope: component area
-   Message: brief description
-   ```
-2. **Wait for "yes" or "confirm"**
-3. **Then call `git_commit(message="...")`**
-
-### Authorization Template
-
-```
-📋 Commit Analysis:
-
-   Type: feat
-   Scope: git
-   Message: simplify to executor mode
-
-🔒 *Authorization Required*
-   Please say: "yes" ✅ or "confirm" ✅, or "skip" ⏭️
+# Step 2: After LLM analysis and user approval
+git.smart_commit(action="approve", workflow_id="xxx", message="feat: description")
 ```
 
----
+**Flow:** `stage_and_scan` → `route_prepare` → `format_review` → `re_stage` → `interrupt` → `commit`
 
-## Commit Message Format
+## Usage Guidelines
 
+### Read Operations (Safe - Use Claude-native bash)
+
+```bash
+git status
+git diff --cached
+git diff
+git log --oneline
 ```
-<type>(<scope>): <subject>
-```
 
-**Types:** feat, fix, docs, style, refactor, perf, test, build, ci, chore
+### Write Operations (Use MCP Tools)
 
----
-
-## Anti-Patterns
-
-| Wrong                                      | Correct                             |
-| ------------------------------------------ | ----------------------------------- |
-| Use MCP for `git status`, `git diff`       | Use Claude-native bash              |
-| Use bash for `git add -A`                  | Use `git_stage_all()` for security  |
-| Call `git_commit` without showing analysis | Always show analysis first          |
-| Use `smart_commit` (doesn't exist)         | Use `git_commit` after confirmation |
-
----
+| Operation    | Tool                                  |
+| ------------ | ------------------------------------- |
+| Stage all    | `git.stage_all()` (scans for secrets) |
+| Commit       | `git.commit(message="...")`           |
+| Push         | `git.push()`                          |
+| Smart Commit | `git.smart_commit(action="start")`    |
 
 ## Key Principle
 
-> **Read operations = Claude-native bash. Write operations = MCP tools.**
+> **Read = Claude-native bash. Write = MCP tools.**

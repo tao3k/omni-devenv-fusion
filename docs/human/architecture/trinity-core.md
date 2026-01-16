@@ -102,11 +102,11 @@ class GitSkill:
 
 ## Architecture Evolution
 
-| Version | Architecture         | Entry Point              |
-| ------- | -------------------- | ------------------------ |
-| v1.0    | Trinity v1.0         | @omni("skill.command")   |
-| v2.0    | Trinity v2.0 + Swarm | @omni + Hot Reload       |
-| Current | Omni Loop + JIT      | @skill_script + JIT      |
+| Version | Architecture         | Entry Point            |
+| ------- | -------------------- | ---------------------- |
+| v1.0    | Trinity v1.0         | @omni("skill.command") |
+| v2.0    | Trinity v2.0 + Swarm | @omni + Hot Reload     |
+| Current | Omni Loop + JIT      | @skill_script + JIT    |
 
 ## Benefits
 

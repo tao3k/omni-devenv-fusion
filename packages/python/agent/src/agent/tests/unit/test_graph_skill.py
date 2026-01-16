@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, AsyncMock, patch
 from pathlib import Path
 
 from agent.core.skill_manager.graph_skill import GraphSkill, create_graph_skill_from_blueprint
-from agent.core.orchestrator.dynamic_builder import DynamicGraphBuilder
+from agent.core.orchestrator.builder import DynamicGraphBuilder
 
 
 class SimpleGraphSkill(GraphSkill):

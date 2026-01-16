@@ -18,7 +18,7 @@ import shutil
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
-from mcp.server.fastmcp import FastMCP
+from mcp.server import Server
 
 from agent.core.registry import get_skill_registry
 from agent.core.skill_manager import SkillManager, get_skill_manager
@@ -53,7 +53,7 @@ def skill_manager():
 @pytest.fixture
 def mock_mcp():
     """Provide mock MCP server."""
-    mcp = MagicMock(spec=FastMCP)
+    mcp = MagicMock(spec=Server)
     mcp.tool = MagicMock(return_value=lambda x: x)
     return mcp
 

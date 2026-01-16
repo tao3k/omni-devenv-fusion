@@ -1,6 +1,6 @@
 # AST-Based Code Navigation and Search
 
-> **Phase 50: The Cartographer & Phase 51: The Hunter**
+> **The Cartographer & The Hunter**
 > CCA-Aligned Code Navigation Using ast-grep-core 0.40.5
 
 ## 1. Philosophical Foundation
@@ -42,8 +42,8 @@ This isn't just efficiency—it's cognitive load management for the LLM.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      Python Skill Layer                          │
-│  assets/skills/code_navigation/tools.py                          │
+│                      Code Navigation Skill                       │
+│  assets/skills/code_navigation/scripts/                          │
 │  - outline_file: Generate symbolic skeleton                      │
 │  - search_code: Pattern matching in single file                  │
 │  - search_directory: Recursive pattern search                    │
@@ -76,7 +76,7 @@ This isn't just efficiency—it's cognitive load management for the LLM.
 
 ### 2.2 Core Components
 
-#### Phase 50: The Cartographer (Outline Generation)
+#### The Cartographer (Outline Generation)
 
 The Cartographer extracts symbolic structure from code:
 
@@ -98,7 +98,7 @@ L122  [class]      BaseAgent class BaseAgent
 - JavaScript: `class $NAME`, `function $NAME`
 - TypeScript: Same as JS + `interface $NAME`
 
-#### Phase 51: The Hunter (Structural Search)
+#### The Hunter (Structural Search)
 
 The Hunter provides surgical precision in code search:
 
@@ -131,9 +131,9 @@ packages/rust/crates/omni-tags/src/lib.rs
 ├── Symbol and SearchMatch structures
 ├── ast-grep patterns (constants)
 └── TagExtractor implementation
-    ├── outline_file()        # Phase 50
-    ├── search_file()         # Phase 51
-    ├── search_directory()    # Phase 51
+    ├── outline_file()        # Cartographer
+    ├── search_file()         # Hunter
+    ├── search_directory()    # Hunter
     └── extract_*(content)    # Language-specific
 ```
 
@@ -190,14 +190,14 @@ for node in root_node.dfs() {
 #### Function Signatures
 
 ```python
-# Phase 50: Outline generation
+## The Cartographer: Outline Generation
 def get_file_outline(path: str, language: str | None = None) -> str:
     """
     Generate symbolic outline for a source file.
     Returns ~50 tokens instead of ~5000 for full content.
     """
 
-# Phase 51: Structural search
+## The Hunter: Structural Search
 def search_code(path: str, pattern: str, language: str | None = None) -> str:
     """
     Search for AST patterns in a single file.
@@ -378,9 +378,9 @@ Directory search (158 Python files):
 
 This implementation is aligned with CCA's vision of **code-aware agents**. Future phases could extend:
 
-- **Phase 52**: Code reasoning (understand what functions do)
-- **Phase 53**: Code generation (write based on patterns)
-- **Phase 54**: Code refactoring (structural edits)
+- **Code Reasoning**: Understand what functions do
+- **Code Generation**: Write based on patterns
+- **Code Refactoring**: Structural edits
 
 ## 9. Conclusion
 
@@ -398,4 +398,4 @@ The Cartographer gives agents a map. The Hunter gives them precision. Together, 
 
 ---
 
-_Part of Omni DevEnv Fusion - Phase 50 & 51_
+_Part of Omni DevEnv Fusion - Code Navigation Skill_

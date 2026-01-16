@@ -25,9 +25,9 @@ routing_keywords:
 authors: ["omni-dev-fusion"]
 ---
 
-You have loaded the **Code Navigation Skill** (Phase 50 & 51).
+You have loaded the **Code Navigation Skill**.
 
-## Phase 50: The Cartographer - Code Navigation
+## Overview
 
 This skill provides structural awareness of the codebase using AST-based parsing:
 
@@ -35,7 +35,7 @@ This skill provides structural awareness of the codebase using AST-based parsing
 - **AX Efficiency**: Reduce Agent's internal workspace usage by 10-50x
 - **CCA-Aligned**: Confucius Code Agent philosophy - understand structure before diving into details
 
-## Phase 51: The Hunter - Structural Code Search
+## Features
 
 Unlike naive grep, this skill searches for **CODE PATTERNS**, not strings:
 

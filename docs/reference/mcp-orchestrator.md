@@ -1,6 +1,6 @@
 # Orchestrator MCP Server
 
-> **Phase 33: Trinity Architecture** - Single `omni` tool with skill dispatch
+> **Architecture**: Trinity Architecture - Single `omni` tool with skill dispatch
 
 The Orchestrator MCP server provides a unified interface to all Omni capabilities via a single `@omni` tool.
 
@@ -306,7 +306,7 @@ Guidance:
 
 ## Practical Scenario: From Intent to Commit
 
-This section demonstrates how The Cortex (Phase 6) and The Immune System (Phase 7) work together in a real workflow.
+This section demonstrates how The Cortex and The Immune System work together in a real workflow.
 
 ### Scenario: Implementing a New Feature
 
@@ -415,7 +415,7 @@ Once approved:
 
 ---
 
-## Phase 8: Singularity (Self-Evolution)
+## Self-Evolution (Legacy Concept)
 
 The Orchestrator supports **Bootstrapping** - it can extend itself by adding new capabilities without human coding.
 
@@ -477,7 +477,7 @@ mcp-server/mcp_core/memory.py:156:    def update_context(self, updates: dict[str
 
 ---
 
-## Phase 9: Code Intelligence (ast-grep)
+## Code Intelligence (ast-grep) - Legacy
 
 The Orchestrator includes **Code Intelligence** capabilities using `ast-grep` for structural code search and refactoring.
 
@@ -538,9 +538,9 @@ The Orchestrator includes **Code Intelligence** capabilities using `ast-grep` fo
 
 ## Stress Test Framework (Legacy)
 
-> **Note**: This section describes the legacy mcp-server stress test framework (Phase 9). For the new **Phase 35.1 skill test framework**, see [Testing Guide](../developer/testing.md) or [Skills Documentation](../skills.md).
+> **Note**: This section describes the legacy mcp-server stress test framework. For the current skill test framework, see [Testing Guide](../developer/testing.md) or [Skills Documentation](../skills.md).
 
-A modular, systematic stress testing framework for Phase 9+.
+A modular, systematic stress testing framework for legacy systems.
 
 ### Directory Structure
 
@@ -551,7 +551,7 @@ mcp-server/tests/
 │   ├── core/
 │   │   └── fixtures.py        # Pytest fixtures
 │   ├── suites/
-│   │   ├── phase9.py          # Phase 9 test suite
+│   │   ├── legacy_suite.py     # Legacy test suite
 │   │   └── template.py        # Phase X template
 │   └── conftest.py            # Pytest configuration
 ├── conftest.py                # Shared fixtures
@@ -567,7 +567,7 @@ mcp-server/tests/
 | `LogicTestRunner`     | Logic depth tests                          |
 | `StabilityTestRunner` | Chaos/stability tests                      |
 | `StressReporter`      | Report generation                          |
-| `Phase9Suite`         | Complete Phase 9 test suite                |
+| `LegacySuite`         | Complete legacy test suite                 |
 
 ### Run Tests
 

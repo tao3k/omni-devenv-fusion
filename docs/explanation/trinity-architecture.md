@@ -1,31 +1,14 @@
-# Trinity Architecture (Phase 52)
+# Trinity Architecture
 
-> **Phase 59: The Meta-Agent** | **Phase 52: The Surgeon** | **Phase 47: The Iron Lung** | **Phase 46: The Neural Bridge** | **Phase 45: Rust Core Integration**
-> **Phase 44: Experiential Agent** | **Phase 43: Holographic Agent** | **Phase 42: State-Aware Routing**
-> **Phase 41: Wisdom-Aware Routing** | **Phase 40: Automated Reinforcement Loop**
-> **Phase 36: Trinity v2.0 - Swarm Engine + Skills**
 > **Core Philosophy**: "Everything is a Skill" - The Executor is no longer a code module, but a logical role played by atomic skills.
 
 ## Quick Reference
 
-| Phase | Key Change                                                                                                 |
-| ----- | ---------------------------------------------------------------------------------------------------------- |
-| 59    | **The Meta-Agent**: Autonomous Build-Test-Improve loop - system can fix its own bugs!                      |
-| 52    | **The Surgeon**: AST-based structural editing with dry-run support via omni-edit (ast-grep + similar)      |
-| 47    | **The Iron Lung**: Safe I/O (binary detection, size limits) + BPE tokenization (100-250x faster)           |
-| 46    | **The Neural Bridge**: Type unification between Rust and Python (SSOT via omni-types)                      |
-| 45    | **Rust Core Integration**: Workspace structure, high-performance omni-sniffer (libgit2, 30x speedup)       |
-| 44    | **Experiential Agent**: Skill-level episodic memory from harvested insights                                |
-| 43    | **Holographic Agent**: Inject environment snapshot into ReAct loop at every step (OODA Loop)               |
-| 42    | **State-Aware Routing**: Inject environment state (Git, active context) to prevent hallucinated actions    |
-| 41    | **Wisdom-Aware Routing**: Inject past lessons from harvested knowledge into Mission Brief                  |
-| 40    | **Automated Reinforcement**: Auto-record feedback on CLI success + Reviewer approval, 1% decay per read    |
-| 39    | **Self-Evolving Feedback**: FeedbackStore records routing outcomes, boosts future confidence by +0.1       |
-| 36.6  | **Production Stability**: Async Task GC Protection, Atomic Upsert, Startup Reconciliation                  |
-| 36.5  | **Hot Reload & Index Sync**: Observer pattern, debounced notifications, Index Sync observer                |
-| 36    | **Trinity v2.0**: Legacy `mcp_core.execution` deleted. Execution now via `skills/terminal` + Swarm Engine. |
-| 35.3  | Pure MCP Server (mcp.server.Server, no FastMCP)                                                            |
-| 35.2  | Sidecar Execution Pattern (uv isolation for crawl4ai, etc.)                                                |
+| Component        | Purpose                                    |
+| ---------------- | ------------------------------------------ |
+| **Orchestrator** | Strategic planning and context assembly    |
+| **Coder**        | Read/write operations (filesystem, git)    |
+| **Executor**     | Execution and operations (terminal, tools) |
 
 ## Trinity v2.0 Overview
 
@@ -100,7 +83,7 @@ The Trinity Architecture unifies three critical concerns through a **Skill-Centr
 **Implementation**:
 
 - `skills/filesystem` - File I/O, grep search, AST operations (consolidated from file_ops)
-- `skills/structural_editing` - AST-based refactoring with dry-run (Phase 52: The Surgeon)
+- `skills/structural_editing` - AST-based refactoring with dry-run
 - `skills/code_insight` - AST analysis, code structure
 
 **Usage**: `@omni("filesystem.read_file", {"path": "README.md"})`
@@ -121,7 +104,7 @@ The Trinity Architecture unifies three critical concerns through a **Skill-Centr
 
 ## Execution Model Evolution
 
-| Aspect             | Legacy (Phase 29)                              | Current (Phase 36)                                             |
+| Aspect             | Legacy (Trinity v1)                            | Current (Trinity v2)                                           |
 | ------------------ | ---------------------------------------------- | -------------------------------------------------------------- |
 | **Execution Path** | MCP → `common.mcp_core.execution` → subprocess | MCP → `Swarm.execute_skill()` → `skills/terminal` → subprocess |
 | **Executor Type**  | Python class (`SafeExecutor`)                  | Atomic Skill (`skills/terminal`)                               |
@@ -200,12 +183,12 @@ async def run_task(command: str, args: list[str] = None, **kwargs) -> str:
     return engine.format_result(result, command, args)
 ```
 
-## File Structure (Phase 36)
+## File Structure
 
 ```
 packages/python/agent/src/agent/
 ├── core/
-│   ├── swarm.py              # 🧠 Runtime orchestrator (Phase 36)
+│   ├── swarm.py              # 🧠 Runtime orchestrator
 │   ├── module_loader.py      # Hot-reload mechanism
 │   └── skill_manager.py      # Trinity facade
 ├── mcp_server.py             # Pure MCP Server (Thin Gateway)
@@ -230,7 +213,7 @@ packages/python/common/src/common/
 └── config/
     └── settings.py           # Configuration
 
-# LEGACY - DELETED (Phase 36)
+# LEGACY - DELETED
 # packages/python/common/src/common/mcp_core/execution/  ❌ REMOVED
 ```
 
@@ -259,13 +242,13 @@ packages/python/common/src/common/
 
 ---
 
-## Phase 36.5/36.6: Hot Reload & Production Stability
+## Hot Reload & Production Stability
 
 ### Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    Phase 36.5/36.6 Hot Reload System                        │
+│                         Hot Reload System                                   │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌───────────────────────────────────────────────────────────────────────┐  │
@@ -289,7 +272,7 @@ packages/python/common/src/common/
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Phase 36.5: Hot Reload Flow
+### Hot Reload Flow
 
 ```
 File Modified (tools.py)
@@ -317,7 +300,7 @@ from agent.core.skill_manager import get_skill_manager
 manager = get_skill_manager()
 
 async def on_skill_change(skill_name: str, change_type: str):
-    """Callback signature (Phase 36.5): (skill_name, change_type)"""
+    """Callback signature: (skill_name, change_type)"""
     if change_type == "load":
         await index_single_skill(skill_name)
     elif change_type == "unload":
@@ -339,7 +322,7 @@ for skill in skills:
 # → ONE notification after 200ms (not 10!)
 ```
 
-### Phase 36.6: Production Optimizations
+### Production Optimizations
 
 #### 1. Async Task GC Protection
 
@@ -389,9 +372,7 @@ async def reconcile_index(loaded_skills: list[str]) -> dict[str, int]:
 
 ---
 
-## Phase 39/40: Self-Evolving Feedback Loop (The Harvester)
-
-> **Phase 39**: Self-Evolving Feedback Loop | **Phase 40**: Automated Reinforcement Loop
+## Self-Evolving Feedback Loop (The Harvester)
 
 The system now learns from experience. Successful routing decisions boost future confidence, and the system automatically records feedback signals.
 
@@ -399,7 +380,7 @@ The system now learns from experience. Successful routing decisions boost future
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    Phase 39/40: Self-Evolving System                         │
+│                         Self-Evolving System                                │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  User Query → Semantic Router → Skill Execution → Feedback Recording        │
@@ -414,7 +395,7 @@ The system now learns from experience. Successful routing decisions boost future
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Phase 39: FeedbackStore
+### FeedbackStore
 
 ```python
 class FeedbackStore:
@@ -422,7 +403,7 @@ class FeedbackStore:
     MIN_SCORE = -0.3   # Maximum penalty
     MAX_SCORE = 0.3    # Maximum boost
     DECAY_FACTOR = 0.1  # How much each feedback affects score
-    TIME_DECAY_RATE = 0.99  # [Phase 40] Decay multiplier per read (1% decay)
+    TIME_DECAY_RATE = 0.99  # Decay multiplier per read (1% decay)
 
     def record_feedback(self, query: str, skill_id: str, success: bool) -> float:
         """Record user feedback for a routing decision."""
@@ -431,7 +412,7 @@ class FeedbackStore:
         """Get boost with time-based decay."""
 ```
 
-### Phase 40: Automated Reinforcement
+### Automated Reinforcement
 
 Three automatic feedback pathways:
 
@@ -466,7 +447,7 @@ Final Score = Base Vector Score
 }
 ```
 
-### Decay Mechanism (Phase 40)
+### Decay Mechanism
 
 Scores decay by 1% each time they are read:
 
@@ -498,14 +479,14 @@ uv run pytest packages/python/agent/src/agent/tests/ -k "feedback" -v
 
 ### Related Specs
 
-- `assets/specs/phase39_self_evolving_feedback_loop.md`
-- `assets/specs/phase40_automated_reinforcement_loop.md`
+- `assets/specs/self_evolving_feedback_loop.md`
+- `assets/specs/automated_reinforcement_loop.md`
 
 ---
 
-## Phase 41: Wisdom-Aware Routing
+## Wisdom-Aware Routing
 
-> **Phase 41**: From "muscle memory" to "intelligent guidance" - learn from past lessons
+From "muscle memory" to "intelligent guidance" - learn from past lessons
 
 The system now injects retrieved lessons from `harvested/*.md` into the routing prompt, so the LLM generates Mission Briefs that avoid known pitfalls.
 
@@ -513,7 +494,7 @@ The system now injects retrieved lessons from `harvested/*.md` into the routing 
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    Phase 41: Wisdom-Aware Routing                            │
+│                         Wisdom-Aware Routing                                │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  User Query                                                                  │
@@ -547,7 +528,7 @@ The system now injects retrieved lessons from `harvested/*.md` into the routing 
 
 1. **Parallel Retrieval**: While building the routing menu, also query Librarian for relevant lessons
 2. **Lesson Formatting**: Format top 3 lessons with title, category, and content
-3. **Prompt Injection**: Add `[Phase 41] RELEVANT PAST LESSONS` section to system prompt
+3. **Prompt Injection**: Add `RELEVANT PAST LESSONS` section to system prompt
 4. **Brief Generation**: LLM references lessons when generating Mission Brief
 
 ### Example
@@ -601,9 +582,9 @@ router = SemanticRouter(
 
 ---
 
-## Phase 42: State-Aware Routing
+## State-Aware Routing
 
-> **Phase 42**: Ground routing in reality - prevent hallucinated actions by detecting environment state
+Ground routing in reality - prevent hallucinated actions by detecting environment state
 
 The system now detects real-time environment state (Git status, active context) and injects it into the routing prompt, preventing the router from suggesting actions that conflict with current reality.
 
@@ -611,7 +592,7 @@ The system now detects real-time environment state (Git status, active context) 
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    Phase 42: State-Aware Routing                             │
+│                         State-Aware Routing                                 │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  User Query                                                                  │
@@ -680,7 +661,7 @@ Ensure you review the most important changes before committing.
 $ omni route invoke "commit my changes" --verbose
 
 # Output includes:
-╭──────────────────────── [Phase 42] Environment State ────────────────────────╮
+╭──────────────────────── Environment State ────────────────────────╮
 │ [ENVIRONMENT STATE]                                                          │
 │ - Branch: main | Modified: 51 files (...)                                    │
 │ - Active Context: Empty                                                      │
@@ -719,17 +700,17 @@ router = SemanticRouter(
 
 ---
 
-## Phase 43: The Holographic Agent
+## The Holographic Agent
 
-> **Phase 43**: Extend state awareness from Router to Agent execution layer.
+Extend state awareness from Router to Agent execution layer.
 
-While Phase 42 gave the Router "full holographic vision" during task dispatch, Phase 43 ensures the Agent maintains that vision throughout execution using **Continuous State Injection (CSI)**.
+While State-Aware Routing gave the Router "full holographic vision" during task dispatch, this enhancement ensures the Agent maintains that vision throughout execution using **Continuous State Injection (CSI)**.
 
 ### Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    Phase 43: Holographic OODA Loop                          │
+│                         Holographic OODA Loop                               │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  Agent ReAct Loop (Upgraded to Holographic)                                 │
@@ -764,7 +745,7 @@ While Phase 42 gave the Router "full holographic vision" during task dispatch, P
 
 ### Example: Agent Detects Lefthook Changes
 
-**Before Phase 43**:
+**Before (Legacy)**:
 
 ```
 Agent: "I'll commit the staged files..."
@@ -772,7 +753,7 @@ Lefthook: reformats files, unstages them
 Agent: "Commit failed... but I don't know why" ❌
 ```
 
-**After Phase 43**:
+**After (Holographic)**:
 
 ```
 Agent: "Checking environment snapshot..."
@@ -782,10 +763,10 @@ Agent: "Ah! Lefthook reformatted files. Re-staging now." ✅
 
 ### System Prompt Enhancement
 
-Agents now have a `[Phase 43] HOLOGRAPHIC AWARENESS` section:
+Agents now have a `HOLOGRAPHIC AWARENESS` section:
 
 ```markdown
-## 📡 [Phase 43] HOLOGRAPHIC AWARENESS
+## 📡 HOLOGRAPHIC AWARENESS
 
 - You will receive a LIVE ENVIRONMENT SNAPSHOT at each reasoning cycle
 - The snapshot shows current Git status (branch, modified files)
@@ -807,33 +788,33 @@ Agents now have a `[Phase 43] HOLOGRAPHIC AWARENESS` section:
 | File                           | Purpose                          |
 | ------------------------------ | -------------------------------- |
 | `agent/core/agents/base.py`    | Added sniffer, CSI in ReAct loop |
-| `agent/core/router/sniffer.py` | Existing (Phase 42)              |
+| `agent/core/router/sniffer.py` | Existing (State-Aware Routing)   |
 
 ### Related Specs
 
-- `assets/specs/phase43_holographic_agent.md`
-- `assets/specs/phase42_state_aware_routing.md`
+- `assets/specs/holographic_agent.md`
+- `assets/specs/state_aware_routing.md`
 
 ---
 
-## Phase 44: The Experiential Agent
+## The Experiential Agent
 
-> **Phase 44**: Extend holographic awareness with skill-level episodic memory
+Extend holographic awareness with skill-level episodic memory.
 
-While Phase 43 gave the agent "holographic vision" (seeing the environment), Phase 44 gives it "experiential wisdom" (learning from past mistakes).
+While Holographic Agent gave the agent "holographic vision" (seeing the environment), this gives it "experiential wisdom" (learning from past mistakes).
 
 ### Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    Phase 44: Experiential Memory System                     │
+│                    Experiential Memory System                               │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  Task Execution                                                              │
 │       ↓                                                                      │
-│       ├─→ Phase 16: RAG Knowledge (static project docs)                     │
-│       ├─→ Phase 43: Holographic Vision (live environment state)             │
-│       └─→ Phase 44: Skill-Level Lessons (harvested insights)                │
+│       ├─→ RAG Knowledge (static project docs)                               │
+│       ├─→ Holographic Vision (live environment state)                       │
+│       └─→ Skill-Level Lessons (harvested insights)                          │
 │       ↓                                                                      │
 │  LLM receives ALL three + mission brief                                      │
 │                                                                             │
@@ -881,22 +862,22 @@ While Phase 43 gave the agent "holographic vision" (seeing the environment), Pha
 
 ### Related Specs
 
-- `assets/specs/phase44_experiential_agent.md`
-- `assets/specs/phase43_holographic_agent.md`
+- `assets/specs/experiential_agent.md`
+- `assets/specs/holographic_agent.md`
 
 ---
 
-## Phase 59: The Meta-Agent
+## The Meta-Agent
 
-> **Phase 59**: Autonomous Build-Test-Improve Loop - The system can now fix its own bugs!
+Autonomous Build-Test-Improve Loop - The system can now fix its own bugs!
 
-Phase 59 introduces **The Meta-Agent** - an autonomous "Build-Test-Improve" loop that implements a self-directed TDD (Test-Driven Development) cycle. This transforms the agent from a passive tool into an active engineer.
+The Meta-Agent introduces an autonomous "Build-Test-Improve" loop that implements a self-directed TDD (Test-Driven Development) cycle. This transforms the agent from a passive tool into an active engineer.
 
 ### Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    Phase 59: The Meta-Agent - TDD Loop                      │
+│                    The Meta-Agent - TDD Loop                                │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  +---------------------------------------------------------------------+   │
@@ -1008,11 +989,11 @@ Bugs Fixed:
 
 ---
 
-## Phase 45: Rust Core Integration (Architecture)
+## Rust Core Integration (Architecture)
 
-> **Phase 45**: Elevate Rust to a first-class citizen in the `packages/` directory
+Elevate Rust to a first-class citizen in the `packages/` directory.
 
-Phase 45 establishes a proper Rust workspace with high-performance crates for environment sensing.
+Establishes a proper Rust workspace with high-performance crates for environment sensing.
 
 ### New Directory Structure
 
@@ -1095,17 +1076,17 @@ print(snapshot.to_prompt_string())
 
 ---
 
-## Phase 46: The Neural Bridge (Type Unification)
+## The Neural Bridge (Type Unification)
 
-> **Phase 46**: Establish type unification between Rust and Python, enabling seamless data flow across language boundaries
+Establish type unification between Rust and Python, enabling seamless data flow across language boundaries.
 
-Phase 46 creates **shared type definitions** using Rust as the source of truth (SSOT), with PyO3 auto-generated bindings for Python consumption.
+Creates **shared type definitions** using Rust as the source of truth (SSOT), with PyO3 auto-generated bindings for Python consumption.
 
 ### Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    Phase 46: Neural Bridge - Type Unification               │
+│                    Neural Bridge - Type Unification                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  Rust Layer (SSOT)                    Python Layer                          │
@@ -1256,11 +1237,11 @@ print(snapshot.to_json())       # JSON serialized
 
 ---
 
-## Phase 47: The Iron Lung (Rust I/O & Tokenization)
+## The Iron Lung (Rust I/O & Tokenization)
 
-> **Phase 47**: Safe, high-performance I/O and tokenization to solve context window overflow and performance bottlenecks
+Safe, high-performance I/O and tokenization to solve context window overflow and performance bottlenecks.
 
-Phase 47 introduces two new atomic Rust crates:
+Introduces two new atomic Rust crates:
 
 - **omni-io**: Safe file reading with size limits, binary detection, and async support
 - **omni-tokenizer**: BPE tokenization using cl100k_base (GPT-4/3.5 standard)
@@ -1269,7 +1250,7 @@ Phase 47 introduces two new atomic Rust crates:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    Phase 47: The Iron Lung                                  │
+│                         The Iron Lung                                       │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  Python Agent                                                               │
@@ -1292,7 +1273,7 @@ Phase 47 introduces two new atomic Rust crates:
 │  │   │   ┌─────────────────────┐  ┌─────────────────────────────┐    │  │   │
 │  │   │   │  Synchronous (Sync) │  │     Asynchronous (Async)    │    │  │   │
 │  │   │   │  read_text_safe()   │  │  read_text_safe_async()     │    │  │   │
-│  │   │   │  - std::fs          │  │  - tokio::fs (Phase 50+)    │    │  │   │
+│  │   │   │  - std::fs          │  │  - tokio::fs                │    │  │   │
 │  │   │   │  - Binary detection │  │  - Non-blocking I/O         │    │  │   │
 │  │   │   │  - Size limits      │  │  - Concurrent reads         │    │  │   │
 │  │   │   └─────────────────────┘  └─────────────────────────────┘    │  │   │
@@ -1358,7 +1339,7 @@ pub fn read_text_safe<P: AsRef<Path>>(path: P, max_bytes: u64) -> Result<String,
     Ok(String::from_utf8_lossy(&buffer).into_owned())
 }
 
-/// Asynchronous API (Powered by Tokio - for Phase 50+ Rust Agent)
+/// Asynchronous API (Powered by Tokio)
 pub async fn read_text_safe_async<P: AsRef<Path>>(path: P, max_bytes: u64) -> Result<String, IoError> {
     let path = path.as_ref();
     let metadata = tokio_fs::metadata(path)
@@ -1516,7 +1497,7 @@ print(f"Read {len(content)} bytes")
 | **GIL Release**  | Concurrent execution during CPU-intensive operations |
 | **Reliability**  | UTF-8 lossy fallback handles corrupted files         |
 | **Zero Config**  | Built-in cl100k_base model, no network required      |
-| **Future-Proof** | Async API ready for Phase 50+ pure Rust Agent        |
+| **Future-Proof** | Async API ready for Rust Agent                       |
 
 ### Related Files
 
@@ -1530,17 +1511,17 @@ print(f"Read {len(content)} bytes")
 
 ### Related Specs
 
-- `assets/specs/phase47_the_iron_lung.md`
-- `assets/specs/phase46_the_neural_bridge.md`
-- `assets/specs/phase45_rust_core_integration.md`
+- `assets/specs/the_iron_lung.md`
+- `assets/specs/neural_bridge.md`
+- `assets/specs/rust_core_integration.md`
 
 ---
 
-## Phase 70: The Knowledge Matrix
+## The Knowledge Matrix
 
-> **Phase 70**: Unified Knowledge Index for Context-Aware AI Agents
+Unified Knowledge Index for Context-Aware AI Agents.
 
-Phase 69 completed **Skill RAG** (dynamic tool loading). Phase 70 extends this to **Knowledge RAG** - a unified matrix for indexing and searching project documentation, specifications, and memory.
+Skill RAG (dynamic tool loading) was completed earlier. The Knowledge Matrix extends this to **Knowledge RAG** - a unified matrix for indexing and searching project documentation, specifications, and memory.
 
 ### Architecture Overview
 
@@ -1591,11 +1572,11 @@ stats = await sync_knowledge(store, "docs/", table_name="knowledge")
 
 ---
 
-## Phase 71: The Memory Mesh
+## The Memory Mesh
 
-> **Phase 71**: Episodic Memory for Self-Learning Agents
+Episodic Memory for Self-Learning Agents.
 
-Phase 71 completes the **Cognitive Trinity** by adding episodic memory - the ability for the Agent to remember past experiences and learn from them.
+Completes the **Cognitive Trinity** by adding episodic memory - the ability for the Agent to remember past experiences and learn from them.
 
 ### Cognitive Trinity Complete
 
@@ -1677,9 +1658,9 @@ for m in memories:
 
 ---
 
-# Legacy Content (Phase 29-35)
+# Legacy Content
 
-> The following content is kept for historical reference. Current implementation is Trinity v2.0 (Phase 36).
+> The following content is kept for historical reference. Current implementation is Trinity v2.0.
 
 ## Overview
 
@@ -1810,7 +1791,7 @@ Execute command function
 
 ```
 packages/python/agent/src/agent/core/
-├── registry/              # Modular skill registry (Phase 29)
+├── registry/              # Modular skill registry
 │   ├── __init__.py       # Unified exports + get_skill_tools()
 │   ├── core.py           # SkillRegistry (singleton, discovery)
 │   ├── loader.py         # SkillLoader (spec-based loading)
@@ -1823,7 +1804,7 @@ packages/python/agent/src/agent/core/
 └── skill_manager.py       # Trinity facade for @omni routing
 
 packages/python/common/src/common/
-├── isolation.py           # Sidecar Execution Pattern (Phase 35.2)
+├── isolation.py           # Sidecar Execution Pattern
 ├── lazy_cache.py          # RepomixCache class
 └── skills_path.py         # Skills directory resolution
 
@@ -1835,7 +1816,7 @@ assets/skills/<skill>/
 ├── SKILL.md              # Skill manifest + rules (definition file)
 ├── tools.py              # Skill interface (lightweight)
 ├── README.md             # Reference docs
-├── scripts/              # Atomic implementations (Phase 35.2)
+├── scripts/              # Atomic implementations
 │   └── *.py              # Heavy imports allowed here
 ├── pyproject.toml        # Skill dependencies (for subprocess mode)
 └── repomix.json          # Atomic context config (optional)

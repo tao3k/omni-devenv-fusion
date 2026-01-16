@@ -18,13 +18,13 @@ import os
 import asyncio
 import threading
 from unittest.mock import AsyncMock, MagicMock, patch
-from mcp.server.fastmcp import FastMCP
+from mcp.server import Server
 
 
 @pytest.fixture
 def mcp_server():
-    """Create a FastMCP instance for testing."""
-    return FastMCP("test-orchestrator")
+    """Create an MCP Server instance for testing."""
+    return Server("test-orchestrator")
 
 
 class TestDelegateMissionTool:

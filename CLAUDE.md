@@ -47,6 +47,7 @@ Build & Verify → just build-rust-dev → Full integration test
 ```
 
 **Key points**:
+
 - Rust tests are ~0.3s, Python `uv run omni ...` is ~30s
 - Always add Rust tests before modifying Rust code
 - Use `just build-rust-dev` for fast iteration

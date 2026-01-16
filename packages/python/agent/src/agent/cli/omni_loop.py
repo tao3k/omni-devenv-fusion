@@ -3,6 +3,7 @@
 agent/cli/omni_loop.py
 [Omni-Dev 1.0] Enriched output with tool stats and token metrics.
 """
+
 from __future__ import annotations
 import argparse
 import asyncio
@@ -97,6 +98,7 @@ def main():
         asyncio.run(run_task(args.task, args.steps))
     else:
         from agent.core.omni_agent import interactive_mode
+
         print_banner()
         asyncio.run(interactive_mode())
 

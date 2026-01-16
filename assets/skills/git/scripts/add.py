@@ -3,7 +3,7 @@ git/scripts/add.py - Git add/stage operations
 """
 
 import subprocess
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pathlib import Path
 
 
@@ -20,6 +20,30 @@ def add(files: List[str]) -> str:
 def add_all() -> str:
     """Stage all changes."""
     return _run(["git", "add", "."])
+
+
+def add_all_with_info() -> Dict[str, Any]:
+    """Stage all changes and return file list and diff.
+
+    Returns:
+        Dict with 'staged_files' list and 'diff' string.
+    """
+    root = Path.cwd()
+    _run(["git", "add", "."], cwd=root)
+
+    # Get staged files
+    files_out, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root)
+    staged_files = [line for line in files_out.splitlines() if line.strip()]
+
+    # Get diff content (truncated)
+    diff_out, _, _ = _run(["git", "--no-pager", "diff", "--cached"], cwd=root)
+    if len(diff_out) > 6000:
+        diff_out = diff_out[:6000] + "\n... (Diff truncated)"
+
+    return {
+        "staged_files": staged_files,
+        "diff": diff_out,
+    }
 
 
 def add_pattern(pattern: str) -> str:

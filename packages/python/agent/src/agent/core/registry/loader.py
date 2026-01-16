@@ -4,7 +4,7 @@ agent/core/registry/loader.py
 
 Module loading with spec-based loading and hot-reload support.
 Supports both legacy tools.py and new scripts/__init__.py patterns.
-Pure MCP Server compatible (no FastMCP dependency).
+Pure MCP Server compatible.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ class SkillLoader:
     def __init__(self, registry: "SkillRegistry") -> None:
         self.registry = registry
 
-    def load_skill(self, skill_name: str, mcp: FastMCP | None = None) -> tuple[bool, str]:
+    def load_skill(self, skill_name: str, mcp: "Server | None" = None) -> tuple[bool, str]:
         """
         Dynamically load a skill into the MCP server.
         Supports HOT RELOAD.
@@ -110,7 +110,7 @@ class SkillLoader:
             return False, f"Load Error: {e}"
 
     def _resolve_dependencies(
-        self, manifest: dict[str, Any], mcp: FastMCP | None
+        self, manifest: dict[str, Any], mcp: "Server | None"
     ) -> tuple[bool, str]:
         """Resolve skill dependencies."""
         # Convert to dict if needed

@@ -455,7 +455,7 @@ class ContextOrchestrator:
         ]
 
         logger.info(
-            "ContextOrchestrator initialized (Step 4 Async)",
+            "ContextOrchestrator initialized",
             max_tokens=max_tokens,
             input_budget=self.input_budget,
             layers=len(self.layers),

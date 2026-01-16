@@ -471,6 +471,9 @@ class TestSyncPathConsistency:
         if not store:
             pytest.skip("Vector store not available")
 
+        # Clean up any existing data in the test table to ensure test isolation
+        await vm.drop_table("test_consistency")
+
         # Run sync to ensure DB is populated
         await vm.sync_skills("assets/skills", "test_consistency")
 

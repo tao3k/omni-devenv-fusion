@@ -19,6 +19,7 @@ Each script module is directly importable as agent.skills.git.scripts.<module_na
 
 from agent.skills.git.scripts import status as status_module
 from agent.skills.git.scripts import commit as commit_module
+from agent.skills.git.scripts import add as add_module
 
 # Re-export status functions (avoid name conflict with module)
 git_status = status_module.status
@@ -34,3 +35,7 @@ commit_no_verify = commit_module.commit_no_verify
 get_last_commit = commit_module.get_last_commit
 get_last_commit_msg = commit_module.get_last_commit_msg
 revert = commit_module.revert
+
+# Re-export add functions
+stage_all = add_module.add_all
+stage_all_with_info = add_module.add_all_with_info

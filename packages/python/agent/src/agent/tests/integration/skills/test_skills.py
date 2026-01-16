@@ -29,7 +29,7 @@ import time
 import types
 from pathlib import Path
 from unittest.mock import MagicMock, patch, AsyncMock
-from mcp.server.fastmcp import FastMCP
+from mcp.server import Server
 
 
 # =============================================================================
@@ -151,8 +151,8 @@ def _load_skill_module_for_test(skill_name: str):
 
 @pytest.fixture
 def real_mcp():
-    """Real FastMCP instance for integration testing."""
-    mcp = FastMCP("test")
+    """Real MCP Server instance for integration testing."""
+    mcp = Server("test")
     return mcp
 
 

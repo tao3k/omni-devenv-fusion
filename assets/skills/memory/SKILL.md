@@ -46,13 +46,13 @@ authors: ["omni-dev-fusion"]
 
 ## Commands Reference
 
-| Command | Description | Example |
-|---------|-------------|---------|
-| `save_memory` | Store insight/recipe into vector memory | `save_memory("Use semantic versioning", {"tag": "git"})` |
-| `search_memory` | Semantic search in memory | `search_memory("git commit format", limit=5)` |
-| `index_memory` | Optimize vector index (IVF-FLAT) | `index_memory()` |
-| `get_memory_stats` | Get memory count | `get_memory_stats()` |
-| `load_skill` | Load skill manifest into memory | `load_skill("git")` |
+| Command            | Description                             | Example                                                  |
+| ------------------ | --------------------------------------- | -------------------------------------------------------- |
+| `save_memory`      | Store insight/recipe into vector memory | `save_memory("Use semantic versioning", {"tag": "git"})` |
+| `search_memory`    | Semantic search in memory               | `search_memory("git commit format", limit=5)`            |
+| `index_memory`     | Optimize vector index (IVF-FLAT)        | `index_memory()`                                         |
+| `get_memory_stats` | Get memory count                        | `get_memory_stats()`                                     |
+| `load_skill`       | Load skill manifest into memory         | `load_skill("git")`                                      |
 
 ## Workflow: Store an Insight
 
@@ -84,13 +84,13 @@ Claude:
 
 ## Memory vs Knowledge Skill
 
-| Aspect | Memory | Knowledge |
-|--------|--------|-----------|
-| **Source** | LLM's own learnings | Project documentation |
-| **Storage** | LanceDB (vector) | File system (markdown) |
-| **Query** | Semantic search | Keyword/pattern match |
-| **Purpose** | "What did I learn?" | "What are the rules?" |
-| **Update** | Runtime accumulation | Pre-indexed docs |
+| Aspect      | Memory               | Knowledge              |
+| ----------- | -------------------- | ---------------------- |
+| **Source**  | LLM's own learnings  | Project documentation  |
+| **Storage** | LanceDB (vector)     | File system (markdown) |
+| **Query**   | Semantic search      | Keyword/pattern match  |
+| **Purpose** | "What did I learn?"  | "What are the rules?"  |
+| **Update**  | Runtime accumulation | Pre-indexed docs       |
 
 ## Best Practices
 

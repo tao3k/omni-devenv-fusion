@@ -3,7 +3,7 @@ packages/python/agent/src/agent/tests/test_mcp_dependencies.py
 Tests to verify skill architecture dependencies are properly configured.
 
 Phase 35.3: Pure MCP Server Architecture
-- Uses mcp.server.Server (no FastMCP)
+- Uses mcp.server.Server
 - Tools listed dynamically via handle_list_tools
 - Tool execution via handle_call_tool -> SkillManager
 
@@ -22,7 +22,7 @@ class TestMcpServerArchitecture:
     """Test pure MCP Server architecture (Phase 35.3)."""
 
     def test_mcp_server_import(self):
-        """mcp.server should import successfully (no FastMCP)."""
+        """mcp.server should import successfully."""
         from mcp.server import Server
         from mcp.server.stdio import stdio_server
         from mcp.server.sse import SseServerTransport

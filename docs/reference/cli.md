@@ -1,6 +1,6 @@
 # CLI Reference
 
-> **Phase 56**: Omni Loop CCA Runtime | **Phase 35.2**: Modular CLI Architecture
+> Omni Loop CCA Runtime | Modular CLI Architecture
 
 The `omni` CLI provides unified access to all Omni-DevEnv Fusion capabilities.
 
@@ -19,7 +19,7 @@ The `omni` CLI provides unified access to all Omni-DevEnv Fusion capabilities.
 
 ## omni run - CCA Runtime Loop
 
-> **Phase 56**: CCA (Context, Cognition, Action) Runtime for autonomous task execution.
+> CCA (Context, Cognition, Action) Runtime for autonomous task execution.
 
 The `omni run` command provides an interactive CLI and single-task execution mode powered by the **OmniAgent** - a CCA Loop agent that uses layered context assembly and autonomous reasoning.
 
@@ -27,7 +27,7 @@ The `omni run` command provides an interactive CLI and single-task execution mod
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    CCA Runtime Loop (Phase 56)                               │
+│                    CCA Runtime Loop                                          │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  1. OBSERVE  →  Layered Context Assembly (The Conductor)                   │
@@ -65,7 +65,7 @@ omni run repl
 **Features:**
 
 - Persistent session with conversation history
-- Dynamic tool loading (Phase 69: Adaptive Loader)
+- Dynamic tool loading (Adaptive Loader)
 - Real-time context analysis
 - Type 'exit', 'quit', or 'q' to end
 
@@ -73,7 +73,7 @@ omni run repl
 
 ```bash
 $ omni run
- CCA Runtime - Omni Loop (Phase 56)
+ CCA Runtime - Omni Loop
 ==================================================
 Type 'exit' or 'quit' to end the session.
 
@@ -100,7 +100,7 @@ omni run exec "Fix the login bug in auth.py"
 omni run exec "Refactor context_orchestrator.py" -s 10
 ```
 
-### Phase 71: Memory Integration
+### Memory Integration
 
 The OmniAgent integrates with **The Memory Mesh** for contextual awareness:
 
@@ -136,7 +136,7 @@ omni run exec "Refactor the context_orchestrator.py to use dataclasses"
 # The agent will:
 # 1. Read current implementation
 # 2. Analyze dependencies
-# 3. Apply AST-based refactoring (Phase 52: The Surgeon)
+# 3. Apply AST-based refactoring (Structural Editing Skill)
 # 4. Verify all tests pass
 ```
 

@@ -3,10 +3,10 @@ agent/mcp_server.py
  High-Performance MCP Server (Official SDK)
 
 Architecture:
-- Pure mcp.server.Server (no FastMCP overhead)
+- Pure mcp.server.Server
 - Stdio mode: Minimal, reliable, no background tasks
 - SSE mode: uvloop + orjson for high performance
-- Skill execution via Swarm Engine
+- Skill execution via Trinity Architecture
 
 Usage:
     omni mcp --transport stdio      # Claude Desktop
@@ -315,15 +315,18 @@ async def _notify_tools_changed(skill_name: str, change_type: str):
         # We must check if we are currently inside a request context
         # This works because skill changes (like jit_install) are triggered
         # as tool calls within a session scope.
-        if server.request_context and server.request_context.session:
-            await server.request_context.session.send_tool_list_changed()
+        request_ctx = server.request_context
+        if request_ctx and request_ctx.session:
+            await request_ctx.session.send_tool_list_changed()
             logger.info(f"🔔 [{change_type.title()}] Sent tool list update to client: {skill_name}")
         else:
+            # No active session - this is expected during startup
             logger.debug(
                 f"🔕 [{change_type.title()}] Skill changed but no active session: {skill_name}"
             )
     except Exception as e:
-        logger.warning(f"⚠️ [Hot Reload] Notification failed: {e}")
+        # Log at debug level since this is expected during startup
+        logger.debug(f"⚠️ [Hot Reload] Notification skipped (no session): {e}")
 
 
 # Global lock to prevent overlapping index syncs
@@ -356,7 +359,16 @@ async def _update_search_index(skill_name: str, change_type: str):
         # which uses file hashes to determine what changed
         result = await reindex_skills_from_manifests()
         stats = result.get("stats", {})
-        logger.info(f"🔄 [Index Sync] Sync completed: {stats}")
+
+        # Only log if there were actual changes
+        added = stats.get("added", 0)
+        modified = stats.get("modified", 0)
+        deleted = stats.get("deleted", 0)
+
+        if added > 0 or modified > 0 or deleted > 0:
+            logger.info(f"🔄 [Index Sync] Sync completed: {stats}")
+        else:
+            logger.debug(f"🔕 [Index Sync] No changes detected (total={stats.get('total', 0)})")
 
     except Exception as e:
         logger.warning(f"⚠️ [Index Sync] Error updating index for {skill_name}: {e}")
