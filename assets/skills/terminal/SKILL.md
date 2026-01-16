@@ -18,6 +18,11 @@ routing_keywords:
     "system",
   ]
 authors: ["omni-dev-fusion"]
+intents:
+  - "Run shell commands"
+  - "Execute build scripts"
+  - "Run tests in terminal"
+  - "System administration tasks"
 ---
 
 You have loaded the **Terminal Skill**.

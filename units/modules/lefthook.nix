@@ -44,6 +44,7 @@ let
     "rust-io" # omni-io crate (safe file I/O)
     "rust-tokenizer" # omni-tokenizer crate (BPE tokenization)
     "rust-bindings" # Python bindings via PyO3
+    "scanner"
   ];
   # Define generator configurations
   generators = [
@@ -73,6 +74,13 @@ let
                 "format-python" = {
                   glob = "*.py";
                   run = "uv run ruff format {staged_files}";
+                };
+                cog-check = {
+                  run = "cog check";
+                };
+                format-rust = {
+                  glob = "*.rs";
+                  run = "cargo fmt -- {staged_files}";
                 };
               };
               commit-msg = lefthook.default.data.commit-msg;

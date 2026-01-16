@@ -35,6 +35,16 @@ from mcp.server import Server
 # -----------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def reset_singletons():
+    """Reset singletons before each test."""
+    import agent.core.skill_manager.manager as manager_module
+
+    manager_module._instance = None
+    yield
+    manager_module._instance = None
+
+
 @pytest.fixture
 def system_components():
     """Initialize a clean system environment."""

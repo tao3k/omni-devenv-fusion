@@ -1,5 +1,7 @@
 """
-List all registered MCP tools from loaded skills.
+skill/scripts/list_tools.py - List All Registered MCP Tools
+
+Lists all registered MCP tools from loaded skills with descriptions.
 """
 
 from agent.skills.decorators import skill_script
@@ -7,23 +9,30 @@ from agent.skills.decorators import skill_script
 
 @skill_script(
     name="list_tools",
-    description="[CRITICAL] List all registered MCP tools with their names, descriptions, and usage. Use this to discover available capabilities.",
-)
-def list_tools(compact: bool = False) -> str:
-    """
-    Format a list of all registered MCP tools.
+    category="read",
+    description="""
+    [CRITICAL] Lists all registered MCP tools with their names, descriptions,
+    and usage information. Use this to discover available capabilities.
 
     Args:
-        compact: If True, show minimal output (name only)
+        compact: If `true`, shows minimal output with tool names only.
+                 Defaults to `false`.
 
     Returns:
-        Formatted markdown string with all tools
-    """
+        Markdown-formatted list of all tools grouped by skill.
+        Full format includes tool names, descriptions, and usage examples.
+        Compact format shows only `skill.command` names.
+
+    Usage:
+        @omni("skill.list_tools", {"compact": true})
+        @omni("skill.list_tools", {"compact": false})
+    """,
+)
+def list_tools(compact: bool = False) -> str:
     from agent.core.skill_manager import get_skill_manager
 
     manager = get_skill_manager()
 
-    # Collect all tools
     tools = []
     for skill_name in manager.list_loaded():
         skill_info = manager.get_info(skill_name)
@@ -45,18 +54,15 @@ def list_tools(compact: bool = False) -> str:
             )
 
     if compact:
-        # Minimal format: just tool names
-        lines = [f"# 🔧 Tools ({len(tools)})", ""]
+        lines = [f"# Tools ({len(tools)})", ""]
         for tool in sorted(tools, key=lambda x: x["skill"]):
             lines.append(f"- `{tool['skill']}.{tool['command']}`")
         return "\n".join(lines)
 
-    # Full format with descriptions
-    lines = ["# 🔧 Registered MCP Tools", ""]
+    lines = ["# Registered MCP Tools", ""]
     lines.append(f"**Total**: {len(tools)} tools from {len(manager.list_loaded())} loaded skills")
     lines.append("")
 
-    # Group by skill
     current_skill = None
     for tool in sorted(tools, key=lambda x: x["skill"]):
         if tool["skill"] != current_skill:
@@ -70,7 +76,7 @@ def list_tools(compact: bool = False) -> str:
         lines.append("")
 
     lines.append("---")
-    lines.append('**Usage**: `@omni("skill.command", {{"arg": "value"}})`')
+    lines.append('**Usage**: `@omni("skill.command", {"arg": "value"})`')
 
     return "\n".join(lines)
 

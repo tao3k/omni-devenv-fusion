@@ -4,14 +4,15 @@
 
 use anyhow::{Context, Result};
 
-use crate::lang::Lang;
-use crate::re_exports::{Pattern, SupportLang, MetaVariable, LanguageExt, MatcherExt};
 use crate::item::Match;
+use crate::lang::Lang;
+use crate::re_exports::{LanguageExt, MatcherExt, MetaVariable, Pattern, SupportLang};
 
 /// Create a search pattern for a language
 pub fn pattern(pattern: &str, lang: Lang) -> Result<Pattern> {
     let lang_str = lang.as_str();
-    let support_lang: SupportLang = lang_str.parse()
+    let support_lang: SupportLang = lang_str
+        .parse()
         .with_context(|| format!("Failed to parse language: {}", lang_str))?;
     Pattern::try_new(pattern, support_lang)
         .with_context(|| format!("Failed to parse pattern: {}", pattern))
@@ -20,7 +21,8 @@ pub fn pattern(pattern: &str, lang: Lang) -> Result<Pattern> {
 /// Scan content and find all matches for a pattern
 pub fn scan(content: &str, pat: &str, lang: Lang) -> Result<Vec<Match>> {
     let lang_str = lang.as_str();
-    let support_lang: SupportLang = lang_str.parse()
+    let support_lang: SupportLang = lang_str
+        .parse()
         .with_context(|| format!("Failed to parse language: {}", lang_str))?;
     let grep_result = support_lang.ast_grep(content);
     let root_node = grep_result.root();
@@ -130,7 +132,12 @@ def goodbye():
         assert_eq!(funcs.len(), 2);
 
         let hello = &funcs[0];
-        assert!(hello.captures.iter().any(|(n, v)| n == "NAME" && v == "hello"));
+        assert!(
+            hello
+                .captures
+                .iter()
+                .any(|(n, v)| n == "NAME" && v == "hello")
+        );
     }
 
     #[test]

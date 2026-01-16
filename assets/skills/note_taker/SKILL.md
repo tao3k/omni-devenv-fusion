@@ -9,6 +9,11 @@ execution_mode: library
 routing_strategy: keyword
 routing_keywords:
   ["note", "remember", "summary", "knowledge", "memory", "learn", "capture"]
+intents:
+  - "Take notes during session"
+  - "Summarize conversation"
+  - "Save important information"
+  - "Recall knowledge from notes"
 ---
 
 # Note Taker Skill

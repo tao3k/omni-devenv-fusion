@@ -17,6 +17,11 @@ routing_keywords:
     "tone",
   ]
 authors: ["omni-dev-fusion"]
+intents:
+  - "Polish or improve writing"
+  - "Check grammar and style"
+  - "Rewrite text"
+  - "Apply writing standards"
 ---
 
 # Writer Skill System Prompts

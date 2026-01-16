@@ -20,17 +20,14 @@ logger = structlog.get_logger(__name__)
 def get_git_status() -> Dict[str, list]:
     """Get git status for changed files."""
     try:
-        # Get staged files
         result = subprocess.run(
             ["git", "diff", "--cached", "--name-only"], capture_output=True, text=True
         )
         staged = result.stdout.strip().split("\n") if result.stdout.strip() else []
 
-        # Get unstaged files
         result = subprocess.run(["git", "diff", "--name-only"], capture_output=True, text=True)
         unstaged = result.stdout.strip().split("\n") if result.stdout.strip() else []
 
-        # Get untracked files
         result = subprocess.run(
             ["git", "ls-files", "--others", "--exclude-standard"], capture_output=True, text=True
         )
@@ -90,23 +87,27 @@ def categorize_changes(files: list) -> Dict[str, bool]:
 @skill_script(
     name="smart_test_runner",
     category="read",
-    description="Execute tests following agent/how-to/testing-workflows.md.",
-)
-async def smart_test_runner(focus_file: Optional[str] = None) -> str:
-    """
-    Execute tests following agent/how-to/testing-workflows.md.
+    description="""
+    Executes tests following assets/how-to/testing-workflows.md.
 
     Implements the Modified-Code Protocol:
-    1. Identify modified files
-    2. Categorize changes
-    3. Run MINIMUM necessary tests
+    1. Identifies modified files via git status
+    2. Categorizes changes (docs, MCP, tool-router, nix, general)
+    3. Runs MINIMUM necessary tests based on change type
 
     Args:
-        focus_file: Optional specific file to test
+        focus_file: Optional specific file to test (bypasses protocol).
 
     Returns:
-        JSON result with test strategy and execution
-    """
+        JSON result with test strategy, recommended command, and reason.
+        Strategies: `skip`, `mcp_only`, `full`.
+
+    Example:
+        @omni("testing_protocol.smart_test_runner")
+        @omni("testing_protocol.smart_test_runner", {"focus_file": "tests/test_core.py"})
+    """,
+)
+async def smart_test_runner(focus_file: Optional[str] = None) -> str:
     if focus_file:
         return json.dumps(
             {
@@ -118,7 +119,6 @@ async def smart_test_runner(focus_file: Optional[str] = None) -> str:
             indent=2,
         )
 
-    # Step 1: Get git status
     status = get_git_status()
     if "error" in status:
         return json.dumps(
@@ -139,10 +139,8 @@ async def smart_test_runner(focus_file: Optional[str] = None) -> str:
             indent=2,
         )
 
-    # Step 2: Categorize changes
     categories = categorize_changes(all_files)
 
-    # Step 3: Determine strategy (Modified-Code Protocol)
     if categories["docs_only"]:
         return json.dumps(
             {
@@ -212,18 +210,27 @@ async def smart_test_runner(focus_file: Optional[str] = None) -> str:
 @skill_script(
     name="run_test_command",
     category="read",
-    description="Run a test command and return results.",
-)
-async def run_test_command(command: str) -> str:
-    """
-    Run a test command and return results.
+    description="""
+    Runs a predefined test command and returns results.
+
+    Validates command against allowed list for safety.
 
     Args:
-        command: Test command to run
+        command: Test command to run (e.g., `just test`, `pytest`).
 
     Returns:
-        JSON result with command output
-    """
+        JSON result with status, returncode, stdout, and stderr.
+        Returns error if command not in allowed list.
+
+    Allowed Commands:
+        - `just test`, `just test-unit`, `just test-int`, `just test-mcp`, `just test-mcp-only`
+        - `pytest`, `devenv test`
+
+    Example:
+        @omni("testing_protocol.run_test_command", {"command": "just test-unit"})
+    """,
+)
+async def run_test_command(command: str) -> str:
     allowed_commands = [
         "just test",
         "just test-unit",
@@ -272,15 +279,18 @@ async def run_test_command(command: str) -> str:
 @skill_script(
     name="get_test_protocol",
     category="read",
-    description="Get the testing protocol summary.",
-)
-async def get_test_protocol() -> str:
-    """
-    Get the testing protocol summary.
+    description="""
+    Gets the testing protocol summary from assets/how-to/testing-workflows.md.
 
     Returns:
-        JSON summary of assets/how-to/testing-workflows.md
-    """
+        JSON summary with document reference, rules, strategies, and test levels.
+        Includes command suggestions for each strategy and level.
+
+    Example:
+        @omni("testing_protocol.get_test_protocol")
+    """,
+)
+async def get_test_protocol() -> str:
     return json.dumps(
         {
             "doc": "assets/how-to/testing-workflows.md",

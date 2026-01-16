@@ -1,67 +1,116 @@
 {#
-# git/prepare_result.j2 - Commit Preparation Result Template (Phase 36.9)
+# git/prepare_result.j2 - Commit Preparation Result Template (Phase 36.12)
 #
+# Enhanced with:
+# - Truncated diff (50000 chars for detailed commit message generation)
+# - File category breakdown for LLM analysis
+# - Rich emoji UI for better audit experience
 #}
 
-## Raw Data
+## 📊 🔍 Raw Data (LLM Read This)
 
 {% if valid_scopes %}
-**Valid Scopes**: {{ valid_scopes|join(', ') }}
+**🎯 Valid Scopes**: `{{ valid_scopes|join('`, `') }}`
 {% endif %}
 
 {% if scope_warning %}
-{{ scope_warning }}
+⚠️  {{ scope_warning }}
 {% endif %}
 
-**{{ staged_file_count }} Files to commit**
+📁 **{{ staged_file_count }} Files to Commit**
 
-{% for f in staged_files[:15] %}
+{% for f in staged_files[:30] %}
 - `{{ f }}`
 {% endfor %}
-{% if staged_file_count > 15 %}
-- ... and {{ staged_file_count - 15 }} more files
+{% if staged_file_count > 30 %}
+- ... and {{ staged_file_count - 30 }} more files
 {% endif %}
+
+### 📁 Files by Category
+
+{% set docs = [] %}
+{% set assets = [] %}
+{% set packages = [] %}
+{% set other = [] %}
+
+{% for f in staged_files %}
+{% if f.startswith('docs/') %}
+{% set _ = docs.append(f) %}
+{% elif f.startswith('assets/') %}
+{% set _ = assets.append(f) %}
+{% elif f.startswith('packages/') %}
+{% set _ = packages.append(f) %}
+{% else %}
+{% set _ = other.append(f) %}
+{% endif %}
+{% endfor %}
+
+| Category | Count | Examples |
+|----------|-------|----------|
+| 📚 docs/ | {{ docs|length }} | {{ docs[:3]|join(', ') }}{% if docs|length > 3 %}...{% endif %} |
+| 🎨 assets/ | {{ assets|length }} | {{ assets[:3]|join(', ') }}{% if assets|length > 3 %}...{% endif %} |
+| 📦 packages/ | {{ packages|length }} | {{ packages[:3]|join(', ') }}{% if packages|length > 3 %}...{% endif %} |
+| 🔧 other | {{ other|length }} | {{ other[:3]|join(', ') }}{% if other|length > 3 %}...{% endif %} |
 
 {% if diff_content %}
-**Diff Preview**:
-{{ diff_content[:2000] }}
-{% endif %}
+### 📝 Diff Preview (50000 chars - enough for detailed message)
 
-{% if valid_scopes %}
-**Scope Notice**: Use ONLY scopes from the list above.
+```diff
+{{ diff_content[:50000] }}
+```
+_(Full diff: `git diff --cached`)_
 {% endif %}
 
 ---
 
-## Commit Analysis Reporter
+## 📋 📝 Commit Analysis Reporter (LLM Fill Placeholders Below)
 
-### 📋 Commit Analysis
+### 🔎 Analysis
 
 | Field           | Value               |
 | --------------- | ------------------- |
-| **Type**        | `feat` (or fix, refactor, docs, style, test, chore) |
-| **Scope**       | `git-workflow` (pick from Valid Scopes) |
+| **Type**        | `feat` (fix/refactor/docs/style/test/chore) |
+| **Scope**       | `agent` (pick from Valid Scopes above) |
+| **Files**       | `{{ staged_file_count }}` files |
 | **Description** | _REPLACE_WITH_SHORT_DESCRIPTION_ |
 
-#### 📁 Files to commit ({{ staged_file_count }})
+#### 📁 Files Changed ({{ staged_file_count }})
 
-{% for f in staged_files[:15] %}
+{% for f in staged_files[:20] %}
 - `{{ f }}`
 {% endfor %}
-{% if staged_file_count > 15 %}
-- ... and {{ staged_file_count - 15 }} more files
+{% if staged_file_count > 20 %}
+- ... and {{ staged_file_count - 20 }} more files
 {% endif %}
 
-#### 📝 Message
+#### ✍️  Message Template
 
 **Subject:**
 
-feat(git-workflow): _REPLACE_WITH_DESCRIPTION_
+```
+type(scope): _REPLACE_WITH_SHORT_DESCRIPTION_
+```
 
 **Body:**
 - _REPLACE_WITH_CHANGE_DETAIL_1
 - _REPLACE_WITH_CHANGE_DETAIL_2
+- ...
 
 ---
+
+### 🚀 Next Steps
+
+1. 📖 Read Raw Data above and analyze the diff
+2. ✍️  Fill the placeholders in Message Template
+3. 💬 Present the commit message to user
+4. ✅ User replies **Yes** to commit, **No** to cancel
+5. 🎯 Execute:
+   ```
+   @omni git.smart_commit(action='approve', workflow_id='{{ wf_id }}', message='type(scope): description\n\n- detail1\n- detail2')
+   ```
+
+---
+
+### ❓ Confirmation
 
 **Please confirm:** Reply **Yes** to commit, **No** to cancel.

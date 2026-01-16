@@ -70,7 +70,10 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let p = dir.path().join("large.txt");
         std_fs::write(&p, "12345678901234567890").unwrap();
-        assert!(matches!(read_text_safe(&p, 10), Err(IoError::TooLarge(_, _))));
+        assert!(matches!(
+            read_text_safe(&p, 10),
+            Err(IoError::TooLarge(_, _))
+        ));
     }
 
     #[test]

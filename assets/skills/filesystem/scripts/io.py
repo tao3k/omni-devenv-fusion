@@ -2,6 +2,10 @@
 filesystem/scripts/io.py - File I/O Operations
 
 Phase 63: Migrated from tools.py to scripts pattern.
+
+NOTE: This skill is for FILE I/O operations ONLY.
+For text search, use: advanced_search.search_project_code (ripgrep)
+For AST search, use: code_navigation.search_code (AST patterns)
 """
 
 import fnmatch
@@ -21,7 +25,6 @@ from agent.skills.decorators import skill_script
 
 logger = structlog.get_logger(__name__)
 
-# Safe hidden files that are allowed
 _ALLOWED_HIDDEN_FILES = {
     ".gitignore",
     ".clang-format",
@@ -33,11 +36,6 @@ _ALLOWED_HIDDEN_FILES = {
 }
 
 
-# =============================================================================
-# Pydantic Models for Batch Operations
-# =============================================================================
-
-
 class FileOperation(BaseModel):
     """Single file operation for batch processing."""
 
@@ -46,11 +44,6 @@ class FileOperation(BaseModel):
     )
     path: str = Field(..., description="Relative path to file")
     content: str = Field(..., description="Content to write or append")
-
-
-# =============================================================================
-# Utility Functions
-# =============================================================================
 
 
 def _validate_syntax(content: str, filepath: str) -> tuple[bool, str]:
@@ -94,25 +87,25 @@ def _create_backup(filepath: Path) -> bool:
         return False
 
 
-# =============================================================================
-# File I/O Commands
-# =============================================================================
-
-
 @skill_script(
     name="read_file",
     category="read",
-    description="Read a single file with line numbering.",
-)
-async def read_file(file_path: str) -> str:
-    """
-    Read a single file with line numbering.
+    description="""
+    Reads a single file with line numbering.
 
     Supports:
-    - Project-relative paths (e.g., "src/main.py")
-    - Trusted absolute paths (e.g., /nix/store/*)
-    """
-    # Check for trusted absolute paths (e.g., /nix/store/*)
+    - Project-relative paths (e.g., `src/main.py`)
+    - Trusted absolute paths (e.g., `/nix/store/*`)
+
+    Args:
+        file_path: Path to the file to read.
+
+    Returns:
+        File content with line numbers, or error message if file not found,
+        is not a file, or exceeds 100KB size limit.
+    """,
+)
+async def read_file(file_path: str) -> str:
     if file_path.startswith("/"):
         is_safe, error_msg = is_safe_path(file_path, allow_absolute=True)
     else:
@@ -121,7 +114,6 @@ async def read_file(file_path: str) -> str:
     if not is_safe:
         return f"Error: {error_msg}"
 
-    # Handle absolute paths (trusted) vs relative paths
     if file_path.startswith("/"):
         full_path = Path(file_path)
     else:
@@ -148,89 +140,27 @@ async def read_file(file_path: str) -> str:
 
 
 @skill_script(
-    name="search_files",
-    category="read",
-    description="Search for text patterns in files (grep-style).",
-    inject_root=True,
-)
-async def search_files(pattern: str, path: str = ".", use_regex: bool = False) -> str:
-    """
-    Search for text patterns in files (like grep).
-
-    Use this to find code snippets, function definitions, or specific patterns.
-
-    Supports:
-    - Relative paths (e.g., "packages/python/agent")
-    - Absolute paths within project (auto-converted to relative)
-    - Trusted absolute paths (e.g., /nix/store/*)
-    """
-    # Normalize path (converts absolute to relative, validates safety)
-    is_safe, error_msg, normalized = normalize_path(path)
-    if not is_safe:
-        return f"Error: {error_msg}"
-    path = normalized
-
-    project_root = Path.cwd()
-    search_root = project_root / path
-
-    if not search_root.exists() or not search_root.is_dir():
-        return f"Error: Directory '{path}' does not exist."
-
-    try:
-        flags = re.IGNORECASE if not use_regex else re.IGNORECASE | re.MULTILINE
-        regex = re.compile(pattern, flags) if use_regex else None
-
-        matches = []
-        max_matches = 100
-
-        for root, dirs, files in os.walk(search_root):
-            # Skip hidden and cache directories
-            dirs[:] = [d for d in dirs if not d.startswith(".") and d != ".cache"]
-            files = [f for f in files if not f.startswith(".")]
-
-            for filename in files:
-                filepath = Path(root) / filename
-                try:
-                    with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
-                        for i, line in enumerate(f, 1):
-                            if len(matches) >= max_matches:
-                                break
-                            if use_regex:
-                                if regex.search(line):
-                                    matches.append(
-                                        f"{filepath.relative_to(project_root)}:{i}: {line.rstrip()}"
-                                    )
-                            else:
-                                if pattern.lower() in line.lower():
-                                    matches.append(
-                                        f"{filepath.relative_to(project_root)}:{i}: {line.rstrip()}"
-                                    )
-                except Exception:
-                    continue
-
-            if len(matches) >= max_matches:
-                break
-
-        if not matches:
-            return f"No matches found for '{pattern}' in '{path}'"
-
-        result = f"--- Search Results: '{pattern}' in {path} ---\n"
-        result += f"Found {len(matches)} matches:\n\n"
-        result += "\n".join(matches[:max_matches])
-        if len(matches) >= max_matches:
-            result += f"\n... (showing first {max_matches} matches)"
-        return result
-
-    except re.error as e:
-        return f"Error: Invalid regex pattern - {e}"
-    except Exception as e:
-        return f"Error searching: {e}"
-
-
-@skill_script(
     name="save_file",
     category="write",
-    description="Write content to a file with backup and validation.",
+    description="""
+    Writes content to a file within the project directory.
+
+    Features:
+    - Auto-creates `.bak` backup before overwriting (safe rollback)
+    - Syntax validation for Python and Nix files
+    - Auto-writing-check for markdown files (check style + structure)
+    - Security checks for path safety
+
+    Args:
+        path: Relative path to the file.
+        content: Content to write.
+        create_backup: If `true`, creates `.bak` backup. Defaults to `true`.
+        validate_syntax: If `true`, validates Python/Nix syntax. Defaults to `true`.
+        auto_check_writing: If `true`, runs writer checks on `.md` files. Defaults to `true`.
+
+    Returns:
+        Success message with byte count, or error message.
+    """,
     inject_root=True,
 )
 async def save_file(
@@ -240,15 +170,6 @@ async def save_file(
     validate_syntax: bool = True,
     auto_check_writing: bool = True,
 ) -> str:
-    """
-    Write content to a file within the project directory.
-
-    Features:
-    - Auto-creates .bak backup before overwriting (safe rollback)
-    - Syntax validation for Python and Nix files
-    - Auto-writing-check for .md files (check style + structure)
-    - Security checks for path safety
-    """
     is_safe, error_msg = is_safe_path(
         path,
         allow_hidden=False,
@@ -282,7 +203,6 @@ async def save_file(
         if not is_valid:
             return f"Error: Syntax validation failed\n{error_msg}"
 
-    # Auto-writing-check for markdown files
     writing_warnings = []
     if auto_check_writing and path.endswith(".md"):
         try:
@@ -320,55 +240,64 @@ async def save_file(
 @skill_script(
     name="apply_changes",
     category="write",
-    description="Apply changes to multiple files in one go.",
-    inject_root=True,
-)
-async def apply_file_changes(changes: List[FileOperation]) -> str:
-    """
-    [BATCH] Efficiently apply changes to multiple files in one go.
+    description="""
+    [BATCH] Efficiently applies changes to multiple files in one go.
 
     Use this for code generation or refactoring tasks to minimize tool calls
     and reduce permission confirmations.
-    """
+
+    Args:
+        changes: List of FileOperation objects with action (`write` or `append`),
+                path, and content.
+
+    Returns:
+        Summary of successful and failed operations with details.
+
+    Example:
+        @omni("filesystem.apply_changes", {"changes": [
+            {"action": "write", "path": "src/main.py", "content": "..."},
+            {"action": "append", "path": "README.md", "content": "..."}
+        ]})
+    """,
+    inject_root=True,
+)
+async def apply_file_changes(changes: List[FileOperation]) -> str:
     project_root = Path.cwd()
     report = []
     success_count = 0
     error_count = 0
 
     for change in changes:
-        # Handle both FileOperation objects and raw dicts from MCP
         if isinstance(change, dict):
             change = FileOperation(**change)
 
         try:
             full_path = project_root / change.path
 
-            # Validate path safety
             is_safe, error_msg = is_safe_path(
                 change.path,
                 allow_hidden=False,
                 allowed_hidden_files=_ALLOWED_HIDDEN_FILES,
             )
             if not is_safe:
-                report.append(f"- ❌ `{change.path}`: {error_msg}")
+                report.append(f"- `{change.path}`: {error_msg}")
                 error_count += 1
                 continue
 
-            # Ensure directory exists
             full_path.parent.mkdir(parents=True, exist_ok=True)
 
             if change.action == "write":
                 full_path.write_text(change.content, encoding="utf-8")
-                report.append(f"- ✅ **Wrote**: `{change.path}` ({len(change.content)} bytes)")
+                report.append(f"- **Wrote**: `{change.path}` ({len(change.content)} bytes)")
             elif change.action == "append":
                 with open(full_path, "a", encoding="utf-8") as f:
                     f.write(change.content)
-                report.append(f"- ➕ **Appended**: `{change.path}` ({len(change.content)} bytes)")
+                report.append(f"- **Appended**: `{change.path}` ({len(change.content)} bytes)")
 
             success_count += 1
 
         except Exception as e:
-            report.append(f"- ❌ **Failed**: `{change.path}` - {str(e)}")
+            report.append(f"- **Failed**: `{change.path}` - {str(e)}")
             error_count += 1
 
     summary = f"**File Operations Summary**\n\n"
@@ -382,11 +311,18 @@ async def apply_file_changes(changes: List[FileOperation]) -> str:
 @skill_script(
     name="list_directory",
     category="read",
-    description="List files and directories in the given path.",
+    description="""
+    Lists files and directories in the given path.
+
+    Args:
+        path: Path to list. Defaults to current directory (`.`).
+
+    Returns:
+        Formatted directory listing with file/directory type and size.
+    """,
     inject_root=True,
 )
 async def list_directory(path: str = ".") -> str:
-    """List files and directories in the given path."""
     try:
         base = Path.cwd()
         target = (base / path).resolve()
@@ -411,11 +347,22 @@ async def list_directory(path: str = ".") -> str:
 @skill_script(
     name="write_file",
     category="write",
-    description="Create or Overwrite a file with new content.",
+    description="""
+    Creates or overwrites a file with new content.
+
+    Simple file write without backup or validation.
+    Use `save_file` for safer write with backup support.
+
+    Args:
+        path: Relative path to the file.
+        content: Content to write.
+
+    Returns:
+        Success message with byte count, or error message.
+    """,
     inject_root=True,
 )
 async def write_file(path: str, content: str) -> str:
-    """Create or Overwrite a file with new content."""
     try:
         base = Path.cwd()
         target = (base / path).resolve()
@@ -429,11 +376,18 @@ async def write_file(path: str, content: str) -> str:
 @skill_script(
     name="get_file_info",
     category="read",
-    description="Get metadata about a file.",
+    description="""
+    Gets metadata about a file.
+
+    Args:
+        path: Path to the file or directory.
+
+    Returns:
+        File/directory information including path, size, type, and absolute path.
+    """,
     inject_root=True,
 )
 async def get_file_info(path: str) -> str:
-    """Get metadata about a file."""
     try:
         base = Path.cwd()
         target = (base / path).resolve()

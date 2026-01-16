@@ -19,11 +19,6 @@ from common.gitops import get_project_root
 from common.skills_path import SKILLS_DIR
 
 
-# =============================================================================
-# Language Expert System (Migrated from tools.py)
-# =============================================================================
-
-# File extension to language mapping
 EXT_TO_LANG = {
     ".nix": "nix",
     ".py": "python",
@@ -34,7 +29,6 @@ EXT_TO_LANG = {
     ".yml": "yaml",
 }
 
-# Language display names
 LANG_NAMES = {
     "nix": "Nix",
     "python": "Python",
@@ -64,7 +58,6 @@ class StandardsCache:
 
     def _load_standards(self) -> None:
         """Load all language standards from skills/knowledge/standards/."""
-        # SSOT: Use SKILLS_DIR for path resolution
         skill_dir = SKILLS_DIR("knowledge")
         standards_dir = skill_dir / "standards"
 
@@ -132,14 +125,8 @@ def _extract_relevant_standards(standard: str, task: str) -> Optional[str]:
     return "\n".join(relevant_lines[:30]) if relevant_lines else None
 
 
-# =============================================================================
-# Internal Helpers (Pure Execution - No Business Logic)
-# =============================================================================
-
-
 def _get_project_name() -> str:
     """Extract project name from pyproject.toml."""
-    # SSOT: Use get_project_root() for path resolution
     project_root = get_project_root()
     pyproject = project_root / "pyproject.toml"
     if pyproject.exists():
@@ -157,7 +144,6 @@ def _load_scopes() -> List[str]:
     from common.settings import get_setting
 
     try:
-        # SSOT: get_setting() auto-resolves paths with project_root
         cog_toml_path = Path(get_setting("config.cog_toml", "cog.toml"))
 
         if cog_toml_path.exists():
@@ -175,7 +161,6 @@ def _analyze_lefthook() -> List[Dict[str, str]]:
 
     hooks = []
 
-    # SSOT: get_setting() auto-resolves paths with project_root
     lefthook_yaml = Path(get_setting("config.lefhook_yaml", "lefthook.yml"))
 
     if lefthook_yaml.exists():
@@ -224,7 +209,6 @@ def _search_docs(topic: str) -> str:
     """Search documentation for a topic."""
     from common.gitops import get_project_root
 
-    # SSOT: Use get_project_root() for path resolution
     docs_dir = get_project_root() / "docs"
     if not docs_dir.exists():
         return f"No docs directory found for topic '{topic}'."
@@ -263,7 +247,6 @@ def _read_file_content(path: str) -> str:
     from common.gitops import get_project_root
 
     try:
-        # SSOT: Use get_project_root() for path resolution
         project_root = get_project_root()
         file_path = Path(path)
         if not file_path.is_absolute():
@@ -276,20 +259,11 @@ def _read_file_content(path: str) -> str:
     return ""
 
 
-# =============================================================================
-# Core Commands
-# =============================================================================
-
-
 @skill_script(
     name="get_development_context",
     category="read",
-    description="[Cognition] Load the Rules of Engagement for this project.",
-    inject_root=True,
-)
-async def get_development_context() -> str:
-    """
-    [Cognition] Loads the "Rules of Engagement" for this project.
+    description="""
+    [Cognition] Loads the Rules of Engagement for this project.
 
     Call this BEFORE:
     - Writing code
@@ -301,7 +275,14 @@ async def get_development_context() -> str:
         - Project Standards (from docs)
         - Active Guardrails (Lefthook checks)
         - Writing Style Rules
-    """
+        - Architecture Summary
+
+    Example:
+        @omni("knowledge.get_development_context")
+    """,
+    inject_root=True,
+)
+async def get_development_context() -> str:
     context = {
         "project": _get_project_name(),
         "git_rules": {
@@ -331,45 +312,49 @@ async def get_development_context() -> str:
 @skill_script(
     name="consult_architecture_doc",
     category="read",
-    description="[RAG] Semantic search for documentation.",
-)
-async def consult_architecture_doc(topic: str) -> str:
-    """
+    description="""
     [RAG] Semantic search for documentation.
+
+    Searches docs/ and agent/ directories for relevant documentation.
 
     Usage:
     - consult_architecture_doc("writing style") -> Writing standards
     - consult_architecture_doc("git workflow") -> Commit rules
     - consult_architecture_doc("nix") -> Nix configuration
 
-    Returns relevant documentation sections without token waste.
-    """
+    Args:
+        topic: The documentation topic to search for.
+
+    Returns:
+        Relevant documentation sections without token waste.
+    """,
+)
+async def consult_architecture_doc(topic: str) -> str:
     return _search_docs(topic)
 
 
 @skill_script(
     name="consult_language_expert",
     category="read",
-    description="[Language Expert] Consult language-specific standards.",
-)
-async def consult_language_expert(file_path: str, task_description: str) -> str:
-    """
+    description="""
     [Language Expert] Consult language-specific standards and code examples.
 
     This is the primary tool for Router-Augmented Coding:
     1. Reads L1a: Language standards (skills/knowledge/standards/lang-*.md)
     2. Queries L2: Case law (tool-router/data/examples/*.jsonl)
 
-    Usage:
-    - consult_language_expert(file_path="units/modules/python.nix", task="extend generator")
-
     Args:
-        file_path: Path to the file being edited
-        task_description: Description of the coding task
+        file_path: Path to the file being edited.
+        task_description: Description of the coding task.
 
     Returns:
-        JSON with language standards and matching examples
-    """
+        JSON with language standards and matching examples.
+
+    Example:
+        @omni("knowledge.consult_language_expert", {"file_path": "units/modules/python.nix", "task_description": "extend generator"})
+    """,
+)
+async def consult_language_expert(file_path: str, task_description: str) -> str:
     lang = _get_language_from_path(file_path)
 
     if not lang:
@@ -388,7 +373,6 @@ async def consult_language_expert(file_path: str, task_description: str) -> str:
         "task": task_description,
     }
 
-    # Load Standards
     standard = _standards_cache.get_standard(lang)
     if standard:
         relevant_std = _extract_relevant_standards(standard, task_description)
@@ -404,19 +388,21 @@ async def consult_language_expert(file_path: str, task_description: str) -> str:
 @skill_script(
     name="get_language_standards",
     category="read",
-    description="[Standards] Get language-specific coding standards.",
-)
-async def get_language_standards(lang: str) -> str:
-    """
+    description="""
     [Standards] Get language-specific coding standards.
 
     Usage:
     - get_language_standards("nix") -> Nix formatting rules
     - get_language_standards("python") -> Python style guide
 
+    Args:
+        lang: Programming language (e.g., `nix`, `python`, `rust`).
+
     Returns:
         JSON with full standards document from skills/knowledge/standards/lang-{lang}.md
-    """
+    """,
+)
+async def get_language_standards(lang: str) -> str:
     lang = lang.lower()
     lang_name = LANG_NAMES.get(lang, lang.title())
 
@@ -446,17 +432,16 @@ async def get_language_standards(lang: str) -> str:
 @skill_script(
     name="list_supported_languages",
     category="read",
-    description="List all supported languages with their standards.",
-)
-async def list_supported_languages() -> str:
-    """
-    List all supported languages with their standards.
+    description="""
+    Lists all supported languages with their standards.
 
     Returns:
-        JSON list of supported languages
-    """
+        JSON list of supported languages with their IDs, names,
+        standards existence status, and file extensions.
+    """,
+)
+async def list_supported_languages() -> str:
     languages = []
-    # SSOT: Use SKILLS_DIR for path resolution
     skill_dir = SKILLS_DIR("knowledge")
     standards_dir = skill_dir / "standards"
 

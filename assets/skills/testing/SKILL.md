@@ -17,6 +17,11 @@ routing_keywords:
     "validate",
   ]
 authors: ["omni-dev-fusion"]
+intents:
+  - "Run tests"
+  - "Add unit tests"
+  - "Check test coverage"
+  - "Fix failing tests"
 ---
 
 You have loaded the **Testing Skill**.

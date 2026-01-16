@@ -5,15 +5,15 @@
 //!
 //! Uses ast-grep for precise AST pattern matching.
 
+use anyhow::Result;
+use hex;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::Path;
 use walkdir::WalkDir;
-use serde::{Deserialize, Serialize};
-use anyhow::Result;
-use sha2::{Sha256, Digest};
-use hex;
 
-use omni_ast::{MatcherExt, Pattern, SupportLang, LanguageExt};
+use omni_ast::{LanguageExt, MatcherExt, Pattern, SupportLang};
 
 /// A discovered tool from script scanning
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,7 +59,8 @@ impl ScriptScanner {
             return Ok(tools);
         }
 
-        let skill_name = skill_path.file_name()
+        let skill_name = skill_path
+            .file_name()
             .unwrap_or_default()
             .to_string_lossy()
             .to_string();
@@ -159,7 +160,8 @@ impl ScriptScanner {
                 let env = m.get_env();
 
                 // Get function name from $NAME meta-variable
-                let func_name = env.get_match("NAME")
+                let func_name = env
+                    .get_match("NAME")
                     .map(|n| n.text().to_string())
                     .unwrap_or_else(|| "unknown".to_string());
 
@@ -169,9 +171,9 @@ impl ScriptScanner {
                 // Check if this function is decorated with @skill_script
                 // A function is decorated if there's a @skill_script ending
                 // within 500 bytes before the function (handles multi-line decorators)
-                let is_decorated = decorator_positions.iter().any(|&dec_pos| {
-                    dec_pos < func_range.start && func_range.start - dec_pos < 500
-                });
+                let is_decorated = decorator_positions
+                    .iter()
+                    .any(|&dec_pos| dec_pos < func_range.start && func_range.start - dec_pos < 500);
 
                 if is_decorated && !decorated_functions.contains(&func_name) {
                     decorated_functions.insert(func_name.clone());
@@ -407,19 +409,27 @@ def real_tool():
         let scripts1 = skill1.join("scripts");
         fs::create_dir_all(&scripts1).unwrap();
         let script1 = scripts1.join("commit.py");
-        fs::write(&script1, r#"@skill_script(name="commit")
+        fs::write(
+            &script1,
+            r#"@skill_script(name="commit")
 def commit():
     pass
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let skill2 = skills_dir.join("file");
         let scripts2 = skill2.join("scripts");
         fs::create_dir_all(&scripts2).unwrap();
         let script2 = scripts2.join("read.py");
-        fs::write(&script2, r#"@skill_script(name="read")
+        fs::write(
+            &script2,
+            r#"@skill_script(name="read")
 def read():
     pass
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let scanner = ScriptScanner::new();
         let tools = scanner.scan_all(&skills_dir).unwrap();

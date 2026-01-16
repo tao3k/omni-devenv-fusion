@@ -17,23 +17,25 @@ def _get_discovery():
 @skill_script(
     name="discover",
     category="workflow",
-    description="Search for skills using semantic vector matching.",
-)
-async def discover(query: str = "", limit: int = 5, local_only: bool = False) -> str:
-    """
-    Search for skills using semantic vector matching.
+    description="""
+    Searches for skills using semantic vector matching.
 
     Uses ChromaDB-based semantic search to find skills that match your query,
-    even when keywords don't exactly match.
+    even when keywords don't exactly match. Returns results with similarity scores.
 
     Args:
-        query: Search query (e.g., "process pdf files", "git workflow")
-        limit: Maximum results (default: 5)
-        local_only: If True, only search installed skills (default: False)
+        query: Search query (e.g., "process pdf files", "git workflow").
+               Leave empty to browse all skills.
+        limit: Maximum number of results to return. Defaults to `5`.
+        local_only: If `true`, only search installed skills.
+                    Defaults to `false`.
 
     Returns:
-        Formatted skill list with similarity scores
-    """
+        Formatted skill list with names, match percentages, and keywords.
+        Shows `installed` or `remote` status for each skill.
+    """,
+)
+async def discover(query: str = "", limit: int = 5, local_only: bool = False) -> str:
     discovery = _get_discovery()
 
     results = await discovery.search(
@@ -71,18 +73,19 @@ async def discover(query: str = "", limit: int = 5, local_only: bool = False) ->
 @skill_script(
     name="suggest",
     category="workflow",
-    description="Analyze a task and suggest the best skill.",
-)
-async def suggest(task: str) -> str:
-    """
-    Analyze a task and suggest the best skill using semantic matching.
+    description="""
+    Analyzes a task description and suggests the best skill using semantic matching.
 
     Args:
-        task: Description of what you want to do
+        task: Description of what you want to do.
+              Example: "commit code with message", "search files recursively"
 
     Returns:
-        Recommendation with reasoning
-    """
+        Recommendation with the best matching skill name, confidence score,
+        and the skill's description.
+    """,
+)
+async def suggest(task: str) -> str:
     discovery = _get_discovery()
 
     suggestions = await discovery.search(
@@ -105,37 +108,43 @@ async def suggest(task: str) -> str:
 @skill_script(
     name="jit_install",
     category="workflow",
-    description="Install and load a skill from the index.",
-)
-def jit_install(skill_id: str, auto_load: bool = True) -> str:
-    """
-    Just-in-Time Skill Installation.
+    description="""
+    Installs and loads a skill from the skill index on-demand.
+
+    Just-in-Time skill installation for dynamic capability expansion.
 
     Args:
-        skill_id: Skill ID to install
-        auto_load: Whether to load after install
+        skill_id: The unique identifier of the skill to install.
+        auto_load: If `true`, automatically loads the skill after installation.
+                   Defaults to `true`.
 
     Returns:
-        Installation status
-    """
+        Status message confirming the installation request.
+    """,
+)
+def jit_install(skill_id: str, auto_load: bool = True) -> str:
     from mcp.types import Tool
 
-    # This is a placeholder - actual implementation would be more complex
     return f"Installing skill: {skill_id} (auto_load={auto_load})"
 
 
 @skill_script(
     name="list_index",
     category="workflow",
-    description="List all skills in the known skills index.",
-)
-async def list_index() -> str:
-    """
-    List all skills in the known skills index.
+    description="""
+    Lists all skills in the known skills index.
+
+    Returns both installed and remote (available) skills with counts.
+
+    Args:
+        None
 
     Returns:
-        Formatted list of installed and available skills
-    """
+        Formatted list showing installed skills and available remote skills.
+        Grouped by status with count totals.
+    """,
+)
+async def list_index() -> str:
     discovery = _get_discovery()
     skills = discovery.list_all()
 

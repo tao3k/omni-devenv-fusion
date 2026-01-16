@@ -2,9 +2,9 @@
 //!
 //! Provides functions for Python-specific pattern matching and extraction.
 
+use crate::item::Match;
 use crate::lang::Lang;
 use crate::scan::scan;
-use crate::item::Match;
 
 /// Find all function definitions in Python code
 pub fn find_python_functions(content: &str) -> Vec<Match> {
@@ -76,7 +76,12 @@ def goodbye():
         assert_eq!(funcs.len(), 2);
 
         let hello = &funcs[0];
-        assert!(hello.captures.iter().any(|(n, v)| n == "NAME" && v == "hello"));
+        assert!(
+            hello
+                .captures
+                .iter()
+                .any(|(n, v)| n == "NAME" && v == "hello")
+        );
     }
 
     #[test]

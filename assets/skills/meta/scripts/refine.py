@@ -9,9 +9,28 @@ from agent.skills.decorators import skill_script
 
 
 @skill_script(
-    description="Analyze test failure and generate fixed code",
+    name="refine_code",
     category="evolution",
-    inject_root=True,  # To read the prompt file
+    description="""
+    Analyzes test failure and generates fixed code using AI.
+
+    Uses the `refiner.md` prompt from skills/meta/prompts/ to guide the LLM
+    in understanding the requirement and fixing the broken implementation.
+
+    Args:
+        inference_client: The injected AI inference client.
+        project_root: Root directory of the project.
+        requirement: The original requirement for the code.
+        code: The current implementation that failed.
+        error: The error message from test execution.
+
+    Returns:
+        Fixed Python code with markdown fences stripped.
+
+    Example:
+        @omni("meta.refine_code", {"requirement": "Add two numbers", "code": "def add(a, b):\\n    return a + b", "error": "NameError: name 'a' not defined"})
+    """,
+    inject_root=True,
 )
 async def refine_code(
     inference_client,
@@ -20,27 +39,12 @@ async def refine_code(
     code: str,
     error: str,
 ) -> str:
-    """
-    Refines code based on error output using the 'refiner.md' prompt.
-
-    Args:
-        inference_client: The injected AI inference client
-        project_root: Root directory of the project
-        requirement: The original requirement for the code
-        code: The current implementation that failed
-        error: The error message from test execution
-
-    Returns:
-        Fixed Python code
-    """
-    # 1. Load System Prompt
     prompt_path = Path(project_root) / "assets/skills/meta/prompts/refiner.md"
     if not prompt_path.exists():
         return f"# Error: Refiner prompt not found at {prompt_path}"
 
     system_prompt = prompt_path.read_text(encoding="utf-8")
 
-    # 2. Build User Context
     user_content = f"""--- REQUIREMENT ---
 {requirement}
 
@@ -53,12 +57,11 @@ async def refine_code(
 Please provide the FIXED code now:
 """
 
-    # 3. Call LLM using complete() API
     try:
         result = await inference_client.complete(
             system_prompt=system_prompt,
             user_query=user_content,
-            temperature=0.1,  # Low temperature for deterministic fixes
+            temperature=0.1,
         )
 
         if not result.get("success"):
@@ -66,7 +69,6 @@ Please provide the FIXED code now:
 
         raw_content = result["content"]
 
-        # 4. Clean Output (Strip Markdown)
         return _clean_code_block(raw_content)
 
     except Exception as e:
@@ -77,13 +79,11 @@ def _clean_code_block(content: str) -> str:
     """Helper to strip markdown fences if present."""
     content = content.strip()
 
-    # Strip ```python or ``` prefix
     if content.startswith("```python"):
         content = content[9:]
     elif content.startswith("```"):
         content = content[3:]
 
-    # Strip ``` suffix
     if content.endswith("```"):
         content = content[:-3]
 

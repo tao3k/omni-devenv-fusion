@@ -20,6 +20,11 @@ routing_keywords:
     "wisdom",
   ]
 authors: ["omni-dev-fusion"]
+intents:
+  - "Remember or store information"
+  - "Recall past experiences"
+  - "Save learning to memory"
+  - "Retrieve context from memory"
 ---
 
 # Memory Skill Policy

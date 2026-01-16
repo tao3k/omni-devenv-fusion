@@ -35,6 +35,18 @@ from agent.core.protocols import ExecutionMode
 # =============================================================================
 
 
+@pytest.fixture(autouse=True)
+def reset_skill_manager_singleton():
+    """Reset SkillManager singleton before each test."""
+    import agent.core.skill_manager.manager as manager_module
+
+    # Reset the singleton
+    manager_module._instance = None
+    yield
+    # Cleanup after test
+    manager_module._instance = None
+
+
 @pytest.fixture
 def temp_skill_dir(tmp_path) -> Path:
     """Create a temporary skills directory with realistic structure."""

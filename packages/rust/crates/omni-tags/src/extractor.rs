@@ -6,13 +6,13 @@
 use std::path::Path;
 use std::str::FromStr;
 
-use omni_ast::{MatcherExt, Pattern, SupportLang, MetaVariable, AstLanguage, LanguageExt};
+use omni_ast::{AstLanguage, LanguageExt, MatcherExt, MetaVariable, Pattern, SupportLang};
 
 use crate::error::{SearchError, TagError};
 use crate::patterns::{
     JS_CLASS_PATTERN, JS_FN_PATTERN, PYTHON_ASYNC_DEF_PATTERN, PYTHON_CLASS_PATTERN,
-    PYTHON_DEF_PATTERN, RUST_ENUM_PATTERN, RUST_FN_PATTERN, RUST_IMPL_PATTERN,
-    RUST_STRUCT_PATTERN, RUST_TRAIT_PATTERN, TS_INTERFACE_PATTERN,
+    PYTHON_DEF_PATTERN, RUST_ENUM_PATTERN, RUST_FN_PATTERN, RUST_IMPL_PATTERN, RUST_STRUCT_PATTERN,
+    RUST_TRAIT_PATTERN, TS_INTERFACE_PATTERN,
 };
 use crate::types::{SearchConfig, SearchMatch, Symbol, SymbolKind};
 
@@ -25,7 +25,10 @@ pub struct TagExtractor;
 impl TagExtractor {
     /// Generate a symbolic outline for a file
     /// Returns formatted string ready for LLM consumption
-    pub fn outline_file<P: AsRef<Path>>(path: P, language: Option<&str>) -> Result<String, TagError> {
+    pub fn outline_file<P: AsRef<Path>>(
+        path: P,
+        language: Option<&str>,
+    ) -> Result<String, TagError> {
         let path = path.as_ref();
         let content = omni_io::read_text_safe(path, 1024 * 1024)?; // 1MB limit for outlining
 
@@ -104,7 +107,8 @@ impl TagExtractor {
                 if let Some(lang) = SupportLang::from_path(path) {
                     lang
                 } else {
-                    let ext = path.extension()
+                    let ext = path
+                        .extension()
                         .map(|e| e.to_string_lossy().to_string())
                         .unwrap_or_else(|| "unknown".to_string());
                     return Err(SearchError::UnsupportedLanguage(ext));
@@ -115,7 +119,11 @@ impl TagExtractor {
         let matches = Self::search_content(&content, pattern, lang, path)?;
 
         if matches.is_empty() {
-            return Ok(format!("[No matches for pattern '{}' in {}]", pattern, path.display()));
+            return Ok(format!(
+                "[No matches for pattern '{}' in {}]",
+                pattern,
+                path.display()
+            ));
         }
 
         // Build formatted output
@@ -125,12 +133,7 @@ impl TagExtractor {
         output.push_str(&format!("// Total matches: {}\n", matches.len()));
 
         for m in &matches {
-            output.push_str(&format!(
-                "L{: <4}:{: <3} {}\n",
-                m.line,
-                m.column,
-                m.content
-            ));
+            output.push_str(&format!("L{: <4}:{: <3} {}\n", m.line, m.column, m.content));
         }
 
         Ok(output)
@@ -156,9 +159,7 @@ impl TagExtractor {
         let mut all_matches: Vec<SearchMatch> = Vec::new();
         let mut file_count = 0;
 
-        let walker = WalkDir::new(dir)
-            .follow_links(false)
-            .into_iter();
+        let walker = WalkDir::new(dir).follow_links(false).into_iter();
 
         for entry in walker {
             let entry = match entry {
@@ -238,12 +239,7 @@ impl TagExtractor {
                 current_file = m.path.clone();
                 output.push_str(&format!("\n// File: {}\n", current_file));
             }
-            output.push_str(&format!(
-                "L{: <4}:{: <3} {}\n",
-                m.line,
-                m.column,
-                m.content
-            ));
+            output.push_str(&format!("L{: <4}:{: <3} {}\n", m.line, m.column, m.content));
         }
 
         Ok(output)
@@ -574,7 +570,10 @@ def helper_function(x: int) -> int:
 class AnotherClass:
     pass
 "#;
-        File::create(&path).unwrap().write_all(content.as_bytes()).unwrap();
+        File::create(&path)
+            .unwrap()
+            .write_all(content.as_bytes())
+            .unwrap();
 
         let outline = TagExtractor::outline_file(&path, Some("python")).unwrap();
         println!("Python outline:\n{}", outline);
@@ -611,7 +610,10 @@ enum Status {
     Inactive,
 }
 "#;
-        File::create(&path).unwrap().write_all(content.as_bytes()).unwrap();
+        File::create(&path)
+            .unwrap()
+            .write_all(content.as_bytes())
+            .unwrap();
 
         let outline = TagExtractor::outline_file(&path, Some("rust")).unwrap();
         println!("Rust outline:\n{}", outline);

@@ -18,6 +18,11 @@ routing_keywords:
     "components",
   ]
 authors: ["omni-dev-fusion"]
+intents:
+  - "Analyze project architecture and structure"
+  - "Design system components and modules"
+  - "Review code for patterns and anti-patterns"
+  - "Navigate and understand codebase organization"
 ---
 
 You have loaded the **Software Engineering Skill**.

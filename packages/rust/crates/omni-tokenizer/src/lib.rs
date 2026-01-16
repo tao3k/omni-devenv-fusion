@@ -44,9 +44,8 @@ fn get_cl100k_base() -> Result<&'static tiktoken_rs::CoreBPE, TokenizerError> {
     let bpe = CL100K_BASE.get_or_init(|| {
         // unwrap_or_else with a closures that returns the BPE or panics
         // We handle the error at the call site
-        tiktoken_rs::cl100k_base().unwrap_or_else(|e| {
-            panic!("Failed to initialize cl100k_base: {}", e)
-        })
+        tiktoken_rs::cl100k_base()
+            .unwrap_or_else(|e| panic!("Failed to initialize cl100k_base: {}", e))
     });
     Ok(bpe)
 }
@@ -117,11 +116,16 @@ pub fn truncate(text: &str, max_tokens: usize) -> String {
 
     // Take only max_tokens and decode back to string
     let truncated: Vec<_> = tokens.into_iter().take(max_tokens).collect();
-    bpe.decode(truncated).unwrap_or_else(|_| estimate_truncate(text, max_tokens))
+    bpe.decode(truncated)
+        .unwrap_or_else(|_| estimate_truncate(text, max_tokens))
 }
 
 /// Truncate using a specific model.
-pub fn truncate_with_model(text: &str, max_tokens: usize, model: &str) -> Result<String, TokenizerError> {
+pub fn truncate_with_model(
+    text: &str,
+    max_tokens: usize,
+    model: &str,
+) -> Result<String, TokenizerError> {
     let bpe = match model {
         "cl100k_base" => tiktoken_rs::cl100k_base(),
         "p50k_base" => tiktoken_rs::p50k_base(),

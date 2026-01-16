@@ -17,6 +17,11 @@ routing_keywords:
     "black",
   ]
 authors: ["omni-dev-fusion"]
+intents:
+  - "Python linting and formatting"
+  - "Check Python imports"
+  - "Python type checking"
+  - "Pytest testing"
 ---
 
 # Python Engineering Skill Policy

@@ -10,8 +10,8 @@
 //!
 //! Patterns follow ODF-REP Security Standards.
 
-use regex::RegexSet;
 use once_cell::sync::Lazy;
+use regex::RegexSet;
 use serde::Serialize;
 
 /// Security violation detected during scan
@@ -27,9 +27,9 @@ pub struct SecurityViolation {
 
 static SECRET_PATTERNS: Lazy<RegexSet> = Lazy::new(|| {
     RegexSet::new([
-        r"AKIA[0-9A-Z]{16}", // AWS Access Key ID
-        r"(?i)sk_live_[0-9a-zA-Z]{24}", // Stripe Secret Key
-        r"xox[baprs]-([0-9a-zA-Z\-]{10,48})", // Slack Token (allows hyphens in token)
+        r"AKIA[0-9A-Z]{16}",                    // AWS Access Key ID
+        r"(?i)sk_(test|live)_[0-9a-zA-Z]{24}",  // Stripe Secret Key (test or live)
+        r"xox[baprs]-([0-9a-zA-Z\-]{10,48})",   // Slack Token (allows hyphens in token)
         r"-----BEGIN [A-Z ]+ PRIVATE KEY-----", // PEM Private Key
         r#"(?i)(api_key|access_token|secret)\s*[:=]\s*["'][A-Za-z0-9_=-]{16,}["']"#, // Generic API Key
     ])

@@ -4,8 +4,8 @@
 
 use lance::dataset::Dataset;
 use lance::index::vector::VectorIndexParams;
-use lance_index::traits::DatasetIndexExt;
 use lance_index::IndexType;
+use lance_index::traits::DatasetIndexExt;
 use lance_linalg::distance::DistanceType;
 
 use crate::{VECTOR_COLUMN, VectorStoreError};

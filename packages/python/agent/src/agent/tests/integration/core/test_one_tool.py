@@ -35,6 +35,18 @@ from agent.tests.integration.skills.test_skills import unwrap_command_result, om
 # =============================================================================
 
 
+@pytest.fixture(autouse=True)
+def reset_skill_manager_singleton():
+    """Reset SkillManager singleton before each test."""
+    import agent.core.skill_manager.manager as manager_module
+
+    # Reset the singleton
+    manager_module._instance = None
+    yield
+    # Cleanup after test
+    manager_module._instance = None
+
+
 @pytest.fixture
 def real_skill_manager():
     """Create a real skill manager with all skills loaded."""

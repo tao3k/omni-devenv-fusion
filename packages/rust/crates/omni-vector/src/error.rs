@@ -1,7 +1,7 @@
 //! Error types for vector store operations.
 
-use thiserror::Error;
 use lance::deps::arrow_schema::ArrowError;
+use thiserror::Error;
 
 /// Errors for vector store operations
 #[derive(Error, Debug)]

@@ -57,12 +57,12 @@
 // Module Declarations (ODF-REP: Atomic Structure)
 // ============================================================================
 
+mod batch;
 mod capture;
 mod diff;
 mod editor;
 mod error;
-mod types;
-mod batch; // Phase 58: Heavy-duty batch refactoring
+mod types; // Phase 58: Heavy-duty batch refactoring
 
 // ============================================================================
 // Public Re-exports

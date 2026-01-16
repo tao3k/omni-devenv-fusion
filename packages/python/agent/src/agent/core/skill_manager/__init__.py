@@ -20,7 +20,7 @@ from typing import Any
 
 from .models import SkillCommand, Skill
 
-from .manager import SkillManager
+from .manager import SkillManager, _get_singleton_manager
 
 from .observer import ObserverMixin
 
@@ -46,7 +46,7 @@ def get_skill_manager(lazy: bool = False) -> SkillManager:
     """
     global _manager, _skill_manager
     if _manager is None:
-        _manager = SkillManager()
+        _manager = _get_singleton_manager()
 
     # Always ensure decorators are preloaded for @skill_command support
     if "agent.skills.decorators" not in __import__("sys").modules:

@@ -18,6 +18,11 @@ routing_keywords:
     "workflow",
   ]
 authors: ["omni-dev-fusion"]
+intents:
+  - "Consult project rules"
+  - "Look up coding standards"
+  - "Check architecture decisions"
+  - "Review workflow guidelines"
 ---
 
 # Knowledge Skill Policy

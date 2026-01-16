@@ -7,7 +7,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 // Use omni-ast for unified ast-grep (re-exports Pattern, SupportLang, LanguageExt)
-use omni_ast::{MatcherExt, Pattern, SupportLang, LanguageExt, AstLanguage};
+use omni_ast::{AstLanguage, LanguageExt, MatcherExt, Pattern, SupportLang};
 
 use crate::capture::substitute_captures;
 use crate::diff::generate_unified_diff;
@@ -58,8 +58,8 @@ impl StructuralEditor {
         let root = lang.ast_grep(content);
         let root_node = root.root();
 
-        let search_pattern = Pattern::try_new(pattern, lang)
-            .map_err(|e| EditError::Pattern(e.to_string()))?;
+        let search_pattern =
+            Pattern::try_new(pattern, lang).map_err(|e| EditError::Pattern(e.to_string()))?;
 
         // Collect matches in reverse order for safe replacement
         let mut matches: Vec<(usize, usize, String, String)> = Vec::new();
@@ -284,13 +284,9 @@ def foo():
     #[test]
     fn test_no_matches() {
         let content = "x = 1 + 2";
-        let result = StructuralEditor::replace(
-            content,
-            "connect($$$)",
-            "async_connect($$$)",
-            "python",
-        )
-        .expect("Should handle no matches");
+        let result =
+            StructuralEditor::replace(content, "connect($$$)", "async_connect($$$)", "python")
+                .expect("Should handle no matches");
 
         assert_eq!(result.count, 0);
         assert_eq!(result.original, result.modified);

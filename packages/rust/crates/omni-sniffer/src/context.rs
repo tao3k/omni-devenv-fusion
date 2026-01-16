@@ -23,8 +23,8 @@ pub fn scan_scratchpad_context(repo_path: &std::path::Path) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use std::fs;
+    use tempfile::TempDir;
 
     #[test]
     fn test_scan_scratchpad_nonexistent() {

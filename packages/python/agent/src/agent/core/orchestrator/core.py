@@ -161,7 +161,9 @@ class Orchestrator:
 
         # Dynamic Workflow Components
         # Initialize SkillManager for dynamic graph execution
-        self.skill_manager = SkillManager()
+        from agent.core.skill_manager import _get_singleton_manager
+
+        self.skill_manager = _get_singleton_manager()
         available_tools = self.skill_manager.list_available()
         self.planner = Planner(self.inference, available_tools)
         logger.bind(

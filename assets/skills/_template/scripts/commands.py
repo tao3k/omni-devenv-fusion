@@ -20,37 +20,35 @@ from agent.skills.decorators import skill_script
 @skill_script(
     name="example",
     category="read",
-    description="Example command with parameter",
-)
-def example(param: str = "default") -> str:
-    """
-    Example command implementation.
+    description="""
+    Executes an example command with a single parameter.
 
     Args:
-        param: Description of the parameter
+        param: The parameter value to process. Defaults to `default`.
 
     Returns:
-        String result
-    """
+        A formatted string result with the parameter value.
+    """,
+)
+def example(param: str = "default") -> str:
     return f"Example: {param}"
 
 
 @skill_script(
     name="example_with_options",
     category="read",
-    description="Example with optional parameters",
-)
-def example_with_options(enabled: bool = True, value: int = 42) -> dict:
-    """
-    Example with optional parameters.
+    description="""
+    Executes an example command with optional boolean and integer parameters.
 
     Args:
-        enabled: Whether the feature is enabled
-        value: The value to use
+        enabled: Whether the feature is enabled. Defaults to `true`.
+        value: The numeric value to use. Defaults to `42`.
 
     Returns:
-        Dictionary with results
-    """
+        A dictionary containing the `enabled` and `value` results.
+    """,
+)
+def example_with_options(enabled: bool = True, value: int = 42) -> dict:
     return {
         "enabled": enabled,
         "value": value,
@@ -60,19 +58,20 @@ def example_with_options(enabled: bool = True, value: int = 42) -> dict:
 @skill_script(
     name="process_data",
     category="write",
-    description="Process a list of data strings",
-)
-def process_data(data: list[str], filter_empty: bool = True) -> list[str]:
-    """
-    Process a list of data strings.
+    description="""
+    Processes a list of data strings by optionally filtering out empty entries.
 
     Args:
-        data: Input data strings
-        filter_empty: Whether to remove empty strings
+        data: The list of input data strings to process.
+        filter_empty: Whether to remove empty strings from the result.
+                      Defaults to `true`.
 
     Returns:
-        Processed data list
-    """
+        The processed list of data strings with empty entries removed if
+        `filter_empty` is `true`.
+    """,
+)
+def process_data(data: list[str], filter_empty: bool = True) -> list[str]:
     if filter_empty:
         return [item for item in data if item.strip()]
     return data

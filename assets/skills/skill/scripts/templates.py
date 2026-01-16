@@ -6,20 +6,12 @@ Implements cascading template loading with "User Overrides > Skill Defaults" pat
 Template Locations:
     User Overrides: assets/templates/{skill}/
     Skill Defaults: assets/skills/{skill}/templates/
-
-Usage:
-    from agent.skills.skill.scripts import templates
-
-    # List templates for a skill
-    result = templates.list_templates("git")
-
-    # Eject a template to user directory
-    result = templates.eject_template("git", "commit_message.j2")
 """
 
 from pathlib import Path
 from typing import Dict, Optional
 
+from agent.skills.decorators import skill_script
 from common.skills_path import SKILLS_DIR
 from common.config.settings import get_setting
 from common.gitops import get_project_root
@@ -34,12 +26,10 @@ def get_template_dirs(skill_name: str) -> Dict[str, Path]:
     """
     project_root = get_project_root()
 
-    # User override directory
     templates_config = get_setting("assets.templates_dir", "assets/templates")
     user_templates_root = project_root / templates_config
     user_skill_templates = user_skill_templates = user_templates_root / skill_name
 
-    # Skill default directory
     skill_templates_dir = SKILLS_DIR(skill_name, path="templates")
 
     return {
@@ -48,28 +38,33 @@ def get_template_dirs(skill_name: str) -> Dict[str, Path]:
     }
 
 
-def list_templates(skill_name: str) -> Dict[str, Dict[str, str]]:
-    """
-    List all available templates for a skill.
+@skill_script(
+    name="list_templates",
+    category="read",
+    description="""
+    Lists all available templates for a skill with their sources.
+
+    Templates follow the cascading pattern: User Overrides > Skill Defaults.
 
     Args:
-        skill_name: Name of the skill (e.g., "git", "docker")
+        skill_name: Name of the skill (e.g., `git`, `docker`).
 
     Returns:
-        Dict mapping template_name -> {"source": "user|skill", "path": absolute_path}
-    """
+        Dictionary mapping template names to their source (`user` or `skill`)
+        and absolute file paths.
+    """,
+)
+def list_templates(skill_name: str) -> Dict[str, Dict[str, str]]:
     dirs = get_template_dirs(skill_name)
     user_dir = dirs["user"]
     skill_dir = dirs["skill"]
 
     all_templates = {}
 
-    # Skill defaults
     if skill_dir.exists():
         for f in skill_dir.glob("*.j2"):
             all_templates[f.name] = {"source": "skill", "path": str(f)}
 
-    # User overrides (override skill defaults)
     if user_dir.exists():
         for f in user_dir.glob("*.j2"):
             all_templates[f.name] = {"source": "user", "path": str(f)}
@@ -77,32 +72,41 @@ def list_templates(skill_name: str) -> Dict[str, Dict[str, str]]:
     return all_templates
 
 
-def get_template_info(skill_name: str, template_name: str) -> Optional[Dict[str, str]]:
-    """
-    Get information about a specific template.
+@skill_script(
+    name="get_template_info",
+    category="read",
+    description="""
+    Gets information about a specific template.
 
     Args:
-        skill_name: Name of the skill
-        template_name: Template filename (e.g., "commit_message.j2")
+        skill_name: Name of the skill.
+        template_name: Template filename (e.g., `commit_message.j2`).
 
     Returns:
-        Dict with source, path, or None if not found
-    """
+        Dictionary with `source` (`user` or `skill`), `path`,
+        or `None` if not found.
+    """,
+)
+def get_template_info(skill_name: str, template_name: str) -> Optional[Dict[str, str]]:
     templates = list_templates(skill_name)
     return templates.get(template_name)
 
 
-def get_template_source(skill_name: str, template_name: str) -> Optional[str]:
-    """
-    Get the source code of a template.
+@skill_script(
+    name="get_template_source",
+    category="read",
+    description="""
+    Gets the source code content of a template.
 
     Args:
-        skill_name: Name of the skill
-        template_name: Template filename
+        skill_name: Name of the skill.
+        template_name: Template filename.
 
     Returns:
-        Template content or None if not found
-    """
+        Template file content as string, or `None` if not found.
+    """,
+)
+def get_template_source(skill_name: str, template_name: str) -> Optional[str]:
     info = get_template_info(skill_name, template_name)
     if info and info.get("path"):
         path = Path(info["path"])
@@ -111,26 +115,35 @@ def get_template_source(skill_name: str, template_name: str) -> Optional[str]:
     return None
 
 
-def eject_template(skill_name: str, template_name: str) -> Dict[str, str]:
-    """
-    Copy a skill default template to user directory.
+@skill_script(
+    name="eject_template",
+    category="write",
+    description="""
+    Copies a skill default template to the user directory for customization.
+
+    Creates a user override that takes precedence over skill defaults.
 
     Args:
-        skill_name: Name of the skill
-        template_name: Template filename (e.g., "commit_message.j2")
+        skill_name: Name of the skill.
+        template_name: Template filename (e.g., `commit_message.j2`).
+                      The `.j2` extension is added automatically if missing.
 
     Returns:
-        Dict with status, message, and path
-    """
+        Dictionary with `status` (`success`, `already_exists`, `not_found`),
+        `message`, `source` path, and destination `path`.
+
+    Example:
+        @omni("skill.eject_template", {"skill_name": "git", "template_name": "commit_message"})
+    """,
+)
+def eject_template(skill_name: str, template_name: str) -> Dict[str, str]:
     dirs = get_template_dirs(skill_name)
     user_dir = dirs["user"]
     skill_dir = dirs["skill"]
 
-    # Ensure .j2 extension
     if not template_name.endswith(".j2"):
         template_name += ".j2"
 
-    # Check if already overridden
     user_path = user_dir / template_name
     if user_path.exists():
         return {
@@ -139,7 +152,6 @@ def eject_template(skill_name: str, template_name: str) -> Dict[str, str]:
             "path": str(user_path),
         }
 
-    # Find source
     skill_path = skill_dir / template_name
     if not skill_path.exists():
         return {
@@ -148,7 +160,6 @@ def eject_template(skill_name: str, template_name: str) -> Dict[str, str]:
             "path": None,
         }
 
-    # Create user directory and copy
     user_dir.mkdir(parents=True, exist_ok=True)
     content = skill_path.read_text()
     user_path.write_text(content)
@@ -175,10 +186,10 @@ def format_template_list(skill_name: str) -> str:
     dirs = get_template_dirs(skill_name)
 
     if not templates:
-        return f"📭 **No templates found** for skill '{skill_name}'"
+        return f"No templates found for skill '{skill_name}'"
 
     lines = [
-        f"# 📄 Skill Templates: {skill_name}",
+        f"# Skill Templates: {skill_name}",
         "",
         "**Cascading Pattern**: User Overrides > Skill Defaults",
         "",
@@ -188,17 +199,16 @@ def format_template_list(skill_name: str) -> str:
 
     for name in sorted(templates.keys()):
         info = templates[name]
-        source_emoji = "🟢" if info["source"] == "user" else "⚪"
-        source_label = "User Override" if info["source"] == "user" else "Skill Default"
-        lines.append(f"{source_emoji} `{name}` ({source_label})")
+        source_emoji = "user" if info["source"] == "user" else "skill"
+        lines.append(f"- `{name}` ({source_emoji})")
 
     lines.extend(
         [
             "",
             "## Template Locations",
             "",
-            f"**User Overrides**: `{dirs['user']}`",
-            f"**Skill Defaults**: `{dirs['skill']}`",
+            f"User Overrides: `{dirs['user']}`",
+            f"Skill Defaults: `{dirs['skill']}`",
         ]
     )
 
@@ -221,11 +231,11 @@ def format_eject_result(skill_name: str, template_name: str) -> str:
     if result["status"] == "success":
         return "\n".join(
             [
-                f"# ✅ Template Ejected",
+                f"# Template Ejected",
                 "",
-                f"**Template**: `{template_name}`",
-                f"**Source**: Skill Default",
-                f"**Location**: `{result['path']}`",
+                f"Template: `{template_name}`",
+                f"Source: Skill Default",
+                f"Location: `{result['path']}`",
                 "",
                 "## Next Steps",
                 "",
@@ -233,13 +243,13 @@ def format_eject_result(skill_name: str, template_name: str) -> str:
                 "2. Test changes",
                 "3. Commit with `/commit`",
                 "",
-                "💡 User templates override skill defaults automatically.",
+                "User templates override skill defaults automatically.",
             ]
         )
     elif result["status"] == "already_exists":
-        return f"# ℹ️ Already Overridden\n\n{result['message']}"
+        return f"Already Overridden\n\n{result['message']}"
     else:
-        return f"# ❌ Not Found\n\n{result['message']}"
+        return f"Not Found\n\n{result['message']}"
 
 
 def format_info_result(skill_name: str, template_name: str) -> str:
@@ -256,17 +266,17 @@ def format_info_result(skill_name: str, template_name: str) -> str:
     info = get_template_info(skill_name, template_name)
 
     if not info:
-        return f"# ❌ Not Found\n\nTemplate `{template_name}` not found for skill `{skill_name}`"
+        return f"Template `{template_name}` not found for skill `{skill_name}`"
 
     content = get_template_source(skill_name, template_name)
     preview = content[:500] + "..." if content and len(content) > 500 else content or ""
 
     return "\n".join(
         [
-            f"# 📄 Template: {template_name}",
+            f"# Template: {template_name}",
             "",
-            f"**Source**: {info['source'].title()}",
-            f"**Path**: `{info['path']}`",
+            f"Source: {info['source'].title()}",
+            f"Path: `{info['path']}`",
             "",
             "## Content Preview",
             "",

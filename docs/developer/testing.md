@@ -203,12 +203,12 @@ def test_git_init(git):
 
 ### Fixture Names
 
-| Fixture Name         | Skill Module                      | Description           |
-| -------------------- | --------------------------------- | --------------------- |
-| `git`                | `agent.skills.git`                | Git operations skill  |
-| `filesystem`         | `agent.skills.filesystem`         | File I/O skill        |
-| `knowledge`          | `agent.skills.knowledge`          | RAG knowledge skill   |
-| `structural_editing` | `agent.skills.structural_editing` | AST refactoring skill |
+| Fixture Name | Skill Module              | Description                                  |
+| ------------ | ------------------------- | -------------------------------------------- |
+| `git`        | `agent.skills.git`        | Git operations skill                         |
+| `filesystem` | `agent.skills.filesystem` | File I/O skill                               |
+| `knowledge`  | `agent.skills.knowledge`  | RAG knowledge skill                          |
+| `code_tools` | `agent.skills.code_tools` | Code search, analysis, and refactoring skill |
 
 ### Reserved Fixture Names
 
@@ -433,7 +433,7 @@ uv run pytest assets/skills/*/tests/ --cov=agent.skills
 Place test data in the skill's `tests/test_data/` directory:
 
 ```
-assets/skills/structural_editing/
+assets/skills/code_tools/
 ├── scripts/
 ├── tests/
 │   ├── test_structural_editing.py

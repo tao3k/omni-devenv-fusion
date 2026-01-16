@@ -17,8 +17,25 @@ from common.prj_dirs import PRJ_DATA
 
 @skill_script(
     name="update_knowledge_base",
-    description="Save extracted knowledge to the knowledge base for future retrieval",
     category="write",
+    description="""
+    Saves extracted knowledge to the knowledge base for future retrieval.
+
+    Stores knowledge in PRJ_DATA/knowledge/harvested/ for runtime persistence.
+
+    Args:
+        category: Knowledge category (`patterns`, `solutions`, `errors`,
+                  `techniques`, `notes`).
+        title: Title of the knowledge entry.
+        content: Markdown content of the knowledge.
+        tags: Optional tags for categorization.
+
+    Returns:
+        Dict with success status, path to saved file, category, and title.
+
+    Example:
+        @omni("note_taker.update_knowledge_base", {"category": "patterns", "title": "Fix pattern", "content": "...", "tags": ["fix", "pattern"]})
+    """,
 )
 def update_knowledge_base(
     category: str,
@@ -26,33 +43,18 @@ def update_knowledge_base(
     content: str,
     tags: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Save knowledge entry to the knowledge base.
-
-    Args:
-        category: Knowledge category (patterns, solutions, errors, techniques)
-        title: Title of the knowledge entry
-        content: Markdown content of the knowledge
-        tags: Optional tags for categorization
-
-    Returns:
-        Dict with success status and path to saved file
-    """
-    # Normalize category
     category = category.lower().strip()
     valid_categories = ["patterns", "solutions", "errors", "techniques", "notes"]
     if category not in valid_categories:
         category = "notes"
 
-    # Ensure knowledge directory exists (using PRJ_DATA for runtime data)
     knowledge_dir = PRJ_DATA("knowledge", "harvested", category)
     knowledge_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create filename from title
     filename = re.sub(r"[^\w\-]", "_", title.lower())[:50]
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     filename = f"{timestamp}_{filename}.md"
 
-    # Generate markdown with frontmatter
     timestamp_full = datetime.now(timezone.utc).isoformat()
 
     markdown = f"""---
@@ -67,11 +69,9 @@ created: {timestamp_full}
 {content}
 """
 
-    # Write to file
     output_path = knowledge_dir / filename
     output_path.write_text(markdown)
 
-    # Update index
     _update_index(category, title, tags or [], str(output_path))
 
     return {
@@ -84,28 +84,28 @@ created: {timestamp_full}
 
 @skill_script(
     name="search_notes",
-    description="Search existing notes and knowledge entries",
     category="read",
+    description="""
+    Searches existing notes and knowledge entries.
+
+    Args:
+        query: Search query string.
+        category: Optional category filter (`patterns`, `solutions`, etc.).
+        limit: Maximum number of results. Defaults to `10`.
+
+    Returns:
+        Dict with success status, query, count, and list of results.
+        Each result includes category, title, path, tags, and content snippet.
+    """,
 )
 def search_notes(
     query: str,
     category: str | None = None,
     limit: int = 10,
 ) -> dict[str, Any]:
-    """Search notes and knowledge entries.
-
-    Args:
-        query: Search query string
-        category: Optional category filter
-        limit: Maximum number of results
-
-    Returns:
-        Dict with search results
-    """
     results = []
     query_lower = query.lower()
 
-    # Determine which categories to search
     if category:
         categories = [category.lower()]
     else:
@@ -120,7 +120,6 @@ def search_notes(
             try:
                 content = md_file.read_text().lower()
                 if query_lower in content:
-                    # Extract title from frontmatter
                     frontmatter = _parse_frontmatter(md_file.read_text())
                     title = frontmatter.get("title", md_file.stem)
 
@@ -152,13 +151,11 @@ def _update_index(category: str, title: str, tags: list[str], path: str) -> None
 
     index_file = index_dir / f"{category}.json"
 
-    # Load existing index or create new
     if index_file.exists():
         index = json.loads(index_file.read_text())
     else:
         index = {"entries": []}
 
-    # Add new entry
     entry = {
         "title": title,
         "tags": tags,
@@ -167,7 +164,6 @@ def _update_index(category: str, title: str, tags: list[str], path: str) -> None
     }
     index["entries"].append(entry)
 
-    # Write updated index
     index_file.write_text(json.dumps(index, indent=2))
 
 
@@ -176,18 +172,15 @@ def _parse_frontmatter(content: str) -> dict[str, Any]:
     frontmatter = {}
 
     if content.startswith("---"):
-        # Extract frontmatter block
         end_marker = content.find("---", 3)
         if end_marker != -1:
             yaml_content = content[3:end_marker].strip()
-            # Simple YAML parsing for basic key-value pairs
             for line in yaml_content.split("\n"):
                 if ":" in line:
                     key, value = line.split(":", 1)
                     key = key.strip()
                     value = value.strip()
 
-                    # Handle list values
                     if value.startswith("[") and value.endswith("]"):
                         value = value[1:-1].replace('"', "").split(",")
                         value = [v.strip().strip("'\"") for v in value if v.strip()]
@@ -216,7 +209,6 @@ def _get_snippet(content: str, query: str, context_chars: int = 100) -> str:
 
 
 if __name__ == "__main__":
-    # Test execution
     result = update_knowledge_base(
         category="patterns",
         title="Test Pattern",

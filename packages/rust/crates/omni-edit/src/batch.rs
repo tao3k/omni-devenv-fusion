@@ -6,13 +6,13 @@
 //! and ignore for maximum performance. Python sends one command, Rust
 //! processes thousands of files concurrently.
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::collections::HashMap;
 
-use rayon::prelude::*;
 use dashmap::DashMap;
 use omni_ast::AstLanguage;
+use rayon::prelude::*;
 
 use crate::StructuralEditor;
 
@@ -165,7 +165,10 @@ impl StructuralEditor {
 
                         if !config.dry_run {
                             if let Err(e) = std::fs::write(&path, &result.modified) {
-                                errors.insert(path.display().to_string(), format!("Write error: {}", e));
+                                errors.insert(
+                                    path.display().to_string(),
+                                    format!("Write error: {}", e),
+                                );
                             }
                         }
                     }
@@ -190,7 +193,10 @@ impl StructuralEditor {
 /// Check if a path matches a glob pattern (simplified implementation).
 fn matches_glob(path: &Path, pattern: &str) -> bool {
     let path_str = path.to_string_lossy();
-    let file_name = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default();
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy())
+        .unwrap_or_default();
 
     if pattern.starts_with("**/*") {
         let suffix = pattern.trim_start_matches("**/*");

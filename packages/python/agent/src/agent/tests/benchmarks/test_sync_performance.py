@@ -36,7 +36,7 @@ class TestSyncPerformance:
                 existing = json.loads(existing_json)
                 if existing:
                     paths = list(existing.keys())
-                    store.delete_by_file_path(paths, "skills")
+                    store.delete_by_file_path("skills", paths)
 
         yield vector_memory
 

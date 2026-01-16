@@ -60,21 +60,30 @@ Use git_commit in git skill instead.
 @skill_script(
     name="run_task",
     category="workflow",
-    description="Run safe development tasks (just, nix, git) with FLIGHT RECORDER.",
+    description="""
+    Runs safe development tasks (just, nix, git) with FLIGHT RECORDER.
+
+    FLIGHT RECORDER captures command execution for debugging and audit trails.
+
+    Args:
+        command: The command to run (e.g., `git`, `just`, `nix`).
+        args: Optional list of arguments. Defaults to empty list.
+              Can also be a single string like `"status"` which gets parsed.
+        inject_root: Auto-inject project root directory.
+
+    Returns:
+        Command output with execution status and timing.
+
+    Example:
+        @omni("terminal.run_task", {"command": "git", "args": ["status"]})
+        @omni("terminal.run_task", {"command": "just validate"})
+    """,
     inject_root=True,
 )
 async def run_task(command: str, args: Optional[list[str]] = None, **kwargs) -> str:
-    """
-    Run safe development tasks (just, nix, git) with FLIGHT RECORDER.
-
-    Usage:
-    - run_task(command="git", args=["status"])
-    - run_task(command="git status")
-    """
     if args is None:
         args = []
 
-    # Handle args=["git status"] case - legacy format
     if (
         args
         and isinstance(args, list)
@@ -85,7 +94,6 @@ async def run_task(command: str, args: Optional[list[str]] = None, **kwargs) -> 
         parts = args[0].split()
         command = parts[0]
         args = parts[1:]
-    # Always parse command string if it contains spaces
     elif " " in command:
         parts = command.split()
         command = parts[0]
@@ -93,12 +101,10 @@ async def run_task(command: str, args: Optional[list[str]] = None, **kwargs) -> 
         if extra_args:
             args = extra_args + args
 
-    # Check git commit block
     blocked, msg = _is_git_commit_blocked(command, args)
     if blocked:
         return msg
 
-    # Import from controller layer
     from agent.skills.terminal.scripts import engine
 
     result = engine.run_command(command, args, timeout=60)
@@ -108,12 +114,21 @@ async def run_task(command: str, args: Optional[list[str]] = None, **kwargs) -> 
 @skill_script(
     name="analyze_last_error",
     category="view",
-    description="Analyze the last failed command in Flight Recorder.",
+    description="""
+    [Debug Tool] Analyzes the last failed command in Flight Recorder.
+
+    Reads crash logs from SCRATCHPAD.md and provides analysis context
+    for debugging purposes.
+
+    Args:
+        None
+
+    Returns:
+        Formatted log analysis with error message, file/line number,
+        and suggested fix.
+    """,
 )
 async def analyze_last_error() -> str:
-    """
-    [Debug Tool] Deeply analyzes the LAST failed command in the Flight Recorder.
-    """
     try:
         from common.mcp_core.memory import ProjectMemory
 
@@ -145,31 +160,48 @@ Please analyze it to find:
 @skill_script(
     name="inspect_environment",
     category="read",
-    description="Check the current execution environment.",
+    description="""
+    Checks the current execution environment.
+
+    Returns system information including OS and current working directory.
+
+    Args:
+        None
+
+    Returns:
+        Formatted string with OS type and CWD.
+    """,
 )
 async def inspect_environment() -> str:
-    """Check the current execution environment."""
     return f"OS: {platform.system()}, CWD: {os.getcwd()}"
 
 
 @skill_script(
     name="run_command",
     category="workflow",
-    description="Run a shell command and return output.",
+    description="""
+    Runs a shell command and returns stdout/stderr.
+
+    Use this for general-purpose command execution.
+
+    Args:
+        command: The command to execute (e.g., `ls`, `cat`, `echo`).
+        args: Optional list of arguments. Can be a single string.
+        timeout: Command timeout in seconds. Defaults to `60`.
+
+    Returns:
+        Command stdout and stderr output.
+
+    Example:
+        @omni("terminal.run_command", {"command": "git", "args": ["status"]})
+        @omni("terminal.run_command", {"command": "ls -la"})
+    """,
     inject_root=True,
 )
 async def run_command(command: str, args: Optional[list[str]] = None, timeout: int = 60) -> str:
-    """
-    Run a shell command and return stdout/stderr.
-
-    Usage:
-    - run_command(command="git", args=["status"])
-    - run_command(command="git status")
-    """
     if args is None:
         args = []
 
-    # Handle command string with args like "git status"
     if " " in command:
         parts = command.split()
         command = parts[0]
@@ -177,7 +209,6 @@ async def run_command(command: str, args: Optional[list[str]] = None, timeout: i
         if extra_args:
             args = extra_args + args
 
-    # Import from controller layer
     from agent.skills.terminal.scripts import engine
 
     result = engine.run_command(command, args, timeout=timeout)

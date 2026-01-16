@@ -2,7 +2,7 @@
 //!
 //! Handles both single captures ($NAME) and variadic captures ($$$ARGS).
 
-use omni_ast::{MetaVariable, Doc};
+use omni_ast::{Doc, MetaVariable};
 
 /// Substitute captured variables into replacement text.
 ///

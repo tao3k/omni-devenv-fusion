@@ -26,7 +26,10 @@ use crate::error::IoError;
 ///
 /// let content = read_text_safe_async("README.md", 1024 * 1024).await?;
 /// ```
-pub async fn read_text_safe_async<P: AsRef<Path>>(path: P, max_bytes: u64) -> Result<String, IoError> {
+pub async fn read_text_safe_async<P: AsRef<Path>>(
+    path: P,
+    max_bytes: u64,
+) -> Result<String, IoError> {
     let path = path.as_ref();
 
     let metadata = tokio_fs::metadata(path)

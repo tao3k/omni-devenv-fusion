@@ -13,7 +13,7 @@ from agent.core.orchestrator.builder import DynamicGraphBuilder
 
 builder = DynamicGraphBuilder(skill_manager)
 builder.add_skill_node("fetch", "filesystem", "read_file", {"path": "main.py"})
-builder.add_skill_node("analyze", "code_insight", "analyze")
+builder.add_skill_node("analyze", "code_tools", "find_tools")
 builder.add_sequence("fetch", "analyze")
 graph = builder.compile()
 ```

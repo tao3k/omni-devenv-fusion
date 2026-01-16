@@ -20,9 +20,61 @@ assets/skills/{skill_name}/
 ├── scripts/           # Commands (@skill_script decorated functions)
 │   ├── __init__.py    # Dynamic module loader (importlib.util)
 │   └── commands.py    # All skill commands
+├── README.md          # Human-readable documentation
+├── templates/         # Jinja2 templates (cascading pattern)
 ├── references/        # Additional documentation
 └── tests/             # Test files
 ```
+
+## Pure MCP Server
+
+Omni uses **pure `mcp.server.Server`** instead of FastMCP for better control and performance:
+
+```python
+# mcp_server.py - Pure MCP Server (no FastMCP)
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+
+server = Server("omni-agent")
+
+@server.list_tools()
+async def list_tools(): ...
+
+@server.call_tool()
+async def call_tool(name, arguments): ...
+```
+
+**Benefits:**
+
+- Direct control over tool listing/execution
+- Explicit error handling for TaskGroup
+- Optional uvloop (SSE mode) + orjson for performance
+- No FastMCP dependency overhead
+
+## Cascading Templates
+
+Skills support **cascading template loading** with "User Overrides > Skill Defaults" pattern:
+
+```
+assets/skills/git/                    # Skill Directory
+├── templates/                         # Skill defaults (Fallback)
+│   ├── commit_message.j2
+│   ├── workflow_result.j2
+│   └── error_message.j2
+└── scripts/
+    ├── __init__.py                   # Package marker (required!)
+    └── commands.py                    # @skill_script decorated commands
+
+assets/templates/                      # User overrides (Priority)
+└── git/
+    ├── commit_message.j2              # Overrides skill default
+    └── workflow_result.j2
+```
+
+**Template Resolution Order:**
+
+1. `assets/templates/{skill}/` - User customizations (highest priority)
+2. `assets/skills/{skill}/templates/` - Skill defaults (fallback)
 
 ## Creating a New Skill
 
@@ -78,6 +130,33 @@ async def command_name(param: str) -> str:
 
 Skills are automatically reloaded when `scripts/commands.py` is modified. Mtime checks are throttled to once per 100ms.
 
+## Skill Metadata (SKILL.md)
+
+Each skill has a `SKILL.md` with YAML frontmatter for system integration:
+
+```yaml
+---
+name: "git"
+version: "2.0.0"
+description: "Git integration with LangGraph workflow support"
+routing_keywords: ["git", "commit", "push", "branch"]
+intents: ["hotfix", "pr", "commit", "status"]
+authors: ["omni-dev-fusion"]
+---
+
+# Git Skill
+
+> **Code is Mechanism, Prompt is Policy**
+
+## Available Commands
+
+| Command         | Description                              |
+| --------------- | ---------------------------------------- |
+| `git.status`    | Show working tree status                 |
+| `git.commit`    | Commit staged changes                    |
+| `git.smart_commit` | Smart Commit workflow (human-in-loop) |
+```
+
 ## Example Skills
 
 | Skill                                           | Features                          |
@@ -89,5 +168,6 @@ Skills are automatically reloaded when `scripts/commands.py` is modified. Mtime 
 
 ## Related Documentation
 
-- [Skills Documentation](../../docs/skills.md) - Comprehensive skills guide
+- [Skill Standard](../../docs/human/architecture/skill-standard.md) - Living Skill Architecture
+- [Skill Lifecycle](../../docs/human/architecture/skill-lifecycle.md) - LangGraph workflow support
 - [Trinity Architecture](../../docs/explanation/trinity-architecture.md) - Technical deep dive

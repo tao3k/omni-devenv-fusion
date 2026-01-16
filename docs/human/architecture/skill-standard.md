@@ -217,6 +217,7 @@ For skills using old structure (`manifest.json`, `tools.py`, `prompts.md`):
 
 ## Related Documentation
 
-- [Skills Documentation](../../docs/skills.md)
+- [Skills Architecture](skills-architecture.md) - Complete skills guide (start here)
+- [Skill Lifecycle](skill-lifecycle.md) - LangGraph workflow support
 - [Trinity Architecture](trinity-core.md)
 - [System Context](../../llm/system_context.xml)

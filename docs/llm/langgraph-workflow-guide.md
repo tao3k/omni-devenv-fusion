@@ -27,7 +27,7 @@ builder = DynamicGraphBuilder(skill_manager)
 # Each step builds on the previous
 builder.add_skill_node("fetch", "filesystem", "read_file")
 builder.add_skill_node("parse", "parser", "parse_code")
-builder.add_skill_node("analyze", "code_insight", "analyze")
+builder.add_skill_node("analyze", "code_tools", "find_tools")
 builder.add_skill_node("report", "writer", "write_report")
 
 builder.add_sequence("fetch", "parse", "analyze", "report")
@@ -106,7 +106,7 @@ def spawn_analysis(state):
     ]
 
 builder.add_skill_node("list_files", "filesystem", "list_files")
-builder.add_skill_node("analyze_file", "code_insight", "analyze")
+builder.add_skill_node("analyze_file", "code_tools", "find_tools")
 builder.add_function_node("aggregate", aggregate_results)
 
 builder.add_send_branch("list_files", ["analyze_file"], spawn_analysis)

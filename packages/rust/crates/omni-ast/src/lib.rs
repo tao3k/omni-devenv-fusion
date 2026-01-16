@@ -28,11 +28,11 @@
 // Module Declarations
 // ============================================================================
 
-mod re_exports;
-mod lang;
 mod item;
-mod scan;
+mod lang;
 mod python;
+mod re_exports;
+mod scan;
 
 // ============================================================================
 // Re-exports (for backwards compatibility)
@@ -48,15 +48,11 @@ pub use lang::Lang;
 pub use item::Match;
 
 // Scan functions (both direct and re-exported from scan module)
-pub use scan::{pattern, scan, extract};
+pub use scan::{extract, pattern, scan};
 
 // Python utilities
 pub use python::{
+    extract_docstring_from_match, extract_python_docstring, find_python_async_functions,
+    find_python_classes, find_python_decorated_by_any, find_python_decorated_functions,
     find_python_functions,
-    find_python_async_functions,
-    find_python_classes,
-    find_python_decorated_functions,
-    find_python_decorated_by_any,
-    extract_python_docstring,
-    extract_docstring_from_match,
 };

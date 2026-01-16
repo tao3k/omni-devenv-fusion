@@ -2,6 +2,16 @@
 
 > **Core Philosophy**: "Everything is a Skill" - The Executor is no longer a code module, but a logical role played by atomic skills.
 
+## Architecture Evolution Timeline
+
+| Phase  | Architecture              | Key Innovation                              | Status  |
+| ------ | ------------------------- | ------------------------------------------- | ------- |
+| **25** | Trinity v1.0              | `@omni("skill.command")` single entry point | Legacy  |
+| **29** | Trinity + Protocols       | Protocol-based modular registry             | Legacy  |
+| **35** | Trinity + Sidecar         | Heavy dependency isolation                  | Active  |
+| **36** | Trinity v2.0              | Swarm Engine, Hot Reload                    | Current |
+| **67** | Trinity + Adaptive Loader | JIT loading, Ghost Tools, LRU               | Active  |
+
 ## Quick Reference
 
 | Component        | Purpose                                    |
@@ -82,9 +92,8 @@ The Trinity Architecture unifies three critical concerns through a **Skill-Centr
 
 **Implementation**:
 
-- `skills/filesystem` - File I/O, grep search, AST operations (consolidated from file_ops)
-- `skills/structural_editing` - AST-based refactoring with dry-run
-- `skills/code_insight` - AST analysis, code structure
+- `skills/filesystem` - File I/O operations
+- `skills/code_tools` - Code search, analysis, and refactoring (AST-based)
 
 **Usage**: `@omni("filesystem.read_file", {"path": "README.md"})`
 

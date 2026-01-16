@@ -3,7 +3,6 @@ assets/skills/knowledge/scripts/search_docs.py
 Phase 70: The Knowledge Matrix - Project Knowledge Search Tool
 
 Provides semantic + keyword search over project documentation.
-[Omni-Dev 1.0] Added safety check for missing knowledge table.
 """
 
 from __future__ import annotations
@@ -14,25 +13,37 @@ from agent.skills.decorators import skill_script
 
 @skill_script(
     name="search_project_knowledge",
-    description="[Knowledge RAG] Search project documentation, specs, and guides using hybrid search. Use this for architecture, conventions, and how-to guides.",
     category="knowledge",
+    description="""
+    [Knowledge RAG] Searches project documentation, specs, and guides using hybrid search.
+
+    Use this for architecture, conventions, and how-to guides.
+    Combines semantic similarity with keyword boosting.
+
+    Args:
+        query: Natural language query (e.g., "coding standards", "git workflow").
+        limit: Maximum results to return. Defaults to `5`. Maximum: `10`.
+        keywords: Optional list of keywords to boost relevance.
+                  Example: `["python", "style"]`
+
+    Returns:
+        JSON string with results or advice if table missing.
+        Includes `content`, `preview`, `doc_path`, `title`, `section`, `score`.
+
+    Example:
+        @omni("knowledge.search_project_knowledge", {"query": "coding standards", "limit": 5})
+    """,
 )
 async def search_project_knowledge(
     query: str,
     limit: int = 5,
     keywords: list[str] | None = None,
 ) -> str:
-    """
-    Search the project knowledge base for relevant documentation.
-
-    Returns: JSON string with results or advice if table missing.
-    """
-    # [FIX] Force convert limit to int, prevent TypeError caused by LLM passing string
     try:
         limit = int(limit)
     except (ValueError, TypeError):
         limit = 5
-    limit = min(max(1, limit), 10)  # Clamp between 1 and 10
+    limit = min(max(1, limit), 10)
     keywords = keywords or []
 
     from agent.core.vector_store import get_vector_memory
@@ -40,7 +51,6 @@ async def search_project_knowledge(
     vm = get_vector_memory()
 
     try:
-        # Perform hybrid search on knowledge table
         results = await vm.search_knowledge_hybrid(
             query=query,
             keywords=keywords,
@@ -59,7 +69,6 @@ async def search_project_knowledge(
                 indent=2,
             )
 
-        # Format results for display
         formatted_results = []
         for r in results:
             formatted_results.append(
@@ -84,7 +93,6 @@ async def search_project_knowledge(
 
     except Exception as e:
         error_msg = str(e)
-        # [FIX] Handle missing table gracefully
         if "Table not found" in error_msg or "knowledge" in error_msg.lower():
             return json.dumps(
                 {

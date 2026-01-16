@@ -25,11 +25,19 @@ PROJECT_ROOT = get_project_root()
 from agent.core.skill_manager import SkillManager, Skill
 
 
+def _reset_singleton():
+    """Reset SkillManager singleton for test isolation."""
+    import agent.core.skill_manager.manager as manager_module
+
+    manager_module._instance = None
+
+
 class TestShimPatternManifest(unittest.TestCase):
     """Test manifest loading and execution mode detection."""
 
     def setUp(self):
         """Create a temporary skill directory with SKILL.md."""
+        _reset_singleton()  # Reset singleton before each test
         self.temp_dir = tempfile.mkdtemp()
         self.skill_dir = Path(self.temp_dir) / "test_skill"
         self.skill_dir.mkdir()
@@ -39,6 +47,7 @@ class TestShimPatternManifest(unittest.TestCase):
         import shutil
 
         shutil.rmtree(self.temp_dir, ignore_errors=True)
+        _reset_singleton()  # Reset singleton after each test
 
     def test_load_manifest_library_mode(self):
         """Test loading manifest with library execution mode."""
@@ -110,6 +119,7 @@ class TestShimPatternSubprocessExecution(unittest.TestCase):
 
     def setUp(self):
         """Create a temporary skill directory with implementation."""
+        _reset_singleton()  # Reset singleton before each test
         self.temp_dir = tempfile.mkdtemp()
         self.skill_dir = Path(self.temp_dir) / "test_skill"
         self.skill_dir.mkdir()
@@ -130,6 +140,7 @@ entry_point: "implementation.py"
         import shutil
 
         shutil.rmtree(self.temp_dir, ignore_errors=True)
+        _reset_singleton()  # Reset singleton after each test
 
     def test_execute_subprocess_missing_manifest(self):
         """Test subprocess execution when manifest is missing."""
@@ -228,6 +239,7 @@ class TestShimPatternToolsShim(unittest.TestCase):
 
     def setUp(self):
         """Create a temporary skill directory."""
+        _reset_singleton()  # Reset singleton before each test
         self.temp_dir = tempfile.mkdtemp()
         self.skill_dir = Path(self.temp_dir) / "shim_skill"
         self.skill_dir.mkdir()
@@ -237,6 +249,7 @@ class TestShimPatternToolsShim(unittest.TestCase):
         import shutil
 
         shutil.rmtree(self.temp_dir, ignore_errors=True)
+        _reset_singleton()  # Reset singleton after each test
 
     def test_run_isolated_missing_venv(self):
         """Test _run_isolated when venv doesn't exist."""
@@ -326,6 +339,7 @@ class TestSkillManagerExecutionMode(unittest.TestCase):
 
     def setUp(self):
         """Create a temporary skill directory."""
+        _reset_singleton()  # Reset singleton before each test
         self.temp_dir = tempfile.mkdtemp()
         self.skill_dir = Path(self.temp_dir) / "test_skill"
         self.skill_dir.mkdir()
@@ -343,6 +357,7 @@ def test_cmd():
         import shutil
 
         shutil.rmtree(self.temp_dir, ignore_errors=True)
+        _reset_singleton()  # Reset singleton after each test
 
     def test_skill_execution_mode_library(self):
         """Test skill with library mode."""

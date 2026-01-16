@@ -24,10 +24,14 @@ from .router import IntentRouter, get_intent_router
 # Import from main.py for backward compatibility
 from .main import clear_routing_cache
 
+# Import from cache.py
+from .cache import HiveMindCache
+
 __all__ = [
     "AgentRoute",
     "IntentRouter",
     "HiveRouter",
+    "HiveMindCache",
     "SemanticRouter",
     "SemanticCortex",
     "RoutingResult",

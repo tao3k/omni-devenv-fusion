@@ -142,7 +142,13 @@ impl EnvironmentSnapshot {
             "Clean".to_string()
         } else {
             let count = self.dirty_files.len();
-            let preview = self.dirty_files.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
+            let preview = self
+                .dirty_files
+                .iter()
+                .take(3)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ");
             if count > 3 {
                 format!("{count} files ({preview}, ...)")
             } else {

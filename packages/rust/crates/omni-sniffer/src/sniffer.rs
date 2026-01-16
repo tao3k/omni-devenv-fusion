@@ -5,9 +5,9 @@
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::context::scan_scratchpad_context;
 use crate::error::SnifferError;
 use crate::git::scan_git_status;
-use crate::context::scan_scratchpad_context;
 use omni_types::EnvironmentSnapshot;
 
 /// High-performance environment sniffer using libgit2.
@@ -43,12 +43,9 @@ impl OmniSniffer {
     /// Returns [`EnvironmentSnapshot`] containing all sensory data.
     #[must_use]
     pub fn get_snapshot(&self) -> EnvironmentSnapshot {
-        let (branch, modified, staged, dirty_files) = self.scan_git().unwrap_or_else(|_| (
-            "unavailable".to_string(),
-            0,
-            0,
-            vec![],
-        ));
+        let (branch, modified, staged, dirty_files) = self
+            .scan_git()
+            .unwrap_or_else(|_| ("unavailable".to_string(), 0, 0, vec![]));
 
         let context_lines = self.scan_context();
 

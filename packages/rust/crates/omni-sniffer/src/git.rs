@@ -9,22 +9,22 @@ use crate::error::SnifferError;
 /// Scan git repository status using libgit2.
 ///
 /// Returns tuple of (branch, modified_count, staged_count, dirty_files).
-pub fn scan_git_status(repo_path: &std::path::Path) -> Result<(String, usize, usize, Vec<String>), SnifferError> {
-    let repo = Repository::open(repo_path)
-        .map_err(|_| SnifferError::RepoOpen(repo_path.to_path_buf()))?;
+pub fn scan_git_status(
+    repo_path: &std::path::Path,
+) -> Result<(String, usize, usize, Vec<String>), SnifferError> {
+    let repo =
+        Repository::open(repo_path).map_err(|_| SnifferError::RepoOpen(repo_path.to_path_buf()))?;
 
     // 1. Get branch
     let head = repo.head().map_err(|_| SnifferError::NoHead)?;
-    let branch = head
-        .shorthand()
-        .unwrap_or("unknown")
-        .to_string();
+    let branch = head.shorthand().unwrap_or("unknown").to_string();
 
     // 2. Scan status
     let mut opts = StatusOptions::new();
     opts.include_untracked(true);
 
-    let statuses = repo.statuses(Some(&mut opts))
+    let statuses = repo
+        .statuses(Some(&mut opts))
         .map_err(|e| SnifferError::StatusScan(e.to_string()))?;
 
     let mut modified = 0;

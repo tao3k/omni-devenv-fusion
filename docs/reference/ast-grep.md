@@ -42,11 +42,14 @@ This isn't just efficiency—it's cognitive load management for the LLM.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      Code Navigation Skill                       │
-│  assets/skills/code_navigation/scripts/                          │
+│                        Code Tools Skill                           │
+│  assets/skills/code_tools/scripts/                               │
 │  - outline_file: Generate symbolic skeleton                      │
 │  - search_code: Pattern matching in single file                  │
 │  - search_directory: Recursive pattern search                    │
+│  - structural_replace: AST-based code replacement                │
+│  - structural_preview: Preview changes (dry-run)                 │
+│  - structural_apply: Apply changes to file                       │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -361,8 +364,8 @@ Directory search (158 Python files):
 | `packages/rust/crates/omni-tags/src/lib.rs` | Rust core implementation            |
 | `packages/rust/crates/omni-tags/Cargo.toml` | Dependencies (ast-grep-core 0.40.5) |
 | `packages/rust/bindings/python/src/lib.rs`  | PyO3 bindings                       |
-| `assets/skills/code_navigation/tools.py`    | Python skill tools                  |
-| `assets/skills/code_navigation/SKILL.md`    | Skill manifest                      |
+| `assets/skills/code_tools/scripts/`         | Python skill tools                  |
+| `assets/skills/code_tools/SKILL.md`         | Skill manifest                      |
 | `docs/developer/ast-grep-core.md`           | Developer API guide                 |
 
 ## 8. Future Directions

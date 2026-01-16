@@ -3,13 +3,13 @@
 //! Provides nearest neighbor search using LanceDB 1.0's scanner API.
 //! Supports both pure vector search and hybrid search with keyword boosting.
 
+use futures::TryStreamExt;
 use lance::dataset::Dataset;
 use lance::deps::arrow_array::{Array, Float32Array, StringArray};
-use futures::TryStreamExt;
 
 use omni_types::VectorSearchResult;
 
-use crate::{ID_COLUMN, CONTENT_COLUMN, METADATA_COLUMN, VECTOR_COLUMN, VectorStoreError};
+use crate::{CONTENT_COLUMN, ID_COLUMN, METADATA_COLUMN, VECTOR_COLUMN, VectorStoreError};
 
 /// Weight for keyword match score in hybrid search
 const KEYWORD_WEIGHT: f64 = 0.3;
@@ -43,7 +43,8 @@ impl crate::VectorStore {
         query: Vec<f32>,
         limit: usize,
     ) -> Result<Vec<VectorSearchResult>, VectorStoreError> {
-        self.search_with_keywords(table_name, query, Vec::new(), limit, None).await
+        self.search_with_keywords(table_name, query, Vec::new(), limit, None)
+            .await
     }
 
     /// Search with metadata filtering.
@@ -69,7 +70,8 @@ impl crate::VectorStore {
         limit: usize,
         where_filter: Option<String>,
     ) -> Result<Vec<VectorSearchResult>, VectorStoreError> {
-        self.search_with_keywords(table_name, query, Vec::new(), limit, where_filter).await
+        self.search_with_keywords(table_name, query, Vec::new(), limit, where_filter)
+            .await
     }
 
     /// Hybrid search with keyword boosting.
@@ -99,7 +101,8 @@ impl crate::VectorStore {
         keywords: Vec<String>,
         limit: usize,
     ) -> Result<Vec<VectorSearchResult>, VectorStoreError> {
-        self.search_with_keywords(table_name, query, keywords, limit, None).await
+        self.search_with_keywords(table_name, query, keywords, limit, None)
+            .await
     }
 
     /// Internal search implementation with optional keyword boosting and metadata filtering.
@@ -146,35 +149,39 @@ impl crate::VectorStore {
         let mut results = Vec::new();
 
         // Process record batches
-        while let Some(batch) = stream
-            .try_next()
-            .await
-            .map_err(VectorStoreError::LanceDB)?
-        {
+        while let Some(batch) = stream.try_next().await.map_err(VectorStoreError::LanceDB)? {
             // Extract columns
-            let id_col = batch
-                .column_by_name(ID_COLUMN)
-                .ok_or_else(|| VectorStoreError::TableNotFound("id column not found".to_string()))?;
-            let content_col = batch
-                .column_by_name(CONTENT_COLUMN)
-                .ok_or_else(|| VectorStoreError::TableNotFound("content column not found".to_string()))?;
-            let distance_col = batch
-                .column_by_name("_distance")
-                .ok_or_else(|| VectorStoreError::TableNotFound("_distance column not found".to_string()))?;
+            let id_col = batch.column_by_name(ID_COLUMN).ok_or_else(|| {
+                VectorStoreError::TableNotFound("id column not found".to_string())
+            })?;
+            let content_col = batch.column_by_name(CONTENT_COLUMN).ok_or_else(|| {
+                VectorStoreError::TableNotFound("content column not found".to_string())
+            })?;
+            let distance_col = batch.column_by_name("_distance").ok_or_else(|| {
+                VectorStoreError::TableNotFound("_distance column not found".to_string())
+            })?;
             let metadata_col = batch.column_by_name(METADATA_COLUMN);
 
             let ids = id_col
                 .as_any()
                 .downcast_ref::<StringArray>()
-                .ok_or_else(|| VectorStoreError::TableNotFound("id column is not StringArray".to_string()))?;
+                .ok_or_else(|| {
+                    VectorStoreError::TableNotFound("id column is not StringArray".to_string())
+                })?;
             let contents = content_col
                 .as_any()
                 .downcast_ref::<StringArray>()
-                .ok_or_else(|| VectorStoreError::TableNotFound("content column is not StringArray".to_string()))?;
+                .ok_or_else(|| {
+                    VectorStoreError::TableNotFound("content column is not StringArray".to_string())
+                })?;
             let distances = distance_col
                 .as_any()
                 .downcast_ref::<Float32Array>()
-                .ok_or_else(|| VectorStoreError::TableNotFound("distance column is not Float32Array".to_string()))?;
+                .ok_or_else(|| {
+                    VectorStoreError::TableNotFound(
+                        "distance column is not Float32Array".to_string(),
+                    )
+                })?;
 
             for i in 0..batch.num_rows() {
                 // Extract metadata if present
@@ -215,7 +222,11 @@ impl crate::VectorStore {
         }
 
         // Sort by hybrid score (distance - smaller is better for cosine)
-        results.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap_or(std::cmp::Ordering::Equal));
+        results.sort_by(|a, b| {
+            a.distance
+                .partial_cmp(&b.distance)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Limit results after sorting
         results.truncate(limit);
@@ -251,13 +262,19 @@ impl crate::VectorStore {
                         // Handle different value types
                         match (&meta_val, value) {
                             (serde_json::Value::String(mv), serde_json::Value::String(v)) => {
-                                if mv != v { return false; }
+                                if mv != v {
+                                    return false;
+                                }
                             }
                             (serde_json::Value::Number(mv), serde_json::Value::Number(v)) => {
-                                if mv != v { return false; }
+                                if mv != v {
+                                    return false;
+                                }
                             }
                             (serde_json::Value::Bool(mv), serde_json::Value::Bool(v)) => {
-                                if mv != v { return false; }
+                                if mv != v {
+                                    return false;
+                                }
                             }
                             _ => {
                                 // Try string comparison for non-exact matches
@@ -265,7 +282,9 @@ impl crate::VectorStore {
                                 let value_str_val = value.to_string();
                                 let meta_str = meta_str_val.trim_matches('"');
                                 let value_str = value_str_val.trim_matches('"');
-                                if meta_str != value_str { return false; }
+                                if meta_str != value_str {
+                                    return false;
+                                }
                             }
                         }
                     } else {
@@ -302,10 +321,10 @@ impl crate::VectorStore {
             // Extract keywords from metadata JSON array
             if let Some(keywords_arr) = result.metadata.get("keywords").and_then(|v| v.as_array()) {
                 for kw in &query_keywords {
-                    if keywords_arr.iter().any(|k| {
-                        k.as_str()
-                            .map_or(false, |s| s.to_lowercase().contains(kw))
-                    }) {
+                    if keywords_arr
+                        .iter()
+                        .any(|k| k.as_str().map_or(false, |s| s.to_lowercase().contains(kw)))
+                    {
                         keyword_score += KEYWORD_BOOST;
                     }
                 }
@@ -367,25 +386,32 @@ mod tests {
         // git.commit: 0.35 - 0.03 = 0.32
         // file.save: 0.3
         // git.commit should rank higher
-        assert!(results[0].id == "git.commit", "git.commit should rank first with keyword boost");
-        assert!(results[0].distance < results[1].distance, "git.commit distance should be lower");
+        assert!(
+            results[0].id == "git.commit",
+            "git.commit should rank first with keyword boost"
+        );
+        assert!(
+            results[0].distance < results[1].distance,
+            "git.commit distance should be lower"
+        );
     }
 
     #[tokio::test]
     async fn test_apply_keyword_boost_no_keywords() {
         // Test that results unchanged when no keywords provided
-        let mut results = vec![
-            VectorSearchResult {
-                id: "git.commit".to_string(),
-                content: "Execute git.commit".to_string(),
-                metadata: serde_json::json!({"keywords": ["git"]}),
-                distance: 0.5,
-            },
-        ];
+        let mut results = vec![VectorSearchResult {
+            id: "git.commit".to_string(),
+            content: "Execute git.commit".to_string(),
+            metadata: serde_json::json!({"keywords": ["git"]}),
+            distance: 0.5,
+        }];
 
         crate::VectorStore::apply_keyword_boost(&mut results, &[]);
 
-        assert_eq!(results[0].distance, 0.5, "Distance should not change with empty keywords");
+        assert_eq!(
+            results[0].distance, 0.5,
+            "Distance should not change with empty keywords"
+        );
     }
 
     #[tokio::test]
@@ -411,13 +437,19 @@ mod tests {
         ];
 
         // Query with multiple keywords
-        crate::VectorStore::apply_keyword_boost(&mut results, &["git".to_string(), "commit".to_string()]);
+        crate::VectorStore::apply_keyword_boost(
+            &mut results,
+            &["git".to_string(), "commit".to_string()],
+        );
 
         // git.commit matches both keywords: keyword_score = 0.1 + 0.1 = 0.2, bonus = 0.06
         // git.commit: 0.4 - 0.06 = 0.34
         // file.save: 0.3
         // file.save still wins (0.3 < 0.34)
-        assert!(results[0].distance < results[1].distance, "Results should be sorted by hybrid distance");
+        assert!(
+            results[0].distance < results[1].distance,
+            "Results should be sorted by hybrid distance"
+        );
     }
 
     #[tokio::test]

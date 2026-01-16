@@ -35,10 +35,8 @@ def add_all_with_info() -> Dict[str, Any]:
     files_out, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root)
     staged_files = [line for line in files_out.splitlines() if line.strip()]
 
-    # Get diff content (truncated)
+    # Get diff content (full)
     diff_out, _, _ = _run(["git", "--no-pager", "diff", "--cached"], cwd=root)
-    if len(diff_out) > 6000:
-        diff_out = diff_out[:6000] + "\n... (Diff truncated)"
 
     return {
         "staged_files": staged_files,

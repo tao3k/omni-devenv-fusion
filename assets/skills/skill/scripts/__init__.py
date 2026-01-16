@@ -2,10 +2,12 @@
 skill/scripts/ - Skill Management Scripts
 
 Contains atomic implementations for skill-related commands:
-- discovery.py: Skill discovery and suggestion (Phase 63)
+- discovery.py: Skill discovery and suggestion
 - templates.py: Cascading template management
 - list_tools.py: List registered MCP tools
-- search_tools.py: Intent-driven tool search (Phase 67)
+- search_tools.py: Intent-driven tool search
+- unload.py: Dynamic skill unload
+- reload.py: Dynamic skill reload
 """
 
 from .discovery import (
@@ -25,6 +27,8 @@ from .templates import (
 )
 from .list_tools import list_tools, format_tools_list
 from .search_tools import search_tools, format_search_result
+from .unload import unload_skill
+from .reload import reload_skill
 
 __all__ = [
     # Discovery commands
@@ -43,7 +47,10 @@ __all__ = [
     "format_tools_list",
     # Tool list command
     "list_tools",
-    # Search commands (Phase 67)
+    # Search commands
     "search_tools",
     "format_search_result",
+    # Unload/Reload commands
+    "unload_skill",
+    "reload_skill",
 ]

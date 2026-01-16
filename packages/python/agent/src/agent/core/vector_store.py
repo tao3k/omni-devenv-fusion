@@ -1358,6 +1358,190 @@ async def ingest_preloaded_skill_definitions() -> None:
         f"Preloaded skill definitions ingested: {skills_ingested}/{len(preload_skills)}"
     )
 
+    # =========================================================================
+    #  Skill Index Export
+    # =========================================================================
+
+    async def export_skill_index(self, output_path: str | None = None) -> dict:
+        """
+        Export skill tools from vector store to skill_index.json.
+
+        This method:
+        1. Fetches all tools from the skills table
+        2. Groups them by skill_name
+        3. Builds skill-level metadata from tools
+        4. Merges with existing skill_index.json (preserves authors, compliance, etc.)
+        5. Writes the result to assets/skills/skill_index.json
+
+        Args:
+            output_path: Optional custom path for the output file.
+                         Defaults to SKILLS_DIR / "skill_index.json"
+
+        Returns:
+            Dict with keys: skills_exported, tools_exported, output_path
+        """
+        from pathlib import Path
+
+        store = self._ensure_store()
+        if not store:
+            _get_logger().warning("Vector memory not available for export_skill_index")
+            return {"skills_exported": 0, "tools_exported": 0, "output_path": ""}
+
+        # Determine output path
+        if output_path is None:
+            output_path = str(SKILLS_DIR() / "skill_index.json")
+        output_file = Path(output_path)
+
+        try:
+            # Step 1: Load existing skill_index.json for merging
+            existing_skills: Dict[str, dict] = {}
+            if output_file.exists():
+                try:
+                    with open(output_file, "r", encoding="utf-8") as f:
+                        existing_data = json.load(f)
+                        for skill in existing_data:
+                            # Extract skill name (handle both quoted and unquoted formats)
+                            name = skill.get("name", "")
+                            if name:
+                                # Remove quotes if present (old format had quoted names)
+                                if name.startswith('"') and name.endswith('"'):
+                                    name = name[1:-1]
+                                existing_skills[name] = skill
+                    _get_logger().debug(
+                        f"Loaded {len(existing_skills)} existing skills for merging"
+                    )
+                except json.JSONDecodeError as e:
+                    _get_logger().warning(f"Failed to parse existing skill_index.json: {e}")
+                    existing_skills = {}
+
+            # Step 2: Fetch all tools from vector store
+            count = store.count("skills")
+            if count == 0:
+                _get_logger().warning("No tools found in skills table")
+                return {"skills_exported": 0, "tools_exported": 0, "output_path": output_path}
+
+            # Get all tools by searching with large limit
+            # We need to get all tools to group by skill
+            all_tools: List[Dict] = []
+            batch_size = 1000
+            offset = 0
+
+            while offset < count:
+                # Search for tools (using dummy query, we'll get all tools)
+                # Actually, let's use a different approach - get all from file hashes
+                hashes_json = store.get_all_file_hashes("skills")
+                hashes_data = json.loads(hashes_json) if hashes_json else {}
+
+                # Get tools by scanning skills directory and matching with DB
+                # For now, let's just use the hashes to build the index
+                for path, data in hashes_data.items():
+                    try:
+                        tool_id = data.get("id", "")
+                        if "." in tool_id:
+                            skill_name, tool_name = tool_id.split(".", 1)
+                            # Get tool details from search
+                            results = store.search("skills", [0.0] * 1536, 1)
+                            for r in results:
+                                result = json.loads(r)
+                                metadata = json.loads(result.get("metadata", "{}"))
+                                all_tools.append(
+                                    {
+                                        "skill_name": skill_name,
+                                        "tool_name": tool_name,
+                                        "metadata": metadata,
+                                    }
+                                )
+                    except (ValueError, KeyError):
+                        continue
+                break  # We got what we need from hashes
+
+            # Alternative: Use scan_skill_tools_raw to get current tools
+            current_jsons = store.scan_skill_tools_raw(str(SKILLS_DIR()))
+            for tool_json in current_jsons:
+                try:
+                    tool = json.loads(tool_json)
+                    all_tools.append(
+                        {
+                            "skill_name": tool.get("skill_name", ""),
+                            "tool_name": tool.get("tool_name", ""),
+                            "metadata": tool,
+                        }
+                    )
+                except json.JSONDecodeError:
+                    continue
+
+            # Step 3: Group tools by skill
+            skills_tools: Dict[str, List[Dict]] = {}
+            for tool in all_tools:
+                skill_name = tool.get("skill_name", "")
+                if skill_name:
+                    if skill_name not in skills_tools:
+                        skills_tools[skill_name] = []
+                    skills_tools[skill_name].append(tool)
+
+            # Step 4: Build skill entries
+            skill_entries = []
+            for skill_name, tools in skills_tools.items():
+                # Get existing skill data for merging
+                existing = existing_skills.get(skill_name, {})
+
+                # Build tools list from current tools
+                tool_list = []
+                for tool in tools:
+                    meta = tool.get("metadata", {})
+                    tool_entry = {
+                        "name": meta.get("tool_name", ""),
+                        "description": meta.get("description", ""),
+                    }
+                    tool_list.append(tool_entry)
+
+                # Build skill entry, preserving existing fields
+                skill_entry = {
+                    "name": skill_name,
+                    "description": existing.get("description", f'"The {skill_name} skill."'),
+                    "version": existing.get("version", '"1.0.0"'),
+                    "path": existing.get("path", f'"assets/skills/{skill_name}"'),
+                    "tools": tool_list,
+                    "routing_keywords": existing.get("routing_keywords", ""),
+                    "intents": existing.get("intents", []),
+                    "authors": existing.get("authors", ["omni-dev-fusion"]),
+                    "docs_available": existing.get(
+                        "docs_available",
+                        {
+                            "skill_md": True,
+                            "readme": False,
+                            "guide": False,
+                            "prompts": False,
+                            "tests": False,
+                        },
+                    ),
+                    "oss_compliant": existing.get("oss_compliant", []),
+                    "compliance_details": existing.get("compliance_details", []),
+                }
+                skill_entries.append(skill_entry)
+
+            # Step 5: Write to file
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(output_file, "w", encoding="utf-8") as f:
+                json.dump(skill_entries, f, indent=2, ensure_ascii=False)
+
+            _get_logger().info(
+                f"Exported {len(skill_entries)} skills, {len(all_tools)} tools to {output_path}"
+            )
+
+            return {
+                "skills_exported": len(skill_entries),
+                "tools_exported": len(all_tools),
+                "output_path": output_path,
+            }
+
+        except Exception as e:
+            _get_logger().error("Failed to export skill index", error=str(e))
+            import traceback
+
+            traceback.print_exc()
+            return {"skills_exported": 0, "tools_exported": 0, "output_path": ""}
+
 
 __all__ = [
     "VectorMemory",
@@ -1367,4 +1551,5 @@ __all__ = [
     "ingest_knowledge",
     "bootstrap_knowledge_base",
     "ingest_preloaded_skill_definitions",
+    "export_skill_index",
 ]

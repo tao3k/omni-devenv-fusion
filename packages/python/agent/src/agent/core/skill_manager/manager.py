@@ -22,6 +22,18 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from common.mcp_core.lazy_cache.repomix_cache import RepomixCache
 
+# Module-level singleton instance
+_instance: SkillManager | None = None
+
+
+def _get_singleton_manager() -> SkillManager:
+    """Get or create the singleton SkillManager instance."""
+    global _instance
+    if _instance is None:
+        _instance = SkillManager()
+    return _instance
+
+
 from .hot_reload import HotReloadMixin
 from .loader import SkillLoaderMixin
 from .models import Skill, SkillCommand
@@ -104,10 +116,18 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin, ResultCacheM
         """
         Initialize the skill manager.
 
+        Singleton pattern: only the first instance is kept.
+        Use _get_singleton_manager() for guaranteed singleton access.
+
         Args:
             skills_dir: Path to skills directory (default: assets/skills)
         """
         from common.skills_path import SKILLS_DIR
+
+        # Singleton pattern: if already initialized, return early
+        global _instance
+        if _instance is not None:
+            return
 
         if skills_dir is None:
             self.skills_dir = SKILLS_DIR()
@@ -151,6 +171,9 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin, ResultCacheM
 
         self._index_path: Path = SKILLS_DIR() / "skill_index.json"
         self._index_loaded: bool = False
+
+        # Register as singleton
+        _instance = self
 
     # =========================================================================
     #  Step 3: Adaptive Unloading (LRU)

@@ -21,6 +21,11 @@ routing_keywords:
     "edit doc",
   ]
 authors: ["omni-dev-fusion"]
+intents:
+  - "Read or update documentation"
+  - "Write README or guide"
+  - "Generate API documentation"
+  - "Document code changes"
 ---
 
 You have loaded the **Documentation Skill**.

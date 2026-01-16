@@ -8,19 +8,19 @@
 // ============================================================================
 
 // Core pattern matching
+pub use ast_grep_core::Doc;
+pub use ast_grep_core::Language as AstLanguage;
 pub use ast_grep_core::Pattern;
 pub use ast_grep_core::matcher::MatcherExt;
-pub use ast_grep_core::Language as AstLanguage;
-pub use ast_grep_core::Doc;
 pub use ast_grep_core::matcher::NodeMatch;
 
 // Language support
-pub use ast_grep_language::SupportLang;
 pub use ast_grep_language::LanguageExt;
+pub use ast_grep_language::SupportLang;
 
 // Meta variable handling
-pub use ast_grep_core::meta_var::MetaVariable;
 pub use ast_grep_core::meta_var::MetaVarEnv;
+pub use ast_grep_core::meta_var::MetaVariable;
 
 /// Type alias for language parser (re-exported from ast-grep).
 pub type LangParser = SupportLang;

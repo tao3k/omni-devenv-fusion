@@ -13,6 +13,11 @@ routing_keywords:
     "which tests",
   ]
 authors: ["omni-dev-fusion"]
+intents:
+  - "Determine what tests to run"
+  - "Create test strategy"
+  - "Select relevant tests for changes"
+  - "Plan testing approach"
 ---
 
 # Testing Protocol Skill System Prompts

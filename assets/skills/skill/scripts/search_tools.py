@@ -14,34 +14,25 @@ from agent.skills.decorators import skill_script
 
 @skill_script(
     name="search_tools",
-    description="[CRITICAL] Search for available tools using semantic + keyword matching. MUST call this if you cannot find a suitable tool in your current context.",
-    category="general",
-)
-async def search_tools(
-    query: str,
-    limit: int = 10,
-    keywords: list[str] | None = None,
-) -> str:
-    """
-    [CRITICAL TOOL] Search tools in the database using hybrid search (vector + keywords).
+    category="read",
+    description="""
+    [CRITICAL] Searches for available tools using semantic + keyword matching.
 
-    **IMPORTANT**: You MUST call this tool if:
-    1. The user's request cannot be fulfilled with your current available tools.
-    2. You are unsure which tool to use for a task.
-    3. You need to discover new capabilities dynamically.
-
-    This enables the Agent to dynamically discover relevant tools when
-    the default toolset doesn't match the current intent.
+    MUST call this tool if you cannot find a suitable tool in your current context.
+    Enables dynamic discovery of relevant tools when the default toolset doesn't
+    match the current intent.
 
     Args:
         query: Natural language description of what you need.
-              Example: "git commit changes", "search files", "write tests"
-        limit: Maximum tools to return (default: 10, max: 50).
-        keywords: Optional keywords to boost relevance.
-                 Example: ["git", "commit"] for git commit related tools
+               Example: "git commit changes", "search files", "write tests"
+        limit: Maximum number of tools to return. Defaults to `10`.
+               Maximum: `50`.
+        keywords: Optional list of keywords to boost relevance.
+                  Example: `["git", "commit"]` for git commit related tools.
 
     Returns:
         JSON string containing matching tools with their schemas.
+
         Format:
         {
             "tools": [
@@ -60,21 +51,23 @@ async def search_tools(
 
     Usage:
         @omni("skill.search_tools", {"query": "git commit", "keywords": ["git"]})
-    """
-    # Validate inputs
-    limit = min(max(1, limit), 50)  # Clamp between 1 and 50
+    """,
+)
+async def search_tools(
+    query: str,
+    limit: int = 10,
+    keywords: list[str] | None = None,
+) -> str:
+    limit = min(max(1, limit), 50)
     keywords = keywords or []
 
-    # Import here to avoid slow startup
     from agent.core.vector_store import get_vector_memory
 
     vm = get_vector_memory()
 
     try:
-        # Use hybrid search from VectorMemory
         results = await vm.search_tools_hybrid(query, keywords=keywords, limit=limit)
 
-        # Format results
         tools = []
         for r in results:
             try:
@@ -90,7 +83,7 @@ async def search_tools(
                         "name": r.get("id", ""),
                         "description": r.get("content", ""),
                         "schema": schema,
-                        "score": 1.0 - r.get("distance", 1.0),  # Convert distance to similarity
+                        "score": 1.0 - r.get("distance", 1.0),
                         "skill": metadata.get("skill_name", ""),
                         "file_path": metadata.get("file_path", ""),
                         "docstring": metadata.get("docstring", ""),
