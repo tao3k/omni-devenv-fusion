@@ -12,6 +12,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+    env:
+      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -22,9 +24,10 @@ jobs:
         uses: ./.github/actions/common-setup
         with:
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
       - name: Run lint
-        run: devenv shell -- just lint
+        run: secretspec run --provider env --profile default -- devenv shell -- just lint
 
   check-format:
     runs-on: ${{ matrix.os }}
@@ -32,6 +35,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+    env:
+      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -42,9 +47,10 @@ jobs:
         uses: ./.github/actions/common-setup
         with:
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
       - name: Check format
-        run: devenv shell -- just check-format
+        run: secretspec run --provider env --profile default -- devenv shell -- just check-format
 
   check-commits:
     runs-on: ${{ matrix.os }}
@@ -52,6 +58,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+    env:
+      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -62,9 +70,10 @@ jobs:
         uses: ./.github/actions/common-setup
         with:
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
       - name: Check commit messages
-        run: devenv shell -- just check-commits
+        run: secretspec run --provider env --profile default -- devenv shell -- just check-commits
 
   test:
     runs-on: ${{ matrix.os }}
@@ -72,6 +81,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+    env:
+      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -82,6 +93,7 @@ jobs:
         uses: ./.github/actions/common-setup
         with:
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
       - name: Run tests
-        run: devenv shell -- just test
+        run: secretspec run --provider env --profile default -- devenv shell -- just test

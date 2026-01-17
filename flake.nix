@@ -48,9 +48,8 @@
           pkgs = nixpkgs.legacyPackages.${system};
           python = pkgs.python3;
           inherit (inputs.omnibus.flake.inputs) nix-filter;
-
           omni-core-rs = (
-            pkgs.callPackage ./units/packages/omni-core-rs.nix {
+            pkgs.callPackage ./assets/nix/packages/omni-core-rs.nix {
               inherit nix-filter;
             }
           );
@@ -90,63 +89,14 @@
             ]
           )
       );
-
-      editableOverlay = workspace.mkEditablePyprojectOverlay {
-        root = "$REPO_ROOT";
-      };
-
     in
     {
-      devShells = forAllSystems (
-        system:
-        let
-          pkgs = nixpkgs.legacyPackages.${system};
-          pythonSet = pythonSets.${system}.overrideScope editableOverlay;
-          virtualenv = pythonSet.mkVirtualEnv "omni-dev-fusion-env" workspace.deps.all;
-        in
-        {
-          default = pkgs.mkShell {
-            packages = [
-              virtualenv
-              pkgs.uv
-            ];
-            env = {
-              UV_NO_SYNC = "1";
-              UV_PYTHON = pythonSet.python.interpreter;
-              UV_PYTHON_DOWNLOADS = "never";
-            };
-            shellHook = ''
-              unset PYTHONPATH
-              export REPO_ROOT=$(git rev-parse --show-toplevel)
-            '';
-          };
-        }
-      );
-
-      packages = forAllSystems (
-        system:
-        let
-          nixpkgs = inputs.nixpkgs.legacyPackages.${system};
-          inherit (inputs.omnibus.flake.inputs) nix-filter;
-          omni-core-rs = (
-            nixpkgs.callPackage ./units/packages/omni-core-rs.nix {
-              inherit nix-filter;
-            }
-          );
-        in
-        {
-          inherit omni-core-rs;
-          default =
-            (
-              pythonSets.${system}.mkVirtualEnv "omni-dev-fusion-env" workspace.deps.default
-              // { }
-            ).overrideAttrs
-              (old: {
-                # postInstall = ''
-                #   ln -s ${omni-core-rs}/${nixpkgs.python3Packages.python.sitePackages}/omni_core_rs $out/${nixpkgs.python3Packages.python.sitePackages}/omni_core_rs
-                # '';
-              });
-        }
-      );
+      packages = forAllSystems (system: {
+        omni-core-rs = pythonSets.${system}.omni-core-rs;
+        default = (
+          pythonSets.${system}.mkVirtualEnv "omni-dev-fusion-env" workspace.deps.default
+          // { }
+        );
+      });
     };
 }

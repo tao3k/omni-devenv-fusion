@@ -158,11 +158,11 @@
         "flops": "flops"
       },
       "locked": {
-        "lastModified": 1768258764,
-        "narHash": "sha256-mxU6Mdx/9GxVYdfnvb0Yzrvi6DpJN2QxREERwTl4k3o=",
+        "lastModified": 1768691457,
+        "narHash": "sha256-EHoDcmEoNuXqAiam7SXb6lxHM2lH08d+izQGtaN38YM=",
         "owner": "tao3k",
         "repo": "omnibus",
-        "rev": "c33f0b7067a26d38424926147e7dd603c69ab722",
+        "rev": "ac858a4921a536e98781ce6dd8b848682967c3a6",
         "type": "github"
       },
       "original": {

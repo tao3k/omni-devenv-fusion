@@ -6,6 +6,9 @@ inputs:
   SECRET_GITHUB_TOKEN:
     required: true
     description: "Github Secret Token"
+  MINIMAX_API_KEY:
+    required: true
+    description: "MiniMax API Key"
 runs:
   using: "composite"
   steps:
@@ -17,8 +20,20 @@ runs:
 
     - uses: DeterminateSystems/magic-nix-cache-action@main
 
-    - name: Install nixci
+    - uses: cachix/cachix-action@v16
+      with:
+        name: devenv
+
+    - name: Install devenv.sh
       shell: bash
+      run: nix profile add nixpkgs#devenv
+
+    - name: Install secretspec and write .env
+      shell: bash
+      env:
+        MINIMAX_API_KEY: ${{ inputs.MINIMAX_API_KEY }}
       run: |
-        nix profile install github:srid/nixci#nixci
-        nix profile install nixpkgs#just
+        nix profile add nixpkgs#secretspec
+        echo "MINIMAX_API_KEY=$MINIMAX_API_KEY" > .env
+        # NAR hash mismatch in input issue, I don't know why
+        # nix flake update omnibus

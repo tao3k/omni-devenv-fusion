@@ -7,14 +7,14 @@
   pkg-config,
   openssl,
   libiconv,
-  python313,
+  python3,
   protobuf,
   nix-filter,
   ...
 }:
 
 let
-  root = ../..;
+  root = ../../..;
   pname = "omni-core-rs";
   version = "0.1.0";
 
@@ -59,6 +59,7 @@ python3Packages.buildPythonPackage {
   build-system = [ rustPlatform.maturinBuildHook ];
 
   nativeBuildInputs = [
+    pkg-config
     rustPlatform.cargoSetupHook
   ];
 
@@ -67,9 +68,11 @@ python3Packages.buildPythonPackage {
   '';
 
   env = {
-    PYO3_PYTHON = "${python313}/bin/python3.13";
-    OPENSSL_NO_VENDOR = 1;
+    PYO3_PYTHON = "${python3}/bin/python3";
     PROTOC = "${protobuf}/bin/protoc";
+    OPENSSL_DIR = lib.getDev openssl;
+    OPENSSL_LIB_DIR = "${lib.getLib openssl}/lib";
+    OPENSSL_NO_VENDOR = 1;
   };
 
   # Don't run tests during build
@@ -88,6 +91,6 @@ python3Packages.buildPythonPackage {
     homepage = "https://github.com/tao3k/omni-devenv-fusion";
     license = with lib.licenses; [ "apache20" ];
     maintainers = with lib.maintainers; [ "tao3k" ];
-    pythonPath = "${python313.sitePackages}";
+    pythonPath = "${python3.sitePackages}";
   };
 }
