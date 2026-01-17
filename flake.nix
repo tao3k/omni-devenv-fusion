@@ -48,6 +48,22 @@
           pkgs = nixpkgs.legacyPackages.${system};
           python = pkgs.python3;
           inherit (inputs.omnibus.flake.inputs) nix-filter;
+
+          omni-core-rs = (
+            pkgs.callPackage ./units/packages/omni-core-rs.nix {
+              inherit nix-filter;
+            }
+          );
+
+          hacks = pkgs.callPackage pyproject-nix.build.hacks { };
+
+          hack-overlay = final: prev: {
+            # Adapt torch from nixpkgs
+            omni-core-rs = hacks.nixpkgsPrebuilt {
+              from = omni-core-rs;
+              prev = prev.omni-core-rs;
+            };
+          };
         in
         (pkgs.callPackage pyproject-nix.build.packages {
           inherit python;
@@ -56,6 +72,7 @@
             lib.composeManyExtensions [
               pyproject-build-systems.overlays.wheel
               overlay
+              hack-overlay
               (final: prev: {
                 # Fix pypika build with setuptools
                 pypika = prev.pypika.overrideAttrs (old: {
@@ -120,12 +137,14 @@
         {
           inherit omni-core-rs;
           default =
-            (pythonSets.${system}.mkVirtualEnv "omni-dev-fusion-env" workspace.deps.default)
-            .overrideAttrs
+            (
+              pythonSets.${system}.mkVirtualEnv "omni-dev-fusion-env" workspace.deps.default
+              // { }
+            ).overrideAttrs
               (old: {
-                postInstall = ''
-                  ln -s ${omni-core-rs}/${nixpkgs.python3Packages.python.sitePackages}/omni_core_rs $out/${nixpkgs.python3Packages.python.sitePackages}/omni_core_rs
-                '';
+                # postInstall = ''
+                #   ln -s ${omni-core-rs}/${nixpkgs.python3Packages.python.sitePackages}/omni_core_rs $out/${nixpkgs.python3Packages.python.sitePackages}/omni_core_rs
+                # '';
               });
         }
       );

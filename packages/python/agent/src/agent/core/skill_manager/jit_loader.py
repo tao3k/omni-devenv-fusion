@@ -219,11 +219,19 @@ if __name__ == "__main__":
 
         try:
             # Run in the skill's isolated environment
-            cmd = ["uv", "run", "python", "-c", bootstrap_script, args_json]
+            cmd = [
+                "uv",
+                "run",
+                "--directory",
+                str(skill_path),
+                "python",
+                "-c",
+                bootstrap_script,
+                args_json,
+            ]
 
             result = subprocess.run(
                 cmd,
-                cwd=str(skill_path),
                 capture_output=True,
                 text=True,
                 timeout=60,

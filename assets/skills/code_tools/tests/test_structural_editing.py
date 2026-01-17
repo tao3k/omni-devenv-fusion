@@ -20,15 +20,15 @@ import os
 from pathlib import Path
 
 
-def _get_structural_skill():
-    """Load and return structural_editing skill."""
+def _get_code_tools_skill():
+    """Load and return code_tools skill."""
     from agent.core.skill_manager import get_skill_manager
 
     manager = get_skill_manager()
     if not manager._loaded:
         manager.load_all()
 
-    return manager.skills.get("structural_editing")
+    return manager.skills.get("code_tools")
 
 
 class TestStructuralReplace:
@@ -431,7 +431,7 @@ class TestGetEditInfo:
 
     def test_get_edit_info_returns_dict(self):
         """Test that get_edit_info returns capability info."""
-        skill = _get_structural_skill()
+        skill = _get_code_tools_skill()
         assert skill is not None
 
         # Find get_edit_info command
@@ -455,14 +455,14 @@ class TestGetEditInfo:
 class TestSkillRegistration:
     """Test skill loading and availability."""
 
-    def test_structural_editing_skill_loaded(self):
-        """Test that structural_editing skill can be loaded."""
-        skill = _get_structural_skill()
+    def test_code_tools_skill_loaded(self):
+        """Test that code_tools skill can be loaded."""
+        skill = _get_code_tools_skill()
         assert skill is not None
 
-    def test_structural_editing_has_commands(self):
-        """Test that structural_editing has expected commands."""
-        skill = _get_structural_skill()
+    def test_code_tools_has_commands(self):
+        """Test that code_tools has expected commands."""
+        skill = _get_code_tools_skill()
         assert skill is not None
 
         command_names = list(skill.commands.keys())
@@ -477,7 +477,7 @@ class TestSkillRegistration:
 
     def test_commands_have_valid_schemas(self):
         """Verify all commands have valid input schemas."""
-        skill = _get_structural_skill()
+        skill = _get_code_tools_skill()
         assert skill is not None
 
         for cmd_name, cmd in skill.commands.items():

@@ -91,6 +91,7 @@ async def handle_list_tools() -> list:
 async def handle_call_tool(name: str, arguments: dict | None) -> list:
     """Execute a tool call via Trinity Architecture."""
     from agent.core.skill_manager import get_skill_manager
+    from mcp.types import TextContent
 
     try:
         # Parse skill.command format
@@ -102,11 +103,11 @@ async def handle_call_tool(name: str, arguments: dict | None) -> list:
 
         manager = get_skill_manager()
         result = await manager.run(skill_name, command_name, arguments or {})
-        return [type("TextContent", (), {"type": "text", "text": str(result)})()]
+        return [TextContent(type="text", text=str(result))]
     except Exception as e:
         error_msg = f"Error executing {name}: {e}"
         logger.error(f"❌ {error_msg}")
-        return [type("TextContent", (), {"type": "text", "text": f"Error: {error_msg}"})()]
+        return [TextContent(type="text", text=f"Error: {error_msg}")]
 
 
 # =============================================================================

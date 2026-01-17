@@ -362,12 +362,12 @@ lint:
 [group('validate')]
 test:
     @echo "Running all tests in parallel (3 workers for stability)..."
-    @uv run pytest packages/python/agent/src/agent/tests/ -n 3 --ignore=stress_tests -v
+    @uv run pytest packages/python/agent/src/agent/tests/ assets/skills/ -n 3 --ignore=stress_tests -v
 
 [group('validate')]
 test-sequential:
     @echo "Running all tests sequentially (for debugging)..."
-    @uv run pytest packages/python/agent/src/agent/tests/ -v --ignore=stress_tests
+    @uv run pytest packages/python/agent/src/agent/tests/ assets/skills/ -v --ignore=stress_tests
 
 [group('validate')]
 vulture:

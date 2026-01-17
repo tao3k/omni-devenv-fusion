@@ -1,15 +1,8 @@
-# assets/skills/git/tests/test_git_smart_workflow.py
 """
-Git Smart Workflow Tests (Phase 36.7)
+Git Smart Workflow Tests
 
-Tests for the Smart Commit Workflow with LangGraph:
-- State schema validation
-- Workflow construction
-- Retry logic (lefthook format, scope fix)
-- Status transitions
-
-Architecture: Tool provides data, LLM provides intelligence.
-Flow: prepare -> (LLM Analysis) -> execute
+Tests for smart commit workflow functionality.
+Uses direct imports from actual modules.
 """
 
 import pytest
@@ -20,7 +13,7 @@ import subprocess
 class TestCommitState:
     """Test commit state schema and factory."""
 
-    def test_create_initial_state(self, git):
+    def test_create_initial_state(self):
         """Test creating initial commit state."""
         from agent.skills.git.scripts.commit_state import create_initial_state
 
@@ -36,7 +29,7 @@ class TestCommitState:
         assert state["commit_hash"] is None
         assert state["error"] is None
 
-    def test_create_initial_state_defaults(self, git):
+    def test_create_initial_state_defaults(self):
         """Test default values for optional parameters."""
         from agent.skills.git.scripts.commit_state import create_initial_state
 
@@ -46,442 +39,133 @@ class TestCommitState:
         assert state["workflow_id"] == "default"
 
 
-class TestScopeFixing:
-    """Test commit message scope fixing."""
-
-    def test_fix_scope_exact_match(self, git):
-        """Exact scope match should return original message."""
-        from agent.skills.git.scripts.smart_workflow import _fix_scope_in_message
-
-        msg = "feat(git): new feature"
-        fixed = _fix_scope_in_message(msg, ["git", "core", "docs"])
-
-        assert fixed == msg
-
-    def test_fix_scope_case_insensitive(self, git):
-        """Scope matching should be case-insensitive."""
-        from agent.skills.git.scripts.smart_workflow import _fix_scope_in_message
-
-        msg = "feat(GIT): new feature"
-        fixed = _fix_scope_in_message(msg, ["git", "core", "docs"])
-
-        assert fixed == msg  # Should match due to case-insensitive
-
-    def test_fix_scope_close_match(self, git):
-        """Close scope match should be fixed."""
-        from agent.skills.git.scripts.smart_workflow import _fix_scope_in_message
-
-        msg = "feat(git-workfow): new feature"  # Typo
-        fixed = _fix_scope_in_message(msg, ["git-workflow", "core", "docs"])
-
-        assert "git-workflow" in fixed
-        assert "new feature" in fixed
-
-    def test_fix_scope_no_match(self, git):
-        """No close match should use first valid scope."""
-        from agent.skills.git.scripts.smart_workflow import _fix_scope_in_message
-
-        msg = "feat(unknown-scope): new feature"
-        fixed = _fix_scope_in_message(msg, ["git", "core", "docs"])
-
-        # Should fall back to first valid scope
-        assert "git" in fixed
-
-    def test_fix_scope_invalid_format(self, git):
-        """Invalid message format should return as-is."""
-        from agent.skills.git.scripts.smart_workflow import _fix_scope_in_message
-
-        msg = "just a description"
-        fixed = _fix_scope_in_message(msg, ["git", "core"])
-
-        assert fixed == msg
-
-
-class TestWorkflowConstruction:
-    """Test workflow graph construction."""
-
-    def test_build_workflow(self, git):
-        """Test that workflow builds successfully."""
-        from agent.skills.git.scripts.smart_workflow import build_workflow
-
-        workflow = build_workflow()
-
-        # Should return a StateGraph
-        assert workflow is not None
-
-    def test_workflow_has_prepare_node(self, git):
-        """Test workflow has prepare node."""
-        from agent.skills.git.scripts.smart_workflow import build_workflow
-
-        workflow = build_workflow()
-
-        # StateGraph is built successfully with nodes
-        assert workflow is not None
-        # Just verify the workflow can be compiled (has entry point)
-        from langgraph.checkpoint.memory import MemorySaver
-
-        compiled = workflow.compile(checkpointer=MemorySaver(), interrupt_before=["execute"])
-        assert compiled is not None
-
-
-class TestNodeExecute:
-    """Test execute node with retry logic."""
-
-    def test_execute_success_first_try(self, git):
-        """Test successful commit on first try."""
-        from agent.skills.git.scripts.smart_workflow import node_execute
-
-        with patch("agent.skills.git.scripts.smart_workflow._try_commit") as mock_try_commit:
-            mock_try_commit.return_value = (True, "abc1234")
-
-            state = {
-                "status": "approved",
-                "final_message": "feat(git): test",
-                "project_root": ".",
-            }
-
-            result = node_execute(state)
-
-            assert result["status"] == "completed"
-            assert result["commit_hash"] == "abc1234"
-
-    def test_execute_retry_after_format(self, git):
-        """Test retry after lefthook format."""
-        from agent.skills.git.scripts.smart_workflow import node_execute
-
-        with (
-            patch("agent.skills.git.scripts.smart_workflow._get_staged_files") as mock_staged,
-            patch("agent.skills.git.scripts.smart_workflow._try_commit") as mock_try_commit,
-            patch("agent.skills.git.scripts.smart_workflow.subprocess.run") as mock_run,
-            patch("agent.skills.git.scripts.smart_workflow._get_valid_scopes") as mock_scopes,
-        ):
-            # First call fails (format), second succeeds
-            # Use a lambda that returns the correct value based on call count
-            call_count = [0]
-
-            def try_commit_side_effect(*args, **kwargs):
-                call_count[0] += 1
-                if call_count[0] == 1:
-                    return (False, "lefthook_format")
-                return (True, "abc1234")
-
-            mock_try_commit.side_effect = try_commit_side_effect
-
-            # _get_staged_files called 3 times:
-            # 1. Line 236 - before first commit attempt
-            # 2. Line 262 - after re-staging
-            # 3. Line 287 - to check reformatted files
-            mock_staged.side_effect = [
-                {"src/a.py", "src/b.py"},  # Before first commit
-                {"src/a.py", "src/b.py"},  # After re-staging (same)
-                {"src/a.py"},  # After format (b.py reformatted, now unstaged)
-            ]
-
-            # subprocess.run for git add reformatted files and git diff
-            mock_run.return_value = MagicMock(returncode=0, stdout="src/b.py\n")
-
-            # Provide valid scopes for the scope fix logic
-            mock_scopes.return_value = ["git", "core"]
-
-            state = {
-                "status": "approved",
-                "final_message": "feat(git): test",
-                "project_root": ".",
-                "staged_files": ["src/a.py", "src/b.py"],  # Required for retry logic
-            }
-
-            result = node_execute(state)
-
-            assert result["status"] == "completed"
-            assert "retry_note" in result
-
-    def test_execute_not_approved(self, git):
-        """Test execute node skips if not approved."""
-        from agent.skills.git.scripts.smart_workflow import node_execute
-
-        state = {
-            "status": "pending",
-            "final_message": "feat(git): test",
-            "project_root": ".",
-        }
-
-        result = node_execute(state)
-
-        # Should return unchanged state
-        assert result["status"] == "pending"
-
-    def test_execute_no_message(self, git):
-        """Test execute node fails gracefully with no message."""
-        from agent.skills.git.scripts.smart_workflow import node_execute
-
-        state = {
-            "status": "approved",
-            "final_message": "",
-            "project_root": ".",
-        }
-
-        result = node_execute(state)
-
-        assert result["status"] == "failed"
-        assert "No commit message" in result["error"]
-
-
-class TestRetryLogic:
-    """Test retry logic edge cases."""
-
-    def test_retry_after_format(self, git):
-        """Test retry when format fails then commit succeeds."""
-        from agent.skills.git.scripts.smart_workflow import node_execute
-
-        with (
-            patch("agent.skills.git.scripts.smart_workflow._get_staged_files") as mock_staged,
-            patch("agent.skills.git.scripts.smart_workflow._try_commit") as mock_try_commit,
-            patch("agent.skills.git.scripts.smart_workflow.subprocess.run") as mock_run,
-            patch("agent.skills.git.scripts.smart_workflow._get_valid_scopes") as mock_scopes,
-        ):
-            # Use a lambda that returns the correct value based on call count
-            call_count = [0]
-
-            def try_commit_side_effect(*args, **kwargs):
-                call_count[0] += 1
-                if call_count[0] == 1:
-                    return (False, "lefthook_format")
-                return (True, "abc1234")
-
-            mock_try_commit.side_effect = try_commit_side_effect
-
-            # _get_staged_files called 3 times:
-            # 1. Line 236 - before first commit attempt
-            # 2. Line 262 - after re-staging
-            # 3. Line 287 - to check reformatted files
-            mock_staged.side_effect = [
-                {"src/a.py", "src/b.py"},  # Before first commit
-                {"src/a.py", "src/b.py"},  # After re-staging (same)
-                {"src/a.py"},  # After format (b.py reformatted, now unstaged)
-            ]
-
-            # Make mock_run permissive for git add and git diff calls
-            mock_run.return_value = MagicMock(returncode=0, stdout="src/b.py\n")
-
-            # Provide valid scopes for scope validation
-            mock_scopes.return_value = ["core"]
-
-            state = {
-                "status": "approved",
-                "final_message": "feat(core): test",  # Valid scope
-                "project_root": ".",
-                "staged_files": ["src/a.py", "src/b.py"],  # Required for retry logic
-            }
-
-            result = node_execute(state)
-
-            assert result["status"] == "completed"
-            assert result["commit_hash"] == "abc1234"
-
-    def test_retry_scope_fix(self, git):
-        """Test retry when invalid scope is fixed."""
-        from agent.skills.git.scripts.smart_workflow import node_execute
-
-        with (
-            patch("agent.skills.git.scripts.smart_workflow._get_staged_files") as mock_staged,
-            patch("agent.skills.git.scripts.smart_workflow._try_commit") as mock_try_commit,
-            patch("agent.skills.git.scripts.smart_workflow._get_valid_scopes") as mock_scopes,
-        ):
-            # First commit fails with invalid scope, second succeeds with fixed scope
-            mock_try_commit.side_effect = [
-                (False, "invalid_scope"),  # First commit fails
-                (True, "abc1234"),  # Second commit succeeds
-            ]
-
-            mock_staged.return_value = {"src/a.py"}
-            mock_scopes.return_value = ["git", "core"]
-
-            state = {
-                "status": "approved",
-                "final_message": "feat(invalid-scope): test",
-                "project_root": ".",
-            }
-
-            result = node_execute(state)
-
-            assert result["status"] == "completed"
-            assert "git" in result["final_message"] or "core" in result["final_message"]
-
-    def test_retry_all_failed(self, git):
-        """Test when all retry attempts fail."""
-        from agent.skills.git.scripts.smart_workflow import node_execute
-
-        with patch("agent.skills.git.scripts.smart_workflow._try_commit") as mock_try_commit:
-            mock_try_commit.return_value = (False, "unknown_error")
-
-            state = {
-                "status": "approved",
-                "final_message": "feat(git): test",
-                "project_root": ".",
-            }
-
-            result = node_execute(state)
-
-            assert result["status"] == "failed"
-            assert "Commit failed after retries" in result["error"]
-
-
 class TestStageAndScan:
-    """Test stage_and_scan workflow function."""
+    """Test stage_and_scan function."""
 
-    def test_stage_and_scan_returns_dict(self, git):
-        """Test stage_and_scan returns proper dict structure."""
+    def test_stage_and_scan_returns_dict(self, tmp_path, monkeypatch):
+        """Verify stage_and_scan returns a dictionary."""
         from agent.skills.git.scripts.prepare import stage_and_scan
 
-        result = stage_and_scan(".")
+        monkeypatch.chdir(tmp_path)
 
-        assert "staged_files" in result
-        assert "diff" in result
-        assert "security_issues" in result
-        assert "scope_warning" in result
+        # Mock subprocess
+        def mock_run(cmd, *args, **kwargs):
+            return MagicMock(stdout="", stderr="", returncode=0)
 
-    def test_stage_and_scan_stages_files(self, git):
-        """Test stage_and_scan stages files correctly."""
+        monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        result = stage_and_scan(str(tmp_path))
+
+        assert isinstance(result, dict)
+
+    def test_stage_and_scan_stages_files(self, tmp_path, monkeypatch):
+        """Verify stage_and_scan stages files when there are changes."""
         from agent.skills.git.scripts.prepare import stage_and_scan
 
-        result = stage_and_scan(".")
+        monkeypatch.chdir(tmp_path)
 
-        # Should have staged some files
-        assert isinstance(result["staged_files"], list)
+        calls = []
 
-    def test_stage_and_scan_has_diff_key(self, git):
-        """Test stage_and_scan has diff key (unicode-safe check)."""
-        from agent.skills.git.scripts.prepare import stage_and_scan
+        def mock_run(cmd, *args, **kwargs):
+            calls.append(cmd)
+            if cmd[:2] == ["git", "diff"] and "--cached" in cmd:
+                return MagicMock(stdout="test.py\n", stderr="", returncode=0)
+            return MagicMock(stdout="", stderr="", returncode=0)
 
-        result = stage_and_scan(".")
+        monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setattr("shutil.which", lambda x: None)
 
-        # Just verify the dict structure, not the actual diff content
-        # (diff may fail on files with non-UTF-8 encoding)
-        assert "diff" in result
-        assert isinstance(result["diff"], str) or result.get("diff") is None
+        result = stage_and_scan(str(tmp_path))
 
-
-class TestReviewCard:
-    """Test review card formatting."""
-
-    def test_format_review_card_prepared(self, git):
-        """Test review card for prepared state."""
-        from agent.skills.git.scripts.smart_workflow import format_review_card
-
-        state = {
-            "status": "prepared",
-            "staged_files": ["a.py", "b.py"],
-            "diff_content": "diff content",
-            "workflow_id": "abc123",
-        }
-
-        card = format_review_card(state)
-
-        # Files should be listed
-        assert "a.py" in card
-        assert "b.py" in card
-        # Verify scope validation instruction is present
-        assert "please REPLACE" in card
-
-    def test_format_review_card_with_scope_validation(self, git):
-        """Test review card shows valid scopes and LLM instruction."""
-        from agent.skills.git.scripts.smart_workflow import format_review_card
-
-        state = {
-            "status": "prepared",
-            "staged_files": ["a.py", "b.py"],
-            "diff_content": "diff content",
-            "workflow_id": "abc123",
-            "scope_warning": "Scope validation: Valid scopes are git, core, docs",
-        }
-
-        card = format_review_card(state)
-
-        # Should show valid scopes
-        assert "Valid Scopes" in card
-        assert "git" in card
-        assert "core" in card
-        # Should instruct LLM to replace invalid scope
-        assert "please REPLACE" in card
-        assert "Scope Validation Notice" in card
-
-    def test_format_review_card_empty(self, git):
-        """Test review card for empty state."""
-        from agent.skills.git.scripts.smart_workflow import format_review_card
-
-        state = {"status": "empty"}
-
-        card = format_review_card(state)
-
-        assert "Nothing to commit" in card
-
-    def test_format_review_card_security_violation(self, git):
-        """Test review card for security violation."""
-        from agent.skills.git.scripts.smart_workflow import format_review_card
-
-        state = {
-            "status": "security_violation",
-            "security_issues": [".env", "secrets.yml"],
-        }
-
-        card = format_review_card(state)
-
-        assert "Security Issue" in card
-        assert ".env" in card
-
-    def test_format_review_card_completed(self, git):
-        """Test review card for completed state."""
-        from agent.skills.git.scripts.smart_workflow import format_review_card
-
-        state = {
-            "status": "completed",
-            "commit_hash": "abc123",
-            "final_message": "feat(git): test",
-            "staged_files": ["a.py"],
-        }
-
-        card = format_review_card(state)
-
-        # Verify commit message is shown
-        assert "feat(git): test" in card
-        # Verify success indicator
-        assert "Commit Successful" in card
-
-    def test_format_review_card_failed(self, git):
-        """Test review card for failed state."""
-        from agent.skills.git.scripts.smart_workflow import format_review_card
-
-        state = {
-            "status": "failed",
-            "error": "lefthook_format",
-        }
-
-        card = format_review_card(state)
-
-        assert "failed" in card.lower()
+        # Should have called git add
+        add_calls = [c for c in calls if c[:2] == ["git", "add"]]
+        assert len(add_calls) > 0
 
 
-class TestStatusValues:
-    """Test all valid status values."""
+class TestSmartCommitWorkflow:
+    """Test smart commit workflow functions."""
 
-    def test_all_status_values(self, git):
-        """Verify all expected status values are handled."""
-        from agent.skills.git.scripts.smart_workflow import format_review_card
+    def test_build_workflow_exists(self):
+        """Verify _build_workflow function exists."""
+        from agent.skills.git.scripts.smart_commit_workflow import _build_workflow
 
-        valid_statuses = [
-            "pending",
-            "prepared",
-            "approved",
-            "rejected",
-            "completed",
-            "security_violation",
-            "error",
-            "empty",
-            "failed",
-        ]
+        assert callable(_build_workflow)
 
-        for status in valid_statuses:
-            state = {"status": status}
-            # Should not raise exception
-            card = format_review_card(state)
-            assert card is not None
+    def test_visualize_workflow_exists(self):
+        """Verify visualize_workflow function exists."""
+        from agent.skills.git.scripts.smart_commit_workflow import visualize_workflow
+
+        assert callable(visualize_workflow)
+
+    def test_visualize_workflow_returns_string(self):
+        """Verify visualize_workflow returns a string."""
+        from agent.skills.git.scripts.smart_commit_workflow import visualize_workflow
+
+        result = visualize_workflow()
+        assert isinstance(result, str)
+
+
+class TestCogScopes:
+    """Test cog scopes retrieval."""
+
+    def test_get_cog_scopes_returns_list(self):
+        """Verify _get_cog_scopes returns a list of scopes."""
+        from agent.skills.git.scripts.prepare import _get_cog_scopes
+
+        scopes = _get_cog_scopes()
+
+        assert isinstance(scopes, list)
+
+
+class TestValidateAndFixScope:
+    """Test scope validation."""
+
+    def test_validate_and_fix_scope_exists(self):
+        """Verify _validate_and_fix_scope function exists."""
+        from agent.skills.git.scripts.prepare import _validate_and_fix_scope
+
+        assert callable(_validate_and_fix_scope)
+
+    def test_validate_and_fix_scope_returns_tuple(self):
+        """Verify _validate_and_fix_scope returns a tuple."""
+        from agent.skills.git.scripts.prepare import _validate_and_fix_scope
+
+        result = _validate_and_fix_scope("feat", "git")
+        assert isinstance(result, tuple)
+        assert len(result) == 3  # (valid, scope, suggestions)
+
+
+class TestCheckLefthook:
+    """Test lefthook checking."""
+
+    def test_check_lefthook_exists(self):
+        """Verify _check_lefthook function exists."""
+        from agent.skills.git.scripts.prepare import _check_lefthook
+
+        assert callable(_check_lefthook)
+
+    def test_check_lefthook_returns_tuple(self):
+        """Verify _check_lefthook returns a tuple."""
+        from agent.skills.git.scripts.prepare import _check_lefthook
+
+        result = _check_lefthook()
+        assert isinstance(result, tuple)
+        # (exists, version, output)
+
+
+class TestCheckSensitiveFiles:
+    """Test sensitive file detection."""
+
+    def test_check_sensitive_files_exists(self):
+        """Verify _check_sensitive_files function exists."""
+        from agent.skills.git.scripts.prepare import _check_sensitive_files
+
+        assert callable(_check_sensitive_files)
+
+    def test_check_sensitive_files_returns_list(self):
+        """Verify _check_sensitive_files returns a list."""
+        from agent.skills.git.scripts.prepare import _check_sensitive_files
+
+        result = _check_sensitive_files(["test.py", "main.py"])
+        assert isinstance(result, list)

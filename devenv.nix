@@ -16,7 +16,7 @@ let
   nixosModules =
     (inputs.omnibus.pops.nixosProfiles.addLoadExtender {
       load = {
-        src = ./units/modules;
+        src = ./assets/nix/modules;
         inputs = {
           __nixpkgs__ = nixpkgs-latest;
           __inputs__ = {
@@ -33,7 +33,7 @@ let
   packages =
     (inputs.omnibus.pops.packages.addLoadExtender {
       load = {
-        src = ./units/packages;
+        src = ./assets/nix/packages;
         inputs = {
           inputs = {
             nixpkgs = nixpkgs-latest;

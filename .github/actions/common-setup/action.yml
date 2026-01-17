@@ -1,0 +1,24 @@
+name: Setup Environment
+inputs:
+  CACHIX_AUTH_TOKEN:
+    required: true
+    description: "Cachix Auth Token"
+  SECRET_GITHUB_TOKEN:
+    required: true
+    description: "Github Secret Token"
+runs:
+  using: "composite"
+  steps:
+    - uses: DeterminateSystems/nix-installer-action@main
+      with:
+        extra-conf: |
+          accept-flake-config = true
+        github_token: ${{ inputs.SECRET_GITHUB_TOKEN }}
+
+    - uses: DeterminateSystems/magic-nix-cache-action@main
+
+    - name: Install nixci
+      shell: bash
+      run: |
+        nix profile install github:srid/nixci#nixci
+        nix profile install nixpkgs#just

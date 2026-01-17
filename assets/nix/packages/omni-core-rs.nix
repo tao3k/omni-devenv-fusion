@@ -53,7 +53,7 @@ python3Packages.buildPythonPackage {
     pname = "omni-core-rs";
     version = "0.1.0";
     src = filteredSrc;
-    hash = "sha256-ZV+rSgA5IEk+waHdVflnUBpwQaN77oI4DRE15sbHQVA=";
+    hash = "sha256-KIUmOay2RVLkQvZYM6X5+ufEXNbDcHj6faRmxhg40Ww=";
   };
 
   build-system = [ rustPlatform.maturinBuildHook ];

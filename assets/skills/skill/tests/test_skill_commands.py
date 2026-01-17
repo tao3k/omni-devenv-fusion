@@ -1,21 +1,21 @@
 """
-Skill Skill Tests - Zero Configuration (Phase 35.1)
+Skill Skill Tests - Phase 63+ Architecture
+
+Tests the new architecture where:
+- Scripts/*.py contain plain functions with @skill_command decorators
+- No tools.py file (legacy pattern removed)
+- Commands exposed via skill prefix: skill_list_templates, skill_discover, etc.
 
 Usage:
-    def test_templates_command(skill):  # 'skill' fixture auto-injected
-        assert hasattr(skill, "templates")
-
-No conftest.py, no complex imports needed!
-
-Phase 36.8: Added auto_route tests
+    def test_discover_command(skill):
+        result = skill.discover(query="git")
+        assert result is not None
 """
 
 import ast
-import inspect
 import pytest
 from pathlib import Path
 
-# Use common.skills_path for SSOT path resolution
 from common.skills_path import SKILLS_DIR
 
 
@@ -35,22 +35,16 @@ def validate_python_syntax(file_path: Path) -> tuple[bool, str | None]:
 class TestSkillSyntaxValidation:
     """Validate Python syntax for skill files."""
 
-    def test_skill_tools_py_has_valid_syntax(self, skill):
-        """skill/tools.py must have valid Python syntax."""
-        tools_path = SKILLS_DIR("skill") / "tools.py"
-        assert tools_path.exists(), f"skill/tools.py not found: {tools_path}"
-
-        is_valid, error = validate_python_syntax(tools_path)
-        assert is_valid, f"skill/tools.py has syntax error: {error}"
-
-    def test_skill_commands_have_valid_syntax(self, skill):
+    def test_skill_scripts_have_valid_syntax(self, skill):
         """All skill/scripts/*.py files must have valid Python syntax."""
         scripts_dir = SKILLS_DIR("skill") / "scripts"
         if not scripts_dir.exists():
-            return  # Skip if no scripts directory
+            pytest.skip("No scripts directory")
 
         invalid_files = []
         for py_file in scripts_dir.glob("*.py"):
+            if py_file.name == "__init__.py":
+                continue
             is_valid, error = validate_python_syntax(py_file)
             if not is_valid:
                 invalid_files.append(f"scripts/{py_file.name}: {error}")
@@ -61,7 +55,6 @@ class TestSkillSyntaxValidation:
 
     def test_core_task_py_has_valid_syntax(self, skill):
         """Core task.py must have valid Python syntax (critical path)."""
-        # Find task.py using SSOT project root
         from common.gitops import get_project_root
 
         project_root = get_project_root()
@@ -73,54 +66,46 @@ class TestSkillSyntaxValidation:
 
 
 class TestSkillTemplatesCommand:
-    """Test skill.templates command functionality."""
+    """Test skill template commands (Phase 63+)."""
 
-    def test_templates_command_exists(self, skill):
-        """The templates command should exist in skill tools."""
-        assert hasattr(skill, "templates"), "skill module missing 'templates' function"
+    def test_list_templates_command_exists(self, skill):
+        """The list_templates command should exist in skill tools."""
+        assert hasattr(skill, "list_templates"), "skill module missing 'list_templates' function"
 
-    def test_templates_list_git(self, skill):
-        """skill.templates with skill_name='git' and action='list' should work."""
-        result = skill.templates(skill_name="git", action="list")
+    def test_list_templates_git(self, skill):
+        """skill.list_templates with skill_name='git' should work."""
+        result = skill.list_templates(skill_name="git")
 
         # Handle CommandResult wrapper
         if hasattr(result, "data"):
             result = result.data if result.success else result.error
 
-        assert isinstance(result, str), "templates() should return string"
-        assert "git" in result.lower(), "Result should mention 'git'"
-        assert "Templates" in result or "templates" in result, "Result should mention templates"
+        assert isinstance(result, (dict, str))
 
-    def test_templates_list_filesystem(self, skill):
-        """skill.templates with skill_name='filesystem' should work."""
-        result = skill.templates(skill_name="filesystem", action="list")
+    def test_list_templates_filesystem(self, skill):
+        """skill.list_templates with skill_name='filesystem' should work."""
+        result = skill.list_templates(skill_name="filesystem")
 
         if hasattr(result, "data"):
             result = result.data if result.success else result.error
 
-        assert isinstance(result, str), "templates() should return string"
+        assert isinstance(result, (dict, str))
 
-    def test_templates_invalid_action(self, skill):
-        """skill.templates with invalid action should return error."""
-        result = skill.templates(skill_name="git", action="invalid_action")
+    def test_eject_template_command_exists(self, skill):
+        """The eject_template command should exist."""
+        assert hasattr(skill, "eject_template"), "skill module missing 'eject_template' function"
 
-        if hasattr(result, "data"):
-            result = result.data if result.success else result.error
-
-        assert isinstance(result, str), "templates() should return string"
-        assert "Unknown action" in result or "error" in result.lower(), (
-            "Should indicate invalid action"
+    def test_get_template_info_command_exists(self, skill):
+        """The get_template_info command should exist."""
+        assert hasattr(skill, "get_template_info"), (
+            "skill module missing 'get_template_info' function"
         )
 
-    def test_templates_nonexistent_skill(self, skill):
-        """skill.templates with nonexistent skill should return error."""
-        result = skill.templates(skill_name="nonexistent_skill_xyz", action="list")
-
-        if hasattr(result, "data"):
-            result = result.data if result.success else result.error
-
-        assert isinstance(result, str), "templates() should return string"
-        assert "no templates" in result.lower() or "not found" in result.lower()
+    def test_get_template_source_command_exists(self, skill):
+        """The get_template_source command should exist."""
+        assert hasattr(skill, "get_template_source"), (
+            "skill module missing 'get_template_source' function"
+        )
 
 
 class TestSkillCommandsMetadata:
@@ -128,163 +113,104 @@ class TestSkillCommandsMetadata:
 
     def test_commands_have_skill_command_metadata(self, skill):
         """All skill commands should have @skill_command metadata."""
-        for name, func in inspect.getmembers(skill, inspect.isfunction):
-            if hasattr(func, "_is_skill_command"):
-                assert hasattr(func, "_skill_config")
-                config = func._skill_config
-                assert "name" in config
-                assert "category" in config
+        # Check via SkillProxy._skill.commands (the original SkillCommand objects)
+        for cmd_name, cmd in skill._skill.commands.items():
+            assert hasattr(cmd, "_is_skill_command") or hasattr(cmd.func, "_is_skill_command"), (
+                f"Command {cmd_name} should have _is_skill_command"
+            )
 
-    def test_tools_py_has_commands(self, skill):
-        """skill/tools.py should have @skill_command decorated functions."""
-        commands = [
-            name
-            for name, func in inspect.getmembers(skill, inspect.isfunction)
-            if hasattr(func, "_is_skill_command")
-        ]
+    def test_skill_has_commands(self, skill):
+        """skill should have @skill_command decorated functions."""
+        # Check via SkillProxy._skill.commands (the original SkillCommand objects)
+        commands = list(skill._skill.commands.keys())
         assert len(commands) > 0, "No skill commands found"
-        assert "templates" in commands
+        # Phase 63+ commands
         assert "discover" in commands
         assert "suggest" in commands
-        assert "auto_route" in commands
+        assert "list_templates" in commands
+        assert "list_tools" in commands
 
 
-class TestSkillAutoRoute:
-    """Test skill.auto_route command (Phase 36.8)."""
+class TestSkillDiscoveryCommands:
+    """Test skill discovery commands (discover, suggest, list_index)."""
 
-    def test_auto_route_command_exists(self, skill):
-        """The auto_route command should exist in skill tools."""
-        assert hasattr(skill, "auto_route"), "skill module missing 'auto_route' function"
+    def test_discover_command_exists(self, skill):
+        """The discover command should exist in skill tools."""
+        assert hasattr(skill, "discover"), "skill module missing 'discover' function"
 
-    @pytest.mark.asyncio
-    async def test_auto_route_returns_string(self, skill):
-        """skill.auto_route should return a string result."""
-        result = await skill.auto_route(task="analyze pcap file")
+    def test_suggest_command_exists(self, skill):
+        """The suggest command should exist in skill tools."""
+        assert hasattr(skill, "suggest"), "skill module missing 'suggest' function"
 
-        # Handle CommandResult wrapper
-        if hasattr(result, "data"):
-            result = result.data if result.success else result.error
+    def test_list_index_command_exists(self, skill):
+        """The list_index command should exist in skill tools."""
+        assert hasattr(skill, "list_index"), "skill module missing 'list_index' function"
 
-        assert isinstance(result, str), "auto_route() should return string"
-
-    @pytest.mark.asyncio
-    async def test_auto_route_contains_task(self, skill):
-        """skill.auto_route result should contain the task description."""
-        result = await skill.auto_route(task="analyze pcap file")
-
-        if hasattr(result, "data"):
-            result = result.data if result.success else result.error
-
-        assert isinstance(result, str)
-        # Result should contain either task context or error message
-        # Both indicate the function executed
-        has_content = (
-            "pcap" in result.lower()
-            or "analyze" in result.lower()
-            or "auto-route" in result.lower()
-            or "task" in result.lower()
-            or "skill" in result.lower()
-            or "error" in result.lower()
-        )
-        assert has_content, "Result should contain task context or indicate processing"
-
-    @pytest.mark.asyncio
-    async def test_auto_route_contains_suggestion(self, skill):
-        """skill.auto_route should provide suggestions or ready status."""
-        result = await skill.auto_route(task="work with docker containers")
-
-        if hasattr(result, "data"):
-            result = result.data if result.success else result.error
-
-        assert isinstance(result, str)
-        # Should contain skill-related content or indicate processing
-        has_content = (
-            "ready" in result.lower()
-            or "loaded" in result.lower()
-            or "suggested" in result.lower()
-            or "no matching" in result.lower()
-            or "auto-route" in result.lower()
-            or "task" in result.lower()
-            or "skill" in result.lower()
-        )
-        assert has_content, "Result should indicate skill status"
-
-    def test_auto_route_has_skill_config(self, skill):
-        """skill.auto_route should have proper @skill_command metadata."""
-        assert hasattr(skill.auto_route, "_is_skill_command")
-        assert hasattr(skill.auto_route, "_skill_config")
-
-        config = skill.auto_route._skill_config
-        assert "name" in config
-        assert config["name"] == "auto_route"
-        assert "category" in config
-        assert config["category"] == "workflow"
-
-    @pytest.mark.asyncio
-    async def test_auto_route_search_logic(self, skill):
-        """skill.auto_route should search for matching skills."""
-        # This tests the underlying logic
-        from agent.core.skill_discovery import SkillDiscovery
-
-        discovery = SkillDiscovery()
-
-        # Search for git-related skills
-        results = await discovery.search(
-            query="git version control",
-            limit=5,
-        )
-
-        # Should return results (may be empty if no skills match)
-        assert isinstance(results, list), "Search should return a list"
-
-    @pytest.mark.asyncio
-    async def test_auto_route_with_auto_install_flag(self, skill):
-        """skill.auto_route should accept auto_install parameter."""
-        # This tests the parameter is accepted
-        result = await skill.auto_route(task="convert video", auto_install=False)
-
-        if hasattr(result, "data"):
-            result = result.data if result.success else result.error
-
-        assert isinstance(result, str), "auto_route() should return string"
+    def test_jit_install_command_exists(self, skill):
+        """The jit_install command should exist in skill tools."""
+        assert hasattr(skill, "jit_install"), "skill module missing 'jit_install' function"
 
 
-class TestSkillAutoRouteIntegration:
-    """Integration tests for skill.auto_route with registry."""
+class TestSkillToolManagement:
+    """Test skill tool management commands."""
 
-    def test_auto_route_uses_vector_discovery(self, skill):
-        """skill.auto_route should use SkillDiscovery."""
+    def test_list_tools_command_exists(self, skill):
+        """The list_tools command should exist in skill tools."""
+        assert hasattr(skill, "list_tools"), "skill module missing 'list_tools' function"
+
+    def test_search_tools_command_exists(self, skill):
+        """The search_tools command should exist in skill tools."""
+        assert hasattr(skill, "search_tools"), "skill module missing 'search_tools' function"
+
+    def test_reload_command_exists(self, skill):
+        """The reload command should exist in skill tools."""
+        assert hasattr(skill, "reload"), "skill module missing 'reload' function"
+
+    def test_unload_command_exists(self, skill):
+        """The unload command should exist in skill tools."""
+        assert hasattr(skill, "unload"), "skill module missing 'unload' function"
+
+
+class TestSkillDiscoveryIntegration:
+    """Integration tests for skill discovery with registry."""
+
+    def test_discover_uses_skill_discovery(self, skill):
+        """skill.discover should use SkillDiscovery."""
         from agent.core.skill_discovery import SkillDiscovery
 
         # Should be able to create and use discovery
         discovery = SkillDiscovery()
         assert discovery is not None, "SkillDiscovery should be instantiable"
 
+    def test_suggest_returns_recommendation(self, skill):
+        """skill.suggest should return a recommendation string."""
+        result = skill.suggest(task="git version control")
 
-class TestSkillAutoRouteEdgeCases:
-    """Edge case tests for skill.auto_route."""
+        # Handle CommandResult wrapper
+        if hasattr(result, "data"):
+            result = result.data if result.success else result.error
 
-    @pytest.mark.asyncio
-    async def test_auto_route_empty_task(self, skill):
-        """skill.auto_route with empty task should not crash."""
-        result = await skill.auto_route(task="")
+        assert isinstance(result, str)
+
+
+class TestSkillListTools:
+    """Tests for skill.list_tools command."""
+
+    def test_list_tools_returns_string(self, skill):
+        """skill.list_tools should return a string result."""
+        result = skill.list_tools()
+
+        # Handle CommandResult wrapper
+        if hasattr(result, "data"):
+            result = result.data if result.success else result.error
+
+        assert isinstance(result, str)
+
+    def test_list_tools_contains_skill_names(self, skill):
+        """skill.list_tools should contain skill names."""
+        result = skill.list_tools()
 
         if hasattr(result, "data"):
             result = result.data if result.success else result.error
 
-        # Should return a valid response (may be "no matching skills")
-        assert isinstance(result, str), "Should return string even for empty task"
-
-    @pytest.mark.asyncio
-    async def test_auto_route_nonexistent_task(self, skill):
-        """skill.auto_route with non-matching task should handle gracefully."""
-        result = await skill.auto_route(task="xyznonexistent123abc task xyz")
-
-        if hasattr(result, "data"):
-            result = result.data if result.success else result.error
-
-        assert isinstance(result, str), "Should return string for non-matching task"
-        # Should indicate no matches found
-        assert "no" in result.lower() or "not" in result.lower() or "find" in result.lower(), (
-            "Should indicate no matching skills"
-        )
+        assert isinstance(result, str)

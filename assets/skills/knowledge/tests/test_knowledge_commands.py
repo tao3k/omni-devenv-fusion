@@ -1,14 +1,8 @@
 """
-Knowledge Skill Tests - Zero Configuration (Phase 35.1)
+Knowledge Skill Tests - Phase 63+ Architecture
 
-Usage:
-    def test_knowledge_query(knowledge):  # 'knowledge' fixture auto-injected
-        assert knowledge.get_development_context().success
-
-No conftest.py, no imports needed!
+Tests for knowledge skill commands with scripts/*.py pattern.
 """
-
-import inspect
 
 
 def test_get_development_context_exists(knowledge):
@@ -37,40 +31,41 @@ def test_list_supported_languages_exists(knowledge):
 
 
 def test_has_skill_commands(knowledge):
-    commands = [
-        name
-        for name, func in inspect.getmembers(knowledge, inspect.isfunction)
-        if hasattr(func, "_is_skill_command")
-    ]
+    """knowledge should have @skill_command decorated functions."""
+    # Check via knowledge._skill.commands
+    commands = list(knowledge._skill.commands.keys())
     assert len(commands) >= 5
     assert "get_development_context" in commands
     assert "consult_architecture_doc" in commands
 
 
 def test_development_context_has_config(knowledge):
-    assert hasattr(knowledge.get_development_context, "_skill_config")
-    config = knowledge.get_development_context._skill_config
+    """get_development_context should have _skill_config via the SkillCommand."""
+    # Access via the original SkillCommand object
+    cmd = knowledge._skill.commands.get("get_development_context")
+    assert cmd is not None, "get_development_context command not found"
+    assert hasattr(cmd, "_skill_config") or hasattr(cmd.func, "_skill_config")
+    config = getattr(cmd, "_skill_config", None) or getattr(cmd.func, "_skill_config", None)
+    assert config is not None, "config should not be None"
     assert config["name"] == "get_development_context"
     assert config["category"] == "read"
 
 
 def test_all_commands_have_category(knowledge):
-    for name, func in inspect.getmembers(knowledge, inspect.isfunction):
-        if hasattr(func, "_is_skill_command"):
-            assert hasattr(func, "_skill_config")
-            config = func._skill_config
-            assert "category" in config
+    """All knowledge commands should have category in config."""
+    for cmd_name, cmd in knowledge._skill.commands.items():
+        config = getattr(cmd, "_skill_config", None) or getattr(cmd.func, "_skill_config", None)
+        assert config is not None, f"Command {cmd_name} should have _skill_config"
+        assert "category" in config
 
 
 def test_list_supported_languages_returns_json(knowledge):
-    import asyncio
     import json
 
-    result = asyncio.run(knowledge.list_supported_languages())
+    result = knowledge.list_supported_languages()
 
-    from agent.skills.decorators import CommandResult
-
-    if isinstance(result, CommandResult):
+    # Handle CommandResultWrapper
+    if hasattr(result, "data"):
         result = result.data if result.success else result.error
 
     assert isinstance(result, str)
@@ -81,14 +76,12 @@ def test_list_supported_languages_returns_json(knowledge):
 
 
 def test_get_development_context_returns_json(knowledge):
-    import asyncio
     import json
 
-    result = asyncio.run(knowledge.get_development_context())
+    result = knowledge.get_development_context()
 
-    from agent.skills.decorators import CommandResult
-
-    if isinstance(result, CommandResult):
+    # Handle CommandResultWrapper
+    if hasattr(result, "data"):
         result = result.data if result.success else result.error
 
     assert isinstance(result, str)
