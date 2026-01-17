@@ -21,7 +21,7 @@ assets/skills/{skill_name}/
 ├── README.md             # [REQUIRED] Human-readable documentation
 ├── scripts/              # [REQUIRED] Command implementations
 │   ├── __init__.py       # Package marker (required for import)
-│   └── commands.py       # @skill_script decorated functions
+│   └── commands.py       # @skill_command decorated functions
 ├── templates/            # Jinja2 templates (skill defaults)
 │   ├── command_result.j2
 │   └── error_message.j2
@@ -35,7 +35,7 @@ assets/skills/{skill_name}/
 | --------------------- | ------------- | ----------------------------------------------------- |
 | `SKILL.md`            | Identity      | YAML frontmatter for routing, command list, LLM rules |
 | `README.md`           | Documentation | Usage examples, command reference                     |
-| `scripts/commands.py` | Execution     | @skill_script decorated async functions               |
+| `scripts/commands.py` | Execution     | @skill_command decorated async functions              |
 | `templates/*.j2`      | Output        | Jinja2 templates for formatting                       |
 | `tests/`              | Quality       | Unit and integration tests                            |
 
@@ -94,14 +94,14 @@ git log --oneline
 
 ````
 
-## @skill_script Pattern
+## @skill_command Pattern
 
-Commands are defined in `scripts/commands.py` with the `@skill_script` decorator:
+Commands are defined in `scripts/commands.py` with the `@skill_command` decorator:
 
 ```python
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
-@skill_script(
+@skill_command(
     name="status",
     category="read",
     description="Show working tree status",
@@ -116,7 +116,7 @@ async def git_status() -> str:
     )
     return result.stdout or "Working tree clean"
 
-@skill_script(
+@skill_command(
     name="commit",
     category="write",
     description="Commit staged changes",
@@ -195,7 +195,7 @@ assets/skills/git/                    # Skill Directory
 │   └── error_message.j2
 └── scripts/
     ├── __init__.py                   # Package marker
-    └── commands.py                    # @skill_script decorated commands
+    └── commands.py                    # @skill_command decorated commands
 
 assets/templates/                      # User overrides (Priority)
 └── git/
@@ -305,9 +305,9 @@ authors: ["your-name"]
 ### 3. Add Commands in scripts/commands.py
 
 ```python
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
-@skill_script(
+@skill_command(
     name="my_command",
     category="read",
     description="Brief description of what this command does",

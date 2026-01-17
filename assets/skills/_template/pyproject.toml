@@ -27,16 +27,16 @@ build-backend = "hatchling.build"
 #
 # For skills with heavy dependencies, use the Sidecar Pattern:
 #
-# 1. tools.py - Lightweight interface (uses common.isolation.run_skill_script)
+# 1. tools.py - Lightweight interface (uses common.isolation.run_skill_command)
 # 2. scripts/engine.py - Heavy implementation (imports crawl4ai, playwright, etc.)
 # 3. pyproject.toml - Skill dependencies (isolated by uv)
 #
 # Example tools.py:
-#     from common.isolation import run_skill_script
+#     from common.isolation import run_skill_command
 #     from pathlib import Path
 #
 #     def my_command(param: str):
-#         return run_skill_script(
+#         return run_skill_command(
 #             skill_dir=Path(__file__).parent,
 #             script_name="engine.py",
 #             args={"param": param},

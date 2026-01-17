@@ -33,16 +33,18 @@ class TestMcpServerArchitecture:
 
     def test_omni_server_instance(self):
         """Omni MCP Server instance should be created correctly."""
-        from agent.mcp_server import server
+        from agent.mcp_server.server import get_init_options
 
-        assert server is not None
-        assert server.name == "omni-agent"
+        # Check that init options are correctly set
+        init_opts = get_init_options()
+        assert init_opts.server_name == "omni-agent"
+        assert init_opts.server_version == "1.0.0"
 
     def test_run_mcp_server_import(self):
-        """run_mcp_server function should be importable."""
-        from agent.mcp_server import run_mcp_server
+        """run function should be importable (the MCP server entry point)."""
+        from agent.mcp_server import run
 
-        assert callable(run_mcp_server)
+        assert callable(run)
 
 
 class TestSkillArchitecture:

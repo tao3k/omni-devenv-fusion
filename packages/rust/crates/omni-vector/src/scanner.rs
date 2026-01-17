@@ -1,7 +1,7 @@
-//! Phase 62: Script Scanner for @skill_script Discovery
+//! Phase 62: Script Scanner for @skill_command Discovery
 //!
 //! Scans `scripts/*.py` files in skill directories to discover
-//! tools decorated with `@skill_script`.
+//! tools decorated with `@skill_command`.
 //!
 //! Uses ast-grep for precise AST pattern matching.
 
@@ -121,65 +121,125 @@ impl ScriptScanner {
         hasher.update(content.as_bytes());
         let file_hash = hex::encode(hasher.finalize());
 
-        // Use ast-grep to find ONLY function definitions decorated with @skill_script
+        // Use ast-grep to find ONLY function definitions decorated with @skill_command
         let lang: SupportLang = "py".parse().expect("Python language should be supported");
         let root = lang.ast_grep(&content);
         let root_node = root.root();
 
-        // Pattern to match @skill_script decorator
-        // Note: AST sees it as skill_script(...) Call, not @skill_script(...)
-        // The @ is Python syntax, the function name in AST is 'skill_script'
-        let decorator_pattern = r#"skill_script($$$)"#;
+        // Pattern to match @skill_command decorator with name parameter
+        // Capture the name value if provided: @skill_command(name="xxx")
+        let decorator_with_name = r#"skill_command(name=$NAME, $$$)"#;
+        let search_decorator_with_name = Pattern::try_new(decorator_with_name, lang)
+            .map_err(|e| anyhow::anyhow!("Failed to parse decorator pattern: {}", e))?;
 
+        // Pattern to match @skill_command decorator without name parameter
+        let decorator_pattern = r#"skill_command($$$)"#;
         let search_decorator = Pattern::try_new(decorator_pattern, lang)
             .map_err(|e| anyhow::anyhow!("Failed to parse decorator pattern: {}", e))?;
 
-        // Also need pattern to get function name
-        // Use simple def pattern - ast-grep will match the node containing def
+        // Pattern to get function name
         let func_pattern = r#"def $NAME"#;
         let search_func = Pattern::try_new(func_pattern, lang)
             .map_err(|e| anyhow::anyhow!("Failed to parse function pattern: {}", e))?;
 
-        // Track which functions are decorated by @skill_script
-        let mut decorated_functions = std::collections::HashSet::new();
+        // Track which functions are decorated by @skill_command
+        // Map: function_name -> tool_name (from decorator's name parameter)
+        let mut decorator_info: std::collections::HashMap<String, (usize, Option<String>)> =
+            std::collections::HashMap::new();
 
-        // Find all decorator positions (byte offsets)
-        let mut decorator_positions: Vec<usize> = Vec::new();
+        // Find decorators with name parameter and extract the name
         for node in root_node.dfs() {
-            if search_decorator.match_node(node.clone()).is_some() {
-                // Get the byte position of the end of the decorator
+            if let Some(m) = search_decorator_with_name.match_node(node.clone()) {
                 let range = node.range();
-                decorator_positions.push(range.end);
+                let env = m.get_env();
+
+                // Get the name argument value (strips quotes)
+                let raw_name = env
+                    .get_match("NAME")
+                    .map(|n| n.text().to_string())
+                    .unwrap_or_default();
+
+                // Strip surrounding quotes if present
+                let tool_name = raw_name.trim_matches('"').trim_matches('\'').to_string();
+
+                // Find the function this decorator applies to by proximity
+                // Look for the next function definition within 500 bytes
+                let func_range_start = range.end;
+                for func_node in root_node.dfs() {
+                    if let Some(func_match) = search_func.match_node(func_node.clone()) {
+                        let func_env = func_match.get_env();
+                        let func_name = func_env
+                            .get_match("NAME")
+                            .map(|n| n.text().to_string())
+                            .unwrap_or_else(|| "unknown".to_string());
+                        let func_range = func_match.range();
+
+                        if func_range.start > func_range_start
+                            && func_range.start - func_range_start < 500
+                        {
+                            // Store the explicit tool_name from decorator
+                            if !tool_name.is_empty() {
+                                decorator_info
+                                    .insert(func_name.clone(), (range.end, Some(tool_name)));
+                            }
+                            break;
+                        }
+                    }
+                }
             }
         }
 
-        // Now find functions and check if they have a @skill_script decorator before them
+        // Find decorators without explicit name parameter
+        for node in root_node.dfs() {
+            if search_decorator.match_node(node.clone()).is_some()
+                && search_decorator_with_name
+                    .match_node(node.clone())
+                    .is_none()
+            {
+                let range = node.range();
+
+                // Find the function this decorator applies to
+                for func_node in root_node.dfs() {
+                    if let Some(func_match) = search_func.match_node(func_node.clone()) {
+                        let func_env = func_match.get_env();
+                        let func_name = func_env
+                            .get_match("NAME")
+                            .map(|n| n.text().to_string())
+                            .unwrap_or_else(|| "unknown".to_string());
+                        let func_range = func_match.range();
+
+                        // Function starts after decorator
+                        if func_range.start > range.end && func_range.start - range.end < 500 {
+                            // Only insert if not already found (decorators with name take precedence)
+                            if !decorator_info.contains_key(&func_name) {
+                                decorator_info.insert(func_name.clone(), (range.end, None));
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Now find functions and create ToolRecords
         for node in root_node.dfs() {
             if let Some(m) = search_func.match_node(node.clone()) {
-                // Get the match environment
                 let env = m.get_env();
 
-                // Get function name from $NAME meta-variable
                 let func_name = env
                     .get_match("NAME")
                     .map(|n| n.text().to_string())
                     .unwrap_or_else(|| "unknown".to_string());
 
-                // Get byte position of function definition
-                let func_range = m.range();
+                let _func_range = m.range();
 
-                // Check if this function is decorated with @skill_script
-                // A function is decorated if there's a @skill_script ending
-                // within 500 bytes before the function (handles multi-line decorators)
-                let is_decorated = decorator_positions
-                    .iter()
-                    .any(|&dec_pos| dec_pos < func_range.start && func_range.start - dec_pos < 500);
-
-                if is_decorated && !decorated_functions.contains(&func_name) {
-                    decorated_functions.insert(func_name.clone());
-
-                    // For Phase 62, tool_name is the function name
-                    let tool_name = func_name.clone();
+                // Check if this function has a @skill_command decorator
+                if let Some((_, tool_name_opt)) = decorator_info.get(&func_name) {
+                    // Use decorator's name if provided, otherwise use function name
+                    let tool_name = match tool_name_opt {
+                        Some(name) => name.clone(),
+                        None => func_name.clone(),
+                    };
 
                     // Generate description
                     let description = format!("Execute {}.{}", skill_name, tool_name);
@@ -244,7 +304,7 @@ mod tests {
         // Test if pattern matching works
         let lang: SupportLang = "py".parse().expect("Python");
         let content = r#"
-@skill_script(name="test")
+@skill_command(name="test")
 def hello():
     pass
 "#;
@@ -252,7 +312,7 @@ def hello():
         let root_node = root.root();
 
         // Try a pattern that should match
-        let pattern = r#"@skill_script($A)"#;
+        let pattern = r#"@skill_command($A)"#;
         let search_pattern = Pattern::try_new(pattern, lang).expect("Pattern should parse");
 
         let mut matches = 0;
@@ -274,14 +334,14 @@ def hello():
 
         // Use single-line format for decorators
         let script_content = r#"
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
-@skill_script(name="hello", description="Say hello to the world")
+@skill_command(name="hello", description="Say hello to the world")
 def hello(name: str) -> str:
     '''Greet someone by name.'''
     return f"Hello, {name}!"
 
-@skill_script(description="An example function")
+@skill_command(description="An example function")
 def example() -> str:
     '''This is an example.'''
     return "example"
@@ -315,7 +375,7 @@ def example() -> str:
 
         // Script with multi-line decorator (like crawl4ai)
         let script_content = r#"
-@skill_script(
+@skill_command(
     name="crawl_url",
     description="Crawl a web page"
 )
@@ -337,6 +397,49 @@ async def crawl_url(url: str) -> dict:
     }
 
     #[test]
+    fn test_decorator_name_differs_from_function_name() {
+        // Test that tool_name uses decorator's name, not function name
+        // This is critical for skill.reload (name="reload" but function is reload_skill)
+        let temp_dir = TempDir::new().unwrap();
+        let skill_dir = temp_dir.path().join("test_skill");
+        let scripts_dir = skill_dir.join("scripts");
+        fs::create_dir_all(&scripts_dir).unwrap();
+
+        // Script where decorator name differs from function name
+        let script_content = r#"
+from agent.skills.decorators import skill_command
+
+@skill_command(name="reload", description="Reload a skill")
+def reload_skill(name: str) -> str:
+    '''Reload a skill from disk.'''
+    return f"Reloaded {name}"
+
+@skill_command(name="commit", description="Commit changes")
+def do_commit(message: str) -> str:
+    '''Commit changes to git.'''
+    return f"Committed {message}"
+"#;
+        let script_file = scripts_dir.join("test.py");
+        let mut file = File::create(&script_file).unwrap();
+        file.write_all(script_content.as_bytes()).unwrap();
+
+        let scanner = ScriptScanner::new();
+        let tools = scanner.scan_skill_dir(&skill_dir).unwrap();
+
+        assert_eq!(tools.len(), 2);
+
+        // First tool should use decorator's name "reload", not function name "reload_skill"
+        let reload_tool = &tools[0];
+        assert_eq!(reload_tool.tool_name, "test_skill.reload");
+        assert_eq!(reload_tool.function_name, "reload_skill");
+
+        // Second tool should use decorator's name "commit", not function name "do_commit"
+        let commit_tool = &tools[1];
+        assert_eq!(commit_tool.tool_name, "test_skill.commit");
+        assert_eq!(commit_tool.function_name, "do_commit");
+    }
+
+    #[test]
     fn test_skips_internal_functions() {
         // Test that internal decorator functions are not picked up
         let temp_dir = TempDir::new().unwrap();
@@ -346,7 +449,7 @@ async def crawl_url(url: str) -> dict:
 
         // Script with internal decorator functions (like in utils.py)
         let script_content = r#"
-def skill_script(**kwargs):
+def skill_command(**kwargs):
     """Internal decorator factory."""
     def decorator(func):
         def wrapper(*args, **kwargs):
@@ -354,7 +457,7 @@ def skill_script(**kwargs):
         return wrapper
     return decorator
 
-@skill_script(name="real_tool", description="A real tool")
+@skill_command(name="real_tool", description="A real tool")
 def real_tool():
     '''This is a real tool.'''
     pass
@@ -411,7 +514,7 @@ def real_tool():
         let script1 = scripts1.join("commit.py");
         fs::write(
             &script1,
-            r#"@skill_script(name="commit")
+            r#"@skill_command(name="commit")
 def commit():
     pass
 "#,
@@ -424,7 +527,7 @@ def commit():
         let script2 = scripts2.join("read.py");
         fs::write(
             &script2,
-            r#"@skill_script(name="read")
+            r#"@skill_command(name="read")
 def read():
     pass
 "#,

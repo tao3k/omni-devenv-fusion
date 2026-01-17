@@ -3,7 +3,9 @@ assets/skills/memory/scripts/__init__.py
 Export memory commands for external usage (e.g. by NoteTaker).
 """
 
-from .memory import (
+from __future__ import annotations
+
+from agent.skills.memory.scripts.memory import (
     save_memory,
     search_memory,
     index_memory,

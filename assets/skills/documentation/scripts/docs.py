@@ -10,7 +10,7 @@ from typing import Optional
 
 import structlog
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 from common.gitops import get_project_root
 
 logger = structlog.get_logger(__name__)
@@ -20,7 +20,7 @@ root = get_project_root()
 knowledge_dir = root / "agent" / "knowledge"
 
 
-@skill_script(
+@skill_command(
     name="create_knowledge_entry",
     category="write",
     description="Create a new standardized knowledge entry.",
@@ -56,7 +56,7 @@ async def create_knowledge_entry(title: str, category: str, content: str) -> str
         return f"Failed to create doc: {e}"
 
 
-@skill_script(
+@skill_command(
     name="rebuild_knowledge_index",
     category="write",
     description="Scan all markdown files and update the main README.md index.",
@@ -95,7 +95,7 @@ async def rebuild_knowledge_index() -> str:
         return f"Failed to rebuild index: {e}"
 
 
-@skill_script(
+@skill_command(
     name="search_knowledge_base",
     category="read",
     description="Simple text search across the knowledge base.",

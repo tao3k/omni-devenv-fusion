@@ -58,7 +58,7 @@ async def consult_knowledge_base(
     """
     vm = get_vector_memory()
 
-    if not vm.client:
+    if not vm.store:
         return {
             "success": False,
             "error": "Vector memory not available",
@@ -254,7 +254,7 @@ async def get_skill_lessons(skills: List[str], limit: int = 5) -> str:
 
     vm = get_vector_memory()
 
-    if not vm.client:
+    if not vm.store:
         return ""
 
     # Build query from skill names

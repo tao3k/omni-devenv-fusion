@@ -1,7 +1,7 @@
 """
 git/scripts/status.py - Git status implementation
 
-Simple wrappers around native git commands (no skill_script decorator needed).
+Simple wrappers around native git commands (no skill_command decorator needed).
 """
 
 import subprocess

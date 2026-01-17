@@ -10,7 +10,7 @@ Output Format:
 
 Architecture:
     - Heavy imports are lazy-loaded inside functions
-    - Uses local skill_script decorator (Shim Pattern) for Rust Scanner
+    - Uses local skill_command decorator (Shim Pattern) for Rust Scanner
     - Called via JIT Loader's _execute_isolated() method
 
 Usage:
@@ -34,12 +34,12 @@ from typing import Optional
 
 # Use absolute import for uv run compatibility
 try:
-    from .utils import skill_script
+    from .utils import skill_command
 except ImportError:
-    from utils import skill_script
+    from utils import skill_command
 
 
-@skill_script(
+@skill_command(
     name="crawl_url",
     description="Crawl a web page and extract its content as markdown using Playwright.",
 )
@@ -98,7 +98,7 @@ async def crawl_url(
         }
 
 
-@skill_script(
+@skill_command(
     name="check_crawler_ready",
     description="Check if the crawler skill is properly configured and ready.",
 )
@@ -147,7 +147,7 @@ def main():
         except json.JSONDecodeError:
             pass
     else:
-        # Use command line args (for run_skill_script)
+        # Use command line args (for run_skill_command)
         url = args.url or ""
         fit_markdown = args.fit_markdown.lower() == "true" if args.fit_markdown else True
 

@@ -1,8 +1,8 @@
 """
-extract_schema.py - Schema Extractor for @skill_script Functions
+extract_schema.py - Schema Extractor for @skill_command Functions
 
 This module is part of the agent package and provides schema extraction
-for Python functions decorated with @skill_script.
+for Python functions decorated with @skill_command.
 
 Can be used by:
 1. Rust indexer via PyO3 embedding (production)

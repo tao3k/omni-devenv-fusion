@@ -386,7 +386,7 @@ command = graph.goto("review_node", update={"status": "approved"})
 
 ## Best Practices
 
-1. **Use skill nodes for existing commands** - Leverage `@skill_script` decorated functions
+1. **Use skill nodes for existing commands** - Leverage `@skill_command` decorated functions
 2. **Use function nodes for simple logic** - Keep them focused and async
 3. **Use command nodes for dynamic routing** - When you need to jump to any node
 4. **Always set entry point** - Or use single-node shortcut

@@ -14,7 +14,7 @@ from typing import TypedDict, Any
 
 import structlog
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
 logger = structlog.get_logger(__name__)
 
@@ -106,7 +106,7 @@ def _parse_ripgrep_output(output: str, context_lines: int = 2) -> list[SearchRes
     return results
 
 
-@skill_script(
+@skill_command(
     name="search_project_code",
     category="read",
     description="""

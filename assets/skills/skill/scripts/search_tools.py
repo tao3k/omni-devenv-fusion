@@ -9,10 +9,10 @@ Allows Agent to dynamically discover tools based on intent.
 import json
 from typing import Any
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
 
-@skill_script(
+@skill_command(
     name="search_tools",
     category="read",
     description="""

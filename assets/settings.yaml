@@ -198,7 +198,7 @@ skills:
     - writer
     - terminal
     - testing_protocol
-    - code_insight
+    - code_tools
     - skill # Phase 27: JIT Skill Acquisition
 
   # Reload behavior

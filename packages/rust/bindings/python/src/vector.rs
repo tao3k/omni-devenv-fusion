@@ -291,7 +291,7 @@ impl PyVectorStore {
 
     /// Phase 62: Index all tools from skills scripts directory.
     ///
-    /// Scans `base_path/skills/*/scripts/*.py` for `@skill_script` decorated
+    /// Scans `base_path/skills/*/scripts/*.py` for `@skill_command` decorated
     /// functions and indexes them for discovery.
     ///
     /// Args:
@@ -327,7 +327,7 @@ impl PyVectorStore {
 
     /// Phase 64: Scan for skill tools without indexing (sync version).
     ///
-    /// This method discovers @skill_script decorated functions without
+    /// This method discovers @skill_command decorated functions without
     /// attempting schema extraction. Returns raw tool records as JSON strings
     /// that can be processed by Python for schema extraction.
     ///

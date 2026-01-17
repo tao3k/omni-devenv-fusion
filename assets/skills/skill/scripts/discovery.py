@@ -4,7 +4,7 @@ skill/scripts/discovery.py - Skill Discovery Commands
 Phase 63: Migrated from tools.py
 """
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
 
 def _get_discovery():
@@ -14,7 +14,7 @@ def _get_discovery():
     return VectorSkillDiscovery()
 
 
-@skill_script(
+@skill_command(
     name="discover",
     category="workflow",
     description="""
@@ -70,7 +70,7 @@ async def discover(query: str = "", limit: int = 5, local_only: bool = False) ->
     return "\n".join(lines)
 
 
-@skill_script(
+@skill_command(
     name="suggest",
     category="workflow",
     description="""
@@ -105,7 +105,7 @@ async def suggest(task: str) -> str:
     return "\n".join(lines)
 
 
-@skill_script(
+@skill_command(
     name="jit_install",
     category="workflow",
     description="""
@@ -128,7 +128,7 @@ def jit_install(skill_id: str, auto_load: bool = True) -> str:
     return f"Installing skill: {skill_id} (auto_load={auto_load})"
 
 
-@skill_script(
+@skill_command(
     name="list_index",
     category="workflow",
     description="""

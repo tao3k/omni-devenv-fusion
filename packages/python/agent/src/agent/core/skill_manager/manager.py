@@ -390,7 +390,7 @@ class SkillManager(HotReloadMixin, SkillLoaderMixin, ObserverMixin, ResultCacheM
         Load a skill from a path.
 
         Only supports scripts/*.py pattern ().
-        Uses @skill_script decorated functions from scripts/*.py.
+        Uses @skill_command decorated functions from scripts/*.py.
 
         Args:
             skill_path: Path to the skill directory

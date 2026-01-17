@@ -32,12 +32,6 @@ from common.config.directory import (
     get_conf_dir,
 )
 
-from common.config.commits import (
-    get_commit_types,
-    get_commit_scopes,
-    get_commit_protocol,
-)
-
 __all__ = [
     # From settings
     "Settings",
@@ -50,8 +44,4 @@ __all__ = [
     # From directory
     "set_conf_dir",
     "get_conf_dir",
-    # From commits
-    "get_commit_types",
-    "get_commit_scopes",
-    "get_commit_protocol",
 ]

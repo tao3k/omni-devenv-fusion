@@ -65,22 +65,29 @@ class TestListToolsRegression:
                 )
 
     @pytest.mark.asyncio
-    async def test_list_tools_includes_omni_meta_tool(self, loaded_manager):
-        """list_tools must always include the omni meta-tool."""
+    async def test_list_tools_includes_all_skill_commands(self, loaded_manager):
+        """list_tools must return all skill commands from loaded skills."""
         from agent.mcp_server import handle_list_tools
 
         tools = await handle_list_tools()
         tool_names = {t.name for t in tools}
 
-        assert "omni" in tool_names, (
-            "omni meta-tool must be in list_tools output. "
-            "This tool is required for skill.command execution."
-        )
+        # Verify all skills have their commands represented
+        for skill_name, skill in loaded_manager.skills.items():
+            for cmd_name in skill.commands.keys():
+                if cmd_name.startswith(f"{skill_name}_"):
+                    base = cmd_name[len(skill_name) + 1 :]
+                elif cmd_name.startswith(f"{skill_name}."):
+                    base = cmd_name[len(skill_name) + 1 :]
+                else:
+                    base = cmd_name
+                expected_tool = f"{skill_name}.{base}"
+                assert expected_tool in tool_names, f"Missing: {expected_tool}"
 
     @pytest.mark.asyncio
-    async def test_list_tools_no_missing_commands(self, loaded_manager):
+    async def test_list_tools_count_matches(self, loaded_manager):
         """
-        Verify count matches: all skill commands + omni should equal tool count.
+        Verify count matches: skill commands should equal tool count.
 
         This catches cases where some commands are silently dropped.
         """
@@ -92,14 +99,12 @@ class TestListToolsRegression:
         expected_skill_commands = sum(
             len(skill.commands) for skill in loaded_manager.skills.values()
         )
-        expected_total = expected_skill_commands + 1  # +1 for omni
 
         actual_count = len(tools)
 
-        assert actual_count == expected_total, (
-            f"Tool count mismatch: expected {expected_total} "
-            f"(={expected_skill_commands} skill commands + omni), "
-            f"got {actual_count}. Some commands may have been dropped."
+        assert actual_count == expected_skill_commands, (
+            f"Tool count mismatch: expected {expected_skill_commands} "
+            f"skill commands, got {actual_count}. Some commands may have been dropped."
         )
 
     @pytest.mark.asyncio
@@ -111,7 +116,7 @@ class TestListToolsRegression:
         returned nothing for dynamic tools. This test ensures the fix works.
 
         Note: The actual count depends on how many skills are loaded.
-        At minimum, we should have all commands from loaded skills + omni.
+        At minimum, we should have all commands from loaded skills.
         """
         from agent.mcp_server import handle_list_tools
         from agent.core.skill_manager import get_skill_manager
@@ -121,11 +126,10 @@ class TestListToolsRegression:
 
         # Calculate expected count from loaded skills
         expected_skill_commands = sum(len(skill.commands) for skill in manager.skills.values())
-        expected_total = expected_skill_commands + 1  # +1 for omni
 
         # Verify all commands are returned
-        assert len(tools) == expected_total, (
-            f"list_tools returned {len(tools)} tools, expected {expected_total}. "
+        assert len(tools) == expected_skill_commands, (
+            f"list_tools returned {len(tools)} tools, expected {expected_skill_commands}. "
             "This suggests a regression to adaptive_loader behavior."
         )
 

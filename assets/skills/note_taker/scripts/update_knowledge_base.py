@@ -11,11 +11,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 from common.prj_dirs import PRJ_DATA
 
 
-@skill_script(
+@skill_command(
     name="update_knowledge_base",
     category="write",
     description="""
@@ -82,7 +82,7 @@ created: {timestamp_full}
     }
 
 
-@skill_script(
+@skill_command(
     name="search_notes",
     category="read",
     description="""

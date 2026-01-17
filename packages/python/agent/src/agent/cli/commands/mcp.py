@@ -24,7 +24,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from ..console import err_console
-from ..app import configure_logging
+from common.log_config import configure_logging
 
 
 # Transport mode enumeration
@@ -65,10 +65,8 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
         """
         # Configure logging based on transport mode
         if transport == TransportMode.stdio:
-            # Stdio mode: logs go to stderr, level INFO
             configure_logging(level="INFO")
         else:
-            # SSE mode: logs for debugging, level DEBUG
             configure_logging(level="DEBUG")
             err_console.print(
                 Panel(
@@ -79,9 +77,9 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
 
         # Import and run the server
         try:
-            from agent.mcp_server import run_mcp_server
+            from agent.mcp_server import run
 
-            asyncio.run(run_mcp_server(transport=transport.value, host=host, port=port))
+            asyncio.run(run(transport=transport.value, host=host, port=port))
         except KeyboardInterrupt:
             sys.exit(0)
         except Exception as e:

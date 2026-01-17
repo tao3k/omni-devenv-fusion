@@ -209,7 +209,7 @@ def _register_skill_fixture(skill_name: str, skills_root: Path):
     """
     Dynamically create and register a fixture for a skill.
 
-    Phase 63+ only: Only supports scripts/*.py pattern with @skill_script decorators.
+    Phase 63+ only: Only supports scripts/*.py pattern with @skill_command decorators.
     Legacy tools.py pattern is no longer supported.
 
     Collision Detection:
@@ -231,7 +231,7 @@ def _register_skill_fixture(skill_name: str, skills_root: Path):
     def _skill_fixture():
         """Dynamic fixture that loads skill via SkillManager.
 
-        Phase 63+ only: skills/*/scripts/*.py with @skill_script decorators.
+        Phase 63+ only: skills/*/scripts/*.py with @skill_command decorators.
         """
         scripts_path = skills_root / skill_name / "scripts"
 
@@ -241,7 +241,7 @@ def _register_skill_fixture(skill_name: str, skills_root: Path):
         # Set up package context BEFORE loading (enables agent.skills.git.scripts imports)
         _setup_skill_package_context(skill_name, skills_root)
 
-        # Phase 63+ mode: scripts/*.py with @skill_script
+        # Phase 63+ mode: scripts/*.py with @skill_command
         from agent.core.skill_manager import get_skill_manager
 
         manager = get_skill_manager()

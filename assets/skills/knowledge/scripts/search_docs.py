@@ -8,12 +8,12 @@ Provides semantic + keyword search over project documentation.
 from __future__ import annotations
 
 import json
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
 
-@skill_script(
+@skill_command(
     name="search_project_knowledge",
-    category="knowledge",
+    category="read",
     description="""
     [Knowledge RAG] Searches project documentation, specs, and guides using hybrid search.
 

@@ -208,7 +208,7 @@ async def ingest_all_knowledge() -> dict[str, Any]:
     """Ingest all project knowledge files into the vector store."""
     vm = get_vector_memory()
 
-    if not vm.client:
+    if not vm.store:
         return {"success": False, "error": "Vector memory not available"}
 
     knowledge_dirs = get_knowledge_dirs()

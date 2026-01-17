@@ -11,7 +11,7 @@ Template Locations:
 from pathlib import Path
 from typing import Dict, Optional
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 from common.skills_path import SKILLS_DIR
 from common.config.settings import get_setting
 from common.gitops import get_project_root
@@ -38,7 +38,7 @@ def get_template_dirs(skill_name: str) -> Dict[str, Path]:
     }
 
 
-@skill_script(
+@skill_command(
     name="list_templates",
     category="read",
     description="""
@@ -72,7 +72,7 @@ def list_templates(skill_name: str) -> Dict[str, Dict[str, str]]:
     return all_templates
 
 
-@skill_script(
+@skill_command(
     name="get_template_info",
     category="read",
     description="""
@@ -92,7 +92,7 @@ def get_template_info(skill_name: str, template_name: str) -> Optional[Dict[str,
     return templates.get(template_name)
 
 
-@skill_script(
+@skill_command(
     name="get_template_source",
     category="read",
     description="""
@@ -115,7 +115,7 @@ def get_template_source(skill_name: str, template_name: str) -> Optional[str]:
     return None
 
 
-@skill_script(
+@skill_command(
     name="eject_template",
     category="write",
     description="""

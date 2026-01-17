@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 import structlog
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
 logger = structlog.get_logger(__name__)
 
@@ -23,7 +23,7 @@ logger = structlog.get_logger(__name__)
 
 def _get_memory_path() -> Path:
     """Get memory root path."""
-    from common.cache_path import CACHE_DIR
+    from common import prj_dirs
     from common.settings import get_setting
 
     # Check for custom override in settings.yaml
@@ -31,7 +31,7 @@ def _get_memory_path() -> Path:
     if custom_path:
         return Path(custom_path)
 
-    return CACHE_DIR("memory")
+    return prj_dirs.get_cache_dir("memory")
 
 
 MEMORY_ROOT = _get_memory_path()
@@ -143,7 +143,7 @@ def _load_skill_manifest(skill_name: str) -> tuple[Optional[Dict[str, Any]], Opt
 # =============================================================================
 
 
-@skill_script(
+@skill_command(
     name="save_memory",
     category="write",
     description="Store a key insight into long-term memory.",
@@ -196,7 +196,7 @@ async def save_memory(content: str, metadata: Optional[Dict[str, Any]] = None) -
         return f"Error saving memory: {str(e)}"
 
 
-@skill_script(
+@skill_command(
     name="search_memory",
     category="read",
     description="Semantically search memory for relevant past experiences.",
@@ -248,7 +248,7 @@ async def search_memory(query: str, limit: int = 5) -> str:
         return f"Error searching memory: {str(e)}"
 
 
-@skill_script(
+@skill_command(
     name="index_memory",
     category="write",
     description="Optimize memory index for faster search (IVF-FLAT).",
@@ -274,7 +274,7 @@ async def index_memory() -> str:
         return f"Error creating index: {str(e)}"
 
 
-@skill_script(
+@skill_command(
     name="get_memory_stats",
     category="view",
     description="Get statistics about stored memories.",
@@ -297,7 +297,7 @@ async def get_memory_stats() -> str:
         return f"Error getting stats: {str(e)}"
 
 
-@skill_script(
+@skill_command(
     name="load_skill",
     category="write",
     description="Load a skill's manifest into semantic memory.",

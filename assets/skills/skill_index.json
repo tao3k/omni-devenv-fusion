@@ -115,10 +115,6 @@
       {
         "name": "crawl4ai.check_crawler_ready",
         "description": "Execute crawl4ai.check_crawler_ready"
-      },
-      {
-        "name": "crawl4ai.main",
-        "description": "Execute crawl4ai.main"
       }
     ],
     "routing_keywords": ["crawl", "scrape", "web", "fetch", "scrape"],
@@ -209,8 +205,8 @@
         "description": "Execute skill.search_tools"
       },
       {
-        "name": "skill.reload_skill",
-        "description": "Execute skill.reload_skill"
+        "name": "skill.reload",
+        "description": "Execute skill.reload"
       },
       {
         "name": "skill.discover",
@@ -229,8 +225,8 @@
         "description": "Execute skill.list_index"
       },
       {
-        "name": "skill.unload_skill",
-        "description": "Execute skill.unload_skill"
+        "name": "skill.unload",
+        "description": "Execute skill.unload"
       },
       {
         "name": "skill.list_templates",
@@ -447,8 +443,8 @@
         "description": "Execute filesystem.save_file"
       },
       {
-        "name": "filesystem.apply_file_changes",
-        "description": "Execute filesystem.apply_file_changes"
+        "name": "filesystem.apply_changes",
+        "description": "Execute filesystem.apply_changes"
       },
       {
         "name": "filesystem.list_directory",
@@ -844,52 +840,24 @@
     "path": "\"assets/skills/git\"",
     "tools": [
       {
+        "name": "git.git_commit",
+        "description": "Execute git.git_commit"
+      },
+      {
+        "name": "git.git_commit_amend",
+        "description": "Execute git.git_commit_amend"
+      },
+      {
+        "name": "git.git_commit_no_verify",
+        "description": "Execute git.git_commit_no_verify"
+      },
+      {
+        "name": "git.git_revert",
+        "description": "Execute git.git_revert"
+      },
+      {
         "name": "git.smart_commit",
         "description": "Execute git.smart_commit"
-      },
-      {
-        "name": "git.commit",
-        "description": "Execute git.commit"
-      },
-      {
-        "name": "git.commit_with_amend",
-        "description": "Execute git.commit_with_amend"
-      },
-      {
-        "name": "git.commit_no_verify",
-        "description": "Execute git.commit_no_verify"
-      },
-      {
-        "name": "git.get_last_commit",
-        "description": "Execute git.get_last_commit"
-      },
-      {
-        "name": "git.get_last_commit_msg",
-        "description": "Execute git.get_last_commit_msg"
-      },
-      {
-        "name": "git.revert",
-        "description": "Execute git.revert"
-      },
-      {
-        "name": "git.status",
-        "description": "Execute git.status"
-      },
-      {
-        "name": "git.git_status_detailed",
-        "description": "Execute git.git_status_detailed"
-      },
-      {
-        "name": "git.current_branch",
-        "description": "Execute git.current_branch"
-      },
-      {
-        "name": "git.has_staged_files",
-        "description": "Execute git.has_staged_files"
-      },
-      {
-        "name": "git.has_unstaged_files",
-        "description": "Execute git.has_unstaged_files"
       }
     ],
     "routing_keywords": [

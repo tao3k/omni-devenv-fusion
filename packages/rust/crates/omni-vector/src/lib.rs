@@ -9,7 +9,7 @@
 //! ├── store.rs            # CRUD operations (add/delete/count)
 //! ├── search.rs           # Search operations
 //! ├── index.rs            # Index creation operations
-//! ├── scanner.rs          # Script scanning for @skill_script
+//! ├── scanner.rs          # Script scanning for @skill_command
 //! ├── skill.rs            # Skill tool indexing
 //! └── batch.rs            # RecordBatch utilities
 //! ```

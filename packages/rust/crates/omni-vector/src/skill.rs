@@ -1,4 +1,4 @@
-//! Skill Tool Indexing - Discover and index @skill_script decorated functions
+//! Skill Tool Indexing - Discover and index @skill_command decorated functions
 //!
 //! This module provides methods for scanning skill directories and indexing
 //! tool functions discovered via the `ScriptScanner`.
@@ -10,7 +10,7 @@ use crate::{ScriptScanner, ToolRecord, VectorStoreError};
 impl crate::VectorStore {
     /// Index all tools from skills scripts directory.
     ///
-    /// Scans `base_path/skills/*/scripts/*.py` for `@skill_script` decorated
+    /// Scans `base_path/skills/*/scripts/*.py` for `@skill_command` decorated
     /// functions and indexes them for discovery.
     ///
     /// # Arguments
@@ -127,7 +127,7 @@ impl crate::VectorStore {
 
     /// Scan for skill tools without indexing (returns raw tool records as JSON).
     ///
-    /// This method discovers @skill_script decorated functions without
+    /// This method discovers @skill_command decorated functions without
     /// attempting schema extraction. Use this when you want to do schema
     /// extraction in Python with proper import context.
     ///

@@ -31,7 +31,7 @@ from typing import Any, Callable, Dict, Optional, TYPE_CHECKING, List, Union
 
 import structlog
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
 logger = structlog.get_logger(__name__)
 

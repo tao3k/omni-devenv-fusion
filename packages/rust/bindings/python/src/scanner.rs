@@ -10,7 +10,7 @@ use std::path::Path;
 /// Scan a skills directory and return discovered tools.
 ///
 /// This function uses the Rust ast-grep scanner to find all Python functions
-/// decorated with @skill_script in the skill scripts directory.
+/// decorated with @skill_command in the skill scripts directory.
 ///
 /// Args:
 ///   base_path: Base directory containing skills (e.g., "assets/skills")

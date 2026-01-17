@@ -14,7 +14,7 @@ The fundamental separation in Fusion:
 | Layer          | Purpose        | Files                                   |
 | -------------- | -------------- | --------------------------------------- |
 | **Brain**      | Rules, routing | `SKILL.md` (LLM reads when skill loads) |
-| **Muscle**     | Execution      | `scripts/commands.py` (@skill_script)   |
+| **Muscle**     | Execution      | `scripts/commands.py` (@skill_command)  |
 | **Guardrails** | Validation     | Lefthook, Cog, Pre-commit               |
 
 **Key insight:** Code is mechanism (how), prompts are policy (what/when).
@@ -91,13 +91,13 @@ When LLM needs to **perform** a task, it loads a Skill from `assets/skills/`:
 ```
 User: "Help me commit these changes"
 → LLM loads: assets/skills/git/
-→ LLM acts: follows SKILL.md + uses @skill_script commands
+→ LLM acts: follows SKILL.md + uses @skill_command commands
 ```
 
 A Skill contains:
 
 - `SKILL.md` - Rules and routing (LLM reads when skill loads)
-- `scripts/commands.py` - @skill_script decorated commands
+- `scripts/commands.py` - @skill_command decorated commands
 - `references/` - Workflow documentation (optional)
 
 ### Pattern 2: Memory Loading
@@ -163,7 +163,7 @@ Dispatches to: skill.command() function
 | **Core Unit** | Tools (functions) | Skills (packages)     | Commands              |
 | **Interface** | 100+ MCP tools    | 100+ MCP tools        | 1 MCP tool            |
 | **Syntax**    | `git_status()`    | `@omni("git.status")` | `@omni("git.status")` |
-| **Extension** | Add tools         | Add skill directory   | Add @skill_script     |
+| **Extension** | Add tools         | Add skill directory   | Add @skill_command    |
 
 ## Why This Separation?
 
@@ -209,7 +209,7 @@ Every skill follows a standardized structure:
 ```
 assets/skills/{skill_name}/
 ├── SKILL.md              # Rules & routing (LLM reads when skill loads)
-├── scripts/commands.py   # @skill_script decorated commands
+├── scripts/commands.py   # @skill_command decorated commands
 └── references/           # Workflow documentation (optional)
 ```
 

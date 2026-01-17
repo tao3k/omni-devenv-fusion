@@ -43,12 +43,12 @@ def _get_logger() -> Any:
 
 
 def _get_vector_discovery() -> Any:
-    """Get VectorSkillDiscovery lazily (Virtual Loading)."""
+    """Get SkillDiscovery lazily (Virtual Loading)."""
     global _cached_vector_discovery
     if _cached_vector_discovery is None:
-        from agent.core.skill_discovery import VectorSkillDiscovery
+        from agent.core.skill_discovery import SkillDiscovery
 
-        _cached_vector_discovery = VectorSkillDiscovery()
+        _cached_vector_discovery = SkillDiscovery()
     return _cached_vector_discovery
 
 

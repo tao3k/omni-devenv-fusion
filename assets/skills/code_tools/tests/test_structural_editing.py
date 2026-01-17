@@ -468,7 +468,7 @@ class TestSkillRegistration:
         command_names = list(skill.commands.keys())
         assert len(command_names) >= 3
 
-        # Check for key commands (registered via @skill_script name parameter)
+        # Check for key commands (registered via @skill_command name parameter)
         # Names are like "structural_editing_replace" -> displayed as "replace"
         command_names_str = " ".join(command_names)
         assert "replace" in command_names_str

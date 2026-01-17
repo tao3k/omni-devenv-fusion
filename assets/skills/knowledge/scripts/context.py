@@ -14,7 +14,7 @@ try:
 except ImportError:
     import tomli as tomllib
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 from common.gitops import get_project_root
 from common.skills_path import SKILLS_DIR
 
@@ -259,7 +259,7 @@ def _read_file_content(path: str) -> str:
     return ""
 
 
-@skill_script(
+@skill_command(
     name="get_development_context",
     category="read",
     description="""
@@ -309,7 +309,7 @@ async def get_development_context() -> str:
     return json.dumps(context, indent=2)
 
 
-@skill_script(
+@skill_command(
     name="consult_architecture_doc",
     category="read",
     description="""
@@ -333,7 +333,7 @@ async def consult_architecture_doc(topic: str) -> str:
     return _search_docs(topic)
 
 
-@skill_script(
+@skill_command(
     name="consult_language_expert",
     category="read",
     description="""
@@ -385,7 +385,7 @@ async def consult_language_expert(file_path: str, task_description: str) -> str:
     return json.dumps(result, indent=2)
 
 
-@skill_script(
+@skill_command(
     name="get_language_standards",
     category="read",
     description="""
@@ -429,7 +429,7 @@ async def get_language_standards(lang: str) -> str:
     )
 
 
-@skill_script(
+@skill_command(
     name="list_supported_languages",
     category="read",
     description="""

@@ -58,7 +58,7 @@ assets/skills/crawl4ai/
 ### tools.py (Lightweight Interface)
 
 ```python
-from common.isolation import run_skill_script
+from common.isolation import run_skill_command
 
 @skill_command(
     name="crawl_url",
@@ -67,7 +67,7 @@ from common.isolation import run_skill_script
 )
 def crawl_webpage(url: str, extract_blocks: bool = True) -> str:
     """Lightweight interface - no heavy imports."""
-    return run_skill_script(
+    return run_skill_command(
         skill_dir=Path(__file__).parent,
         script_name="engine.py",
         args={"url": url, "extract_blocks": extract_blocks},
@@ -105,7 +105,7 @@ import subprocess
 import json
 from pathlib import Path
 
-def run_skill_script(
+def run_skill_command(
     skill_dir: Path,
     script_name: str,
     args: dict,

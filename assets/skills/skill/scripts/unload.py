@@ -5,10 +5,10 @@ Provides dynamic skill unloading via MCP tool:
 - @omni("skill.unload", {"name": "advanced_search"})
 """
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
 
-@skill_script(
+@skill_command(
     name="unload",
     category="admin",
     description="""

@@ -13,7 +13,7 @@ from typing import Dict, List, Any, Optional
 
 import structlog
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 from common.skills_path import SKILLS_DIR
 
 logger = structlog.get_logger(__name__)
@@ -125,7 +125,7 @@ def _check_passive_voice(line: str) -> List[str]:
     return violations
 
 
-@skill_script(
+@skill_command(
     name="lint_writing_style",
     category="read",
     description="""
@@ -216,7 +216,7 @@ async def lint_writing_style(text: str) -> str:
     )
 
 
-@skill_script(
+@skill_command(
     name="check_markdown_structure",
     category="read",
     description="""
@@ -319,7 +319,7 @@ async def check_markdown_structure(text: str) -> str:
     )
 
 
-@skill_script(
+@skill_command(
     name="polish_text",
     category="read",
     description="""
@@ -360,7 +360,7 @@ async def polish_text(text: str) -> str:
     )
 
 
-@skill_script(
+@skill_command(
     name="load_writing_memory",
     category="read",
     description="""
@@ -394,7 +394,7 @@ async def load_writing_memory() -> str:
     )
 
 
-@skill_script(
+@skill_command(
     name="run_vale_check",
     category="read",
     description="""

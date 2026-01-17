@@ -96,14 +96,14 @@ This document describes the workflow and commands for the Template skill.
 
 ## Implementation Details
 
-### @skill_script Pattern
+### @skill_command Pattern
 
-Commands in `scripts/commands.py` are decorated with `@skill_script`:
+Commands in `scripts/commands.py` are decorated with `@skill_command`:
 
 ```python
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
-@skill_script(name="example", category="read", description="Brief desc")
+@skill_command(name="example", category="read", description="Brief desc")
 async def example(param: str = "default") -> str:
     """Detailed docstring."""
     return f"Result: {param}"

@@ -89,7 +89,7 @@ def main():
             print(f"   - {t.function_name}: {t.description[:40]}...")
     else:
         print("⚠️  No script-based tools detected in 'git' skill yet.")
-        print("   This is expected if you haven't added @skill_script decorators yet.")
+        print("   This is expected if you haven't added @skill_command decorators yet.")
         print("   The Rust scanner is working correctly - it's finding 0 tools.")
 
     # 5. Test attributes are accessible

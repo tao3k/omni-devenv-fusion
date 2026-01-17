@@ -7,15 +7,10 @@ Phase 33: Modularized subpackage.
 Modules:
 - settings.py: Settings class and functions
 - directory.py: Configuration directory management
-- commits.py: Commit-related configuration
 
 Usage:
-    # New modular imports (recommended)
     from common.config.settings import get_setting
-    from common.config.commits import get_commit_types
-
-    # Old imports (still work for backward compatibility)
-    from common.config.settings import get_setting
+    from common.config import get_setting  # Backward compatibility
 """
 
 from .settings import (
@@ -33,12 +28,6 @@ from .directory import (
     get_conf_dir,
 )
 
-from .commits import (
-    get_commit_types,
-    get_commit_scopes,
-    get_commit_protocol,
-)
-
 # Backward compatibility: Re-export everything
 __all__ = [
     # From settings
@@ -52,8 +41,4 @@ __all__ = [
     # From directory
     "set_conf_dir",
     "get_conf_dir",
-    # From commits
-    "get_commit_types",
-    "get_commit_scopes",
-    "get_commit_protocol",
 ]

@@ -11,13 +11,13 @@ from typing import List
 
 import structlog
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 from common.gitops import get_project_root
 
 logger = structlog.get_logger(__name__)
 
 
-@skill_script(
+@skill_command(
     name="analyze_project_structure",
     category="read",
     description="Generate a tree-like view of the project structure.",
@@ -61,7 +61,7 @@ async def analyze_project_structure(depth: int = 2) -> str:
     return "\n".join(output)
 
 
-@skill_script(
+@skill_command(
     name="grep_codebase",
     category="read",
     description="Universal content search (grep) for patterns in files.",
@@ -122,7 +122,7 @@ async def grep_codebase(pattern: str, file_extension: str = "", path: str = ".")
         return f"Error: {e}"
 
 
-@skill_script(
+@skill_command(
     name="detect_tech_stack",
     category="read",
     description="Analyze the project to identify languages and frameworks.",

@@ -1,11 +1,8 @@
 """
 src/agent/core/skill_discovery/indexing.py
- The Librarian - Adapter for VectorMemory.
+ The Librarian - Vector-Based Skill Discovery
 
-This module is a lightweight adapter that connects SkillManager to the
-Rust-backed VectorMemory (LanceDB) for semantic skill discovery.
-
-No file scanning or indexing logic here - all delegated to VectorMemory.
+Semantic skill search using Rust-backed VectorMemory (LanceDB).
 """
 
 from __future__ import annotations
@@ -14,24 +11,28 @@ from typing import Any
 
 from common.skills_path import SKILLS_DIR
 
-# Backward compatibility constant for old ChromaDB-based vector.py
+# Collection name for skill registry
 SKILL_REGISTRY_COLLECTION = "skill_registry"
 
 
 class SkillDiscovery:
     """
-    The Librarian: Facade for Semantic Skill Search.
+    Vector-based Semantic Skill Discovery.
 
-    Acts as a lightweight adapter between SkillManager and VectorMemory.
-    All heavy lifting (scanning, indexing, searching) is done by VectorMemory.
+    Uses VectorMemory (LanceDB) for semantic search over skill definitions.
     """
 
     def __init__(self) -> None:
         """Initialize the discovery adapter."""
-        from agent.core.vector_store import get_vector_memory
+        self._vm: Any = None
 
-        self.vm = get_vector_memory()
-        self.skills_dir = SKILLS_DIR()
+    def _get_vector_memory(self) -> Any:
+        """Get VectorMemory instance lazily."""
+        if self._vm is None:
+            from agent.core.vector_store import get_vector_memory
+
+            self._vm = get_vector_memory()
+        return self._vm
 
     async def reindex_all(self, skill_manager: Any | None = None) -> dict[str, Any]:
         """
@@ -48,8 +49,10 @@ class SkillDiscovery:
         Returns:
             Dict with sync stats: added, modified, deleted, total
         """
-        stats = await self.vm.sync_skills(
-            base_path=str(self.skills_dir),
+        vm = self._get_vector_memory()
+        skills_dir = SKILLS_DIR()
+        stats = await vm.sync_skills(
+            base_path=str(skills_dir),
             table_name="skills",
         )
 
@@ -57,10 +60,11 @@ class SkillDiscovery:
             "success": True,
             "stats": stats,
             "local_skills_indexed": stats.get("total", 0),
-            "remote_skills_indexed": 0,  # No remote skills for local discovery
         }
 
-    async def search(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+    async def search(
+        self, query: str, limit: int = 5, local_only: bool = False
+    ) -> list[dict[str, Any]]:
         """
         Semantic search for skills/tools.
 
@@ -72,27 +76,76 @@ class SkillDiscovery:
         Args:
             query: Natural language query
             limit: Maximum results to return
+            local_only: If True, only return installed skills
 
         Returns:
             List of matching tools with metadata
         """
-        results = await self.vm.search_tools_hybrid(query, limit=limit)
+        vm = self._get_vector_memory()
+        results = await vm.search_tools_hybrid(query, limit=limit)
 
         # Transform to simplified format for SkillManager/Orchestrator
         formatted: list[dict[str, Any]] = []
         for r in results:
             metadata = r.get("metadata", {})
+            distance = r.get("distance", 0.0)
+
+            # Extract skill name - prefer metadata.name, fall back to id parsing
+            raw_id = r.get("id", "")
+            if metadata.get("name"):
+                skill_name = metadata.get("name")
+            elif raw_id.startswith("skill-"):
+                skill_name = raw_id[6:]  # Strip "skill-" prefix
+            else:
+                skill_name = raw_id.split(".")[0]
+
+            # Calculate keyword matches based on query presence in content/keywords
+            keywords_str = metadata.get("keywords", "")
+            keywords_list = [k.strip() for k in keywords_str.split(",")]
+            query_lower = query.lower()
+            keyword_matches = sum(1 for k in keywords_list if k.lower() in query_lower)
+            keyword_bonus = keyword_matches * 0.1  # 10% bonus per keyword match
+
+            # Convert installed string to boolean
+            installed_raw = metadata.get("installed", "true")
+            installed_bool = (
+                installed_raw.lower() in ("true", "1", "yes")
+                if isinstance(installed_raw, str)
+                else bool(installed_raw)
+            )
+
+            # Skip uninstalled skills if local_only=True
+            if local_only and not installed_bool:
+                continue
+
             formatted.append(
                 {
-                    "id": r.get("id", ""),  # e.g., "git.commit"
-                    "name": metadata.get("skill_name", r.get("id", "").split(".")[0]),
+                    "id": skill_name,
+                    "name": metadata.get("skill_name", skill_name),
                     "description": r.get("content", ""),
-                    "score": 1.0 - r.get("distance", 1.0),  # Convert distance to similarity
+                    "score": 1.0 - distance,
+                    "raw_vector_score": 1.0 - distance,
+                    "calibrated_vector": 1.0 - distance,
+                    "keyword_matches": keyword_matches,
+                    "keyword_bonus": keyword_bonus,
+                    "installed": installed_bool,
+                    "keywords": metadata.get("keywords", ""),
                     "metadata": metadata,
                 }
             )
 
         return formatted
+
+    async def get_index_stats(self) -> dict[str, Any]:
+        """Get statistics about the skill index."""
+        vm = self._get_vector_memory()
+        count = await vm.count(collection=SKILL_REGISTRY_COLLECTION)
+        collections = await vm.list_collections()
+        return {
+            "collection": SKILL_REGISTRY_COLLECTION,
+            "skill_count": count,
+            "available_collections": collections,
+        }
 
 
 # =============================================================================
@@ -101,31 +154,13 @@ class SkillDiscovery:
 
 
 async def reindex_skills_from_manifests() -> dict[str, Any]:
-    """
-    Convenience function to reindex all skills.
-
-    Uses VectorMemory.sync_skills() for efficient incremental updates.
-
-    Returns:
-        Dict with sync stats
-    """
+    """Convenience function to reindex all skills."""
     discovery = SkillDiscovery()
     return await discovery.reindex_all()
 
 
-async def vector_search_skills(query: str, limit: int = 5) -> list[dict[str, Any]]:
-    """
-    Convenience function to search skills semantically.
-
-    Uses VectorMemory.search_tools_hybrid() for hybrid search.
-
-    Args:
-        query: Search query
-        limit: Max results
-
-    Returns:
-        List of matching skills
-    """
+async def search_skills(query: str, limit: int = 5) -> list[dict[str, Any]]:
+    """Convenience function to search skills semantically."""
     discovery = SkillDiscovery()
     return await discovery.search(query, limit)
 
@@ -133,6 +168,6 @@ async def vector_search_skills(query: str, limit: int = 5) -> list[dict[str, Any
 __all__ = [
     "SkillDiscovery",
     "reindex_skills_from_manifests",
-    "vector_search_skills",
+    "search_skills",
     "SKILL_REGISTRY_COLLECTION",
 ]

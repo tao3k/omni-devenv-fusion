@@ -56,7 +56,7 @@ authors: ["omni-dev-fusion"]
 
 ## Architecture
 
-This skill uses `@skill_script` decorator in `scripts/*.py` files.
+This skill uses `@skill_command` decorator in `scripts/*.py` files.
 Commands are automatically exposed via MCP as `git.command_name`.
 
 ## Available Commands

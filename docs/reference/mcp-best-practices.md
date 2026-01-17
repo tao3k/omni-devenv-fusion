@@ -223,7 +223,7 @@ src/
     └── skills/                # Skill modules
         └── {skill}/
             ├── SKILL.md       # Skill manifest + rules
-            └── scripts/       # @skill_script decorated commands
+            └── scripts/       # @skill_command decorated commands
 ```
 
 ---

@@ -36,7 +36,7 @@ logger = structlog.get_logger(__name__)
 # Phase 39: Routing Feedback Store (Self-Evolving Loop)
 # =============================================================================
 
-# Feedback storage uses CACHE_DIR from common.cache_path
+# Feedback storage uses PRJ_CACHE from common
 # Path: {project_root}/{cache_dir}/memory/routing_feedback.json
 
 
@@ -73,9 +73,9 @@ class FeedbackStore:
             return
 
         try:
-            from common.cache_path import CACHE_DIR
+            from common import prj_dirs
 
-            self._db_path = CACHE_DIR("memory", "routing_feedback.json")
+            self._db_path = prj_dirs.PRJ_CACHE("memory", "routing_feedback.json")
 
             if self._db_path.exists():
                 self._data = json.loads(self._db_path.read_text(encoding="utf-8"))
@@ -523,9 +523,9 @@ def get_scratchpad_summary() -> str:
     Useful as input to harvest_session_insight after completing a task.
     """
     try:
-        from common.cache_path import CACHE_DIR
+        from common import prj_dirs
 
-        scratchpad = CACHE_DIR("memory", "active_context", "SCRATCHPAD.md")
+        scratchpad = prj_dirs.PRJ_CACHE("memory", "active_context", "SCRATCHPAD.md")
 
         if not scratchpad.exists():
             return "No SCRATCHPAD.md found."

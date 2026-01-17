@@ -63,7 +63,7 @@ mod tests {
     #[test]
     fn test_find_python_functions() {
         let content = r#"
-@skill_script(name="test")
+@skill_command(name="test")
 def hello(name: str) -> str:
     '''Greet someone by name.'''
     return f"Hello, {name}!"

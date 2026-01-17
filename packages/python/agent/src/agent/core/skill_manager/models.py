@@ -6,7 +6,7 @@ Contains:
 - SkillCommand: A single command exposed by a skill
 - Skill: A loaded skill with commands and context
 
- Added script mode support for @skill_script decorated commands.
+ Added script mode support for @skill_command decorated commands.
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ class SkillCommand:
     Note: We don't inherit from ISkillCommand protocol here to avoid
     dataclass field ordering issues with Protocol base classes.
 
-     Supports script mode for @skill_script decorated functions
+     Supports script mode for @skill_command decorated functions
     with built-in dependency injection and retry logic.
     """
 
@@ -80,7 +80,7 @@ class SkillCommand:
         """Prepare arguments with dependency injection for script mode."""
         import inspect
 
-        from common.config_paths import get_project_root
+        from common.gitops import get_project_root
         from common.config.settings import get_setting
 
         if not self._script_mode:

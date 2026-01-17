@@ -11,7 +11,7 @@ _template/                    # Start: Copy this template
    │
 2. scripts/                   # Step 1: COMMANDS (actual implementation)
    ├── __init__.py            #    Dynamic module loader
-   └── commands.py            #    @skill_script decorated functions
+   └── commands.py            #    @skill_command decorated functions
    │
 3. tests/                     # Step 2: TESTS (zero-config pytest)
    └── test_template_commands.py
@@ -28,12 +28,12 @@ _template/                    # Start: Copy this template
 
 ## Step 1: COMMANDS (`scripts/commands.py`)
 
-Commands are defined directly with `@skill_script` decorator:
+Commands are defined directly with `@skill_command` decorator:
 
 ```python
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
-@skill_script(
+@skill_command(
     name="my_command",
     category="read",
     description="Brief description",
@@ -191,7 +191,7 @@ Update frontmatter and system prompts for LLM context.
 
 When adding a new command `my_command` in `scripts/commands.py`:
 
-- [ ] **Command**: Add `@skill_script` decorated function in `scripts/commands.py`
+- [ ] **Command**: Add `@skill_command` decorated function in `scripts/commands.py`
 - [ ] **Tests**: Add test in `tests/test_template_commands.py`
 - [ ] **Docs**: Update `references/skill-workflow.md`
 - [ ] **User Docs**: Update `README.md` with command reference
@@ -241,9 +241,9 @@ This skill template follows the **"Python Zenith" Engineering Protocol**:
 ### Command Pattern (`scripts/commands.py`)
 
 ```python
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
-@skill_script(
+@skill_command(
     name="my_command",
     category="read",
     description="Brief description",
@@ -272,7 +272,7 @@ cp -r assets/skills/_template assets/skills/my_skill
 
 # Update SKILL.md frontmatter with new name/description
 
-# Add commands in scripts/commands.py (with @skill_script decorator)
+# Add commands in scripts/commands.py (with @skill_command decorator)
 # Add tests in tests/ (required!)
 # Add docs in references/ (required!)
 ```

@@ -106,7 +106,7 @@ class GitSkill:
 | ------- | -------------------- | ---------------------- |
 | v1.0    | Trinity v1.0         | @omni("skill.command") |
 | v2.0    | Trinity v2.0 + Swarm | @omni + Hot Reload     |
-| Current | Omni Loop + JIT      | @skill_script + JIT    |
+| Current | Omni Loop + JIT      | @skill_command + JIT   |
 
 ## Benefits
 

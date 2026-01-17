@@ -15,7 +15,7 @@ Validates the Trinity Architecture (JIT + Hot-Reload + LRU) under extreme stress
 - **JIT Loading**: Skills load on first use (not at startup)
 - **LRU Memory Management**: Max 15 loaded skills, pinned core skills
 - **Simplified Hot Reload**: No syntax validation, fail-fast philosophy
-- **Scripts Pattern**: Uses `scripts/*.py` with `@skill_script` decorator
+- **Scripts Pattern**: Uses `scripts/*.py` with `@skill_command` decorator
 
 #### Purpose
 

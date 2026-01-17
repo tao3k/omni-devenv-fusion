@@ -19,11 +19,11 @@ High-performance web crawler using the Sidecar Execution Pattern for dependency 
 
 This skill demonstrates **Sidecar Execution Pattern**:
 
-- `scripts/__init__.py`: Lightweight interface (loaded by main agent via @skill_script)
+- `scripts/__init__.py`: Lightweight interface (loaded by main agent via @skill_command)
 - `scripts/engine.py`: Actual crawler implementation (runs in isolated uv environment)
 - `pyproject.toml`: Skill-specific dependencies (crawl4ai, fire, pydantic)
 
-The main agent never imports crawl4ai directly. Instead, it uses `common.isolation.run_skill_script()` to execute the crawler in a subprocess with its own isolated environment.
+The main agent never imports crawl4ai directly. Instead, it uses `common.isolation.run_skill_command()` to execute the crawler in a subprocess with its own isolated environment.
 
 ## Commands
 

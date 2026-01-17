@@ -1,5 +1,5 @@
 """
-Unit tests for Phase 62: @skill_script decorator and script-based loading.
+Unit tests for Phase 62: @skill_command decorator and script-based loading.
 
 Tests the new metadata-driven architecture where scripts/*.py
 can be loaded directly without tools.py router layer.
@@ -14,30 +14,30 @@ import pytest
 
 from agent.skills.decorators import (
     skill_command,
-    skill_script,
-    is_skill_script,
+    skill_command,
+    is_skill_command,
     get_script_config,
     CommandResult,
 )
 
 
 class TestSkillScriptDecorator:
-    """Tests for @skill_script decorator."""
+    """Tests for @skill_command decorator."""
 
-    def test_skill_script_marks_function(self) -> None:
-        """Verify @skill_script marks function with marker."""
+    def test_skill_command_marks_function(self) -> None:
+        """Verify @skill_command marks function with marker."""
 
-        @skill_script(description="Test command")
+        @skill_command(description="Test command")
         def test_command(arg1: str) -> str:
             """A test command."""
             return f"Result: {arg1}"
 
-        assert is_skill_script(test_command) is True
+        assert is_skill_command(test_command) is True
 
-    def test_skill_script_stores_config(self) -> None:
-        """Verify @skill_script stores config correctly."""
+    def test_skill_command_stores_config(self) -> None:
+        """Verify @skill_command stores config correctly."""
 
-        @skill_script(
+        @skill_command(
             name="custom_name",
             description="A custom command",
             category="write",
@@ -54,10 +54,10 @@ class TestSkillScriptDecorator:
         assert config["category"] == "write"
         assert config["inject_root"] is True
 
-    def test_skill_script_defaults(self) -> None:
-        """Verify @skill_script has correct defaults."""
+    def test_skill_command_defaults(self) -> None:
+        """Verify @skill_command has correct defaults."""
 
-        @skill_script()
+        @skill_command()
         def default_func() -> str:
             """A function."""
             return "ok"
@@ -69,10 +69,10 @@ class TestSkillScriptDecorator:
         assert config["inject_root"] is False
         assert config["max_attempts"] == 3
 
-    def test_skill_script_generates_input_schema(self) -> None:
-        """Verify @skill_script generates input schema from type hints."""
+    def test_skill_command_generates_input_schema(self) -> None:
+        """Verify @skill_command generates input schema from type hints."""
 
-        @skill_script(description="Test")
+        @skill_command(description="Test")
         def typed_func(name: str, count: int = 5) -> str:
             """A typed function."""
             return f"{name}: {count}"
@@ -85,10 +85,10 @@ class TestSkillScriptDecorator:
         assert "count" in schema["properties"]
         assert "name" in schema["required"]
 
-    def test_skill_script_description_from_docstring(self) -> None:
-        """Verify @skill_script uses docstring if no description."""
+    def test_skill_command_description_from_docstring(self) -> None:
+        """Verify @skill_command uses docstring if no description."""
 
-        @skill_script()
+        @skill_command()
         def with_docstring() -> str:
             """This is the description from docstring."""
             return "ok"
@@ -98,10 +98,10 @@ class TestSkillScriptDecorator:
         assert config["description"] == "This is the description from docstring."
 
     # Phase 61: Caching tests
-    def test_skill_script_cache_ttl(self) -> None:
-        """Verify @skill_script stores cache_ttl in config."""
+    def test_skill_command_cache_ttl(self) -> None:
+        """Verify @skill_command stores cache_ttl in config."""
 
-        @skill_script(
+        @skill_command(
             description="Cached command",
             cache_ttl=60.0,
             pure=True,
@@ -115,10 +115,10 @@ class TestSkillScriptDecorator:
         assert config["cache_ttl"] == 60.0
         assert config["pure"] is True
 
-    def test_skill_script_cache_defaults(self) -> None:
-        """Verify @skill_script has correct caching defaults."""
+    def test_skill_command_cache_defaults(self) -> None:
+        """Verify @skill_command has correct caching defaults."""
 
-        @skill_script()
+        @skill_command()
         def uncached_func() -> str:
             """A function without caching."""
             return "result"
@@ -142,37 +142,37 @@ class TestSkillCommandDecorator:
         assert hasattr(test_cmd, "_is_skill_command")
         assert hasattr(test_cmd, "_skill_config")
 
-    def test_skill_command_wraps_result(self) -> None:
-        """Verify @skill_command wraps result in CommandResult."""
+    def test_skill_command_returns_direct_result(self) -> None:
+        """Verify @skill_command returns result directly (no wrapper)."""
 
         @skill_command()
         def simple() -> str:
             """Simple function."""
             return "result"
 
-        # Call the wrapped function
+        # Call the decorated function - returns result directly
         result = simple()
-        assert isinstance(result, CommandResult)
-        assert result.success is True
-        assert result.data == "result"
+        assert result == "result"
+        # The function is not wrapped, returns raw result
+        assert not isinstance(result, CommandResult)
 
 
 class TestSkillScriptExecution:
-    """Tests for executing @skill_script decorated functions."""
+    """Tests for executing @skill_command decorated functions."""
 
     @pytest.fixture
     def sample_script_module(self, tmp_path: Path) -> ModuleType:
         """Create a mock script module for testing."""
         # Create a temporary script file
         script_content = '''
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
-@skill_script(description="Echo a message", category="general")
+@skill_command(description="Echo a message", category="general")
 def echo(message: str) -> str:
     """Echo the message back."""
     return f"Echo: {message}"
 
-@skill_script(description="Add numbers", category="general", inject_root=True)
+@skill_command(description="Add numbers", category="general", inject_root=True)
 def add(a: int, b: int) -> int:
     """Add two numbers."""
     return a + b

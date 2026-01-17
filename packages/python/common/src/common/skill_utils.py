@@ -119,7 +119,7 @@ def skill_asset(relative_path: str, *, skill_dir: Path | None = None) -> Path:
     return skill_path(f"assets/{relative_path}", skill_dir=skill_dir)
 
 
-def skill_script(relative_path: str, *, skill_dir: Path | None = None) -> Path:
+def skill_command(relative_path: str, *, skill_dir: Path | None = None) -> Path:
     """
     Get path to a file in the skill's scripts/ directory.
 
@@ -128,10 +128,10 @@ def skill_script(relative_path: str, *, skill_dir: Path | None = None) -> Path:
         skill_dir: Optional skill directory
 
     Example:
-        from common.skill_utils import skill_script
+        from common.skill_utils import skill_command
 
-        workflow = skill_script("workflow.py")
-        script = skill_script("helpers.sh")
+        workflow = skill_command("workflow.py")
+        script = skill_command("helpers.sh")
 
     Returns:
         Absolute Path to the script
@@ -235,7 +235,7 @@ __all__ = [
     "current_skill_dir",
     "skill_path",
     "skill_asset",
-    "skill_script",
+    "skill_command",
     "skill_reference",
     "skill_data",
 ]

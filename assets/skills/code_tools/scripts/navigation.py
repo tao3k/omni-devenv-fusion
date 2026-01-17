@@ -10,7 +10,7 @@ from typing import Any
 
 import structlog
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
 logger = structlog.get_logger(__name__)
 
@@ -24,7 +24,7 @@ except ImportError:
     logger.warning("omni_core_rs not found. CodeNavigation will use fallback.")
 
 
-@skill_script(
+@skill_command(
     name="outline_file",
     category="read",
     description="Generate a high-level outline (skeleton) of a source file.",
@@ -64,7 +64,7 @@ def outline_file(path: str, language: str | None = None) -> str:
         return f"Error generating outline: {str(e)}"
 
 
-@skill_script(
+@skill_command(
     name="count_symbols",
     category="read",
     description="Count the number of symbols (classes, functions, etc.) in a file.",
@@ -101,7 +101,7 @@ def count_symbols(path: str, language: str | None = None) -> dict[str, Any]:
         return {"error": str(e)}
 
 
-@skill_script(
+@skill_command(
     name="search_code",
     category="read",
     description="Search for AST patterns in a single file using ast-grep syntax.",
@@ -136,7 +136,7 @@ def search_code(path: str, pattern: str, language: str | None = None) -> str:
         return f"Error searching: {str(e)}"
 
 
-@skill_script(
+@skill_command(
     name="search_directory",
     category="read",
     description="Search for AST patterns recursively in a directory.",

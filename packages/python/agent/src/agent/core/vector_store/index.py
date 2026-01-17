@@ -75,7 +75,7 @@ async def index_skill_tools(self: VectorMemory, base_path: str, table_name: str 
     """
     Index all skill tools from scripts into the vector store.
 
-    Uses Rust scanner to discover @skill_script decorated functions.
+    Uses Rust scanner to discover @skill_command decorated functions.
     Note: This method uses placeholder schemas. Use index_skill_tools_with_schema()
     for full schema extraction.
 

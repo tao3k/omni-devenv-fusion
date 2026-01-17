@@ -10,7 +10,7 @@ This skill provides git operations with **Smart Commit Protocol** for clean, saf
 assets/skills/git/
 ├── SKILL.md              # Skill manifest + LLM context
 ├── README.md             # This file
-├── scripts/              # @skill_script decorated commands
+├── scripts/              # @skill_command decorated commands
 │   ├── __init__.py
 │   ├── commit.py         # commit operations
 │   ├── graph_workflow.py # Smart Commit workflow (LangGraph)

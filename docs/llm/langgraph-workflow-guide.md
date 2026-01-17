@@ -553,9 +553,9 @@ async def _approve_smart_commit_async(message: str, workflow_id: str) -> Dict[st
     return {"status": "committed", "final_message": message}
 
 # Skill command with template rendering
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
-@skill_script(name="smart_commit", category="workflow")
+@skill_command(name="smart_commit", category="workflow")
 async def smart_commit(action: str = "start", workflow_id: str = "", message: str = "") -> str:
     if action == "start":
         result = await _start_smart_commit_async()

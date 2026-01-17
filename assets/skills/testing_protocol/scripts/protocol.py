@@ -12,7 +12,7 @@ from typing import Dict, Any, Optional
 
 import structlog
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
 logger = structlog.get_logger(__name__)
 
@@ -84,7 +84,7 @@ def categorize_changes(files: list) -> Dict[str, bool]:
     return categories
 
 
-@skill_script(
+@skill_command(
     name="smart_test_runner",
     category="read",
     description="""
@@ -207,7 +207,7 @@ async def smart_test_runner(focus_file: Optional[str] = None) -> str:
         )
 
 
-@skill_script(
+@skill_command(
     name="run_test_command",
     category="read",
     description="""
@@ -276,7 +276,7 @@ async def run_test_command(command: str) -> str:
         return json.dumps({"status": "error", "message": str(e), "command": command}, indent=2)
 
 
-@skill_script(
+@skill_command(
     name="get_test_protocol",
     category="read",
     description="""

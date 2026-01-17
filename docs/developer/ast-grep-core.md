@@ -150,7 +150,7 @@ The `$$$` is ast-grep's **Sequence Wildcard** that matches zero or more items in
 "func($$$)"             // Matches func(), func(1), func(a, b, c)
 
 // Match decorator calls with any arguments
-"@skill_script($$$)"    // Matches @skill_script, @skill_script(name="test"), @skill_script(...)
+"@skill_command($$$)"    // Matches @skill_command, @skill_command(name="test"), @skill_command(...)
 
 // Match class inheritance with any number of bases
 "class $NAME($$$)"      // Matches class Foo, class Foo(Base), class Foo(A, B, C)
@@ -158,11 +158,11 @@ The `$$$` is ast-grep's **Sequence Wildcard** that matches zero or more items in
 
 **Why `$$$` instead of `$`?**
 
-| Pattern              | Behavior                                        |
-| -------------------- | ----------------------------------------------- |
-| `@skill_script($)`   | **Invalid** - `$` matches only a single node    |
-| `@skill_script($A)`  | **Limited** - `$A` matches exactly one argument |
-| `@skill_script($$$)` | **Correct** - Matches zero or more arguments    |
+| Pattern               | Behavior                                        |
+| --------------------- | ----------------------------------------------- |
+| `@skill_command($)`   | **Invalid** - `$` matches only a single node    |
+| `@skill_command($A)`  | **Limited** - `$A` matches exactly one argument |
+| `@skill_command($$$)` | **Correct** - Matches zero or more arguments    |
 
 ### 4.5 Multi-Variable Capture
 
@@ -258,7 +258,7 @@ for p in &patterns {
 
 ### 6.4 Decorator Pattern Not Matching
 
-**Problem**: Pattern `@skill_script(` or `@skill_script($)` returns 0 matches.
+**Problem**: Pattern `@skill_command(` or `@skill_command($)` returns 0 matches.
 
 **Cause**: Incomplete Python syntax. The pattern must be valid Python AST.
 
@@ -266,20 +266,20 @@ for p in &patterns {
 
 ```rust
 // ❌ Wrong - incomplete Python syntax
-let pattern = r#"@skill_script("#;
+let pattern = r#"@skill_command("#;
 
 // ❌ Wrong - $ matches single node only
-let pattern = r#"@skill_script($)"#;
+let pattern = r#"@skill_command($)"#;
 
 // ✅ Correct - $$$ matches any arguments
-let pattern = r#"@skill_script($$$)"#;
+let pattern = r#"@skill_command($$$)"#;
 ```
 
-**Real Example** (from `scanner.rs` for @skill_script discovery):
+**Real Example** (from `scanner.rs` for @skill_command discovery):
 
 ```rust
-// Match @skill_script decorator with any arguments
-let decorator_pattern = r#"@skill_script($$$)"#;
+// Match @skill_command decorator with any arguments
+let decorator_pattern = r#"@skill_command($$$)"#;
 
 let search_decorator = Pattern::try_new(decorator_pattern, lang)
     .map_err(|e| anyhow::anyhow!("Failed to parse decorator pattern: {}", e))?;
@@ -310,9 +310,9 @@ for node in root_node.dfs() {
 
 // 2. Test simple patterns first
 let simple_patterns = vec![
-    "@skill_script($$$)",
-    "@skill_script(...)",
-    "@skill_script",
+    "@skill_command($$$)",
+    "@skill_command(...)",
+    "@skill_command",
 ];
 for p in &simple_patterns {
     match Pattern::try_new(p, lang) {
@@ -370,7 +370,7 @@ impl<'tree, D: Doc> NodeMatch<'tree, D> {
 ## 8. Related Files
 
 - `packages/rust/crates/omni-tags/src/lib.rs` - Implementation example
-- `packages/rust/crates/omni-vector/src/scanner.rs` - Real-world @skill_script discovery
+- `packages/rust/crates/omni-vector/src/scanner.rs` - Real-world @skill_command discovery
 - `packages/rust/crates/omni-ast/src/scan.rs` - Pattern matching utilities
 - `packages/rust/crates/omni-tags/Cargo.toml` - Dependency configuration
 - `assets/specs/cca_navigation.md` - Code navigation specification

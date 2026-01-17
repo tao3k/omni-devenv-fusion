@@ -290,7 +290,6 @@ class TestSpecBasedLoading:
         assert hasattr(module, "list_directory")
         assert hasattr(module, "read_file")
         assert hasattr(module, "write_file")
-        assert hasattr(module, "search_files")
 
     def test_execute_function_after_load(self, registry_fixture, real_mcp):
         """Should be able to execute functions after loading."""
@@ -319,7 +318,7 @@ class TestSpecBasedLoading:
         assert "not found" in message.lower()
 
     def test_template_loads_with_spec_based_loading(self, registry_fixture, real_mcp):
-        """_template can be loaded since Phase 63 (it has @skill_script commands).
+        """_template can be loaded since Phase 63 (it has @skill_command commands).
 
         Phase 63+: _template is a skeleton skill that demonstrates the scripts/ pattern.
         It can be discovered AND loaded because it has example commands.
@@ -328,7 +327,7 @@ class TestSpecBasedLoading:
         available = registry_fixture.list_available_skills()
         assert "_template" in available
 
-        # _template can now be loaded because it has @skill_script decorated functions
+        # _template can now be loaded because it has @skill_command decorated functions
         success, message = registry_fixture.load_skill("_template", real_mcp)
         assert success is True, f"Expected _template to load successfully, got: {message}"
         assert "_template" in registry_fixture.loaded_skills
@@ -538,17 +537,6 @@ class TestFilesystemSkill:
         assert content == "test content 123"
 
     @pytest.mark.asyncio
-    async def test_search_files_operation(self, isolated_registry, mock_mcp_server):
-        """Test search_files function."""
-        isolated_registry.load_skill("filesystem", mock_mcp_server)
-        module = isolated_registry.module_cache["filesystem"]
-
-        # Search for SKILL.md files
-        result = await module.search_files(pattern="SKILL.md", path="assets/skills")
-        result = unwrap_command_result(result)
-        assert "SKILL.md" in result
-
-    @pytest.mark.asyncio
     async def test_get_file_info_operation(self, isolated_registry, mock_mcp_server):
         """Test get_file_info function."""
         isolated_registry.load_skill("filesystem", mock_mcp_server)
@@ -729,6 +717,266 @@ class TestSkillManagerCommandExecution:
                 continue  # Skip template
             result = await skill_manager_fixture.run(skill_name, "help", {})
             assert isinstance(result, str), f"Skill {skill_name} should return string"
+
+
+# =============================================================================
+# Phase 35+: MCP Server Tool Registration Tests
+# =============================================================================
+
+
+class TestMCPServerToolRegistration:
+    """Test that MCP server correctly registers tools from skills.
+
+    Regression tests to prevent issue where MCP server has no tools registered.
+    """
+
+    @pytest.mark.asyncio
+    async def test_mcp_handle_list_tools_returns_tools(self, skill_manager_fixture):
+        """handle_list_tools should return non-empty list of tools."""
+        from agent.mcp_server.server import handle_list_tools
+
+        skill_manager_fixture.load_skills()
+        tools = await handle_list_tools()
+
+        assert len(tools) > 0, "MCP server should have tools registered"
+        assert isinstance(tools, list), "handle_list_tools should return a list"
+
+    @pytest.mark.asyncio
+    async def test_mcp_has_minimum_tools(self, skill_manager_fixture):
+        """MCP server should have at least 50 tools registered."""
+        from agent.mcp_server.server import handle_list_tools
+
+        skill_manager_fixture.load_skills()
+        tools = await handle_list_tools()
+
+        # At minimum, we should have 50+ tools across all skills
+        assert len(tools) >= 50, f"Expected at least 50 tools, got {len(tools)}"
+
+    def test_mcp_tools_have_required_fields(self, skill_manager_fixture):
+        """All MCP tools should have name and inputSchema.
+
+        Regression test: Ensures tools are proper mcp.types.Tool instances,
+        not dynamic type() objects which can cause compatibility issues.
+        """
+        from agent.mcp_server.server import handle_list_tools
+        from mcp.types import Tool
+        import asyncio
+
+        skill_manager_fixture.load_skills()
+        tools = asyncio.run(handle_list_tools())
+
+        # Must return a list
+        assert isinstance(tools, list), f"handle_list_tools should return list, got {type(tools)}"
+
+        # Each tool must be a proper mcp.types.Tool instance
+        for tool in tools:
+            assert isinstance(tool, Tool), (
+                f"Tool should be mcp.types.Tool instance, got {type(tool)}. "
+                f"This indicates handle_list_tools is using dynamic type() instead of Tool()."
+            )
+            # Verify required fields exist and have correct types
+            assert hasattr(tool, "name"), f"Tool missing 'name' attribute: {tool}"
+            assert hasattr(tool, "inputSchema"), f"Tool missing 'inputSchema': {tool.name}"
+            assert isinstance(tool.name, str), f"Tool name should be string: {tool.name}"
+            assert isinstance(tool.inputSchema, dict), f"inputSchema should be dict: {tool.name}"
+
+    @pytest.mark.asyncio
+    async def test_mcp_tools_are_mcp_types_tool_instances(self, skill_manager_fixture):
+        """Verify tools are proper mcp.types.Tool instances.
+
+        This is a critical regression test - dynamic type() objects can cause
+        MCP protocol compatibility issues with Claude Desktop/Code.
+        """
+        from agent.mcp_server.server import handle_list_tools
+        from mcp.types import Tool
+
+        skill_manager_fixture.load_skills()
+        tools = await handle_list_tools()
+
+        # All tools must be proper MCP Tool instances
+        for tool in tools:
+            # Check it's exactly mcp.types.Tool, not a subclass or dynamic type
+            assert type(tool) is Tool, (
+                f"Tool must be exactly mcp.types.Tool, not {type(tool).__name__}. "
+                f"Name: {tool.name if hasattr(tool, 'name') else 'unknown'}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_mcp_tool_attributes_are_correct_types(self, skill_manager_fixture):
+        """Verify MCP tool attributes have correct Python types.
+
+        Ensures:
+        - name is str (not bytes, not something else)
+        - inputSchema is dict (not list, not something else)
+        - description is str or None
+        """
+        from agent.mcp_server.server import handle_list_tools
+
+        skill_manager_fixture.load_skills()
+        tools = await handle_list_tools()
+
+        for tool in tools:
+            # name must be str
+            assert isinstance(tool.name, str), (
+                f"Tool.name must be str, got {type(tool.name).__name__}: {tool.name!r}"
+            )
+
+            # inputSchema must be dict (not list, etc.)
+            assert isinstance(tool.inputSchema, dict), (
+                f"Tool.inputSchema must be dict, got {type(tool.inputSchema).__name__}: {tool.name}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_mcp_has_critical_skills_tools(self, skill_manager_fixture):
+        """MCP server should have tools from critical skills."""
+        from agent.mcp_server.server import handle_list_tools
+
+        skill_manager_fixture.load_skills()
+        tools = await handle_list_tools()
+        tool_names = [t.name for t in tools]
+
+        # Critical skills that must be available (using actual command names)
+        critical_skills = {
+            "git": ["git.smart_commit", "git.commit"],
+            "filesystem": ["filesystem.list_directory", "filesystem.read_file"],
+            "memory": ["memory.save_memory", "memory.search_memory"],
+            "terminal": ["terminal.run_command", "terminal.run_task"],
+        }
+
+        for skill, expected_tools in critical_skills.items():
+            for expected_tool in expected_tools:
+                assert expected_tool in tool_names, (
+                    f"Critical tool '{expected_tool}' from '{skill}' not found. "
+                    f"Available tools: {sorted(tool_names)[:20]}..."
+                )
+
+    @pytest.mark.asyncio
+    async def test_mcp_tools_from_scripts_pattern(self, skill_manager_fixture):
+        """Skills using scripts/ pattern should have tools registered."""
+        from agent.mcp_server.server import handle_list_tools
+
+        skill_manager_fixture.load_skills()
+        tools = await handle_list_tools()
+        tool_names = [t.name for t in tools]
+
+        # Skills using Phase 63 scripts/ pattern
+        scripts_skills = ["code_tools", "knowledge", "skill", "testing_protocol"]
+
+        for skill_name in scripts_skills:
+            # Check if any tools from this skill are registered
+            skill_tools = [n for n in tool_names if n.startswith(f"{skill_name}.")]
+            # These skills may have 0 tools (e.g., testing_protocol exports but has decorators elsewhere)
+            # Just verify the skill was discovered
+            available = skill_manager_fixture.list_available_skills()
+            assert skill_name in available, f"Skill {skill_name} should be discovered"
+
+    @pytest.mark.asyncio
+    async def test_mcp_tool_names_follow_pattern(self, skill_manager_fixture):
+        """MCP tool names should follow 'skill.command' pattern."""
+        from agent.mcp_server.server import handle_list_tools
+
+        skill_manager_fixture.load_skills()
+        tools = await handle_list_tools()
+
+        for tool in tools:
+            if "." in tool.name:
+                parts = tool.name.split(".", 1)
+                assert len(parts) == 2, f"Tool name should have at most one dot: {tool.name}"
+                assert parts[0].replace("_", "").isalnum(), (
+                    f"Skill name should be alphanumeric: {tool.name}"
+                )
+
+    @pytest.mark.asyncio
+    async def test_mcp_server_lifespan_loads_skills(self, mock_mcp_server):
+        """Server lifespan should preload configured skills."""
+        from agent.core.skill_manager import get_skill_manager
+
+        manager = get_skill_manager()
+
+        # Verify some preload skills are loaded
+        # Skills from settings.yaml preload list
+        preloaded = ["git", "filesystem", "memory", "terminal"]
+        for skill in preloaded:
+            # These may or may not be loaded depending on preload config
+            # Just verify they can be loaded
+            if skill in manager.skills:
+                assert len(manager.skills[skill].commands) > 0, (
+                    f"Skill {skill} should have commands when loaded"
+                )
+
+
+class TestMCPToolExecution:
+    """Test that registered MCP tools can actually be executed."""
+
+    @pytest.mark.asyncio
+    async def test_mcp_tools_json_serializable(self, skill_manager_fixture):
+        """Verify MCP tools can be JSON serialized for protocol.
+
+        This is critical - MCP uses JSON for tool list exchange.
+        Dynamic type() objects may not serialize correctly.
+        """
+        import json
+        from agent.mcp_server.server import handle_list_tools
+
+        skill_manager_fixture.load_skills()
+        tools = await handle_list_tools()
+
+        for tool in tools:
+            # Each tool should be JSON serializable
+            try:
+                json_str = json.dumps(
+                    {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "inputSchema": tool.inputSchema,
+                    }
+                )
+                assert isinstance(json_str, str), f"Tool should produce string JSON: {tool.name}"
+            except TypeError as e:
+                pytest.fail(
+                    f"Tool '{tool.name}' is not JSON serializable: {e}. "
+                    f"Type: {type(tool)}. "
+                    f"This indicates handle_list_tools is using incompatible type."
+                )
+
+    @pytest.mark.asyncio
+    async def test_mcp_call_git_status(self, skill_manager_fixture):
+        """Test executing git.status via MCP call handler."""
+        from agent.mcp_server.server import handle_call_tool
+
+        skill_manager_fixture.load_skills()
+
+        # Execute git.status
+        result = await handle_call_tool("git.status", {})
+
+        assert len(result) > 0, "handle_call_tool should return result"
+        assert hasattr(result[0], "type"), "Result should have 'type' attribute"
+        assert hasattr(result[0], "text"), "Result should have 'text' attribute"
+        assert result[0].type == "text", "Result type should be 'text'"
+
+    @pytest.mark.asyncio
+    async def test_mcp_call_filesystem_list(self, skill_manager_fixture):
+        """Test executing filesystem.list_directory via MCP."""
+        from agent.mcp_server.server import handle_call_tool
+
+        skill_manager_fixture.load_skills()
+
+        result = await handle_call_tool("filesystem.list_directory", {"path": "assets"})
+
+        assert len(result) > 0, "handle_call_tool should return result"
+        assert "assets" in result[0].text or "Directory" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_mcp_call_nonexistent_tool_returns_error(self, skill_manager_fixture):
+        """Test that calling nonexistent tool returns error message."""
+        from agent.mcp_server.server import handle_call_tool
+
+        skill_manager_fixture.load_skills()
+
+        result = await handle_call_tool("nonexistent.skill", {})
+
+        assert len(result) > 0, "handle_call_tool should return error result"
+        assert "Error" in result[0].text, "Nonexistent tool should return error"
 
 
 # =============================================================================

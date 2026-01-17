@@ -15,13 +15,13 @@ import structlog
 log = structlog.get_logger("mcp-core.memory")
 
 
-# Default memory directory (from CACHE_DIR + "memory")
+# Default memory directory (from PRJ_CACHE + "memory")
 def _get_memory_dir() -> Path:
-    """Get memory directory from CACHE_DIR."""
+    """Get memory directory from PRJ_CACHE."""
     try:
-        from common.cache_path import CACHE_DIR
+        from common import prj_dirs
 
-        return CACHE_DIR("memory")
+        return prj_dirs.PRJ_CACHE("memory")
     except Exception:
         # Fallback for edge cases
         return Path(".cache/omni-dev-fusion/memory")

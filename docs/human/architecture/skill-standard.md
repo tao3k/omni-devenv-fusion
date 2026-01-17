@@ -16,7 +16,7 @@ assets/skills/<skill_name>/
 ├── 🧪 tests/             # [RECOMMENDED] Test files
 └── 📁 scripts/           # [REQUIRED] Command implementations
     ├── __init__.py       # Module loader
-    └── commands.py       # @skill_script decorated functions
+    └── commands.py       # @skill_command decorated functions
 ```
 
 ### File Responsibilities
@@ -25,7 +25,7 @@ assets/skills/<skill_name>/
 | --------------------- | ------------------ | --------------------------------------------------------- |
 | `SKILL.md`            | Identity + Context | Metadata (YAML frontmatter) + LLM rules + Trinity context |
 | `README.md`           | User Guide         | Usage docs, examples, command reference                   |
-| `scripts/commands.py` | Execution          | @skill_script decorated async functions                   |
+| `scripts/commands.py` | Execution          | @skill_command decorated async functions                  |
 | `tests/`              | Quality            | Unit tests                                                |
 
 ### Legacy Files (Move to references/ if needed)
@@ -95,12 +95,12 @@ This skill follows the **scripts/commands.py** pattern:
 
 ## Scripts/Commands.py Pattern
 
-Commands are defined in `scripts/commands.py` with the `@skill_script` decorator:
+Commands are defined in `scripts/commands.py` with the `@skill_command` decorator:
 
 ```python
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
-@skill_script(
+@skill_command(
     name="status",
     category="read",
     description="Show working tree status",
@@ -111,7 +111,7 @@ async def git_status() -> str:
     result = subprocess.run(["git", "status", "--short"], capture_output=True, text=True)
     return result.stdout or "Working tree clean"
 
-@skill_script(
+@skill_command(
     name="commit",
     category="write",
     description="Commit staged changes",
@@ -178,7 +178,7 @@ cp -r assets/skills/_template assets/skills/my_skill
 # Edit name, version, description, routing_keywords
 
 # 3. Add commands in scripts/commands.py
-@skill_script(name="my_command", category="read", description="...")
+@skill_command(name="my_command", category="read", description="...")
 async def my_command(param: str) -> str:
     ...
 

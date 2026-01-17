@@ -43,7 +43,7 @@ class TestSkillSyntaxValidation:
         is_valid, error = validate_python_syntax(tools_path)
         assert is_valid, f"skill/tools.py has syntax error: {error}"
 
-    def test_skill_scripts_have_valid_syntax(self, skill):
+    def test_skill_commands_have_valid_syntax(self, skill):
         """All skill/scripts/*.py files must have valid Python syntax."""
         scripts_dir = SKILLS_DIR("skill") / "scripts"
         if not scripts_dir.exists():
@@ -224,15 +224,14 @@ class TestSkillAutoRoute:
     async def test_auto_route_search_logic(self, skill):
         """skill.auto_route should search for matching skills."""
         # This tests the underlying logic
-        from agent.core.skill_discovery import VectorSkillDiscovery
+        from agent.core.skill_discovery import SkillDiscovery
 
-        discovery = VectorSkillDiscovery()
+        discovery = SkillDiscovery()
 
         # Search for git-related skills
         results = await discovery.search(
             query="git version control",
             limit=5,
-            installed_only=False,
         )
 
         # Should return results (may be empty if no skills match)
@@ -254,12 +253,12 @@ class TestSkillAutoRouteIntegration:
     """Integration tests for skill.auto_route with registry."""
 
     def test_auto_route_uses_vector_discovery(self, skill):
-        """skill.auto_route should use VectorSkillDiscovery."""
-        from agent.core.skill_discovery import VectorSkillDiscovery
+        """skill.auto_route should use SkillDiscovery."""
+        from agent.core.skill_discovery import SkillDiscovery
 
         # Should be able to create and use discovery
-        discovery = VectorSkillDiscovery()
-        assert discovery is not None, "VectorSkillDiscovery should be instantiable"
+        discovery = SkillDiscovery()
+        assert discovery is not None, "SkillDiscovery should be instantiable"
 
 
 class TestSkillAutoRouteEdgeCases:

@@ -136,35 +136,35 @@ class TestMCPServerInputSchema:
 
 
 class TestSkillScriptConfig:
-    """Test @skill_script decorator attaches _script_config with input_schema.
+    """Test @skill_command decorator attaches _skill_config with input_schema.
 
     Note: These tests verify the decorator mechanism, not specific skill commands.
     """
 
-    def test_skill_script_decorator_attaches_config(self):
-        """@skill_script should attach _script_config to function."""
-        from agent.skills.decorators import skill_script
+    def test_skill_command_decorator_attaches_config(self):
+        """@skill_command should attach _skill_config to function."""
+        from agent.skills.decorators import skill_command
 
-        @skill_script(name="test_command", category="test", description="A test command")
+        @skill_command(name="test_command", category="test", description="A test command")
         def test_func(message: str, count: int = 1):
             pass
 
         # Verify config is attached
-        assert hasattr(test_func, "_script_config")
-        assert test_func._script_config["name"] == "test_command"
-        assert test_func._script_config["category"] == "test"
+        assert hasattr(test_func, "_skill_config")
+        assert test_func._skill_config["name"] == "test_command"
+        assert test_func._skill_config["category"] == "test"
 
-    def test_skill_script_input_schema_generated(self):
-        """@skill_script should generate input_schema for function parameters."""
-        from agent.skills.decorators import skill_script
+    def test_skill_command_input_schema_generated(self):
+        """@skill_command should generate input_schema for function parameters."""
+        from agent.skills.decorators import skill_command
 
-        @skill_script(name="test_command", category="test", description="A test command")
+        @skill_command(name="test_command", category="test", description="A test command")
         def test_func(message: str, count: int = 1):
             pass
 
         # Verify input_schema is in config
-        assert "input_schema" in test_func._script_config
-        schema = test_func._script_config["input_schema"]
+        assert "input_schema" in test_func._skill_config
+        schema = test_func._skill_config["input_schema"]
 
         # Verify schema structure
         assert schema["type"] == "object"

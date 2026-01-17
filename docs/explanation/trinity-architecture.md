@@ -1886,11 +1886,11 @@ assets/skills/crawl4ai/
 **tools.py** (lightweight):
 
 ```python
-from common.isolation import run_skill_script
+from common.isolation import run_skill_command
 
 @skill_command
 def crawl_webpage(url: str):
-    return run_skill_script(
+    return run_skill_command(
         skill_dir=Path(__file__).parent,
         script_name="engine.py",
         args={"url": url},

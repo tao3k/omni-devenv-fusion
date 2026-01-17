@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from common.cache_path import CACHE_DIR
+from common import prj_dirs
 from dataclasses import dataclass
 
 # Lazy imports to avoid slow module loading
@@ -90,7 +90,7 @@ class VectorMemory:
             return
 
         # Defer omni-vector client creation - only compute path
-        self._cache_path = CACHE_DIR("omni-vector")
+        self._cache_path = prj_dirs.PRJ_CACHE("omni-vector")
         self._cache_path.mkdir(parents=True, exist_ok=True)
 
         self._initialized = True

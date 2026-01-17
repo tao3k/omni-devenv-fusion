@@ -9,12 +9,12 @@ from pathlib import Path
 
 import structlog
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
 logger = structlog.get_logger(__name__)
 
 
-@skill_script(
+@skill_command(
     name="run_tests",
     category="read",
     description="""
@@ -74,7 +74,7 @@ async def run_tests(path: str = ".", verbose: bool = False, max_fail: int = 5) -
         return f"Execution Error: {str(e)}"
 
 
-@skill_script(
+@skill_command(
     name="list_tests",
     category="read",
     description="""

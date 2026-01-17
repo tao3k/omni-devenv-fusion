@@ -1,7 +1,7 @@
 """
 git/scripts/commit.py - Git commit operations
 
-Write commands (commit, amend, revert) use @skill_script.
+Write commands (commit, amend, revert) use @skill_command.
 Read commands (get_last_commit, get_last_commit_msg) are simple wrappers.
 """
 
@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
 
 def _run(cmd: list[str], cwd: Optional[Path] = None) -> tuple[str, str, int]:
@@ -18,7 +18,7 @@ def _run(cmd: list[str], cwd: Optional[Path] = None) -> tuple[str, str, int]:
     return result.stdout.strip(), result.stderr.strip(), result.returncode
 
 
-@skill_script(
+@skill_command(
     name="git_commit",
     category="write",
     description="""
@@ -47,7 +47,7 @@ def commit(message: str, project_root: Optional[Path] = None) -> str:
     return f"Commit failed: {stdout} {stderr}"
 
 
-@skill_script(
+@skill_command(
     name="git_commit_amend",
     category="write",
     description="""
@@ -71,7 +71,7 @@ def commit_with_amend(message: str, project_root: Optional[Path] = None) -> str:
     return f"Amend failed: {stdout} {stderr}"
 
 
-@skill_script(
+@skill_command(
     name="git_commit_no_verify",
     category="write",
     description="""
@@ -107,7 +107,7 @@ def get_last_commit_msg(project_root: Optional[Path] = None) -> str:
     return stdout
 
 
-@skill_script(
+@skill_command(
     name="git_revert",
     category="write",
     description="""

@@ -25,7 +25,7 @@ from typing import Any, Dict, List
 from agent.core.router.semantic_router import SemanticRouter
 from agent.core.router.models import RoutingResult
 from agent.core.router import clear_routing_cache
-from agent.core.skill_discovery import VectorSkillDiscovery, SKILL_REGISTRY_COLLECTION
+from agent.core.skill_discovery import SkillDiscovery, SKILL_REGISTRY_COLLECTION
 
 # Import test fakes
 from agent.tests.fakes.fake_vectorstore import FakeVectorStore, SearchResult
@@ -209,7 +209,7 @@ def router_with_mocks(populated_vector_store) -> SemanticRouter:
     )
 
     # Inject fake vector discovery
-    router._vector_discovery = VectorSkillDiscovery()
+    router._vector_discovery = SkillDiscovery()
     router._vector_discovery._vm = populated_vector_store
 
     # Mock cache - note: router uses `cache` property backed by `_cache`
@@ -239,12 +239,12 @@ async def test_scenario1_explicit_tool_discover(populated_vector_store):
     - Icons show installed/uninstalled status
     - Installation hints are provided
     """
-    # Create VectorSkillDiscovery with fake store
-    discovery = VectorSkillDiscovery()
+    # Create SkillDiscovery with fake store
+    discovery = SkillDiscovery()
     discovery._vm = populated_vector_store
 
     # Directly test the discovery search
-    results = await discovery.search(query="docker", limit=5, installed_only=False)
+    results = await discovery.search(query="docker", limit=5)
 
     assert len(results) >= 1, "Should find docker skill"
     docker_result = next((r for r in results if r["id"] == "docker"), None)
@@ -252,11 +252,11 @@ async def test_scenario1_explicit_tool_discover(populated_vector_store):
     assert docker_result["installed"] is False, "Docker should be uninstalled"
 
     # Test local-only search
-    results_local = await discovery.search(query="docker", limit=5, installed_only=True)
+    results_local = await discovery.search(query="docker", limit=5, local_only=True)
     assert len(results_local) == 0, "Should not find docker when local_only=True"
 
     # Test finding installed skill - use "git" query which will match substring
-    results_git = await discovery.search(query="git", limit=5, installed_only=True)
+    results_git = await discovery.search(query="git", limit=5)
     assert len(results_git) >= 1, "Should find git skill with 'git' query"
     git_result = next((r for r in results_git if r["id"] == "git"), None)
     assert git_result is not None, "Should find git in results"
@@ -398,10 +398,9 @@ async def test_scenario5_vector_filtering(populated_vector_store):
     Scenario 5: Vector Store Filtering by Installation Status
 
     Validates that where_filter works correctly:
-    - installed_only=True → only returns installed skills
-    - installed_only=False → returns all skills
+    - limit parameter controls result count
     """
-    # Test installed_only=True (filter for installed="true")
+    # Test with limit parameter
     results_installed = await populated_vector_store.search(
         collection=SKILL_REGISTRY_COLLECTION,
         query="git",
@@ -413,7 +412,7 @@ async def test_scenario5_vector_filtering(populated_vector_store):
     assert "git" in installed_ids, "Should find installed git"
     assert "docker" not in installed_ids, "Should not find uninstalled docker"
 
-    # Test installed_only=False (no filter)
+    # Test search
     results_all = await populated_vector_store.search(
         collection=SKILL_REGISTRY_COLLECTION,
         query="git",
@@ -468,31 +467,20 @@ async def test_scenario6_cache_hit(router_with_mocks):
 @pytest.mark.asyncio
 async def test_scenario7_discovery_search_interface(populated_vector_store):
     """
-    Scenario 7: VectorSkillDiscovery.search() Interface
+    Scenario 7: SkillDiscovery.search() Interface
 
-    Validates that VectorSkillDiscovery correctly:
-    - Accepts installed_only parameter
-    - Applies where_filter to vector store
+    Validates that SkillDiscovery correctly:
+    - Accepts limit parameter
     - Returns properly formatted results
     """
-    discovery = VectorSkillDiscovery()
+    discovery = SkillDiscovery()
     discovery._vm = populated_vector_store
 
-    # Test 1: Search with installed_only=True
-    results_local = await discovery.search(query="container", limit=5, installed_only=True)
+    # Test search
+    results = await discovery.search(query="container", limit=5)
 
-    # All results should be installed
-    for r in results_local:
-        assert r["installed"] is True, f"Result {r['id']} should be installed"
-
-    # Test 2: Search with installed_only=False
-    results_all = await discovery.search(query="container", limit=5, installed_only=False)
-
-    # Should include both installed and uninstalled
-    assert len(results_all) >= len(results_local), "Should find at least as many results"
-
-    # Test 3: Results have required fields
-    for r in results_all:
+    # Test 2: Results have required fields
+    for r in results:
         assert "id" in r, "Result should have id"
         assert "name" in r, "Result should have name"
         assert "description" in r, "Result should have description"
@@ -518,7 +506,7 @@ async def test_phase38_auto_route_typo_handling(populated_vector_store):
     2. Correct skill is found (code_insight)
     3. RoutingResult is returned with calibrated confidence >= 0.6
     """
-    discovery = VectorSkillDiscovery()
+    discovery = SkillDiscovery()
     discovery._vm = populated_vector_store
 
     # Add code_insight and filesystem to the store for this test
@@ -555,7 +543,7 @@ async def test_phase38_auto_route_typo_handling(populated_vector_store):
     )
 
     # Test query that will match via substring in fake store
-    result = await discovery.search(query="analyze code", limit=5, installed_only=True)
+    result = await discovery.search(query="analyze code", limit=5)
 
     # Verify results
     assert len(result) >= 1, "Should find at least one skill"
@@ -578,65 +566,6 @@ async def test_phase38_auto_route_typo_handling(populated_vector_store):
 
 
 @pytest.mark.asyncio
-async def test_phase38_calibrated_scoring():
-    """
-    Phase 38: Calibrated Scoring Verification
-
-    Tests that the sigmoid calibration and Base+Boost model work correctly.
-    """
-    from agent.core.skill_discovery.vector import (
-        _sigmoid_calibration,
-        _fuzzy_keyword_match,
-        MIN_CONFIDENCE,
-        MAX_CONFIDENCE,
-        KEYWORD_BONUS,
-    )
-
-    # Test 1: Sigmoid calibration stretches scores
-    # Raw scores around 0.5 should be pushed outward
-    low_score = _sigmoid_calibration(0.3)
-    mid_score = _sigmoid_calibration(0.5)
-    high_score = _sigmoid_calibration(0.7)
-
-    assert mid_score > low_score, "Sigmoid should push 0.5 higher than 0.3"
-    assert high_score > mid_score, "Sigmoid should push 0.7 higher than 0.5"
-
-    # Test 2: Sigmoid output is bounded
-    assert 0.0 <= _sigmoid_calibration(0.0) <= 1.0, "Sigmoid should output 0.0-1.0"
-    assert 0.0 <= _sigmoid_calibration(1.0) <= 1.0, "Sigmoid should output 0.0-1.0"
-
-    # Test 3: Fuzzy keyword matching (returns tuple[int, bool] since Phase 38.1)
-    # Exact match
-    match_count, verb_matched = _fuzzy_keyword_match({"test"}, {"test"})
-    assert match_count >= 1, "Exact match should work"
-
-    # Substring match (tests -> test)
-    match_count, _ = _fuzzy_keyword_match({"tests"}, {"test"})
-    assert match_count >= 1, f"Substring match should work, got {match_count}"
-
-    # Stemming (running -> run)
-    match_count, _ = _fuzzy_keyword_match({"running"}, {"run"})
-    assert match_count >= 1, f"Stemming should work, got {match_count}"
-
-    # Verb detection (commit is a core verb)
-    match_count, verb_matched = _fuzzy_keyword_match({"commit"}, {"commit"})
-    assert verb_matched is True, "commit should be detected as core verb"
-
-    # Test 4: Score bounds
-    assert MIN_CONFIDENCE == 0.3, "MIN_CONFIDENCE should be 0.3"
-    assert MAX_CONFIDENCE == 0.95, "MAX_CONFIDENCE should be 0.95"
-    assert KEYWORD_BONUS == 0.15, "KEYWORD_BONUS should be 0.15"
-
-    # Test 5: Verify sigmoid values at key points
-    # Score 0.5 should give ~0.5 (center of sigmoid)
-    assert abs(_sigmoid_calibration(0.5) - 0.5) < 0.1, "0.5 input should give ~0.5 output"
-    # Score 0.3 should give < 0.5
-    assert _sigmoid_calibration(0.3) < 0.5, "0.3 input should give < 0.5 output"
-    # Score 0.7 should give > 0.5
-    assert _sigmoid_calibration(0.7) > 0.5, "0.7 input should give > 0.5 output"
-
-
-@pytest.mark.asyncio
 async def test_phase38_adaptive_confidence_gap(populated_vector_store):
     """
     Phase 38: Adaptive Confidence based on Score Gap
@@ -644,7 +573,9 @@ async def test_phase38_adaptive_confidence_gap(populated_vector_store):
     Tests that the router correctly adjusts confidence based on
     the gap between top and second results.
     """
-    discovery = VectorSkillDiscovery()
+    from agent.core.skill_discovery import SkillDiscovery
+
+    discovery = SkillDiscovery()
     discovery._vm = populated_vector_store
 
     # Add a skill that should clearly match "git commit"
@@ -664,7 +595,7 @@ async def test_phase38_adaptive_confidence_gap(populated_vector_store):
     )
 
     # Search for a clear query (that will match in fake store)
-    results = await discovery.search(query="git commit", limit=3, installed_only=True)
+    results = await discovery.search(query="git commit", limit=3)
 
     assert len(results) >= 1, "Should find results"
 
@@ -686,7 +617,7 @@ async def test_phase38_keyword_boost_effectiveness(populated_vector_store):
 
     Tests that keyword matching provides a positive boost to scores.
     """
-    discovery = VectorSkillDiscovery()
+    discovery = SkillDiscovery()
     discovery._vm = populated_vector_store
 
     # Add skills with clear keywords
@@ -706,12 +637,10 @@ async def test_phase38_keyword_boost_effectiveness(populated_vector_store):
     )
 
     # Query with keyword match
-    results_with_match = await discovery.search(query="run tests", limit=5, installed_only=True)
+    results_with_match = await discovery.search(query="run tests", limit=5)
 
     # Query without keyword match
-    results_without_match = await discovery.search(
-        query="execute verification procedures", limit=5, installed_only=True
-    )
+    results_without_match = await discovery.search(query="execute verification procedures", limit=5)
 
     # The skill with matching keywords should score higher
     if results_with_match and results_without_match:
@@ -741,7 +670,7 @@ async def test_phase38_router_integration(populated_vector_store):
     )
 
     # Inject fake vector discovery
-    router._vector_discovery = VectorSkillDiscovery()
+    router._vector_discovery = SkillDiscovery()
     router._vector_discovery._vm = populated_vector_store
 
     # Mock cache - note: router uses `cache` property backed by `_cache`
@@ -781,7 +710,7 @@ async def test_phase38_full_pipeline_with_typo():
     End-to-end test simulating @omni("skill.auto_route", {"task": "analyze code"})
     Tests the complete flow from auto_route through vector search to RoutingResult.
     """
-    from agent.core.skill_discovery.vector import VectorSkillDiscovery
+    from agent.core.skill_discovery import SkillDiscovery
 
     # Create a fresh vector store
     store = FakeVectorStore()
@@ -813,11 +742,11 @@ async def test_phase38_full_pipeline_with_typo():
         )
 
     # Create discovery with store
-    discovery = VectorSkillDiscovery()
+    discovery = SkillDiscovery()
     discovery._vm = store
 
     # Test query (simulating skill.auto_route)
-    result = await discovery.search(query="analyze code", limit=3, installed_only=True)
+    result = await discovery.search(query="analyze code", limit=3)
 
     # Verify results
     assert len(result) >= 1, "Should find at least one skill"

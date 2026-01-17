@@ -144,6 +144,74 @@ class TestVectorMemoryStore:
             assert mock.call_count == 1
 
 
+class TestVectorMemoryAPI:
+    """Tests to prevent regression of incorrect VectorMemory API usage.
+
+    These tests ensure the correct API is used:
+    - Use 'store' property to access the underlying vector store
+    - Do NOT use 'client' attribute (does not exist)
+    """
+
+    def setup_method(self):
+        """Reset singleton before each test."""
+        VectorMemory._instance = None
+        VectorMemory._store = None
+        VectorMemory._initialized = False
+
+    def test_vector_memory_has_store_property(self):
+        """VectorMemory should have 'store' property for accessing the underlying store."""
+        vm = VectorMemory()
+        assert hasattr(vm, "store"), "VectorMemory should have 'store' property"
+
+    def test_vector_memory_has_no_client_attribute(self):
+        """VectorMemory should NOT have 'client' attribute.
+
+        Regression test: Prevents code from using incorrect 'client' attribute.
+        The correct way to access the underlying store is via 'store' property.
+        """
+        vm = VectorMemory()
+        assert not hasattr(vm, "client"), (
+            "VectorMemory should NOT have 'client' attribute. "
+            "Use 'store' property instead to access the underlying vector store."
+        )
+
+    def test_vector_memory_has_ensure_store_method(self):
+        """VectorMemory should have '_ensure_store' method for lazy initialization."""
+        vm = VectorMemory()
+        assert hasattr(vm, "_ensure_store"), "VectorMemory should have '_ensure_store' method"
+        assert callable(vm._ensure_store), "_ensure_store should be callable"
+
+
+class TestVectorMemoryAvailabilityCheck:
+    """Tests for correct way to check if vector memory is available."""
+
+    def setup_method(self):
+        """Reset singleton before each test."""
+        VectorMemory._instance = None
+        VectorMemory._store = None
+        VectorMemory._initialized = False
+
+    def test_check_store_availability_with_store_property(self):
+        """Correct pattern: Check 'vm.store' for availability."""
+        vm = VectorMemory()
+
+        # Without omni-vector available, store should be None
+        with patch("agent.core.vector_store.connection._get_omni_vector", return_value=None):
+            store = vm.store
+            assert store is None, "store should be None when omni-vector is not available"
+
+    def test_client_attribute_does_not_exist_pattern(self):
+        """Demonstrate that using 'client' would fail.
+
+        This test verifies the incorrect pattern would raise AttributeError.
+        """
+        vm = VectorMemory()
+
+        # Attempting to access 'client' should raise AttributeError
+        with pytest.raises(AttributeError, match="'VectorMemory' object has no attribute 'client'"):
+            _ = vm.client  # noqa: F841
+
+
 class TestLazyImports:
     """Tests for lazy import functions."""
 

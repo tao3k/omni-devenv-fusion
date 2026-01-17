@@ -11,7 +11,7 @@ from typing import Any
 
 import structlog
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
 logger = structlog.get_logger(__name__)
 
@@ -50,7 +50,7 @@ def _fallback_replace(content: str, pattern: str, replacement: str) -> str:
         return f"[Regex error in fallback mode: {e}]"
 
 
-@skill_script(
+@skill_command(
     name="structural_replace",
     category="write",
     description="""
@@ -109,7 +109,7 @@ def structural_replace(
         return f"Error in structural replace: {str(e)}"
 
 
-@skill_script(
+@skill_command(
     name="structural_preview",
     category="read",
     description="""
@@ -153,7 +153,7 @@ def structural_preview(
         return f"Error in structural preview: {str(e)}"
 
 
-@skill_script(
+@skill_command(
     name="structural_apply",
     category="write",
     description="""
@@ -197,7 +197,7 @@ def structural_apply(
         return f"Error in structural apply: {str(e)}"
 
 
-@skill_script(
+@skill_command(
     name="refactor_repository",
     category="write",
     description="""
@@ -291,7 +291,7 @@ def refactor_repository(
         return f"Critical Batch Error: {str(e)}"
 
 
-@skill_script(
+@skill_command(
     name="get_edit_info",
     category="read",
     description="""

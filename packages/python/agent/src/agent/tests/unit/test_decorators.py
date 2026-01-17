@@ -124,9 +124,9 @@ def load_skill_module(skill_name: str):
 
 
 class TestSkillScriptDecorators:
-    """Test @skill_script decorator functionality (Phase 63).
+    """Test @skill_command decorator functionality (Phase 63).
 
-    Note: Uses _is_skill_script marker and _script_config (not _skill_config).
+    Note: Uses _is_skill_command marker and _skill_config.
     """
 
     @pytest.fixture
@@ -140,53 +140,46 @@ class TestSkillScriptDecorators:
         return load_skill_module("filesystem")
 
     def test_run_task_has_marker(self, terminal_module):
-        """run_task should have _is_skill_script marker."""
-        assert hasattr(terminal_module.run_task, "_is_skill_script")
-        assert terminal_module.run_task._is_skill_script is True
+        """run_task should have _is_skill_command marker."""
+        assert hasattr(terminal_module.run_task, "_is_skill_command")
+        assert terminal_module.run_task._is_skill_command is True
 
     def test_run_task_has_config(self, terminal_module):
-        """run_task should have _script_config."""
-        assert hasattr(terminal_module.run_task, "_script_config")
-        config = terminal_module.run_task._script_config
+        """run_task should have _skill_config."""
+        assert hasattr(terminal_module.run_task, "_skill_config")
+        config = terminal_module.run_task._skill_config
         assert config["name"] == "run_task"
         assert config["category"] == "workflow"
 
     def test_read_file_has_marker(self, filesystem_module):
-        """read_file should have _is_skill_script marker."""
-        assert hasattr(filesystem_module.read_file, "_is_skill_script")
-        assert filesystem_module.read_file._is_skill_script is True
+        """read_file should have _is_skill_command marker."""
+        assert hasattr(filesystem_module.read_file, "_is_skill_command")
+        assert filesystem_module.read_file._is_skill_command is True
 
     def test_read_file_has_config(self, filesystem_module):
-        """read_file should have _script_config."""
-        assert hasattr(filesystem_module.read_file, "_script_config")
-        config = filesystem_module.read_file._script_config
+        """read_file should have _skill_config."""
+        assert hasattr(filesystem_module.read_file, "_skill_config")
+        config = filesystem_module.read_file._skill_config
         assert config["name"] == "read_file"
         assert config["category"] == "read"
 
     def test_write_file_has_config(self, filesystem_module):
-        """write_file should have _script_config."""
-        assert hasattr(filesystem_module.write_file, "_script_config")
-        config = filesystem_module.write_file._script_config
+        """write_file should have _skill_config."""
+        assert hasattr(filesystem_module.write_file, "_skill_config")
+        config = filesystem_module.write_file._skill_config
         assert config["name"] == "write_file"
         assert config["category"] == "write"
 
     def test_list_directory_has_config(self, filesystem_module):
-        """list_directory should have _script_config."""
-        assert hasattr(filesystem_module.list_directory, "_script_config")
-        config = filesystem_module.list_directory._script_config
+        """list_directory should have _skill_config."""
+        assert hasattr(filesystem_module.list_directory, "_skill_config")
+        config = filesystem_module.list_directory._skill_config
         assert config["name"] == "list_directory"
         assert config["category"] == "read"
 
-    def test_search_files_has_config(self, filesystem_module):
-        """search_files should have _script_config."""
-        assert hasattr(filesystem_module.search_files, "_script_config")
-        config = filesystem_module.search_files._script_config
-        assert config["name"] == "search_files"
-        assert config["category"] == "read"
-
     def test_get_file_info_has_config(self, filesystem_module):
-        """get_file_info should have _script_config."""
-        assert hasattr(filesystem_module.get_file_info, "_script_config")
-        config = filesystem_module.get_file_info._script_config
+        """get_file_info should have _skill_config."""
+        assert hasattr(filesystem_module.get_file_info, "_skill_config")
+        config = filesystem_module.get_file_info._skill_config
         assert config["name"] == "get_file_info"
         assert config["category"] == "read"

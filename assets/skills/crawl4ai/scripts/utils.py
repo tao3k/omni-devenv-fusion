@@ -7,9 +7,9 @@ This is a local dummy decorator that allows crawl4ai scripts to:
 3. Keep the same code style as regular skills
 
 Usage:
-    from .utils import skill_script
+    from .utils import skill_command
 
-    @skill_script(
+    @skill_command(
         name="crawl_url",
         description="Crawl a web page...",
     )
@@ -21,7 +21,7 @@ import functools
 from typing import Any, Callable
 
 
-def skill_script(**kwargs):
+def skill_command(**kwargs):
     """
     Dummy decorator for Heavy Skills.
 
@@ -41,7 +41,7 @@ def skill_script(**kwargs):
             return await func(*args, **kwargs)
 
         # Mark for scanner detection
-        wrapper._is_skill_script = True
+        wrapper._is_skill_command = True
         wrapper._skill_metadata = kwargs
 
         return wrapper

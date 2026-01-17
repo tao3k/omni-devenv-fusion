@@ -29,7 +29,7 @@ def __getattr__(name: str):
         "current_skill_dir",
         "skill_path",
         "skill_asset",
-        "skill_script",
+        "skill_command",
         "skill_reference",
         "skill_data",
     ):
@@ -37,13 +37,7 @@ def __getattr__(name: str):
 
         return getattr(skill_utils, name)
 
-    # Lazy load cache_path
-    if name in ("CACHE_DIR", "get_cache_dir"):
-        from . import cache_path
-
-        return getattr(cache_path, name)
-
-    # Lazy load prj_dirs (PRJ_SPEC directories)
+    # Lazy load prj_dirs (PRJ_SPEC directories including cache)
     if name in (
         "PRJ_DIRS",
         "PRJ_DATA",

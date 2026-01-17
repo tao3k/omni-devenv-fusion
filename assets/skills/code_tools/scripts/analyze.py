@@ -11,7 +11,7 @@ from typing import List
 
 import structlog
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 from common.config_paths import get_project_root
 
 logger = structlog.get_logger(__name__)
@@ -57,7 +57,7 @@ class _ToolVisitor(ast.NodeVisitor):
 # =============================================================================
 
 
-@skill_script(
+@skill_command(
     name="find_tools",
     category="read",
     description="""
@@ -102,7 +102,7 @@ async def find_tools(file_path: str) -> str:
         return f"Error: {e}"
 
 
-@skill_script(
+@skill_command(
     name="count_lines",
     category="read",
     description="""

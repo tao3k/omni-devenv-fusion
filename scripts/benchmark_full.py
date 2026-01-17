@@ -296,16 +296,6 @@ def run_common_critical(runner: BenchmarkRunner) -> None:
     with runner.measure("import", "from common.config.directory import get_conf_dir", priority=2):
         from common.config.directory import get_conf_dir
 
-    # config commits
-    clear_modules(["common.config"])
-    with runner.measure("import", "from common.config.commits import get_commit_types", priority=2):
-        from common.config.commits import get_commit_types
-
-    with runner.measure("function", "get_commit_types()", priority=2):
-        from common.config.commits import get_commit_types
-
-        get_commit_types()
-
 
 # =============================================================================
 # Priority 2: HIGH - MCP Core Package

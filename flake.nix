@@ -21,6 +21,7 @@
       inputs.uv2nix.follows = "uv2nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    omnibus.url = "github:tao3k/omnibus";
   };
 
   outputs =
@@ -30,7 +31,7 @@
       uv2nix,
       pyproject-build-systems,
       ...
-    }:
+    }@inputs:
     let
       inherit (nixpkgs) lib;
       forAllSystems = lib.genAttrs lib.systems.flakeExposed;
@@ -46,6 +47,7 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
           python = pkgs.python3;
+          inherit (inputs.omnibus.flake.inputs) nix-filter;
         in
         (pkgs.callPackage pyproject-nix.build.packages {
           inherit python;
@@ -83,12 +85,7 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
           pythonSet = pythonSets.${system}.overrideScope editableOverlay;
-          virtualenv = pythonSet.mkVirtualEnv "omni-dev-fusion-env" (
-            workspace.deps.all
-            // {
-              omni-dev-fusion = [ ];
-            }
-          );
+          virtualenv = pythonSet.mkVirtualEnv "omni-dev-fusion-env" workspace.deps.all;
         in
         {
           default = pkgs.mkShell {
@@ -109,13 +106,28 @@
         }
       );
 
-      packages = forAllSystems (system: {
-        default = pythonSets.${system}.mkVirtualEnv "omni-dev-fusion-env" (
-          workspace.deps.default
-          // {
-            omni-dev-fusion = [ ];
-          }
-        );
-      });
+      packages = forAllSystems (
+        system:
+        let
+          nixpkgs = inputs.nixpkgs.legacyPackages.${system};
+          inherit (inputs.omnibus.flake.inputs) nix-filter;
+          omni-core-rs = (
+            nixpkgs.callPackage ./units/packages/omni-core-rs.nix {
+              inherit nix-filter;
+            }
+          );
+        in
+        {
+          inherit omni-core-rs;
+          default =
+            (pythonSets.${system}.mkVirtualEnv "omni-dev-fusion-env" workspace.deps.default)
+            .overrideAttrs
+              (old: {
+                postInstall = ''
+                  ln -s ${omni-core-rs}/${nixpkgs.python3Packages.python.sitePackages}/omni_core_rs $out/${nixpkgs.python3Packages.python.sitePackages}/omni_core_rs
+                '';
+              });
+        }
+      );
     };
 }

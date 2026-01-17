@@ -155,7 +155,7 @@ def security_scan_skill(target_dir: Path, repo_url: str) -> dict[str, Any]:
         return {"passed": True, "error": str(e), "report": {"error": str(e)}}
 
 
-def discover_skills(query: str = "", limit: int = 5) -> dict[str, Any]:
+async def discover_skills(query: str = "", limit: int = 5) -> dict[str, Any]:
     """
     Search the known skills index for matching skills.
 
@@ -169,7 +169,7 @@ def discover_skills(query: str = "", limit: int = 5) -> dict[str, Any]:
     from agent.core.skill_discovery import SkillDiscovery
 
     discovery = SkillDiscovery()
-    results = discovery.search_local(query, limit)
+    results = await discovery.search(query, limit, local_only=False)
 
     return {
         "query": query,
@@ -179,7 +179,7 @@ def discover_skills(query: str = "", limit: int = 5) -> dict[str, Any]:
     }
 
 
-def suggest_skills_for_task(task: str) -> dict[str, Any]:
+async def suggest_skills_for_task(task: str) -> dict[str, Any]:
     """
     Analyze a task and suggest relevant skills.
 
@@ -192,7 +192,13 @@ def suggest_skills_for_task(task: str) -> dict[str, Any]:
     from agent.core.skill_discovery import SkillDiscovery
 
     discovery = SkillDiscovery()
-    return discovery.suggest_for_query(task)
+    suggestions = await discovery.search(task, limit=5)
+
+    return {
+        "task": task,
+        "suggestions": suggestions,
+        "count": len(suggestions),
+    }
 
 
 def list_installed_skills(

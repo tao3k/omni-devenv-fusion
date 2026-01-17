@@ -279,7 +279,7 @@ reject_workflow() → END
 | `scripts/rendering.py`             | Commit message template rendering     |
 | `templates/review_card.j2`         | Review card template for LLM analysis |
 | `templates/commit_message.j2`      | Final commit message template         |
-| `scripts/graph_workflow.py`        | `smart_commit` @skill_script command  |
+| `scripts/graph_workflow.py`        | `smart_commit` @skill_command command |
 | `tests/test_git_smart_workflow.py` | Unit tests                            |
 
 ### Tests

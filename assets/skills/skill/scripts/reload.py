@@ -5,10 +5,10 @@ Provides dynamic skill reloading via MCP tool:
 - @omni("skill.reload", {"name": "git"})
 """
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
 
-@skill_script(
+@skill_command(
     name="reload",
     category="admin",
     description="""
@@ -18,7 +18,7 @@ from agent.skills.decorators import skill_script
     Only reload when:
     - Cache issues occur (old data persists)
     - Modified configs/tools don't take effect
-    - A @skill_script decorator's description was updated (LLM needs new schema)
+    - A @skill_command decorator's description was updated (LLM needs new schema)
     - Explicit debugging required
 
     If the skill was unloaded, this will load it. If it was modified,

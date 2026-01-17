@@ -72,13 +72,13 @@ def write_script_version(version: int):
     """Dynamically modify scripts/ping.py, simulating developer saving files."""
     content = f'''"""Ping script for stress testing - Version {version}"""
 import time
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
 # Version: {version}
 # Timestamp: {time.time()}
 
 
-@skill_script(
+@skill_command(
     name="ping",
     category="general",
     description="Ping Pong Test - verifies hot-reload works"
@@ -135,7 +135,7 @@ Returns version string to verify reload happened.
         encoding="utf-8",
     )
 
-    # Phase 63+: Use scripts/ directory with @skill_script decorator
+    # Phase 63+: Use scripts/ directory with @skill_command decorator
     scripts_dir = TARGET_SKILL_DIR / "scripts"
     scripts_dir.mkdir(parents=True, exist_ok=True)
 

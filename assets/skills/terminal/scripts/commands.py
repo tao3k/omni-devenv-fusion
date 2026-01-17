@@ -9,7 +9,7 @@ import platform
 from pathlib import Path
 from typing import Optional
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
 
 def _is_git_commit_blocked(command: str, args: list[str]) -> tuple[bool, str]:
@@ -57,7 +57,7 @@ Use git_commit in git skill instead.
     return False, ""
 
 
-@skill_script(
+@skill_command(
     name="run_task",
     category="workflow",
     description="""
@@ -111,7 +111,7 @@ async def run_task(command: str, args: Optional[list[str]] = None, **kwargs) -> 
     return engine.format_result(result, command, args)
 
 
-@skill_script(
+@skill_command(
     name="analyze_last_error",
     category="view",
     description="""
@@ -157,7 +157,7 @@ Please analyze it to find:
         return f"Error reading crash logs: {e}"
 
 
-@skill_script(
+@skill_command(
     name="inspect_environment",
     category="read",
     description="""
@@ -176,7 +176,7 @@ async def inspect_environment() -> str:
     return f"OS: {platform.system()}, CWD: {os.getcwd()}"
 
 
-@skill_script(
+@skill_command(
     name="run_command",
     category="workflow",
     description="""

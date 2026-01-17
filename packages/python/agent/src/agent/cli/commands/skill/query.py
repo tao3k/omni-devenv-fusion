@@ -147,11 +147,10 @@ def skill_search(
     """
     import asyncio
 
-    from agent.core.skill_discovery import VectorSkillDiscovery
+    from agent.core.skill_discovery import search_skills
 
     async def do_search():
-        discovery = VectorSkillDiscovery()
-        return await discovery.search(query, limit=limit, installed_only=not all_skills)
+        return await search_skills(query, limit=limit)
 
     try:
         results = asyncio.run(do_search())

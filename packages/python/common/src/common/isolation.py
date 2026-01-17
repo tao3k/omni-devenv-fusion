@@ -10,11 +10,11 @@ Philosophy:
 - Communication via JSON through stdout/stderr
 
 Usage:
-    from common.isolation import run_skill_script
+    from common.isolation import run_skill_command
 
     @skill_command
     def crawl_webpage(url: str):
-        return run_skill_script(Path(__file__).parent, "engine.py", {"url": url})
+        return run_skill_command(Path(__file__).parent, "engine.py", {"url": url})
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ def _json_loads(data: str | bytes) -> Any:
     return json.loads(data)
 
 
-def run_skill_script(
+def run_skill_command(
     skill_dir: Path,
     script_name: str,
     args: Dict[str, Any],
@@ -66,7 +66,7 @@ def run_skill_script(
         Dictionary with 'success' key and either 'result' or 'error'
 
     Example:
-        result = run_skill_script(
+        result = run_skill_command(
             Path(__file__).parent,
             "engine.py",
             {"url": "https://example.com", "fit_markdown": True}
@@ -157,14 +157,14 @@ def run_skill_script(
         }
 
 
-def run_skill_script_async(
+def run_skill_command_async(
     skill_dir: Path,
     script_name: str,
     args: Dict[str, Any],
     timeout: int = 60,
 ) -> Dict[str, Any]:
     """
-    Async wrapper for run_skill_script.
+    Async wrapper for run_skill_command.
 
     Note: subprocess.run is synchronous by nature. This wrapper exists
     for API compatibility with async code patterns.
@@ -178,7 +178,7 @@ def run_skill_script_async(
     Returns:
         Dictionary with 'success' key and either 'result' or 'error'
     """
-    return run_skill_script(skill_dir, script_name, args, timeout)
+    return run_skill_command(skill_dir, script_name, args, timeout)
 
 
 def _extract_json(text: str) -> Optional[Dict[str, Any]]:
@@ -243,7 +243,7 @@ def check_skill_dependencies(skill_dir: Path) -> Dict[str, Any]:
 
 
 __all__ = [
-    "run_skill_script",
-    "run_skill_script_async",
+    "run_skill_command",
+    "run_skill_command_async",
     "check_skill_dependencies",
 ]

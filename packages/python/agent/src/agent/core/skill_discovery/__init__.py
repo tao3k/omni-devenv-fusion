@@ -1,28 +1,24 @@
 """
 src/agent/core/skill_discovery/
- The Librarian - Simplified VectorMemory Adapter
+ The Librarian - Vector-Based Skill Discovery
 
 Atomic modules following ODF patterns:
-- indexing.py: Lightweight adapter for Rust-backed VectorMemory
-- local.py: Legacy local index (still used for some orchestration)
+- indexing.py: Vector-based skill discovery
+- reconciliation.py: Index reconciliation
 
 Usage:
     from agent.core.skill_discovery import (
         SkillDiscovery,
         reindex_skills_from_manifests,
-        vector_search_skills,
+        search_skills,
     )
 """
 
-# Local discovery (legacy - still used by some components)
-from .local import SkillDiscovery, KNOWN_SKILLS_INDEX, discover_skills, suggest_for_task
-
-# Vector discovery ( - ChromaDB-based, still used by some components)
-from .vector import VectorSkillDiscovery, vector_search_skills, vector_suggest_for_task
-
-# Index management -  Rust-backed adapter
+# Vector-based skill discovery
 from .indexing import (
+    SkillDiscovery,
     reindex_skills_from_manifests,
+    search_skills,
     SKILL_REGISTRY_COLLECTION,
 )
 
@@ -30,17 +26,10 @@ from .indexing import (
 from .reconciliation import reconcile_index
 
 __all__ = [
-    # Local discovery
+    # Discovery
     "SkillDiscovery",
-    "KNOWN_SKILLS_INDEX",
-    "discover_skills",
-    "suggest_for_task",
-    # Vector discovery
-    "VectorSkillDiscovery",
-    "vector_search_skills",
-    "vector_suggest_for_task",
-    # Index management
     "reindex_skills_from_manifests",
+    "search_skills",
     "SKILL_REGISTRY_COLLECTION",
     # Reconciliation
     "reconcile_index",

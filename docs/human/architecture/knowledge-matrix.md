@@ -182,7 +182,7 @@ async def search_knowledge_hybrid(
 **File**: `assets/skills/knowledge/scripts/search_docs.py`
 
 ```python
-@skill_script(
+@skill_command(
     name="search_project_knowledge",
     description="[Knowledge RAG] Search project documentation, specs, and guides...",
     category="knowledge",

@@ -233,10 +233,10 @@ def skill_index_stats(
     """
     import asyncio
 
-    from agent.core.skill_discovery import VectorSkillDiscovery
+    from agent.core.skill_discovery import SkillDiscovery
 
     async def get_stats():
-        return await VectorSkillDiscovery().get_index_stats()
+        return await SkillDiscovery().get_index_stats()
 
     try:
         result = asyncio.run(get_stats())

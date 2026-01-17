@@ -16,29 +16,10 @@ ODF-EP v6.0 Compliance:
 
 from __future__ import annotations
 
-import functools
 import inspect
-import time
-from typing import Any, Callable, get_type_hints, Optional, Union
+from typing import Any, Callable, get_type_hints, Union
 
 from pydantic import BaseModel, ConfigDict
-
-# Import from common (not mcp_core - these are general utilities)
-from common.config_paths import get_project_root
-from common.config.settings import get_setting
-
-# Lazy logger - defer structlog.get_logger() to avoid import overhead
-_cached_logger: Any | None = None
-
-
-def _get_logger() -> Any:
-    """Get logger lazily."""
-    global _cached_logger
-    if _cached_logger is None:
-        import structlog
-
-        _cached_logger = structlog.get_logger(__name__)
-    return _cached_logger
 
 
 # =============================================================================
@@ -92,189 +73,85 @@ class CommandResult(BaseModel):
 
 
 # =============================================================================
-# Skill Command Decorator (Enhanced)
+# Skill Command Decorator (Metadata-Driven Architecture)
 # =============================================================================
+# Direct decorator for scripts/*.py files - no tools.py router layer needed.
+# Auto-detects skill name from file path and registers directly with SkillManager.
 
 
 def skill_command(
     name: str | None = None,
-    category: str = "general",
     description: str | None = None,
-    # Dependency Injection Flags
+    category: str = "general",
+    # Dependency Injection
     inject_root: bool = False,
     inject_settings: list[str] | None = None,
     # Retry Configuration
     retry_on: tuple[type[Exception], ...] = (ConnectionError, TimeoutError),
     max_attempts: int = 3,
-    #  Caching support
+    # Caching support
     cache_ttl: float = 0.0,
     pure: bool = False,
 ):
     """
-    [Macro] Mark a function as an exposed skill command with optional DI.
+    [Macro] Mark a function in scripts/*.py as an exposed skill command.
 
-    Enhanced with:
-    - Structured CommandResult output
-    - Automatic retry for transient failures
-    - Context-aware logging
-    -  Result caching with TTL
+    This decorator is used directly in script files - no tools.py router needed.
+
+    Features:
+    - Auto-detects skill name from file path (e.g., git/scripts/commit.py -> skill="git")
+    - Auto-generates tool name from function name (e.g., commit -> "git.commit")
+    - Stores full metadata for MCP tool registration
+    - Supports dependency injection and retry logic
+    - Supports result caching with TTL
 
     Args:
         name: Override command name (default: function name)
-        category: Grouping for help display (e.g. "git", "file")
         description: Override docstring description
+        category: Grouping for help display (e.g., "write", "read")
         inject_root: If True, passes 'project_root' (Path) to the function
-        inject_settings: List of setting keys to inject (e.g. ["git.path"])
-                         Keys are converted to snake_case kwargs (e.g. git_path)
+        inject_settings: List of setting keys to inject
         retry_on: Tuple of exception types to retry on
-        max_attempts: Maximum retry attempts (default: 3)
+        max_attempts: Maximum retry attempts
         cache_ttl: Cache time-to-live in seconds (0 = disabled)
         pure: Whether the function is side-effect free (improves caching safety)
 
-    Usage:
-        @skill_command(category="git", description="Check git status")
-        def git_status(): ...
+    Usage (in assets/skills/git/scripts/commit.py):
 
-        @skill_command(category="git", inject_root=True)
-        def status(project_root: Path): ...
+        from agent.skills.decorators import skill_command
 
-        @skill_command(category="git", inject_settings=["git.user", "git.email"])
-        def setup_config(git_user: str = None, git_email: str = None): ...
+        @skill_command(
+            description="Commit staged changes",
+            category="write",
+            cache_ttl=60.0,  # Cache result for 60 seconds
+        )
+        def commit(message: str) -> str:
+            '''Commit changes to git repository.'''
+            # ... implementation ...
 
-        @skill_command(cache_ttl=60.0, pure=True)
-        def read_config(): ...  # Read-only operation, cached for 60s
+    This will be registered as "git.commit" automatically.
     """
 
     def decorator(func: Callable) -> Callable:
-        # 1. Attach Metadata (used by SkillManager)
+        # Attach script-specific metadata
         func._is_skill_command = True
         func._skill_config = {
             "name": name or func.__name__,
-            "category": category,
             "description": description or _extract_description(func),
+            "category": category,
             "retry_on": retry_on,
             "max_attempts": max_attempts,
             "input_schema": _get_param_schema(func),
-            #  Caching metadata
+            "inject_root": inject_root,
+            "inject_settings": inject_settings or [],
+            # Caching metadata
             "cache_ttl": cache_ttl,
             "pure": pure,
         }
 
-        # 2. Sync Wrapper with Structured Logging
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            t0 = time.perf_counter()
-            log = _get_logger().bind(
-                command=name or func.__name__,
-                category=category,
-            )
-
-            try:
-                # Inject Project Root
-                if inject_root and "project_root" not in kwargs:
-                    kwargs["project_root"] = get_project_root()
-
-                # Inject Settings
-                if inject_settings:
-                    for key in inject_settings:
-                        arg_name = key.replace(".", "_")
-                        if arg_name not in kwargs:
-                            val = get_setting(key)
-                            kwargs[arg_name] = val
-
-                # Execute
-                result = func(*args, **kwargs)
-                duration_ms = (time.perf_counter() - t0) * 1000
-
-                log.info("command_execution_success", duration_ms=duration_ms)
-
-                return CommandResult(
-                    success=True,
-                    data=result,
-                    metadata={"duration_ms": duration_ms},
-                )
-
-            except Exception as e:
-                duration_ms = (time.perf_counter() - t0) * 1000
-                error_msg = f"{type(e).__name__}: {str(e)}"
-
-                log.error(
-                    "command_execution_failed",
-                    error=error_msg,
-                    duration_ms=duration_ms,
-                )
-
-                return CommandResult(
-                    success=False,
-                    data=None,
-                    error=error_msg,
-                    metadata={
-                        "duration_ms": duration_ms,
-                        "exception_type": type(e).__name__,
-                        "retryable": isinstance(e, retry_on),
-                    },
-                )
-
-        # 3. Async Wrapper with Structured Logging
-        @functools.wraps(func)
-        async def async_wrapper(*args, **kwargs):
-            t0 = time.perf_counter()
-            log = _get_logger().bind(
-                command=name or func.__name__,
-                category=category,
-            )
-
-            try:
-                # Inject Project Root
-                if inject_root and "project_root" not in kwargs:
-                    kwargs["project_root"] = get_project_root()
-
-                # Inject Settings
-                if inject_settings:
-                    for key in inject_settings:
-                        arg_name = key.replace(".", "_")
-                        if arg_name not in kwargs:
-                            val = get_setting(key)
-                            kwargs[arg_name] = val
-
-                # Execute async function
-                result = await func(*args, **kwargs)
-                duration_ms = (time.perf_counter() - t0) * 1000
-
-                log.info("command_execution_success", duration_ms=duration_ms)
-
-                return CommandResult(
-                    success=True,
-                    data=result,
-                    metadata={"duration_ms": duration_ms},
-                )
-
-            except Exception as e:
-                duration_ms = (time.perf_counter() - t0) * 1000
-                error_msg = f"{type(e).__name__}: {str(e)}"
-
-                log.error(
-                    "command_execution_failed",
-                    error=error_msg,
-                    duration_ms=duration_ms,
-                )
-
-                return CommandResult(
-                    success=False,
-                    data=None,
-                    error=error_msg,
-                    metadata={
-                        "duration_ms": duration_ms,
-                        "exception_type": type(e).__name__,
-                        "retryable": isinstance(e, retry_on),
-                    },
-                )
-
-        # Choose wrapper based on function type
-        if inspect.iscoroutinefunction(func):
-            return async_wrapper
-        else:
-            return wrapper
+        # Return the original function (no wrapper for script commands)
+        # The SkillLoaderMixin will handle execution with proper context
+        return func
 
     # Handle @skill_command without parentheses
     # When used as @skill_command, name receives the decorated function
@@ -284,6 +161,16 @@ def skill_command(
         return decorator(func)
 
     return decorator
+
+
+def is_skill_command(func: Callable) -> bool:
+    """Check if a function is marked with @skill_command."""
+    return getattr(func, "_is_skill_command", False)
+
+
+def get_script_config(func: Callable) -> dict | None:
+    """Get the script config attached to a function (for @skill_command)."""
+    return getattr(func, "_skill_config", None)
 
 
 # =============================================================================
@@ -497,111 +384,13 @@ def _get_param_schema(func: Callable) -> dict:
 
 
 # =============================================================================
-# Skill Script Decorator ( Metadata-Driven Architecture)
-# =============================================================================
-# Direct decorator for scripts/*.py files - no tools.py router layer needed.
-# Auto-detects skill name from file path and registers directly with SkillManager.
-
-
-_SCRIPT_SKILL_MARKER = "_is_skill_script"
-
-
-def skill_script(
-    name: str | None = None,
-    description: str | None = None,
-    category: str = "general",
-    # Dependency Injection (same as skill_command)
-    inject_root: bool = False,
-    inject_settings: list[str] | None = None,
-    # Retry Configuration
-    retry_on: tuple[type[Exception], ...] = (ConnectionError, TimeoutError),
-    max_attempts: int = 3,
-    #  Caching support
-    cache_ttl: float = 0.0,
-    pure: bool = False,
-):
-    """
-    [Macro] Mark a function in scripts/*.py as an exposed skill command.
-
-    This decorator is used directly in script files - no tools.py router needed.
-
-    Features:
-    - Auto-detects skill name from file path (e.g., git/scripts/commit.py -> skill="git")
-    - Auto-generates tool name from function name (e.g., commit -> "git.commit")
-    - Stores full metadata for MCP tool registration
-    - Supports dependency injection and retry logic
-    -  Supports result caching with TTL
-
-    Args:
-        name: Override command name (default: function name)
-        description: Override docstring description
-        category: Grouping for help display (e.g., "write", "read")
-        inject_root: If True, passes 'project_root' (Path) to the function
-        inject_settings: List of setting keys to inject
-        retry_on: Tuple of exception types to retry on
-        max_attempts: Maximum retry attempts
-        cache_ttl: Cache time-to-live in seconds (0 = disabled)
-        pure: Whether the function is side-effect free (improves caching safety)
-
-    Usage (in assets/skills/git/scripts/commit.py):
-
-        from agent.skills.decorators import skill_script
-
-        @skill_script(
-            description="Commit staged changes",
-            category="write",
-            cache_ttl=60.0,  # Cache result for 60 seconds
-        )
-        def commit(message: str) -> str:
-            '''Commit changes to git repository.'''
-            # ... implementation ...
-
-    This will be registered as "git.commit" automatically.
-    """
-
-    def decorator(func: Callable) -> Callable:
-        # Attach script-specific metadata
-        func._is_skill_script = True
-        func._script_config = {
-            "name": name or func.__name__,
-            "description": description or _extract_description(func),
-            "category": category,
-            "retry_on": retry_on,
-            "max_attempts": max_attempts,
-            "input_schema": _get_param_schema(func),
-            "inject_root": inject_root,
-            "inject_settings": inject_settings or [],
-            #  Caching metadata
-            "cache_ttl": cache_ttl,
-            "pure": pure,
-        }
-
-        # Return the original function (no wrapper for script commands)
-        # The SkillLoaderMixin will handle execution with proper context
-        return func
-
-    return decorator
-
-
-def is_skill_script(func: Callable) -> bool:
-    """Check if a function is marked with @skill_script."""
-    return getattr(func, _SCRIPT_SKILL_MARKER, False)
-
-
-def get_script_config(func: Callable) -> dict | None:
-    """Get the script config attached to a function."""
-    return getattr(func, "_script_config", None)
-
-
-# =============================================================================
 # Export
 # =============================================================================
 
 
 __all__ = [
     "skill_command",
-    "skill_script",
-    "is_skill_script",
+    "is_skill_command",
     "get_script_config",
     "CommandResult",
     "validate_structure",

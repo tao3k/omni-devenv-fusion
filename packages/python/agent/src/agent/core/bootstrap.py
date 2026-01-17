@@ -4,11 +4,10 @@ System boot sequence and background task initialization.
  Config-driven skill preloading for pure MCP Server.
 """
 
-import sys
 import asyncio
 import threading
 import structlog
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from mcp.server import Server
@@ -16,7 +15,7 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 
-def boot_core_skills(mcp: "Server" = None):
+def boot_core_skills(mcp: Optional["Server"] = None):
     """
     [Kernel Boot] Auto-load skills from settings.yaml.
     Fixes the 'Lobotomized Agent' issue by ensuring tools are ready.
@@ -30,7 +29,6 @@ def boot_core_skills(mcp: "Server" = None):
     """
     # Lazy imports to avoid import-time overhead
     from agent.core.registry import get_skill_registry
-    from common.mcp_core import log_decision
 
     registry = get_skill_registry()
 
@@ -53,11 +51,9 @@ def boot_core_skills(mcp: "Server" = None):
                 success, msg = registry.load_skill(skill, mcp)
                 if success:
                     logger.info("Preloaded skill", skill=skill)
-                    log_decision(f"boot.skill_preloaded", {"skill": skill}, logger)
                     loaded_count += 1
                 else:
                     logger.warning("Skipped skill", skill=skill, reason=msg)
-                    log_decision(f"boot.skill_skipped", {"skill": skill, "reason": msg}, logger)
             else:
                 logger.warning("Skill not found", skill=skill)
         except Exception as e:
@@ -78,8 +74,8 @@ def start_background_tasks() -> threading.Thread | None:
 
     def _run_ingest():
         try:
-            from agent.capabilities.knowledge_ingestor import ingest_all_knowledge
-            from agent.capabilities.librarian import bootstrap_knowledge
+            from agent.capabilities.knowledge.ingestor import ingest_all_knowledge
+            from agent.capabilities.knowledge.librarian import bootstrap_knowledge
 
             # Create new event loop for this thread
             loop = asyncio.new_event_loop()
@@ -138,4 +134,4 @@ def shutdown_background_tasks(timeout: float = 30.0) -> bool:
     return True
 
 
-__all__ = ["boot_core_skills", "start_background_tasks", "shutdown_background_tasks", "CORE_SKILLS"]
+__all__ = ["boot_core_skills", "start_background_tasks", "shutdown_background_tasks"]

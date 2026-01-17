@@ -1,7 +1,7 @@
 """
 _template/scripts/commands.py - Skill Commands
 
-Phase 63+: Commands defined directly with @skill_script decorator.
+Phase 63+: Commands defined directly with @skill_command decorator.
 No tools.py needed - this is the single source of skill commands.
 
 Architecture:
@@ -14,10 +14,10 @@ Usage:
     commands.example(...)
 """
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
 
-@skill_script(
+@skill_command(
     name="example",
     category="read",
     description="""
@@ -34,7 +34,7 @@ def example(param: str = "default") -> str:
     return f"Example: {param}"
 
 
-@skill_script(
+@skill_command(
     name="example_with_options",
     category="read",
     description="""
@@ -55,7 +55,7 @@ def example_with_options(enabled: bool = True, value: int = 42) -> dict:
     }
 
 
-@skill_script(
+@skill_command(
     name="process_data",
     category="write",
     description="""

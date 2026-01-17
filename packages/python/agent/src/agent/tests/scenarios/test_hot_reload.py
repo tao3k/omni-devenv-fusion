@@ -276,18 +276,18 @@ async def test_scenario2_mcp_notification_with_session(skill_manager):
     mock_request_context = MagicMock()
     mock_request_context.session = mock_session
 
-    # Patch server.request_context at module level
-    import agent.mcp_server as mcp_module
+    # Patch server.request_context in the server module
+    import agent.mcp_server.server as server_module
 
     # Save original server instance
-    original_server = mcp_module.server
+    original_server = server_module.server
 
     class MockContext:
         request_context = mock_request_context
 
     try:
         # Replace server with mock
-        mcp_module.server = MockContext()
+        server_module.server = MockContext()
 
         # Subscribe
         skill_manager.subscribe(_notify_tools_changed)
@@ -302,7 +302,7 @@ async def test_scenario2_mcp_notification_with_session(skill_manager):
 
     finally:
         # Restore original server instance
-        mcp_module.server = original_server
+        server_module.server = original_server
 
 
 @pytest.mark.asyncio

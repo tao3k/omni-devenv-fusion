@@ -123,14 +123,16 @@ def _build_workflow() -> Any:
     return builder.compile(checkpointer=checkpointer)
 
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
 
-@skill_script(
+@skill_command(
     name="smart_commit",
     category="workflow",
     description="""
-    Executes the Smart Commit workflow with security scan and human approval.
+    Primary git commit workflow with security scan and human approval.
+
+    ⚠️  **Use smart_commit for all commits in this project** unless user explicitly requests otherwise.
 
     Multi-step workflow:
     1. start: Stages files, runs security scan, lefthook checks
@@ -138,6 +140,13 @@ from agent.skills.decorators import skill_script
     3. reject: Cancels the workflow
     4. status: Checks workflow status
     5. visualize: Shows the workflow diagram
+
+    Benefits over direct git_commit:
+    - Automatic commit message generation from diff analysis
+    - Security scan for sensitive files
+    - Lefthook validation before commit
+    - Human-in-the-loop approval
+    - File categorization for detailed commit messages
 
     Args:
         action: The workflow action (`start`, `approve`, `reject`, `status`, `visualize`).

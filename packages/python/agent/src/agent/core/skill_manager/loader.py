@@ -2,7 +2,7 @@
 src/agent/core/skill_manager/loader.py
 Skill loading and command extraction.
 
- Only supports scripts/*.py pattern with @skill_script decorator.
+ Only supports scripts/*.py pattern with @skill_command decorator.
 Removes legacy tools.py + @skill_command support.
 """
 
@@ -23,7 +23,7 @@ class SkillLoaderMixin:
     """
     Mixin providing skill loading and command extraction capabilities.
 
-     Only supports scripts/*.py with @skill_script decorator.
+     Only supports scripts/*.py with @skill_command decorator.
     Legacy tools.py + @skill_command support has been removed.
     """
 
@@ -44,7 +44,7 @@ class SkillLoaderMixin:
         module: Any,
         skill_name: str,
     ) -> dict[str, SkillCommand]:
-        """Extract @skill_script decorated functions from a script module.
+        """Extract @skill_command decorated functions from a script module.
 
         Args:
             module: The loaded Python module (from scripts/*.py)
@@ -59,12 +59,12 @@ class SkillLoaderMixin:
             if not inspect.isfunction(obj):
                 continue
 
-            # Check for @skill_script marker
-            if not hasattr(obj, "_is_skill_script"):
+            # Check for @skill_command marker
+            if not hasattr(obj, "_is_skill_command"):
                 continue
 
             # Get config from decorator
-            config = getattr(obj, "_script_config", {})
+            config = getattr(obj, "_skill_config", {})
             cmd_name = config.get("name") or name
             description = config.get("description", "") or self._get_docstring(obj)
             category = config.get("category", "general")
@@ -168,7 +168,7 @@ class SkillLoaderMixin:
         scripts_dir: Path,
         reload: bool = False,
     ) -> dict[str, SkillCommand]:
-        """Extract all @skill_script commands from a skill's scripts directory.
+        """Extract all @skill_command commands from a skill's scripts directory.
 
         Args:
             skill_name: Name of the skill

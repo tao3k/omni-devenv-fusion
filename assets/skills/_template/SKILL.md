@@ -24,7 +24,7 @@ When working with the Template skill:
 
 - Use `template.example` for basic operations
 - Use `template.process_data` for data processing tasks
-- All commands are defined in `scripts/commands.py` with @skill_script decorator
+- All commands are defined in `scripts/commands.py` with @skill_command decorator
 - No tools.py needed - this is the single source of truth
 ```
 
@@ -37,7 +37,7 @@ _template/
 ├── SKILL.md           # Metadata + System Prompts
 ├── scripts/           # Commands (Phase 63+)
 │   ├── __init__.py    # Dynamic module loader (importlib.util)
-│   └── commands.py    # @skill_script decorated functions
+│   └── commands.py    # @skill_command decorated functions
 └── tests/             # Test files
 ```
 
@@ -58,7 +58,7 @@ Phase 63+ simplifies the skill architecture:
 
 **New (Phase 63+):**
 
-- `scripts/commands.py` - Commands with `@skill_script` decorators
+- `scripts/commands.py` - Commands with `@skill_command` decorators
 - No `tools.py` needed
 
 **Benefits:**
@@ -106,9 +106,9 @@ cp -r assets/skills/_template assets/skills/my_new_skill
 ### Step 2: Add Commands (`scripts/commands.py`)
 
 ```python
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
-@skill_script(
+@skill_command(
     name="my_command",
     category="read",
     description="Brief description",

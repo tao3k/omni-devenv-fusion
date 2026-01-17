@@ -122,7 +122,7 @@ class OmniAgent:
     def _load_tools(self) -> None:
         """Load all available tools from skills.
 
-        Uses Rust scanner to discover @skill_script decorated functions
+        Uses Rust scanner to discover @skill_command decorated functions
         and creates wrapper functions that use JIT loader for execution.
         """
         if self._tools:

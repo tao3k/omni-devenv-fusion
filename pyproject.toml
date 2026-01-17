@@ -2,12 +2,13 @@
 name = "omni-dev-fusion"
 description = "Tri-MCP Agentic OS: orchestrator + executor + coder"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dynamic = ["version"]
 
 
 [dependency-groups]
 dev = [
+    "omni-core-rs",
     "omni-dev-fusion-agent",
     "omni-dev-fusion-common",
     "polyfactory>=3.2.0",
@@ -29,6 +30,7 @@ source = "vcs"
 [tool.uv.sources]
 omni-dev-fusion-common = { workspace = true }
 omni-dev-fusion-agent = { workspace = true }
+omni-core-rs = { path = "packages/rust/bindings/python", editable = true }
 
 
 [tool.uv.workspace]

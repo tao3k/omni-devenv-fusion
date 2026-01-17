@@ -494,7 +494,7 @@ def test_skill():
 
 **Symptom**: `Skill 'xxx' has no scripts/*.py (tools.py pattern removed)`
 
-**Cause**: Skill doesn't have `scripts/*.py` files with `@skill_script` decorators.
+**Cause**: Skill doesn't have `scripts/*.py` files with `@skill_command` decorators.
 
 **Solution**: Ensure skill follows current structure:
 
@@ -502,8 +502,8 @@ def test_skill():
 assets/skills/git/
 ├── scripts/
 │   ├── __init__.py
-│   ├── status.py      # Has @skill_script decorator
-│   └── init.py        # Has @skill_script decorator
+│   ├── status.py      # Has @skill_command decorator
+│   └── init.py        # Has @skill_command decorator
 └── SKILL.md
 ```
 

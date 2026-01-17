@@ -47,7 +47,7 @@ class TestRepomixIngestor:
     async def test_ingest_from_repomix_xml_missing_file(self):
         """Verify error when XML file doesn't exist."""
         with patch("agent.capabilities.knowledge.ingestor.get_vector_memory") as mock_vm:
-            mock_vm.return_value.client = MagicMock()
+            mock_vm.return_value.store = MagicMock()
 
             result = await ingest_from_repomix_xml("/nonexistent/path.xml")
 

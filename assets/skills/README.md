@@ -1,6 +1,6 @@
 # Skills Directory
 
-> **Phase 63+**: @skill_script Pattern - No tools.py Required
+> **Phase 63+**: @skill_command Pattern - No tools.py Required
 
 This directory contains **Skills** - composable, self-contained packages that provide specific capabilities to the Omni Agent.
 
@@ -17,7 +17,7 @@ This directory contains **Skills** - composable, self-contained packages that pr
 ```
 assets/skills/{skill_name}/
 ├── SKILL.md           # Metadata + LLM context (YAML frontmatter)
-├── scripts/           # Commands (@skill_script decorated functions)
+├── scripts/           # Commands (@skill_command decorated functions)
 │   ├── __init__.py    # Dynamic module loader (importlib.util)
 │   └── commands.py    # All skill commands
 ├── README.md          # Human-readable documentation
@@ -63,7 +63,7 @@ assets/skills/git/                    # Skill Directory
 │   └── error_message.j2
 └── scripts/
     ├── __init__.py                   # Package marker (required!)
-    └── commands.py                    # @skill_script decorated commands
+    └── commands.py                    # @skill_command decorated commands
 
 assets/templates/                      # User overrides (Priority)
 └── git/
@@ -87,9 +87,9 @@ cp -r assets/skills/_template assets/skills/my_new_skill
 ### 2. Add Commands in scripts/commands.py
 
 ```python
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
-@skill_script(
+@skill_command(
     name="my_command",
     category="read",
     description="Brief description of what this command does",
@@ -111,12 +111,12 @@ async def my_command(param: str) -> str:
 | `workflow` | Multi-step operations (complex tasks)         |
 | `general`  | Miscellaneous commands                        |
 
-## @skill_script Decorator
+## @skill_command Decorator
 
-The `@skill_script` decorator registers functions as MCP tools:
+The `@skill_command` decorator registers functions as MCP tools:
 
 ```python
-@skill_script(
+@skill_command(
     name="command_name",       # Tool name (required)
     category="read",           # Category from SkillCategory enum
     description="Brief desc",  # Tool description for LLM

@@ -6,7 +6,7 @@ Defines the structured context for Git workflows using Pydantic models.
 This is the "Memory" layer of the Omni Skill Standard (OSS).
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List, Dict, Any
 from enum import Enum
 
@@ -98,9 +98,10 @@ class GitWorkflowState(BaseModel):
     resume_id: Optional[str] = Field(default=None, description="Resume ID for state persistence")
     retry_count: int = Field(default=0, description="Number of retry attempts for the current step")
 
-    class Config:
-        extra = "allow"  # Allow additional fields for flexibility
-        use_enum_values = True  # Store enum values as strings
+    model_config = ConfigDict(
+        extra="allow",  # Allow additional fields for flexibility
+        use_enum_values=True,  # Store enum values as strings
+    )
 
 
 def create_initial_state(

@@ -102,10 +102,23 @@ class ModuleLoader:
                     skills_pkg.__path__.append(skills_dir)
                     logger.debug("Appended assets/skills to 'agent.skills' __path__")
 
-    def _ensure_skill_package(self, skill_name: str) -> None:
-        """Ensure skill-specific package exists (needed for subpackage imports)."""
+    def _ensure_skill_package(self, skill_name: str, is_scripts: bool = False) -> None:
+        """Ensure skill-specific package exists (needed for subpackage imports).
+
+        Args:
+            skill_name: Name of the skill
+            is_scripts: If True, we're loading from scripts/ directory, so don't
+                create the skill package to avoid breaking relative imports in scripts.
+                When scripts/__init__.py does 'from .memory import ...', we don't want
+                Python to resolve it as 'agent.skills.memory.memory'.
+        """
         skill_pkg_name = f"agent.skills.{skill_name}"
         if skill_pkg_name in sys.modules:
+            return
+
+        # Don't create skill package when loading from scripts/ - this breaks
+        # relative imports like 'from .memory import ...' in scripts/__init__.py
+        if is_scripts:
             return
 
         skill_pkg_path = self.skills_dir / skill_name
@@ -174,10 +187,13 @@ class ModuleLoader:
         # Extract skill name from module name (e.g., 'git' from 'agent.skills.git.tools')
         skill_name = module_name.split(".")[2] if module_name.startswith("agent.skills.") else ""
 
+        # Check if loading from scripts directory
+        is_scripts = "scripts" in str(file_path)
+
         # Ensure parent packages and skill package exist (needed for subpackage imports)
         self._ensure_parent_packages()
         if skill_name:
-            self._ensure_skill_package(skill_name)
+            self._ensure_skill_package(skill_name, is_scripts=is_scripts)
         self._preload_decorators()
 
         # Clear existing module for hot-reload

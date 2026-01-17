@@ -25,9 +25,9 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
-# Marker attributes for @skill_command and @skill_script decorated functions
+# Marker attributes for @skill_command and @skill_command decorated functions
 _SKILL_COMMAND_MARKER = "_is_skill_command"
-_SKILL_SCRIPT_MARKER = "_is_skill_script"
+_SKILL_COMMAND_MARKER = "_is_skill_command"
 
 
 class SkillLoader:
@@ -91,11 +91,11 @@ class SkillLoader:
         try:
             module = self._load_module_from_path(tools_module, source_path)
 
-            # Check for @skill_command or @skill_script decorated functions
+            # Check for @skill_command or @skill_command decorated functions
             skill_commands = self._extract_commands(module)
 
             if not skill_commands:
-                return False, f"Module has no @skill_command or @skill_script decorated functions."
+                return False, f"Module has no @skill_command or @skill_command decorated functions."
 
             # Register (store as dict for compatibility)
             manifest_dict = manifest if isinstance(manifest, dict) else manifest.model_dump()
@@ -149,14 +149,14 @@ class SkillLoader:
         return loader.load_module(module_name, file_path, reload=True)
 
     def _extract_commands(self, module: types.ModuleType) -> list[str]:
-        """Extract @skill_command or @skill_script decorated function names."""
+        """Extract @skill_command or @skill_command decorated function names."""
         commands = []
         for name in dir(module):
             if name.startswith("_"):
                 continue
             obj = getattr(module, name)
             if callable(obj) and (
-                hasattr(obj, _SKILL_COMMAND_MARKER) or hasattr(obj, _SKILL_SCRIPT_MARKER)
+                hasattr(obj, _SKILL_COMMAND_MARKER) or hasattr(obj, _SKILL_COMMAND_MARKER)
             ):
                 commands.append(name)
         return commands

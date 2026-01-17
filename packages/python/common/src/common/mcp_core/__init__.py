@@ -25,7 +25,7 @@ Usage:
 
     # From modular subpackages
     from mcp_core.lazy_cache import FileCache, MarkdownCache, ConfigCache, RepomixCache
-    from common.config.settings import Settings, get_setting, get_commit_types  # Fast import
+    from common.config.settings import Settings, get_setting  # Fast import
     from mcp_core.utils import setup_logging, is_safe_path
     from mcp_core.context import get_project_context, ProjectContext, ContextRegistry
     from mcp_core.inference import InferenceClient, PERSONAS, build_persona_prompt
@@ -116,12 +116,6 @@ from common.config.settings import (
 from common.config.directory import (
     set_conf_dir,
     get_conf_dir,
-)
-
-from common.config.commits import (
-    get_commit_types,
-    get_commit_scopes,
-    get_commit_protocol,
 )
 
 # =============================================================================
@@ -283,9 +277,6 @@ __all__ = [
     "Settings",
     "get_setting",
     "get_config_path",
-    "get_commit_types",
-    "get_commit_scopes",
-    "get_commit_protocol",
     "has_setting",
     "list_setting_sections",
     "set_conf_dir",

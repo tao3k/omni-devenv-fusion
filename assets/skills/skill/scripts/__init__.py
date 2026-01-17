@@ -10,13 +10,15 @@ Contains atomic implementations for skill-related commands:
 - reload.py: Dynamic skill reload
 """
 
-from .discovery import (
+from __future__ import annotations
+
+from agent.skills.skill.scripts.discovery import (
     discover,
     suggest,
     jit_install,
     list_index,
 )
-from .templates import (
+from agent.skills.skill.scripts.templates import (
     list_templates,
     get_template_info,
     get_template_source,
@@ -25,10 +27,10 @@ from .templates import (
     format_eject_result,
     format_info_result,
 )
-from .list_tools import list_tools, format_tools_list
-from .search_tools import search_tools, format_search_result
-from .unload import unload_skill
-from .reload import reload_skill
+from agent.skills.skill.scripts.list_tools import list_tools, format_tools_list
+from agent.skills.skill.scripts.search_tools import search_tools, format_search_result
+from agent.skills.skill.scripts.unload import unload_skill
+from agent.skills.skill.scripts.reload import reload_skill
 
 __all__ = [
     # Discovery commands

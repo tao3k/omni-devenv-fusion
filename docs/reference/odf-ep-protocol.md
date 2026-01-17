@@ -317,7 +317,7 @@ Skills with heavy dependencies (like `crawl4ai`, `playwright`) use the **Sidecar
 ┌─────────────────────────────────────────────────────────────┐
 │                     Swarm (Execution Layer)                  │
 │  ┌─────────────────────────────────────────────────────────┐│
-│  │  run_skill_script() via uv isolation                    ││
+│  │  run_skill_command() via uv isolation                    ││
 │  │  - Uses skill's own pyproject.toml                      ││
 │  │  - No dependency conflicts with main agent              ││
 │  └─────────────────────────────────────────────────────────┘│

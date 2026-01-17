@@ -39,7 +39,7 @@ import structlog
 
 from common.log_config import configure_logging, get_logger
 from common.skills_path import SKILLS_DIR
-from common.isolation import run_skill_script, check_skill_dependencies
+from common.isolation import run_skill_command, check_skill_dependencies
 
 logger = structlog.get_logger(__name__)
 
@@ -149,7 +149,7 @@ class SwarmEngine:
         # Run in thread pool to not block async event loop
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
-            None, lambda: run_skill_script(skill_dir, command, args, timeout)
+            None, lambda: run_skill_command(skill_dir, command, args, timeout)
         )
 
         duration_ms = (time.perf_counter() - t0) * 1000

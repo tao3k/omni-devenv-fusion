@@ -4,10 +4,10 @@ skill/scripts/list_tools.py - List All Registered MCP Tools
 Lists all registered MCP tools from loaded skills with descriptions.
 """
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
 
-@skill_script(
+@skill_command(
     name="list_tools",
     category="read",
     description="""

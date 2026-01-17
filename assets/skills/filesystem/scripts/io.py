@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 from common.mcp_core import is_safe_path, normalize_path
 import structlog
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
 logger = structlog.get_logger(__name__)
 
@@ -87,7 +87,7 @@ def _create_backup(filepath: Path) -> bool:
         return False
 
 
-@skill_script(
+@skill_command(
     name="read_file",
     category="read",
     description="""
@@ -139,7 +139,7 @@ async def read_file(file_path: str) -> str:
         return f"Error reading file: {e}"
 
 
-@skill_script(
+@skill_command(
     name="save_file",
     category="write",
     description="""
@@ -237,7 +237,7 @@ async def save_file(
         return f"Error writing file: {e}"
 
 
-@skill_script(
+@skill_command(
     name="apply_changes",
     category="write",
     description="""
@@ -308,7 +308,7 @@ async def apply_file_changes(changes: List[FileOperation]) -> str:
     return summary
 
 
-@skill_script(
+@skill_command(
     name="list_directory",
     category="read",
     description="""
@@ -344,7 +344,7 @@ async def list_directory(path: str = ".") -> str:
         return f"Error listing directory: {e}"
 
 
-@skill_script(
+@skill_command(
     name="write_file",
     category="write",
     description="""
@@ -373,7 +373,7 @@ async def write_file(path: str, content: str) -> str:
         return f"Error writing file: {e}"
 
 
-@skill_script(
+@skill_command(
     name="get_file_info",
     category="read",
     description="""

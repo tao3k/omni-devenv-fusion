@@ -9,10 +9,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from agent.skills.decorators import skill_script
+from agent.skills.decorators import skill_command
 
 
-@skill_script(
+@skill_command(
     name="summarize_session",
     category="write",
     description="""

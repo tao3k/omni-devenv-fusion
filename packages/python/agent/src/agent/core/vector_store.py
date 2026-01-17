@@ -39,7 +39,7 @@ from dataclasses import dataclass
 
 # In uv workspace, 'common' package is available directly
 from common.gitops import get_project_root
-from common.cache_path import CACHE_DIR
+from common import prj_dirs
 from common.skills_path import SKILLS_DIR
 
 # Lazy imports to avoid slow module loading
@@ -119,7 +119,7 @@ class VectorMemory:
             return
 
         # Defer omni-vector client creation - only compute path
-        self._cache_path = CACHE_DIR("omni-vector")
+        self._cache_path = prj_dirs.PRJ_CACHE("omni-vector")
         self._cache_path.mkdir(parents=True, exist_ok=True)
 
         self._initialized = True
@@ -687,7 +687,7 @@ class VectorMemory:
         """
         Index all skill tools from scripts into the vector store.
 
-         Uses Rust scanner to discover @skill_script decorated functions.
+         Uses Rust scanner to discover @skill_command decorated functions.
         Note: This method uses placeholder schemas. Use index_skill_tools_with_schema()
         for full schema extraction.
 

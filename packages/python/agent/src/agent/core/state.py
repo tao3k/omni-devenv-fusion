@@ -165,9 +165,9 @@ class StateCheckpointer:
             checkpoint_interval: Checkpoint every N updates (default: 10)
         """
         if db_path is None:
-            from common.cache_path import CACHE_DIR
+            from common import prj_dirs
 
-            db_path = CACHE_DIR("agent", "checkpoints.db")
+            db_path = prj_dirs.PRJ_CACHE("agent", "checkpoints.db")
 
         self.db_path = Path(db_path)
         self.checkpoint_interval = checkpoint_interval
