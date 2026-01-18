@@ -25,7 +25,7 @@ class TestSmartCommitGraphConstruction:
 
     @pytest.fixture
     def mock_skill_manager(self):
-        """Create a mock SkillManager for Smart Commit."""
+        """Create a mock SkillContext for Smart Commit."""
         manager = MagicMock()
         manager.run = AsyncMock(
             return_value={
@@ -139,7 +139,7 @@ class TestSmartCommitVisualization:
 
     @pytest.fixture
     def mock_skill_manager(self):
-        """Create a mock SkillManager."""
+        """Create a mock SkillContext."""
         manager = MagicMock()
         manager.run = AsyncMock(return_value={"result": "test"})
         return manager
@@ -169,7 +169,7 @@ class TestConditionalRouting:
 
     @pytest.fixture
     def mock_skill_manager(self):
-        """Create a mock SkillManager."""
+        """Create a mock SkillContext."""
         manager = MagicMock()
         manager.run = AsyncMock(return_value={"result": "test"})
         return manager

@@ -1,6 +1,6 @@
 """
 assets/skills/note_taker/scripts/session_summarizer.py
-Phase 63: Session Trajectory Summarizer.
+Session Trajectory Summarizer.
 
 Extracts key decisions, failures, and solutions from session trajectories
 and generates structured markdown summaries.

@@ -28,7 +28,7 @@ def boot_core_skills(mcp: Optional["Server"] = None):
     - skills.on_demand: Skills available but not loaded until requested
     """
     # Lazy imports to avoid import-time overhead
-    from agent.core.registry import get_skill_registry
+    from agent.core.skill_registry import get_skill_registry
 
     registry = get_skill_registry()
 
@@ -42,6 +42,7 @@ def boot_core_skills(mcp: Optional["Server"] = None):
         return
 
     loaded_count = 0
+    skipped_count = 0
     for skill in preload_skills:
         try:
             # Check if skill exists before trying to load
@@ -50,17 +51,18 @@ def boot_core_skills(mcp: Optional["Server"] = None):
                 # but kept for API compatibility)
                 success, msg = registry.load_skill(skill, mcp)
                 if success:
-                    logger.info("Preloaded skill", skill=skill)
                     loaded_count += 1
                 else:
-                    logger.warning("Skipped skill", skill=skill, reason=msg)
+                    skipped_count += 1
             else:
-                logger.warning("Skill not found", skill=skill)
+                skipped_count += 1
         except Exception as e:
             # Don't crash main process if a skill is malformed
             logger.warning(f"Skill boot error ({skill}): {e}")
 
-    logger.info("Skills preloaded", loaded=loaded_count, total=len(preload_skills))
+    logger.info(
+        "Skills preloaded", loaded=loaded_count, skipped=skipped_count, total=len(preload_skills)
+    )
 
 
 def start_background_tasks() -> threading.Thread | None:

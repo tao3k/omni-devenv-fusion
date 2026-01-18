@@ -29,9 +29,9 @@ from agent.skills.decorators import skill_command
     """,
 )
 def list_tools(compact: bool = False) -> str:
-    from agent.core.skill_manager import get_skill_manager
+    from agent.core.skill_runtime import get_skill_context
 
-    manager = get_skill_manager()
+    manager = get_skill_context()
 
     tools = []
     for skill_name in manager.list_loaded():

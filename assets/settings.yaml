@@ -186,20 +186,28 @@ cache:
   project_name: "omni-dev-fusion"
 
 # =============================================================================
-# Phase 13.10: Dynamic Skill Loading
+# Skill Management
 # =============================================================================
 skills:
-  # Skills to preload at server startup (loaded into context immediately)
+  # Skills to preload at server startup
+  # NOTE: These are "Core" skills but can still be manually unloaded via skill.unload
   preload:
-    - knowledge # Project Cortex - Load FIRST
-    - memory # Hippocampus - Vector memory
+    - knowledge
+    - memory
     - git
     - filesystem
     - writer
     - terminal
     - testing_protocol
     - code_tools
-    - skill # Phase 27: JIT Skill Acquisition
+    - skill
+
+  # LRU + TTL eviction settings
+  ttl:
+    timeout: 1800 # Skill eviction timeout in seconds (30 minutes)
+    check_interval: 300 # TTL cleanup check interval (5 minutes)
+
+  max_loaded: 15 # Maximum loaded skills limit
 
   # Reload behavior
   reload:

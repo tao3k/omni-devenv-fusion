@@ -1,7 +1,7 @@
 ---
 name: "writer"
 version: "1.0.0"
-description: "Writing quality tools for enforcing project writing standards."
+description: "Text manipulation and file editing agent. KEYWORDS: replace, update, modify, edit, change, rewrite, insert, append, write, delete, content, text, file, documentation."
 routing_keywords:
   [
     "writing",
@@ -15,6 +15,14 @@ routing_keywords:
     "documentation style",
     "voice",
     "tone",
+    "replace",
+    "update",
+    "edit",
+    "modify",
+    "insert",
+    "append",
+    "write",
+    "content",
   ]
 authors: ["omni-dev-fusion"]
 intents:

@@ -539,7 +539,7 @@
   },
   {
     "name": "code_tools",
-    "description": "Code search, analysis, and refactoring using AST patterns. Search code structure, analyze modules, and refactor with precision.",
+    "description": "Code search, analysis, and refactoring using AST patterns. Search code structure, analyze modules, and refactor with precision. KEYWORDS: ast, syntax, parse, surgical, replace, transform, refactor, rename, symbol, class, function, method.",
     "version": "1.0.0",
     "path": "\"assets/skills/code_tools\"",
     "tools": [
@@ -604,7 +604,12 @@
       "edit",
       "transform",
       "tools",
-      "decorators"
+      "decorators",
+      "replace",
+      "surgical",
+      "syntax",
+      "parse",
+      "symbol"
     ],
     "intents": [
       "Search code patterns using AST",
@@ -626,7 +631,7 @@
   },
   {
     "name": "writer",
-    "description": "Writing quality tools for enforcing project writing standards.",
+    "description": "Text manipulation and file editing agent. KEYWORDS: replace, update, modify, edit, change, rewrite, insert, append, write, delete, content, text, file, documentation.",
     "version": "1.0.0",
     "path": "\"assets/skills/writer\"",
     "tools": [
@@ -662,7 +667,15 @@
       "text",
       "documentation style",
       "voice",
-      "tone"
+      "tone",
+      "replace",
+      "update",
+      "edit",
+      "modify",
+      "insert",
+      "append",
+      "write",
+      "content"
     ],
     "intents": [
       "Polish or improve writing",

@@ -6,7 +6,7 @@ Omni-DevEnv Fusion is an Agentic OS kernel that bridges the gap between human in
 
 With **Nix** for absolute environment reproducibility and a rigorous "Legislation-Execution" policy engine, Fusion empowers AI to autonomously handle the complete SDLC—from architectural design to AST-level refactoring.
 
-## Phase 25: One Tool Architecture
+## One Tool Architecture
 
 Fusion uses a single MCP tool entry point with infinite skill commands:
 
@@ -22,7 +22,7 @@ Fusion uses a single MCP tool entry point with infinite skill commands:
 | `skill.command` | `git.status` | `git.git_status()` |
 | `skill`         | `git`        | Shows skill help   |
 
-## Phase 26: Skill Network (Git Installer)
+## Skill Network (Git Installer)
 
 Omni can now **download and install skills from Git repositories** at runtime, enabling true capability expansion:
 
@@ -63,7 +63,7 @@ omni skill info pandas-expert
 4. **Lockfile**: Generates `.omni-lock.json` for reproducible installs
 5. **Dirty Handling**: Stashes local changes, pulls, then pops (stash strategy)
 
-## Phase 35.2: Cascading Templates & Skill Structure Validation
+## Cascading Templates & Skill Structure Validation
 
 Omni supports **cascading templates** with "User Overrides > Skill Defaults" pattern:
 
@@ -113,7 +113,7 @@ assets/skills/git/templates/
 └── tests/                # Optional (zero-config)
 ```
 
-## Phase 27: JIT Skill Acquisition
+## JIT Skill Acquisition
 
 Omni can **dynamically discover and install skills** when you need capabilities not currently loaded:
 
@@ -176,7 +176,7 @@ You: @omni("skill.suggest", {"task": "analyze pcap file"})
 2. **Auto-Load**: Skills are automatically loaded after installation
 3. **Index-Based**: Uses `known_skills.json` for reliable discovery
 
-## Phase 36.2: Vector-Enhanced Discovery (Virtual Loading)
+## Vector-Enhanced Discovery (Virtual Loading)
 
 Omni now uses **LanceDB-based vector search** for intelligent skill discovery with semantic matching:
 
@@ -195,7 +195,7 @@ omni skill index-stats
 @omni("skill.suggest", {"task": "analyze nginx logs"})
 ```
 
-### Routing Flow (Phase 36.2)
+### Routing Flow
 
 ```
 User Request
@@ -246,7 +246,7 @@ User Request
 
 See [Developer Guide](../docs/developer/discover.md) for detailed architecture documentation.
 
-## Phase 36.5: Hot Reload & Index Sync
+## Hot Reload & Index Sync
 
 Omni now supports **zero-downtime skill reloading** with automatic index synchronization:
 
@@ -296,7 +296,7 @@ File Modified → Syntax Check → Unload → Load → Debounced Notification
                    Tool List Update                      Vector Store Upsert
 ```
 
-## Phase 36.6: Production Stability
+## Production Stability
 
 Optimizations for 100+ skill scale and Swarm mode:
 
@@ -320,7 +320,7 @@ Automatic cleanup of "phantom skills" after crash or unclean shutdown.
 | Reload time (with sync)       | ~80ms                          |
 | Phantom skill detection       | Automatic at startup           |
 
-See [Developer Guide](../docs/developer/discover.md) for Phase 36.5/36.6 details.
+See [Developer Guide](../docs/developer/discover.md) for details.
 
 ## The Vision
 
@@ -562,6 +562,6 @@ Special thanks to the maintainers of these projects for enabling the AI-SDLC wor
 
 Built with ❤️ using devenv, Nix, and Claude Code
 
-## Atomic Git Skill (Phase 23)
+## Atomic Git Skill
 
 The Git Skill has been atomized for independent operation.

@@ -2,16 +2,16 @@
 agent/skills/core - Core skill loading and management
 
 Module contents:
-- skill_manifest_loader: SKILL.md parsing and metadata extraction
-- skill_manifest: Pydantic models for skill metadata
+- skill_metadata_loader: SKILL.md parsing and metadata extraction
+- skill_metadata: Pydantic models for skill metadata
 - test_framework: Pytest plugin for dynamic skill fixture generation
 - task: @script_task decorator for atomic script implementations
 
 This package provides pure SKILL.md support and skill testing utilities.
 """
 
-from .skill_manifest_loader import get_manifest_loader, SkillManifestLoader
-from .skill_manifest import SkillManifestModel, SkillMetadata, ExecutionMode
+from .skill_metadata_loader import get_skill_metadata_loader, SkillMetadataLoader
+from .skill_metadata import SkillMetadataModel, SkillMetadata, ExecutionMode
 from .task import script_task, is_script_task, get_task_metadata, run_script_as_cli
 
 # test_framework requires pytest - lazy import to avoid runtime dependency
@@ -36,9 +36,9 @@ def __getattr__(name):
 
 
 __all__ = [
-    "get_manifest_loader",
-    "SkillManifestLoader",
-    "SkillManifestModel",
+    "get_skill_metadata_loader",
+    "SkillMetadataLoader",
+    "SkillMetadataModel",
     "SkillMetadata",
     "ExecutionMode",
     "test",

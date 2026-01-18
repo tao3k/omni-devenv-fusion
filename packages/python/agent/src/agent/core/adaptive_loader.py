@@ -105,7 +105,7 @@ def get_core_tool_schemas() -> list[dict[str, Any]]:
 
     Returns list of tool schemas for tools that must always be available.
     """
-    from agent.core.skill_manager.jit_loader import get_jit_loader
+    from agent.core.skill_runtime.jit_loader import get_jit_loader
     from common.skills_path import SKILLS_DIR
 
     schemas = []
@@ -136,7 +136,7 @@ def get_core_tool_schemas() -> list[dict[str, Any]]:
             rust_record = tools_by_name.get(tool_name)
             if rust_record:
                 # Create ToolRecord from Rust record
-                from agent.core.skill_manager.jit_loader import ToolRecord
+                from agent.core.skill_runtime.jit_loader import ToolRecord
 
                 record = ToolRecord.from_rust(rust_record)
                 schema = jit.get_tool_schema(record)
@@ -185,7 +185,7 @@ class AdaptiveLoader:
     def jit_loader(self):
         """Lazy load JIT loader."""
         if self._jit_loader is None:
-            from agent.core.skill_manager.jit_loader import get_jit_loader
+            from agent.core.skill_runtime.jit_loader import get_jit_loader
 
             self._jit_loader = get_jit_loader()
         return self._jit_loader

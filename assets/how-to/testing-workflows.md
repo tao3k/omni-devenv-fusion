@@ -63,7 +63,7 @@ just test           # All tests (devenv test)
 
 ---
 
-## 4. Phase 25+ MCP Test Patterns
+## 4. MCP Test Patterns
 
 ### Async/Await Tests
 
@@ -150,7 +150,7 @@ class TestMultimodalReturns:
 
 ### Architecture Compliance Tests
 
-Verify Phase 25+ architecture:
+Verify current architecture:
 
 ```python
 class TestArchitectureCompliance:
@@ -176,12 +176,12 @@ class TestArchitectureCompliance:
 | Category                    | Test Class                   | Purpose                         |
 | :-------------------------- | :--------------------------- | :------------------------------ |
 | **Core Skills**             | `TestSkillDiscovery`         | Skill discovery and loading     |
-| **Phase 25 Omni CLI**       | `TestSkillManagerOmniCLI`    | Single entry point commands     |
+| **Omni CLI**                | `TestSkillManagerOmniCLI`    | Single entry point commands     |
 | **One Tool Architecture**   | `TestOneToolArchitecture`    | Verify `omni` tool registration |
 | **Performance**             | `TestAsyncPerformance`       | Async execution benchmarks      |
 | **Multimodal**              | `TestMultimodalReturns`      | Image, Context capabilities     |
 | **Context Injection**       | `TestContextInjection`       | Context parameter validation    |
-| **Architecture Compliance** | `TestArchitectureCompliance` | Phase 25+ requirements          |
+| **Architecture Compliance** | `TestArchitectureCompliance` | Architecture requirements       |
 
 ---
 

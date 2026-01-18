@@ -12,7 +12,7 @@ from typing import List, Dict, Any, Optional, Set
 
 from agent.core.router import get_hive_router
 from agent.core.router.models import RoutingResult
-from agent.core.registry import get_skill_registry
+from agent.core.skill_registry import get_skill_registry
 
 logger = logging.getLogger(__name__)
 

@@ -24,7 +24,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, AsyncMock, patch
 
 # Core Components
-from agent.core.registry import get_skill_registry
+from agent.core.skill_registry import get_skill_registry
 from agent.core.vector_store import get_vector_memory
 from agent.core.schema import HarvestedInsight, KnowledgeCategory
 from mcp.server import Server
@@ -38,7 +38,7 @@ from mcp.server import Server
 @pytest.fixture(autouse=True)
 def reset_singletons():
     """Reset singletons before each test."""
-    import agent.core.skill_manager.manager as manager_module
+    import agent.core.skill_runtime.context as manager_module
 
     manager_module._instance = None
     yield

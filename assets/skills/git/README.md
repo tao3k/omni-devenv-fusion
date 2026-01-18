@@ -4,7 +4,7 @@
 
 This skill provides git operations with **Smart Commit Protocol** for clean, safe commits.
 
-## Architecture (Phase 63+)
+## Architecture
 
 ```
 assets/skills/git/

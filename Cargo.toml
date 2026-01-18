@@ -16,7 +16,7 @@ license = "Apache-2.0"
 publish = false
 description = "Omni-DevEnv Fusion - Trinity Architecture with Rust Core"
 
-# [Phase 45.2] Unified dependency management
+# Unified dependency management
 [workspace.dependencies]
 # Core dependencies
 tokio = { version = "1.49.0", features = ["full"] }
@@ -32,7 +32,7 @@ git2 = "0.20.3"
 # Python bindings - Python 3.13 support via PyO3 0.27+
 pyo3 = { version = "0.27.2", features = ["extension-module"] }
 
-# [Phase 47] The Iron Lung - Safe I/O & Tokenization
+# Safe I/O & Tokenization
 tiktoken-rs = "0.9.1"
 memchr = "2.7.6"
 tempfile = "3.24"

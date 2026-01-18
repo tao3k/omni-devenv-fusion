@@ -81,7 +81,7 @@ class TestSkillCommandModel:
 
     def test_skill_command_has_input_schema_field(self):
         """SkillCommand should have input_schema field."""
-        from agent.core.skill_manager.models import SkillCommand
+        from agent.core.skill_runtime.support.models import SkillCommand
 
         # Create a dummy command
         def dummy_func():
@@ -101,7 +101,7 @@ class TestSkillCommandModel:
 
     def test_skill_command_stores_input_schema(self):
         """SkillCommand should correctly store provided input_schema."""
-        from agent.core.skill_manager.models import SkillCommand
+        from agent.core.skill_runtime.support.models import SkillCommand
 
         def dummy_func():
             pass

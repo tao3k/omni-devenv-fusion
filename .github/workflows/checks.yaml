@@ -27,7 +27,7 @@ jobs:
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
       - name: Check Rust formatting
-        run: secretspec run --provider env --profile default -- devenv shell -- just build-rust
+        run: secretspec run --provider env --profile default -- devenv shell -- just cargo test
 
   nix-build-default:
     runs-on: ${{ matrix.os }}

@@ -15,7 +15,7 @@ The Adaptive Loader transforms the Agent from a "preload everything" model to an
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                        Phase 67: The Adaptive Loader                    │
+│                        Adaptive Loader                    │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
 │  ┌─────────────┐     ┌──────────────────┐     ┌──────────────────┐     │
@@ -188,7 +188,7 @@ LRU-based garbage collection with pinned core skills.
 ```python
 class SkillManager(HotReloadMixin, ...):
     def __init__(self, ...):
-        # Phase 67 Step 3: Adaptive Unloading (LRU)
+        # Step 3: Adaptive Unloading (LRU)
         self._lru_order: list[str] = []          # Usage order queue
         self._pinned_skills: set[str] = {        # Protected from unload
             "filesystem", "terminal", "writer", "git", "note_taker"
@@ -224,13 +224,13 @@ class SkillManager(HotReloadMixin, ...):
 
 ### Before vs After
 
-| Feature              | Before (Phase 36.5) | After (Phase 67) |
-| -------------------- | ------------------- | ---------------- |
-| Lines of code        | 216                 | 145              |
-| `_validate_syntax()` | ✅ Yes              | ❌ Removed       |
-| Transaction rollback | ✅ Yes              | ❌ Removed       |
-| mtime check          | ✅ Yes              | ✅ Yes           |
-| Lazy logger          | ❌ No               | ✅ Yes           |
+| Feature              | Before | After      |
+| -------------------- | ------ | ---------- |
+| Lines of code        | 216    | 145        |
+| `_validate_syntax()` | ✅ Yes | ❌ Removed |
+| Transaction rollback | ✅ Yes | ❌ Removed |
+| mtime check          | ✅ Yes | ✅ Yes     |
+| Lazy logger          | ❌ No  | ✅ Yes     |
 
 ### Implementation
 
@@ -239,7 +239,7 @@ def _ensure_fresh(self, skill_name: str) -> bool:
     """
     Check if a skill needs reloading.
 
-    Phase 67: Simplified - only checks mtime, no syntax validation.
+    Simplified - only checks mtime, no syntax validation.
     If code has syntax errors, Python import will raise an exception.
     The Meta-Agent can then self-repair the code.
     """

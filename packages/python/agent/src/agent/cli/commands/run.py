@@ -7,7 +7,7 @@ from typing import Optional
 
 from common.lib import setup_import_paths
 
-# Setup paths before importing omni_agent
+# Setup paths before importing omni modules
 setup_import_paths()
 
 run_app = typer.Typer(
@@ -36,7 +36,7 @@ def run_callback(ctx: typer.Context):
     # Only run REPL when no subcommand is provided
     if ctx.invoked_subcommand is None:
         print_banner()
-        from agent.core.omni_agent import interactive_mode
+        from agent.core.omni import interactive_mode
         import asyncio
 
         asyncio.run(interactive_mode())
@@ -45,7 +45,7 @@ def run_callback(ctx: typer.Context):
 @run_app.command("repl", help="Enter interactive REPL mode")
 def repl_cmd():
     """Enter interactive REPL mode."""
-    from agent.core.omni_agent import interactive_mode
+    from agent.core.omni import interactive_mode
     import asyncio
 
     asyncio.run(interactive_mode())
@@ -57,7 +57,7 @@ def exec_cmd(
     steps: int = typer.Option(1, "-s", "--steps", help="Maximum steps (default: 1, max: 20)"),
 ):
     """Execute a single task through the CCA loop and exit."""
-    from agent.core.omni_agent import OmniAgent
+    from agent.core.omni import OmniLoop
     from rich.console import Console
     from rich.table import Table
     from rich.box import ROUNDED
@@ -73,10 +73,21 @@ def exec_cmd(
         tokens = 0
         for msg in agent.history:
             tokens += len(msg.get("content", "") or "") // 4
+
+            # Count role="tool" messages (actual format in history)
+            if msg.get("role") == "tool":
+                tool_name = msg.get("tool_name", "unknown")
+                tool_counts[tool_name] = tool_counts.get(tool_name, 0) + 1
+
+            # Also support tool_calls format for backwards compatibility
             if msg.get("tool_calls"):
                 for tc in msg["tool_calls"]:
-                    name = tc["function"]["name"]
-                    tool_counts[name] = tool_counts.get(name, 0) + 1
+                    # Support both OpenAI format: tc["function"]["name"]
+                    # and simplified format: tc["name"]
+                    func = tc.get("function", {})
+                    name = func.get("name") or tc.get("name", "unknown")
+                    if name != "unknown":
+                        tool_counts[name] = tool_counts.get(name, 0) + 1
 
         # Grid layout
         grid = Table.grid(expand=True)
@@ -117,7 +128,7 @@ def exec_cmd(
         console.print(f"\n[bold]🚀 Starting:[/bold] {task}")
         console.print(f"[dim]Max steps: {steps}[/dim]\n")
 
-        agent = OmniAgent()
+        agent = OmniLoop()
         result = await agent.run(task, steps)
         _print_enrich_result(task, result, agent)
 

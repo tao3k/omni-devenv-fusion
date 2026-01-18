@@ -1,6 +1,6 @@
 """
 assets/skills/note_taker/scripts/summarize_session.py
-Phase 63: Session Summarization Command.
+Session Summarization Command.
 
 Summarizes session trajectory into structured markdown notes.
 """

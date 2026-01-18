@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-# Phase 52: The Surgeon - Structural refactoring
+# The Surgeon - Structural refactoring
 # Using omni-ast for unified ast-grep (v0.40.5)
 omni-ast = { path = "../omni-ast" }
 
@@ -16,7 +16,7 @@ serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 omni-io = { path = "../omni-io" }
 
-# Phase 58: The Ouroboros - Heavy-duty batch refactoring
+# The Ouroboros - Heavy-duty batch refactoring
 rayon = "1.8"          # Parallel iteration
 ignore = "0.4"         # .gitignore-aware file traversal
 dashmap = "5.5"        # Concurrent HashMap for stats

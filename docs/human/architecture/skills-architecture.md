@@ -254,7 +254,7 @@ await manager.load_skill("git")
 
 Skills support hot reload when `scripts/commands.py` is modified.
 
-### 4. JIT Loading (Phase 67)
+### 4. JIT Loading
 
 Skills can be loaded Just-In-Time on first use:
 

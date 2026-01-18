@@ -29,7 +29,7 @@ from agent.core.state import get_checkpointer, create_initial_state
 from agent.core.graph import get_graph, OmniGraph
 
 # Dynamic Workflow imports
-from agent.core.skill_manager import SkillManager
+from agent.core.skill_runtime import SkillManager
 from agent.core.orchestrator.builder import DynamicGraphBuilder
 from agent.core.planner.planner import Planner
 
@@ -161,7 +161,7 @@ class Orchestrator:
 
         # Dynamic Workflow Components
         # Initialize SkillManager for dynamic graph execution
-        from agent.core.skill_manager import _get_singleton_manager
+        from agent.core.skill_runtime import _get_singleton_manager
 
         self.skill_manager = _get_singleton_manager()
         available_tools = self.skill_manager.list_available()

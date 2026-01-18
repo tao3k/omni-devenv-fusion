@@ -6,11 +6,11 @@ This directory contains utility scripts for the Omni Agentic OS project.
 
 ### stress_trinity.py
 
-**Phase 25.4 → Phase 67**: The "Iron Trinity" Stress Test.
+The "Iron Trinity" Stress Test.
 
 Validates the Trinity Architecture (JIT + Hot-Reload + LRU) under extreme stress conditions.
 
-#### Phase 67 Updates
+#### Architecture Updates
 
 - **JIT Loading**: Skills load on first use (not at startup)
 - **LRU Memory Management**: Max 15 loaded skills, pinned core skills
@@ -36,7 +36,7 @@ python scripts/stress_trinity.py
 2. **Spammer**: Fires 1-5 concurrent requests every 10ms (tests JIT + LRU)
 3. **Context Loader**: Calls help command 10 times (tests context generation)
 
-#### Phase 67 Expected Output
+#### Expected Output
 
 ```
 🛡️  Omni Trinity Architecture Stress Test  🛡️
@@ -74,16 +74,16 @@ Performance Summary:
 
 | Result    | Meaning                                         |
 | --------- | ----------------------------------------------- |
-| ✅ PASSED | Phase 67 architecture is production-ready       |
+| ✅ PASSED | Architecture is production-ready                |
 | ⚠️ ERRORS | Check logs for race conditions or module errors |
 
 #### Key Metrics
 
-| Metric            | Phase 25.4 | Phase 67  | Meaning        |
-| ----------------- | ---------- | --------- | -------------- |
-| Hot Reload        | 216 LOC    | 145 LOC   | Simplified     |
-| Syntax Validation | Yes        | No        | Fail-fast      |
-| Memory Limit      | N/A        | 15 skills | LRU protection |
+| Metric            | Previous | Current   | Meaning        |
+| ----------------- | -------- | --------- | -------------- |
+| Hot Reload        | 216 LOC  | 145 LOC   | Simplified     |
+| Syntax Validation | Yes      | No        | Fail-fast      |
+| Memory Limit      | N/A      | 15 skills | LRU protection |
 
 #### CI Integration
 

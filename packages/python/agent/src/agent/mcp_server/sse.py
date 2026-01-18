@@ -49,9 +49,9 @@ def create_sse_app() -> Starlette:
 
     async def handle_ready(request: Request):
         """Readiness check."""
-        from agent.core.skill_manager import get_skill_manager
+        from agent.core.skill_runtime import get_skill_context
 
-        manager = get_skill_manager()
+        manager = get_skill_context()
         skills_count = len(manager.list_loaded())
         return Response(
             content=f"Omni Agent Ready - {skills_count} skills loaded",

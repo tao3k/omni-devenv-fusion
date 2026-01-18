@@ -22,6 +22,9 @@ import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch, Mock
 
+# Import JIT loader components from the correct module
+from agent.core.skill_runtime.support.jit_loader import JITSkillLoader, ToolRecord
+
 
 class MockRustTool:
     """Mock for Rust PyToolRecord."""
@@ -54,8 +57,6 @@ class TestJITAsyncExecution:
 
     def test_execute_tool_handles_async_function(self):
         """Test that execute_tool correctly handles async functions."""
-        from agent.core.skill_manager.jit_loader import JITSkillLoader, ToolRecord
-
         loader = JITSkillLoader()
 
         # Create a mock async function
@@ -79,8 +80,6 @@ class TestJITAsyncExecution:
 
     def test_execute_tool_handles_sync_function(self):
         """Test that execute_tool correctly handles sync functions."""
-        from agent.core.skill_manager.jit_loader import JITSkillLoader, ToolRecord
-
         loader = JITSkillLoader()
 
         # Create a mock sync function
@@ -103,8 +102,6 @@ class TestJITAsyncExecution:
 
     def test_execute_tool_returns_string_from_async(self):
         """Test that execute_tool returns string, not coroutine, from async functions."""
-        from agent.core.skill_manager.jit_loader import JITSkillLoader, ToolRecord
-
         loader = JITSkillLoader()
 
         async def async_search(query: str) -> str:
@@ -129,8 +126,6 @@ class TestExecuteToolWithMockedRust:
 
     def test_execute_tool_with_async_function(self):
         """Test async function execution via JIT loader."""
-        from agent.core.skill_manager.jit_loader import JITSkillLoader, ToolRecord
-
         loader = JITSkillLoader()
 
         # Define async function specifically for this test
@@ -156,8 +151,6 @@ class TestExecuteToolWithMockedRust:
 
     def test_execute_tool_with_sync_function(self):
         """Test sync function execution via JIT loader."""
-        from agent.core.skill_manager.jit_loader import JITSkillLoader, ToolRecord
-
         loader = JITSkillLoader()
 
         # Define sync function
@@ -181,17 +174,17 @@ class TestExecuteToolWithMockedRust:
 
 
 class TestOmniAgentAsyncTools:
-    """Test OmniAgent with async tools."""
+    """Test OmniLoop with async tools."""
 
     @pytest.fixture
     def agent(self):
-        """Create an OmniAgent instance for testing."""
-        from agent.core.omni_agent import OmniAgent
+        """Create an OmniLoop instance for testing."""
+        from agent.core.omni import OmniLoop
 
-        return OmniAgent()
+        return OmniLoop()
 
     def test_execute_tool_awaits_async_result(self, agent):
-        """Test that _execute_tool correctly awaits async tool results."""
+        """Test that tool_loader.execute_tool correctly awaits async tool results."""
 
         # Create an async mock tool
         async def mock_async_tool(**kwargs):
@@ -201,55 +194,55 @@ class TestOmniAgentAsyncTools:
         async def async_wrapper(**kwargs):
             return await mock_async_tool(**kwargs)
 
-        # Mock _tools with the async wrapper
-        agent._tools = {"test.async_tool": async_wrapper}
+        # Mock tool_loader._tools with the async wrapper
+        agent.tool_loader._tools = {"test.async_tool": async_wrapper}
 
         # Create tool call
         tool_call = {"name": "test.async_tool", "input": {"query": "test"}}
 
         # Run in async context
-        result = asyncio.run(agent._execute_tool(tool_call))
+        result = asyncio.run(agent.tool_loader.execute_tool(tool_call))
 
         assert result == "Async result"
 
     def test_execute_tool_handles_sync_result(self, agent):
-        """Test that _execute_tool handles sync tool results."""
+        """Test that tool_loader.execute_tool handles sync tool results."""
 
         def mock_sync_tool(**kwargs):
             return "Sync result"
 
-        agent._tools = {"test.sync_tool": mock_sync_tool}
+        agent.tool_loader._tools = {"test.sync_tool": mock_sync_tool}
 
         tool_call = {"name": "test.sync_tool", "input": {"query": "test"}}
 
-        result = asyncio.run(agent._execute_tool(tool_call))
+        result = asyncio.run(agent.tool_loader.execute_tool(tool_call))
 
         assert result == "Sync result"
 
 
 class TestStepCounting:
-    """Test step counting in OmniAgent."""
+    """Test step counting in OmniLoop."""
 
     def test_max_steps_default_is_one(self):
         """Test that default max_steps is 1."""
-        from agent.core.omni_agent import OmniAgent
+        from agent.core.omni import OmniLoop
 
-        agent = OmniAgent()
+        agent = OmniLoop()
         assert agent.max_steps == 1
 
     def test_max_steps_can_be_overridden(self):
         """Test that max_steps can be set."""
-        from agent.core.omni_agent import OmniAgent
+        from agent.core.omni import OmniLoop
 
-        agent = OmniAgent()
+        agent = OmniLoop()
         agent.max_steps = 5
         assert agent.max_steps == 5
 
     def test_step_count_starts_at_zero(self):
         """Test that step_count starts at 0."""
-        from agent.core.omni_agent import OmniAgent
+        from agent.core.omni import OmniLoop
 
-        agent = OmniAgent()
+        agent = OmniLoop()
         assert agent.step_count == 0
 
 
@@ -258,8 +251,6 @@ class TestToolSchemas:
 
     def test_tool_schema_generation(self):
         """Test that tool schemas are generated correctly."""
-        from agent.core.skill_manager.jit_loader import JITSkillLoader, ToolRecord
-
         loader = JITSkillLoader()
 
         # Create a simple sync function with type hints
@@ -288,8 +279,6 @@ class TestAsyncToolExecutionEdgeCases:
 
     def test_execute_tool_with_exception(self):
         """Test that execute_tool handles exceptions from async functions."""
-        from agent.core.skill_manager.jit_loader import JITSkillLoader, ToolRecord
-
         loader = JITSkillLoader()
 
         async def failing_async_func() -> str:
@@ -307,8 +296,6 @@ class TestAsyncToolExecutionEdgeCases:
 
     def test_execute_tool_with_empty_args(self):
         """Test that execute_tool handles empty arguments."""
-        from agent.core.skill_manager.jit_loader import JITSkillLoader, ToolRecord
-
         loader = JITSkillLoader()
 
         async def no_args_func() -> str:
@@ -327,8 +314,6 @@ class TestAsyncToolExecutionEdgeCases:
 
     def test_execute_tool_with_complex_args(self):
         """Test that execute_tool handles complex arguments."""
-        from agent.core.skill_manager.jit_loader import JITSkillLoader, ToolRecord
-
         loader = JITSkillLoader()
 
         async def complex_args_func(data: dict, items: list, flag: bool) -> str:
@@ -351,8 +336,6 @@ class TestAsyncToolExecutionEdgeCases:
 
     def test_execute_tool_with_void_function(self):
         """Test that void (None-returning) functions work correctly."""
-        from agent.core.skill_manager.jit_loader import JITSkillLoader, ToolRecord
-
         loader = JITSkillLoader()
 
         def void_func() -> None:
@@ -406,8 +389,6 @@ class TestNoCoroutineWarnings:
     def test_no_warning_for_async_execution(self):
         """Verify async execution doesn't produce coroutine warnings."""
         import warnings
-
-        from agent.core.skill_manager.jit_loader import JITSkillLoader, ToolRecord
 
         loader = JITSkillLoader()
 

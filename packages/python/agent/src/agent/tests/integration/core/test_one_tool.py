@@ -8,7 +8,7 @@ Tests the complete flow:
 3. Skill loading and command execution
 4. Multi-turn conversation with @omni syntax
 
-Phase 35.3: Uses pure MCP Server with SkillManager.run()
+Phase 35.3: Uses pure MCP Server with SkillContext.run()
 
 Usage:
     python -m pytest packages/python/agent/src/agent/tests/test_phase25_one_tool.py -v -s
@@ -22,7 +22,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
 
-from agent.core.skill_manager import get_skill_manager, SkillManager
+from agent.core.skill_runtime import get_skill_context, SkillContext
 from agent.core.router import SemanticRouter, clear_routing_cache
 from agent.skills.decorators import skill_command
 
@@ -37,8 +37,8 @@ from agent.tests.integration.skills.test_skills import unwrap_command_result, om
 
 @pytest.fixture(autouse=True)
 def reset_skill_manager_singleton():
-    """Reset SkillManager singleton before each test."""
-    import agent.core.skill_manager.manager as manager_module
+    """Reset SkillContext singleton before each test."""
+    import agent.core.skill_runtime.context as manager_module
 
     # Reset the singleton
     manager_module._instance = None
@@ -50,7 +50,7 @@ def reset_skill_manager_singleton():
 @pytest.fixture
 def real_skill_manager():
     """Create a real skill manager with all skills loaded."""
-    manager = get_skill_manager()
+    manager = get_skill_context()
     # Ensure all skills are loaded before tests run
     if not manager.skills:
         manager.load_all()
@@ -259,7 +259,7 @@ class TestSkillManagerLoading:
             del sys.modules[mod]
 
         # Create fresh skill manager
-        manager = SkillManager()
+        manager = SkillContext()
 
         # Load all skills
         skills = manager.load_skills()

@@ -32,7 +32,7 @@ from pathlib import Path
 import structlog
 from pydantic import BaseModel
 
-from agent.core.registry import get_skill_registry
+from agent.core.skill_registry import get_skill_registry
 from agent.core.vector_store import get_vector_memory, SearchResult
 
 # Import Sniffer for Holographic Context

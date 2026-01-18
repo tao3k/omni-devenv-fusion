@@ -1,6 +1,6 @@
 # Rust Crates for Omni-DevEnv Fusion
 
-> **Phase 45**: Rust Workspace - Now managed from project root `Cargo.toml`
+> Rust Workspace - Now managed from project root `Cargo.toml`
 
 This directory contains Rust crates for the Omni project. The workspace is now managed from the **project root** (`omni-devenv-fusion/Cargo.toml`).
 

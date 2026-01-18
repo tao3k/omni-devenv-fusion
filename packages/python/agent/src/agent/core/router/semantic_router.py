@@ -26,7 +26,7 @@ Usage:
 from __future__ import annotations
 
 # Re-export get_skill_registry for backward compatibility with tests
-from agent.core.registry import get_skill_registry
+from agent.core.skill_registry import get_skill_registry
 
 # Re-export everything from the semantic package for backward compatibility
 from agent.core.router.semantic import (

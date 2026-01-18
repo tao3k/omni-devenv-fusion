@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "{{ skill_description }}"
 requires-python = ">=3.11"
 
-# Phase 35.2: Sidecar Execution Pattern
+# Sidecar Execution Pattern
 # Heavy dependencies for subprocess mode - NOT imported by main agent
 dependencies = [
     # Add skill-specific dependencies here

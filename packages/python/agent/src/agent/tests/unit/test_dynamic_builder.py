@@ -49,7 +49,7 @@ class TestDynamicGraphBuilder:
 
     @pytest.fixture
     def mock_skill_manager(self):
-        """Create a mock SkillManager."""
+        """Create a mock SkillContext."""
         manager = MagicMock()
         manager.run = AsyncMock(return_value="test result")
         return manager
@@ -226,7 +226,7 @@ class TestDynamicGraphBuilderCompilation:
 
     @pytest.fixture
     def mock_skill_manager(self):
-        """Create a mock SkillManager."""
+        """Create a mock SkillContext."""
         manager = MagicMock()
         manager.run = AsyncMock(return_value="test result")
         return manager
@@ -269,7 +269,7 @@ class TestDynamicGraphBuilderVisualize:
 
     @pytest.fixture
     def mock_skill_manager(self):
-        """Create a mock SkillManager."""
+        """Create a mock SkillContext."""
         manager = MagicMock()
         manager.run = AsyncMock(return_value="test result")
         return manager
@@ -300,7 +300,7 @@ class TestDynamicGraphBuilderExecution:
 
     @pytest.fixture
     def mock_skill_manager(self):
-        """Create a mock SkillManager."""
+        """Create a mock SkillContext."""
         manager = MagicMock()
         manager.run = AsyncMock(return_value="test result")
         return manager
@@ -392,7 +392,7 @@ class TestDynamicGraphBuilderInterrupt:
 
     @pytest.fixture
     def mock_skill_manager(self):
-        """Create a mock SkillManager."""
+        """Create a mock SkillContext."""
         manager = MagicMock()
         manager.run = AsyncMock(return_value="test result")
         return manager
@@ -437,7 +437,7 @@ class TestUpdateCommitScenario:
 
     @pytest.fixture
     def mock_skill_manager(self):
-        """Create a mock SkillManager for Update & Commit scenario."""
+        """Create a mock SkillContext for Update & Commit scenario."""
         manager = MagicMock()
         manager.run = AsyncMock(return_value={"content": "test file content"})
         return manager
@@ -604,7 +604,7 @@ class TestConditionalWorkflow:
 
     @pytest.fixture
     def mock_skill_manager(self):
-        """Create a mock SkillManager."""
+        """Create a mock SkillContext."""
         manager = MagicMock()
         manager.run = AsyncMock(return_value="result")
         return manager

@@ -7,7 +7,7 @@ Loaded automatically as pytest plugins.
 Fixtures:
     - registry_fixture: Clean SkillRegistry instance
     - isolated_registry: Registry with no pre-loaded skills
-    - skill_manager_fixture: Clean SkillManager instance
+    - skill_manager_fixture: Clean SkillContext instance
     - skill_loader: Function to load skill modules
     - loaded_git_skill: Pre-loaded git skill module
     - loaded_filesystem_skill: Pre-loaded filesystem skill module
@@ -27,7 +27,7 @@ def fixtures_registry_registry_fixture():
     Yields:
         A fresh registry with cleared cache
     """
-    import agent.core.registry as sr_module
+    import agent.core.skill_registry as sr_module
 
     # Reset singleton
     sr_module.SkillRegistry._instance = None
@@ -56,18 +56,18 @@ def fixtures_registry_isolated_registry(fixtures_registry_registry_fixture):
 
 @pytest.fixture
 def fixtures_registry_skill_manager_fixture():
-    """Fixture to provide a clean SkillManager instance.
+    """Fixture to provide a clean SkillContext instance.
 
     Yields:
         A fresh skill manager with all skills loaded
     """
-    import agent.core.skill_manager as sm_module
+    import agent.core.skill_runtime as sm_module
 
     # Reset singletons
     sm_module._skill_manager = None
     sm_module._manager = None
 
-    manager = sm_module.get_skill_manager()
+    manager = sm_module.get_skill_context()
     # Load all skills for tests that need them
     manager.load_all()
     yield manager

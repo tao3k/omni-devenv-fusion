@@ -28,7 +28,7 @@ When working with the Template skill:
 - No tools.py needed - this is the single source of truth
 ```
 
-## Trinity Architecture v2.0 Context (Phase 63+)
+## Trinity Architecture v2.0 Context
 
 This skill operates within the **Trinity Architecture v2.0** with **scripts/commands.py** pattern:
 
@@ -49,14 +49,14 @@ _template/
 
 ## Why scripts/commands.py Pattern?
 
-Phase 63+ simplifies the skill architecture:
+The new architecture simplifies the skill pattern:
 
-**Old (Phase 36):**
+**Old pattern:**
 
 - `tools.py` - Router with `@skill_command` decorators
 - `scripts/*.py` - Implementation functions
 
-**New (Phase 63+):**
+**New pattern:**
 
 - `scripts/commands.py` - Commands with `@skill_command` decorators
 - No `tools.py` needed
@@ -83,7 +83,7 @@ All core skill modules follow the **"Python Zenith" Engineering Protocol**:
 
 Use `_template` as a scaffold for new skills:
 
-### Development Workflow (Phase 63+)
+### Development Workflow
 
 ```
 1. _template/                    # Start: Copy this template

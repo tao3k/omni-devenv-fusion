@@ -3,7 +3,7 @@ tests/unit/test_skill_manifest.py
 Phase 33: Unit tests for SKILL.md Standardization (Pure SKILL.md)
 
 Tests for:
-- SkillManifestLoader
+- SkillMetadataLoader
 - SkillMetadata
 - SkillDefinition
 """
@@ -14,15 +14,15 @@ from pathlib import Path
 
 import pytest
 
-from agent.skills.core.skill_manifest import (
+from agent.skills.core.skill_metadata import (
     ExecutionMode,
     RoutingStrategy,
     SkillDefinition,
     SkillMetadata,
-    SkillManifestModel,
+    SkillMetadataModel,
     SKILL_FILE,
 )
-from agent.skills.core.skill_manifest_loader import SkillManifestLoader
+from agent.skills.core.skill_metadata_loader import SkillMetadataLoader
 
 
 # =============================================================================
@@ -118,16 +118,16 @@ class TestSkillMetadata:
 
 
 # =============================================================================
-# SkillManifestModel Tests
+# SkillMetadataModel Tests
 # =============================================================================
 
 
-class TestSkillManifestModel:
-    """Tests for SkillManifestModel Pydantic model."""
+class TestSkillMetadataModel:
+    """Tests for SkillMetadataModel Pydantic model."""
 
     def test_valid_model(self):
         """Test creating valid Pydantic model."""
-        model = SkillManifestModel(
+        model = SkillMetadataModel(
             name="test-skill",
             version="1.0.0",
             description="Test description",
@@ -139,7 +139,7 @@ class TestSkillManifestModel:
 
     def test_to_metadata(self):
         """Test converting Pydantic model to SkillMetadata."""
-        model = SkillManifestModel(
+        model = SkillMetadataModel(
             name="test",
             version="1.0.0",
             execution_mode=ExecutionMode.SUBPROCESS,
@@ -154,34 +154,34 @@ class TestSkillManifestModel:
     def test_missing_required_fields(self):
         """Test that missing required fields raise validation error."""
         with pytest.raises(Exception):
-            SkillManifestModel(description="No name or version")
+            SkillMetadataModel(description="No name or version")
 
 
 # =============================================================================
-# SkillManifestLoader Tests
+# SkillMetadataLoader Tests
 # =============================================================================
 
 
-class TestSkillManifestLoader:
-    """Tests for SkillManifestLoader (SKILL.md only)."""
+class TestSkillMetadataLoader:
+    """Tests for SkillMetadataLoader (SKILL.md only)."""
 
     def test_skill_file_exists_true(self, temp_skill_dir: Path):
         """Test SKILL.md file exists check."""
         (temp_skill_dir / SKILL_FILE).touch()
-        loader = SkillManifestLoader()
+        loader = SkillMetadataLoader()
 
         assert loader.skill_file_exists(temp_skill_dir) is True
 
     def test_skill_file_exists_false(self, temp_skill_dir: Path):
         """Test SKILL.md file does not exist."""
-        loader = SkillManifestLoader()
+        loader = SkillMetadataLoader()
 
         assert loader.skill_file_exists(temp_skill_dir) is False
 
     @pytest.mark.asyncio
     async def test_load_metadata(self, sample_skill_md: Path):
         """Test loading metadata from SKILL.md."""
-        loader = SkillManifestLoader()
+        loader = SkillMetadataLoader()
         metadata = await loader.load_metadata(sample_skill_md)
 
         assert metadata is not None
@@ -193,7 +193,7 @@ class TestSkillManifestLoader:
 
     async def test_load_definition(self, sample_skill_md: Path):
         """Test loading complete definition from SKILL.md."""
-        loader = SkillManifestLoader()
+        loader = SkillMetadataLoader()
 
         definition = await loader.load_definition(sample_skill_md)
 
@@ -208,7 +208,7 @@ name: test-skill
 ---
 """
         (temp_skill_dir / SKILL_FILE).write_text(content)
-        loader = SkillManifestLoader()
+        loader = SkillMetadataLoader()
 
         metadata = await loader.load_metadata(temp_skill_dir)
 
@@ -216,7 +216,7 @@ name: test-skill
 
     async def test_empty_directory(self, temp_skill_dir: Path):
         """Test handling empty directory."""
-        loader = SkillManifestLoader()
+        loader = SkillMetadataLoader()
 
         metadata = await loader.load_metadata(temp_skill_dir)
 
@@ -230,7 +230,7 @@ description: No version
 ---
 """
         (temp_skill_dir / SKILL_FILE).write_text(content)
-        loader = SkillManifestLoader()
+        loader = SkillMetadataLoader()
 
         metadata = await loader.load_metadata(temp_skill_dir)
 
@@ -245,7 +245,7 @@ invalid yaml: [[[
 # Content
 """
         (temp_skill_dir / SKILL_FILE).write_text(content)
-        loader = SkillManifestLoader()
+        loader = SkillMetadataLoader()
 
         metadata = await loader.load_metadata(temp_skill_dir)
 
@@ -262,48 +262,48 @@ class TestVersionComparison:
 
     def test_parse_version_simple(self):
         """Test parsing simple version string."""
-        result = SkillManifestLoader.parse_version("1.2.0")
+        result = SkillMetadataLoader.parse_version("1.2.0")
 
         assert result == (1, 2, 0)
 
     def test_parse_version_partial(self):
         """Test parsing version with fewer parts."""
-        result = SkillManifestLoader.parse_version("2.0")
+        result = SkillMetadataLoader.parse_version("2.0")
 
         assert result == (2, 0, 0)
 
     def test_parse_version_single(self):
         """Test parsing single-part version."""
-        result = SkillManifestLoader.parse_version("3")
+        result = SkillMetadataLoader.parse_version("3")
 
         assert result == (3, 0, 0)
 
     def test_compare_versions_equal(self):
         """Test comparing equal versions."""
-        result = SkillManifestLoader.compare_versions("1.2.0", "1.2.0")
+        result = SkillMetadataLoader.compare_versions("1.2.0", "1.2.0")
 
         assert result == 0
 
     def test_compare_versions_greater(self):
         """Test comparing when v1 > v2."""
-        result = SkillManifestLoader.compare_versions("2.0.0", "1.0.0")
+        result = SkillMetadataLoader.compare_versions("2.0.0", "1.0.0")
 
         assert result == 1
 
     def test_compare_versions_less(self):
         """Test comparing when v1 < v2."""
-        result = SkillManifestLoader.compare_versions("1.0.0", "2.0.0")
+        result = SkillMetadataLoader.compare_versions("1.0.0", "2.0.0")
 
         assert result == -1
 
     def test_compare_versions_minor(self):
         """Test comparing minor version differences."""
-        result = SkillManifestLoader.compare_versions("1.2.0", "1.3.0")
+        result = SkillMetadataLoader.compare_versions("1.2.0", "1.3.0")
 
         assert result == -1
 
     def test_compare_versions_patch(self):
         """Test comparing patch version differences."""
-        result = SkillManifestLoader.compare_versions("1.2.1", "1.2.0")
+        result = SkillMetadataLoader.compare_versions("1.2.1", "1.2.0")
 
         assert result == 1

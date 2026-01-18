@@ -1,7 +1,7 @@
 # MCP Sidecar Architecture
 
 > **Status**: Implemented | **Date**: 2024-XX-XX
-> **Related**: Phase 29 (Trinity + Protocols), Phase 36 (Trinity v2.0)
+> **Related**: Trinity + Protocols, Trinity v2.0
 
 ## Overview
 
@@ -151,11 +151,11 @@ def run_skill_command(
 
 ## Pure MCP Server
 
-Phase 35.3 introduced a pure MCP Server implementation using the official `mcp.server` package instead of FastMCP.
+A pure MCP Server implementation was introduced using the official `mcp.server` package instead of FastMCP.
 
 ### Architecture Comparison
 
-| Aspect            | FastMCP (Before)             | Pure MCP (Phase 35.3)  |
+| Aspect            | FastMCP (Before)             | Pure MCP (Current)     |
 | ----------------- | ---------------------------- | ---------------------- |
 | **Dependency**    | fastmcp                      | mcp.server (official)  |
 | **Control**       | Abstracted                   | Direct protocol access |

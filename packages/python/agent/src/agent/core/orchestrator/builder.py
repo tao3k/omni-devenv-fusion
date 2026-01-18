@@ -52,7 +52,7 @@ from langgraph.types import (
     StreamMode,
 )
 
-from ..skill_manager import SkillManager
+from ..skill_runtime import SkillManager
 from ..state import GraphState
 from .compiled import CompiledGraph
 

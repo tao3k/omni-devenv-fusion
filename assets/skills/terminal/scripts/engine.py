@@ -195,15 +195,40 @@ async def run_command_async(command: str, args: list[str], timeout: int = 60) ->
         }
 
 
-def format_result(result: dict[str, Any], command: str, args: list[str]) -> str:
-    """Format execution result for display."""
+def format_result(
+    result: dict[str, Any],
+    command: str,
+    args: list[str],
+    tail_lines: int | None = None,
+) -> str:
+    """Format execution result for display.
+
+    Args:
+        result: Command execution result dict
+        command: The command that was executed
+        args: Command arguments
+        tail_lines: If set, only show last N lines (default: None = show all)
+    """
     output = []
 
-    if result.get("stdout"):
-        output.append(result["stdout"])
+    stdout = result.get("stdout", "")
+    stderr = result.get("stderr", "")
 
-    if result.get("stderr"):
-        output.append(f"STDERR:\n{result['stderr']}")
+    # Show tail if requested (UNIX-style tail for large output)
+    if tail_lines is not None and tail_lines > 0:
+        lines = stdout.split("\n")
+        if len(lines) > tail_lines:
+            stdout = "\n".join(lines[-tail_lines:])
+            output.append(
+                f"[... showing last {tail_lines} lines of {len(lines)} total ...]\n{stdout}"
+            )
+        else:
+            output.append(stdout)
+    else:
+        output.append(stdout)
+
+    if stderr:
+        output.append(f"STDERR:\n{stderr}")
 
     if result.get("exit_code", 0) != 0:
         output.append(f"Exit code: {result.get('exit_code')}")

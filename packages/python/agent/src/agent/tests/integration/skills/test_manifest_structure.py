@@ -23,7 +23,7 @@ _ALL_SKILLS = get_all_skill_paths(_SKILLS_PATH)
 
 def _get_registry():
     """Get a fresh registry instance."""
-    import agent.core.registry as sr_module
+    import agent.core.skill_registry as sr_module
 
     sr_module.SkillRegistry._instance = None
     reg = sr_module.get_skill_registry()

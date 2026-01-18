@@ -278,7 +278,7 @@ def skill_watch():
     Example:
         omni skill watch        # Start watching (Ctrl+C to stop)
     """
-    from agent.core.skill_manager.watcher import BackgroundWatcher
+    from agent.core.skill_runtime.watcher import BackgroundWatcher
     from agent.core.vector_store import get_vector_memory
 
     err_console.print(

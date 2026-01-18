@@ -179,7 +179,7 @@ class FakeVectorStore:
         Hybrid search for tools/skills.
 
         Used by SkillDiscovery for semantic skill search.
-        Returns results in format expected by SkillManager.
+        Returns results in format expected by SkillContext.
 
         Args:
             query: Search query

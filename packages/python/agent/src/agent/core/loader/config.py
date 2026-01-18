@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from agent.core.protocols import SecurityAssessment
-    from agent.core.skill_manager import Skill
+    from agent.core.skill_runtime import Skill
 
 
 @dataclass(slots=True)

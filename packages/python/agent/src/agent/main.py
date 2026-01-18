@@ -69,9 +69,9 @@ From Claude Code CLI:
     # Import and call omni
     try:
         import asyncio
-        from agent.core.skill_manager import get_skill_manager
+        from agent.core.skill_runtime import get_skill_context
 
-        manager = get_skill_manager()
+        manager = get_skill_context()
 
         # Parse skill.command format
         if "." in args.command:

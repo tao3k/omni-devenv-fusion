@@ -18,7 +18,7 @@ from .stages import DiscoveryStage, ValidationStage, SecurityStage
 
 if TYPE_CHECKING:
     from agent.core.protocols import SecurityAssessment
-    from agent.core.skill_manager import Skill, SkillManager
+    from agent.core.skill_runtime import Skill, SkillManager
 
 logger = structlog.get_logger(__name__)
 
@@ -61,7 +61,7 @@ class SkillLoader:
         self.config = config or LoaderConfig()
 
         if manager is None:
-            from agent.core.skill_manager import _get_singleton_manager
+            from agent.core.skill_runtime import _get_singleton_manager
 
             self._manager = _get_singleton_manager()
         else:

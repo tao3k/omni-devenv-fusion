@@ -88,7 +88,7 @@ async def ingest_preloaded_skill_definitions() -> None:
     - terminal: Command execution rules
     - testing_protocol: Testing workflow
     """
-    from agent.core.registry import get_skill_registry
+    from agent.core.skill_registry import get_skill_registry
     from common.skills_path import SKILLS_DIR
 
     registry = get_skill_registry()

@@ -20,7 +20,7 @@ from .base import skill_app, err_console, print_result
 @skill_app.command("list")
 def skill_list():
     """List installed skills."""
-    from agent.core.registry import get_skill_registry
+    from agent.core.skill_registry import get_skill_registry
 
     registry = get_skill_registry()
     skills = registry.list_available_skills()
@@ -48,7 +48,7 @@ def skill_list():
 @skill_app.command("discover")
 def skill_discover(query: str = typer.Argument(..., help="Search query")):
     """Discover skills from remote index."""
-    from agent.core.registry.jit import discover_skills
+    from agent.core.skill_registry.jit import discover_skills
 
     result = discover_skills(query, limit=20)
     skills = result.get("skills", [])
@@ -74,7 +74,7 @@ def skill_discover(query: str = typer.Argument(..., help="Search query")):
 def skill_info(name: str = typer.Argument(..., help="Skill name")):
     """Show detailed information about a skill from SKILL.md frontmatter."""
     from rich.markdown import Markdown
-    from agent.core.registry import get_skill_registry
+    from agent.core.skill_registry import get_skill_registry
 
     registry = get_skill_registry()
     info = registry.get_skill_info(name)

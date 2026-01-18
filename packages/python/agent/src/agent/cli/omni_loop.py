@@ -35,10 +35,21 @@ def _print_enrich_result(task: str, result: str, agent):
     tokens = 0
     for msg in agent.history:
         tokens += len(msg.get("content", "") or "") // 4
+
+        # Count role="tool" messages (actual format in history)
+        if msg.get("role") == "tool":
+            tool_name = msg.get("tool_name", "unknown")
+            tool_counts[tool_name] = tool_counts.get(tool_name, 0) + 1
+
+        # Also support tool_calls format for backwards compatibility
         if msg.get("tool_calls"):
             for tc in msg["tool_calls"]:
-                name = tc["function"]["name"]
-                tool_counts[name] = tool_counts.get(name, 0) + 1
+                # Support both OpenAI format: tc["function"]["name"]
+                # and simplified format: tc["name"]
+                func = tc.get("function", {})
+                name = func.get("name") or tc.get("name", "unknown")
+                if name != "unknown":
+                    tool_counts[name] = tool_counts.get(name, 0) + 1
 
     # 2. Grid layout
     grid = Table.grid(expand=True)
@@ -76,12 +87,12 @@ def _print_enrich_result(task: str, result: str, agent):
 
 async def run_task(task: str, max_steps: int):
     """Run a single task through the CCA loop."""
-    from agent.core.omni_agent import OmniAgent
+    from agent.core.omni import OmniLoop
 
     print_banner()
     console.print(f"\n[bold]🚀 Starting:[/bold] {task}\n")
 
-    agent = OmniAgent()
+    agent = OmniLoop()
     result = await agent.run(task, max_steps)
     _print_enrich_result(task, result, agent)
     return result
@@ -97,7 +108,7 @@ def main():
     if args.task:
         asyncio.run(run_task(args.task, args.steps))
     else:
-        from agent.core.omni_agent import interactive_mode
+        from agent.core.omni import interactive_mode
 
         print_banner()
         asyncio.run(interactive_mode())

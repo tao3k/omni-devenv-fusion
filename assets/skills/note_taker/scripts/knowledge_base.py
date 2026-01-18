@@ -1,6 +1,6 @@
 """
 assets/skills/note_taker/scripts/knowledge_base.py
-Phase 63: Knowledge Base Manager.
+Knowledge Base Manager.
 
 Manages persistent knowledge storage and retrieval.
 """

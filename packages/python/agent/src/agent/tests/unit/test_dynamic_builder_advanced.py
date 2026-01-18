@@ -28,7 +28,7 @@ class TestHumanInTheLoop:
 
     @pytest.fixture
     def mock_skill_manager(self):
-        """Create a mock SkillManager."""
+        """Create a mock SkillContext."""
         manager = MagicMock()
         manager.run = AsyncMock(return_value={"success": True})
         return manager
@@ -79,7 +79,7 @@ class TestCommandPattern:
 
     @pytest.fixture
     def mock_skill_manager(self):
-        """Create a mock SkillManager."""
+        """Create a mock SkillContext."""
         manager = MagicMock()
         manager.run = AsyncMock(return_value={"success": True})
         return manager
@@ -180,7 +180,7 @@ class TestCompiledGraphHelpers:
 
     @pytest.fixture
     def mock_skill_manager(self):
-        """Create a mock SkillManager."""
+        """Create a mock SkillContext."""
         manager = MagicMock()
         manager.run = AsyncMock(return_value={"result": "test"})
         return manager
@@ -247,7 +247,7 @@ class TestStreamModes:
 
     @pytest.fixture
     def mock_skill_manager(self):
-        """Create a mock SkillManager."""
+        """Create a mock SkillContext."""
         manager = MagicMock()
         manager.run = AsyncMock(return_value={"result": "test"})
         return manager
@@ -286,7 +286,7 @@ class TestVisualization:
 
     @pytest.fixture
     def mock_skill_manager(self):
-        """Create a mock SkillManager."""
+        """Create a mock SkillContext."""
         manager = MagicMock()
         manager.run = AsyncMock(return_value={"result": "test"})
         return manager
@@ -329,7 +329,7 @@ class TestSmartCommitUseCase:
 
     @pytest.fixture
     def mock_skill_manager(self):
-        """Create a mock SkillManager for git operations."""
+        """Create a mock SkillContext for git operations."""
         manager = MagicMock()
         manager.run = AsyncMock(
             return_value={
@@ -417,7 +417,7 @@ class TestSendPattern:
 
     @pytest.fixture
     def mock_skill_manager(self):
-        """Create a mock SkillManager."""
+        """Create a mock SkillContext."""
         manager = MagicMock()
         manager.run = AsyncMock(return_value={"result": "ok"})
         return manager

@@ -39,7 +39,7 @@ from agent.tests.fakes.fake_vectorstore import FakeVectorStore, SearchResult
 @pytest.fixture(autouse=True)
 def reset_singletons():
     """Reset singletons before each test."""
-    import agent.core.skill_manager.manager as manager_module
+    import agent.core.skill_runtime.context as manager_module
 
     manager_module._instance = None
 

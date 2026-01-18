@@ -1,4 +1,4 @@
-# Smart Commit Workflow (Phase 36.8)
+# Smart Commit Workflow
 
 ## Architecture: Tool provides Data, LLM provides Intelligence
 

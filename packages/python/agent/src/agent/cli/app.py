@@ -5,6 +5,7 @@ from __future__ import annotations
 import typer
 
 from common.log_config import configure_logging
+from common.config.directory import set_conf_dir
 
 # Configure logging first (logs go to stderr per UNIX philosophy)
 configure_logging(level="INFO")
@@ -14,6 +15,24 @@ app = typer.Typer(
     help="Omni DevEnv - CCA Runtime Integration",
     add_completion=False,
 )
+
+
+@app.callback()
+def callback(
+    conf: str | None = typer.Option(
+        None,
+        "--conf",
+        "-c",
+        help="Configuration directory (overrides default assets/)",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+):
+    """Omni DevEnv - CCA Runtime Integration"""
+    if conf:
+        set_conf_dir(conf)
 
 
 def main():

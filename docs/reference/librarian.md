@@ -33,7 +33,7 @@ Librarian is the **retrieval interface** layer of the Knowledge Matrix, providin
 
 ## Knowledge Lifecycle
 
-### Phase 1: Ingestion
+### 1. Ingestion
 
 The Knowledge Indexer scans Markdown files and creates searchable chunks:
 
@@ -48,17 +48,17 @@ stats = await sync_knowledge(store, "docs/", table_name="knowledge")
 # Returns: {"added": 5, "updated": 2, "deleted": 1, "total": 42}
 ```
 
-### Phase 2: Storage (Knowledge Matrix)
+### 2. Storage (Knowledge Matrix)
 
 Three tables work together:
 
-| Table | Purpose | Data Source |
-|-------|---------|-------------|
-| **Skills** | Tool discovery | `assets/skills/*/scripts/*.py` |
-| **Knowledge** | Documentation | `docs/`, `assets/knowledge/`, `assets/how-to/` |
-| **Memory** | Session history | Runtime interactions |
+| Table         | Purpose         | Data Source                                    |
+| ------------- | --------------- | ---------------------------------------------- |
+| **Skills**    | Tool discovery  | `assets/skills/*/scripts/*.py`                 |
+| **Knowledge** | Documentation   | `docs/`, `assets/knowledge/`, `assets/how-to/` |
+| **Memory**    | Session history | Runtime interactions                           |
 
-### Phase 3: Retrieval (Librarian)
+### 3. Retrieval (Librarian)
 
 Librarian provides the retrieval interface:
 
@@ -72,7 +72,7 @@ result = await consult_knowledge_base(
 )
 ```
 
-### Phase 4: Application
+### 4. Application
 
 Agents and Routers use retrieved knowledge for informed decision-making.
 
@@ -351,18 +351,18 @@ knowledge:
   min_chunk_size: 50
 
 vector_store:
-  provider: "lancedb"  # Rust-accelerated via omni-vector
+  provider: "lancedb" # Rust-accelerated via omni-vector
   persist_directory: ".cache/omni-vector"
 ```
 
 ## Performance Characteristics
 
-| Operation | Time | Notes |
-|-----------|------|-------|
-| Semantic search | ~50ms | Vector similarity + reranking |
+| Operation          | Time       | Notes                         |
+| ------------------ | ---------- | ----------------------------- |
+| Semantic search    | ~50ms      | Vector similarity + reranking |
 | Document ingestion | ~100ms/doc | Includes embedding generation |
-| Bootstrap (full) | ~5s | Initial scan and index |
-| Incremental sync | ~10ms | Hash-based change detection |
+| Bootstrap (full)   | ~5s        | Initial scan and index        |
+| Incremental sync   | ~10ms      | Hash-based change detection   |
 
 ## File Structure
 

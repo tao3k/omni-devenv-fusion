@@ -1,6 +1,6 @@
 # Omni-DevEnv Fusion
 
-> **Phase 25.3: One Tool + Trinity Architecture**
+> One Tool + Trinity Architecture
 > Single Entry Point: `@omni("skill.command")`
 
 Quick Reference: `docs/explanation/trinity-architecture.md` | `docs/skills.md`

@@ -45,14 +45,14 @@ def get_init_options() -> InitializationOptions:
 
 async def handle_list_tools() -> list:
     """List all available tools from loaded skills plus the execute meta-tool."""
-    from agent.core.skill_manager import get_skill_manager
+    from agent.core.skill_runtime import get_skill_context
     from mcp.types import Tool
 
-    manager = get_skill_manager()
+    manager = get_skill_context()
 
-    if not manager._loaded:
-        logger.info("⏳ Tools requested but skills not ready. Loading synchronously...")
-        manager.load_all()
+    if not manager.skills:
+        logger.info("Loading preload skills...")
+        manager.load_preload_skills()
 
     tools: list[Tool] = []
     seen_names: set[str] = set()
@@ -90,8 +90,7 @@ async def handle_list_tools() -> list:
 
 async def handle_call_tool(name: str, arguments: dict | None) -> list:
     """Execute a tool call via Trinity Architecture."""
-    from agent.core.skill_manager import get_skill_manager
-    from mcp.types import TextContent
+    from agent.core.skill_runtime import get_skill_context
 
     try:
         # Parse skill.command format
@@ -101,13 +100,13 @@ async def handle_call_tool(name: str, arguments: dict | None) -> list:
             skill_name = name
             command_name = "help"
 
-        manager = get_skill_manager()
+        manager = get_skill_context()
         result = await manager.run(skill_name, command_name, arguments or {})
-        return [TextContent(type="text", text=str(result))]
+        return [{"type": "text", "text": str(result)}]
     except Exception as e:
         error_msg = f"Error executing {name}: {e}"
         logger.error(f"❌ {error_msg}")
-        return [TextContent(type="text", text=f"Error: {error_msg}")]
+        return [{"type": "text", "text": f"Error: {error_msg}"}]
 
 
 # =============================================================================

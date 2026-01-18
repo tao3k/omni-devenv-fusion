@@ -11,6 +11,8 @@ in
   packages = [
     pkgs.protobuf
     nixpkgs-latest.maturin
+    pkgs.openssl
+    pkgs.pkg-config
   ];
   # https://devenv.sh/languages/
   languages.rust = {

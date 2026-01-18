@@ -1,7 +1,7 @@
 ---
 name: "code_tools"
 version: "1.0.0"
-description: "Code search, analysis, and refactoring using AST patterns. Search code structure, analyze modules, and refactor with precision."
+description: "Code search, analysis, and refactoring using AST patterns. Search code structure, analyze modules, and refactor with precision. KEYWORDS: ast, syntax, parse, surgical, replace, transform, refactor, rename, symbol, class, function, method."
 routing_keywords:
   [
     "code",
@@ -20,6 +20,11 @@ routing_keywords:
     "transform",
     "tools",
     "decorators",
+    "replace",
+    "surgical",
+    "syntax",
+    "parse",
+    "symbol",
   ]
 authors: ["omni-dev-fusion"]
 execution_mode: "library"

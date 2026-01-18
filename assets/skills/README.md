@@ -1,6 +1,6 @@
 # Skills Directory
 
-> **Phase 63+**: @skill_command Pattern - No tools.py Required
+> @skill_command Pattern - No tools.py Required
 
 This directory contains **Skills** - composable, self-contained packages that provide specific capabilities to the Omni Agent.
 

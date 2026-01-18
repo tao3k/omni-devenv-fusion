@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 
 import structlog
 
-from agent.skills.core.skill_manifest import SKILL_FILE
+from agent.skills.core.skill_metadata import SKILL_FILE
 
 if TYPE_CHECKING:
     from agent.core.registry.core import ToolRegistry

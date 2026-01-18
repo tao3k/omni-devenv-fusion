@@ -16,7 +16,7 @@ import asyncio
 import json
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from agent.core.registry import get_skill_registry
+from agent.core.skill_registry import get_skill_registry
 from agent.core.router.models import RoutingResult
 
 if TYPE_CHECKING:

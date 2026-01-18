@@ -22,10 +22,10 @@ from pathlib import Path
 
 def _get_code_tools_skill():
     """Load and return code_tools skill."""
-    from agent.core.skill_manager import get_skill_manager
+    from agent.core.skill_runtime import get_skill_context
 
-    manager = get_skill_manager()
-    if not manager._loaded:
+    manager = get_skill_context()
+    if not manager.skills:
         manager.load_all()
 
     return manager.skills.get("code_tools")
@@ -445,7 +445,7 @@ class TestGetEditInfo:
         # The command is a function, call it
         result = cmd.func()
         assert isinstance(result, dict)
-        assert result["name"] == "structural_editing"
+        assert result["name"] == "code_tools"
         assert "rust_available" in result
         assert "supported_languages" in result
         assert "python" in result["supported_languages"]

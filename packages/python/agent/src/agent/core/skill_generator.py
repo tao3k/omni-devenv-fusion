@@ -181,7 +181,7 @@ class LLMSkillGenerator:
 
         Args:
             inference_client: LLM inference client (defaults to global client)
-            skill_manager: SkillManager instance for calling meta.refine_code
+            skill_manager: SkillContext instance for calling meta.refine_code
             max_validation_retries: Maximum validation/refinement attempts
         """
         self.inference = inference_client

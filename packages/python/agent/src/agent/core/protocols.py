@@ -33,7 +33,7 @@ from dataclasses import field
 from pydantic import BaseModel, ConfigDict
 
 if TYPE_CHECKING:
-    from agent.core.schemas import SkillManifest
+    from agent.core.schema.skill import SkillManifest
 
 # =============================================================================
 # Lazy Logger Initialization ( Import Optimization)

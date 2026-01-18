@@ -1,7 +1,7 @@
 """
 terminal/scripts/commands.py - Terminal Skill Commands
 
-Phase 63: Migrated from tools.py to scripts pattern.
+Migrated from tools.py to scripts pattern.
 """
 
 import os
@@ -67,14 +67,15 @@ Use git_commit in git skill instead.
 
     Args:
         command: The command to run (e.g., `git`, `just`, `nix`).
-        args: Optional list of arguments. Defaults to empty list.
-              Can also be a single string like `"status"` which gets parsed.
-        inject_root: Auto-inject project root directory.
+                Can include args in single string like `"just validate"`.
+        args: Optional list of arguments as separate strings.
+                Example: `{"command": "git", "args": ["status"]}`
+        inject_root: Auto-inject $PRJ_ROOT to args (enabled by default).
 
     Returns:
         Command output with execution status and timing.
 
-    Example:
+    Examples:
         @omni("terminal.run_task", {"command": "git", "args": ["status"]})
         @omni("terminal.run_task", {"command": "just validate"})
     """,
@@ -185,20 +186,31 @@ async def inspect_environment() -> str:
     Use this for general-purpose command execution.
 
     Args:
-        command: The command to execute (e.g., `ls`, `cat`, `echo`).
-        args: Optional list of arguments. Can be a single string.
+        command: The command to execute (e.g., `ls`, `git`, `echo`).
+                Can include arguments in a single string like `"ls -la"`.
+        args: Optional list of arguments as separate strings.
+                Example: `{"command": "git", "args": ["status"]}`
+                If not provided, command is parsed for args.
         timeout: Command timeout in seconds. Defaults to `60`.
+        tail_lines: If set, only show last N lines (default: None = show all).
+                    Use this for commands with large output like `pytest`, `cargo test`.
 
     Returns:
         Command stdout and stderr output.
 
-    Example:
+    Examples:
         @omni("terminal.run_command", {"command": "git", "args": ["status"]})
         @omni("terminal.run_command", {"command": "ls -la"})
+        @omni("terminal.run_command", {"command": "just test", "tail_lines": 50})
     """,
     inject_root=True,
 )
-async def run_command(command: str, args: Optional[list[str]] = None, timeout: int = 60) -> str:
+async def run_command(
+    command: str,
+    args: Optional[list[str]] = None,
+    timeout: int = 60,
+    tail_lines: Optional[int] = None,
+) -> str:
     if args is None:
         args = []
 
@@ -212,4 +224,4 @@ async def run_command(command: str, args: Optional[list[str]] = None, timeout: i
     from agent.skills.terminal.scripts import engine
 
     result = engine.run_command(command, args, timeout=timeout)
-    return engine.format_result(result, command, args)
+    return engine.format_result(result, command, args, tail_lines=tail_lines)

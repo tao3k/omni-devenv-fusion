@@ -193,7 +193,7 @@ def add(a: int, b: int) -> int:
         sample_script_module: ModuleType,
     ) -> None:
         """Verify we can extract commands from a script module."""
-        from agent.core.skill_manager.loader import SkillLoaderMixin
+        from agent.core.skill_runtime.support.loader import SkillLoaderMixin
 
         class TestLoader(SkillLoaderMixin):
             skills_dir = Path(".")
@@ -213,7 +213,7 @@ def add(a: int, b: int) -> int:
         sample_script_module: ModuleType,
     ) -> None:
         """Verify script commands have correct input schema."""
-        from agent.core.skill_manager.loader import SkillLoaderMixin
+        from agent.core.skill_runtime.support.loader import SkillLoaderMixin
 
         class TestLoader(SkillLoaderMixin):
             skills_dir = Path(".")
@@ -231,7 +231,7 @@ class TestSkillCommandScriptMode:
 
     def test_skill_command_script_mode_fields(self) -> None:
         """Verify SkillCommand accepts script mode fields."""
-        from agent.core.skill_manager.models import SkillCommand
+        from agent.core.skill_runtime.support.models import SkillCommand
 
         def dummy_func() -> str:
             return "ok"
@@ -255,7 +255,7 @@ class TestSkillCommandScriptMode:
     @pytest.mark.asyncio
     async def test_skill_command_script_mode_injects_root(self) -> None:
         """Verify script mode injects project_root when requested."""
-        from agent.core.skill_manager.models import SkillCommand
+        from agent.core.skill_runtime.support.models import SkillCommand
         from pathlib import Path
 
         captured_args: dict = {}

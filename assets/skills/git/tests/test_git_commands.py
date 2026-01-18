@@ -1,5 +1,5 @@
 """
-Git Skill Tests - Updated for Phase 63+ Architecture
+Git Skill Tests - Updated for Scripts Architecture
 
 Tests the new architecture where:
 - Scripts/*.py contain plain functions (status, branch, log, etc.)
@@ -23,7 +23,7 @@ from unittest.mock import MagicMock
 
 
 # ==============================================================================
-# Script Function Tests - Direct import pattern for Phase 63+
+# Script Function Tests - Direct import pattern
 # ==============================================================================
 
 
@@ -142,6 +142,27 @@ def test_git_revert_command_exists(git):
 # ==============================================================================
 
 
+@pytest.fixture
+def temp_git_repo(tmp_path):
+    """Create a temporary git repository for testing."""
+    repo_path = tmp_path / "test_repo"
+    repo_path.mkdir()
+
+    # Initialize git repo
+    subprocess.run(["git", "init"], cwd=repo_path, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"], cwd=repo_path, capture_output=True
+    )
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_path, capture_output=True)
+
+    # Create initial commit
+    (repo_path / "README.md").write_text("# Test Repo")
+    subprocess.run(["git", "add", "."], cwd=repo_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_path, capture_output=True)
+
+    return repo_path
+
+
 @pytest.mark.parametrize(
     "cmd,args",
     [
@@ -151,8 +172,9 @@ def test_git_revert_command_exists(git):
         (["git", "remote"], ["-v"]),
     ],
 )
-def test_git_command(project_root, cmd, args):
-    result = subprocess.run(cmd + args, capture_output=True, text=True, cwd=project_root)
+def test_git_command(temp_git_repo, cmd, args):
+    """Test git commands in isolated temporary repository."""
+    result = subprocess.run(cmd + args, capture_output=True, text=True, cwd=temp_git_repo)
     assert result.returncode == 0
 
 
@@ -177,7 +199,7 @@ def test_git_commit_has_metadata(git):
 
 
 # ==============================================================================
-# Commit Message Parsing Tests (Phase 35.3)
+# Commit Message Parsing Tests
 # ==============================================================================
 
 
@@ -206,7 +228,7 @@ def test_commit_message_parsing_without_scope():
 
 
 # ==============================================================================
-# Scope Validation Tests (Phase 35.3)
+# Scope Validation Tests
 # ==============================================================================
 
 
@@ -231,7 +253,7 @@ def test_get_cog_scopes_returns_list():
 
 
 # ==============================================================================
-# Template Rendering Tests (Phase 35.3)
+# Template Rendering Tests
 # ==============================================================================
 
 
@@ -307,7 +329,7 @@ def test_render_commit_message_security_issues():
 
 
 # ==============================================================================
-# Cog Scopes Regex Tests (Phase 35.3)
+# Cog Scopes Regex Tests
 # ==============================================================================
 
 
@@ -332,7 +354,7 @@ scopes = [
 
 
 # ==============================================================================
-# Stage and Scan Tests (Phase 36.8)
+# Stage and Scan Tests
 # ==============================================================================
 
 

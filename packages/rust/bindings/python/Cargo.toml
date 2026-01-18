@@ -10,20 +10,20 @@ workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
-# [Phase 45.2] Python 3.13 support via PyO3 0.23
+# Python 3.13 support via PyO3 0.23
 pyo3 = { workspace = true, features = ["extension-module"] }
 # Note: tokio removed - not needed for synchronous bindings
 omni-sniffer = { path = "../../crates/omni-sniffer" }
 omni-types = { path = "../../crates/omni-types" }
 omni-io = { path = "../../crates/omni-io" }
 omni-tokenizer = { path = "../../crates/omni-tokenizer" }
-# [Phase 49] Hyper-Immune System
+# Hyper-Immune System
 omni-security = { path = "../../crates/omni-security" }
-# [Phase 50] The Cartographer
+# The Cartographer
 omni-tags = { path = "../../crates/omni-tags" }
-# [Phase 52] The Surgeon - Structural Refactoring
+# The Surgeon - Structural Refactoring
 omni-edit = { path = "../../crates/omni-edit" }
-# Phase 53: The Librarian - Vector Store for embeddings
+# The Librarian - Vector Store for embeddings
 omni-vector = { path = "../../crates/omni-vector" }
 serde = { workspace = true }
 serde_json = { workspace = true }

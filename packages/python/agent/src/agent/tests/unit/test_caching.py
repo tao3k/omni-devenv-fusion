@@ -10,8 +10,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from agent.core.skill_manager.caching import CacheEntry, ResultCacheMixin
-from agent.core.skill_manager.models import Skill, SkillCommand
+from agent.core.skill_runtime.support.caching import CacheEntry, ResultCacheMixin
+from agent.core.skill_runtime.support.models import Skill, SkillCommand
 
 
 class TestCacheEntry:
@@ -237,12 +237,12 @@ class TestSkillCommandCaching:
 
 
 class TestCachingIntegration:
-    """Integration tests for caching in SkillManager context."""
+    """Integration tests for caching in SkillContext context."""
 
     @pytest.mark.asyncio
     async def test_cached_command_execution(self):
         """Test that cached commands return cached results."""
-        from agent.core.skill_manager.caching import ResultCacheMixin
+        from agent.core.skill_runtime.support.caching import ResultCacheMixin
 
         # Create a minimal class with just the cache mixin
         class CacheOnly(ResultCacheMixin):
@@ -270,7 +270,7 @@ class TestCachingIntegration:
     @pytest.mark.asyncio
     async def test_uncached_command_execution(self):
         """Test that commands without TTL are not cached."""
-        from agent.core.skill_manager.caching import ResultCacheMixin
+        from agent.core.skill_runtime.support.caching import ResultCacheMixin
 
         class CacheOnly(ResultCacheMixin):
             pass

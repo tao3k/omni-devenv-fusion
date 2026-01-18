@@ -54,9 +54,9 @@ def run_skills(
 
     if not commands or commands[0] in ("help", "?"):
         # Show available skills - lazy import to avoid pytest dependency
-        from agent.core.skill_manager import get_skill_manager
+        from agent.core.skill_runtime import get_skill_context
 
-        skill_manager = get_skill_manager()
+        skill_manager = get_skill_context()
         skill_manager.load_all()  # Ensure all skills are loaded
 
         err_console.print()
@@ -105,11 +105,11 @@ def run_skills(
     cmd_args.pop("log_handler", None)
 
     # Use SkillManager for command execution (supports both tools.py and scripts/*.py)
-    from agent.core.skill_manager import get_skill_manager
+    from agent.core.skill_runtime import get_skill_context
     from agent.core.skill_loader import get_skill_loader
 
     # Lazy mode: Don't auto-load all skills for faster CLI startup
-    skill_manager = get_skill_manager(lazy=True)
+    skill_manager = get_skill_context(lazy=True)
 
     # Fast path: Try to get skill path from pre-indexed data (avoids directory scan)
     skill_path = None

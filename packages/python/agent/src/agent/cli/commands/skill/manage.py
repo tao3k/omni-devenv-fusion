@@ -39,7 +39,7 @@ def skill_install(
     version: str = typer.Option("main", "--version", "-v", help="Git ref (default: main)"),
 ):
     """Install a skill from a remote repository."""
-    from agent.core.registry import get_skill_registry
+    from agent.core.skill_registry import get_skill_registry
 
     if not name:
         name = url.rstrip("/").split("/")[-1].replace("-skill", "")
@@ -60,7 +60,7 @@ def skill_update(
     version: str = typer.Option("main", "--version", "-v", help="Git ref"),
 ):
     """Update an installed skill."""
-    from agent.core.registry import get_skill_registry
+    from agent.core.skill_registry import get_skill_registry
 
     registry = get_skill_registry()
     success, msg = registry.update_skill(name, version)

@@ -219,7 +219,7 @@ async def validate_and_refine(
         skill_code: Python code for the skill implementation
         test_code: Python code for the test
         requirement: Original requirement for context
-        skill_manager: SkillManager instance (for calling meta.refine_code)
+        skill_manager: SkillContext instance (for calling meta.refine_code)
         project_root: Project root path
         max_retries: Maximum refinement attempts
 

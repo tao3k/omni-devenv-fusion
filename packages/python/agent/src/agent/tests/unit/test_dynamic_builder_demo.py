@@ -14,7 +14,7 @@ from agent.core.state import GraphState
 
 
 def create_mock_skill_manager():
-    """Create a mock SkillManager for demonstration."""
+    """Create a mock SkillContext for demonstration."""
     manager = MagicMock()
     manager.run = AsyncMock(return_value={"content": "test content"})
     return manager

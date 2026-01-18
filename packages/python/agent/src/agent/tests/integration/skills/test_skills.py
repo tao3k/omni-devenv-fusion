@@ -4,14 +4,14 @@ Comprehensive testing for the Phase 13 Skill Architecture + Phase 25 Omni CLI.
 
 Phase 25.1: Macro System with @skill_command Decorators
 - @skill_command decorator marks functions with metadata and DI support
-- SkillManager scans skills and builds registry from decorated functions
+- SkillContext scans skills and builds registry from decorated functions
 - Single omni() tool handles all operations
 
 Phase 34: CommandResult wrapper for structured output
 
 Covers:
 1. SkillRegistry (Discovery, Loading, Context, Spec-based Loading)
-2. SkillManager (Phase 25: Omni CLI single entry point)
+2. SkillContext (Phase 25: Omni CLI single entry point)
 3. Skill Manifest (Schema Validation)
 4. Skill Hot Reload
 5. Filesystem Skill
@@ -63,16 +63,16 @@ async def omni(command: str, args: dict | None = None) -> str:
     """
     Execute a skill command. Mimics old FastMCP @tool omni behavior.
 
-    Phase 35.3: Uses SkillManager.run() directly instead of FastMCP.
+    Phase 35.3: Uses SkillContext.run() directly instead of FastMCP.
 
     Special commands:
     - "help": Shows all available skills
     - "skill": Shows skill's commands (e.g., omni("git") shows git commands)
     - "skill.command": Executes a specific command (e.g., omni("git.status"))
     """
-    from agent.core.skill_manager import get_skill_manager
+    from agent.core.skill_runtime import get_skill_context
 
-    manager = get_skill_manager()
+    manager = get_skill_context()
     args = args or {}
 
     # Special case: "help" shows all skills
@@ -110,8 +110,8 @@ def async_unwrap_command_result(coro):
 
 # Import core components
 from agent.core.schema import SkillManifest
-from agent.core.registry import SkillRegistry, get_skill_registry
-from agent.core.skill_manager import SkillManager, get_skill_manager
+from agent.core.skill_registry import SkillRegistry, get_skill_registry
+from agent.core.skill_runtime import SkillContext, get_skill_context
 
 # Use new SKILLS_DIR API from common.skills_path
 from common.skills_path import SKILLS_DIR, load_skill_module
@@ -342,7 +342,7 @@ class TestHotReload:
         Phase 63: Tests hot reload by modifying scripts/ files.
         """
         import asyncio
-        import agent.core.registry as sr_module
+        import agent.core.skill_registry as sr_module
         from common.skills_path import SKILLS_DIR
 
         # First load
@@ -425,10 +425,10 @@ class TestSkillContext:
 
 
 class TestSkillManagerOmniCLI:
-    """Test Phase 25: Omni CLI SkillManager."""
+    """Test Phase 25: Omni CLI SkillContext."""
 
     def test_skill_manager_fixture_loads_skills(self, skill_manager_fixture):
-        """SkillManager should load skills from agent/skills."""
+        """SkillContext should load skills from agent/skills."""
         skills = skill_manager_fixture.load_skills()
 
         assert "git" in skills, f"Expected 'git' in skills, got: {list(skills.keys())}"
@@ -444,7 +444,7 @@ class TestSkillManagerOmniCLI:
 
     @pytest.mark.asyncio
     async def test_skill_manager_fixture_run_with_args(self, skill_manager_fixture):
-        """SkillManager.run() should pass arguments to commands."""
+        """SkillContext.run() should pass arguments to commands."""
         # git.log tests migrated to assets/skills/git/tests/
         pass
 
@@ -481,9 +481,9 @@ class TestSkillManagerOmniCLI:
         assert info["command_count"] >= 1
 
     def test_skill_manager_fixture_global_instance(self):
-        """get_skill_manager() should return singleton."""
-        manager1 = get_skill_manager()
-        manager2 = get_skill_manager()
+        """get_skill_context() should return singleton."""
+        manager1 = get_skill_context()
+        manager2 = get_skill_context()
 
         assert manager1 is manager2
 
@@ -617,10 +617,10 @@ class TestOneToolArchitecture:
     @pytest.mark.asyncio
     async def test_omni_simplified_syntax_git_status(self, skill_manager_fixture):
         """Test @omni('skill.command') simplified syntax works."""
-        from agent.core.skill_manager import _skill_manager
+        from agent.core.skill_runtime import get_skill_context
 
-        # Ensure we're using the same manager as the fixture
-        assert _skill_manager is skill_manager_fixture
+        # Ensure get_skill_context returns the same manager as the fixture
+        assert get_skill_context() is skill_manager_fixture
 
     @pytest.mark.asyncio
     async def test_omni_syntax_with_args(self, skill_manager_fixture):
@@ -693,7 +693,7 @@ class TestOneToolArchitecture:
 
 
 class TestSkillManagerCommandExecution:
-    """Test SkillManager command execution for One Tool architecture."""
+    """Test SkillContext command execution for One Tool architecture."""
 
     @pytest.mark.asyncio
     async def test_run_command_returns_string(self, skill_manager_fixture):
@@ -856,15 +856,12 @@ class TestMCPServerToolRegistration:
         from agent.mcp_server.server import handle_list_tools
 
         skill_manager_fixture.load_skills()
-        tools = await handle_list_tools()
-        tool_names = [t.name for t in tools]
+        await handle_list_tools()
 
         # Skills using Phase 63 scripts/ pattern
         scripts_skills = ["code_tools", "knowledge", "skill", "testing_protocol"]
 
         for skill_name in scripts_skills:
-            # Check if any tools from this skill are registered
-            skill_tools = [n for n in tool_names if n.startswith(f"{skill_name}.")]
             # These skills may have 0 tools (e.g., testing_protocol exports but has decorators elsewhere)
             # Just verify the skill was discovered
             available = skill_manager_fixture.list_available_skills()
@@ -887,11 +884,11 @@ class TestMCPServerToolRegistration:
                 )
 
     @pytest.mark.asyncio
-    async def test_mcp_server_lifespan_loads_skills(self, mock_mcp_server):
+    async def test_mcp_server_lifespan_loads_skills(self):
         """Server lifespan should preload configured skills."""
-        from agent.core.skill_manager import get_skill_manager
+        from agent.core.skill_runtime import get_skill_context
 
-        manager = get_skill_manager()
+        manager = get_skill_context()
 
         # Verify some preload skills are loaded
         # Skills from settings.yaml preload list
@@ -950,9 +947,10 @@ class TestMCPToolExecution:
         result = await handle_call_tool("git.status", {})
 
         assert len(result) > 0, "handle_call_tool should return result"
-        assert hasattr(result[0], "type"), "Result should have 'type' attribute"
-        assert hasattr(result[0], "text"), "Result should have 'text' attribute"
-        assert result[0].type == "text", "Result type should be 'text'"
+        assert isinstance(result[0], dict), "Result should be a dict"
+        assert "type" in result[0], "Result should have 'type' key"
+        assert "text" in result[0], "Result should have 'text' key"
+        assert result[0]["type"] == "text", "Result type should be 'text'"
 
     @pytest.mark.asyncio
     async def test_mcp_call_filesystem_list(self, skill_manager_fixture):
@@ -964,7 +962,7 @@ class TestMCPToolExecution:
         result = await handle_call_tool("filesystem.list_directory", {"path": "assets"})
 
         assert len(result) > 0, "handle_call_tool should return result"
-        assert "assets" in result[0].text or "Directory" in result[0].text
+        assert "assets" in result[0]["text"] or "Directory" in result[0]["text"]
 
     @pytest.mark.asyncio
     async def test_mcp_call_nonexistent_tool_returns_error(self, skill_manager_fixture):
@@ -976,7 +974,7 @@ class TestMCPToolExecution:
         result = await handle_call_tool("nonexistent.skill", {})
 
         assert len(result) > 0, "handle_call_tool should return error result"
-        assert "Error" in result[0].text, "Nonexistent tool should return error"
+        assert "Error" in result[0]["text"], "Nonexistent tool should return error"
 
 
 # =============================================================================

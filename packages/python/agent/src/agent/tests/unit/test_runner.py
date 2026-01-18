@@ -8,7 +8,7 @@ import tempfile
 import asyncio
 from pathlib import Path
 
-from agent.core.skill_manager.runner import ScriptModeRunner, SubprocessResult
+from agent.core.skill_runtime.support.runner import ScriptModeRunner, SubprocessResult
 
 
 class TestSubprocessResult:
@@ -67,7 +67,7 @@ class TestScriptModeRunner:
     @pytest.mark.asyncio
     async def test_run_in_process_simple(self):
         """Test running a simple in-process command."""
-        from agent.core.skill_manager.models import SkillCommand
+        from agent.core.skill_runtime.support.models import SkillCommand
 
         # Create a mock command that returns a successful result
         async def mock_func(**kwargs):
@@ -92,7 +92,7 @@ class TestScriptModeRunner:
     @pytest.mark.asyncio
     async def test_run_in_process_error(self):
         """Test running an in-process command that fails."""
-        from agent.core.skill_manager.models import SkillCommand
+        from agent.core.skill_runtime.support.models import SkillCommand
 
         async def mock_func(**kwargs):
             raise ValueError("Test error")
@@ -198,12 +198,12 @@ time.sleep(10)
 
 
 class TestScriptModeRunnerIntegration:
-    """Integration tests for ScriptModeRunner with SkillManager."""
+    """Integration tests for ScriptModeRunner with SkillContext."""
 
     @pytest.mark.asyncio
     async def test_runner_with_model_execute(self):
         """Test runner with a SkillCommand that uses the model's execute method."""
-        from agent.core.skill_manager.models import SkillCommand
+        from agent.core.skill_runtime.support.models import SkillCommand
 
         # Create a command with a real execute method
         async def sample_func(**kwargs):

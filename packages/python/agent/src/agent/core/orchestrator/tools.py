@@ -18,7 +18,7 @@ def get_tools_for_agent(self, agent_name: str) -> Dict[str, Any]:
     Returns:
         Dict of tool name -> callable function
     """
-    from agent.core.registry import get_skill_tools
+    from agent.core.skill_registry import get_skill_tools
 
     # Get tools from loaded skills via Skill Registry
     tools = {}

@@ -236,7 +236,7 @@ class ModuleLoader:
 
         try:
             spec.loader.exec_module(module)
-            logger.debug("Loaded module", module=module_name)
+            # No debug log for successful load - only errors matter
         except Exception:
             if module_name in sys.modules:
                 del sys.modules[module_name]
@@ -254,8 +254,7 @@ class ModuleLoader:
         parent_name = module_name.rsplit(".", 1)[0] if "." in module_name else ""
         if parent_name and parent_name in sys.modules:
             del sys.modules[parent_name]
-
-        logger.debug("Unloaded module", module=module_name)
+        # No debug log for successful unload - only errors matter
 
 
 # =============================================================================

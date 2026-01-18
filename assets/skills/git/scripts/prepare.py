@@ -129,7 +129,6 @@ def _check_lefthook(cwd: Optional[Path] = None) -> tuple[bool, str, str]:
 
 
 def stage_and_scan(root_dir: str = ".") -> dict:
-    import glob as glob_module
     import shutil
     from pathlib import Path as PathType
 
@@ -143,12 +142,19 @@ def stage_and_scan(root_dir: str = ".") -> dict:
 
     root_path = PathType(root_dir)
 
-    _run(["git", "add", "."], cwd=root_path)
+    if not root_path.exists():
+        return result
+
+    try:
+        _run(["git", "add", "."], cwd=root_path)
+    except Exception:
+        return result
 
     all_staged_after_add, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root_path)
     all_staged_set = set(line for line in all_staged_after_add.splitlines() if line.strip())
 
     sensitive_patterns = [
+        ".env*",
         "*.env*",
         "*.pem",
         "*.key",
@@ -159,11 +165,14 @@ def stage_and_scan(root_dir: str = ".") -> dict:
     ]
 
     sensitive = []
-    for pattern in sensitive_patterns:
-        matches = glob_module.glob(pattern, recursive=True)
-        for m in matches:
-            if m in all_staged_set and m not in sensitive:
-                sensitive.append(m)
+    for staged_file in all_staged_set:
+        for pattern in sensitive_patterns:
+            import fnmatch
+
+            if fnmatch.fnmatch(staged_file, pattern):
+                if staged_file not in sensitive:
+                    sensitive.append(staged_file)
+                break
 
     for f in sensitive:
         _run(["git", "reset", "HEAD", "--", f], cwd=root_path)
@@ -180,14 +189,16 @@ def stage_and_scan(root_dir: str = ".") -> dict:
         lefthook_output = lh_out or lh_err
         lefthook_failed = lh_rc != 0
 
+        # Re-stage files that lefthook may have modified (e.g., formatting)
+        current_staged, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root_path)
+        current_staged_set = set(line for line in current_staged.splitlines() if line.strip())
+        unstaged_by_lefthook = final_staged_set - current_staged_set
+
+        for f in unstaged_by_lefthook:
+            _run(["git", "add", f], cwd=root_path)
+
         if lefthook_failed:
-            current_staged, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root_path)
-            current_staged_set = set(line for line in current_staged.splitlines() if line.strip())
-            unstaged_by_lefthook = final_staged_set - current_staged_set
-
-            for f in unstaged_by_lefthook:
-                _run(["git", "add", f], cwd=root_path)
-
+            # Re-run lefthook on newly staged files
             lh_out, lh_err, lh_rc = _run(["lefthook", "run", "pre-commit"], cwd=root_path)
             lefthook_output = lh_out or lh_err
             lefthook_failed = lh_rc != 0
@@ -215,7 +226,10 @@ def stage_and_scan(root_dir: str = ".") -> dict:
 
 
 __all__ = [
-    "prepare_commit",
-    "format_prepare_result",
     "stage_and_scan",
+    "_run",
+    "_check_sensitive_files",
+    "_get_cog_scopes",
+    "_validate_and_fix_scope",
+    "_check_lefthook",
 ]

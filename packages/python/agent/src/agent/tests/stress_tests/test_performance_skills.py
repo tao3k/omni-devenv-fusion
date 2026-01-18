@@ -63,7 +63,7 @@ class TestAsyncPerformance:
 
     @pytest.mark.asyncio
     async def test_skill_manager_run_performance(self, skill_manager_fixture):
-        """Benchmark SkillManager.run() execution time."""
+        """Benchmark SkillContext.run() execution time."""
         # Warm up
         await skill_manager_fixture.run("git", "git_status", {})
 
@@ -75,7 +75,7 @@ class TestAsyncPerformance:
         elapsed = time.perf_counter() - start
 
         avg_time = elapsed / iterations
-        print(f"\n[Performance] SkillManager.run() avg: {avg_time * 1000:.2f}ms")
+        print(f"\n[Performance] SkillContext.run() avg: {avg_time * 1000:.2f}ms")
 
         # Should complete within 100ms per call (generous threshold)
         assert avg_time < 0.1, f"Run too slow: {avg_time * 1000:.2f}ms"
@@ -127,19 +127,18 @@ class TestAsyncPerformance:
     @pytest.mark.asyncio
     async def test_skill_loading_performance(self):
         """Benchmark skill loading from cold start."""
-        import agent.core.skill_manager as sm_module
+        from agent.core.skill_runtime.context import reset_context, get_skill_context
 
-        # Clear all caches
-        sm_module._skill_manager = None
-        sm_module._manager = None
+        # Reset context for cold start
+        reset_context()
 
         start = time.perf_counter()
-        manager = sm_module.get_skill_manager()
-        manager.load_skills()
+        manager = get_skill_context()
+        manager.load_all()
         elapsed = time.perf_counter() - start
 
         print(f"\n[Performance] Skill loading: {elapsed * 1000:.2f}ms")
 
         # Should load all skills within reasonable time
         assert elapsed < 2.0, f"Skill loading too slow: {elapsed * 1000:.2f}ms"
-        assert len(manager._skills) >= 1
+        assert len(manager.skills) >= 1

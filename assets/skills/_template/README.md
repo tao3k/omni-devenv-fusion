@@ -2,7 +2,7 @@
 
 ## Overview
 
-Template skill demonstrating **Trinity Architecture v2.0** with **scripts/commands.py** pattern (Phase 63+).
+Template skill demonstrating **Trinity Architecture v2.0** with **scripts/commands.py** pattern.
 
 ## Development Workflow
 
@@ -279,7 +279,7 @@ cp -r assets/skills/_template assets/skills/my_skill
 
 ---
 
-## Testing (Phase 35.1)
+## Testing
 
 Skills use **zero-configuration testing** via the Pytest plugin.
 

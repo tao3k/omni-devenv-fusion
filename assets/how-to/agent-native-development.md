@@ -2,7 +2,7 @@
 
 > **Code is Mechanism, Prompt is Policy**
 >
-> The foundation of Omni-DevEnv architecture (Phase 13.10).
+> The foundation of Omni-DevEnv architecture.
 
 ---
 
@@ -260,7 +260,7 @@ def commit_workflow():
 
 These are the **final line of defense**. If LLM produces invalid output, these tools reject it.
 
-### Context Injection (Phase 13.9)
+### Context Injection
 
 Git status is auto-injected into System Prompt:
 
@@ -274,7 +274,7 @@ def get_combined_system_prompt(self):
 
 Result: LLM "sees" git status without tool calls.
 
-### Dynamic Skill Loading (Phase 13.10)
+### Dynamic Skill Loading
 
 Skills are configured in `agent/settings.yaml`:
 

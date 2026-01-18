@@ -34,7 +34,7 @@ anyhow = "1.0"
 serde = { workspace = true }
 serde_json = "1.0"
 
-# Script scanning (Phase 62)
+# Script scanning
 omni-ast = { path = "../omni-ast" }
 walkdir = "2.5"
 

@@ -6,10 +6,10 @@ readme = "README.md"
 requires-python = ">=3.12"
 
 dependencies = [
-    "fastembed>=0.5.0",  # Phase 53.5: Local embedding with ONNX
+    "fastembed>=0.5.0",  # Local embedding with ONNX
     "gitpython>=3.1.0",
     "jinja2>=3.1.0",
-    "openai>=1.0.0",  # Phase 53.5: Cloud embedding fallback
+    "openai>=1.0.0",  # Cloud embedding fallback
     "structlog>=25.5.0",
     "langgraph>=1.0.5",
     "langsmith>=0.6.0",
@@ -22,7 +22,7 @@ dependencies = [
     "starlette>=0.40.0",
     "uvicorn[standard]>=0.30.0",  # standard includes uvloop
     "typer>=0.15.0",
-    "watchdog>=3.0.0",  # Phase 65: File watching for auto-sync
+    "watchdog>=3.0.0",  # File watching for auto-sync
     "omni-dev-fusion-common",
     "langgraph-checkpoint-sqlite>=3.0.2",
 ]

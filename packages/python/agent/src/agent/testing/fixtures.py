@@ -92,9 +92,9 @@ def _create_skill_fixture(skill_name: str, skills_root: Path):
         # Set up package context BEFORE loading (enables agent.skills.git.scripts imports)
         _setup_skill_package_context(skill_name, skills_root)
 
-        from agent.core.skill_manager import get_skill_manager
+        from agent.core.skill_runtime import get_skill_context
 
-        manager = get_skill_manager()
+        manager = get_skill_context()
         skill = manager.skills.get(skill_name)
         if skill is None:
             pytest.skip(f"Skill '{skill_name}' failed to load")
