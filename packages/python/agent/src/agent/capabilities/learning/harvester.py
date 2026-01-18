@@ -48,7 +48,7 @@ class FeedbackStore:
     Maps (normalized_query, skill_id) -> score (weight adjustment).
     Positive scores boost future routing, negative scores penalize.
 
-    Storage: JSON file for simplicity (can migrate to ChromaDB later).
+    Storage: JSON file for simplicity.
 
     Decay Mechanism (Phase 40):
     - Scores decay by 1% each time they are read

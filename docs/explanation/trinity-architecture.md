@@ -272,7 +272,7 @@ packages/python/common/src/common/
 │           ▼                                                                  │
 │  ┌────────────────────────┐    ┌──────────────────────────────┐            │
 │  │  MCP Observer          │    │  Index Sync Observer         │            │
-│  │  (Tool List Update)    │    │  (ChromaDB Sync)             │            │
+│  │  (Tool List Update)    │    │  (Vector Store Sync)         │            │
 │  ├────────────────────────┤    ├──────────────────────────────┤            │
 │  │ send_tool_list_        │    │ index_single_skill()         │            │
 │  │ changed()              │    │ remove_skill_from_index()    │            │
@@ -298,7 +298,7 @@ manager.reload(skill_name)
         ↓
 5. Observers notified:
    ├─ MCP Observer → send_tool_list_changed()
-   └─ Index Sync Observer → ChromaDB Upsert
+   └─ Index Sync Observer → Vector Store Upsert
 ```
 
 ### Observer Pattern
@@ -347,13 +347,15 @@ class SkillManager:
         return task
 ```
 
-#### 2. Atomic Upsert (ChromaDB)
+#### 2. Atomic Upsert (LanceDB)
 
 ```python
 # Single atomic operation (no race conditions)
-collection.upsert(
-    documents=[semantic_text],
+store.upsert(
+    table_name="skills",
     ids=[skill_id],
+    vectors=[embedding],
+    documents=[semantic_text],
     metadatas=[...],
 )
 ```
@@ -363,7 +365,7 @@ collection.upsert(
 ```python
 async def reconcile_index(loaded_skills: list[str]) -> dict[str, int]:
     """Cleanup phantom skills after crash/unclean shutdown."""
-    # 1. Get all local skill IDs from ChromaDB
+    # 1. Get all local skill IDs from vector store
     # 2. Compare with loaded skills
     # 3. Remove phantoms (in index but not loaded)
     # 4. Re-index missing skills
@@ -395,7 +397,7 @@ The system now learns from experience. Successful routing decisions boost future
 │  User Query → Semantic Router → Skill Execution → Feedback Recording        │
 │       ↓              ↓                ↓                   ↓                  │
 │  Vector Search    Hybrid Score    Success?        FeedbackStore             │
-│  (ChromaDB)       (+keyword)      (Reviewer)      (.memory/routing_        │
+│  (LanceDB)        (+keyword)      (Reviewer)      (.memory/routing_        │
 │                                      Approval         feedback.json)        │
 │       ↓              ↓                ↓                   ↓                  │
 │  Confidence    Final Score    High Signal         Boost +0.1               │

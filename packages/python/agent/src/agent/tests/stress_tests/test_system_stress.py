@@ -185,8 +185,8 @@ class TestMemorySaturation:
 
     @pytest.mark.asyncio
     @pytest.mark.skipif(
-        True,  # Skip RAG tests - requires persistent ChromaDB collection
-        reason="RAG tests require persistent ChromaDB collection setup",
+        True,  # Skip RAG tests - requires persistent LanceDB setup
+        reason="RAG tests require persistent LanceDB setup",
     )
     async def test_rag_performance_under_load(self, system_components):
         """
@@ -357,8 +357,8 @@ class TestSystemEndurance:
                 collection=col_name,
             )
 
-            # Small delay to allow ChromaDB to sync (fixes race condition)
-            # Without this, rapid add+search can fail with "Collection does not exist"
+            # Small delay to allow LanceDB to sync (fixes race condition)
+            # Without this, rapid add+search can fail with "Table does not exist"
             await asyncio.sleep(0.05)
 
             # Step 5: Recall (Validation)

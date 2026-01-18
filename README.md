@@ -178,7 +178,7 @@ You: @omni("skill.suggest", {"task": "analyze pcap file"})
 
 ## Phase 36.2: Vector-Enhanced Discovery (Virtual Loading)
 
-Omni now uses **ChromaDB-based vector search** for intelligent skill discovery with semantic matching:
+Omni now uses **LanceDB-based vector search** for intelligent skill discovery with semantic matching:
 
 ```bash
 # Reindex all skills into vector store
@@ -211,7 +211,7 @@ User Request
 ### How It Works
 
 - **Index Source**: SKILL.md files are parsed and embedded
-- **Storage**: ChromaDB collection `skill_registry`
+- **Storage**: LanceDB table `skills` (via omni-vector)
 - **Query**: Semantic similarity search with metadata filtering
 - **Fallback**: Triggered when LLM confidence < 0.5 or uses generic skills
 
@@ -273,7 +273,7 @@ omni skill watch git
            ↓                              ↓
 ┌────────────────────────┐    ┌──────────────────────────────┐
 │  MCP Observer          │    │  Index Sync Observer         │
-│  send_tool_list_       │    │  ChromaDB Upsert             │
+│  send_tool_list_       │    │  Vector Store Upsert         │
 │  changed()             │    │  (Vector Discovery Sync)     │
 └────────────────────────┘    └──────────────────────────────┘
 ```
@@ -282,7 +282,7 @@ omni skill watch git
 
 - **Observer Pattern**: Skills emit events on load/unload/reload
 - **Debounced Notifications**: 200ms batching prevents notification storms
-- **Index Sync**: ChromaDB index stays in sync with runtime changes
+- **Index Sync**: LanceDB index stays in sync with runtime changes
 - **Transactional Safety**: Syntax validation prevents "bricked" skills
 
 ### Flow
@@ -293,7 +293,7 @@ File Modified → Syntax Check → Unload → Load → Debounced Notification
                           ┌──────────────────┴──────────────────┐
                           ↓                                       ↓
                    MCP Observer                          Index Sync
-                   Tool List Update                      ChromaDB Upsert
+                   Tool List Update                      Vector Store Upsert
 ```
 
 ## Phase 36.6: Production Stability
@@ -306,7 +306,7 @@ Background tasks are tracked to prevent premature garbage collection.
 
 ### 2. Atomic Upsert
 
-ChromaDB uses atomic `upsert` instead of delete+add (no race conditions).
+LanceDB uses atomic `upsert` instead of delete+add (no race conditions).
 
 ### 3. Startup Reconciliation
 

@@ -54,7 +54,7 @@ class TestSemanticCortexBasics:
 
     def test_similarity_conversion(self, cortex):
         """Test distance to similarity conversion."""
-        # ChromaDB distance: 0 = identical, 1 = opposite
+        # LanceDB distance: 0 = identical, 1 = opposite
         assert cortex._similarity_to_score(0.0) == 1.0
         assert cortex._similarity_to_score(0.25) == 0.75
         assert cortex._similarity_to_score(0.5) == 0.5

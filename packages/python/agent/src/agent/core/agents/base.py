@@ -290,7 +290,7 @@ class BaseAgent(ABC):
                 return "", []
 
             # Filter by similarity (distance < 0.3 means high similarity)
-            # ChromaDB distance: 0.0 = identical, smaller = more similar
+            # LanceDB distance: 0.0 = identical, smaller = more similar
             filtered = [r for r in results if r.distance < 0.3]
 
             if not filtered:

@@ -87,7 +87,7 @@ omni-dev-fusion-common = { workspace = true }
 # ❌ WRONG! dependencies placed under [tool.hatch.build.targets.wheel]
 [tool.hatch.build.targets.wheel]
 dependencies = [
-    "chromadb>=1.4.0",
+    "lancedb>=0.20.0",
     "structlog>=24.0.0",
 ]
 ```
@@ -103,7 +103,7 @@ version = "0.3.0-dev"
 requires-python = ">=3.12"
 # ✅ dependencies MUST be under [project] table
 dependencies = [
-    "chromadb>=1.4.0",
+    "lancedb>=0.20.0",
     "gitpython>=3.1.0",
     "langgraph>=1.0.5",
     "langsmith>=0.6.0",

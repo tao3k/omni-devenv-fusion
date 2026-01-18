@@ -56,8 +56,6 @@ class VectorMemory:
     """
     omni-vector (LanceDB) based Vector Memory for RAG.
 
-    Migrated from ChromaDB to Rust + LanceDB for better performance.
-
     Stores and retrieves semantic embeddings for:
     - Project documentation
     - Workflow rules

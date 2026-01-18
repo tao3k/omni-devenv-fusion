@@ -205,7 +205,7 @@ The routing system now includes a feedback loop that learns from successful rout
 │  User Query → Semantic Router → Skill Execution → Feedback Recording        │
 │       ↓              ↓                ↓                   ↓                  │
 │  Vector Search    Hybrid Score    Success?        FeedbackStore             │
-│  (ChromaDB)       (+keyword)      (Reviewer)      (.memory/routing_        │
+│  (LanceDB)        (+keyword)      (Reviewer)      (.memory/routing_        │
 │                                      Approval         feedback.json)        │
 │       ↓              ↓                ↓                   ↓                  │
 │  Confidence    Final Score    High Signal         Boost +0.1               │
@@ -314,7 +314,7 @@ The Routing System is responsible for translating user requests into the right s
 │         ▼                                                                   │
 │  ┌───────────────────────────────────────────────────────────────────────┐  │
 │  │ 4️⃣ Vector Fallback (Cold Path)                            │  │
-│  │    ChromaDB semantic search → suggested_skills                         │  │
+│  │    LanceDB semantic search → suggested_skills                          │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -406,7 +406,7 @@ LLM Confidence < 0.5
         ↓
 Vector Fallback Triggered
         ↓
-ChromaDB Query (skill_registry collection)
+LanceDB Query (skill_registry collection)
         ↓
 Filter: installed_only=True (local skills only)
         ↓
@@ -475,7 +475,7 @@ Test Suite Initialization
 │ Conftest Setup  │
 │ - Mock skills   │
 │ - Mock LLM      │
-│ - Mock ChromaDB │
+│ - Mock Vector Store │
 └────────┬────────┘
          │
          ▼
@@ -540,7 +540,7 @@ Test Suite Initialization
               ▼                              ▼
     ┌─────────────────┐      ┌─────────────────────────┐
     │ Return Result   │      │ Vector Fallback         │
-    │ + Learn         │      │ (ChromaDB Search)       │
+    │ + Learn         │      │ (LanceDB Search)        │
     └─────────────────┘      └───────────┬─────────────┘
                                          │
                                          ▼
@@ -604,7 +604,7 @@ Debounced Notification (200ms)
         ↓
 Observers Notified:
 ├─ MCP Observer → send_tool_list_changed()
-└─ Index Sync Observer → ChromaDB Upsert
+└─ Index Sync Observer → Vector Store Upsert
         ↓
 Router detects tool list change
         ↓

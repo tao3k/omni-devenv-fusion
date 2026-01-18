@@ -2,7 +2,7 @@
 
 > **Core Capabilities**: Wisdom-Aware Routing | Automated Reinforcement | Self-Evolving Feedback | Auto-Route Discovery | Hot Reload | Vector-Enhanced Discovery
 
-> **Virtual Loading** - Intelligent skill discovery using ChromaDB vector search.
+> **Virtual Loading** - Intelligent skill discovery using LanceDB vector search.
 
 ## Overview
 
@@ -42,7 +42,7 @@
                 ↓                              ↓
 ┌─────────────────────────┐    ┌─────────────────────────────────┐
 │ Return Result           │    │ 4️⃣ Vector Fallback (Cold Path)  │
-│ (No Vector Search)      │    │    • Search ChromaDB            │
+│ (No Vector Search)      │    │    • Search LanceDB             │
 │                         │    │    • Filter: installed_only=True │
 │                         │    │    • Return suggested_skills     │
 └─────────────────────────┘    └─────────────────────────────────┘
@@ -349,12 +349,12 @@ uv run pytest packages/python/agent/src/agent/tests/scenarios/test_discovery_flo
 
 ## Architecture Decisions
 
-### Why ChromaDB?
+### Why LanceDB?
 
 - **Performance**: O(log N) ANN search vs O(N) linear scan
 - **Persistence**: Index survives restarts
-- **Filtering**: Support for `where_filter` metadata queries
-- **Simplicity**: Easy integration with existing VectorMemory
+- **Filtering**: Support for metadata queries
+- **Simplicity**: Rust-accelerated via omni-vector
 
 ### Why Local-Only Default?
 
@@ -378,7 +378,7 @@ The `installed_only=True` default ensures:
 | `agent/core/skill_discovery.py`          | VectorSkillDiscovery class          |
 | `agent/core/router/semantic_router.py`   | Router with Vector Fallback         |
 | `agent/cli/commands/skill.py`            | CLI commands (reindex, index-stats) |
-| `agent/core/vector_store.py`             | ChromaDB wrapper                    |
+| `agent/core/vector_store.py`             | LanceDB wrapper (omni-vector)       |
 | `tests/scenarios/test_discovery_flow.py` | Integration tests                   |
 | `tests/fakes/fake_vectorstore.py`        | Test double for vector store        |
 
@@ -396,7 +396,7 @@ The `installed_only=True` default ensures:
 
 ### Overview
 
-Connects the Vector Discovery system with Hot Reload, ensuring the ChromaDB index stays in sync with runtime skill changes.
+Connects the Vector Discovery system with Hot Reload, ensuring the LanceDB index stays in sync with runtime skill changes.
 
 ### Architecture
 
@@ -411,7 +411,7 @@ Connects the Vector Discovery system with Hot Reload, ensuring the ChromaDB inde
            ↓                              ↓
 ┌────────────────────────┐    ┌──────────────────────────────┐
 │  MCP Observer          │    │  Index Sync Observer         │
-│  (Tool List Update)    │    │  (ChromaDB Sync)             │
+│  (Tool List Update)    │    │  (Vector Store Sync)         │
 ├────────────────────────┤    ├──────────────────────────────┤
 │ send_tool_list_        │    │ index_single_skill()         │
 │ changed()              │    │ remove_skill_from_index()    │
@@ -468,7 +468,7 @@ manager.reload(skill_name)
         ↓
 3. Load Fresh
         ↓
-4. Debounced Notification → [Index Sync → ChromaDB upsert]
+4. Debounced Notification → [Index Sync → Vector Store upsert]
 ```
 
 ### Transactional Safety
@@ -509,7 +509,7 @@ from agent.core.skill_discovery import (
 )
 
 # Called when skill is loaded or reloaded
-await index_single_skill("git")  # Atomic upsert to ChromaDB
+await index_single_skill("git")  # Atomic upsert to LanceDB
 
 # Called when skill is unloaded
 await remove_skill_from_index("git")
@@ -550,21 +550,23 @@ for skill_name, change_type in changes:
             cb(skill_name, change_type)
 ```
 
-### 2. Atomic Upsert (ChromaDB)
+### 2. Atomic Upsert (LanceDB)
 
 **Problem**: Delete+Add creates race conditions in concurrent reloads.
 
-**Solution**: Use ChromaDB's atomic `upsert` operation.
+**Solution**: Use LanceDB's atomic operations.
 
 ```python
 # Before (Legacy): Two separate operations
-collection.delete(ids=[skill_id])
-collection.add(documents=[...], ids=[skill_id])
+store.delete(ids=[skill_id])
+store.add(documents=[...], ids=[skill_id])
 
 # After (Current): Single atomic operation
-collection.upsert(
-    documents=[semantic_text],
+store.upsert(
+    table_name="skills",
     ids=[skill_id],
+    vectors=[embedding],
+    documents=[semantic_text],
     metadatas=[...],
 )
 ```
@@ -587,8 +589,8 @@ async def reconcile_index(loaded_skills: list[str]) -> dict[str, int]:
     Cleanup phantom skills after crash/unclean shutdown.
     Returns: {"removed": N, "reindexed": N}
     """
-    # 1. Get all local skill IDs from ChromaDB
-    all_docs = collection.get(where={"type": "local"})
+    # 1. Get all local skill IDs from vector store
+    all_docs = store.list(table_name="skills", filter_json='{"type": "local"}')
     indexed_ids = set(all_docs.get("ids", []))
 
     # 2. Compare with loaded skills
@@ -597,7 +599,7 @@ async def reconcile_index(loaded_skills: list[str]) -> dict[str, int]:
     # 3. Remove phantoms (in index but not loaded)
     phantom_ids = indexed_ids - expected_ids
     if phantom_ids:
-        collection.delete(ids=list(phantom_ids))
+        store.delete(ids=list(phantom_ids), table_name="skills")
 
     # 4. Re-index missing skills (in loaded but not index)
     missing = [name for name in loaded_skills
@@ -767,17 +769,11 @@ also improves vector index quality:
 
 **2. Cosine Distance Metric**
 
-Changed ChromaDB collection to use cosine distance for better semantic similarity:
+LanceDB uses cosine distance by default for better semantic similarity:
 
 ```python
-# vector_store.py
-return client.get_or_create_collection(
-    name=collection_name,
-    metadata={
-        "description": f"Project knowledge base: {collection_name}",
-        "hnsw:space": "cosine",  # Cosine instead of L2
-    },
-)
+# omni-vector (Rust) handles this automatically
+store.create_index(table_name="skills", metric="cosine")
 ```
 
 **3. Confidence Calculation**

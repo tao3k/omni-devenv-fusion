@@ -136,7 +136,7 @@ def skill_search(
     Search skills using semantic vector search (Phase 37/38).
 
     Uses hybrid search with:
-    - Vector similarity (ChromaDB embeddings)
+    - Vector similarity (LanceDB embeddings via omni-vector)
     - Fuzzy keyword matching (substring, stemming)
     - Sigmoid score calibration
 

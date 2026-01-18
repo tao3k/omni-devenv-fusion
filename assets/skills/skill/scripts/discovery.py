@@ -20,7 +20,7 @@ def _get_discovery():
     description="""
     Searches for skills using semantic vector matching.
 
-    Uses ChromaDB-based semantic search to find skills that match your query,
+    Uses LanceDB-based semantic search to find skills that match your query,
     even when keywords don't exactly match. Returns results with similarity scores.
 
     Args:

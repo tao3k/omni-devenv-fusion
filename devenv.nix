@@ -50,6 +50,7 @@ in
     nixosModules.lefthook
     nixosModules.python
     nixosModules.llm
+    nixosModules.rust
     #./modules/flake-parts/omnibus-hive.nix
     ({
       config = lib.mkMerge [
@@ -79,30 +80,10 @@ in
     nixpkgs-latest.glow
     nixpkgs-latest.google-cloud-sdk
     packages.secretspec
-
-    nixpkgs-latest.maturin
   ];
 
   dotenv.enable = true;
   dotenv.filename = [ ".env" ];
-
-  # [Phase 45.2] PyO3 Python path for Rust bindings
-  env.PYO3_PYTHON = "${config.languages.python.package}/bin/python";
-
-  # https://devenv.sh/languages/
-  languages.rust = {
-    enable = true;
-    channel = "nightly";
-    # Ensure rust can link python library
-    components = [
-      "rustc"
-      "cargo"
-      "clippy"
-      "rustfmt"
-      "rust-analyzer"
-    ];
-  };
-
   # https://devenv.sh/processes/
   # processes.cargo-watch.exec = "cargo-watch";
 

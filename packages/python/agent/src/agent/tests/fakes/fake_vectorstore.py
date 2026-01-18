@@ -2,7 +2,7 @@
 Fake VectorStore for Testing.
 
 A lightweight in-memory implementation of VectorStoreProtocol for fast testing.
-Supports ChromaDB-style filtering and search results.
+Supports filtering and search results compatible with omni-vector (LanceDB).
 """
 
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 @dataclass
 class SearchResult:
-    """Fake search result matching ChromaDB's SearchResult structure."""
+    """Fake search result compatible with omni-vector (LanceDB) SearchResult."""
 
     id: str
     content: str
@@ -54,7 +54,7 @@ class FakeVectorStore:
     In-memory fake vector store for testing.
 
     Implements VectorStoreProtocol for seamless replacement in tests.
-    Supports ChromaDB-style where_filter for filtering by metadata.
+    Supports filtering via where_filter for metadata filtering.
 
     Usage:
         store = FakeVectorStore()
@@ -98,7 +98,7 @@ class FakeVectorStore:
         """
         Search for documents in a collection using simple keyword matching.
 
-        Supports ChromaDB-style filtering via where_filter:
+        Supports filtering via where_filter:
             where_filter={"installed": "true"}  # Only installed skills
             where_filter={"type": "remote"}      # Only remote skills
         """

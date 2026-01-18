@@ -1,6 +1,6 @@
 # RAG Knowledge Base Usage Guide
 
-> Keywords: rag, knowledge base, consult_knowledge_base, vector store, chromadb
+> Keywords: rag, knowledge base, consult_knowledge_base, vector store, lancedb
 
 ## Overview
 

@@ -2,8 +2,6 @@
 """
 Vector Memory Store - omni-vector (LanceDB) based RAG for Project Knowledge
 
-Migrated from ChromaDB to omni-vector (Rust + LanceDB)
-
 Provides semantic search over project documentation and code.
 
 Philosophy:

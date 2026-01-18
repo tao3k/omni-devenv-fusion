@@ -14,7 +14,7 @@ Current architecture uses vector database (FAISS) for semantic search. Maintenan
 - Embedding model drift
 - Database migration complexity
 
-Alternative: Zettelkasten methodology using mcp-obsidian + Rucola + ChromaDB.
+Alternative: Zettelkasten methodology using mcp-obsidian + Rucola + LanceDB.
 
 ---
 
@@ -38,9 +38,9 @@ Alternative: Zettelkasten methodology using mcp-obsidian + Rucola + ChromaDB.
 │                    • Quick operations, stats                │
 │                    • CLI management                         │
 │                                                             │
-│  EXTERNAL (ChromaDB)                                        │
+│  EXTERNAL (LanceDB)                                       │
 │  ┌─────────────────────────────────────────────────────┐   │
-│  │  crawl4ai → ChromaDB → Semantic Search               │   │
+│  │  crawl4ai → LanceDB → Semantic Search                │   │
 │  │  • Repomix (Full) → Store                            │   │
 │  │  • Compression option for LLM                        │   │
 │  └─────────────────────────────────────────────────────┘   │
@@ -54,7 +54,7 @@ Alternative: Zettelkasten methodology using mcp-obsidian + Rucola + ChromaDB.
 | ---------------- | -------------------- | --------------------------------------- |
 | **mcp-obsidian** | Obsidian Integration | Notes CRUD, wiki-links, graph, search   |
 | **Rucola**       | CLI Helper           | Quick operations, stats, CLI management |
-| **ChromaDB**     | External Knowledge   | Crawled content, semantic search        |
+| **LanceDB**      | External Knowledge   | Crawled content, semantic search        |
 
 ---
 
@@ -77,7 +77,7 @@ Alternative: Zettelkasten methodology using mcp-obsidian + Rucola + ChromaDB.
 
 ---
 
-## External Knowledge: ChromaDB
+## External Knowledge: LanceDB
 
 **Input**: Crawled content from crawl4ai, GitHub repos, PDFs, APIs
 **Output**: Searchable vector store with metadata
@@ -89,7 +89,7 @@ Source: GitHub Repo, Web Page, PDF, API Doc
     │
     ▼
 ┌─────────────────┐     ┌─────────────────────┐
-│ Repomix (Full)  │────▶│   ChromaDB          │  ← Store complete content
+│ Repomix (Full)  │────▶│   LanceDB           │  ← Store complete content
 │ Complete Mix    │     │   (Vector Store)    │
 └─────────────────┘     │   - Full content    │
                         │   - Semantic index  │
@@ -100,7 +100,7 @@ Source: GitHub Repo, Web Page, PDF, API Doc
                         │   Query Strategy    │
                         ├─────────────────────┤
                         │ 1. Semantic Search  │
-                        │ 2. Get from ChromaDB│
+                        │ 2. Get from LanceDB │
                         │ 3. Decision:        │
                         │    • Full → LLM     │  ← Research mode
                         │    • Compress → LLM │  ← Quick mode
@@ -120,7 +120,7 @@ Source: GitHub Repo, Web Page, PDF, API Doc
 | ----------------- | ------------------ | ------------ | ---------------------------------- | ----------- |
 | **mcp-obsidian**  | Local Knowledge    | Obsidian MCP | Notes, links, graph                | Required    |
 | **Rucola**        | Local Helper       | CLI Tool     | Quick operations                   | Optional    |
-| **ChromaDB**      | External Knowledge | Vector Store | Crawled content, research          | Required    |
+| **LanceDB**       | External Knowledge | Vector Store | Crawled content, research          | Required    |
 | **Repomix Cache** | LLM Interface      | XML Format   | Aggregate → Token optimize → Cache | Recommended |
 
 ---
@@ -128,7 +128,7 @@ Source: GitHub Repo, Web Page, PDF, API Doc
 ## Pros
 
 - **Full Obsidian Integration**: mcp-obsidian provides complete vault access
-- **Efficiency**: ChromaDB avoids duplicate crawling
+- **Efficiency**: LanceDB avoids duplicate crawling
 - **LLM Interface**: XML context is LLM-friendly
 - **Flexibility**: mcp-obsidian + Rucola combination
 - **Pragmatism**: Let LLM handle edge cases
@@ -144,7 +144,7 @@ Source: GitHub Repo, Web Page, PDF, API Doc
 
 - [mcp-obsidian](https://github.com/bitbonsai/mcp-obsidian) - Obsidian MCP Server
 - [Rucola](https://github.com/Linus-Mussmaecher/rucola) - Terminal-based Zettelkasten
-- [ChromaDB](https://www.trychroma.com/) - Vector database
+- [ChromaDB](https://www.trychroma.com/) - Vector database (replaced by LanceDB)
 - [crawl4ai](https://github.com/unclecode/crawl4ai) - Web crawling
 - [Repomix](https://github.com/yl439/repomix)
 
@@ -155,5 +155,5 @@ Source: GitHub Repo, Web Page, PDF, API Doc
 - [ ] Configure mcp-obsidian for Obsidian vault
 - [ ] Integrate mcp-obsidian with Omni MCP
 - [ ] Keep Rucola for CLI operations
-- [ ] Design External Knowledge workflow (crawl4ai → ChromaDB)
+- [ ] Design External Knowledge workflow (crawl4ai → LanceDB)
 - [ ] Implement Repomix Cache XML schema
