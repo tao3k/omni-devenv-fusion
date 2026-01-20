@@ -23,13 +23,15 @@ skill_app = typer.Typer(help="Skill management commands")
 def _load_templates_module():
     """Load templates module directly from file."""
     import importlib.util
-    from pathlib import Path
 
-    templates_path = Path("assets/skills/skill/scripts/templates.py")
+    # SSOT: Use SKILLS_DIR for skill template path
+    templates_path = SKILLS_DIR(skill="skill", filename="scripts/templates.py")
     if not templates_path.exists():
         return None
 
-    spec = importlib.util.spec_from_file_location("templates", templates_path)
+    spec = importlib.util.spec_from_file_location("templates", str(templates_path))
+    if spec is None or spec.loader is None:
+        return None
     templates = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(templates)
     return templates

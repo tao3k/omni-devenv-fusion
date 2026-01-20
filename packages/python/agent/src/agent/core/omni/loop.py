@@ -253,16 +253,23 @@ When the task is complete, output: TASK_COMPLETE
         # Build initial context with task AND plan
         context_content = task
         if initial_plan:
-            context_content = (
-                f"{task}\n\n"
-                f"[ADAPTIVE PLAN]\n{initial_plan}\n\n"
-                f"[INSTRUCTION]\n"
-                f"Follow the plan above. Mark completed steps as you go. "
-                f"Use 'writer' skill for text editing tasks."
-            )
+            context_content = f"""{task}
+
+[ADAPTIVE PLAN]
+{initial_plan}
+
+[SYSTEM ENFORCEMENT - READ THIS CAREFULLY]
+1. 🛑 **DO NOT READ THE SAME FILE TWICE.** Once you read it, the content is in your context history. Scroll up to see it.
+2. ⚡ **ACTION REQUIRED.** You MUST use `writer` or `filesystem` tools to modify files. Do not just "check" or "analyze" - you must CHANGE the content.
+3. ✅ **Follow the plan.** Execute the steps in order.
+4. 📝 **Output format:** When done, output: TASK_COMPLETE
+"""
 
         # Add initial task (with plan if available) to history
         self.history.append({"role": "user", "content": context_content})
+
+        # Track read files to detect and prevent read loops
+        self._read_files: set[str] = set()
 
         # Load tools
         self.tool_loader.load_tools()
@@ -306,15 +313,56 @@ When the task is complete, output: TASK_COMPLETE
                         count=len(tool_calls),
                     )
 
+                    # Track if any file was modified in this step
+                    files_modified_this_step: set[str] = set()
+
                     for tool_call in tool_calls:
+                        tool_name = tool_call.get("name", "")
+
+                        # [ANTI-READ-LOOP] Detect and prevent repeated file reads
+                        if "read_file" in tool_name or "cat" in tool_name:
+                            file_path = tool_call.get("arguments", {}).get("file_path", "")
+                            if file_path:
+                                if (
+                                    file_path in self._read_files
+                                    and file_path not in files_modified_this_step
+                                ):
+                                    # Repeat read detected! Inject warning and skip execution
+                                    logger.warning(f"OmniLoop: Blocking repeat read of {file_path}")
+                                    output = f"[BLOCKED - REPEAT READ]\nYou already read this file in a previous step!\nContent is in your context history above.\n\nIMMEDIATE ACTION: Use 'writer.replace' or 'filesystem.write_file' to modify the file!"
+                                    self.history.append(
+                                        {
+                                            "role": "tool",
+                                            "content": f"[Tool: {tool_name}] {output}",
+                                            "tool_name": tool_name,
+                                        }
+                                    )
+                                    continue
+                                else:
+                                    # First time reading this file
+                                    self._read_files.add(file_path)
+                                    logger.debug(f"OmniLoop: Tracking first read of {file_path}")
+
+                        # Track file modifications
+                        if "write_file" in tool_name or "save_file" in tool_name:
+                            file_path = tool_call.get("arguments", {}).get("file_path", "")
+                            if file_path:
+                                files_modified_this_step.add(file_path)
+                                # Allow re-reading files that were just modified
+                                if file_path in self._read_files:
+                                    self._read_files.discard(file_path)
+                                    logger.debug(
+                                        f"OmniLoop: Cleared read tracker for modified file: {file_path}"
+                                    )
+
                         output = await self.tool_loader.execute_tool(tool_call)
 
                         # Add tool output to history
                         self.history.append(
                             {
                                 "role": "tool",
-                                "content": f"[Tool: {tool_call.get('name')}]\n{output}",
-                                "tool_name": tool_call.get("name"),
+                                "content": f"[Tool: {tool_name}]\n{output}",
+                                "tool_name": tool_name,
                             }
                         )
 

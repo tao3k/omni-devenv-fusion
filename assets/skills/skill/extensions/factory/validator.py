@@ -1,5 +1,5 @@
 """
-src/agent/core/meta_agent/validator.py
+validator.py
  Sandbox Validator for generated skills.
 
 Executes generated skills and tests in an isolated environment
@@ -8,13 +8,18 @@ to verify code correctness before saving to the skills directory.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import structlog
+
+from common.gitops import get_project_root
+from common.skills_path import SKILLS_DIR
 
 logger = structlog.get_logger(__name__)
 
@@ -41,19 +46,10 @@ class SandboxValidator:
     4. Returns detailed results for the refinement loop
     """
 
-    def __init__(self, project_root: Path | None = None):
-        """
-        Initialize the validator.
-
-        Args:
-            project_root: Root directory of the project (defaults to project root)
-        """
-        if project_root is None:
-            from common.gitops import get_project_root
-
-            project_root = get_project_root()
-
-        self.project_root = Path(project_root)
+    def __init__(self):
+        """Initialize the validator using SSOT paths."""
+        self.project_root = get_project_root()
+        self.skills_dir = SKILLS_DIR()
 
     def validate(
         self,
@@ -74,8 +70,6 @@ class SandboxValidator:
         Returns:
             ValidationResult with success status and error details
         """
-        import time
-
         t0 = time.perf_counter()
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -87,25 +81,33 @@ class SandboxValidator:
             scripts_dir.mkdir(parents=True)
             tests_dir.mkdir(parents=True)
 
+            # Convert skill name to valid Python module name (hyphens to underscores)
+            skill_module_name = skill_name.replace("-", "_")
+
             # Write files
             (scripts_dir / "__init__.py").touch()
-            (scripts_dir / f"{skill_name}.py").write_text(skill_code, encoding="utf-8")
-            (tests_dir / f"test_{skill_name}.py").write_text(test_code, encoding="utf-8")
+            (scripts_dir / f"{skill_module_name}.py").write_text(skill_code, encoding="utf-8")
+            (tests_dir / f"test_{skill_module_name}.py").write_text(test_code, encoding="utf-8")
 
-            # Build environment with PYTHONPATH including agent source
-            import os
+            # Build PYTHONPATH for uv run (includes temp work_dir for scripts import)
+            existing_path = os.environ.get("PYTHONPATH", "")
+            agent_src = str(self.project_root / "packages/python/agent/src")
+            skills_path = str(self.skills_dir)
+            work_dir_path = str(work_dir)
 
-            env = {
-                **os.environ,
-                "PYTHONPATH": str(self.project_root / "packages/python/agent/src"),
-            }
+            if existing_path:
+                new_path = f"{work_dir_path}:{agent_src}:{skills_path}:{existing_path}"
+            else:
+                new_path = f"{work_dir_path}:{agent_src}:{skills_path}"
+
+            env = {**os.environ, "PYTHONPATH": new_path}
 
             # Command: uv run pytest <temp_test_file>
             cmd = [
                 "uv",
                 "run",
                 "pytest",
-                str(tests_dir / f"test_{skill_name}.py"),
+                str(tests_dir / f"test_{skill_module_name}.py"),
                 "-v",
                 "--tb=short",
             ]
@@ -124,7 +126,6 @@ class SandboxValidator:
                 error_summary = ""
 
                 if not success:
-                    # Extract last lines of stderr/stdout as summary
                     error_output = result.stderr or result.stdout
                     error_summary = self._extract_error_summary(error_output)
 
@@ -145,7 +146,7 @@ class SandboxValidator:
                     success=False,
                     stdout="",
                     stderr="",
-                    error_summary=f"Test execution timed out after {timeout_seconds} seconds",
+                    error_summary=f"Test timed out after {timeout_seconds}s",
                     duration_ms=duration_ms,
                 )
 
@@ -161,43 +162,25 @@ class SandboxValidator:
                 )
 
     def _extract_error_summary(self, output: str, max_length: int = 800) -> str:
-        """
-        Extract a useful error summary from test output.
-
-        Args:
-            output: Full test output (stdout or stderr)
-            max_length: Maximum length of returned summary
-
-        Returns:
-            Concise error summary
-        """
+        """Extract useful error summary from test output."""
         if not output:
             return "No output from test runner"
 
-        # Look for common error patterns
         lines = output.strip().split("\n")
 
-        # Priority: FAILED, ERROR, then last 10 lines
+        # Priority: FAILED, ERROR, then last 20 lines
         for i, line in enumerate(lines):
-            if line.startswith("FAILED") or line.startswith("ERROR"):
-                # Extract context around the failure
+            if line.startswith(("FAILED", "ERROR")):
                 start = max(0, i - 2)
                 end = min(len(lines), i + 15)
                 summary = "\n".join(lines[start:end])
-                if len(summary) > max_length:
-                    summary = summary[:max_length] + "...\n(truncated)"
-                return summary
+                return summary[:max_length] + (
+                    "...\n(truncated)" if len(summary) > max_length else ""
+                )
 
         # If no clear failure marker, take last N lines
-        if len(lines) > 20:
-            summary = "\n".join(lines[-20:])
-        else:
-            summary = "\n".join(lines)
-
-        if len(summary) > max_length:
-            summary = summary[:max_length] + "...\n(truncated)"
-
-        return summary
+        summary = "\n".join(lines[-20:]) if len(lines) > 20 else "\n".join(lines)
+        return summary[:max_length] + ("...\n(truncated)" if len(summary) > max_length else "")
 
 
 async def validate_and_refine(
@@ -206,52 +189,25 @@ async def validate_and_refine(
     test_code: str,
     requirement: str,
     skill_manager: Any,
-    project_root: Path | None = None,
     max_retries: int = 2,
 ) -> dict[str, Any]:
     """
     Validate skill code and refine if necessary using the Meta skill.
 
-    This is the main entry point for 's self-repair loop.
-
-    Args:
-        skill_name: Name of the skill
-        skill_code: Python code for the skill implementation
-        test_code: Python code for the test
-        requirement: Original requirement for context
-        skill_manager: SkillContext instance (for calling meta.refine_code)
-        project_root: Project root path
-        max_retries: Maximum refinement attempts
-
-    Returns:
-        Dict with:
-            - success: Whether final validation passed
-            - code: Final (possibly refined) skill code
-            - attempts: Number of validation attempts
-            - error: Error message if failed
+    This is the main entry point for self-repair loop.
     """
-    validator = SandboxValidator(project_root)
-
-    # Initialize result to satisfy type checker
+    validator = SandboxValidator()
     result = ValidationResult(success=False, stdout="", stderr="", error_summary="")
 
     for attempt in range(max_retries + 1):
         logger.info(
-            "validating_skill",
-            skill=skill_name,
-            attempt=attempt + 1,
-            max_attempts=max_retries + 1,
+            "validating_skill", skill=skill_name, attempt=attempt + 1, max_attempts=max_retries + 1
         )
 
-        # Validate
         result = validator.validate(skill_name, skill_code, test_code)
 
         if result.success:
-            logger.info(
-                "skill_validation_passed",
-                skill=skill_name,
-                duration_ms=result.duration_ms,
-            )
+            logger.info("skill_validation_passed", skill=skill_name, duration_ms=result.duration_ms)
             return {
                 "success": True,
                 "code": skill_code,
@@ -259,18 +215,13 @@ async def validate_and_refine(
                 "duration_ms": result.duration_ms,
             }
 
-        # Validation failed - try to refine
         logger.warning(
-            "skill_validation_failed",
-            skill=skill_name,
-            error_summary=result.error_summary[:200],
+            "skill_validation_failed", skill=skill_name, error_summary=result.error_summary[:200]
         )
 
         if attempt < max_retries and skill_manager is not None:
             logger.info("refining_skill_via_meta", skill=skill_name)
-
             try:
-                # Call the meta skill to refine the code
                 refine_result = await skill_manager.run(
                     "meta",
                     "refine_code",
@@ -280,26 +231,15 @@ async def validate_and_refine(
                         "error": result.stdout + "\n" + result.stderr,
                     },
                 )
-
-                # Check if refinement returned valid code
                 if refine_result and not refine_result.startswith("# Error"):
                     skill_code = refine_result
                     logger.info("refinement_completed", skill=skill_name, attempt=attempt + 1)
                     continue
-                else:
-                    logger.error(
-                        "refinement_failed",
-                        skill=skill_name,
-                        error=refine_result[:200] if refine_result else "Empty result",
-                    )
-
             except Exception as e:
                 logger.error("refinement_exception", skill=skill_name, error=str(e))
 
-        # Either no more retries, or refinement failed
         break
 
-    # Final failure - use result.error_summary (it's initialized above)
     return {
         "success": False,
         "code": skill_code,
@@ -308,8 +248,4 @@ async def validate_and_refine(
     }
 
 
-__all__ = [
-    "SandboxValidator",
-    "ValidationResult",
-    "validate_and_refine",
-]
+__all__ = ["SandboxValidator", "ValidationResult", "validate_and_refine"]

@@ -130,7 +130,7 @@ class NoteTaker:
     async def _call_llm(self, transcript: str) -> List[Dict[str, Any]]:
         """Call LLM to generate notes from transcript.
 
-        This is now fully async - no sync wrapper needed.
+        Optimized: reduced max_tokens, simplified prompt, fast-fail JSON parsing.
         """
         client = self.llm_client
         if client is None:
@@ -138,12 +138,24 @@ class NoteTaker:
             return self._generate_dummy_notes(transcript)
 
         try:
-            user_query = f"Analyze this trajectory and generate wisdom notes:\n\n{transcript}"
+            # Optimized prompt: simplified, forces JSON format
+            user_query = f"""Analyze this session and extract insights.
+
+Session:
+{transcript}
+
+Output ONLY a JSON object with this structure:
+{{
+  "has_insights": boolean,
+  "insights": ["string", "string"]
+}}
+
+If nothing new learned, set has_insights: false."""
 
             result = await client.complete(
-                system_prompt=self.system_prompt,
+                system_prompt="You are a Knowledge Harvester. Extract technical insights. Output ONLY valid JSON.",
                 user_query=user_query,
-                max_tokens=4000,
+                max_tokens=500,  # Reduced from 4000 - prevent verbose output
             )
 
             if not result["success"]:
@@ -153,44 +165,40 @@ class NoteTaker:
             content = result["content"]
             logger.debug(f"LLM response length: {len(content)} chars")
 
-            # Handle empty response
+            # Handle empty response - fast fail
             if not content or not content.strip():
-                logger.warning("Note-Taker: LLM returned empty response, using dummy notes")
-                return self._generate_dummy_notes(transcript)
+                logger.warning("Note-Taker: LLM returned empty response")
+                return []
 
             # Clean JSON content (remove markdown code blocks if present)
             cleaned_content = self._clean_json_content(content)
 
-            # Handle empty cleaned content
+            # Handle empty cleaned content - fast fail
             if not cleaned_content or not cleaned_content.strip():
-                logger.warning(
-                    "Note-Taker: Failed to extract JSON from response, using dummy notes"
-                )
-                return self._generate_dummy_notes(transcript)
+                logger.warning("Note-Taker: Failed to extract JSON from response")
+                return []
 
-            # Parse JSON response
+            # Parse JSON response - robust parsing
             parsed = json.loads(cleaned_content)
 
-            # [FIX] Handle weird LLM output formats like {'command': ...}
+            # Validate structure
             if isinstance(parsed, dict):
-                if "command" in parsed and "notes" not in parsed:
-                    logger.warning(f"Note-Taker: LLM hallucinated a command output, ignoring")
-                    return []
-                if "notes" in parsed:
-                    return parsed["notes"]
+                if "has_insights" in parsed and parsed["has_insights"] is True:
+                    return parsed.get("notes", [])
+                return []
 
             # Handle direct list format
             if isinstance(parsed, list):
                 return parsed
 
-            logger.warning(f"Unexpected LLM response format: {str(parsed)[:100]}")
+            logger.warning(f"Note-Taker: Unexpected response format")
             return []
 
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse LLM response as JSON: {e}")
+            logger.error(f"Note-Taker: JSON parse failed: {e}")
             return []
         except Exception as e:
-            logger.error(f"LLM call failed: {e}")
+            logger.error(f"Note-Taker: LLM call failed: {e}")
             return []
 
     def _generate_dummy_notes(self, transcript: str) -> List[Dict[str, Any]]:

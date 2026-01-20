@@ -16,6 +16,9 @@ from typing import Generator
 
 import structlog
 
+from common.lib import agent_src
+from common.skills_path import SKILLS_DIR
+
 logger = structlog.get_logger(__name__)
 
 
@@ -56,20 +59,20 @@ class ModuleLoader:
     - Support hot-reload by clearing existing modules
     """
 
-    __slots__ = ("skills_dir", "project_root")
+    __slots__ = ("skills_dir", "project_root", "_agent_src")
 
     def __init__(self, skills_dir: Path) -> None:
         self.skills_dir = skills_dir
         self.project_root = skills_dir.parent.parent  # assets/skills -> project_root
+        self._agent_src = agent_src()  # SSOT: packages/python/agent/src
 
     def _ensure_parent_packages(self) -> None:
         """Create parent packages for skill modules."""
         # Ensure 'agent' package exists
         if "agent" not in sys.modules:
-            agent_src = self.project_root / "packages/python/agent/src/agent"
             agent_pkg = types.ModuleType("agent")
-            agent_pkg.__path__ = [str(agent_src)]
-            agent_pkg.__file__ = str(agent_src / "__init__.py")
+            agent_pkg.__path__ = [str(self._agent_src)]
+            agent_pkg.__file__ = str(self._agent_src / "agent" / "__init__.py")
             sys.modules["agent"] = agent_pkg
             logger.debug("Created 'agent' package in sys.modules")
 
@@ -77,8 +80,8 @@ class ModuleLoader:
         # IMPORTANT: Include BOTH paths for proper module resolution:
         # - packages/python/agent/src/agent/skills (for core modules like agent.skills.core)
         # - assets/skills (for skill tools like agent.skills.git.tools)
-        agent_skills_src = self.project_root / "packages/python/agent/src/agent/skills"
-        skills_dir = str(self.skills_dir)  # assets/skills
+        agent_skills_src = self._agent_src / "agent" / "skills"
+        skills_dir = str(SKILLS_DIR())  # SSOT: assets/skills
         agent_skills_src_str = str(agent_skills_src)
 
         if "agent.skills" not in sys.modules:
@@ -107,27 +110,24 @@ class ModuleLoader:
 
         Args:
             skill_name: Name of the skill
-            is_scripts: If True, we're loading from scripts/ directory, so don't
-                create the skill package to avoid breaking relative imports in scripts.
-                When scripts/__init__.py does 'from .memory import ...', we don't want
-                Python to resolve it as 'agent.skills.memory.memory'.
+            is_scripts: If True, we're loading from scripts/ directory.
+                Still creates the package as a namespace package to allow subpackage imports.
         """
         skill_pkg_name = f"agent.skills.{skill_name}"
         if skill_pkg_name in sys.modules:
-            return
-
-        # Don't create skill package when loading from scripts/ - this breaks
-        # relative imports like 'from .memory import ...' in scripts/__init__.py
-        if is_scripts:
             return
 
         skill_pkg_path = self.skills_dir / skill_name
         if not skill_pkg_path.exists():
             return
 
+        # Create as namespace package (no __file__) to avoid import conflicts
+        # This allows both:
+        # - Absolute imports: from agent.skills.json_to_yaml.scripts.X import Y
+        # - Relative imports: from .scripts import X (works because scripts/ is a subdir)
         skill_pkg = types.ModuleType(skill_pkg_name)
         skill_pkg.__path__ = [str(skill_pkg_path)]
-        skill_pkg.__file__ = str(skill_pkg_path / "__init__.py")
+        # No __file__ = namespace package, no __init__.py interference
         sys.modules[skill_pkg_name] = skill_pkg
 
         # Also set as attribute on parent
@@ -141,7 +141,7 @@ class ModuleLoader:
         """Pre-load the decorators module for @skill_command support."""
         from importlib import util
 
-        decorators_path = self.project_root / "packages/python/agent/src/agent/skills/decorators.py"
+        decorators_path = self._agent_src / "agent" / "skills" / "decorators.py"  # SSOT
 
         if "agent.skills.decorators" in sys.modules:
             return  # Already loaded

@@ -110,4 +110,5 @@ Guides specifically for LLMs interacting with the system:
 
 | Document                                       | Description                           |
 | ---------------------------------------------- | ------------------------------------- |
+| [Backlog](./backlog.md)                        | Feature-based task tracking           |
 | [Skills Directory](../assets/skills/README.md) | Skill packages and commands reference |

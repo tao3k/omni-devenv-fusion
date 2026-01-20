@@ -28,6 +28,80 @@ def _get_logger() -> Any:
 
 if TYPE_CHECKING:
     import structlog
+    from agent.core.skill_registry.core import SkillRegistry
+
+
+def jit_load_local_skill(
+    skill_path: Path,
+    registry: "SkillRegistry | None" = None,
+    strict_security: bool = False,
+) -> dict[str, Any]:
+    """
+    Just-in-Time Local Skill Loading.
+
+    Loads a locally generated/existing skill directory into the registry immediately.
+    Used by Meta-Agent after generating a new skill.
+
+    Args:
+        skill_path: Path to the skill directory
+        registry: SkillRegistry instance
+        strict_security: If True, use full security scan. If False, allow file I/O skills.
+
+    Returns:
+        Dict with success status and details
+    """
+    from agent.core.skill_registry.core import SkillRegistry
+    from agent.core.skill_registry.loader import SkillLoader
+
+    if registry is None:
+        registry = SkillRegistry()
+
+    if not skill_path.exists():
+        return {"success": False, "error": f"Skill path does not exist: {skill_path}"}
+
+    skill_name = skill_path.name
+
+    # 1. Security Scan
+    if strict_security:
+        # Full security scan for remote/unsafe sources
+        security_result = security_scan_skill(skill_path, repo_url="")
+        if not security_result["passed"]:
+            return {
+                "success": False,
+                "error": "Security scan failed for generated skill",
+                "report": security_result.get("report", {}),
+            }
+    else:
+        # Light security scan for locally generated skills
+        # Skip file I/O detection since CSV converters naturally need file access
+        security_result = _light_security_scan(skill_path)
+        if not security_result["passed"]:
+            return {
+                "success": False,
+                "error": "Security scan failed for generated skill",
+                "report": security_result.get("report", {}),
+            }
+
+    # 2. Hot Load
+    try:
+        loader = SkillLoader(registry)
+        success, load_msg = loader.load_skill(skill_name, mcp=None)
+
+        if success:
+            return {
+                "success": True,
+                "skill_name": skill_name,
+                "path": str(skill_path),
+                "message": "Skill loaded successfully",
+            }
+        else:
+            return {
+                "success": False,
+                "skill_name": skill_name,
+                "error": f"Load failed: {load_msg}",
+            }
+    except Exception as e:
+        return {"success": False, "error": f"Exception during JIT load: {str(e)}"}
 
 
 def jit_install_skill(
@@ -153,6 +227,72 @@ def security_scan_skill(target_dir: Path, repo_url: str) -> dict[str, Any]:
 
     except Exception as e:
         return {"passed": True, "error": str(e), "report": {"error": str(e)}}
+
+
+def _light_security_scan(skill_path: Path) -> dict[str, Any]:
+    """
+    Light security scan for locally generated skills.
+
+    Only checks for obviously dangerous patterns like system calls,
+    but allows file I/O operations (needed for CSV processing, etc.).
+
+    Args:
+        skill_path: Path to the skill directory
+
+    Returns:
+        Dict with passed status and report
+    """
+    import re
+
+    dangerous_patterns = [
+        (r"os\.system", "System command execution"),
+        (r"subprocess\.", "Subprocess execution"),
+        (r"eval\s*\(", "Dynamic code evaluation"),
+        (r"exec\s*\(", "Dynamic code execution"),
+        (r"__import__\s*\(", "Dynamic module import"),
+        (r"open\s*\([^)]*['\"](?:\./)?\.{2}/", "Path traversal attempt"),
+        (r"socket\.", "Network operations"),
+    ]
+
+    findings = []
+    total_score = 0
+
+    # Scan all Python files in the skill directory
+    for py_file in skill_path.rglob("*.py"):
+        try:
+            content = py_file.read_text()
+            lines = content.split("\n")
+
+            for line_num, line in enumerate(lines, 1):
+                for pattern, description in dangerous_patterns:
+                    if re.search(pattern, line):
+                        findings.append(
+                            {
+                                "pattern": pattern,
+                                "severity": "high",
+                                "line_number": line_num,
+                                "description": description,
+                            }
+                        )
+                        total_score += 50
+        except Exception:
+            continue
+
+    is_blocked = total_score >= 50
+
+    return {
+        "passed": not is_blocked,
+        "error": None
+        if not is_blocked
+        else f"High severity patterns detected (score: {total_score})",
+        "report": {
+            "skill_name": skill_path.name,
+            "skill_path": str(skill_path),
+            "findings": findings,
+            "total_score": total_score,
+            "is_blocked": is_blocked,
+        },
+    }
 
 
 async def discover_skills(query: str = "", limit: int = 5) -> dict[str, Any]:

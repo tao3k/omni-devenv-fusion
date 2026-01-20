@@ -2,11 +2,11 @@
 Unit tests for AdaptivePlanner (simple.py).
 
 Tests lightweight task estimation and initial planning without the full planner.
+Optimized for efficiency: fewer steps, faster planning.
 """
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock
-from dataclasses import dataclass
 
 from agent.core.planner.simple import AdaptivePlanner, create_adaptive_planner
 
@@ -27,10 +27,10 @@ class TestAdaptivePlannerInitialization:
 
 
 class TestEstimateSteps:
-    """Tests for step estimation heuristics."""
+    """Tests for step estimation heuristics (optimized for speed)."""
 
     def test_simple_query_tasks(self) -> None:
-        """Verify simple query tasks get base steps."""
+        """Verify simple query tasks get optimized base steps."""
         planner = AdaptivePlanner()
         tasks = [
             "Analyze the code",
@@ -40,20 +40,20 @@ class TestEstimateSteps:
         ]
         for task in tasks:
             steps = planner.estimate_steps(task)
-            assert steps == 4, f"Expected 4 steps for '{task}', got {steps}"
+            assert steps == 3, f"Expected 3 steps for '{task}', got {steps}"
 
     def test_file_listing_tasks(self) -> None:
-        """Verify file listing tasks get elevated steps."""
+        """Verify file listing tasks get optimized steps."""
         planner = AdaptivePlanner()
         tasks = [
             "List all files",
         ]
         for task in tasks:
             steps = planner.estimate_steps(task)
-            assert steps == 6, f"Expected 6 steps for '{task}', got {steps}"
+            assert steps == 5, f"Expected 5 steps for '{task}', got {steps}"
 
     def test_edit_tasks(self) -> None:
-        """Verify edit tasks get higher steps."""
+        """Verify edit tasks get optimized steps (3 base + 1 buffer = 4)."""
         planner = AdaptivePlanner()
         tasks = [
             "Edit the file",
@@ -61,13 +61,15 @@ class TestEstimateSteps:
             "Change the content",
             "Modify the config",
             "Replace the text",
+            "Fix the error",
+            "Check the style",
         ]
         for task in tasks:
             steps = planner.estimate_steps(task)
-            assert steps == 6, f"Expected 6 steps for '{task}', got {steps}"
+            assert steps == 4, f"Expected 4 steps for '{task}', got {steps}"
 
     def test_create_tasks(self) -> None:
-        """Verify create tasks get appropriate steps."""
+        """Verify create tasks get optimized steps."""
         planner = AdaptivePlanner()
         tasks = [
             "Create a new file",
@@ -77,10 +79,10 @@ class TestEstimateSteps:
         ]
         for task in tasks:
             steps = planner.estimate_steps(task)
-            assert steps == 7, f"Expected 7 steps for '{task}', got {steps}"
+            assert steps == 5, f"Expected 5 steps for '{task}', got {steps}"
 
     def test_refactor_tasks(self) -> None:
-        """Verify refactor tasks get highest steps."""
+        """Verify refactor tasks get optimized steps (6 base + 1 buffer = 7)."""
         planner = AdaptivePlanner()
         tasks = [
             "Refactor the codebase",
@@ -89,23 +91,22 @@ class TestEstimateSteps:
         ]
         for task in tasks:
             steps = planner.estimate_steps(task)
-            assert steps == 10, f"Expected 10 steps for '{task}', got {steps}"
+            assert steps == 7, f"Expected 7 steps for '{task}', got {steps}"
 
     def test_debug_tasks(self) -> None:
-        """Verify debug tasks get elevated steps."""
+        """Verify debug tasks get optimized steps (5 base + 1 buffer = 6)."""
         planner = AdaptivePlanner()
         tasks = [
             "Debug the issue",
-            "Fix the error",
             "Troubleshoot the problem",
             "Investigate the failure",
         ]
         for task in tasks:
             steps = planner.estimate_steps(task)
-            assert steps == 8, f"Expected 8 steps for '{task}', got {steps}"
+            assert steps == 6, f"Expected 6 steps for '{task}', got {steps}"
 
     def test_documentation_tasks(self) -> None:
-        """Verify documentation tasks get at least 4 steps."""
+        """Verify documentation tasks get optimized steps (writer skill)."""
         planner = AdaptivePlanner()
         tasks = [
             "Update the readme",
@@ -115,7 +116,8 @@ class TestEstimateSteps:
         ]
         for task in tasks:
             steps = planner.estimate_steps(task)
-            assert steps >= 4, f"Expected at least 4 steps for '{task}', got {steps}"
+            # Documentation uses writer skill, optimized to 4 steps
+            assert steps >= 3, f"Expected at least 3 steps for '{task}', got {steps}"
 
     def test_multi_file_indicator(self) -> None:
         """Verify multi-file tasks get +2 steps."""
@@ -129,20 +131,20 @@ class TestEstimateSteps:
         )
 
     def test_default_for_unknown_tasks(self) -> None:
-        """Verify unknown tasks get default steps."""
+        """Verify unknown tasks get optimized default steps."""
         planner = AdaptivePlanner()
         steps = planner.estimate_steps("Do something random")
-        assert steps == 5, f"Expected 5 steps for unknown task, got {steps}"
+        assert steps == 3, f"Expected 3 steps for unknown task, got {steps}"
 
     def test_safety_buffer(self) -> None:
-        """Verify all estimates include safety buffer."""
+        """Verify all estimates include optimized safety buffer (+1)."""
         planner = AdaptivePlanner()
         # Test tasks with their expected base steps (before buffer)
         tasks = [
-            ("Analyze the code", 4),  # Analyze -> base 2 + buffer 2 = 4
-            ("Edit the file", 6),  # Edit -> base 4 + buffer 2 = 6
-            ("Create a new file", 7),  # Create -> base 5 + buffer 2 = 7
-            ("Refactor the code", 10),  # Refactor -> base 8 + buffer 2 = 10
+            ("Analyze the code", 3),  # Analyze -> base 2 + buffer 1 = 3
+            ("Edit the file", 4),  # Edit -> base 3 + buffer 1 = 4
+            ("Create a new file", 5),  # Create -> base 4 + buffer 1 = 5
+            ("Refactor the code", 7),  # Refactor -> base 6 + buffer 1 = 7 (not capped)
         ]
         for task, expected_with_buffer in tasks:
             steps = planner.estimate_steps(task)
@@ -236,7 +238,7 @@ class TestAnalyzeTask:
         steps, plan = await planner.analyze_task("Edit the readme")
 
         assert isinstance(steps, int)
-        assert steps >= 4
+        assert steps >= 3  # Optimized: at least 3 steps
         assert "PLAN:" in plan
 
     @pytest.mark.asyncio
@@ -272,8 +274,8 @@ class TestAnalyzeTask:
         steps, plan = await planner.analyze_task("Refactor the codebase")
 
         mock_client.complete.assert_called_once()
-        # Steps are determined by heuristic (refactor = 10 steps)
-        assert steps == 10, f"Heuristic should determine steps, got {steps}"
+        # Steps are determined by heuristic (refactor = 7 steps)
+        assert steps == 7, f"Heuristic should determine steps, got {steps}"
         assert "PLAN:" in plan
 
     @pytest.mark.asyncio
@@ -288,8 +290,8 @@ class TestAnalyzeTask:
         planner = AdaptivePlanner(client=mock_client)
         steps, plan = await planner.analyze_task("Complex task")
 
-        # Steps use heuristic (default = 5 steps for unknown)
-        assert steps == 5, f"Heuristic should determine steps, got {steps}"
+        # Steps use heuristic (default = 3 steps for unknown optimized)
+        assert steps == 3, f"Heuristic should determine steps, got {steps}"
         assert "PLAN:" in plan
 
     @pytest.mark.asyncio
@@ -300,10 +302,10 @@ class TestAnalyzeTask:
         mock_client.complete = AsyncMock(return_value=mock_response)
 
         planner = AdaptivePlanner(client=mock_client)
-        # Edit task should have at least 6 steps from heuristic
+        # Edit task should have at least 4 steps from heuristic (optimized)
         steps, _ = await planner.analyze_task("Edit the file")
 
-        assert steps >= 6, f"Heuristic should override low LLM estimate: {steps}"
+        assert steps >= 4, f"Heuristic should override low LLM estimate: {steps}"
 
 
 class TestCreateAdaptivePlanner:
@@ -349,43 +351,43 @@ class TestFallbackPlan:
         plan = planner._fallback_plan("Do something", None)
 
         assert "PLAN:" in plan
-        assert "Analyze" in plan
         assert "Read" in plan
         assert "Verify" in plan
+        # Optimized fallback doesn't include "Analyze" step explicitly
 
 
 class TestEdgeCases:
-    """Tests for edge cases."""
+    """Tests for edge cases (optimized)."""
 
     def test_empty_task(self) -> None:
         """Verify empty task handled gracefully."""
         planner = AdaptivePlanner()
         steps = planner.estimate_steps("")
-        assert steps == 5  # Default case
+        assert steps == 3  # Optimized default case
 
     def test_very_long_task(self) -> None:
         """Verify very long task handled."""
         planner = AdaptivePlanner()
         long_task = "Edit the file " * 100
         steps = planner.estimate_steps(long_task)
-        assert steps == 6  # Edit task
+        assert steps == 4  # Edit task (optimized)
 
     def test_special_characters(self) -> None:
         """Verify special characters handled."""
         planner = AdaptivePlanner()
         steps = planner.estimate_steps("Edit file @#$%")
-        assert steps == 6  # Edit task
+        assert steps == 4  # Edit task (optimized)
 
     def test_unicode_content(self) -> None:
         """Verify unicode content handled."""
         planner = AdaptivePlanner()
         # Chinese text doesn't match any keyword, falls to default
         steps = planner.estimate_steps("分析代码")  # Chinese: "Analyze code"
-        assert steps == 5  # Default case (3 + 2 buffer)
+        assert steps == 3  # Optimized default case (2 + 1 buffer)
 
 
 class TestIntegration:
-    """Integration-style tests."""
+    """Integration-style tests (optimized)."""
 
     @pytest.mark.asyncio
     async def test_full_analysis_flow(self) -> None:
@@ -412,14 +414,14 @@ class TestIntegration:
 
     @pytest.mark.asyncio
     async def test_multiple_tasks_different_complexity(self) -> None:
-        """Verify different task complexities are distinguished."""
+        """Verify different task complexities are distinguished (optimized)."""
         planner = AdaptivePlanner()
 
         tasks = [
-            ("Analyze structure", 4),
-            ("Edit config", 6),
-            ("Create module", 7),
-            ("Refactor system", 10),
+            ("Analyze structure", 3),  # Optimized: analyze = 3
+            ("Edit config", 4),  # Optimized: edit = 4
+            ("Create module", 5),  # Optimized: create = 5
+            ("Refactor system", 7),  # Optimized: refactor = 7
         ]
 
         for task, expected_min in tasks:

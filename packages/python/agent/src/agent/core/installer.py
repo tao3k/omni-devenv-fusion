@@ -29,9 +29,12 @@ if _git_spec:
         git = importlib.import_module("git")
         _git_exc = importlib.import_module("git.exc")
     else:
-        # This is assets/skills/git - find the real GitPython
-        # Remove ALL paths containing assets/skills from sys.path
-        skills_paths = [p for p in sys.path if "assets/skills" in p]
+        # This is skills_dir/git - find the real GitPython
+        # Remove ALL paths containing skills_dir from sys.path
+        from common.skills_path import SKILLS_DIR
+
+        skills_dir_str = str(SKILLS_DIR())  # SSOT: assets/skills
+        skills_paths = [p for p in sys.path if skills_dir_str in p]
         for p in skills_paths:
             sys.path.remove(p)
         try:

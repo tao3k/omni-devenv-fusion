@@ -9,6 +9,7 @@ Commands are organized into modules:
 - manage.py: run, install, update, test, check commands
 - index_cmd.py: reindex, sync, index-stats, watch commands
 - create.py: templates, create commands
+- generate.py: AI-powered skill generation (Meta-Agent)
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from . import query  # noqa: F401
 from . import manage  # noqa: F401
 from . import index_cmd  # noqa: F401
 from . import create  # noqa: F401
+from . import generate  # noqa: F401 - Meta-Agent skill generation
 
 # Re-export specific commands for backward compatibility
 from .query import skill_discover

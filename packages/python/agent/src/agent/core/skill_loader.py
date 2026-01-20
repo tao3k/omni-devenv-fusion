@@ -90,11 +90,10 @@ class SkillLoader:
         self._skills = {}
 
     def _find_skill_files(self, base_path: Optional[Path] = None) -> List[Path]:
-        """Find all SKILL.md files in assets/skills/."""
-        from common.gitops import get_project_root
+        """Find all SKILL.md files using SSOT path."""
+        from common.skills_path import SKILLS_DIR
 
-        root = base_path or get_project_root()
-        skills_dir = root / "assets" / "skills"
+        skills_dir = SKILLS_DIR()  # SSOT: assets/skills (or from settings.yaml)
 
         if not skills_dir.exists():
             logger.warning("Skills directory not found", path=str(skills_dir))

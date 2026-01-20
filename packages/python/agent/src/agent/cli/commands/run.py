@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import typer
 from typing import Optional
 
@@ -129,6 +130,7 @@ def exec_cmd(
         console.print(
             Panel(grid, title="✨ CCA Session Report ✨", border_style="green", expand=False)
         )
+        sys.stdout.flush()
 
     async def _run():
         console.print(f"\n[bold]🚀 Starting:[/bold] {task}")
@@ -140,6 +142,7 @@ def exec_cmd(
         agent = OmniLoop()
         result = await agent.run(task, steps)
         _print_enrich_result(task, result, agent)
+        sys.stdout.flush()
 
     asyncio.run(_run())
 

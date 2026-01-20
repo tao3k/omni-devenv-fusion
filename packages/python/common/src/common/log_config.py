@@ -32,15 +32,20 @@ class SubprocessLogFilter(logging.Filter):
         return True
 
 
-def configure_logging(level: str = "INFO") -> None:
+def configure_logging(level: str = "INFO", colors: Optional[bool] = None) -> None:
     """Configure global logging to send all logs to stderr.
 
     This ensures stdout stays clean for skill results only.
 
     Args:
         level: Log level (DEBUG, INFO, WARNING, ERROR)
+        colors: Enable ANSI colors. If None, auto-detect from TTY.
     """
     log_level = getattr(logging, level.upper(), logging.INFO)
+
+    # Auto-detect colors if not specified
+    if colors is None:
+        colors = sys.stderr.isatty()
 
     # 1. Configure standard logging (captures all third-party library logs)
     root_logger = logging.getLogger()
@@ -67,8 +72,8 @@ def configure_logging(level: str = "INFO") -> None:
             structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S"),
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
-            # Use plain text renderer instead of ConsoleRenderer for MCP stdio mode
-            structlog.dev.ConsoleRenderer(colors=False),
+            # Use ConsoleRenderer with colors based on TTY detection
+            structlog.dev.ConsoleRenderer(colors=bool(colors)),
         ],
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),

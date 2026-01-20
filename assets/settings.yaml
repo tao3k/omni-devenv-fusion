@@ -238,16 +238,16 @@ skills:
           description: "Skill metadata (YAML frontmatter) and system prompts"
           type: "file"
 
-        # Core implementation (Trinity: Code)
-        - path: "tools.py"
-          description: "Omni-native Python MCP tools (@skill_command decorators)"
-          type: "file"
-
       # Default files/directories (auto-generated if not exists)
       # Validation ignores these - they can exist or not
       default:
         - path: "scripts/"
           description: "Standalone executables (Python workflows, state management)"
+          type: "dir"
+
+        # Extensions directory: Stateful modules, lifecycle hooks, complex logic (Meta-Agent, Watchers)
+        - path: "extensions/"
+          description: "Internal modules and plugins (Meta-Agent, Factory, Watchers)"
           type: "dir"
 
         - path: "templates/"

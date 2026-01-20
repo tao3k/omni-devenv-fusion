@@ -66,15 +66,10 @@ def load_module_isolated(path: Path, skill_name: str) -> types.ModuleType:
     the decorators module and sets up the proper package hierarchy.
     """
     from pathlib import Path as P
+    from common.skills_path import SKILLS_DIR
 
-    # Find skills directory
-    # Try multiple locations to find the skills directory
-    skills_dir = P("/Users/guangtao/ghq/github.com/tao3k/omni-dev-fusion/assets/skills")
-    if not skills_dir.exists():
-        module_dir = P(__file__).parent.parent.parent
-        skills_dir = module_dir / "assets" / "skills"
-    if not skills_dir.exists():
-        skills_dir = P("assets/skills")
+    # SSOT: Use SKILLS_DIR to get skills directory
+    skills_dir = SKILLS_DIR()
 
     pkg_namespace = f"agent.skills.{skill_name}.scripts"
     module_name = f"{pkg_namespace}.{path.stem}"
