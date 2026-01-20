@@ -87,9 +87,6 @@ def search(
     Returns:
         Markdown-formatted search results
     """
-    from agent.core.skill_manager.skill_loading import lazy_load_skills
-
-    # Lazy load skills to get access to knowledge directories
     results = []
     query_lower = query.lower()
 

@@ -39,9 +39,9 @@ from agent.skills.decorators import skill_command
     """,
 )
 async def reload_skill(name: str = "git") -> str:
-    from agent.core.skill_manager.manager import _get_singleton_manager
+    from agent.core.skill_runtime import get_skill_context
 
-    manager = _get_singleton_manager()
+    ctx = get_skill_context()
 
     import os
 
@@ -51,15 +51,19 @@ async def reload_skill(name: str = "git") -> str:
 
 Skill `{name}` does not exist in `assets/skills/`. Use `omni skill discover` to find available skills."""
 
-    result = manager.reload(name)
+    # Check if skill was previously loaded
+    was_loaded = name in ctx.registry.skills
 
-    if result is True:
+    # Reload the skill via SkillContext
+    success = ctx.reload(name)
+
+    if success is True:
         return f"""**Skill Reloaded**
 
 Successfully reloaded skill: `{name}`
 
 The latest changes from disk are now active."""
-    elif result is None:
+    elif success is None:
         return f"""**Skill Loaded**
 
 Skill `{name}` was not loaded before. It has been loaded now.

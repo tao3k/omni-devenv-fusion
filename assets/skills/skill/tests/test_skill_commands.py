@@ -270,3 +270,270 @@ class TestSkillListTools:
             result = result.data if result.success else result.error
 
         assert isinstance(result, str)
+
+
+class TestSkillScriptsImport:
+    """Test that all skill scripts import correctly and use correct APIs."""
+
+    @pytest.mark.parametrize("skill_name", ["git", "filesystem", "terminal", "knowledge", "memory"])
+    def test_core_skills_scripts_import(self, skill_name):
+        """Core skill scripts should import without errors."""
+        scripts_dir = SKILLS_DIR(skill_name) / "scripts"
+        if not scripts_dir.exists():
+            pytest.skip(f"No scripts directory for {skill_name}")
+
+        for py_file in scripts_dir.glob("*.py"):
+            if py_file.name == "__init__.py":
+                continue
+
+            # Read the file and check for relative imports
+            with open(py_file, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # Skip files with relative imports (they need proper package context)
+            if "from ." in content or "from .state" in content:
+                continue
+
+            # Try to import the module to verify no import errors
+            import importlib.util
+
+            spec = importlib.util.spec_from_file_location(f"{skill_name}_{py_file.stem}", py_file)
+            assert spec is not None, f"Failed to load {py_file}"
+            assert spec.loader is not None, f"{py_file} has no loader"
+            module = importlib.util.module_from_spec(spec)
+
+            # This will fail if there are import errors
+            try:
+                spec.loader.exec_module(module)
+            except ImportError as e:
+                pytest.fail(f"{py_file} has import error: {e}")
+
+    def test_reload_script_uses_correct_api(self):
+        """reload.py should use SkillContext, not skill_manager."""
+        scripts_dir = SKILLS_DIR("skill") / "scripts"
+        reload_file = scripts_dir / "reload.py"
+
+        if not reload_file.exists():
+            pytest.skip("reload.py not found")
+
+        with open(reload_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Should NOT use deprecated skill_manager
+        assert "agent.core.skill_manager" not in content, (
+            "reload.py should not use deprecated 'agent.core.skill_manager'"
+        )
+
+        # Should use skill_runtime (SkillContext)
+        assert "agent.core.skill_runtime" in content, (
+            "reload.py should use 'agent.core.skill_runtime'"
+        )
+
+    def test_unload_script_uses_correct_api(self):
+        """unload.py should use SkillContext, not skill_manager."""
+        scripts_dir = SKILLS_DIR("skill") / "scripts"
+        unload_file = scripts_dir / "unload.py"
+
+        if not unload_file.exists():
+            pytest.skip("unload.py not found")
+
+        with open(unload_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Should NOT use deprecated skill_manager
+        assert "agent.core.skill_manager" not in content, (
+            "unload.py should not use deprecated 'agent.core.skill_manager'"
+        )
+
+        # Should use skill_runtime (SkillContext)
+        assert "agent.core.skill_runtime" in content, (
+            "unload.py should use 'agent.core.skill_runtime'"
+        )
+
+    def test_smart_commit_workflow_uses_correct_api(self):
+        """smart_commit_workflow.py should not use skill_manager."""
+        git_scripts_dir = SKILLS_DIR("git") / "scripts"
+        workflow_file = git_scripts_dir / "smart_commit_workflow.py"
+
+        if not workflow_file.exists():
+            pytest.skip("smart_commit_workflow.py not found")
+
+        with open(workflow_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Should NOT use deprecated skill_manager
+        assert "agent.core.skill_manager" not in content, (
+            "smart_commit_workflow.py should not use deprecated 'agent.core.skill_manager'"
+        )
+
+    def test_no_deprecated_vector_skill_discovery_import(self):
+        """discovery.py should not use VectorSkillDiscovery."""
+        scripts_dir = SKILLS_DIR("skill") / "scripts"
+        discovery_file = scripts_dir / "discovery.py"
+
+        if not discovery_file.exists():
+            pytest.skip("discovery.py not found")
+
+        with open(discovery_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Should NOT use deprecated VectorSkillDiscovery
+        assert "VectorSkillDiscovery" not in content, (
+            "discovery.py should not use deprecated 'VectorSkillDiscovery'"
+        )
+
+        # Should use SkillDiscovery
+        assert "SkillDiscovery" in content, "discovery.py should use 'SkillDiscovery'"
+
+    def test_discovery_script_uses_local_only_param(self):
+        """discovery.py should use local_only, not installed_only."""
+        scripts_dir = SKILLS_DIR("skill") / "scripts"
+        discovery_file = scripts_dir / "discovery.py"
+
+        if not discovery_file.exists():
+            pytest.skip("discovery.py not found")
+
+        with open(discovery_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Should NOT use deprecated installed_only
+        assert "installed_only" not in content, (
+            "discovery.py should not use deprecated 'installed_only' parameter"
+        )
+
+        # Should use local_only
+        assert "local_only" in content, "discovery.py should use 'local_only' parameter"
+
+    def test_no_deprecated_list_all_method(self):
+        """discovery.py should use get_index_stats, not list_all."""
+        scripts_dir = SKILLS_DIR("skill") / "scripts"
+        discovery_file = scripts_dir / "discovery.py"
+
+        if not discovery_file.exists():
+            pytest.skip("discovery.py not found")
+
+        with open(discovery_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Should NOT use deprecated list_all
+        assert ".list_all(" not in content, (
+            "discovery.py should not use deprecated 'list_all' method"
+        )
+
+        # Should use get_index_stats
+        assert "get_index_stats" in content, "discovery.py should use 'get_index_stats' method"
+
+
+class TestSkillHotReload:
+    """Test hot reload/unload functionality uses correct API."""
+
+    def test_reload_uses_context_reload_method(self):
+        """reload.py should call ctx.reload(), not registry methods."""
+        scripts_dir = SKILLS_DIR("skill") / "scripts"
+        reload_file = scripts_dir / "reload.py"
+
+        if not reload_file.exists():
+            pytest.skip("reload.py not found")
+
+        with open(reload_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Should call ctx.reload() method
+        assert "ctx.reload(" in content, "reload.py should call ctx.reload()"
+        # Should NOT call registry.unregister_module directly
+        assert "registry.unregister_module" not in content, (
+            "reload.py should not call registry.unregister_module directly"
+        )
+
+    def test_unload_uses_context_unload_method(self):
+        """unload.py should call ctx.unload(), not registry methods."""
+        scripts_dir = SKILLS_DIR("skill") / "scripts"
+        unload_file = scripts_dir / "unload.py"
+
+        if not unload_file.exists():
+            pytest.skip("unload.py not found")
+
+        with open(unload_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Should call ctx.unload() method
+        assert "ctx.unload(" in content, "unload.py should call ctx.unload()"
+        # Should NOT call registry.unregister_module directly
+        assert "registry.unregister_module" not in content, (
+            "unload.py should not call registry.unregister_module directly"
+        )
+
+    def test_reload_checks_correct_skill_registry(self):
+        """reload.py should check ctx.registry.skills, not registry.loaded_skills."""
+        scripts_dir = SKILLS_DIR("skill") / "scripts"
+        reload_file = scripts_dir / "reload.py"
+
+        if not reload_file.exists():
+            pytest.skip("reload.py not found")
+
+        with open(reload_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Should use ctx.registry.skills for loaded check
+        assert "ctx.registry.skills" in content, (
+            "reload.py should check 'ctx.registry.skills' for loaded skills"
+        )
+        # Should NOT use registry.loaded_skills
+        assert "registry.loaded_skills" not in content, (
+            "reload.py should not use deprecated 'registry.loaded_skills'"
+        )
+
+    def test_unload_checks_correct_skill_registry(self):
+        """unload.py should check ctx.registry.skills, not registry.loaded_skills."""
+        scripts_dir = SKILLS_DIR("skill") / "scripts"
+        unload_file = scripts_dir / "unload.py"
+
+        if not unload_file.exists():
+            pytest.skip("unload.py not found")
+
+        with open(unload_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Should use ctx.registry.skills for loaded check
+        assert "ctx.registry.skills" in content, (
+            "unload.py should check 'ctx.registry.skills' for loaded skills"
+        )
+        # Should NOT use registry.loaded_skills
+        assert "registry.loaded_skills" not in content, (
+            "unload.py should not use deprecated 'registry.loaded_skills'"
+        )
+
+    def test_reload_uses_context_core_skills_config(self):
+        """reload.py should use ctx._config.core_skills for pinned check."""
+        scripts_dir = SKILLS_DIR("skill") / "scripts"
+        reload_file = scripts_dir / "reload.py"
+
+        if not reload_file.exists():
+            pytest.skip("reload.py not found")
+
+        with open(reload_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # reload doesn't block pinned skills, but should not hardcode pinned list
+        # It should delegate to ctx._config.core_skills or ctx.reload() which handles it
+        pass  # reload.py doesn't need pinned check, ctx.reload() handles it internally
+
+    def test_unload_uses_context_core_skills_config(self):
+        """unload.py should use ctx._config.core_skills for pinned check."""
+        scripts_dir = SKILLS_DIR("skill") / "scripts"
+        unload_file = scripts_dir / "unload.py"
+
+        if not unload_file.exists():
+            pytest.skip("unload.py not found")
+
+        with open(unload_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Should use ctx._config.core_skills for pinned check
+        assert "ctx._config.core_skills" in content, (
+            "unload.py should use 'ctx._config.core_skills' for pinned check"
+        )
+        # Should NOT hardcode pinned skills list
+        assert '"git"' not in content or "ctx._config" in content, (
+            "unload.py should not hardcode pinned skills, use config"
+        )

@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import structlog
-from git import Repo
+import git  # Use module import to avoid path shadowing with assets/skills/git
 
 from agent.core.installer import SkillInstaller as BaseInstaller
 

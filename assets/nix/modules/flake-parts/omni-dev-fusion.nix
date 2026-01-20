@@ -36,7 +36,7 @@ in
           hack-overlay = final: prev: {
             omni-core-rs = hacks.nixpkgsPrebuilt {
               from = self.packages.${system}.omni-core-rs-python-bindings;
-              prev = prev.omni-core-rs-python-bindings;
+              prev = prev.omni-core-rs;
             };
           };
         in
@@ -66,6 +66,7 @@ in
           );
     in
     {
+      packages.default = self.packages.${system}.omni-dev-fusion;
       packages.omni-dev-fusion = pythonSets.mkVirtualEnv "omni-dev-fusion" workspace.deps.default;
     };
 }

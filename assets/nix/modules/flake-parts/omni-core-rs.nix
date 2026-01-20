@@ -43,7 +43,6 @@ in
         # look at documentation for more options
         # };
       };
-      packages.default = config.nci.outputs."omni-core-rs".packages.release;
       packages.omni-core-rs-python-bindings =
         pkgs.callPackage ../../packages/omni-core-rs.nix
           {

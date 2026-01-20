@@ -11,7 +11,48 @@ Features:
 Uses Rust scanner for SKILL.md parsing.
 """
 
-from __future__ import annotations
+# Import GitPython FIRST, before any other imports
+# This must be done before skills path is added to sys.path
+import importlib.util
+import os
+import sys
+
+_git_spec = importlib.util.find_spec("git")
+if _git_spec:
+    # Check if this is the real GitPython package (has exc.py)
+    git_origin = _git_spec.origin
+    git_dir = os.path.dirname(git_origin) if git_origin else ""
+    has_exc = os.path.exists(os.path.join(git_dir, "exc.py"))
+
+    if has_exc:
+        # This is the real GitPython package
+        git = importlib.import_module("git")
+        _git_exc = importlib.import_module("git.exc")
+    else:
+        # This is assets/skills/git - find the real GitPython
+        # Remove ALL paths containing assets/skills from sys.path
+        skills_paths = [p for p in sys.path if "assets/skills" in p]
+        for p in skills_paths:
+            sys.path.remove(p)
+        try:
+            # Clear cached git module to force re-import from correct location
+            if "git" in sys.modules:
+                del sys.modules["git"]
+            if "git.exc" in sys.modules:
+                del sys.modules["git.exc"]
+            git = importlib.import_module("git")
+            _git_exc = importlib.import_module("git.exc")
+        finally:
+            # Restore skills paths
+            for p in reversed(skills_paths):
+                sys.path.insert(0, p)
+else:
+    # GitPython not found at all
+    import git  # noqa: F401
+    import git.exc as _git_exc  # type: ignore
+
+GitCommandError = _git_exc.GitCommandError
+InvalidGitRepositoryError = _git_exc.InvalidGitRepositoryError
 
 import json
 import shutil
@@ -20,9 +61,6 @@ from pathlib import Path
 from typing import Optional
 import logging
 import subprocess
-
-from git import Repo
-from git.exc import GitCommandError, InvalidGitRepositoryError
 
 from agent.core.skill_discovery import parse_skill_md
 
@@ -174,7 +212,7 @@ class SkillInstaller:
 
         logger.info(f"Configuring sparse checkout for subpath: {subpath}")
 
-        repo = Repo(target_dir)
+        repo = git.Repo(target_dir)
 
         # Enable sparse checkout
         repo.git.config("core.sparseCheckout", "true")
@@ -220,7 +258,7 @@ class SkillInstaller:
 
         logger.info(f"Updating skill at {target_dir}")
 
-        repo_git = Repo(str(target_dir))
+        repo_git = git.Repo(str(target_dir))
 
         # Check for dirty state
         if repo_git.is_dirty():
@@ -282,7 +320,7 @@ class SkillInstaller:
                 hint=self._get_error_hint(e),
             ) from e
 
-    def _smart_stash_update(self, repo_git: Repo) -> None:
+    def _smart_stash_update(self, repo_git: git.Repo) -> None:
         """
         Smart stash & update strategy.
         Stashes local changes, pulls, then attempts to pop stash.
@@ -328,7 +366,7 @@ class SkillInstaller:
             )
         elif "not found" in error_str or "does not exist" in error_str:
             return (
-                "Repository not found. Check the URL is correct.\n"
+                "git.Repository not found. Check the URL is correct.\n"
                 "For private repos, ensure you have access permissions."
             )
         else:
@@ -373,9 +411,9 @@ class SkillInstaller:
         """
         try:
             # Use GitPython directly for better compatibility
-            repo = Repo(str(target_dir))
+            repo = git.Repo(str(target_dir))
             return repo.head.commit.hexsha
-        except (InvalidGitRepositoryError, ValueError):
+        except (InvalidGitgit.RepositoryError, ValueError):
             pass
 
         # Fallback to git rev-parse
@@ -483,7 +521,7 @@ class SkillInstaller:
 
         Args:
             target_dir: Directory of the installed skill
-            repo_url: Repository URL for trusted source check
+            repo_url: git.Repository URL for trusted source check
 
         Returns:
             dict with scan result: {"passed": bool, "error": str or None, "report": dict}

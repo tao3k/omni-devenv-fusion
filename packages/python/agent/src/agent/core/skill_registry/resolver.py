@@ -6,14 +6,49 @@ Multi-strategy skill version resolution.
 Uses Rust scanner for SKILL.md parsing.
 """
 
-from __future__ import annotations
+# Import GitPython FIRST, before any other imports
+# This must be done before skills path is added to sys.path
+import importlib.util
+import os
+import sys
+
+_git_spec = importlib.util.find_spec("git")
+if _git_spec:
+    # Check if this is the real GitPython package (has exc.py)
+    git_origin = _git_spec.origin
+    git_dir = os.path.dirname(git_origin) if git_origin else ""
+    has_exc = os.path.exists(os.path.join(git_dir, "exc.py"))
+
+    if has_exc:
+        # This is the real GitPython package
+        git = importlib.import_module("git")
+        _git_exc = importlib.import_module("git.exc")
+    else:
+        # This is assets/skills/git - find the real GitPython
+        # Remove ALL paths containing assets/skills from sys.path
+        skills_paths = [p for p in sys.path if "assets/skills" in p]
+        for p in skills_paths:
+            sys.path.remove(p)
+        try:
+            git = importlib.import_module("git")
+            _git_exc = importlib.import_module("git.exc")
+        finally:
+            # Restore skills paths
+            for p in reversed(skills_paths):
+                sys.path.insert(0, p)
+else:
+    # GitPython not found at all
+    import git  # noqa: F401
+    import git.exc as _git_exc  # type: ignore
+
+InvalidGitRepositoryError = _git_exc.InvalidGitRepositoryError
 
 import json
 import subprocess
 from pathlib import Path
+from typing import Any, Optional
 
 import structlog
-from git import Repo, InvalidGitRepositoryError
 
 from agent.core.skill_discovery import parse_skill_md
 
@@ -57,12 +92,12 @@ class VersionResolver:
 
         # Strategy 3: Git HEAD
         try:
-            repo = Repo(skill_path)
+            repo = git.Repo(skill_path)
             sha = repo.head.commit.hexsha
             is_dirty = repo.is_dirty()
             suffix = " *" if is_dirty else ""
             return f"{sha[:7]}{suffix}"
-        except (InvalidGitRepositoryError, ValueError):
+        except (InvalidGitgit.RepositoryError, ValueError):
             pass
 
         # Strategy 4: Git rev-parse from parent repo
@@ -101,9 +136,9 @@ class VersionResolver:
         Get the current git revision of an installed skill.
         """
         try:
-            repo = Repo(skill_path)
+            repo = git.Repo(skill_path)
             return repo.head.commit.hexsha[:7]
-        except (InvalidGitRepositoryError, ValueError):
+        except (InvalidGitgit.RepositoryError, ValueError):
             pass
 
         try:
@@ -124,9 +159,9 @@ class VersionResolver:
     def is_dirty(skill_path: Path) -> bool:
         """Check if a skill has uncommitted changes."""
         try:
-            repo = Repo(skill_path)
+            repo = git.Repo(skill_path)
             return repo.is_dirty()
-        except (InvalidGitRepositoryError, ValueError):
+        except (InvalidGitgit.RepositoryError, ValueError):
             pass
 
         try:

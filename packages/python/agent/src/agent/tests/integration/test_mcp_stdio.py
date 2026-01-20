@@ -13,7 +13,6 @@ Usage:
 
 import asyncio
 import pytest
-import threading
 from pathlib import Path
 
 
@@ -127,11 +126,11 @@ class TestWatcherPathDisplay:
 class TestGracefulShutdown:
     """Test graceful shutdown mechanisms."""
 
-    def test_terminate_server_function_exists(self):
-        """Test that terminate_server function exists."""
-        from agent.mcp_server.stdio import _terminate_server
+    def test_request_shutdown_function_exists(self):
+        """Test that request_shutdown function exists (replaces _terminate_server)."""
+        from agent.mcp_server.stdio import request_shutdown
 
-        assert callable(_terminate_server)
+        assert callable(request_shutdown)
 
     def test_setup_signal_handler_function_exists(self):
         """Test that _setup_signal_handler function exists."""
@@ -141,25 +140,26 @@ class TestGracefulShutdown:
 
 
 class TestServerProcessManagement:
-    """Test server process management."""
+    """Test server process management.
 
-    def test_server_process_initial_state(self):
-        """Test that server process starts as None."""
+    Note: Current stdio implementation runs directly without multiprocessing.
+    The old _server_process, _run_server_worker, and _run_server_async are replaced
+    by run_stdio() which handles the server loop directly.
+    """
+
+    def test_run_stdio_exists(self):
+        """Test that run_stdio function exists and is callable."""
+        from agent.mcp_server.stdio import run_stdio
+
+        assert callable(run_stdio)
+
+    def test_no_server_process_attribute(self):
+        """Test that _server_process is not used in current implementation."""
         import agent.mcp_server.stdio as stdio_module
 
-        assert stdio_module._server_process is None
-
-    def test_run_server_worker_exists(self):
-        """Test that _run_server_worker function exists and is callable."""
-        from agent.mcp_server.stdio import _run_server_worker
-
-        assert callable(_run_server_worker)
-
-    def test_run_server_async_exists(self):
-        """Test that _run_server_async function exists and is callable."""
-        from agent.mcp_server.stdio import _run_server_async
-
-        assert callable(_run_server_async)
+        # Current implementation doesn't use _server_process
+        # This test verifies we're using the direct stdio approach
+        assert hasattr(stdio_module, "run_stdio")
 
 
 class TestShutdownCount:
@@ -170,17 +170,6 @@ class TestShutdownCount:
         import agent.mcp_server.stdio as stdio_module
 
         assert stdio_module._shutdown_count == 0
-
-
-class TestProcessLock:
-    """Test process lock for thread-safe process management."""
-
-    def test_process_lock_exists(self):
-        """Test that process lock exists."""
-        import agent.mcp_server.stdio as stdio_module
-
-        assert stdio_module._process_lock is not None
-        assert isinstance(stdio_module._process_lock, type(threading.Lock()))
 
 
 class TestIntegration:

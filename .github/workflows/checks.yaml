@@ -27,7 +27,7 @@ jobs:
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
       - name: Check Rust formatting
-        run: secretspec run --provider env --profile default -- devenv shell -- just cargo test
+        run: secretspec run --provider env --profile default -- devenv shell -- cargo test
 
   nix-build-default:
     runs-on: ${{ matrix.os }}
@@ -51,7 +51,7 @@ jobs:
       - name: Build default package
         run: nix build -v
 
-  nix-build-omni-core-rs:
+  nix-build-omni-core-rs-python-bindings:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -70,5 +70,5 @@ jobs:
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
-      - name: Build omni-core-rs
-        run: nix build .#omni-core-rs -v
+      - name: Build omni-core-rs-python-bindings
+        run: nix build .\#omni-core-rs-python-bindings -v

@@ -34,21 +34,23 @@ from agent.skills.decorators import skill_command
     """,
 )
 async def unload_skill(name: str) -> str:
-    from agent.core.skill_manager.manager import _get_singleton_manager
+    from agent.core.skill_runtime import get_skill_context
 
-    manager = _get_singleton_manager()
+    ctx = get_skill_context()
 
-    if name not in manager._skills:
+    if name not in ctx.registry.skills:
         return f"""**Skill Not Loaded**
 
 Skill `{name}` is not currently loaded. Use `omni skill list` to see loaded skills."""
 
-    if name in manager._pinned_skills:
+    # Check if it's a pinned skill (from config)
+    if name in ctx._config.core_skills:
         return f"""**Cannot Unload Pinned Skill**
 
 `{name}` is a core pinned skill and cannot be unloaded. Core skills are essential for system operation."""
 
-    success = manager.unload(name)
+    # Unload the skill via SkillContext
+    success = ctx.unload(name)
 
     if success:
         return f"""**Skill Unloaded**

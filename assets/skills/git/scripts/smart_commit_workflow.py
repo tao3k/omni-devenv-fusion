@@ -333,12 +333,9 @@ async def _approve_smart_commit_async(
     project_root: str = ".",
 ) -> Dict[str, Any]:
     """Approve and execute commit with the given message."""
-    from agent.core.skill_manager.manager import _get_singleton_manager
-
-    skill_manager = _get_singleton_manager()
-
     import subprocess
 
+    # Get staged files count
     try:
         proc = subprocess.run(
             ["git", "diff", "--cached", "--name-only"],
@@ -355,17 +352,27 @@ async def _approve_smart_commit_async(
         workflow_id, {"status": "approved", "final_message": message, "file_count": file_count}
     )
 
-    commit_result = await skill_manager.run(
-        "git", "git_commit", {"message": message, "project_root": project_root}
+    # Execute commit directly via subprocess (simpler than skill_manager.run)
+    result = subprocess.run(
+        ["git", "commit", "-m", message],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
     )
 
     commit_hash = ""
-    if isinstance(commit_result, str):
-        import re
+    if result.returncode == 0:
+        # Extract commit hash from the commit output or run rev-parse
+        proc = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode == 0:
+            commit_hash = proc.stdout.strip()[:8]
 
-        match = re.search(r"\[([a-f0-9]+)\]", commit_result)
-        if match:
-            commit_hash = match.group(1)
+    commit_result = result.stdout if result.returncode == 0 else f"Commit failed: {result.stderr}"
 
     return {
         "status": "committed",

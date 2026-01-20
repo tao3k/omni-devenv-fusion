@@ -12,11 +12,41 @@ Tests cover:
 Uses Rust scanner for SKILL.md parsing.
 """
 
+# Import GitPython FIRST, before any other imports
+# This must be done before skills path is added to sys.path
+import importlib.util
+import os
+import sys
+
+_git_spec = importlib.util.find_spec("git")
+if _git_spec:
+    # Check if this is the real GitPython package (has exc.py)
+    git_origin = _git_spec.origin
+    git_dir = os.path.dirname(git_origin) if git_origin else ""
+    has_exc = os.path.exists(os.path.join(git_dir, "exc.py"))
+
+    if has_exc:
+        # This is the real GitPython package
+        git = importlib.import_module("git")
+    else:
+        # This is assets/skills/git - find the real GitPython
+        # Remove ALL paths containing assets/skills from sys.path
+        skills_paths = [p for p in sys.path if "assets/skills" in p]
+        for p in skills_paths:
+            sys.path.remove(p)
+        try:
+            git = importlib.import_module("git")
+        finally:
+            # Restore skills paths
+            for p in reversed(skills_paths):
+                sys.path.insert(0, p)
+else:
+    import git  # noqa: F401
+
 import pytest
 import json
 import subprocess
 from pathlib import Path
-from git import Repo
 
 from agent.core.installer import SkillInstaller
 from agent.core.skill_registry import SkillRegistry, get_skill_registry
@@ -30,7 +60,7 @@ def mock_remote_repo(tmp_path):
     remote_dir.mkdir()
 
     # Initialize git
-    repo = Repo.init(remote_dir)
+    repo = git.Repo.init(remote_dir)
 
     # Create SKILL.md (unified manifest format)
     skill_md = """---
@@ -182,7 +212,7 @@ class TestSkillInstaller:
         assert installer.is_dirty(install_dir) is True
 
         # 3. Update remote to v2
-        remote_repo = Repo(mock_remote_repo)
+        remote_repo = git.Repo(mock_remote_repo)
         (Path(mock_remote_repo) / "tools.py").write_text(
             '''"""Test skill tools v2."""
 from agent.skills.decorators import skill_command
