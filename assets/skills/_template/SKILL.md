@@ -49,20 +49,9 @@ _template/
 
 ## Why scripts/commands.py Pattern?
 
-The new architecture simplifies the skill pattern:
-
-**Old pattern:**
-
-- `tools.py` - Router with `@skill_command` decorators
-- `scripts/*.py` - Implementation functions
-
-**New pattern:**
+The Trinity Architecture v2.0 uses a simplified pattern:
 
 - `scripts/commands.py` - Commands with `@skill_command` decorators
-- No `tools.py` needed
-
-**Benefits:**
-
 - Single source of truth
 - No router-indirection layer
 - Easier to understand and maintain

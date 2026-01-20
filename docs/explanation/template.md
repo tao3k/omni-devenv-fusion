@@ -19,7 +19,7 @@ Start with the problem, not the solution. Tell the story of why we built this.
 What was wrong with the status quo?
 
 > _Example:_
-> "When we started building Omni-DevEnv, we tried using standard MCP connections. However, we quickly hit a wall: standard MCP tools are isolated. The 'Git' tool didn't know about the 'Linear' tickets. We needed a way to glue them together."
+> "When we started building Omni-Dev-Fusion, we tried using standard MCP connections. However, we quickly hit a wall: standard MCP tools are isolated. The 'Git' tool didn't know about the 'Linear' tickets. We needed a way to glue them together."
 
 ### The Goal
 

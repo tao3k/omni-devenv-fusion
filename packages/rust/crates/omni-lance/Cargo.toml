@@ -3,7 +3,7 @@ name = "omni-lance"
 version.workspace = true
 edition.workspace = true
 description = "LanceDB RecordBatch utilities"
-authors = ["Omni-DevEnv Team"]
+authors = ["Omni-Dev-Fusion Team"]
 license = "Apache-2.0"
 publish = false
 

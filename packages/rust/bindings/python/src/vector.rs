@@ -337,20 +337,41 @@ impl PyVectorStore {
     /// Returns:
     ///   List of JSON strings representing tool records
     fn scan_skill_tools_raw(&self, base_path: String) -> PyResult<Vec<String>> {
-        // Use the omni-vector scanner directly
-        let scanner = omni_vector::ScriptScanner::new();
+        // Use SkillScanner for metadata and ScriptScanner for tools
+        let skill_scanner = omni_vector::SkillScanner::new();
+        let script_scanner = omni_vector::ScriptScanner::new();
         let skills_path = Path::new(&base_path);
 
         if !skills_path.exists() {
             return Ok(vec![]);
         }
 
-        let tools = scanner
-            .scan_all(skills_path)
+        // Step 1: Scan SKILL.md files to get routing_keywords
+        let metadatas = skill_scanner
+            .scan_all(skills_path, None)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
+        // Step 2: For each skill, scan scripts with routing_keywords
+        let mut all_tools: Vec<omni_vector::ToolRecord> = Vec::new();
+
+        for metadata in &metadatas {
+            let skill_scripts_path = skills_path.join(&metadata.skill_name).join("scripts");
+
+            match script_scanner.scan_scripts(
+                &skill_scripts_path,
+                &metadata.skill_name,
+                &metadata.routing_keywords,
+            ) {
+                Ok(tools) => all_tools.extend(tools),
+                Err(e) => eprintln!(
+                    "Warning: Failed to scan scripts for '{}': {}",
+                    metadata.skill_name, e
+                ),
+            }
+        }
+
         // Convert to JSON strings
-        let json_tools: Vec<String> = tools
+        let json_tools: Vec<String> = all_tools
             .into_iter()
             .map(|t| serde_json::to_string(&t).unwrap_or_default())
             .filter(|s| !s.is_empty())

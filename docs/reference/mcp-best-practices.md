@@ -28,13 +28,13 @@ server = Server("omni-agent")
 
 @server.list_tools()
 async def list_tools() -> list[Tool]:
-    """Dynamic tool discovery from SkillManager."""
+    """Dynamic tool discovery from SkillContext."""
     # Your tool listing logic here
     return []
 
 @server.call_tool()
 async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
-    """Execute tool via SkillManager."""
+    """Execute tool via SkillContext."""
     # Your tool execution logic here
     return [TextContent(type="text", text="result")]
 ```
@@ -51,7 +51,7 @@ MCP Server runs on an async Event Loop. Calling `asyncio.run()` inside the loop 
 
 ```python
 # Correct: Native async/await
-class SkillManager:
+class SkillContext:
     async def run(self, skill_name: str, command_name: str, args: dict = None) -> str:
         if asyncio.iscoroutinefunction(func):
             result = await func(**args)
@@ -96,13 +96,13 @@ server = Server("omni-agent")
 @server.list_tools()
 async def list_tools() -> list[Tool]:
     """Expose skill commands as individual tools."""
-    from agent.core.skill_manager import get_skill_manager
+    from agent.core.skill_runtime import get_skill_context
 
-    manager = get_skill_manager()
+    context = get_skill_context()
     tools = []
 
-    for skill_name in manager.list_loaded():
-        for cmd_name in manager.get_commands(skill_name):
+    for skill_name in context.list_loaded():
+        for cmd_name in context.get_commands(skill_name):
             tools.append(Tool(
                 name=f"{skill_name}.{cmd_name}",
                 description=f"Execute {skill_name}.{cmd_name}",
@@ -114,10 +114,10 @@ async def list_tools() -> list[Tool]:
 @server.call_tool()
 async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
     """Single entry point for all skill commands."""
-    from agent.core.skill_manager import get_skill_manager
+    from agent.core.skill_runtime import get_skill_context
 
     args = arguments or {}
-    manager = get_skill_manager()
+    context = get_skill_context()
 
     if "." in name:
         skill_name, command_name = name.split(".", 1)
@@ -125,7 +125,7 @@ async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
         skill_name = name
         command_name = "help"
 
-    result = await manager.run(skill_name, command_name, args)
+    result = await context.run(skill_name, command_name, args)
     return [TextContent(type="text", text=str(result))]
 ```
 
@@ -234,12 +234,12 @@ src/
 
 ```python
 import pytest
-from agent.core.skill_manager import get_skill_manager
+from agent.core.skill_runtime import get_skill_context
 
 @pytest.mark.asyncio
 async def test_skill_command():
-    manager = get_skill_manager()
-    result = await manager.run("git", "status", {})
+    context = get_skill_context()
+    result = await context.run("git", "status", {})
     assert "Git Status" in result
 ```
 

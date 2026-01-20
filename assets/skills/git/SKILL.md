@@ -85,6 +85,51 @@ git.smart_commit(action="approve", workflow_id="xxx", message="feat: description
 
 **Flow:** `stage_and_scan` → `route_prepare` → `format_review` → `re_stage` → `interrupt` → `commit`
 
+## Staged Files Feature
+
+### Stage and Scan Workflow
+
+The `stage_and_scan` function (Phase 35.2) provides automatic staging with security validation:
+
+```
+Stage All Files → Security Scan → Lefthook Pre-commit → Finalize
+```
+
+#### Key Features
+
+1. **Automatic Staging**
+
+   ```python
+   stage_and_scan(project_root=".")
+   # Returns: {staged_files, diff, security_issues, lefthook_error}
+   ```
+
+2. **Security Scanning**
+   - Detects sensitive files (`.env*`, `*.pem`, `*.key`, `*.secret`, etc.)
+   - Automatically un-stages detected files
+   - Returns list of security issues
+
+3. **Lefthook Integration**
+   - Runs pre-commit hooks after staging
+   - Re-stages files modified by lefthook formatters
+   - Returns lefthook output for review
+
+### Staged Files Commands
+
+| Command           | Description                               |
+| ----------------- | ----------------------------------------- |
+| `git.stage_all()` | Stage all changes with security scan      |
+| `git.status()`    | Show staged files and working tree status |
+| `git.diff()`      | Show staged diff                          |
+
+### Security Patterns Detected
+
+```
+.env*, *.env*, *.pem, *.key, *.secret, *.credentials*
+id_rsa*, id_ed25519*, *.priv
+secrets.yml, secrets.yaml, credentials.yml
+```
+
 ## Usage Guidelines
 
 ### Read Operations (Safe - Use Claude-native bash)

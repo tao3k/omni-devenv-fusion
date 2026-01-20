@@ -251,8 +251,8 @@ class TestMissionBriefIntegration:
 
         # Mock the registry
         coder.registry = MagicMock()
-        coder.registry.get_skill_manifest = MagicMock(
-            return_value=MagicMock(description="Test skill", tools_module="test.tools")
+        coder.registry.get_skill_metadata = MagicMock(
+            return_value=MagicMock(description="Test skill", routing_keywords=["test"])
         )
 
         # Prepare context with specific mission brief

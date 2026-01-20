@@ -32,7 +32,7 @@ def boot_core_skills(mcp: Optional["Server"] = None):
 
     registry = get_skill_registry()
 
-    logger.info("Booting Omni-DevEnv Kernel...")
+    logger.info("Booting Omni-Dev-Fusion Kernel...")
 
     # Use config-driven preloading
     preload_skills = registry.get_preload_skills()
@@ -46,7 +46,7 @@ def boot_core_skills(mcp: Optional["Server"] = None):
     for skill in preload_skills:
         try:
             # Check if skill exists before trying to load
-            if registry.get_skill_manifest(skill):
+            if registry.get_skill_metadata(skill):
                 # Load skill (mcp parameter is ignored in pure MCP mode,
                 # but kept for API compatibility)
                 success, msg = registry.load_skill(skill, mcp)

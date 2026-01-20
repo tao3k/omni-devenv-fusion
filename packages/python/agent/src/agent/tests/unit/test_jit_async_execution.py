@@ -223,6 +223,14 @@ class TestOmniAgentAsyncTools:
 class TestStepCounting:
     """Test step counting in OmniLoop."""
 
+    def setup_method(self):
+        """Reset OmniLoop state before each test (OmniLoop is a singleton)."""
+        from agent.core.omni import OmniLoop
+
+        agent = OmniLoop()
+        agent.max_steps = 1
+        agent.step_count = 0
+
     def test_max_steps_default_is_one(self):
         """Test that default max_steps is 1."""
         from agent.core.omni import OmniLoop

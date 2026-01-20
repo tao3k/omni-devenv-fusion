@@ -167,12 +167,12 @@ server = Server("omni-agent")
 
 @server.list_tools()
 async def list_tools():
-    """Dynamic tool discovery from SkillManager."""
+    """Dynamic tool discovery from SkillContext."""
     ...
 
 @server.call_tool()
 async def call_tool(name: str, arguments: dict):
-    """Execute via SkillManager."""
+    """Execute via SkillContext."""
     ...
 ```
 
@@ -241,13 +241,13 @@ assets/skills/
 
 ### 2. Loading
 
-Skills are loaded on-demand via SkillManager:
+Skills are loaded on-demand via SkillContext:
 
 ```python
-from agent.core.skill_manager import get_skill_manager
+from agent.core.skill_runtime import get_skill_context
 
-manager = get_skill_manager()
-await manager.load_skill("git")
+context = get_skill_context()
+await context.load_skill("git")
 ```
 
 ### 3. Hot Reload
@@ -273,7 +273,7 @@ results = await search_skills(skill_name, limit=10)
 Memory-efficient garbage collection with pinned core skills:
 
 ```python
-class SkillManager:
+class SkillContext:
     _max_loaded_skills: int = 15
     _pinned_skills: set[str] = {
         "filesystem", "terminal", "writer", "git", "note_taker"

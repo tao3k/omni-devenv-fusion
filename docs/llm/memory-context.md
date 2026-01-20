@@ -4,7 +4,7 @@
 
 ## Overview
 
-This guide explains how memory systems work in Omni-DevEnv Fusion and how LLMs can leverage episodic memory.
+This guide explains how memory systems work in Omni-Dev-Fusion Fusion and how LLMs can leverage episodic memory.
 
 ## Memory Architecture
 

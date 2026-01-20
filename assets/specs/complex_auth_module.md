@@ -6,7 +6,7 @@ Spec: Complex Auth Module
 
 ## 1. Context & Goal (Why)
 
-_Building a centralized authentication module for the Omni-DevEnv project to provide secure, reusable auth primitives across MCP servers and CLI tools._
+_Building a centralized authentication module for the Omni-Dev-Fusion project to provide secure, reusable auth primitives across MCP servers and CLI tools._
 
 - **Goal**: Create a `complex_auth_module` that handles authentication flows, credential management, and session lifecycle for the orchestrator and coder MCP servers.
 - **User Story**: As a developer, I want a unified authentication module so that I can implement secure access control without reinventing auth patterns for each component.
@@ -60,7 +60,7 @@ class Credential(BaseModel):
 
 ```python
 class AuthModule:
-    """Centralized authentication module for Omni-DevEnv."""
+    """Centralized authentication module for Omni-Dev-Fusion."""
 
     def __init__(self, config: AuthConfig) -> None:
         """Initialize auth module with configuration."""

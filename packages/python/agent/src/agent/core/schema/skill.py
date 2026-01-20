@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 
 class SkillDependencies(BaseModel):
-    """Skill dependency configuration (Manifest v2.0)."""
+    """Skill dependency configuration (SkillMetadata v2.0)."""
 
     skills: dict = Field(
         default_factory=dict, description="Skill dependencies with version constraints"
@@ -17,13 +17,13 @@ class SkillDependencies(BaseModel):
     )
 
 
-class SkillManifest(BaseModel):
-    """Metadata for a dynamically loadable skill (Manifest v2.0)."""
+class SkillMetadata(BaseModel):
+    """Metadata for a dynamically loadable skill (SkillMetadata v2.0)."""
 
     model_config = {"extra": "allow"}  # Allow extra fields like routing_keywords
 
     # v2.0 new fields
-    manifest_version: str = Field(default="1.0.0", description="Manifest version format")
+    metadata_version: str = Field(default="1.0.0", description="Metadata version format")
     type: str = Field(default="skill", description="Component type: skill, agent, instruction")
     name: str = Field(..., description="Unique skill identifier (e.g., 'git')")
     version: str = Field(..., description="Semantic version")
@@ -47,8 +47,10 @@ class SkillManifest(BaseModel):
         default_factory=SkillDependencies, description="Dependencies configuration"
     )
 
-    tools_module: str = Field(
-        ..., description="Python module path containing the tool registration logic"
+    # v2.0 module paths (commands module is required, others optional)
+    commands_module: str = Field(
+        default="scripts",
+        description="Python module path containing the skill commands (default: scripts)",
     )
     workflow_module: Optional[str] = Field(
         None, description="Workflow module path for skills with complex workflows"
@@ -66,7 +68,7 @@ class SkillManifest(BaseModel):
 
 # Rebuild models after all classes are defined
 SkillDependencies.model_rebuild()
-SkillManifest.model_rebuild()
+SkillMetadata.model_rebuild()
 
 
-__all__ = ["SkillDependencies", "SkillManifest"]
+__all__ = ["SkillDependencies", "SkillMetadata"]

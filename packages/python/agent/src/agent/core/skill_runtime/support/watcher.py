@@ -12,8 +12,9 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
+import concurrent.futures
 import logging
+import threading
 import time
 from pathlib import Path
 from typing import Optional
@@ -21,13 +22,37 @@ from typing import Optional
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-from ...core.vector_store import get_vector_memory
+import structlog
+from ....core.vector_store import get_vector_memory
 from common.skills_path import SKILLS_DIR
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Global lock to prevent overlapping syncs
 _watcher_sync_lock = False
+
+# Thread pool for sync operations (avoids blocking watchdog thread)
+_sync_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="sync")
+
+
+def _shutdown_executor() -> None:
+    """Shutdown the sync executor."""
+    global _sync_executor
+    _sync_executor.shutdown(wait=False)
+    _sync_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="sync")
+
+
+def _do_sync(skills_dir: str) -> dict:
+    """Perform sync in thread pool (blocking but non-async)."""
+    vm = get_vector_memory()
+    # sync_skills is async, run it in the event loop
+    import asyncio
+
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(vm.sync_skills(skills_dir, "skills"))
+    finally:
+        loop.close()
 
 
 class SkillSyncHandler(FileSystemEventHandler):
@@ -37,7 +62,7 @@ class SkillSyncHandler(FileSystemEventHandler):
     Features:
     - Ignores directories and non-Python files
     - Debounces rapid changes (1s cooldown)
-    - Thread-safe: uses fresh VectorStore instance per sync
+    - Uses thread pool for sync (non-blocking watchdog callback)
     - Prevents overlapping syncs with global lock
     """
 
@@ -77,24 +102,20 @@ class SkillSyncHandler(FileSystemEventHandler):
 
         _watcher_sync_lock = True
         try:
-            # [NEW] Syntax check pre-flight - catches SyntaxError without crashing
+            # Syntax check pre-flight - catches SyntaxError without crashing
             if not self._validate_syntax(src_path):
-                return  # Skip files with syntax errors
+                _watcher_sync_lock = False
+                return
 
-            # Use fresh VectorStore instance (thread-safe)
-            # Note: sync_skills is async, so we need to run it in an event loop
-            vm = get_vector_memory()
-            stats = asyncio.run(vm.sync_skills(self.skills_dir, "skills"))
+            # Submit sync to thread pool (fire-and-forget, non-blocking)
+            future = _sync_executor.submit(_do_sync, self.skills_dir)
 
-            if any(
-                v > 0
-                for v in [stats.get("added", 0), stats.get("modified", 0), stats.get("deleted", 0)]
-            ):
-                logger.info(
-                    f"auto_sync_complete: +{stats.get('added', 0)} ~{stats.get('modified', 0)} -{stats.get('deleted', 0)}"
-                )
+            # Log result when ready (non-blocking callback)
+            future.add_done_callback(lambda f: self._on_sync_done(f, self.skills_dir))
+
+            # Unlock immediately since we're not waiting
+            _watcher_sync_lock = False
         except SyntaxError as e:
-            # Should not reach here since _validate_syntax handles it
             logger.warning(f"syntax_error_in_sync: {e}")
         except Exception as e:
             logger.error(f"auto_sync_failed: {e}")
@@ -117,6 +138,20 @@ class SkillSyncHandler(FileSystemEventHandler):
             logger.warning(f"syntax_error_detected_ignoring: {file_path} - {e}")
             return False
 
+    def _on_sync_done(self, future: concurrent.futures.Future, skills_dir: str) -> None:
+        """Callback when sync completes (runs in thread pool thread)."""
+        try:
+            stats = future.result()
+            if any(
+                v > 0
+                for v in [stats.get("added", 0), stats.get("modified", 0), stats.get("deleted", 0)]
+            ):
+                logger.info(
+                    f"auto_sync_complete: +{stats.get('added', 0)} ~{stats.get('modified', 0)} -{stats.get('deleted', 0)}"
+                )
+        except Exception as e:
+            logger.error(f"auto_sync_callback_failed: {e}")
+
 
 class BackgroundWatcher:
     """
@@ -130,6 +165,7 @@ class BackgroundWatcher:
     def __init__(self):
         self.observer: Optional[Observer] = None
         self._running = False
+        self._start_lock = threading.Lock()
 
     def start(self, skills_path: Optional[str] = None) -> None:
         """
@@ -142,22 +178,44 @@ class BackgroundWatcher:
             logger.warning("Watcher already running")
             return
 
-        if skills_path is None:
-            skills_path = str(SKILLS_DIR())
+        with self._start_lock:
+            # Double-check inside lock
+            if self._running:
+                return
 
-        skills_dir = Path(skills_path)
-        if not skills_dir.exists():
-            logger.warning(f"skills_dir_not_found: {skills_path}")
-            return
+            if skills_path is None:
+                skills_path = str(SKILLS_DIR())
 
-        # Create handler and observer
-        event_handler = SkillSyncHandler(skills_path)
-        self.observer = Observer()
-        self.observer.schedule(event_handler, skills_path, recursive=True)
-        self.observer.start()
+            skills_dir = Path(skills_path)
+            if not skills_dir.exists():
+                logger.warning(f"skills_dir_not_found: {skills_path}")
+                return
 
-        self._running = True
-        logger.info(f"Skill Watcher started: {skills_path}")
+            # Create handler and observer
+            event_handler = SkillSyncHandler(skills_path)
+            self.observer = Observer()
+            self.observer.schedule(event_handler, skills_path, recursive=True)
+
+            # Start observer in a background thread (daemon)
+            # This is needed because observer.start() can block on some platforms
+            def _start_observer():
+                self.observer.start()
+
+            observer_thread = threading.Thread(
+                target=_start_observer, name="watcher-observer", daemon=True
+            )
+            observer_thread.start()
+
+            self._running = True
+            # Show path relative to project root
+            skills_path_obj = Path(skills_path)
+            # Get the last 2 components: "assets/skills"
+            parts = (
+                skills_path_obj.parts[-2:]
+                if len(skills_path_obj.parts) >= 2
+                else skills_path_obj.parts
+            )
+            logger.info(f"👀 [Watcher] Watching: {'/'.join(parts)}")
 
     def run(self, skills_path: Optional[str] = None) -> None:
         """
@@ -183,8 +241,12 @@ class BackgroundWatcher:
         logger.info("Stopping Skill Watcher...")
         if self.observer:
             self.observer.stop()
-            self.observer.join()
+            # Join with timeout
+            self.observer.join(timeout=1.0)
             self.observer = None
+
+        # Shutdown executor
+        _shutdown_executor()
 
         self._running = False
         logger.info("Skill Watcher stopped")

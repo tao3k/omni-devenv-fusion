@@ -69,7 +69,7 @@ def load_module_isolated(path: Path, skill_name: str) -> types.ModuleType:
 
     # Find skills directory
     # Try multiple locations to find the skills directory
-    skills_dir = P("/Users/guangtao/ghq/github.com/tao3k/omni-devenv-fusion/assets/skills")
+    skills_dir = P("/Users/guangtao/ghq/github.com/tao3k/omni-dev-fusion/assets/skills")
     if not skills_dir.exists():
         module_dir = P(__file__).parent.parent.parent
         skills_dir = module_dir / "assets" / "skills"

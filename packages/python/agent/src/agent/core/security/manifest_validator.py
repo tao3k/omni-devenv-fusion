@@ -3,13 +3,14 @@ agent/core/security/manifest_validator.py
  SKILL.md Validator for skill permission audit.
 
 Validates skill SKILL.md for dangerous permissions.
+Uses Rust scanner for high-performance parsing.
 """
 
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import frontmatter
+from agent.core.skill_discovery import parse_skill_md
 
 
 @dataclass
@@ -172,9 +173,8 @@ class ManifestValidator:
             return result
 
         try:
-            with open(skill_md_path) as f:
-                post = frontmatter.load(f)
-            manifest = post.metadata or {}
+            # Use Rust scanner for high-performance parsing
+            manifest = parse_skill_md(skill_md_path.parent) or {}
         except Exception as e:
             result.add_error(f"Failed to parse SKILL.md: {e}")
             return result

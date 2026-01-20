@@ -483,7 +483,7 @@ from typing import Dict, Any, Optional
 from .rendering import render_template, render_commit_message
 from .prepare import _get_cog_scopes
 
-_DB_PATH = Path.home() / ".cache" / "omni-devenv-fusion" / "workflows.db"
+_DB_PATH = Path.home() / ".cache" / "omni-dev-fusion" / "workflows.db"
 
 def _get_state_db() -> sqlite3.Connection:
     _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -518,12 +518,12 @@ def _get_workflow_state(workflow_id: str) -> Optional[Dict[str, Any]]:
     return json.loads(row[0]) if row else None
 
 async def _start_smart_commit_async() -> Dict[str, Any]:
-    from agent.core.skill_manager.manager import SkillManager
-    skill_manager = SkillManager()
+    from agent.core.skill_runtime import get_skill_context
+    context = get_skill_context()
     wf_id = str(uuid.uuid4())[:8]
 
     # Run stage_and_scan
-    result = await skill_manager.run("git", "stage_and_scan", {})
+    result = await context.run("git", "stage_and_scan", {})
     staged_files = result.get("staged_files", [])
     diff = result.get("diff", "")
 
@@ -542,11 +542,11 @@ async def _start_smart_commit_async() -> Dict[str, Any]:
     return state
 
 async def _approve_smart_commit_async(message: str, workflow_id: str) -> Dict[str, Any]:
-    from agent.core.skill_manager.manager import SkillManager
-    skill_manager = SkillManager()
+    from agent.core.skill_runtime import get_skill_context
+    context = get_skill_context()
 
     # Execute commit
-    result = await skill_manager.run("git", "git_commit", {"message": message})
+    result = await context.run("git", "git_commit", {"message": message})
 
     _save_workflow_state(workflow_id, {"status": "approved", "final_message": message})
 

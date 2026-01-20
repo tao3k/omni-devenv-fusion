@@ -21,6 +21,17 @@ from typing import Optional
 import structlog
 
 
+class SubprocessLogFilter(logging.Filter):
+    """Filter out non-structured subprocess logs (e.g., Popen debug output from GitPython)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        # Filter out Popen debug output
+        if "Popen(['git'" in msg or "subprocess.Popen" in msg:
+            return False
+        return True
+
+
 def configure_logging(level: str = "INFO") -> None:
     """Configure global logging to send all logs to stderr.
 
@@ -37,6 +48,7 @@ def configure_logging(level: str = "INFO") -> None:
 
     # Key: StreamHandler uses sys.stderr
     stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.addFilter(SubprocessLogFilter())
 
     # Simple format, specific rendering handled by structlog or rich
     formatter = logging.Formatter("%(message)s")
@@ -46,6 +58,8 @@ def configure_logging(level: str = "INFO") -> None:
     root_logger.setLevel(log_level)
 
     # 2. Configure Structlog (for internal structured logging)
+    # Disable ConsoleRenderer in stdio mode to avoid polluting stderr with ANSI codes
+    # which can interfere with MCP protocol communication
     structlog.configure(
         processors=[
             structlog.stdlib.add_log_level,
@@ -53,8 +67,8 @@ def configure_logging(level: str = "INFO") -> None:
             structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S"),
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
-            # ConsoleRenderer renders colors, but final print goes through logging handler (stderr)
-            structlog.dev.ConsoleRenderer(colors=True),
+            # Use plain text renderer instead of ConsoleRenderer for MCP stdio mode
+            structlog.dev.ConsoleRenderer(colors=False),
         ],
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),

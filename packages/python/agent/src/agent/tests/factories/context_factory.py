@@ -1,65 +1,88 @@
 """
 Context Factory
 
-生成 AgentContext 和相关对象的测试数据。
+生成 AgentContext, SessionState, AgentResult 等核心对象的测试数据。
+
+Usage:
+    from agent.tests.factories import AgentContextFactory, SessionStateFactory
+
+    context = AgentContextFactory.build()
+    state = SessionStateFactory.build()
 """
 
 from typing import Any
 from polyfactory.factories.pydantic_factory import ModelFactory
 
+from agent.core.agents.base import AgentContext, AgentResult, AuditResult
+from agent.core.session import SessionState, SessionEvent
 
-class AgentContextFactory(ModelFactory):
-    """Factory for generating AgentContext instances.
 
-    Note: Replace with actual AgentContext import when available.
-    """
+class AgentContextFactory(ModelFactory[AgentContext]):
+    """Factory for generating AgentContext instances."""
 
-    __model__: Any = None  # Set to actual model class when available
+    __model__ = AgentContext
+    __random_seed__ = 42
 
-    # Placeholder fields - will be replaced with actual model
+    system_prompt = "You are a helpful AI assistant."
+    tools = []
+    mission_brief = "Complete the assigned task."
+    constraints = []
+    relevant_files = []
+    knowledge_context = ""
+    rag_sources = []
+
+
+class AgentResultFactory(ModelFactory[AgentResult]):
+    """Factory for generating AgentResult instances."""
+
+    __model__ = AgentResult
+    __random_seed__ = 42
+
+    success = True
+    content = ""
+    tool_calls = []
+    message = ""
+    confidence = 0.5
+    audit_result = None
+    needs_review = False
+    rag_sources = []
+
+
+class SessionStateFactory(ModelFactory[SessionState]):
+    """Factory for generating SessionState instances."""
+
+    __model__ = SessionState
+    __random_seed__ = 42
+
     session_id = "test-session-123"
-    user_id = "test-user-456"
-    working_directory = "/tmp/test"
-    environment = "development"
-
-
-class SessionStateFactory(ModelFactory):
-    """Factory for generating session state objects."""
-
-    __model__: Any = None  # Set to actual model class when available
-
-    session_id = "test-session-123"
-    created_at = "2024-01-01T00:00:00Z"
-    last_activity = "2024-01-01T00:00:00Z"
-    state = {"active_skills": [], "context": {}}
-
-
-class ConversationContextFactory(ModelFactory):
-    """Factory for generating conversation context objects."""
-
-    __model__: Any = None  # Set to actual model class when available
-
-    conversation_id = "conv-123"
-    messages = []
-    current_skill = None
+    mission_id = None
+    current_agent = None
+    attempt_number = 1
     history = []
+    telemetry = None  # Will use default from model
 
 
-# =============================================================================
-# Documentation Examples
-# =============================================================================
-"""
-Usage Examples:
+class SessionEventFactory(ModelFactory[SessionEvent]):
+    """Factory for generating SessionEvent instances."""
 
-# 1. Basic usage
-def test_context_has_required_fields():
-    from agent.tests.factories import AgentContextFactory
-    context = AgentContextFactory.build()
-    assert context.session_id is not None
+    __model__ = SessionEvent
+    __random_seed__ = 42
 
-# 2. With overrides
-def test_context_with_custom_session():
-    from agent.tests.factories import AgentContextFactory
-    context = AgentContextFactory.build(session_id="my-custom-session")
-    assert context.session_id == "my-custom-session"
-"""
+    type = "user"
+    source = "user"
+    content = "Test event content"
+    usage = None
+    metadata = None
+
+
+class AuditResultFactory(ModelFactory[AuditResult]):
+    """Factory for generating AuditResult instances."""
+
+    __model__ = AuditResult
+    __random_seed__ = 42
+
+    approved = True
+    feedback = ""
+    confidence = 0.5
+    issues_found = []
+    suggestions = []

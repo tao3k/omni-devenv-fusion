@@ -15,7 +15,7 @@ Simplified for JIT/Meta-Agent Era. Removed syntax validation - Python import cat
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      SkillManager                           │
+│                      SkillContext                           │
 │  ┌─────────────────┐                                        │
 │  │  _ensure_fresh  │───▶ Direct reload (no validation)     │
 │  │  (mtime check)  │                                        │
@@ -218,11 +218,11 @@ skill_manager._mtime_cache.clear()
 
 ## Related Files
 
-| File                                                                  | Purpose                                  |
-| --------------------------------------------------------------------- | ---------------------------------------- |
-| `packages/python/agent/src/agent/core/skill_manager/hot_reload.py`    | HotReloadMixin implementation            |
-| `packages/python/agent/src/agent/core/skill_manager/skill_manager.py` | SkillManager with hot-reload integration |
-| `packages/python/agent/src/agent/core/skill_manager/discovery.py`     | Skill discovery and loading              |
+| File                                                              | Purpose                                  |
+| ----------------------------------------------------------------- | ---------------------------------------- |
+| `packages/python/agent/src/agent/core/skill_runtime/lifecycle.py` | HotReloadMixin implementation            |
+| `packages/python/agent/src/agent/core/skill_runtime/context.py`   | SkillContext with hot-reload integration |
+| `packages/python/agent/src/agent/core/skill_runtime/discovery.py` | Skill discovery and loading              |
 
 ## See Also
 

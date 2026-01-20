@@ -75,7 +75,7 @@ def verify_doc_compliance(doc_path: str) -> bool:
 ## 3. Implementation Plan (How)
 
 1. [ ] **Define Template Structure**: Establish the 5-section structure (Context, Mental Model, Mechanics, Decisions, Roadmap) in `docs/explanation/template.md`
-2. [ ] **Create Placeholder Content**: Replace template examples with Omni-DevEnv-specific examples where appropriate
+2. [ ] **Create Placeholder Content**: Replace template examples with Omni-Dev-Fusion-specific examples where appropriate
 3. [ ] **Add Related Links Section**: Include references to tutorials, how-tos, and API docs for cross-linking
 4. [ ] **Document Integration Points**: Clarify how concept docs connect to tutorials and reference materials
 5. [ ] **Update Documentation Index**: Add this template to the docs navigation hierarchy

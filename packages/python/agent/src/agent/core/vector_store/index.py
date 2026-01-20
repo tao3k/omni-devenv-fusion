@@ -427,12 +427,8 @@ async def export_skill_index(self: VectorMemory, output_path: str | None = None)
     """
     Export skill tools from vector store to skill_index.json.
 
-    This method:
-    1. Fetches all tools from the skills table
-    2. Groups them by skill_name
-    3. Builds skill-level metadata from tools
-    4. Merges with existing skill_index.json (preserves authors, compliance, etc.)
-    5. Writes the result to assets/skills/skill_index.json
+    Uses Rust SSOT (skills-scanner) for parsing SKILL.md frontmatter
+    and generating the complete skill_index.json.
 
     Args:
         self: VectorMemory instance
@@ -442,185 +438,27 @@ async def export_skill_index(self: VectorMemory, output_path: str | None = None)
     Returns:
         Dict with keys: skills_exported, tools_exported, output_path
     """
-    from yaml import safe_load
-
-    store = self._ensure_store()
-    if not store:
-        _get_logger().warning("Vector memory not available for export_skill_index")
-        return {"skills_exported": 0, "tools_exported": 0, "output_path": ""}
-
     # Determine output path
     if output_path is None:
         output_path = str(SKILLS_DIR() / "skill_index.json")
-    output_file = Path(output_path)
 
-    try:
-        # Step 1: Load existing skill_index.json for merging
-        existing_skills: Dict[str, dict] = {}
-        if output_file.exists():
-            try:
-                with open(output_file, "r", encoding="utf-8") as f:
-                    existing_data = json.load(f)
-                    for skill in existing_data:
-                        # Extract skill name (handle both quoted and unquoted formats)
-                        name = skill.get("name", "")
-                        if name:
-                            # Remove quotes if present (old format had quoted names)
-                            if name.startswith('"') and name.endswith('"'):
-                                name = name[1:-1]
-                            existing_skills[name] = skill
-                _get_logger().debug(f"Loaded {len(existing_skills)} existing skills for merging")
-            except json.JSONDecodeError as e:
-                _get_logger().warning(f"Failed to parse existing skill_index.json: {e}")
-                existing_skills = {}
+    # Use Rust SSOT to generate skill_index.json
+    from omni_core_rs import export_skill_index as rust_export
 
-        # Step 2: Fetch all tools from vector store
-        count = store.count("skills")
-        if count == 0:
-            _get_logger().warning("No tools found in skills table")
-            return {"skills_exported": 0, "tools_exported": 0, "output_path": output_path}
+    # Call Rust function to generate the index
+    json_content = rust_export(str(SKILLS_DIR()), output_path)
 
-        # Get all tools by scanning skills directory
-        all_tools: List[Dict] = []
-        current_jsons = store.scan_skill_tools_raw(str(SKILLS_DIR()))
-        for tool_json in current_jsons:
-            try:
-                tool = json.loads(tool_json)
-                all_tools.append(
-                    {
-                        "skill_name": tool.get("skill_name", ""),
-                        "tool_name": tool.get("tool_name", ""),
-                        "metadata": tool,
-                    }
-                )
-            except json.JSONDecodeError:
-                continue
+    # Parse the result to get counts
+    skills_data = json.loads(json_content)
+    skills_exported = len(skills_data)
+    tools_exported = sum(len(skill.get("tools", [])) for skill in skills_data)
 
-        # Step 3: Group tools by skill
-        skills_tools: Dict[str, List[Dict]] = {}
-        for tool in all_tools:
-            skill_name = tool.get("skill_name", "")
-            if skill_name:
-                if skill_name not in skills_tools:
-                    skills_tools[skill_name] = []
-                skills_tools[skill_name].append(tool)
+    _get_logger().info(
+        f"Exported {skills_exported} skills, {tools_exported} tools to {output_path}"
+    )
 
-        # Step 4: Build skill entries
-        skill_entries = []
-        for skill_name, tools in skills_tools.items():
-            # Get existing skill data for merging
-            # First try to match by directory name (current format)
-            existing = existing_skills.get(skill_name, {})
-
-            # If no match, try to find by title case name from SKILL.md
-            if not existing:
-                title_name = skill_name.replace("_", " ").title()
-                # Handle special cases
-                title_name = title_name.replace("Crawl4Ai", "crawl4ai")
-                title_name = title_name.replace("Note Taker", "note_taker")
-                title_name = title_name.replace("Test Skill", "test-skill")
-                existing = existing_skills.get(title_name, {})
-
-            # Read SKILL.md for display name if available
-            skill_dir = SKILLS_DIR() / skill_name
-            skill_display_name = skill_name
-            skill_description = existing.get("description", f'"The {skill_name} skill."')
-            skill_version = existing.get("version", '"1.0.0"')
-            skill_path = existing.get("path", f'"assets/skills/{skill_name}"')
-            skill_routing_keywords = existing.get("routing_keywords", [])
-            skill_intents = existing.get("intents", [])
-            skill_authors = existing.get("authors", ["omni-dev-fusion"])
-            skill_docs_available = existing.get(
-                "docs_available",
-                {
-                    "skill_md": True,
-                    "readme": False,
-                    "guide": False,
-                    "prompts": False,
-                    "tests": False,
-                },
-            )
-            skill_oss_compliant = existing.get("oss_compliant", [])
-            skill_compliance_details = existing.get("compliance_details", [])
-
-            # Parse SKILL.md for metadata
-            skill_md_path = skill_dir / "SKILL.md"
-            if skill_md_path.exists():
-                try:
-                    import re
-
-                    content = skill_md_path.read_text(encoding="utf-8")
-                    # Extract YAML frontmatter
-                    yaml_match = re.search(r"^---\n([\s\S]*?)\n---", content)
-                    if yaml_match:
-                        yaml_content = yaml_match.group(1)
-                        yaml_data = safe_load(yaml_content) or {}
-                        # Extract values from YAML
-                        if "name" in yaml_data:
-                            skill_display_name = str(yaml_data["name"]).strip('"')
-                        if "description" in yaml_data:
-                            skill_description = yaml_data["description"]
-                        if "version" in yaml_data:
-                            skill_version = yaml_data["version"]
-                        if "routing_keywords" in yaml_data:
-                            kw = yaml_data["routing_keywords"]
-                            if isinstance(kw, list):
-                                skill_routing_keywords = [str(k).strip() for k in kw]
-                        if "intents" in yaml_data:
-                            intents = yaml_data["intents"]
-                            if isinstance(intents, list):
-                                skill_intents = [str(i).strip() for i in intents]
-                        if "authors" in yaml_data:
-                            authors = yaml_data["authors"]
-                            if isinstance(authors, list):
-                                skill_authors = [str(a).strip() for a in authors]
-                except Exception as e:
-                    _get_logger().debug(f"Failed to parse SKILL.md for {skill_name}: {e}")
-
-            # Build tools list from current tools
-            tool_list = []
-            for tool in tools:
-                meta = tool.get("metadata", {})
-                tool_entry = {
-                    "name": meta.get("tool_name", ""),
-                    "description": meta.get("description", ""),
-                }
-                tool_list.append(tool_entry)
-
-            # Build skill entry
-            skill_entry = {
-                "name": skill_display_name,
-                "description": skill_description,
-                "version": skill_version,
-                "path": skill_path,
-                "tools": tool_list,
-                "routing_keywords": skill_routing_keywords,
-                "intents": skill_intents,
-                "authors": skill_authors,
-                "docs_available": skill_docs_available,
-                "oss_compliant": skill_oss_compliant,
-                "compliance_details": skill_compliance_details,
-            }
-            skill_entries.append(skill_entry)
-
-        # Step 5: Write to file
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_file, "w", encoding="utf-8") as f:
-            json.dump(skill_entries, f, indent=2, ensure_ascii=False)
-
-        _get_logger().info(
-            f"Exported {len(skill_entries)} skills, {len(all_tools)} tools to {output_path}"
-        )
-
-        return {
-            "skills_exported": len(skill_entries),
-            "tools_exported": len(all_tools),
-            "output_path": output_path,
-        }
-
-    except Exception as e:
-        _get_logger().error("Failed to export skill index", error=str(e))
-        import traceback
-
-        traceback.print_exc()
-        return {"skills_exported": 0, "tools_exported": 0, "output_path": ""}
+    return {
+        "skills_exported": skills_exported,
+        "tools_exported": tools_exported,
+        "output_path": output_path,
+    }

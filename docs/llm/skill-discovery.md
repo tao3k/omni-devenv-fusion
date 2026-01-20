@@ -4,7 +4,7 @@
 
 ## Overview
 
-This guide explains how LLMs discover and use skills in the Omni-DevEnv Fusion system.
+This guide explains how LLMs discover and use skills in the Omni-Dev-Fusion Fusion system.
 
 ## The Trinity Entry Point
 

@@ -38,13 +38,17 @@ async def test_holographic_ooda_loop_detects_unstaged_changes():
 
     # 2. Setup Agent with mocked inference
     mock_inference = AsyncMock()
+
     # Mock LLM response demonstrating "Visual Awareness"
     # The LLM explicitly mentions seeing the modified files in its reasoning
-    mock_inference.complete.return_value = {
-        "success": True,
-        "content": "I see there are modified files (lib/core.py) but nothing staged. I must stage them first.\nTOOL: git_stage_all()",
-        "tool_calls": [{"name": "git_stage_all", "input": {}}],
-    }
+    async def mock_complete_fn(*args, **kwargs):
+        return {
+            "success": True,
+            "content": "I see there are modified files (lib/core.py) but nothing staged. I must stage them first.\nTOOL: git_stage_all()",
+            "tool_calls": [{"name": "git_stage_all", "input": {}}],
+        }
+
+    mock_inference.complete.side_effect = mock_complete_fn
 
     # 3. Initialize Agent with mocked components
     agent = CoderAgent(inference=mock_inference)
@@ -82,7 +86,8 @@ async def test_holographic_ooda_loop_detects_unstaged_changes():
     assert "lib/core.py" in passed_system_prompt, "CSI: Specific file should be mentioned"
 
     # Verify the agent made a visual-aware decision
-    assert "I must stage them first" in mock_inference.complete.return_value["content"], (
+    result = await mock_inference.complete()
+    assert "I must stage them first" in result["content"], (
         "Agent should acknowledge seeing unstaged files"
     )
 
@@ -108,23 +113,40 @@ async def test_holographic_dynamic_update():
     agent = CoderAgent(inference=AsyncMock())
     agent.sniffer = mock_sniffer
     agent.tools = {
-        "git_stage_all": AsyncMock(return_value="Staged."),
-        "git_commit": AsyncMock(return_value="Committed."),
+        "git_stage_all": AsyncMock(),
+        "git_commit": AsyncMock(),
     }
 
+    # Configure tools to return coroutines when awaited
+    async def staged_result():
+        return "Staged."
+
+    async def committed_result():
+        return "Committed."
+
+    agent.tools["git_stage_all"].side_effect = staged_result
+    agent.tools["git_commit"].side_effect = committed_result
+
     # Mock inference to drive the loop
-    agent.inference.complete.side_effect = [
-        {
-            "success": True,
-            "content": "Staging files...\nTOOL: git_stage_all()",
-            "tool_calls": [{"name": "git_stage_all", "input": {}}],
-        },
-        {
-            "success": True,
-            "content": "Now committing...\nTOOL: git_commit(message='done')",
-            "tool_calls": [{"name": "git_commit", "input": {"message": "done"}}],
-        },
-    ]
+    call_count = 0
+
+    async def mock_complete_step(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return {
+                "success": True,
+                "content": "Staging files...\nTOOL: git_stage_all()",
+                "tool_calls": [{"name": "git_stage_all", "input": {}}],
+            }
+        else:
+            return {
+                "success": True,
+                "content": "Now committing...\nTOOL: git_commit(message='done')",
+                "tool_calls": [{"name": "git_commit", "input": {"message": "done"}}],
+            }
+
+    agent.inference.complete.side_effect = mock_complete_step
 
     await agent._run_react_loop("Fix it", "System", max_steps=2)
 
@@ -144,10 +166,19 @@ async def test_holographic_prompt_structure():
     3. Live environment snapshot
     """
     mock_sniffer = AsyncMock(spec=ContextSniffer)
-    mock_sniffer.get_snapshot.return_value = "[ENVIRONMENT] Branch: test | Clean"
+
+    async def mock_snapshot():
+        return "[ENVIRONMENT] Branch: test | Clean"
+
+    mock_sniffer.get_snapshot.side_effect = mock_snapshot
 
     mock_inference = AsyncMock()
-    mock_inference.complete.return_value = {"success": True, "content": "Done", "tool_calls": []}
+
+    # Must return coroutine since code uses await
+    async def mock_complete_fn(*args, **kwargs):
+        return {"success": True, "content": "Done", "tool_calls": []}
+
+    mock_inference.complete.side_effect = mock_complete_fn
 
     agent = CoderAgent(inference=mock_inference)
     agent.sniffer = mock_sniffer
@@ -173,10 +204,18 @@ async def test_holographic_graceful_degradation():
     Test that if sniffer fails, the agent still works (graceful degradation).
     """
     mock_sniffer = AsyncMock(spec=ContextSniffer)
-    mock_sniffer.get_snapshot.return_value = "Environment: Unknown"  # Fallback value
+
+    async def mock_snapshot():
+        return "Environment: Unknown"  # Fallback value
+
+    mock_sniffer.get_snapshot.side_effect = mock_snapshot
 
     mock_inference = AsyncMock()
-    mock_inference.complete.return_value = {"success": True, "content": "Done", "tool_calls": []}
+
+    async def mock_complete_fn():
+        return {"success": True, "content": "Done", "tool_calls": []}
+
+    mock_inference.complete.side_effect = mock_complete_fn
 
     agent = CoderAgent(inference=mock_inference)
     agent.sniffer = mock_sniffer

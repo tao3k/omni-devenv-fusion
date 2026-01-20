@@ -9,17 +9,18 @@ Tests cover:
 - Update strategy with stash/pop
 - Lockfile generation
 - Dependency cycle detection
+Uses Rust scanner for SKILL.md parsing.
 """
 
 import pytest
 import json
 import subprocess
-import frontmatter
 from pathlib import Path
 from git import Repo
 
 from agent.core.installer import SkillInstaller
 from agent.core.skill_registry import SkillRegistry, get_skill_registry
+from agent.core.skill_discovery import parse_skill_md
 
 
 @pytest.fixture
@@ -132,10 +133,9 @@ class TestSkillInstaller:
             version="main",
         )
 
-        # Read SKILL.md version
-        with open(install_dir / "SKILL.md") as f:
-            post = frontmatter.load(f)
-        manifest = post.metadata
+        # Read SKILL.md version using Rust scanner
+        manifest = parse_skill_md(install_dir)
+        assert manifest is not None
         assert manifest["version"] == "1.0.0"
 
     def test_dirty_state_detection(self, mock_remote_repo, skill_install_dir):

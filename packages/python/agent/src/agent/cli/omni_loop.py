@@ -85,12 +85,21 @@ def _print_enrich_result(task: str, result: str, agent):
     console.print(Panel(grid, title="✨ CCA Session Report ✨", border_style="green", expand=False))
 
 
-async def run_task(task: str, max_steps: int):
-    """Run a single task through the CCA loop."""
+async def run_task(task: str, max_steps: int | None):
+    """Run a single task through the CCA loop.
+
+    Args:
+        task: The task to execute
+        max_steps: None = auto-estimate, 1 = single step, N = max steps
+    """
     from agent.core.omni import OmniLoop
 
     print_banner()
-    console.print(f"\n[bold]🚀 Starting:[/bold] {task}\n")
+    console.print(f"\n[bold]🚀 Starting:[/bold] {task}")
+    if max_steps is None:
+        console.print("[dim]Max steps: Auto (AdaptivePlanner)[/dim]\n")
+    else:
+        console.print(f"[dim]Max steps: {max_steps}[/dim]\n")
 
     agent = OmniLoop()
     result = await agent.run(task, max_steps)
@@ -102,7 +111,9 @@ def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(prog="omni", description="CCA Runtime - Omni Loop")
     parser.add_argument("task", nargs="?", help="Task to execute")
-    parser.add_argument("-s", "--steps", type=int, default=1, help="Max steps (default: 1)")
+    parser.add_argument(
+        "-s", "--steps", type=int, default=None, help="Max steps (default: auto-estimate)"
+    )
     args, _ = parser.parse_known_args()
 
     if args.task:

@@ -15,12 +15,12 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import os
+import signal
 import sys
 from enum import Enum
-from typing import Optional
 
 import typer
-from rich.console import Console
 from rich.panel import Panel
 
 from ..console import err_console
@@ -31,6 +31,18 @@ from common.log_config import configure_logging
 class TransportMode(str, Enum):
     stdio = "stdio"  # Production mode (Claude Desktop)
     sse = "sse"  # Development/debug mode (Claude Code CLI)
+
+
+def _setup_signal_handlers() -> None:
+    """Set up immediate exit handlers for stdio mode."""
+
+    def _exit_now(signum, frame):
+        err_console.print("[yellow]📡 Interrupted, exiting immediately...[/yellow]")
+        # Force exit immediately (bypasses all cleanup)
+        os._exit(0)
+
+    signal.signal(signal.SIGINT, _exit_now)
+    signal.signal(signal.SIGTERM, _exit_now)
 
 
 def register_mcp_command(app_instance: typer.Typer) -> None:
@@ -66,6 +78,8 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
         # Configure logging based on transport mode
         if transport == TransportMode.stdio:
             configure_logging(level="INFO")
+            # Set up immediate exit handlers BEFORE any async code
+            _setup_signal_handlers()
         else:
             configure_logging(level="DEBUG")
             err_console.print(

@@ -36,7 +36,10 @@ pub use editor::{
 };
 pub use io::{count_tokens, read_file_safe, truncate_tokens};
 pub use navigation::{get_file_outline, search_code, search_directory};
-pub use scanner::scan_skill_tools;
+pub use scanner::{
+    PySkillMetadata, export_skill_index, get_skill_index_schema, scan_skill,
+    scan_skill_from_content, scan_skill_tools,
+};
 pub use security::{contains_secrets, scan_secrets};
 pub use sniffer::{PyEnvironmentSnapshot, PyOmniSniffer, get_environment_snapshot, py_get_sniffer};
 pub use vector::{PyToolRecord, PyVectorStore, create_vector_store};
@@ -84,6 +87,13 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Script Scanner (Phase 62)
     m.add_function(pyo3::wrap_pyfunction!(scan_skill_tools, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(export_skill_index, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(get_skill_index_schema, m)?)?;
+
+    // Phase 64: SKILL.md Frontmatter Parser (replaces python-frontmatter)
+    m.add_function(pyo3::wrap_pyfunction!(scan_skill, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(scan_skill_from_content, m)?)?;
+    m.add_class::<PySkillMetadata>()?;
 
     m.add("VERSION", "0.5.0")?;
     Ok(())

@@ -1,8 +1,8 @@
-# Why Omni-DevEnv Fusion?
+# Why Omni-Dev-Fusion Fusion?
 
 > **Your AI Coding Assistant That Actually Understands Your Project**
 
-Ever wish your AI assistant knew exactly how you work? That it understood your project's rules, your coding style, and your tools? That's what Omni-DevEnv Fusion is built for.
+Ever wish your AI assistant knew exactly how you work? That it understood your project's rules, your coding style, and your tools? That's what Omni-Dev-Fusion Fusion is built for.
 
 ---
 
@@ -23,7 +23,7 @@ Think of skills like **specialized assistants** living inside Omni.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Omni-DevEnv Fusion                            │
+│                    Omni-Dev-Fusion Fusion                            │
 │                                                                  │
 │   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐          │
 │   │   📝 Writer │   │   🔀 Git    │   │  📁 File    │          │
@@ -273,7 +273,7 @@ your-project/
 
 ### How to Get Started:
 
-1. **Install Omni-DevEnv** (one command)
+1. **Install Omni-Dev-Fusion** (one command)
 2. **Skills come pre-installed** (git, writer, terminal, memory...)
 3. **Just use natural language:**
    ```
@@ -298,7 +298,7 @@ omni skill install <skill-name>
 
 ### Traditional AI Assistants vs Omni
 
-| Aspect          | Traditional AI         | Omni-DevEnv                 |
+| Aspect          | Traditional AI         | Omni-Dev-Fusion             |
 | --------------- | ---------------------- | --------------------------- |
 | **Context**     | Forgets your project   | Remembers everything        |
 | **Safety**      | Can delete files       | Blocks destructive commands |
@@ -390,7 +390,7 @@ Every skill:
 
 > **From "AI helps you code" to "AI works the way you think"**
 
-Omni-DevEnv Fusion bridges the gap between:
+Omni-Dev-Fusion Fusion bridges the gap between:
 
 ```
     Technical Complexity          │          Human Intention

@@ -186,7 +186,7 @@ The Agent doesn't just write code. It manages the environment.
 
 We are betting that **Reproducibility is the prerequisite for Agency**.
 
-| Feature                   | Standard Approach (venv/Docker) | Omni-DevEnv (Nix)                        |
+| Feature                   | Standard Approach (venv/Docker) | Omni-Dev-Fusion (Nix)                    |
 | :------------------------ | :------------------------------ | :--------------------------------------- |
 | **Portability**           | "Should work" (if OS matches)   | **Guaranteed** (Bit-for-bit identical)   |
 | **Introspection**         | Black Box (Binary blobs)        | **White Box** (Text-based config)        |

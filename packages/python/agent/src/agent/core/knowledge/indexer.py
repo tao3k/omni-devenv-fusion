@@ -6,7 +6,7 @@ Indexes Markdown documents into LanceDB for semantic search.
 
 Features:
 - File-level and Section-level chunking
-- Frontmatter extraction
+- Frontmatter extraction (simple parser)
 - SHA256 hash for incremental updates
 - Metadata enrichment
 
@@ -27,13 +27,29 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List
 
-# Try to import frontmatter, fallback to simple parsing
-try:
-    import frontmatter
 
-    FRONTMATTER_AVAILABLE = True
-except ImportError:
-    FRONTMATTER_AVAILABLE = False
+# Simple frontmatter parsing (no external dependency)
+# This handles basic YAML frontmatter in markdown files
+def _parse_frontmatter(content: str) -> tuple[Dict[str, Any], str]:
+    """Parse YAML frontmatter from markdown content.
+
+    Returns:
+        Tuple of (metadata dict, body content)
+    """
+    metadata: Dict[str, Any] = {}
+    body = content
+
+    if content.startswith("---"):
+        end_marker = content.find("---", 4)
+        if end_marker > 0:
+            fm_content = content[4:end_marker]
+            body = content[end_marker + 3 :]
+            for line in fm_content.split("\n"):
+                if ":" in line:
+                    key, value = line.split(":", 1)
+                    metadata[key.strip()] = value.strip()
+
+    return metadata, body
 
 
 @dataclass
@@ -91,29 +107,15 @@ def scan_markdown_files(root_dir: str) -> List[DocRecord]:
             content = path.read_text(encoding="utf-8")
             file_hash = hashlib.sha256(content.encode()).hexdigest()
 
-            # Parse frontmatter
+            # Parse frontmatter using simple parser
             metadata: Dict[str, Any] = {}
             body = content
             title = ""
 
-            if FRONTMATTER_AVAILABLE:
-                try:
-                    post = frontmatter.loads(content)
-                    metadata = dict(post.metadata)
-                    body = post.content
-                except Exception:
-                    pass
-            else:
-                # Simple frontmatter parsing
-                if content.startswith("---"):
-                    end_marker = content.find("---", 4)
-                    if end_marker > 0:
-                        fm_content = content[4:end_marker]
-                        body = content[end_marker + 3 :]
-                        for line in fm_content.split("\n"):
-                            if ":" in line:
-                                key, value = line.split(":", 1)
-                                metadata[key.strip()] = value.strip()
+            try:
+                metadata, body = _parse_frontmatter(content)
+            except Exception:
+                pass
 
             # Extract title from first # heading or metadata
             title = metadata.get("title", "")

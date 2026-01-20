@@ -71,10 +71,10 @@ await terminal_run()
 
 ## Key Components
 
-### 1. SkillManager (Facade)
+### 1. SkillContext (Facade)
 
 ```python
-class SkillManager:
+class SkillContext:
     """Unified interface for all skill operations."""
 
     async def run(self, skill_name: str, command: str, args: dict) -> Any:

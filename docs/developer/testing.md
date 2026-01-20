@@ -1,4 +1,4 @@
-# Omni-DevEnv Testing System - Developer Guide
+# Omni-Dev-Fusion Testing System - Developer Guide
 
 > Test system architecture, patterns, and maintenance guidelines.
 > Last Updated: 2026-01-15
@@ -359,12 +359,12 @@ import pytest
 
 def _get_git_skill():
     """Helper to get git skill (alternative to fixture)."""
-    from agent.core.skill_manager import get_skill_manager
+    from agent.core.skill_runtime import get_skill_context
 
-    manager = get_skill_manager()
-    if not manager._loaded:
-        manager.load_all()
-    return manager.skills.get("git")
+    context = get_skill_context()
+    if not context._loaded:
+        context.load_all()
+    return context.skills.get("git")
 
 
 class TestGitStatus:
@@ -480,14 +480,14 @@ ls assets/skills/  # Check skill directories
 
 **Cause**: The plugin handles this automatically, but tests outside the pytest plugin context may fail.
 
-**Solution**: Use SkillManager directly:
+**Solution**: Use SkillContext directly:
 
 ```python
-from agent.core.skill_manager import get_skill_manager
+from agent.core.skill_runtime import get_skill_context
 
 def test_skill():
-    manager = get_skill_manager()
-    skill = manager.skills.get("git")
+    context = get_skill_context()
+    skill = context.skills.get("git")
 ```
 
 #### Issue: Skill Has No Scripts
@@ -516,10 +516,10 @@ assets/skills/git/
 **Solution**: Check skill loading:
 
 ```python
-from agent.core.skill_manager import get_skill_manager
+from agent.core.skill_runtime import get_skill_context
 
-manager = get_skill_manager()
-skill = manager.skills.get("git")
+context = get_skill_context()
+skill = context.skills.get("git")
 
 if skill:
     print(f"Commands: {list(skill.commands.keys())}")

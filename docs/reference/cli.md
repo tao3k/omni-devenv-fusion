@@ -2,7 +2,7 @@
 
 > Omni Loop CCA Runtime | Modular CLI Architecture
 
-The `omni` CLI provides unified access to all Omni-DevEnv Fusion capabilities.
+The `omni` CLI provides unified access to all Omni-Dev-Fusion Fusion capabilities.
 
 ## Quick Reference
 

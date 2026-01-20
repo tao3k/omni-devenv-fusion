@@ -402,7 +402,7 @@ Connects the Vector Discovery system with Hot Reload, ensuring the LanceDB index
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    SkillManager (Runtime)                       │
+│                    SkillContext (Runtime)                       │
 ├─────────────────────────────────────────────────────────────────┤
 │  _observers: [MCP Observer, Index Sync Observer]               │
 │  _pending_changes: [(skill_name, change_type), ...]            │
@@ -528,7 +528,7 @@ await remove_skill_from_index("git")
 **Solution**: Track tasks in a set with auto-cleanup callbacks.
 
 ```python
-class SkillManager:
+class SkillContext:
     _background_tasks: set[asyncio.Task] = set()
 
     def _fire_and_forget(self, coro: asyncio.coroutine) -> asyncio.Task:

@@ -4,7 +4,7 @@
 > **Toolchain:** `nightly-2026-01-12`
 > **Philosophy:** Atomic, Fearless, Zero-Cost.
 
-This document defines the engineering standards for Rust core development in Omni-DevEnv Fusion. All code commits under `packages/rust/` must pass this protocol review.
+This document defines the engineering standards for Rust core development in Omni-Dev-Fusion Fusion. All code commits under `packages/rust/` must pass this protocol review.
 
 ## 1. Architecture Principles
 

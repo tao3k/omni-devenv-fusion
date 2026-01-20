@@ -84,10 +84,8 @@ class TestBaseAgent:
 
         agent = TestAgent()
         agent.registry = MagicMock()
-        agent.registry.get_skill_manifest = MagicMock(
-            return_value=MagicMock(
-                description="Test skill", tools_module="assets.skills.filesystem.tools"
-            )
+        agent.registry.get_skill_metadata = MagicMock(
+            return_value=MagicMock(description="Test skill", routing_keywords=["filesystem"])
         )
 
         ctx = await agent.prepare_context(
@@ -160,9 +158,9 @@ class TestBaseAgent:
 
         agent = TestAgent()
         agent.registry = MagicMock()
-        agent.registry.get_skill_manifest = MagicMock(
+        agent.registry.get_skill_metadata = MagicMock(
             return_value=MagicMock(
-                description="File system operations", tools_module="assets.skills.filesystem.tools"
+                description="File system operations", routing_keywords=["filesystem"]
             )
         )
 
@@ -184,14 +182,14 @@ class TestBaseAgent:
         agent = TestAgent()
         agent.registry = MagicMock()
 
-        def get_manifest(skill_name):
+        def get_metadata(skill_name):
             if skill_name == "filesystem":
-                return MagicMock(description="File operations")
+                return MagicMock(description="File operations", routing_keywords=[])
             elif skill_name == "git":
-                return MagicMock(description="Git operations")
+                return MagicMock(description="Git operations", routing_keywords=[])
             return None
 
-        agent.registry.get_skill_manifest = MagicMock(side_effect=get_manifest)
+        agent.registry.get_skill_metadata = MagicMock(side_effect=get_metadata)
 
         capabilities = agent._get_skill_capabilities()
 
@@ -346,7 +344,7 @@ class TestMissionBriefProtocol:
 
         agent = TestAgent()
         agent.registry = MagicMock()
-        agent.registry.get_skill_manifest = MagicMock(return_value=None)
+        agent.registry.get_skill_metadata = MagicMock(return_value=None)
 
         ctx = await agent.prepare_context(
             mission_brief="Fix the critical bug in router.py immediately"
@@ -369,7 +367,7 @@ class TestMissionBriefProtocol:
 
         agent = TestAgent()
         agent.registry = MagicMock()
-        agent.registry.get_skill_manifest = MagicMock(return_value=None)
+        agent.registry.get_skill_metadata = MagicMock(return_value=None)
 
         ctx = await agent.prepare_context(
             mission_brief="Complete the feature",

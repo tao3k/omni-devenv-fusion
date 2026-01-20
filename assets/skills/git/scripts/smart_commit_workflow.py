@@ -22,7 +22,7 @@ from .commit_state import create_initial_state
 from .rendering import render_commit_message, render_template
 from .prepare import _get_cog_scopes
 
-_DB_PATH = Path.home() / ".cache" / "omni-devenv-fusion" / "workflows.db"
+_DB_PATH = Path.home() / ".cache" / "omni-dev-fusion" / "workflows.db"
 
 
 def _get_checkpointer() -> SqliteSaver:

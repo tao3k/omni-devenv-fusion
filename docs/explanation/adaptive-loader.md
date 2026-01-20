@@ -26,7 +26,7 @@ The Adaptive Loader transforms the Agent from a "preload everything" model to an
 │                                │                                        │
 │                                ▼                                        │
 │  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │                     SkillManager                                │   │
+│  │                     SkillContext                                │   │
 │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │   │
 │  │  │ JIT Loading │  │ LRU Queue   │  │ Hot Reload (Simplified) │  │   │
 │  │  │             │  │             │  │                         │  │   │
@@ -84,8 +84,8 @@ async def fetch_ghost_tools(
     ghost_tools = []
     exclude_tools = exclude_tools or set()
 
-    # Search index via SkillManager
-    results = await skill_manager.search_skills(query, limit=limit)
+    # Search index via SkillContext
+    results = await skill_context.search_skills(query, limit=limit)
 
     for tool_doc in results:
         tool_name = tool_doc.get("name")
@@ -186,7 +186,7 @@ LRU-based garbage collection with pinned core skills.
 ### Implementation
 
 ```python
-class SkillManager(HotReloadMixin, ...):
+class SkillContext(HotReloadMixin, ...):
     def __init__(self, ...):
         # Step 3: Adaptive Unloading (LRU)
         self._lru_order: list[str] = []          # Usage order queue
@@ -271,10 +271,10 @@ def _ensure_fresh(self, skill_name: str) -> bool:
 
 | Function                                         | Description                       |
 | ------------------------------------------------ | --------------------------------- |
-| `fetch_ghost_tools(query, skill_manager, limit)` | Get ghost tool schemas from index |
+| `fetch_ghost_tools(query, skill_context, limit)` | Get ghost tool schemas from index |
 | `merge_tool_definitions(loaded, ghosts)`         | Merge loaded and ghost tools      |
 
-### SkillManager Methods
+### SkillContext Methods
 
 | Method                        | Description                 |
 | ----------------------------- | --------------------------- |

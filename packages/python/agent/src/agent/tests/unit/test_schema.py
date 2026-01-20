@@ -1,7 +1,7 @@
 """
 Schema Module Unit Tests
 
-Tests for SkillManifest schema validation.
+Tests for SkillMetadata schema validation.
 These are fast, isolated tests that don't require file I/O.
 
 Run with:
@@ -9,77 +9,69 @@ Run with:
 """
 
 import pytest
-from agent.core.schema import SkillManifest
+from dirty_equals import IsStr, IsInstance
+
+from agent.core.schema import SkillMetadata
+from agent.tests.factories import SkillMetadataFactory
 
 
-class TestSkillManifestSchema:
-    """Unit tests for SkillManifest validation."""
+class TestSkillMetadataSchema:
+    """Unit tests for SkillMetadata validation."""
 
-    def test_skill_manifest_importable(self):
-        """SkillManifest should be importable from agent.core.schema."""
-        from agent.core.schema import SkillManifest
+    def test_skill_metadata_importable(self):
+        """SkillMetadata should be importable from agent.core.schema."""
+        assert SkillMetadata is not None
 
-        assert SkillManifest is not None
-
-    def test_skill_manifest_validation(self):
-        """SkillManifest should validate correctly."""
-        from agent.core.schema import SkillManifest
-
-        # Valid manifest
+    def test_skill_metadata_validation(self):
+        """SkillMetadata should validate correctly."""
+        # Valid metadata
         data = {
             "name": "test_skill",
             "version": "1.0.0",
             "description": "A test skill",
-            "tools_module": "assets.skills.test.tools",
+            "commands_module": "scripts",
         }
-        manifest = SkillManifest(**data)
-        assert manifest.name == "test_skill"
-        assert manifest.version == "1.0.0"
+        metadata = SkillMetadata(**data)
+        assert metadata.name == "test_skill"
+        assert metadata.version == "1.0.0"
 
-    def test_skill_manifest_minimal(self):
-        """SkillManifest should work with minimal required fields."""
-        from agent.core.schema import SkillManifest
-
-        # Minimal valid manifest
+    def test_skill_metadata_minimal(self):
+        """SkillMetadata should work with minimal required fields."""
+        # Minimal valid metadata
         data = {
             "name": "minimal",
             "version": "0.1.0",
             "description": "Minimal skill",
-            "tools_module": "assets.skills.minimal.tools",
+            "commands_module": "scripts",
         }
-        manifest = SkillManifest(**data)
-        assert manifest.name == "minimal"
+        metadata = SkillMetadata(**data)
+        assert metadata.name == "minimal"
 
 
-class TestSkillManifestWithFactory:
+class TestSkillMetadataWithFactory:
     """Tests using polyfactory for test data generation."""
 
-    def test_factory_generates_valid_manifest(self):
-        """Factory should generate valid SkillManifest instances."""
-        from agent.tests.factories import SkillManifestFactory
-
-        manifest = SkillManifestFactory.build()
-        assert isinstance(manifest, SkillManifest)
-        assert manifest.name is not None
-        assert manifest.version is not None
-        assert manifest.description is not None
-        assert manifest.tools_module is not None
+    def test_factory_generates_valid_metadata(self):
+        """Factory should generate valid SkillMetadata instances."""
+        metadata = SkillMetadataFactory.build()
+        # Using dirty-equals for type assertions
+        assert isinstance(metadata, SkillMetadata)
+        assert metadata.name == IsStr()
+        assert metadata.version == IsStr()
+        assert metadata.description == IsStr()
+        assert metadata.commands_module == IsStr()
 
     def test_factory_with_overrides(self):
         """Factory should respect field overrides."""
-        from agent.tests.factories import SkillManifestFactory
-
-        manifest = SkillManifestFactory.build(name="custom_skill", version="2.0.0")
-        assert manifest.name == "custom_skill"
-        assert manifest.version == "2.0.0"
+        metadata = SkillMetadataFactory.build(name="custom_skill", version="2.0.0")
+        assert metadata.name == "custom_skill"
+        assert metadata.version == "2.0.0"
 
     def test_factory_batch_generation(self):
         """Factory should support batch generation."""
-        from agent.tests.factories import SkillManifestFactory
-
-        manifests = SkillManifestFactory.batch(size=5)
-        assert len(manifests) == 5
-        assert all(isinstance(m, SkillManifest) for m in manifests)
+        metadata_list = SkillMetadataFactory.batch(size=5)
+        assert len(metadata_list) == 5
+        assert all(isinstance(m, SkillMetadata) for m in metadata_list)
 
 
 class TestSharedUtilities:

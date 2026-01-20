@@ -1,4 +1,4 @@
-# Omni-DevEnv Documentation
+# Omni-Dev-Fusion Documentation
 
 > Explore the potential of AI and LLMs in your software development lifecycle.
 

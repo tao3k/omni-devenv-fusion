@@ -21,82 +21,34 @@
       inputs.uv2nix.follows = "uv2nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
     omnibus.url = "github:tao3k/omnibus";
+
+    nci.url = "github:90-008/nix-cargo-integration";
+    nci.inputs.nixpkgs.follows = "nixpkgs";
+    parts.url = "github:hercules-ci/flake-parts";
+    parts.inputs.nixpkgs-lib.follows = "nixpkgs";
   };
 
   outputs =
-    {
-      nixpkgs,
-      pyproject-nix,
-      uv2nix,
-      pyproject-build-systems,
-      ...
-    }@inputs:
+    inputs:
     let
-      inherit (nixpkgs) lib;
-      forAllSystems = lib.genAttrs lib.systems.flakeExposed;
-
-      workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
-
-      overlay = workspace.mkPyprojectOverlay {
-        sourcePreference = "wheel";
+      inherit (inputs.nixpkgs) lib;
+      systems = lib.systems.flakeExposed;
+    in
+    inputs.parts.lib.mkFlake
+      {
+        inherit inputs;
+      }
+      {
+        inherit systems;
+        debug = true;
+        _module.args.workspaceRoot = ./.;
+        imports = [
+          inputs.nci.flakeModule
+          ./assets/nix/modules/flake-parts/omni-core-rs.nix
+          ./assets/nix/modules/flake-parts/omni-dev-fusion.nix
+        ];
       };
 
-      pythonSets = forAllSystems (
-        system:
-        let
-          pkgs = nixpkgs.legacyPackages.${system};
-          python = pkgs.python3;
-          inherit (inputs.omnibus.flake.inputs) nix-filter;
-          omni-core-rs = (
-            pkgs.callPackage ./assets/nix/packages/omni-core-rs.nix {
-              inherit nix-filter;
-            }
-          );
-
-          hacks = pkgs.callPackage pyproject-nix.build.hacks { };
-
-          hack-overlay = final: prev: {
-            # Adapt torch from nixpkgs
-            omni-core-rs = hacks.nixpkgsPrebuilt {
-              from = omni-core-rs;
-              prev = prev.omni-core-rs;
-            };
-          };
-        in
-        (pkgs.callPackage pyproject-nix.build.packages {
-          inherit python;
-        }).overrideScope
-          (
-            lib.composeManyExtensions [
-              pyproject-build-systems.overlays.wheel
-              overlay
-              hack-overlay
-              (final: prev: {
-                # Fix pypika build with setuptools
-                pypika = prev.pypika.overrideAttrs (old: {
-                  nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
-                    final.setuptools
-                  ];
-                });
-                # Fix hatchling editable build with editables
-                hatchling = prev.hatchling.overrideAttrs (old: {
-                  propagatedBuildInputs = (old.propagatedBuildInputs or [ ]) ++ [
-                    final.editables
-                  ];
-                });
-              })
-            ]
-          )
-      );
-    in
-    {
-      packages = forAllSystems (system: {
-        omni-core-rs = pythonSets.${system}.omni-core-rs;
-        default = (
-          pythonSets.${system}.mkVirtualEnv "omni-dev-fusion-env" workspace.deps.default
-          // { }
-        );
-      });
-    };
 }

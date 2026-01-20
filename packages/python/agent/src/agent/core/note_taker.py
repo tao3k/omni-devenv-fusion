@@ -112,8 +112,8 @@ class NoteTaker:
         if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
             return content[first_brace : last_brace + 1].strip()
 
-        # Return original if no extraction worked
-        return content
+        # Return empty string if no valid JSON found (let caller handle fallback)
+        return ""
 
     def _format_history(self, history: List[Dict[str, str]]) -> str:
         """Convert history list to transcript string."""
@@ -153,8 +153,20 @@ class NoteTaker:
             content = result["content"]
             logger.debug(f"LLM response length: {len(content)} chars")
 
+            # Handle empty response
+            if not content or not content.strip():
+                logger.warning("Note-Taker: LLM returned empty response, using dummy notes")
+                return self._generate_dummy_notes(transcript)
+
             # Clean JSON content (remove markdown code blocks if present)
             cleaned_content = self._clean_json_content(content)
+
+            # Handle empty cleaned content
+            if not cleaned_content or not cleaned_content.strip():
+                logger.warning(
+                    "Note-Taker: Failed to extract JSON from response, using dummy notes"
+                )
+                return self._generate_dummy_notes(transcript)
 
             # Parse JSON response
             parsed = json.loads(cleaned_content)

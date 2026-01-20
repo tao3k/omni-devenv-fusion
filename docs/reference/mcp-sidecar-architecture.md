@@ -169,18 +169,18 @@ A pure MCP Server implementation was introduced using the official `mcp.server` 
 # Tool discovery is dynamic based on loaded skills
 async def handle_list_tools() -> list[Tool]:
     """
-    List all available tools from SkillManager.
+    List all available tools from SkillContext.
 
     This creates a live tool list based on:
     1. Loaded skills
     2. Commands within each skill
     3. Command metadata (description, parameters)
     """
-    manager = get_skill_manager()
+    context = get_skill_context()
     tools = []
 
-    for skill_name in manager.list_loaded():
-        skill = manager.get_skill(skill_name)
+    for skill_name in context.list_loaded():
+        skill = context.get_skill(skill_name)
         for cmd_name, cmd in skill.commands.items():
             tools.append(Tool(
                 name=f"{skill_name}.{cmd_name}",

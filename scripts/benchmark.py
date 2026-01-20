@@ -389,7 +389,7 @@ def main():
     """Run all benchmarks and output report."""
     setup_import_path()
 
-    runner = BenchmarkRunner("Omni-DevEnv Core Performance")
+    runner = BenchmarkRunner("Omni-Dev-Fusion Core Performance")
 
     print("Running core benchmarks (Priority 1-5)...")
     print()

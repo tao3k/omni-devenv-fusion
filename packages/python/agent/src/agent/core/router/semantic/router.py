@@ -250,17 +250,17 @@ class SemanticRouter:
         return "\n".join(lines)
 
     def _build_routing_menu(self) -> str:
-        """Build routing menu from Skill Registry manifests (Data-Driven)."""
+        """Build routing menu from Skill Registry metadata (Data-Driven)."""
         menu_items = []
         for skill in self.registry.list_available_skills():
-            manifest = self.registry.get_skill_manifest(skill)
-            if manifest:
+            metadata = self.registry.get_skill_metadata(skill)
+            if metadata:
                 keywords = (
-                    manifest.routing_keywords if hasattr(manifest, "routing_keywords") else []
+                    metadata.routing_keywords if hasattr(metadata, "routing_keywords") else []
                 )
                 keywords_str = ", ".join(keywords[:8]) if keywords else "general"
                 menu_items.append(
-                    f"- [{skill}]: {manifest.description}\n  Keywords: {keywords_str}"
+                    f"- [{skill}]: {metadata.description}\n  Keywords: {keywords_str}"
                 )
         return "\n".join(menu_items)
 
@@ -381,6 +381,24 @@ Route this request and provide a mission brief."""
         )
 
         if not result["success"]:
+            # Try vector fallback even when LLM fails
+            if self._use_vector_fallback:
+                try:
+                    from agent.core.router.semantic.fallback import try_vector_fallback
+
+                    await try_vector_fallback(user_query, fallback, self.vector_discovery)
+                    # If vector fallback found relevant skills, use them
+                    if fallback.selected_skills and fallback.selected_skills != [
+                        "writer",
+                        "knowledge",
+                    ]:
+                        _get_logger().info(
+                            "Vector fallback succeeded after LLM failure",
+                            skills=fallback.selected_skills,
+                        )
+                        return fallback
+                except Exception as ve:
+                    _get_logger().warning("Vector fallback also failed", error=str(ve))
             return fallback
 
         try:
@@ -391,7 +409,7 @@ Route this request and provide a mission brief."""
             confidence = routing_data.get("confidence", 0.5)
 
             # Validate skills exist
-            valid_skills = [s for s in skills if self.registry.get_skill_manifest(s)]
+            valid_skills = [s for s in skills if self.registry.get_skill_metadata(s)]
 
             routing_result = RoutingResult(
                 selected_skills=valid_skills if valid_skills else ["writer"],

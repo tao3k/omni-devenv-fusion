@@ -23,7 +23,7 @@ class TestPerformanceMetrics:
         """Create router with semantic cache enabled."""
         with patch("agent.core.router.semantic_router.get_skill_registry") as mock_reg:
             mock_reg.return_value.list_available_skills = MagicMock(return_value=["git", "testing"])
-            mock_reg.return_value.get_skill_manifest = MagicMock(
+            mock_reg.return_value.get_skill_metadata = MagicMock(
                 return_value=MagicMock(description="Test skill", routing_keywords=[])
             )
             from agent.core.router.semantic_router import SemanticRouter

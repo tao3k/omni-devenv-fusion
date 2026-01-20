@@ -54,9 +54,15 @@ def repl_cmd():
 @run_app.command("exec", help="Execute a single task and exit")
 def exec_cmd(
     task: str = typer.Argument(..., help="Task description to execute"),
-    steps: int = typer.Option(1, "-s", "--steps", help="Maximum steps (default: 1, max: 20)"),
+    steps: int | None = typer.Option(
+        None, "-s", "--steps", help="Maximum steps (default: auto-estimate, max: 20)"
+    ),
 ):
-    """Execute a single task through the CCA loop and exit."""
+    """Execute a single task through the CCA loop and exit.
+
+    Use without -s flag for AdaptivePlanner to auto-estimate steps.
+    Use -s N to explicitly set max steps.
+    """
     from agent.core.omni import OmniLoop
     from rich.console import Console
     from rich.table import Table
@@ -126,7 +132,10 @@ def exec_cmd(
 
     async def _run():
         console.print(f"\n[bold]🚀 Starting:[/bold] {task}")
-        console.print(f"[dim]Max steps: {steps}[/dim]\n")
+        if steps is None:
+            console.print("[dim]Max steps: Auto (AdaptivePlanner)[/dim]\n")
+        else:
+            console.print(f"[dim]Max steps: {steps}[/dim]\n")
 
         agent = OmniLoop()
         result = await agent.run(task, steps)

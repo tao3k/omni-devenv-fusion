@@ -268,6 +268,119 @@ async fn test_delete_by_file_path_with_underscores() {
 
 ---
 
+## Project Namespace Conventions
+
+This section defines the **actual namespace structure** used in this project.
+
+### Current Package Structure
+
+```
+packages/python/
+├── common/src/common/          # Shared utilities
+│   ├── config/                 # Configuration (settings.py)
+│   ├── mcp_core/               # MCP core functionality
+│   ├── skills_path.py          # SKILLS_DIR() utility
+│   ├── prj_dirs.py             # PRJ_DATA, PRJ_CACHE
+│   └── gitops.py               # Git operations
+│
+└── agent/src/agent/            # Agent implementation
+    ├── core/                   # Core logic
+    │   ├── skill_registry/     # Skill loading/management
+    │   ├── skill_discovery/    # Skill discovery
+    │   ├── memory/             # Memory management
+    │   ├── security/           # Security validation
+    │   ├── planner/            # Task planning
+    │   ├── orchestrator/       # Execution orchestration
+    │   └── swarm.py            # Process isolation
+    │
+    ├── tools/                  # MCP tools
+    │   ├── router.py           # Tool routing
+    │   ├── context.py          # Context tools
+    │   └── orchestrator/       # Orchestrator tools
+    │
+    ├── mcp_server/             # MCP server
+    ├── cli/                    # CLI commands
+    └── tests/                  # Agent tests
+```
+
+### Namespace Layers
+
+| Layer                | Import Pattern                                | Example                                                    |
+| -------------------- | --------------------------------------------- | ---------------------------------------------------------- |
+| **common**           | `from common.{module} import ...`             | `from common.skills_path import SKILLS_DIR`                |
+| **agent.core**       | `from agent.core.{module} import ...`         | `from agent.core.skill_registry.core import SkillRegistry` |
+| **agent.core.sub**   | `from agent.core.{submodule} import ...`      | `from agent.core.skill_registry.loader import SkillLoader` |
+| **agent.tools**      | `from agent.tools.{module} import ...`        | `from agent.tools.router import ToolRouter`                |
+| **agent.mcp_server** | `from agent.mcp_server.{module} import ...`   | `from agent.mcp_server.server import MCPServer`            |
+| **agent.cli**        | `from agent.cli.{command} import ...`         | `from agent.cli.run import run_agent`                      |
+| **agent.tests**      | `from agent.tests.{type}.{module} import ...` | `from agent.tests.unit.test_skill_manager import ...`      |
+
+### Correct Import Examples
+
+```python
+# Cross-layer imports (always use absolute)
+from common.skills_path import SKILLS_DIR
+from common.config.settings import get_setting
+from common.prj_dirs import PRJ_DATA, PRJ_CACHE
+from common.gitops import get_project_root
+
+from agent.core.skill_registry import SkillRegistry
+from agent.core.skill_registry.loader import SkillLoader
+from agent.core.skill_registry.adapter import SkillAdapter
+from agent.core.swarm import get_swarm
+from agent.core.memory.manager import MemoryManager
+
+from agent.tools.router import ToolRouter
+from agent.tools.orchestrator.core import OrchestratorCore
+
+from agent.mcp_server.server import MCPServer
+```
+
+### Import Anti-Patterns
+
+```python
+# WRONG - Deep relative imports (confusing, hard to trace)
+from ..common.skills_path import SKILLS_DIR
+
+# WRONG - Importing from wrong layer
+from agent.core.skills_path import SKILLS_DIR  # Should be from common!
+
+# WRONG - Circular imports by importing in wrong order
+from agent.core.omni_agent import get_agent  # If agent imports this too early
+```
+
+### Common Modules
+
+| Module            | Location                      | Purpose                        |
+| ----------------- | ----------------------------- | ------------------------------ |
+| `skills_path`     | `common/skills_path.py`       | Path to skills directory       |
+| `prj_dirs`        | `common/prj_dirs.py`          | Runtime data/cache/config dirs |
+| `settings`        | `common/config/settings.py`   | SSOT configuration             |
+| `gitops`          | `common/gitops.py`            | Git operations                 |
+| `skill_registry`  | `agent/core/skill_registry/`  | Skill loading/management       |
+| `skill_discovery` | `agent/core/skill_discovery/` | Skill discovery/reconciliation |
+| `swarm`           | `agent/core/swarm.py`         | Process isolation/execution    |
+| `memory`          | `agent/core/memory/`          | Memory/vector store            |
+| `planner`         | `agent/core/planner/`         | Task decomposition/planning    |
+
+### Key SSOT Utilities
+
+```python
+# Always use these from common/, never hardcode!
+from common.skills_path import SKILLS_DIR
+from common.config.settings import get_setting
+from common.prj_dirs import PRJ_DATA, PRJ_CACHE
+from common.gitops import get_project_root
+
+# Usage
+skills_dir = SKILLS_DIR("git")              # assets/skills/git
+data_dir = PRJ_DATA("knowledge")            # .data/knowledge
+cache_file = PRJ_CACHE("vector_store.db")   # .cache/vector_store.db
+timeout = get_setting("mcp.timeout", 30)    # From settings.yaml
+```
+
+---
+
 ## Related Documents
 
 - [Testing Guide](../developer/testing.md) - Test structure and patterns

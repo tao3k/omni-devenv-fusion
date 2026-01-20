@@ -3,6 +3,7 @@ agent/core/security/immune_system.py
  Immune System - Central security decision engine.
 
 Makes security decisions based on SecurityReport and ValidationResult.
+Uses Rust scanner for SKILL.md parsing.
 """
 
 from dataclasses import dataclass, field
@@ -15,6 +16,7 @@ from agent.core.security.manifest_validator import (
     ManifestValidator,
     ValidationResult,
 )
+from agent.core.skill_discovery import parse_skill_md
 from common.config.settings import get_setting
 
 
@@ -196,14 +198,13 @@ class ImmuneSystem:
         repository = ""
         manifest = {}
 
-        import frontmatter
-
+        # Use Rust scanner for high-performance parsing
         if skill_md_path.exists():
             try:
-                with open(skill_md_path) as f:
-                    post = frontmatter.load(f)
-                repository = post.metadata.get("repository", "") if post.metadata else ""
-                manifest = post.metadata if post.metadata else {}
+                meta = parse_skill_md(skill_path)
+                if meta:
+                    repository = meta.get("repository", "") or ""
+                    manifest = meta
             except Exception:
                 pass
 

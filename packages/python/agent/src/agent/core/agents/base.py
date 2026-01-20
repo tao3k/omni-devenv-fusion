@@ -236,13 +236,13 @@ class BaseAgent(ABC):
         """
         tools = []
         for skill_name in self.default_skills:
-            manifest = self.registry.get_skill_manifest(skill_name)
-            if manifest:
+            metadata = self.registry.get_skill_metadata(skill_name)
+            if metadata:
                 tools.append(
                     {
                         "skill": skill_name,
-                        "tools_module": manifest.tools_module,
-                        "description": manifest.description or f"Tools for {skill_name}",
+                        "commands_module": metadata.commands_module,
+                        "description": metadata.description or f"Commands for {skill_name}",
                     }
                 )
         return tools
@@ -258,12 +258,12 @@ class BaseAgent(ABC):
 
         capabilities = []
         for skill_name in self.default_skills:
-            manifest = self.registry.get_skill_manifest(skill_name)
-            if manifest:
-                desc = manifest.description or skill_name
+            metadata = self.registry.get_skill_metadata(skill_name)
+            if metadata:
+                desc = metadata.description or skill_name
                 capabilities.append(f"- [{skill_name}]: {desc}")
             else:
-                capabilities.append(f"- [{skill_name}]: (skill manifest not found)")
+                capabilities.append(f"- [{skill_name}]: (skill metadata not found)")
         return "\n".join(capabilities)
 
     async def _retrieve_relevant_knowledge(

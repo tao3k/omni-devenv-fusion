@@ -67,7 +67,7 @@ get_writing_memory()
 
 ```json
 {
-  "project": "omni-devenv-fusion",
+  "project": "omni-dev-fusion",
   "git_rules": {
     "types": ["feat", "fix", "docs", "style", "refactor", ...],
     "scopes": ["core", "mcp", "git"],

@@ -39,11 +39,12 @@ _ALLOWED_HIDDEN_FILES = {
 class FileOperation(BaseModel):
     """Single file operation for batch processing."""
 
-    action: Literal["write", "append"] = Field(
-        ..., description="Action to perform: write (create/overwrite) or append"
+    action: Literal["write", "append", "replace"] = Field(
+        ..., description="Action: write (create/overwrite), append, or replace (search/replace)"
     )
     path: str = Field(..., description="Relative path to file")
-    content: str = Field(..., description="Content to write or append")
+    content: str = Field(..., description="Content to write, append, or new content for replace")
+    search_for: str = Field("", description="Text to search for (only for replace action)")
 
 
 def _validate_syntax(content: str, filepath: str) -> tuple[bool, str]:
@@ -293,6 +294,18 @@ async def apply_file_changes(changes: List[FileOperation]) -> str:
                 with open(full_path, "a", encoding="utf-8") as f:
                     f.write(change.content)
                 report.append(f"- **Appended**: `{change.path}` ({len(change.content)} bytes)")
+            elif change.action == "replace":
+                if not full_path.exists():
+                    raise FileNotFoundError(f"File not found: {change.path}")
+                original_content = full_path.read_text(encoding="utf-8")
+                if change.search_for:
+                    new_content = original_content.replace(change.search_for, change.content)
+                else:
+                    new_content = change.content
+                full_path.write_text(new_content, encoding="utf-8")
+                report.append(
+                    f"- **Replaced**: `{change.path}` ({len(change.search_for)} chars → {len(change.content)} chars)"
+                )
 
             success_count += 1
 

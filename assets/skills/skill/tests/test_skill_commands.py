@@ -35,7 +35,7 @@ def validate_python_syntax(file_path: Path) -> tuple[bool, str | None]:
 class TestSkillSyntaxValidation:
     """Validate Python syntax for skill files."""
 
-    def test_skill_scripts_have_valid_syntax(self, skill):
+    def test_skill_scripts_have_valid_syntax(self):
         """All skill/scripts/*.py files must have valid Python syntax."""
         scripts_dir = SKILLS_DIR("skill") / "scripts"
         if not scripts_dir.exists():
@@ -53,7 +53,29 @@ class TestSkillSyntaxValidation:
             f"Found {len(invalid_files)} files with syntax errors:\n" + "\n".join(invalid_files)
         )
 
-    def test_core_task_py_has_valid_syntax(self, skill):
+    def test_discovery_script_imports_correctly(self):
+        """scripts/discovery.py should import without errors."""
+        scripts_dir = SKILLS_DIR("skill") / "scripts"
+        discovery_file = scripts_dir / "discovery.py"
+
+        if not discovery_file.exists():
+            pytest.skip("discovery.py not found")
+
+        # Try to import the module to verify no import errors
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("discovery_test", discovery_file)
+        assert spec is not None, "Failed to load discovery.py spec"
+        assert spec.loader is not None, "discovery.py has no loader"
+        module = importlib.util.module_from_spec(spec)
+
+        # This will fail if there are import errors
+        try:
+            spec.loader.exec_module(module)
+        except ImportError as e:
+            pytest.fail(f"discovery.py has import error: {e}")
+
+    def test_core_task_py_has_valid_syntax(self):
         """Core task.py must have valid Python syntax (critical path)."""
         from common.gitops import get_project_root
 
@@ -174,13 +196,47 @@ class TestSkillToolManagement:
 class TestSkillDiscoveryIntegration:
     """Integration tests for skill discovery with registry."""
 
-    def test_discover_uses_skill_discovery(self, skill):
-        """skill.discover should use SkillDiscovery."""
+    def test_skill_discovery_import(self):
+        """SkillDiscovery should be importable from agent.core.skill_discovery."""
         from agent.core.skill_discovery import SkillDiscovery
 
-        # Should be able to create and use discovery
+        # Verify class exists and can be instantiated
         discovery = SkillDiscovery()
-        assert discovery is not None, "SkillDiscovery should be instantiable"
+        assert discovery is not None
+
+    def test_skill_discovery_has_search_method(self):
+        """SkillDiscovery should have search method with correct signature."""
+        from agent.core.skill_discovery import SkillDiscovery
+        import inspect
+
+        discovery = SkillDiscovery()
+        assert hasattr(discovery, "search"), "SkillDiscovery should have 'search' method"
+
+        # Verify method signature
+        sig = inspect.signature(discovery.search)
+        params = list(sig.parameters.keys())
+        assert "query" in params
+        assert "limit" in params
+        assert "local_only" in params
+        # Verify no deprecated parameters
+        assert "installed_only" not in params, (
+            "Use 'local_only' instead of deprecated 'installed_only'"
+        )
+
+    def test_skill_discovery_has_get_index_stats_method(self):
+        """SkillDiscovery should have get_index_stats method."""
+        from agent.core.skill_discovery import SkillDiscovery
+
+        discovery = SkillDiscovery()
+        assert hasattr(discovery, "get_index_stats"), (
+            "SkillDiscovery should have 'get_index_stats' method"
+        )
+        assert not hasattr(discovery, "list_all"), "list_all is deprecated, use get_index_stats"
+
+    def test_discover_uses_skill_discovery(self, skill):
+        """skill.discover should use SkillDiscovery."""
+        # Test that the command is callable without import errors
+        assert callable(skill.discover)
 
     def test_suggest_returns_recommendation(self, skill):
         """skill.suggest should return a recommendation string."""

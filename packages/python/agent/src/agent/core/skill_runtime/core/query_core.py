@@ -102,13 +102,13 @@ class SkillQueryManager:
 
         return {
             "name": skill.name,
-            "version": skill.manifest.get("version", "unknown") if skill.manifest else "unknown",
-            "description": skill.manifest.get("description", "") if skill.manifest else "",
+            "version": skill.metadata.version if skill.metadata else "unknown",
+            "description": skill.metadata.description if skill.metadata else "",
             "command_count": len(skill.commands),
             "execution_mode": exec_mode_value,
             "commands": list(skill.commands.keys()),
             "loaded": True,
-            "manifest": skill.manifest,
+            "metadata": skill.metadata,
         }
 
     def get_commands(self, skill_name: str) -> list[str]:

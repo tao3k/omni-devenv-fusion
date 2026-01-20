@@ -7,10 +7,7 @@ Handles startup/shutdown, skill loading, and hot-reload observers.
 
 from __future__ import annotations
 
-import asyncio
-import logging
 from contextlib import asynccontextmanager
-from typing import Any
 
 import structlog
 from .server import server
@@ -23,10 +20,20 @@ _index_sync_lock: bool = False
 _last_sync_stats: dict | None = None
 _last_notification: tuple[str, str] | None = None
 
+# Track if watcher was started
+_watcher_started: bool = False
+
 
 @asynccontextmanager
-async def server_lifespan():
-    """Manage application lifecycle - startup and shutdown."""
+async def server_lifespan(enable_watcher: bool = True):
+    """Manage application lifecycle - startup and shutdown.
+
+    Args:
+        enable_watcher: Whether to start the skill watcher. Set to False for
+            stdio transport (watchdog + multiprocessing daemon issues).
+    """
+    global _watcher_started
+
     log.info("🚀 [Lifecycle] Starting Omni Agent Runtime...")
 
     # Load all skills synchronously (safe for stdio mode startup)
@@ -51,24 +58,34 @@ async def server_lifespan():
     manager.subscribe(_update_search_index)
     log.info("🔍 [Lifecycle] Index Sync observer registered")
 
-    # Start Skill Watcher for auto-sync
-    from agent.core.skill_runtime.watcher import start_global_watcher
+    # Start Skill Watcher for auto-sync (disabled in stdio mode)
+    from agent.core.skill_runtime.support.watcher import start_global_watcher
 
-    try:
-        start_global_watcher()
-        log.info("👀 [Lifecycle] Skill Watcher started (auto-sync)")
-    except Exception as e:
-        log.warning(f"⚠️  [Lifecycle] Skill Watcher failed to start: {e}")
+    if enable_watcher:
+        try:
+            start_global_watcher()
+            _watcher_started = True
+            log.info("👀 [Lifecycle] Skill Watcher started")
+        except Exception as e:
+            log.warning(f"⚠️  [Lifecycle] Skill Watcher failed to start: {e}")
+    else:
+        log.info("🔕 [Lifecycle] Skill Watcher disabled (stdio mode)")
 
     log.info("✅ [Lifecycle] Server ready")
 
     try:
         yield
     finally:
-        # Stop Skill Watcher
-        from agent.core.skill_runtime.watcher import stop_global_watcher
+        # Step 1: Stop Skill Watcher first (before other cleanup)
+        if _watcher_started:
+            from agent.core.skill_runtime.support.watcher import stop_global_watcher
 
-        stop_global_watcher()
+            log.info("🛑 [Lifecycle] Stopping Skill Watcher...")
+            stop_global_watcher()
+            _watcher_started = False
+            log.info("✅ [Lifecycle] Skill Watcher stopped")
+
+        # Step 2: Shutdown other resources
         log.info("🛑 [Lifecycle] Shutting down...")
 
 
@@ -88,7 +105,7 @@ async def _notify_tools_changed(skill_changes: dict[str, str]):
         if request_ctx and request_ctx.session:
             await request_ctx.session.send_tool_list_changed()
             _last_notification = ("batch", "update") if skill_changes else None
-            log.info(f"🔔 [Tools] Sent tool list update", skills=list(skill_changes.keys()))
+            log.info("🔔 [Tools] Sent tool list update", skills=list(skill_changes.keys()))
     except Exception as e:
         log.debug(f"⚠️ [Hot Reload] Notification skipped (no session): {e}")
 

@@ -7,7 +7,7 @@
 set -euo pipefail
 
 SRC_DIR="$PRJ_ROOT"
-DEST_DIR="$HOME/ghq/github.com/tao3k/omni-devenv-fusion-gpt"
+DEST_DIR="$HOME/ghq/github.com/tao3k/omni-dev-fusion-gpt"
 
 echo "Syncing from: $SRC_DIR"
 echo "Syncing to:   $DEST_DIR"

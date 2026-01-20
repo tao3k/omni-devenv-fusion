@@ -3,6 +3,7 @@
 Pipeline stages for skill loading.
 
 Contains: DiscoveryStage, ValidationStage, SecurityStage
+Uses Rust scanner for SKILL.md parsing.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from typing import TYPE_CHECKING
 import structlog
 
 from .config import LoaderConfig
+from agent.core.skill_discovery import parse_skill_md
 
 if TYPE_CHECKING:
     from agent.core.protocols import SecurityAssessment
@@ -73,23 +75,20 @@ class ValidationStage:
         Returns:
             (is_valid, error_message)
         """
-        import frontmatter
-
         # Check SKILL.md exists
         skill_md_path = skill_path / "SKILL.md"
         if not skill_md_path.exists():
             return False, f"SKILL.md not found at {skill_md_path}"
 
-        # Validate SKILL.md frontmatter
+        # Validate SKILL.md frontmatter using Rust scanner
         try:
-            with open(skill_md_path) as f:
-                post = frontmatter.load(f)
-            manifest = post.metadata or {}
+            # Use Rust scanner for high-performance parsing
+            manifest = parse_skill_md(skill_path) or {}
 
             # Required fields
             required = ["name", "version", "description"]
             for field in required:
-                if field not in manifest:
+                if field not in manifest or not manifest.get(field):
                     return False, f"Required field '{field}' missing from SKILL.md"
 
             # Validate name

@@ -4,13 +4,16 @@ skill_injector.py - Skill Injection with Name Boosting and Hybrid Search.
 Injects relevant skills based on task intent using Hybrid Discovery:
 1. Name Boosting: Check if task explicitly mentions any known skill name
 2. Semantic/Keyword Search: Use VectorStore's hybrid search for relevance
+3. Load any unloaded relevant skills via JIT loader
+4. Track active skills for reporting
+5. Provide skill prompts for context injection
 """
 
 from __future__ import annotations
 
 import re
 import structlog
-from typing import Set
+from typing import Dict, Set
 
 logger = structlog.get_logger(__name__)
 
@@ -24,10 +27,13 @@ class SkillInjector:
     2. Semantic/Keyword Search: Use VectorStore's hybrid search for relevance
     3. Load any unloaded relevant skills via JIT loader
     4. Update TTL for accessed skills
+    5. Track active skills for reporting
+    6. Provide skill prompts for context injection
     """
 
     def __init__(self) -> None:
         self._last_task: str = ""
+        self._active_skills: Set[str] = set()  # Track active skills for reporting
 
     async def inject_for_task(self, task: str) -> None:
         """
@@ -58,10 +64,13 @@ class SkillInjector:
                 if hasattr(vm, "get_all_skill_names"):
                     all_known_skills = vm.get_all_skill_names()
                 else:
-                    # Fallback: get from manager's loaded skills + core skills
-                    all_known_skills = manager._skills.keys() | manager._core_skills
+                    # Fallback: get from registry's loaded skills + core skills
+                    # SkillContext uses registry.skills and _config.core_skills
+                    all_known_skills = (
+                        set(manager.registry.skills.keys()) | manager._config.core_skills
+                    )
             except Exception:
-                all_known_skills = manager._skills.keys() | manager._core_skills
+                all_known_skills = set(manager.registry.skills.keys()) | manager._config.core_skills
 
             # Check for explicit skill name mentions with word boundary matching
             for skill_name in all_known_skills:
@@ -95,19 +104,19 @@ class SkillInjector:
             # Step 3: Load unloaded relevant skills
             loaded_count = 0
             for skill_name in relevant_skills:
-                # Skip if already loaded
-                if skill_name in manager._skills:
+                # Skip if already loaded (check in registry.skills)
+                if skill_name in manager.registry.skills:
                     # Update TTL for already-loaded skills
                     manager._touch_skill(skill_name)
                     continue
 
                 # Skip if core skill (should already be loaded)
-                if skill_name in manager._core_skills:
+                if skill_name in manager._config.core_skills:
                     continue
 
                 # JIT load the skill
                 try:
-                    await manager._try_jit_load(skill_name)
+                    await manager._jit.try_load(skill_name)
                     loaded_count += 1
                     logger.info(
                         "SkillInjector: Intent-Driven Loading - loaded skill for task",
@@ -128,6 +137,13 @@ class SkillInjector:
                     relevant=len(relevant_skills),
                 )
 
+            # Track active skills for reporting
+            self._active_skills = relevant_skills.copy()
+            logger.info(
+                "SkillInjector: Active skills tracked",
+                active=list(self._active_skills),
+            )
+
             self._last_task = task
 
         except Exception as e:
@@ -139,8 +155,22 @@ class SkillInjector:
 
     def get_injected_skills(self) -> Set[str]:
         """Get the set of skills injected for the last task."""
-        # This could be enhanced to track actual loaded skills
-        return set()
+        return self._active_skills.copy()
+
+    def get_skill_context_prompts(self) -> Dict[str, str]:
+        """
+        Get SKILL.md content for Core Skills (persistent) + Active Skills (task).
+
+        This method reads SKILL.md files for skills that should be active in context,
+        enabling the agent to understand skill usage protocols.
+
+        Returns:
+            Dict mapping skill_name -> SKILL.md content
+        """
+        from agent.core.skill_memory import get_skill_memory
+
+        skill_memory = get_skill_memory()
+        return skill_memory.get_all_prompts(self._active_skills)
 
 
 # Convenience function for singleton access

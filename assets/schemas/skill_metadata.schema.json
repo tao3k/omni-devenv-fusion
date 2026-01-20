@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Omni Skill Metadata Schema",
+  "description": "SSOT for skill metadata. All skill capabilities are defined here.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Unique skill identifier (kebab-case)"
+    },
+    "version": {
+      "type": "string",
+      "description": "Semantic version (e.g., 1.0.0)",
+      "default": "1.0.0"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description for context"
+    },
+    "routing_keywords": {
+      "type": "array",
+      "description": "Keywords for semantic routing",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "authors": {
+      "type": "array",
+      "description": "Skill authors",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "intents": {
+      "type": "array",
+      "description": "Intents this skill fulfills",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "require_refs": {
+      "type": "array",
+      "description": "External docs loaded into context when skill is active",
+      "items": { "type": "string" },
+      "default": [],
+      "examples": [
+        "assets/skills/writer/references/writing-style/00_index.md",
+        "assets/skills/writer/references/writing-style/01_philosophy.md"
+      ]
+    },
+    "permissions": {
+      "type": "array",
+      "description": "Required permissions/scopes",
+      "items": { "type": "string" },
+      "default": ["read"]
+    },
+    "memory_ttl": {
+      "type": "integer",
+      "description": "Skill memory TTL in seconds",
+      "default": 3600
+    }
+  },
+  "required": ["name", "description"]
+}

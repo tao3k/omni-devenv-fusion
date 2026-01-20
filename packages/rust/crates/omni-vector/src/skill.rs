@@ -1,17 +1,22 @@
 //! Skill Tool Indexing - Discover and index @skill_command decorated functions
 //!
 //! This module provides methods for scanning skill directories and indexing
-//! tool functions discovered via the `ScriptScanner`.
+//! tool functions discovered via `skills-scanner` crate.
+//!
+//! Uses both `SkillScanner` (for SKILL.md) and `ScriptScanner` (for scripts/)
+//! to properly enrich tool records with routing_keywords from SKILL.md.
 
 use std::path::Path;
 
-use crate::{ScriptScanner, ToolRecord, VectorStoreError};
+use crate::{ScriptScanner, SkillScanner, ToolRecord, VectorStoreError};
 
 impl crate::VectorStore {
     /// Index all tools from skills scripts directory.
     ///
-    /// Scans `base_path/skills/*/scripts/*.py` for `@skill_command` decorated
-    /// functions and indexes them for discovery.
+    /// This method:
+    /// 1. Scans SKILL.md files to extract `routing_keywords`
+    /// 2. Scans scripts/ for `@skill_command` decorated functions
+    /// 3. Enriches tool records with routing_keywords for hybrid search
     ///
     /// # Arguments
     ///
@@ -26,7 +31,8 @@ impl crate::VectorStore {
         base_path: &str,
         table_name: &str,
     ) -> Result<(), VectorStoreError> {
-        let scanner = ScriptScanner::new();
+        let skill_scanner = SkillScanner::new();
+        let script_scanner = ScriptScanner::new();
         let skills_path = Path::new(base_path);
 
         if !skills_path.exists() {
@@ -34,26 +40,61 @@ impl crate::VectorStore {
             return Ok(());
         }
 
-        let tools = scanner
-            .scan_all(skills_path)
-            .map_err(|e| VectorStoreError::from(anyhow::anyhow!("Failed to scan skills: {}", e)))?;
+        // Step 1: Scan SKILL.md files to get routing_keywords
+        let metadatas = skill_scanner.scan_all(skills_path, None).map_err(|e| {
+            VectorStoreError::from(anyhow::anyhow!("Failed to scan skill metadata: {}", e))
+        })?;
 
-        if tools.is_empty() {
+        if metadatas.is_empty() {
+            log::info!("No skills with SKILL.md found");
+            return Ok(());
+        }
+
+        // Step 2: For each skill, scan scripts with routing_keywords
+        let mut all_tools: Vec<ToolRecord> = Vec::new();
+
+        for metadata in &metadatas {
+            let skill_scripts_path = skills_path.join(&metadata.skill_name).join("scripts");
+
+            let tools = script_scanner
+                .scan_scripts(
+                    &skill_scripts_path,
+                    &metadata.skill_name,
+                    &metadata.routing_keywords,
+                )
+                .map_err(|e| {
+                    VectorStoreError::from(anyhow::anyhow!(
+                        "Failed to scan scripts for skill '{}': {}",
+                        metadata.skill_name,
+                        e
+                    ))
+                })?;
+
+            all_tools.extend(tools);
+        }
+
+        if all_tools.is_empty() {
             log::info!("No tools found in scripts");
             return Ok(());
         }
 
-        // Convert tools to record format
-        let ids: Vec<String> = tools
+        // Step 3: Convert tools to record format for indexing
+        let ids: Vec<String> = all_tools
             .iter()
-            .map(|t| format!("{}.{}", t.skill_name, t.tool_name))
+            .map(|t| {
+                format!(
+                    "{}.{}",
+                    t.skill_name,
+                    t.tool_name.split('.').skip(1).collect::<Vec<_>>().join(".")
+                )
+            })
             .collect();
 
         // Use description as content for embedding
-        let contents: Vec<String> = tools.iter().map(|t| t.description.clone()).collect();
+        let contents: Vec<String> = all_tools.iter().map(|t| t.description.clone()).collect();
 
-        // Create metadata JSON with file_hash (input_schema will be added by Python if needed)
-        let metadatas: Vec<String> = tools
+        // Create metadata JSON with routing_keywords for hybrid search
+        let metadatas_json: Vec<String> = all_tools
             .iter()
             .map(|t| {
                 serde_json::json!({
@@ -61,9 +102,9 @@ impl crate::VectorStore {
                     "tool_name": t.tool_name,
                     "file_path": t.file_path,
                     "function_name": t.function_name,
-                    "keywords": t.keywords,
+                    "keywords": t.keywords,  // Includes routing_keywords from SKILL.md
                     "file_hash": t.file_hash,
-                    "input_schema": "{}",  // Placeholder - Python can update this
+                    "input_schema": t.input_schema,
                     "docstring": t.docstring,
                 })
                 .to_string()
@@ -89,10 +130,14 @@ impl crate::VectorStore {
             })
             .collect();
 
-        self.add_documents(table_name, ids, vectors, contents, metadatas)
+        self.add_documents(table_name, ids, vectors, contents, metadatas_json)
             .await?;
 
-        log::info!("Indexed {} tools from scripts", tools.len());
+        log::info!(
+            "Indexed {} tools from {} skills",
+            all_tools.len(),
+            metadatas.len()
+        );
         Ok(())
     }
 
@@ -143,7 +188,8 @@ impl crate::VectorStore {
     ///
     /// Returns an error if scanning fails.
     pub fn scan_skill_tools_raw(&self, base_path: &str) -> Result<Vec<String>, VectorStoreError> {
-        let scanner = ScriptScanner::new();
+        let skill_scanner = SkillScanner::new();
+        let script_scanner = ScriptScanner::new();
         let skills_path = Path::new(base_path);
 
         if !skills_path.exists() {
@@ -151,12 +197,36 @@ impl crate::VectorStore {
             return Ok(vec![]);
         }
 
-        let tools = scanner
-            .scan_all(skills_path)
-            .map_err(|e| VectorStoreError::from(anyhow::anyhow!("Failed to scan skills: {}", e)))?;
+        // Get metadatas for routing_keywords
+        let metadatas = skill_scanner.scan_all(skills_path, None).map_err(|e| {
+            VectorStoreError::from(anyhow::anyhow!("Failed to scan skill metadata: {}", e))
+        })?;
+
+        // Collect tools with routing_keywords
+        let mut all_tools: Vec<ToolRecord> = Vec::new();
+
+        for metadata in &metadatas {
+            let skill_scripts_path = skills_path.join(&metadata.skill_name).join("scripts");
+
+            let tools = script_scanner
+                .scan_scripts(
+                    &skill_scripts_path,
+                    &metadata.skill_name,
+                    &metadata.routing_keywords,
+                )
+                .map_err(|e| {
+                    VectorStoreError::from(anyhow::anyhow!(
+                        "Failed to scan scripts for skill '{}': {}",
+                        metadata.skill_name,
+                        e
+                    ))
+                })?;
+
+            all_tools.extend(tools);
+        }
 
         // Convert to JSON strings
-        let json_tools: Vec<String> = tools
+        let json_tools: Vec<String> = all_tools
             .into_iter()
             .map(|t| serde_json::to_string(&t).unwrap_or_default())
             .filter(|s| !s.is_empty())

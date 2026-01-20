@@ -43,7 +43,7 @@ class ObserverMixin:
         Args:
             callback: Callable that takes a dict of skill changes. Can be sync or async.
         """
-        from ..protocols import _get_logger
+        from ...protocols import _get_logger
 
         # Prevent duplicate registrations
         if callback in self._observers:
@@ -79,7 +79,7 @@ class ObserverMixin:
         This is called after 200ms debounce delay to batch multiple
         skill changes into a single notification.
         """
-        from ..protocols import _get_logger
+        from ...protocols import _get_logger
 
         await asyncio.sleep(0.2)  # 200ms debounce
 
@@ -126,7 +126,7 @@ class ObserverMixin:
         This triggers MCP Server to send_tool_list_changed() so Claude
         refreshes its available tools.
         """
-        from ..protocols import _get_logger
+        from ...protocols import _get_logger
 
         # Add to pending changes
         self._pending_changes.append((skill_name, change_type))

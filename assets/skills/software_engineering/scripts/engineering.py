@@ -66,13 +66,27 @@ async def analyze_project_structure(depth: int = 2) -> str:
     category="read",
     description="Universal content search (grep) for patterns in files.",
 )
-async def grep_codebase(pattern: str, file_extension: str = "", path: str = ".") -> str:
+async def grep_codebase(
+    pattern: str,
+    file_extension: str = "",
+    path: str = ".",
+    case_sensitive: bool = False,
+) -> str:
     """
     Universal content search (grep).
     Finds occurrences of a string or regex pattern in ANY file type.
+
+    Args:
+        pattern: The search pattern (string or regex).
+        file_extension: Optional file extension filter (e.g., ".py").
+        path: Root directory to search from (default: current directory).
+        case_sensitive: If True, performs case-sensitive search.
+            Default is False (smart case-insensitive search).
     """
     results = []
     root = get_project_root()
+    flags = 0 if case_sensitive else re.IGNORECASE
+
     try:
         target_path = (root / path).resolve()
 
@@ -103,19 +117,20 @@ async def grep_codebase(pattern: str, file_extension: str = "", path: str = ".")
                     lines = content.splitlines()
 
                     for i, line in enumerate(lines):
-                        if re.search(pattern, line):
+                        if re.search(pattern, line, flags):
                             rel = file_path.relative_to(root)
                             results.append(f"{rel}:{i + 1}: {line.strip()[:100]}")
                             count += 1
                             if count >= MAX_RESULTS:
                                 break
-                except:
+                except Exception:
                     continue
             if count >= MAX_RESULTS:
                 break
 
         if not results:
-            return f"No matches found for '{pattern}'."
+            case_hint = "" if case_sensitive else " (try case_sensitive=True if needed)"
+            return f"No matches found for '{pattern}'{case_hint}."
 
         return f"Universal Grep Results ({len(results)} matches):\n" + "\n".join(results)
     except Exception as e:

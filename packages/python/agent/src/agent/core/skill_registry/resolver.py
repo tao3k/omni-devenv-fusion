@@ -3,6 +3,7 @@ agent/core/registry/resolver.py
  Version Resolver
 
 Multi-strategy skill version resolution.
+Uses Rust scanner for SKILL.md parsing.
 """
 
 from __future__ import annotations
@@ -13,6 +14,8 @@ from pathlib import Path
 
 import structlog
 from git import Repo, InvalidGitRepositoryError
+
+from agent.core.skill_discovery import parse_skill_md
 
 logger = structlog.get_logger(__name__)
 
@@ -42,16 +45,12 @@ class VersionResolver:
             except Exception:
                 pass
 
-        # Strategy 2: SKILL.md
-        import frontmatter
-
+        # Strategy 2: SKILL.md (using Rust scanner)
         skill_md_path = skill_path / "SKILL.md"
         if skill_md_path.exists():
             try:
-                with open(skill_md_path) as f:
-                    post = frontmatter.load(f)
-                meta = post.metadata or {}
-                if "version" in meta:
+                meta = parse_skill_md(skill_path)
+                if meta and "version" in meta:
                     return meta["version"]
             except Exception:
                 pass

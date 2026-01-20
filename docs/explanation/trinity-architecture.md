@@ -199,7 +199,7 @@ packages/python/agent/src/agent/
 ├── core/
 │   ├── swarm.py              # 🧠 Runtime orchestrator
 │   ├── module_loader.py      # Hot-reload mechanism
-│   └── skill_manager.py      # Trinity facade
+│   └── skill_runtime/        # Trinity facade (SkillContext)
 ├── mcp_server.py             # Pure MCP Server (Thin Gateway)
 └── skills/
     └── decorators.py         # @skill_command decorator
@@ -261,7 +261,7 @@ packages/python/common/src/common/
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │                    SkillManager (Runtime)                              │  │
+│  │                    SkillContext (Runtime)                              │  │
 │  ├───────────────────────────────────────────────────────────────────────┤  │
 │  │  _observers: [MCP Observer, Index Sync Observer]                      │  │
 │  │  _pending_changes: [(skill_name, change_type), ...]                   │  │
@@ -304,9 +304,9 @@ manager.reload(skill_name)
 ### Observer Pattern
 
 ```python
-from agent.core.skill_manager import get_skill_manager
+from agent.core.skill_runtime import get_skill_context
 
-manager = get_skill_manager()
+context = get_skill_context()
 
 async def on_skill_change(skill_name: str, change_type: str):
     """Callback signature: (skill_name, change_type)"""
@@ -317,7 +317,7 @@ async def on_skill_change(skill_name: str, change_type: str):
     elif change_type == "reload":
         await index_single_skill(skill_name)
 
-manager.subscribe(on_skill_change)
+context.subscribe(on_skill_change)
 ```
 
 ### Debounced Notifications
@@ -336,7 +336,7 @@ for skill in skills:
 #### 1. Async Task GC Protection
 
 ```python
-class SkillManager:
+class SkillContext:
     _background_tasks: set[asyncio.Task] = set()
 
     def _fire_and_forget(self, coro: asyncio.coroutine) -> asyncio.Task:
@@ -1009,7 +1009,7 @@ Establishes a proper Rust workspace with high-performance crates for environment
 ### New Directory Structure
 
 ```
-omni-devenv-fusion/
+omni-dev-fusion/
 ├── packages/
 │   ├── python/          # Existing Python code
 │   │   ├── agent/
@@ -1681,7 +1681,7 @@ The Trinity Architecture unifies three critical concerns in a single skill manag
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    SkillManager (Facade)                     │
+│                    SkillContext (Facade)                     │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
 │  │    Code     │  │   Context   │  │       State         │  │
 │  │ (Hot-Load)  │  │ (Repomix)   │  │     (Registry)      │  │
@@ -1733,7 +1733,7 @@ class Skill(ISkill):
 
 ```
 .cache/
-└── omni-devenv-fusion/
+└── omni-dev-fusion/
     └── skill_git_repomix.xml  (20KB, includes tools.py, Backlog.md, workflows)
 ```
 
@@ -1773,7 +1773,7 @@ class SkillCommand(ISkillCommand):
 User: @omni("git.status")
      │
      ▼
-get_skill_manager().run("git", "git_status")
+get_skill_context().run("git", "git_status")
      │
      ▼
 _ensure_fresh("git") ──→ Check mtime
@@ -1923,18 +1923,18 @@ async def crawl(url: str):
 
 ```python
 from mcp.server import Server
-from agent.core.skill_manager import get_skill_manager
+from agent.core.skill_runtime import get_skill_context
 
 # Create pure MCP Server (no FastMCP)
 server = Server("omni-agent")
 
 @server.list_tools()
 async def handle_list_tools() -> list[Tool]:
-    """Dynamic tool discovery from SkillManager."""
-    manager = get_skill_manager()
+    """Dynamic tool discovery from SkillContext."""
+    context = get_skill_context()
     tools = []
-    for skill_name in manager.list_loaded():
-        for cmd_name in manager.get_commands(skill_name):
+    for skill_name in context.list_loaded():
+        for cmd_name in context.get_commands(skill_name):
             tools.append(Tool(
                 name=f"{skill_name}.{cmd_name}",
                 description=...
@@ -1943,10 +1943,10 @@ async def handle_list_tools() -> list[Tool]:
 
 @server.call_tool()
 async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
-    """Execute via SkillManager."""
-    manager = get_skill_manager()
+    """Execute via SkillContext."""
+    context = get_skill_context()
     skill_name, cmd_name = name.split(".", 1)
-    result = await manager.run(skill_name, cmd_name, arguments)
+    result = await context.run(skill_name, cmd_name, arguments)
     return [TextContent(type="text", text=result)]
 ```
 
@@ -1990,7 +1990,7 @@ Without `repomix.json`, dynamic config is generated with defaults.
 
 | Issue                        | Solution                                                         |
 | ---------------------------- | ---------------------------------------------------------------- |
-| Command not found after edit | Wait for reload or call `manager.reload(skill_name)`             |
+| Command not found after edit | Wait for reload or call `context.reload(skill_name)`             |
 | Help returns old context     | Delete `.cache/<project>/*.xml` or call `context_cache.reload()` |
 | Slow first command           | Normal - cold start requires module load                         |
 

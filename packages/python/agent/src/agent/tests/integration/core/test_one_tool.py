@@ -211,7 +211,9 @@ class TestOmniRealLLMSession:
         result = await router.route("commit my changes with message feat: add new feature")
 
         # Should route to git skill
-        assert "git" in result.selected_skills
+        assert "git" in result.selected_skills, (
+            f"Expected 'git' in skills, got {result.selected_skills}"
+        )
 
         # Mission brief should be actionable (could be from LLM or vector fallback)
         assert len(result.mission_brief) > 0

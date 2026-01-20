@@ -3,7 +3,7 @@ name = "omni-ast"
 version.workspace = true
 edition.workspace = true
 description = "Unified AST utilities using ast-grep"
-authors = ["Omni-DevEnv Team"]
+authors = ["Omni-Dev-Fusion Team"]
 license = "Apache-2.0"
 publish = false
 

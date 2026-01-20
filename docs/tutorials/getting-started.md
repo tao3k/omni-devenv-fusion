@@ -1,4 +1,4 @@
-# Tutorial: Getting Started with Omni-DevEnv
+# Tutorial: Getting Started with Omni-Dev-Fusion
 
 > **Duration**: 15 minutes | **Goal**: Run the Omni Agent
 

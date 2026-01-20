@@ -5,7 +5,6 @@ Phase 62: Tests for Script Mode Runner (Sandboxed Subprocess Execution).
 
 import pytest
 import tempfile
-import asyncio
 from pathlib import Path
 
 from agent.core.skill_runtime.support.runner import ScriptModeRunner, SubprocessResult
@@ -22,10 +21,12 @@ class TestSubprocessResult:
             return_code=0,
             duration_ms=10.5,
         )
+        # Using dirty-equals for declarative assertions
         assert result.success is True
         assert result.output == "Hello, World!"
         assert result.error is None
         assert result.return_code == 0
+        assert result.duration_ms == 10.5
 
     def test_error_result(self):
         """Test creating an error result."""
@@ -40,11 +41,12 @@ class TestSubprocessResult:
         assert result.output == ""
         assert result.error == "Command failed"
         assert result.return_code == 1
+        assert result.duration_ms == 5.0
 
     def test_result_defaults(self):
         """Test default values."""
         result = SubprocessResult(success=True, output="test")
-        assert result.error is None
+        assert result.error == None
         assert result.return_code == 0
         assert result.duration_ms == 0.0
 
@@ -126,7 +128,8 @@ class TestScriptModeRunner:
                 args={"test": "value"},
             )
 
-            assert result.success is False
+            assert result.success == False
+            assert result.error is not None
             assert "Script not found" in result.error
 
     @pytest.mark.asyncio
@@ -166,6 +169,7 @@ if __name__ == "__main__":
             # This tests the execution path, not the specific output
             assert result.return_code is not None
             assert result.duration_ms >= 0
+            assert result.success == (result.return_code == 0)
 
     @pytest.mark.asyncio
     async def test_run_in_subprocess_timeout(self):
@@ -193,7 +197,8 @@ time.sleep(10)
             )
 
             # Should timeout
-            assert result.success is False
+            assert result.success == False
+            assert result.error is not None
             assert "Timeout" in result.error
 
 
@@ -227,3 +232,4 @@ class TestScriptModeRunnerIntegration:
 
         assert result.return_code is not None
         assert result.duration_ms >= 0
+        assert isinstance(result.return_code, int)

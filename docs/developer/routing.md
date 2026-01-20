@@ -598,7 +598,7 @@ When a skill is reloaded, the routing system is updated automatically:
 ```
 Skill Modified
         ↓
-SkillManager.reload(skill_name)
+SkillContext.reload(skill_name)
         ↓
 Debounced Notification (200ms)
         ↓
@@ -730,7 +730,7 @@ User: "Analyze this pcap file"
 | `agent/core/router/semantic_router.py`         | Main router implementation         |
 | `agent/core/router/semantic_cortex.py`         | Fuzzy cache implementation         |
 | `agent/core/router/models.py`                  | RoutingResult, HiveMindCache       |
-| `agent/core/skill_manager.py`                  | SkillManager with observer pattern |
+| `agent/core/skill_runtime/context.py`          | SkillContext with observer pattern |
 | `agent/core/skill_discovery.py`                | VectorSkillDiscovery               |
 | `agent/tests/test_semantic_cortex.py`          | Cortex tests                       |
 | `agent/tests/scenarios/test_discovery_flow.py` | Discovery flow tests               |

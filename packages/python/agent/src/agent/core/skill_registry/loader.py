@@ -3,8 +3,7 @@ agent/core/registry/loader.py
  Skill Loader with scripts/ support
 
 Module loading with spec-based loading and hot-reload support.
-Supports both legacy tools.py and new scripts/__init__.py patterns.
-Pure MCP Server compatible.
+Supports scripts/__init__.py pattern (Trinity Architecture v2.0).
 """
 
 from __future__ import annotations
@@ -49,18 +48,18 @@ class SkillLoader:
         """
         Dynamically load a skill into the MCP server.
         Supports HOT RELOAD.
-         Supports both scripts/__init__.py and tools.py.
+        Uses scripts/__init__.py pattern (Trinity Architecture v2.0).
         """
-        # Get manifest
-        manifest = self.registry.get_skill_manifest(skill_name)
-        if not manifest:
+        # Get metadata
+        metadata = self.registry.get_skill_metadata(skill_name)
+        if not metadata:
             return False, f"Skill '{skill_name}' not found or invalid."
 
         # Convert to dict for consistent access
-        if hasattr(manifest, "model_dump"):
-            manifest_dict = manifest.model_dump()
+        if hasattr(metadata, "model_dump"):
+            metadata_dict = metadata.model_dump()
         else:
-            manifest_dict = manifest
+            metadata_dict = metadata
 
         # Check if already loaded (hot reload will override)
         if skill_name in self.registry.loaded_skills:
@@ -68,28 +67,26 @@ class SkillLoader:
             pass
 
         # Resolve skill dependencies
-        success, msg = self._resolve_dependencies(manifest, mcp)
+        success, msg = self._resolve_dependencies(metadata, mcp)
         if not success:
             return False, msg
 
-        #  Support scripts/ directory (preferred) and tools.py (legacy)
+        # Load from scripts/__init__.py (Trinity Architecture v2.0)
         scripts_dir = self.registry.skills_dir / skill_name / "scripts"
-        tools_path = self.registry.skills_dir / skill_name / "tools.py"
+        init_path = scripts_dir / "__init__.py"
 
-        if scripts_dir.exists() and (scripts_dir / "__init__.py").exists():
-            # New scripts/ pattern (+)
-            source_path = scripts_dir / "__init__.py"
-            tools_module = f"agent.skills.{skill_name}.scripts"
-        elif tools_path.exists():
-            # Legacy tools.py pattern
-            source_path = tools_path
-            tools_module = f"agent.skills.{skill_name}.tools"
+        if init_path.exists():
+            source_path = init_path
+            module_path = f"agent.skills.{skill_name}.scripts"
         else:
-            return False, f"No scripts/__init__.py or tools.py found for {skill_name}"
+            return (
+                False,
+                f"No scripts/__init__.py found for {skill_name} (scripts/ directory required)",
+            )
 
         # Load the module
         try:
-            module = self._load_module_from_path(tools_module, source_path)
+            module = self._load_module_from_path(module_path, source_path)
 
             # Check for @skill_command or @skill_command decorated functions
             skill_commands = self._extract_commands(module)
@@ -98,8 +95,7 @@ class SkillLoader:
                 return False, f"Module has no @skill_command or @skill_command decorated functions."
 
             # Register (store as dict for compatibility)
-            manifest_dict = manifest if isinstance(manifest, dict) else manifest.model_dump()
-            self.registry.loaded_skills[skill_name] = manifest_dict
+            self.registry.loaded_skills[skill_name] = metadata_dict
             self.registry.register_module(skill_name, module)
 
             # No debug log for successful load - only errors matter
@@ -110,16 +106,16 @@ class SkillLoader:
             return False, f"Load Error: {e}"
 
     def _resolve_dependencies(
-        self, manifest: dict[str, Any], mcp: "Server | None"
+        self, metadata: dict[str, Any], mcp: "Server | None"
     ) -> tuple[bool, str]:
         """Resolve skill dependencies."""
         # Convert to dict if needed
-        if hasattr(manifest, "model_dump"):
-            manifest_dict = manifest.model_dump()
+        if hasattr(metadata, "model_dump"):
+            metadata_dict = metadata.model_dump()
         else:
-            manifest_dict = manifest
+            metadata_dict = metadata
 
-        deps = manifest_dict.get("dependencies", {})
+        deps = metadata_dict.get("dependencies", {})
 
         # Skill dependencies
         skill_deps = deps.get("skills", {}) if isinstance(deps, dict) else {}
@@ -164,10 +160,10 @@ class SkillLoader:
     def load_module(self, skill_name: str, source_path: Path) -> types.ModuleType:
         """Load a skill module from a specific path.
 
-        Determines module name based on path type.
+        Determines module name based on path type (scripts/ only in v2.0).
         """
         if "scripts" in str(source_path):
             module_name = f"agent.skills.{skill_name}.scripts"
         else:
-            module_name = f"agent.skills.{skill_name}.tools"
+            module_name = f"agent.skills.{skill_name}.scripts"
         return self._load_module_from_path(module_name, source_path)

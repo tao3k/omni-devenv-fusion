@@ -21,7 +21,7 @@ from common.mcp_core.lazy_cache.repomix_cache import RepomixCache
 from ...protocols import ExecutionMode, ExecutionResult, SkillCategory
 
 if TYPE_CHECKING:
-    from ...protocols import SkillManifest
+    from ...protocols import SkillMetadata
 
 # Lazy logger
 _cached_logger: Any = None
@@ -200,7 +200,7 @@ class Skill:
     """
 
     name: str
-    manifest: "SkillManifest"
+    metadata: "SkillMetadata"
     commands: dict[str, SkillCommand] = field(default_factory=dict)
     module_name: str = ""
     path: Path | None = None

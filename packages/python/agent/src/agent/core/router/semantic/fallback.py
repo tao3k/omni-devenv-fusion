@@ -52,11 +52,11 @@ async def try_vector_fallback(
         vector_discovery: VectorSkillDiscovery instance
     """
     try:
-        # 1. Search local skills first (installed_only=True by default)
+        # 1. Search local skills first (local_only=True by default)
         suggestions = await vector_discovery.search(
             query=query,
             limit=3,
-            installed_only=True,  # Only local skills
+            local_only=True,  # Only local skills
         )
 
         # Filter out already selected skills
@@ -69,7 +69,7 @@ async def try_vector_fallback(
             remote_suggestions = await vector_discovery.search(
                 query=query,
                 limit=5,
-                installed_only=False,  # Search all skills (remote too)
+                local_only=False,  # Search all skills (remote too)
             )
 
             if remote_suggestions:

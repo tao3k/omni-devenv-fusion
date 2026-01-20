@@ -46,7 +46,7 @@ class SkillLifecycle:
         mtime_cache: dict[str, float],
         memory: "SkillMemoryManager",
         notify_change: Callable[[str, str], None],
-        fire_and_forget: Callable[[asyncio.Future], None],
+        fire_and_forget: Callable[[Any], Any],
     ) -> None:
         self._skills_dir = skills_dir
         self._manifest_loader = manifest_loader
@@ -130,7 +130,7 @@ class SkillLifecycle:
 
         skill = Skill(
             name=skill_name,
-            manifest=manifest,
+            metadata=metadata,
             commands=script_commands,
             module_name=f"agent.skills.{skill_name}",
             path=scripts_dir,

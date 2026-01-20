@@ -5,6 +5,7 @@ This module uses pytest_plugins to load fixtures from the fixtures/ directory.
 Plugin-based loading provides better organization and discoverability.
 
 Fixtures are organized into:
+    - plugins/: Pytest plugins for seed management and utilities
     - fixtures/core.py: Session-scoped path fixtures
     - fixtures/registry.py: Skill registry and manager fixtures
     - fixtures/mocks.py: Mock objects for testing
@@ -52,17 +53,61 @@ def _ensure_agent_skills_loaded():
     yield
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _add_skills_to_syspath():
+    """Add assets/skills to sys.path so skill imports work.
+
+    Skills like agent.skills.git.scripts.prepare are in assets/skills/
+    but need to be importable as Python packages.
+    """
+    import sys
+    from common.skills_path import SKILLS_DIR
+
+    skills_path = str(SKILLS_DIR())
+    if skills_path not in sys.path:
+        sys.path.insert(0, skills_path)
+
+    yield
+
+
 # =============================================================================
 # Pytest Plugin-based Fixture Loading
 # =============================================================================
 
 
 pytest_plugins = [
+    "plugins.seed_manager",  # Seed synchronization for deterministic tests
     "fixtures.core",
     "fixtures.registry",
     "fixtures.mocks",
     "fixtures.skills_data",
 ]
+
+
+# =============================================================================
+# Parallel Execution Safety Fixtures
+# =============================================================================
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_singletons():
+    """Clean up singletons between tests for parallel execution safety.
+
+    This fixture runs automatically for every test to ensure that
+    singleton instances are reset, preventing state leakage between
+    tests when running with pytest-xdist.
+    """
+    import agent.core.skill_runtime.context as ctx
+
+    # Store original state
+    original_instance = getattr(ctx, "_instance", None)
+    original_manager = getattr(ctx, "_manager", None)
+
+    yield
+
+    # Cleanup after test
+    ctx._instance = None
+    ctx._manager = None
 
 
 # =============================================================================

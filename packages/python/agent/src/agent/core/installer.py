@@ -8,6 +8,7 @@ Features:
 - Dependency cycle detection
 - Lockfile generation
 - Python dependency installation
+Uses Rust scanner for SKILL.md parsing.
 """
 
 from __future__ import annotations
@@ -22,6 +23,8 @@ import subprocess
 
 from git import Repo
 from git.exc import GitCommandError, InvalidGitRepositoryError
+
+from agent.core.skill_discovery import parse_skill_md
 
 logger = logging.getLogger(__name__)
 
@@ -439,16 +442,13 @@ class SkillInstaller:
         Returns:
             dict with installation results
         """
-        import frontmatter
-
         skill_md_path = target_dir / "SKILL.md"
         if not skill_md_path.exists():
             return {"success": True, "message": "No SKILL.md found"}
 
         try:
-            with open(skill_md_path) as f:
-                post = frontmatter.load(f)
-            meta = post.metadata or {}
+            # Use Rust scanner for high-performance parsing
+            meta = parse_skill_md(target_dir) or {}
             python_deps = meta.get("dependencies", {}).get("python", {})
 
             if not python_deps:

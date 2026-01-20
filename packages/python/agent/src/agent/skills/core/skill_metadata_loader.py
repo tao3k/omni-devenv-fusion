@@ -3,6 +3,7 @@ agent/skills/core/skill_metadata_loader.py
 Phase 33: SKILL.md Standardization - Pure SKILL.md Loader
 
 Only supports SKILL.md format - no manifest.json backward compatibility.
+Uses Rust scanner for high-performance frontmatter parsing.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-import frontmatter
+from agent.core.skill_discovery import parse_skill_md
 
 from .skill_metadata import (
     SkillMetadata,
@@ -82,14 +83,20 @@ class SkillMetadataLoader:
         skill_file = skill_path / SKILL_FILE
 
         try:
-            with open(skill_file, encoding="utf-8") as f:
-                post = frontmatter.load(f)
+            # Use Rust scanner for high-performance parsing
+            meta = parse_skill_md(skill_path)
 
-            meta = post.metadata or {}
+            if meta is None:
+                _get_logger().error(
+                    "SKILL.md not found or invalid",
+                    skill=skill_path.name,
+                    file=str(skill_file),
+                )
+                return None
 
             # Validate required fields
             for field in self.REQUIRED_FIELDS:
-                if field not in meta:
+                if field not in meta or not meta.get(field):
                     _get_logger().error(
                         "Missing required field in SKILL.md",
                         skill=skill_path.name,
@@ -98,7 +105,7 @@ class SkillMetadataLoader:
                     )
                     return None
 
-            # Use Pydantic model for validation
+            # Convert to Pydantic model for validation
             model = SkillMetadataModel.model_validate(meta)
             return model.to_metadata()
 
@@ -140,9 +147,14 @@ class SkillMetadataLoader:
         system_prompt = ""
 
         try:
-            with open(skill_file, encoding="utf-8") as f:
-                post = frontmatter.load(f)
-            system_prompt = post.content.strip()
+            # Read SKILL.md content directly (after frontmatter)
+            content = skill_file.read_text(encoding="utf-8")
+            # Extract content after second '---'
+            # First partition: skip first "---\n" (YAML opening marker)
+            _, _, after_first = content.partition("---\n")
+            # Second partition: skip second "---\n" (YAML closing marker)
+            _, _, system_prompt = after_first.partition("---\n")
+            system_prompt = system_prompt.strip()
         except Exception as e:
             _get_logger().warning(
                 "Failed to read SKILL.md content",

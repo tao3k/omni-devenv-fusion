@@ -43,6 +43,124 @@ pub struct Skill {
     pub category: String,
 }
 
+/// Skill definition with generic metadata container.
+/// This enables schema-driven metadata evolution without recompiling Rust.
+///
+/// All schema-defined fields (version, permissions, require_refs, etc.)
+/// are stored in the flexible `metadata` JSON object.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "SkillDefinitionHelper", into = "SkillDefinitionHelper")]
+pub struct SkillDefinition {
+    /// Unique identifier for the skill (e.g., "git", "writer")
+    pub name: String,
+    /// Semantic description used for vector embedding generation
+    pub description: String,
+    /// Generic metadata container for schema-defined fields
+    pub metadata: serde_json::Value,
+    /// Routing keywords for semantic search
+    pub routing_keywords: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SkillDefinitionHelper {
+    name: String,
+    description: String,
+    metadata: serde_json::Value,
+}
+
+impl From<SkillDefinitionHelper> for SkillDefinition {
+    fn from(helper: SkillDefinitionHelper) -> Self {
+        let metadata = helper.metadata.clone();
+        let routing_keywords = metadata
+            .get("routing_keywords")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Self {
+            name: helper.name,
+            description: helper.description,
+            metadata,
+            routing_keywords,
+        }
+    }
+}
+
+impl From<SkillDefinition> for SkillDefinitionHelper {
+    fn from(def: SkillDefinition) -> Self {
+        Self {
+            name: def.name,
+            description: def.description,
+            metadata: def.metadata,
+        }
+    }
+}
+
+impl SkillDefinition {
+    /// Create a new skill definition.
+    #[must_use]
+    pub fn new(name: String, description: String, metadata: serde_json::Value) -> Self {
+        let routing_keywords = metadata
+            .get("routing_keywords")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Self {
+            name,
+            description,
+            metadata,
+            routing_keywords,
+        }
+    }
+
+    /// Get require_refs from metadata safely.
+    #[must_use]
+    pub fn get_require_refs(&self) -> Vec<String> {
+        self.metadata
+            .get("requireRefs")
+            .or(self.metadata.get("require_refs"))
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Get a specific metadata field as string.
+    /// Tries both camelCase and snake_case variations.
+    pub fn get_meta_string(&self, key: &str) -> Option<String> {
+        // Try camelCase (first char uppercase) and original key
+        let camel_key = key
+            .chars()
+            .next()
+            .map(|c| c.to_uppercase().to_string() + &key[1..])
+            .unwrap_or_default();
+
+        self.metadata
+            .get(&camel_key)
+            .or(self.metadata.get(key))
+            .and_then(|v| v.as_str())
+            .map(String::from)
+    }
+
+    /// Get skill version from metadata.
+    #[must_use]
+    pub fn get_version(&self) -> String {
+        self.get_meta_string("version").unwrap_or_default()
+    }
+}
+
 /// Task brief from orchestrator
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskBrief {

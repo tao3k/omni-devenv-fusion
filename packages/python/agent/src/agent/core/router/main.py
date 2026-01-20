@@ -16,7 +16,7 @@ from agent.core.router.hive import get_hive_router, HiveRouter
 
 
 def clear_routing_cache():
-    """Clear the Hive Mind Cache. Useful for debugging or after major changes."""
+    """Clear all routing caches including semantic router caches."""
     router = get_router()
     if hasattr(router, "cache") and isinstance(router.cache, HiveMindCache):
         router.cache.cache.clear()
@@ -25,3 +25,12 @@ def clear_routing_cache():
     hive_router = get_hive_router()
     if hasattr(hive_router, "clear_cache"):
         hive_router.clear_cache()
+
+    # Clear semantic router's global caches
+    try:
+        from agent.core.router.semantic.router import _cached_cache, _cached_cortex
+
+        _cached_cache.clear()
+        _cached_cortex = None
+    except ImportError:
+        pass

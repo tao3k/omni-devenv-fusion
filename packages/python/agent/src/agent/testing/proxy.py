@@ -59,7 +59,7 @@ class SkillProxy:
     def __init__(self, skill):
         self._skill = skill
         self._name = skill.name
-        self._manifest = skill.manifest
+        self._metadata = skill.metadata
         self._commands = skill.commands
 
         # Expose all commands as direct methods
@@ -109,5 +109,5 @@ class SkillProxy:
         return self._name
 
     @property
-    def manifest(self):
-        return self._manifest
+    def metadata(self):
+        return self._metadata

@@ -11,6 +11,8 @@ import structlog
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from agent.core.planner.simple import AdaptivePlanner, create_adaptive_planner
+
 logger = structlog.get_logger(__name__)
 
 
@@ -98,17 +100,21 @@ class OmniLoop:
     # Context Building
     # =========================================================================
 
-    async def _build_cca_context(self, task: str) -> str:
+    async def _build_cca_context(
+        self, task: str, skill_prompts: Dict[str, str] | None = None
+    ) -> str:
         """
         [Step 4] The Conductor: Async Context Assembly.
 
         Assembles layered context from ContextOrchestrator.
+        Optionally injects skill prompts for Core + Active skills.
         """
         logger.info("OmniLoop: Building CCA context via Async Conductor...")
 
         context = await self.orchestrator.build_prompt(
             task=task,
             history=self.history,
+            skill_prompts=skill_prompts,
         )
 
         stats = self.orchestrator.get_context_stats(context)
@@ -116,6 +122,7 @@ class OmniLoop:
             "OmniLoop: Context built",
             total_tokens=stats["total_tokens"],
             utilization=f"{stats['utilization']:.1%}",
+            skill_prompts_count=len(skill_prompts) if skill_prompts else 0,
         )
 
         return context
@@ -205,29 +212,71 @@ When the task is complete, output: TASK_COMPLETE
 
         Args:
             task: The user's task description
-            max_steps: Maximum steps (default: 1)
+            max_steps: Maximum steps (default: 1, auto-estimated if None)
 
         Returns:
             Final result or summary
         """
-        self.max_steps = max_steps or self.max_steps
         self.step_count = 0
         self.history = []
 
-        logger.info(
-            "OmniLoop: Starting CCA Loop",
-            task_preview=task[:100],
-            max_steps=self.max_steps,
-        )
+        # Initialize LLM client early for planning
+        client = self._load_llm_client()
 
-        # Add initial task to history
-        self.history.append({"role": "user", "content": task})
+        # Adaptive Planning (if max_steps not hardcoded by user)
+        initial_plan = ""
+        if max_steps is None:
+            if client:
+                planner = await create_adaptive_planner(client)
+                estimated_steps, initial_plan = await planner.analyze_task(task)
+                self.max_steps = estimated_steps
+                logger.info(
+                    "OmniLoop: Adaptive planning enabled",
+                    estimated_steps=estimated_steps,
+                    has_plan=bool(initial_plan),
+                )
+            else:
+                self.max_steps = self.max_steps  # Use default (1)
+                logger.info(
+                    "OmniLoop: Starting CCA Loop (no LLM, using defaults)",
+                    task_preview=task[:100],
+                    max_steps=self.max_steps,
+                )
+        else:
+            self.max_steps = max_steps
+            logger.info(
+                "OmniLoop: Starting CCA Loop (user-specified max_steps)",
+                task_preview=task[:100],
+                max_steps=self.max_steps,
+            )
+
+        # Build initial context with task AND plan
+        context_content = task
+        if initial_plan:
+            context_content = (
+                f"{task}\n\n"
+                f"[ADAPTIVE PLAN]\n{initial_plan}\n\n"
+                f"[INSTRUCTION]\n"
+                f"Follow the plan above. Mark completed steps as you go. "
+                f"Use 'writer' skill for text editing tasks."
+            )
+
+        # Add initial task (with plan if available) to history
+        self.history.append({"role": "user", "content": context_content})
 
         # Load tools
         self.tool_loader.load_tools()
 
         # Dynamic Skill Injection based on Task Intent
         await self.skill_injector.inject_for_task(task)
+
+        # Get skill prompts for context injection (Core + Active skills)
+        skill_prompts = self.skill_injector.get_skill_context_prompts()
+        logger.info(
+            "OmniLoop: Skill prompts prepared",
+            core_skills=len([k for k in skill_prompts if k in {"git", "memory", "knowledge"}]),
+            active_skills=len(skill_prompts),
+        )
 
         try:
             while self.step_count < self.max_steps:
@@ -238,8 +287,8 @@ When the task is complete, output: TASK_COMPLETE
                     total=self.max_steps,
                 )
 
-                # Observe + Orient: Build layered context
-                system_context = await self._build_cca_context(task)
+                # Observe + Orient: Build layered context with skill prompts
+                system_context = await self._build_cca_context(task, skill_prompts)
 
                 # Decide: LLM reasoning
                 response = await self._llm_reason(task, system_context)
@@ -282,13 +331,24 @@ When the task is complete, output: TASK_COMPLETE
             # Reflect: Distill wisdom
             reflection = await self._reflect()
 
+            # Get active skills for reporting (separate Core and Active)
+            active_skills = self.skill_injector.get_injected_skills()
+            core_skills = {"git", "memory", "knowledge"}
+            triggered_core = core_skills & active_skills
+            truly_active = active_skills - core_skills
+
+            core_str = ", ".join(sorted(triggered_core)) if triggered_core else "(None triggered)"
+            active_str = ", ".join(sorted(truly_active)) if truly_active else "None"
+
             # Build final summary
             actual_steps = min(self.step_count + 1, self.max_steps)
             summary = f"""
 ## CCA Loop Complete
 
 **Task:** {task}
-**Steps:** {actual_steps}
+**Steps:** {actual_steps}/{self.max_steps}
+**Core Skills:** {core_str}
+**Active Skills:** {active_str}
 **Reflection:** {reflection}
 """
 

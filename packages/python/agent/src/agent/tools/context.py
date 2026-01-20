@@ -79,7 +79,7 @@ async def manage_context(
                     f"\n\nRecent Activity (last 30 lines of SCRATCHPAD.md):\n{recent_logs}"
                 )
 
-        return f"""=== 📋 Omni-DevEnv Fusion - Active Context ===
+        return f"""=== 📋 Omni-Dev-Fusion Fusion - Active Context ===
 
 {status_text}
 

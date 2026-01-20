@@ -5,7 +5,7 @@
 
 ## Overview
 
-Omni Skill Standard (OSS) 1.0 defines the canonical structure for all skills in Omni-DevEnv Fusion. Skills are "Living Microservice Units" that can be hot-reloaded, indexed, and invoked via `@omni("skill.command")`.
+Omni Skill Standard (OSS) 1.0 defines the canonical structure for all skills in Omni-Dev-Fusion Fusion. Skills are "Living Microservice Units" that can be hot-reloaded, indexed, and invoked via `@omni("skill.command")`.
 
 ## Directory Structure
 

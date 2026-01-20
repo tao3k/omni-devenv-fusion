@@ -20,14 +20,38 @@ from typing import Optional
 _project_root: Optional[Path] = None
 
 
+def _find_project_root_from_file(file_path: Path) -> Optional[Path]:
+    """Find project root by searching upward from a file path.
+
+    Looks for project indicators: pyproject.toml, Cargo.toml, justfile, etc.
+
+    Args:
+        file_path: Starting file path to search from.
+
+    Returns:
+        Project root path or None if not found.
+    """
+    for parent in file_path.parents:
+        if _is_project_root(parent):
+            return parent
+    return None
+
+
+def _is_project_root(path: Path) -> bool:
+    """Check if path is a project root (non-git method)."""
+    indicators = [".git", "justfile", "pyproject.toml", "package.json", "go.mod", "Cargo.toml"]
+    return any((path / indicator).exists() for indicator in indicators)
+
+
 def get_project_root() -> Path:
     """
-    Get the project root directory using GitOps.
+    Get the project root directory.
 
     Priority:
     1. PRJ_ROOT environment variable
     2. Git toplevel (git rev-parse --show-toplevel)
-    3. Fallback: Current directory if it contains .git
+    3. Search upward from this module file (__file__)
+    4. Current working directory with project indicators
 
     Returns:
         Path to project root
@@ -57,16 +81,22 @@ def get_project_root() -> Path:
     except Exception:
         pass
 
-    # Method 3: Current working directory as fallback (must have .git)
+    # Method 3: Search upward from this module file
+    this_module = Path(__file__).resolve()
+    project_root = _find_project_root_from_file(this_module)
+    if project_root:
+        _project_root = project_root
+        return _project_root
+
+    # Method 4: Current working directory
     cwd = Path.cwd()
-    if (cwd / ".git").exists():
+    if _is_project_root(cwd):
         _project_root = cwd
         return _project_root
 
-    # Should never reach here in production
     raise RuntimeError(
         "CRITICAL: Cannot determine project root. "
-        "Not in a git repository and no fallback available. "
+        "Not in a git repository and no project indicators found. "
         f"Current working directory: {Path.cwd()}"
     )
 
@@ -106,19 +136,10 @@ def is_git_repo(path: Path | None = None) -> bool:
 
 
 def is_project_root(path: Path | None = None) -> bool:
-    """Check if the given path appears to be a project root."""
+    """Check if the given path appears to be a project root (non-git method)."""
     if path is None:
         path = Path.cwd()
-    # Project root indicators
-    indicators = [
-        ".git",
-        "justfile",
-        "pyproject.toml",
-        "package.json",
-        "go.mod",
-        "Cargo.toml",
-    ]
-    return any((path / indicator).exists() for indicator in indicators)
+    return _is_project_root(path)
 
 
 # =============================================================================

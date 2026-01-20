@@ -10,7 +10,7 @@ Fixtures:
 
 Functions:
     - get_all_skill_paths: Get all valid skill directories
-    - parse_skill_manifest: Parse SKILL.md frontmatter
+    - parse_skill_manifest: Parse SKILL.md frontmatter (using Rust scanner)
     - validate_python_syntax: Validate Python file syntax
 """
 
@@ -21,6 +21,7 @@ from typing import Generator, Callable
 
 import pytest
 
+from agent.core.skill_discovery import parse_skill_md
 from common.skills_path import get_all_skill_paths
 
 
@@ -138,17 +139,13 @@ get_all_skill_paths = get_all_skill_paths
 
 
 def parse_skill_manifest(skill_dir: Path) -> dict:
-    """Parse SKILL.md frontmatter into a dict."""
-    import frontmatter
-
+    """Parse SKILL.md frontmatter into a dict using Rust scanner."""
     skill_md = skill_dir / "SKILL.md"
     if not skill_md.exists():
         return {}
 
-    with open(skill_md) as f:
-        post = frontmatter.load(f)
-
-    data = post.metadata or {}
+    # Use Rust scanner for high-performance parsing
+    data = parse_skill_md(skill_dir) or {}
     data["tools_module"] = f"agent.skills.{skill_dir.name}.tools"
     return data
 

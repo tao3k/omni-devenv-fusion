@@ -109,7 +109,7 @@ def async_unwrap_command_result(coro):
 
 
 # Import core components
-from agent.core.schema import SkillManifest
+from agent.core.schema import SkillMetadata
 from agent.core.skill_registry import SkillRegistry, get_skill_registry
 from agent.core.skill_runtime import SkillContext, get_skill_context
 
@@ -135,9 +135,8 @@ def _load_skill_module_for_test(skill_name: str):
         module_name = f"agent.skills.{skill_name}.scripts"
         skill_path = scripts_dir / "__init__.py"
     else:
-        # Fallback to tools.py (legacy support for git skill)
-        skill_path = SKILLS_DIR(skill=skill_name, filename="tools.py")
-        module_name = f"agent.skills.{skill_name}.tools"
+        # No fallback - scripts/ is required in v2.0
+        raise FileNotFoundError(f"scripts/__init__.py not found for skill: {skill_name}")
 
     if not skill_path.exists():
         raise FileNotFoundError(f"Skill module not found: {skill_path}")
@@ -156,55 +155,55 @@ def real_mcp():
     return mcp
 
 
-class TestSkillManifest:
+class TestSkillMetadata:
     """Test the DNA of skills - Schema validation."""
 
-    def test_valid_manifest_creation(self):
-        """Test creating a valid SkillManifest with v2.0 format."""
+    def test_valid_metadata_creation(self):
+        """Test creating a valid SkillMetadata with v2.0 format."""
         data = {
             "name": "test_skill",
             "version": "1.0.0",
             "description": "A test skill",
             "dependencies": {"skills": {"git": ">=1.0.0"}},
-            "tools_module": "assets.skills.test.tools",
+            "commands_module": "scripts",
             "guide_file": "README.md",
         }
-        manifest = SkillManifest(**data)
-        assert manifest.name == "test_skill"
-        assert manifest.version == "1.0.0"
-        assert manifest.dependencies.skills == {"git": ">=1.0.0"}
-        assert manifest.tools_module == "assets.skills.test.tools"
+        metadata = SkillMetadata(**data)
+        assert metadata.name == "test_skill"
+        assert metadata.version == "1.0.0"
+        assert metadata.dependencies.skills == {"git": ">=1.0.0"}
+        assert metadata.commands_module == "scripts"
 
-    def test_minimal_manifest(self):
-        """Test creating manifest with only required fields."""
+    def test_minimal_metadata(self):
+        """Test creating metadata with only required fields."""
         data = {
             "name": "minimal_skill",
             "version": "0.1.0",
             "description": "Minimal skill",
-            "tools_module": "assets.skills.minimal.tools",
+            "commands_module": "scripts",
         }
-        manifest = SkillManifest(**data)
-        assert manifest.name == "minimal_skill"
-        assert manifest.dependencies.skills == {}
-        assert manifest.dependencies.python == {}
-        assert manifest.guide_file == "README.md"
-        assert manifest.prompts_file is None
+        metadata = SkillMetadata(**data)
+        assert metadata.name == "minimal_skill"
+        assert metadata.dependencies.skills == {}
+        assert metadata.dependencies.python == {}
+        assert metadata.guide_file == "README.md"
+        assert metadata.prompts_file is None
 
-    def test_invalid_manifest_missing_name(self):
+    def test_invalid_metadata_missing_name(self):
         """Test that missing name raises error."""
         data = {
             "version": "1.0.0",
             "description": "A test skill",
-            "tools_module": "assets.skills.test.tools",
+            "commands_module": "scripts",
         }
         with pytest.raises(ValueError):
-            SkillManifest(**data)
+            SkillMetadata(**data)
 
-    def test_invalid_manifest_missing_tools_module(self):
-        """Test that missing tools_module raises error."""
+    def test_invalid_metadata_missing_commands_module(self):
+        """Test that missing commands_module uses default value."""
         data = {"name": "test_skill", "version": "1.0.0", "description": "A test skill"}
-        with pytest.raises(ValueError):
-            SkillManifest(**data)
+        metadata = SkillMetadata(**data)
+        assert metadata.commands_module == "scripts"  # Uses default value
 
 
 class TestSkillDiscovery:
@@ -252,14 +251,14 @@ class TestSkillDiscovery:
         skills = registry_fixture.list_available_skills()
         assert "__pycache__" not in skills
 
-    def test_manifest_parsing_filesystem(self, registry_fixture):
+    def test_metadata_parsing_filesystem(self, registry_fixture):
         """Registry should correctly parse filesystem/SKILL.md."""
-        manifest = registry_fixture.get_skill_manifest("filesystem")
-        assert manifest is not None
-        assert manifest.name == "filesystem"
-        assert manifest.version == "1.0.0"
-        assert manifest.tools_module == "agent.skills.filesystem.tools"
-        assert manifest.guide_file == "README.md"
+        metadata = registry_fixture.get_skill_metadata("filesystem")
+        assert metadata is not None
+        assert metadata.name == "filesystem"
+        assert metadata.version == "1.0.0"
+        assert metadata.commands_module == "scripts"
+        assert metadata.guide_file == "README.md"
 
 
 class TestSpecBasedLoading:

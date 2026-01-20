@@ -74,7 +74,7 @@ def run_dashboard(clear_log: bool = True) -> None:
 
     # Clear screen and show header
     console.clear()
-    console.rule("[bold cyan]Omni-DevEnv Glass Cockpit[/]")
+    console.rule("[bold cyan]Omni-Dev-Fusion Glass Cockpit[/]")
     console.print(f"[dim]Listening for events at {EVENT_LOG_PATH}...[/]")
     console.print("[dim]Press Ctrl+C to stop.[/]")
     console.print()
@@ -112,7 +112,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Omni-DevEnv Sidecar Dashboard - Visualize agent operations in real-time"
+        description="Omni-Dev-Fusion Sidecar Dashboard - Visualize agent operations in real-time"
     )
     parser.add_argument(
         "--no-clear",

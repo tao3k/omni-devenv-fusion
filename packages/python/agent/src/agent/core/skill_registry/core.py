@@ -112,12 +112,12 @@ class SkillRegistry:
         return skill_name in self.loaded_skills
 
     # =========================================================================
-    # Manifest
+    # SkillMetadata
     # =========================================================================
 
-    def get_skill_manifest(self, skill_name: str) -> "SkillManifest | None":
-        """Read and parse a skill's manifest from SKILL.md."""
-        from agent.core.schema import SkillManifest, SkillDependencies
+    def get_skill_metadata(self, skill_name: str) -> "SkillMetadata | None":
+        """Read and parse a skill's metadata from SKILL.md."""
+        from agent.core.schema import SkillMetadata, SkillDependencies
 
         # Robust import for pytest-xdist compatibility
         # Sometimes the module is not found in sys.modules due to test worker isolation
@@ -158,8 +158,9 @@ class SkillRegistry:
         if metadata is None:
             return None
 
-        # Convert SkillMetadata to SkillManifest
-        return SkillManifest(
+        # Convert loader metadata to SkillMetadata
+        # Note: commands_module uses default value "scripts"
+        return SkillMetadata(
             name=metadata.name,
             version=metadata.version,
             description=metadata.description,
@@ -167,7 +168,6 @@ class SkillRegistry:
             routing_keywords=metadata.routing_keywords,
             intents=metadata.intents,
             dependencies=SkillDependencies(python=metadata.dependencies.get("python", {})),
-            tools_module=f"agent.skills.{skill_name}.tools",
         )
 
     # =========================================================================
@@ -263,14 +263,14 @@ class SkillRegistry:
         """Get skill definition (SKILL.md) for a skill."""
         from agent.core.skill_registry.context import ContextBuilder
 
-        manifest = self.loaded_skills.get(skill_name)
-        if manifest is None:
-            manifest_model = self.get_skill_manifest(skill_name)
-            if manifest_model is None:
+        skill_data = self.loaded_skills.get(skill_name)
+        if skill_data is None:
+            metadata = self.get_skill_metadata(skill_name)
+            if metadata is None:
                 return ""
-            manifest = manifest_model.model_dump()
+            skill_data = metadata.model_dump()
 
-        return ContextBuilder(self, skill_name, manifest).build(use_diff=use_diff)
+        return ContextBuilder(self, skill_name, skill_data).build(use_diff=use_diff)
 
     def get_combined_context(self) -> str:
         """Aggregate prompts.md from all loaded skills."""

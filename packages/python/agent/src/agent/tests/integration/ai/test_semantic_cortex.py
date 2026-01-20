@@ -167,7 +167,7 @@ class TestSemanticRouter:
             mock_reg.return_value.list_available_skills = MagicMock(
                 return_value=["git", "filesystem"]
             )
-            mock_reg.return_value.get_skill_manifest = MagicMock(
+            mock_reg.return_value.get_skill_metadata = MagicMock(
                 return_value=MagicMock(
                     description="Test skill",
                     routing_keywords=["test"],
@@ -234,18 +234,42 @@ class TestSemanticRouter:
 class TestGoldenPayload:
     """Tests for Golden Payload quality (path-independent briefs)."""
 
+    def setup_method(self):
+        """Clear cache before each test to prevent cache pollution from other tests."""
+        from agent.core.router import clear_routing_cache
+
+        clear_routing_cache()
+
     @pytest.fixture
     def router(self):
         """Create router for testing mission briefs."""
+        # Clear all caches before creating router
+        from agent.core.router import clear_routing_cache
+        from agent.core.router.semantic.router import _cached_cortex, _cached_cache
+
+        clear_routing_cache()
+        _cached_cortex = None
+        if isinstance(_cached_cache, dict) and "_cache_keys" in _cached_cache:
+            for cache in _cached_cache["_cache_keys"].values():
+                if hasattr(cache, "cache"):
+                    cache.cache.clear()
+
         with patch("agent.core.router.semantic_router.get_skill_registry") as mock_reg:
             mock_reg.return_value.list_available_skills = MagicMock(
                 return_value=["git", "filesystem", "testing"]
             )
-            mock_reg.return_value.get_skill_manifest = MagicMock(
+            mock_reg.return_value.get_skill_metadata = MagicMock(
                 return_value=MagicMock(description="Test skill", routing_keywords=[])
             )
             router = SemanticRouter(use_semantic_cache=False)
             router.inference = MagicMock()
+
+            # Clear router's cache again after creation
+            router.cache.cache.clear()
+
+            # Mock semantic cortex to prevent cache hits from real cortex
+            router.semantic_cortex = None
+
             return router
 
     def _is_path_independent(self, brief: str) -> bool:
@@ -308,7 +332,7 @@ class TestGoldenPayload:
             mock_reg.return_value.list_available_skills = MagicMock(
                 return_value=["git", "filesystem", "testing"]
             )
-            mock_reg.return_value.get_skill_manifest = MagicMock(
+            mock_reg.return_value.get_skill_metadata = MagicMock(
                 return_value=MagicMock(description="Test skill", routing_keywords=[])
             )
             router = SemanticRouter(use_semantic_cache=False)

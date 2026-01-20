@@ -9,9 +9,8 @@
 //! ├── store.rs            # CRUD operations (add/delete/count)
 //! ├── search.rs           # Search operations
 //! ├── index.rs            # Index creation operations
-//! ├── scanner.rs          # Script scanning for @skill_command
-//! ├── skill.rs            # Skill tool indexing
-//! └── batch.rs            # RecordBatch utilities
+//! ├── skill.rs            # Skill tool indexing (uses skills-scanner crate)
+//! ├── batch.rs            # RecordBatch utilities
 //! ```
 //!
 //! Uses [omni-lance][omni_lance] for RecordBatch utilities.
@@ -31,6 +30,12 @@ pub use omni_lance::{
     CONTENT_COLUMN, DEFAULT_DIMENSION, ID_COLUMN, METADATA_COLUMN, VECTOR_COLUMN,
     VectorRecordBatchReader, extract_optional_string, extract_string,
 };
+
+// ============================================================================
+// Re-exports from skills-scanner
+// ============================================================================
+
+pub use skills_scanner::{ScriptScanner, SkillMetadata, SkillScanner, SkillStructure, ToolRecord};
 
 // ============================================================================
 // Vector Store Implementation
@@ -66,12 +71,9 @@ pub struct VectorStore {
 // ============================================================================
 
 pub use error::VectorStoreError;
-pub use scanner::{ScriptScanner, ToolRecord};
-
 pub mod batch;
 pub mod error;
 pub mod index;
-pub mod scanner;
 pub mod search;
 pub mod skill;
 pub mod store;
@@ -254,5 +256,79 @@ mod tests {
             count, 0,
             "All paths with SQL-like special chars should be deleted"
         );
+    }
+
+    /// Test that Rust scanner correctly includes routing_keywords from SKILL.md
+    #[test]
+    fn test_scan_skill_tools_includes_routing_keywords() {
+        use skills_scanner::{ScriptScanner, SkillScanner};
+
+        let skill_scanner = SkillScanner::new();
+        let script_scanner = ScriptScanner::new();
+
+        // manifest_dir: packages/rust/crates/omni-vector
+        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+
+        // Navigate up to project root (5 levels up)
+        let project_root = manifest_dir
+            .parent()
+            .unwrap() // omni-vector -> crates
+            .parent()
+            .unwrap() // crates -> rust
+            .parent()
+            .unwrap() // rust -> packages
+            .parent()
+            .unwrap() // packages -> omni-dev-fusion
+            .parent()
+            .unwrap(); // omni-dev-fusion -> parent
+
+        let skills_path = project_root.join("omni-dev-fusion").join("assets/skills");
+
+        if !skills_path.exists() {
+            println!("skills directory not found, skipping test");
+            return;
+        }
+
+        // Get metadatas for routing_keywords
+        let metadatas = skill_scanner.scan_all(&skills_path, None).unwrap();
+
+        // Find writer skill metadata
+        let writer_metadata = metadatas
+            .iter()
+            .find(|m| m.skill_name == "writer")
+            .expect("writer skill should exist");
+
+        // Verify routing_keywords are not empty
+        assert!(
+            !writer_metadata.routing_keywords.is_empty(),
+            "writer skill should have routing_keywords"
+        );
+
+        // Scan scripts with routing_keywords
+        let skill_scripts_path = skills_path.join("writer").join("scripts");
+        let tools = script_scanner
+            .scan_scripts(
+                &skill_scripts_path,
+                "writer",
+                &writer_metadata.routing_keywords,
+            )
+            .unwrap();
+
+        // Verify tools have routing_keywords
+        assert!(!tools.is_empty(), "writer skill should have tools");
+
+        for tool in &tools {
+            // Check that routing_keywords are included in tool keywords
+            let has_routing_kw = tool
+                .keywords
+                .iter()
+                .any(|kw| writer_metadata.routing_keywords.contains(kw));
+
+            assert!(
+                has_routing_kw,
+                "Tool {} should include at least one routing keyword from SKILL.md",
+                tool.tool_name
+            );
+        }
     }
 }

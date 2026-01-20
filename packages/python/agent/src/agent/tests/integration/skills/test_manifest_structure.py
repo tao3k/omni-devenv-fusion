@@ -3,6 +3,7 @@ Skill Manifest and Structure Integration Tests
 
 Parametrized tests for validating all skills in the skills directory.
 Each skill is tested independently with clear failure reporting.
+Uses Rust scanner for SKILL.md parsing.
 
 Run with:
     pytest integration/skills/test_manifest_structure.py -v
@@ -13,6 +14,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
 
+from agent.core.skill_discovery import parse_skill_md
 from common.skills_path import SKILLS_DIR, get_all_skill_paths
 
 
@@ -49,15 +51,11 @@ def _get_real_mcp():
 )
 def test_skill_has_valid_manifest(skill_dir: Path):
     """Every skill must have a valid SKILL.md with required fields."""
-    import frontmatter
-
     skill_md = skill_dir / "SKILL.md"
     assert skill_md.exists(), f"{skill_dir.name}: SKILL.md not found"
 
-    with open(skill_md) as f:
-        post = frontmatter.load(f)
-
-    data = post.metadata or {}
+    # Use Rust scanner for high-performance parsing
+    data = parse_skill_md(skill_dir) or {}
     assert "name" in data, f"{skill_dir.name}: 'name' field missing"
     assert "version" in data, f"{skill_dir.name}: 'version' field missing"
     assert "description" in data, f"{skill_dir.name}: 'description' field missing"
@@ -70,13 +68,10 @@ def test_skill_has_valid_manifest(skill_dir: Path):
 )
 def test_skill_manifest_name_matches_directory(skill_dir: Path):
     """SKILL.md name field must match the skill directory name."""
-    import frontmatter
-
     skill_md = skill_dir / "SKILL.md"
-    with open(skill_md) as f:
-        post = frontmatter.load(f)
 
-    data = post.metadata or {}
+    # Use Rust scanner for high-performance parsing
+    data = parse_skill_md(skill_dir) or {}
     manifest_name = data.get("name", "")
     assert manifest_name == skill_dir.name, (
         f"{skill_dir.name}: SKILL.md name '{manifest_name}' doesn't match directory"
@@ -90,13 +85,8 @@ def test_skill_manifest_name_matches_directory(skill_dir: Path):
 )
 def test_skill_manifest_version_format(skill_dir: Path):
     """SKILL.md version should follow semver format (x.y.z)."""
-    import frontmatter
-
-    skill_md = skill_dir / "SKILL.md"
-    with open(skill_md) as f:
-        post = frontmatter.load(f)
-
-    data = post.metadata or {}
+    # Use Rust scanner for high-performance parsing
+    data = parse_skill_md(skill_dir) or {}
     version = data.get("version", "")
     parts = version.split(".")
 

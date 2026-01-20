@@ -7,6 +7,7 @@ edition.workspace = true
 workspace = true
 
 [lib]
+name = "omni_core_rs"
 crate-type = ["cdylib"]
 
 [dependencies]
@@ -25,6 +26,8 @@ omni-tags = { path = "../../crates/omni-tags" }
 omni-edit = { path = "../../crates/omni-edit" }
 # The Librarian - Vector Store for embeddings
 omni-vector = { path = "../../crates/omni-vector" }
+# Skills Scanner - Skill metadata and tool discovery
+skills-scanner = { path = "../../crates/skills-scanner" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }

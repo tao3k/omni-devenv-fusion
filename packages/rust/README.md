@@ -1,14 +1,14 @@
-# Rust Crates for Omni-DevEnv Fusion
+# Rust Crates for Omni-Dev-Fusion Fusion
 
 > Rust Workspace - Now managed from project root `Cargo.toml`
 
-This directory contains Rust crates for the Omni project. The workspace is now managed from the **project root** (`omni-devenv-fusion/Cargo.toml`).
+This directory contains Rust crates for the Omni project. The workspace is now managed from the **project root** (`omni-dev-fusion/Cargo.toml`).
 
 ## Quick Start
 
 ```bash
 # Build all crates from project root
-cd omni-devenv-fusion
+cd omni-dev-fusion
 cargo build
 
 # Run tests

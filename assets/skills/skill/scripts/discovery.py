@@ -8,10 +8,10 @@ from agent.skills.decorators import skill_command
 
 
 def _get_discovery():
-    """Get VectorSkillDiscovery instance (lazy loaded)."""
-    from agent.core.skill_discovery import VectorSkillDiscovery
+    """Get SkillDiscovery instance (lazy loaded)."""
+    from agent.core.skill_discovery import SkillDiscovery
 
-    return VectorSkillDiscovery()
+    return SkillDiscovery()
 
 
 @skill_command(
@@ -41,7 +41,7 @@ async def discover(query: str = "", limit: int = 5, local_only: bool = False) ->
     results = await discovery.search(
         query=query,
         limit=limit,
-        installed_only=local_only,
+        local_only=local_only,
     )
 
     if not results:
@@ -91,7 +91,7 @@ async def suggest(task: str) -> str:
     suggestions = await discovery.search(
         query=task,
         limit=5,
-        installed_only=False,
+        local_only=False,
     )
 
     if not suggestions:
@@ -123,8 +123,6 @@ async def suggest(task: str) -> str:
     """,
 )
 def jit_install(skill_id: str, auto_load: bool = True) -> str:
-    from mcp.types import Tool
-
     return f"Installing skill: {skill_id} (auto_load={auto_load})"
 
 
@@ -146,29 +144,12 @@ def jit_install(skill_id: str, auto_load: bool = True) -> str:
 )
 async def list_index() -> str:
     discovery = _get_discovery()
-    skills = discovery.list_all()
 
-    if not skills:
-        return "No skills in index"
+    # Get index stats
+    stats = await discovery.get_index_stats()
 
     lines = ["Skills Index:", ""]
-    installed = []
-    remote = []
-
-    for skill in skills:
-        if skill.get("installed"):
-            installed.append(skill)
-        else:
-            remote.append(skill)
-
-    if installed:
-        lines.append(f"Installed ({len(installed)}):")
-        for s in installed:
-            lines.append(f"  - {s['name']}")
-
-    if remote:
-        lines.append(f"Available ({len(remote)}):")
-        for s in remote:
-            lines.append(f"  - {s['name']} (remote)")
+    lines.append(f"Total skills: {stats.get('skill_count', 0)}")
+    lines.append(f"Collection: {stats.get('collection', 'unknown')}")
 
     return "\n".join(lines)

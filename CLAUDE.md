@@ -1,4 +1,4 @@
-# Omni-DevEnv Fusion
+# Omni-Dev Fusion
 
 > One Tool + Trinity Architecture
 > Single Entry Point: `@omni("skill.command")`
@@ -7,36 +7,53 @@ Quick Reference: `docs/explanation/trinity-architecture.md` | `docs/skills.md`
 
 ---
 
-## ODF-EP Protocol (MANDATORY READ)
+## MANDATORY READING
 
-**All LLMs MUST read and follow `docs/reference/odf-ep-protocol.md`**
+**All LLMs MUST read these documents BEFORE making any changes:**
 
-This is the complete engineering protocol for this project:
+### 1. Engineering Protocol (Python/Rust)
 
-- **SSOT**: Use `SKILLS_DIR()` and `get_setting()` - NEVER `__file__` or hardcoded paths
-- **Code Style**: Type hints, async-first, Google docstrings
-- **Skill Structure**: SKILL.md + tools.py + scripts/ pattern
-- **Naming**: kebab-case (skills), snake_case (commands/functions)
+**File: `docs/reference/odf-ep-protocol.md`**
 
-## ⛔ Critical: Git Commit
+Universal engineering standards:
+
+- Code Style: Type hints, async-first, Google docstrings
+- Naming Conventions: snake_case, PascalCase, UPPER_SNAKE_CASE
+- Module Design: Single responsibility, import rules, dependency flow
+- Error Handling: Fail fast, rich context
+- Testing Standards: Unit tests required, parametrized tests
+- Git Workflow: Commit format, branch naming
+
+### 2. Project Execution Standard
+
+**File: `docs/reference/project-execution-standard.md`**
+
+Project-specific implementations:
+
+- Rust/Python cross-language workflow
+- Project namespace conventions and examples
+- SSOT utilities: `SKILLS_DIR()`, `PRJ_DATA()`, `get_setting()`
+- Build and test commands
+
+### 3. RAG/Representation Protocol
+
+**File: `docs/reference/odf-rep-protocol.md`**
+
+Memory system, knowledge indexing, context optimization
+
+---
+
+## Critical Rules
+
+### Git Commit
 
 **Use `/commit` slash command** - Never `git commit` via terminal.
 
----
+### Rust/Python Cross-Language Development
 
-## Essential Commands
+> **Read First**: `docs/reference/project-execution-standard.md`
 
-- `just validate` - fmt, lint, test
-- `just build-rust-dev` - Build Rust debug bindings (fast iteration)
-- `/mcp enable orchestrator` - Reconnect omni mcp
-
----
-
-## Rust/Python Cross-Language Development
-
-> **Read First**: [Project Execution Standard](../reference/project-execution-standard.md)
-
-When debugging issues between Rust and Python (e.g., SQL query mismatches), follow the **strict workflow**:
+Follow the **strict workflow**:
 
 ```
 Rust Implementation → Add Rust Test → cargo test PASSED
@@ -54,55 +71,11 @@ Build & Verify → just build-rust-dev → Full integration test
 
 ---
 
-## Path Handling Guidelines
+## Essential Commands
 
-### Preferred Pattern: `$PRJ_ROOT` + Relative Path
-
-Always use **relative paths** from current location combined with `"$PRJ_ROOT"`:
-
-```bash
-# GOOD - Always quote $PRJ_ROOT (required for paths with spaces)
-"$PRJ_ROOT/packages/python/agent/src/agent/core/skill_manager.py"
-
-# GOOD - Using environment variable
-echo $PRJ_ROOT/.data/benchmark_report.txt
-
-# BAD - Hardcoded absolute path
-/Users/guangtao/ghq/github.com/tao3k/omni-devenv-fusion/packages/python/agent/src/agent/core/skill_manager.py
-```
-
-### Root Path: Git Toplevel
-
-Use `$(git rev-parse --show-toplevel)` or `$PRJ_ROOT` as the project root. All paths should be relative to this.
-
-### Security: Unsafe Absolute Paths
-
-**Absolute paths are considered UNSAFE** unless they match:
-
-- `/nix/store/*` - Nix store paths (read-only, trusted)
-
-```python
-# SAFE - Nix store path
-/nix/store/abc123-python-3.13.9/lib/python3.13/site-packages/pydantic/
-
-# UNSAFE - Any other absolute path
-/etc/config.yaml           # ❌
-/usr/local/bin/python      # ❌
-/tmp/secrets.txt           # ❌
-/home/user/.ssh/id_rsa     # ❌
-```
-
-### File Operations
-
-```bash
-# Use relative paths with PRJ_ROOT
-$PRJ_ROOT/assets/skills/git/tools.py
-$PRJ_ROOT/docs/developer/testing.md
-
-# NEVER use absolute paths for project files
-# /Users/guangtao/...  ❌
-# /home/...            ❌
-```
+- `just validate` - fmt, lint, test
+- `just build-rust-dev` - Build Rust debug bindings (fast iteration)
+- `/mcp enable orchestrator` - Reconnect omni mcp
 
 ---
 

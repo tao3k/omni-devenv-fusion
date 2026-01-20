@@ -104,11 +104,11 @@ def build_worker_context(
     # Get skill contexts for selected skills
     skill_contexts = []
     for skill_name in routing_result.selected_skills:
-        manifest = registry.get_skill_manifest(skill_name)
-        if manifest and manifest.prompts_file:
+        metadata = registry.get_skill_metadata(skill_name)
+        if metadata and metadata.prompts_file:
             # Load skill prompt from file
             skill_dir = registry.skills_dir / skill_name
-            prompt_file = skill_dir / manifest.prompts_file
+            prompt_file = skill_dir / metadata.prompts_file
             if prompt_file.exists():
                 skill_contexts.append(f"\n--- {skill_name.upper()} SKILL ---\n")
                 skill_contexts.append(prompt_file.read_text())

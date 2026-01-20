@@ -33,7 +33,7 @@ from dataclasses import field
 from pydantic import BaseModel, ConfigDict
 
 if TYPE_CHECKING:
-    from agent.core.schema.skill import SkillManifest
+    from agent.core.schema.skill import SkillMetadata
 
 # =============================================================================
 # Lazy Logger Initialization ( Import Optimization)
@@ -169,8 +169,8 @@ class ISkill(Protocol):
 
     @property
     @abstractmethod
-    def manifest(self) -> "SkillManifest":
-        """Skill manifest with full metadata."""
+    def metadata(self) -> "SkillMetadata":
+        """Skill metadata with full information."""
 
     @property
     @abstractmethod
@@ -230,8 +230,8 @@ class ISkillRegistry(Protocol):
         """Currently loaded skills."""
 
     @abstractmethod
-    def get_manifest(self, skill_name: str) -> "SkillManifest | None":
-        """Get manifest for a skill."""
+    def get_metadata(self, skill_name: str) -> "SkillMetadata | None":
+        """Get metadata for a skill."""
 
     @abstractmethod
     def get_skill(self, skill_name: str) -> ISkill | None:

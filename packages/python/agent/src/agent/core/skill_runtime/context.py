@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..protocols import SkillManifest
+    from ..protocols import SkillMetadata
     from ..module_loader import ModuleLoader
     from ..skill_registry.adapter import UnifiedManifestAdapter
     from .registry import SkillRegistry
@@ -39,6 +39,22 @@ if TYPE_CHECKING:
     from .executor import SkillExecutor
     from ..support.models import Skill, SkillCommand
     from ..support.preload import CoreSkillsConfig
+
+from .support.observer import ObserverMixin
+
+
+class SkillContext(ObserverMixin):
+    """
+    Unified context for all skill operations.
+
+    This class coordinates independent sub-services without being a
+    monolithic manager. Each service is responsible for one thing.
+
+    Usage:
+        ctx = get_skill_context()
+        ctx.load_skill(path)
+        ctx.run("git", "status")
+    """
 
 
 # Lazy logger
@@ -55,7 +71,7 @@ def _get_logger() -> Any:
     return _cached_logger
 
 
-class SkillContext:
+class SkillContext(ObserverMixin):
     """
     Unified context for all skill operations.
 
@@ -74,6 +90,11 @@ class SkillContext:
         "_config",
         "_manifest_loader",
         "_module_loader",
+        # ObserverMixin required attributes
+        "_observers",
+        "_pending_change_task",
+        "_pending_changes",
+        "_background_tasks",
         # Services
         "_discovery",
         "_memory",
@@ -116,6 +137,12 @@ class SkillContext:
         self._config = CoreSkillsConfig.from_settings(self.skills_dir)
         self._manifest_loader = get_unified_adapter()
         self._module_loader: ModuleLoader | None = None
+
+        # Initialize ObserverMixin attributes
+        self._observers: list = []
+        self._pending_change_task: asyncio.Task | None = None
+        self._pending_changes: list[tuple[str, str]] = []
+        self._background_tasks: set[asyncio.Task] = set()
 
         # Initialize services
         self._discovery = SkillDiscovery(self.skills_dir)
@@ -181,13 +208,13 @@ class SkillContext:
     # Observer Pattern (from mixin)
     # =========================================================================
 
-    def _notify_change(self, skill_name: str, change_type: str) -> None:
+    def _notify_change(self, skill_name: str, change_type: str = "load") -> None:
         """Notify observers of skill change."""
         pass  # Override if needed
 
-    def _fire_and_forget(self, future: asyncio.Future) -> asyncio.Task:
+    def _fire_and_forget(self, coro: Any) -> asyncio.Task:
         """Track background task to prevent GC."""
-        task = asyncio.create_task(future)
+        task = asyncio.create_task(coro)
         return task
 
     # =========================================================================

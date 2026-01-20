@@ -1,4 +1,4 @@
-# Justfile for devenv-native
+# Justfile for omni-dev-fusion project  
 # https://github.com/casey/just
 #
 # Design principles:

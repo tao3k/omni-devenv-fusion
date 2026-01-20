@@ -79,7 +79,7 @@ _schema_registry = {
     "HarvestedInsight": ".harvester",
     #  Skill
     "SkillDependencies": ".skill",
-    "SkillManifest": ".skill",
+    "SkillMetadata": ".skill",
 }
 
 # Backward compatibility - expose all classes

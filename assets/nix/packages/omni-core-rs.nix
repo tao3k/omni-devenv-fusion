@@ -1,6 +1,7 @@
 {
   lib,
   stdenv,
+  symlinkJoin,
   python3Packages,
   rustPlatform,
   maturin,
@@ -10,16 +11,16 @@
   python3,
   protobuf,
   nix-filter,
+  workspaceRoot,
+  cargoDeps,
+  version,
   ...
 }:
 
 let
-  root = ../../..;
   pname = "omni-core-rs";
-  version = "0.1.0";
-
   filteredSrc = nix-filter.lib.filter {
-    inherit root;
+    root = workspaceRoot;
     include = [
       # Rust workspace
       "Cargo.toml"
@@ -49,11 +50,12 @@ python3Packages.buildPythonPackage {
   ];
 
   # Vendor dependencies from the workspace
-  cargoDeps = rustPlatform.fetchCargoVendor {
-    pname = "omni-core-rs";
-    version = "0.1.0";
-    src = filteredSrc;
-    hash = "sha256-KIUmOay2RVLkQvZYM6X5+ufEXNbDcHj6faRmxhg40Ww=";
+  cargoDeps = symlinkJoin {
+    name = "${pname}-cargo-deps";
+    paths = [
+      cargoDeps
+      filteredSrc
+    ];
   };
 
   build-system = [ rustPlatform.maturinBuildHook ];
@@ -88,7 +90,7 @@ python3Packages.buildPythonPackage {
       - omni-edit: Structural code editing
       - omni-security: Security scanning
     '';
-    homepage = "https://github.com/tao3k/omni-devenv-fusion";
+    homepage = "https://github.com/tao3k/omni-dev-fusion";
     license = with lib.licenses; [ "apache20" ];
     maintainers = with lib.maintainers; [ "tao3k" ];
     pythonPath = "${python3.sitePackages}";

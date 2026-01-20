@@ -2,7 +2,7 @@
 
 > **Code is Mechanism, Prompt is Policy**
 >
-> The foundation of Omni-DevEnv architecture.
+> The foundation of Omni-Dev-Fusion architecture.
 
 ---
 
@@ -344,7 +344,7 @@ The `knowledge` skill is the **Project Cortex** - it provides structural knowled
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  MCP Server (Omni-DevEnv)                               │
+│  MCP Server (Omni-Dev-Fusion)                               │
 ├─────────────────────────────────────────────────────────┤
 │  🧠 Knowledge Layer (knowledge skill)                   │
 │     - get_development_context()                         │

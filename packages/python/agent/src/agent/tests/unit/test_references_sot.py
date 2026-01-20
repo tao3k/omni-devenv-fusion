@@ -182,21 +182,35 @@ class TestNoHardcodedPaths:
     """Verify critical paths are not hardcoded in source files."""
 
     def test_no_hardcoded_docs_path_in_orchestrator(self):
-        """Verify no hardcoded 'Path(\"docs\")' in context_orchestrator.py."""
+        """Verify no hardcoded 'Path(\"docs\")' in context_orchestrator package."""
         import re
+        from pathlib import Path
+        import os
 
-        file_path = "packages/python/agent/src/agent/core/context_orchestrator.py"
-        with open(file_path, "r") as f:
-            content = f.read()
-
-        # Check for hardcoded path patterns that should use references.yaml
-        hardcoded_patterns = [
-            r'Path\s*\(\s*["\']docs["\']\s*\)',  # Path("docs")
+        # Check the new package structure
+        base_dir = Path("packages/python/agent/src/agent/core/context_orchestrator")
+        files_to_check = [
+            base_dir / "orchestrator.py",
+            base_dir / "layers" / "layer1_persona.py",
+            base_dir / "layers" / "layer3_knowledge.py",
+            base_dir / "layers" / "layer6_maps.py",
         ]
 
-        for pattern in hardcoded_patterns:
-            matches = re.findall(pattern, content)
-            assert len(matches) == 0, f"Found hardcoded path pattern: {pattern}"
+        for file_path in files_to_check:
+            if file_path.exists():
+                with open(file_path, "r") as f:
+                    content = f.read()
+
+                # Check for hardcoded path patterns that should use references.yaml
+                hardcoded_patterns = [
+                    r'Path\s*\(\s*["\']docs["\']\s*\)',  # Path("docs")
+                ]
+
+                for pattern in hardcoded_patterns:
+                    matches = re.findall(pattern, content)
+                    assert len(matches) == 0, (
+                        f"Found hardcoded path pattern in {file_path}: {pattern}"
+                    )
 
     def test_no_hardcoded_docs_path_in_alignment(self):
         """Verify no hardcoded 'Path("docs")' in alignment.py."""
