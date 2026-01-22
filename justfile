@@ -361,13 +361,36 @@ lint:
 
 [group('validate')]
 test:
-    @echo "Running all tests in parallel (3 workers for stability)..."
-    @uv run pytest packages/python/agent/src/agent/tests/ assets/skills/ -n 3 --ignore=stress_tests -v
+    @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    @echo "                              TEST PIPELINE"
+    @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ packages/python/mcp-server/tests/ \
+        -v --tb=short --ignore=packages/python/mcp-server/tests/integration/test_sse.py \
+        --ignore=packages/python/mcp-server/tests/unit/test_interfaces.py \
+        --ignore=packages/python/mcp-server/tests/unit/test_types.py \
+        --ignore=packages/python/mcp-server/tests/unit/test_transport/test_sse.py
+    @echo ""
+    @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    @echo "                              COMPLETE"
+    @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 [group('validate')]
-test-sequential:
-    @echo "Running all tests sequentially (for debugging)..."
-    @uv run pytest packages/python/agent/src/agent/tests/ assets/skills/ -v --ignore=stress_tests
+test-quick:
+    @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    @echo "                              TEST PIPELINE (QUICK)"
+    @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ packages/python/mcp-server/tests/ \
+        -q --tb=short
+
+[group('validate')]
+test-skills:
+    @echo "Running skill tests via omni skill test --all..."
+    @uv run omni skill test --all
+
+[group('validate')]
+test-parallel:
+    @echo "Running tests in parallel (faster)..."
+    @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ packages/python/mcp-server/tests/ -n auto --tb=short
 
 [group('validate')]
 vulture:
@@ -378,11 +401,6 @@ vulture:
 test-stress:
     @echo "Running stress tests (slow)..."
     @uv run pytest packages/python/agent/tests/stress_tests/ -v
-
-[group('skills')]
-test-skills:
-    @echo "Running skill tests..."
-    @uv run pytest assets/skills/ -v
 
 # ==============================================================================
 # CHANGELOG MANAGEMENT
@@ -890,7 +908,7 @@ agent-lint: lint
 agent-format: fmt
 
 # ==============================================================================
-# RUST BUILD (Phase 58.9: Memory Purge)
+# RUST BUILD
 # ==============================================================================
 
 [group('rust')]

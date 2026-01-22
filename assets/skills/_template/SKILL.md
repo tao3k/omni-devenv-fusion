@@ -2,13 +2,18 @@
 # === Omni-Dev Fusion Skill Manifest ===
 name: _template
 version: 1.0.0
-description: Template skill for new capabilities - demonstrates Trinity Architecture v2.0
+description: Template skill for new capabilities - demonstrates Trinity Architecture v4.0
 authors: ["omni-dev-fusion"]
 license: Apache-2.0
 execution_mode: library
 routing_strategy: keyword
 routing_keywords: ["template", "new skill", "create skill", "scaffold"]
+require_refs: []
 intents: []
+# Zero Trust Permissions - Declare required capabilities here
+# Format: "category:action" (e.g., "filesystem:read", "network:http")
+# Empty list = no permissions granted (safer default)
+permissions: []
 ---
 
 # Template Skill
@@ -35,7 +40,7 @@ This skill operates within the **Trinity Architecture v2.0** with **scripts/comm
 ```
 _template/
 ├── SKILL.md           # Metadata + System Prompts
-├── scripts/           # Commands (Phase 63+)
+├── scripts/           # Commands (v2.0+)
 │   ├── __init__.py    # Dynamic module loader (importlib.util)
 │   └── commands.py    # @skill_command decorated functions
 └── tests/             # Test files
@@ -131,8 +136,11 @@ name: my_new_skill
 version: 1.0.0
 description: My new skill description
 routing_keywords: ["keyword1", "keyword2"]
+permissions: [] # Zero Trust: declare required capabilities
 ---
 ```
+
+**Permission Format**: `"category:action"` (e.g., `"filesystem:read"`, `"network:http"`)
 
 ### Step 6: (Optional) Subprocess Mode - Sidecar Execution Pattern
 

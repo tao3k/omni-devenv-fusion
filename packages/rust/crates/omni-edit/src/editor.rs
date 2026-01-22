@@ -1,7 +1,7 @@
 //! Core structural editor implementation.
 //!
 //! Provides AST-based code modification using ast-grep patterns.
-//! Part of Phase 52: The Surgeon.
+//! Part of The Surgeon.
 
 use std::path::Path;
 use std::str::FromStr;
@@ -17,7 +17,7 @@ use crate::types::{EditConfig, EditLocation, EditResult};
 /// StructuralEditor - AST-based code modification engine.
 ///
 /// Uses ast-grep patterns for surgical precision in code refactoring.
-/// Part of Phase 52: The Surgeon.
+/// Part of The Surgeon.
 ///
 /// # Example
 ///

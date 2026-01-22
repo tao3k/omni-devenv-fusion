@@ -1,83 +1,226 @@
 """
-code_tools/scripts/analyze.py - Code Analysis Commands
+Code Analysis Skill (Refactored - Lean & Secured)
 
-Phase 68: Migrated from code_insight.
-Static code analysis using pure Python AST.
+Philosophy:
+- Zero Config: Assumes tools (grep) are in System PATH.
+- Security: Operations strictly constrained to ConfigPaths.project_root.
+- Focus: Parsing and structuring data for the LLM.
+
+Commands:
+- search_code: Text search using system grep
+- list_project_structure: Directory tree view
 """
 
-import ast
 from pathlib import Path
-from typing import List
+from typing import Any
+import subprocess
+import shutil
+import os
 
-import structlog
+# Modern Foundation API
+from omni.foundation.api.decorators import skill_command
+from omni.foundation.config.paths import ConfigPaths
+from omni.foundation.config.logging import get_logger
 
-from agent.skills.decorators import skill_command
-from common.config_paths import get_project_root
+logger = get_logger("skill.code_tools.analyze")
 
-logger = structlog.get_logger(__name__)
+# Try to import Rust-powered AST (Structural Code Intelligence)
+try:
+    from omni_core_rs import search_code as rust_search_code
+    from omni_core_rs import search_directory as rust_search_directory
 
-
-# =============================================================================
-# Pure Helper Functions (The "Hands")
-# =============================================================================
-
-
-def _is_tool_decorator(decorator: ast.AST) -> bool:
-    """Check if a decorator is @tool or @mcp.tool."""
-    # Case: @tool
-    if isinstance(decorator, ast.Name) and decorator.id == "tool":
-        return True
-    # Case: @mcp.tool
-    if isinstance(decorator, ast.Attribute) and decorator.attr == "tool":
-        return True
-    # Case: @tool() or @mcp.tool()
-    if isinstance(decorator, ast.Call):
-        func = decorator.func
-        if isinstance(func, ast.Name) and func.id == "tool":
-            return True
-        if isinstance(func, ast.Attribute) and func.attr == "tool":
-            return True
-    return False
-
-
-class _ToolVisitor(ast.NodeVisitor):
-    """Find all @tool decorated functions."""
-
-    def __init__(self):
-        self.tools: List[str] = []
-
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-        if any(_is_tool_decorator(d) for d in node.decorator_list):
-            self.tools.append(node.name)
-        self.generic_visit(node)
+    _RUST_AST_AVAILABLE = True
+except ImportError:
+    _RUST_AST_AVAILABLE = False
+    logger.debug("Rust AST engine not available, falling back to Python/grep")
 
 
 # =============================================================================
-# Atomic Tools (Dumb, Stateless)
+# Grep-Based Search (System Tool, No Config)
 # =============================================================================
 
 
 @skill_command(
-    name="find_tools",
-    category="read",
-    description="""
-    Finds all @tool decorated functions in a Python file.
-
-    Parses the Python AST to locate functions with `@tool` or `@mcp.tool` decorators.
-
-    Args:
-        file_path: Relative path to the Python file from project root.
-
-    Returns:
-        List of tool function names, one per line with `-` prefix.
-        Returns error if file not found, syntax error, or path outside project.
-
-    Example:
-        @omni("code_tools.find_tools", {"file_path": "agent/skills/git/tools.py"})
-    """,
+    name="search_code",
+    description="Search for code patterns using system grep (recursive).",
+    autowire=True,
 )
-async def find_tools(file_path: str) -> str:
-    root = get_project_root()
+def search_code(
+    pattern: str,
+    include: str | None = None,
+    exclude: str | None = None,
+    case_sensitive: bool = True,
+    max_results: int = 100,
+    # Injected (No Settings needed!)
+    paths: ConfigPaths | None = None,
+) -> dict[str, Any]:
+    """
+    Search code base safely.
+    Relies on system 'grep' being available in PATH.
+    """
+    if paths is None:
+        paths = ConfigPaths()
+
+    try:
+        root = paths.project_root
+
+        # 1. Auto-Discovery (Environment is Truth)
+        grep_cmd = shutil.which("grep")
+        if not grep_cmd:
+            return {"success": False, "error": "System tool 'grep' not found in PATH."}
+
+        # 2. Build Command
+        # -r: recursive, -n: line number, -I: ignore binary
+        cmd = [grep_cmd, "-r", "-n", "-I"]
+
+        if not case_sensitive:
+            cmd.append("-i")
+
+        # Standard Excludes (Hardcoded best practices, no config bloat)
+        default_excludes = [
+            ".git",
+            "__pycache__",
+            "node_modules",
+            ".venv",
+            ".mypy_cache",
+            "target",
+            "dist",
+        ]
+        for d in default_excludes:
+            cmd.extend(["--exclude-dir", d])
+
+        if exclude:
+            cmd.extend(["--exclude", exclude])
+        if include:
+            cmd.extend(["--include", include])
+
+        cmd.append(pattern)
+        cmd.append(".")  # Search from current cwd (which we set to root)
+
+        # 3. Execute
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            cwd=root,  # SECURITY: Enforce root as working directory
+            check=False,
+        )
+
+        if result.returncode > 1:
+            return {"success": False, "error": f"Grep failed: {result.stderr}"}
+
+        # 4. Parse & Limit (Logic Layer)
+        matches = []
+        lines = result.stdout.splitlines()
+        truncated = False
+
+        if len(lines) > max_results:
+            lines = lines[:max_results]
+            truncated = True
+
+        for line in lines:
+            try:
+                # grep output format: file:line:content
+                parts = line.split(":", 2)
+                if len(parts) >= 3:
+                    matches.append(
+                        {
+                            "file": parts[0],
+                            "line": int(parts[1]),
+                            "content": parts[2].strip(),
+                        }
+                    )
+            except ValueError:
+                continue
+
+        return {
+            "success": True,
+            "count": len(matches),
+            "total_found": len(result.stdout.splitlines()),
+            "truncated": truncated,
+            "matches": matches,
+        }
+
+    except Exception as e:
+        logger.error(f"Search failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
+# Project Structure (Pure Python, No External Dependencies)
+# =============================================================================
+
+
+@skill_command(
+    name="list_project_structure",
+    description="Get a high-level view of the project structure.",
+    autowire=True,
+)
+def list_project_structure(
+    depth: int = 2,
+    paths: ConfigPaths | None = None,
+) -> dict[str, Any]:
+    """Generates a directory tree safely."""
+    if paths is None:
+        paths = ConfigPaths()
+
+    try:
+        root = paths.project_root
+        structure = []
+
+        start_depth = str(root).count(os.sep)
+
+        # Pure Python implementation - no external dependencies
+        for dirpath, dirnames, filenames in os.walk(root):
+            # Filter hidden/system dirs in place
+            dirnames[:] = [
+                d
+                for d in dirnames
+                if not d.startswith(".") and d not in ["__pycache__", "node_modules"]
+            ]
+
+            curr_depth = dirpath.count(os.sep) - start_depth
+            if curr_depth >= depth:
+                dirnames[:] = []
+
+            rel_path = os.path.relpath(dirpath, root)
+            if rel_path == ".":
+                rel_path = ""
+
+            structure.append(
+                {
+                    "path": rel_path,
+                    "dirs": dirnames.copy(),
+                    "files": [f for f in filenames if not f.startswith(".")],
+                }
+            )
+
+        return {"success": True, "root": str(root), "structure": structure}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
+# Rust-Powered AST Search (Advanced Feature)
+# =============================================================================
+
+
+@skill_command(
+    name="ast_search",
+    description="Structural code search using Rust-powered AST (ast-grep).",
+    autowire=True,
+)
+async def ast_search(
+    file_path: str,
+    pattern: str,
+    language: str | None = None,
+    paths: ConfigPaths | None = None,
+) -> str:
+    """Search file using Rust AST engine."""
+    if paths is None:
+        paths = ConfigPaths()
+
+    root = paths.project_root
     target = (root / file_path).resolve()
 
     if not str(target).startswith(str(root)):
@@ -86,45 +229,48 @@ async def find_tools(file_path: str) -> str:
     if not target.exists():
         return f"Error: File not found: {file_path}"
 
+    if not _RUST_AST_AVAILABLE:
+        return "Error: Rust AST engine not available. Install omni-core-rs."
+
     try:
-        content = target.read_text(encoding="utf-8")
-        tree = ast.parse(content)
-        visitor = _ToolVisitor()
-        visitor.visit(tree)
-
-        if not visitor.tools:
-            return f"No tools found in `{file_path}`"
-
-        return "\n".join(f"- {t}" for t in visitor.tools)
-    except SyntaxError as e:
-        return f"Syntax Error: {e}"
+        result = rust_search_code(str(target), pattern, language)
+        return result if result else f"No matches found for pattern: {pattern}"
     except Exception as e:
-        return f"Error: {e}"
+        return f"Search error: {e}"
 
 
 @skill_command(
-    name="count_lines",
-    category="read",
-    description="""
-    Counts lines of code in a file.
-
-    Args:
-        file_path: Relative path to the file from project root.
-
-    Returns:
-        String with format `{file_path}: {count} lines`.
-        Returns error if file not found.
-
-    Example:
-        @omni("code_tools.count_lines", {"file_path": "agent/core/engine.py"})
-    """,
+    name="ast_search_dir",
+    description="Recursive structural search in a directory using Rust AST engine.",
+    autowire=True,
 )
-async def count_lines(file_path: str) -> str:
-    root = get_project_root()
-    target = (root / file_path).resolve()
+async def ast_search_dir(
+    path: str,
+    pattern: str,
+    file_pattern: str | None = None,
+    paths: ConfigPaths | None = None,
+) -> str:
+    """Search directory using Rust AST engine."""
+    if paths is None:
+        paths = ConfigPaths()
+
+    root = paths.project_root
+    target = (root / path).resolve()
+
+    if not str(target).startswith(str(root)):
+        return "Error: Access denied to paths outside project root."
 
     if not target.exists():
-        return f"Error: File not found: {file_path}"
+        return f"Error: Directory not found: {path}"
 
-    lines = target.read_text().splitlines()
-    return f"{file_path}: {len(lines)} lines"
+    if not _RUST_AST_AVAILABLE:
+        return "Error: Rust AST engine not available. Install omni-core-rs."
+
+    try:
+        result = rust_search_directory(str(target), pattern, file_pattern)
+        return result if result else f"No matches found for pattern: {pattern}"
+    except Exception as e:
+        return f"Search error: {e}"
+
+
+__all__ = ["search_code", "list_project_structure", "ast_search", "ast_search_dir"]

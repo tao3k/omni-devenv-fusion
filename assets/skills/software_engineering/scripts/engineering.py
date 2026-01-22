@@ -1,36 +1,109 @@
 """
-software_engineering/scripts/engineering.py - Software Engineering Commands
+Software Engineering Skill (Refactored)
 
-Phase 63: Migrated from tools.py to scripts pattern.
+Philosophy:
+- Orchestration: High-level tasks that compose other skills/tools.
+- Zero Config: Relies on Standard Interface (Make/Nix/Just).
+- Security: All operations constrained to ConfigPaths.project_root.
+
+Commands:
+- run_tests: Run project test suite
+- analyze_project_structure: Generate tree-like view
+- detect_tech_stack: Identify languages and frameworks
+- grep_codebase: Content search (fallback to code_tools.search_code)
 """
 
-import os
-import re
+import subprocess
 from pathlib import Path
-from typing import List
+from typing import Any
 
-import structlog
+# Modern Foundation API
+from omni.foundation.api.decorators import skill_command
+from omni.foundation.config.paths import ConfigPaths
+from omni.foundation.config.logging import get_logger
 
-from agent.skills.decorators import skill_command
-from common.gitops import get_project_root
+logger = get_logger("skill.software_engineering")
 
-logger = structlog.get_logger(__name__)
+
+# =============================================================================
+# Build & Test Orchestration
+# =============================================================================
+
+
+@skill_command(
+    name="run_tests",
+    description="Run project test suite.",
+    autowire=True,
+)
+def run_tests(
+    test_path: str = "",
+    # Injected
+    paths: ConfigPaths | None = None,
+) -> dict[str, Any]:
+    """
+    Run tests using standard discovery.
+    Prioritizes: 'just test', 'make test', or 'pytest'.
+    """
+    if paths is None:
+        paths = ConfigPaths()
+
+    root = paths.project_root
+
+    # Discovery Logic (Smart Defaults)
+    cmd = []
+    if (root / "justfile").exists():
+        cmd = ["just", "test"]
+    elif (root / "Makefile").exists():
+        cmd = ["make", "test"]
+    else:
+        cmd = ["pytest"]
+
+    if test_path:
+        cmd.append(test_path)
+
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=root,
+            capture_output=True,
+            text=True,
+        )
+        return {
+            "success": result.returncode == 0,
+            "command": " ".join(cmd),
+            "output": result.stdout + result.stderr,
+        }
+    except FileNotFoundError:
+        return {"success": False, "error": f"Command not found: {cmd[0]}"}
+
+
+# =============================================================================
+# Project Analysis
+# =============================================================================
 
 
 @skill_command(
     name="analyze_project_structure",
-    category="read",
     description="Generate a tree-like view of the project structure.",
+    autowire=True,
 )
-async def analyze_project_structure(depth: int = 2) -> str:
+def analyze_project_structure(
+    depth: int = 2,
+    paths: ConfigPaths | None = None,
+) -> str:
     """
     Generate a tree-like view of the project structure to understand architecture.
     Ignores common noise (node_modules, .git, __pycache__).
     """
-    root = get_project_root()
+    if paths is None:
+        paths = ConfigPaths()
+
+    root = paths.project_root
     exclude_dirs = {".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "build"}
 
     output = [f"Project Root: {root.name}"]
+
+    import os
 
     for dirpath, dirnames, filenames in os.walk(root):
         # Prune directories in-place
@@ -45,7 +118,7 @@ async def analyze_project_structure(depth: int = 2) -> str:
 
         indent = "  " * level
         if level > 0:
-            output.append(f"{indent}📂 {path.name}/")
+            output.append(f"{indent}  {path.name}/")
 
         # List key config files specifically at high levels
         for f in filenames:
@@ -56,97 +129,26 @@ async def analyze_project_structure(depth: int = 2) -> str:
                 or f.endswith(".md")
                 or f == "Dockerfile"
             ):
-                output.append(f"{indent}  📄 {f}")
+                output.append(f"{indent}    {f}")
 
     return "\n".join(output)
 
 
 @skill_command(
-    name="grep_codebase",
-    category="read",
-    description="Universal content search (grep) for patterns in files.",
-)
-async def grep_codebase(
-    pattern: str,
-    file_extension: str = "",
-    path: str = ".",
-    case_sensitive: bool = False,
-) -> str:
-    """
-    Universal content search (grep).
-    Finds occurrences of a string or regex pattern in ANY file type.
-
-    Args:
-        pattern: The search pattern (string or regex).
-        file_extension: Optional file extension filter (e.g., ".py").
-        path: Root directory to search from (default: current directory).
-        case_sensitive: If True, performs case-sensitive search.
-            Default is False (smart case-insensitive search).
-    """
-    results = []
-    root = get_project_root()
-    flags = 0 if case_sensitive else re.IGNORECASE
-
-    try:
-        target_path = (root / path).resolve()
-
-        # Safety check
-        if not str(target_path).startswith(str(root)):
-            return "Access denied: Path outside project root."
-
-        count = 0
-        MAX_RESULTS = 50
-
-        for r, d, f in os.walk(target_path):
-            if ".git" in r or "node_modules" in r or "__pycache__" in r:
-                continue
-
-            for file in f:
-                if file_extension and not file.endswith(file_extension):
-                    continue
-
-                file_path = Path(r) / file
-                try:
-                    # Quick check for binary
-                    with open(file_path, "rb") as check:
-                        if b"\0" in check.read(1024):
-                            continue
-
-                    # Read text
-                    content = file_path.read_text(encoding="utf-8", errors="ignore")
-                    lines = content.splitlines()
-
-                    for i, line in enumerate(lines):
-                        if re.search(pattern, line, flags):
-                            rel = file_path.relative_to(root)
-                            results.append(f"{rel}:{i + 1}: {line.strip()[:100]}")
-                            count += 1
-                            if count >= MAX_RESULTS:
-                                break
-                except Exception:
-                    continue
-            if count >= MAX_RESULTS:
-                break
-
-        if not results:
-            case_hint = "" if case_sensitive else " (try case_sensitive=True if needed)"
-            return f"No matches found for '{pattern}'{case_hint}."
-
-        return f"Universal Grep Results ({len(results)} matches):\n" + "\n".join(results)
-    except Exception as e:
-        return f"Error: {e}"
-
-
-@skill_command(
     name="detect_tech_stack",
-    category="read",
     description="Analyze the project to identify languages and frameworks.",
+    autowire=True,
 )
-async def detect_tech_stack() -> str:
+def detect_tech_stack(paths: ConfigPaths | None = None) -> str:
     """
     Analyze the project to identify languages and frameworks used.
     """
-    root = get_project_root()
+    import os
+
+    if paths is None:
+        paths = ConfigPaths()
+
+    root = paths.project_root
     languages = {}
     frameworks = []
 
@@ -177,7 +179,11 @@ async def detect_tech_stack() -> str:
     # Sort languages by file count
     sorted_langs = sorted(languages.items(), key=lambda x: x[1], reverse=True)
 
-    return f"""Tech Stack Detected:
-Languages: {", ".join([f"{l} ({c} files)" for l, c in sorted_langs])}
-Frameworks/Tools: {", ".join(set(frameworks))}
-"""
+    return (
+        f"Tech Stack Detected:\n"
+        f"Languages: {', '.join([f'{l} ({c} files)' for l, c in sorted_langs])}\n"
+        f"Frameworks/Tools: {', '.join(set(frameworks))}\n"
+    )
+
+
+__all__ = ["run_tests", "analyze_project_structure", "detect_tech_stack"]

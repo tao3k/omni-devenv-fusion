@@ -1,46 +1,55 @@
 """
-Git Status Tests - Direct import pattern
+Git Skill Tests - Trinity Architecture v2.0
 
-Tests for git status functionality using direct function imports.
+Tests for git skill commands.
+Uses simple import checks.
 """
 
+import sys
+from pathlib import Path
 
-def test_status_module_exists():
-    """Verify status module exists."""
-    from agent.skills.git.scripts import status
-
-    assert hasattr(status, "status")
-    assert callable(status.status)
-
-
-def test_status_returns_string():
-    """Verify status function returns a string."""
-    from agent.skills.git.scripts import status
-    from common.gitops import get_project_root
-
-    result = status.status(project_root=get_project_root())
-    assert isinstance(result, str)
+# Add assets/skills to path for imports
+SKILLS_ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(SKILLS_ROOT))
 
 
-def test_git_status_detailed_exists():
-    """Verify git_status_detailed function exists."""
-    from agent.skills.git.scripts import status
+class TestGitScripts:
+    """Test git skill scripts can be imported."""
 
-    assert hasattr(status, "git_status_detailed")
-    assert callable(status.git_status_detailed)
+    def test_commit_script_imports(self):
+        """Test commit script imports successfully."""
+        from git.scripts import commit
 
+        assert hasattr(
+            commit, "commit"
+        )  # Function name is 'commit', name='git_commit' in decorator
 
-def test_has_staged_files_exists():
-    """Verify has_staged_files function exists."""
-    from agent.skills.git.scripts import status
+    def test_status_script_imports(self):
+        """Test status script imports successfully."""
+        from git.scripts import status
 
-    assert hasattr(status, "has_staged_files")
-    assert callable(status.has_staged_files)
+        assert hasattr(status, "status")
 
+    def test_prepare_script_imports(self):
+        """Test prepare script imports successfully."""
+        from git.scripts import prepare
 
-def test_has_unstaged_files_exists():
-    """Verify has_unstaged_files function exists."""
-    from agent.skills.git.scripts import status
+        assert hasattr(prepare, "stage_and_scan")
 
-    assert hasattr(status, "has_unstaged_files")
-    assert callable(status.has_unstaged_files)
+    def test_render_script_imports(self):
+        """Test rendering script imports successfully."""
+        from git.scripts import rendering
+
+        assert hasattr(rendering, "render_commit_message")
+
+    def test_commit_state_script_imports(self):
+        """Test commit_state script imports successfully."""
+        from git.scripts import commit_state
+
+        assert hasattr(commit_state, "create_initial_state")
+
+    def test_smart_commit_workflow_imports(self):
+        """Test smart_commit_workflow script imports successfully."""
+        from git.scripts import smart_commit_workflow
+
+        assert hasattr(smart_commit_workflow, "_build_workflow")

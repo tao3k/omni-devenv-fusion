@@ -1,33 +1,38 @@
 #!/usr/bin/env python3
 """
 scripts/generate_llm_index.py
-Omni-Dev 1.0: Skill Index Generator for LLM Context.
+Skill Index Generator for LLM Context.
 
-Scans assets/skills/ and generates docs/llm/skill_index.json.
+Scans assets/skills/ and generates .cache/skill_index.json.
 This allows the Agent to "know what it knows" without reading every file.
 
-OSS 1.0 Standard Structure:
+Standard Structure:
 - SKILL.md: Core definition + YAML Frontmatter (metadata)
 - README.md: User guide
-- prompts.md: Persona definitions
 - scripts/*.py: Command implementations
 """
 
+from __future__ import annotations
+
 import json
 import re
+import sys
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Any
+
+# Add packages to path for imports
+_PRJ_ROOT = Path(__file__).parent.parent
+_foundation_src = _PRJ_ROOT / "packages/python/foundation/src"
+if str(_foundation_src) not in sys.path:
+    sys.path.insert(0, str(_foundation_src))
+
+from omni.foundation.config.skills import SKILLS_DIR
 
 
-SKILLS_DIR = Path("assets/skills")
-OUTPUT_FILE = SKILLS_DIR / "skill_index.json"
-
-
-def parse_skill_md_frontmatter(skill_path: Path) -> Dict[str, Any]:
+def parse_skill_md_frontmatter(skill_path: Path) -> dict[str, Any]:
     """Parse YAML frontmatter from SKILL.md."""
     skill_md = skill_path / "SKILL.md"
     if not skill_md.exists():
-        # Fallback for legacy skills without SKILL.md
         return {
             "name": skill_path.name,
             "description": "Legacy skill (no SKILL.md)",
@@ -37,34 +42,24 @@ def parse_skill_md_frontmatter(skill_path: Path) -> Dict[str, Any]:
         }
 
     try:
-        with open(skill_md, "r") as f:
-            content = f.read()
-
-        # Parse YAML frontmatter between --- markers
+        content = skill_md.read_text(encoding="utf-8")
         frontmatter_match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
         if frontmatter_match:
             frontmatter = frontmatter_match.group(1)
-            data = {}
-
-            # Parse simple YAML key: value pairs
+            data: dict[str, Any] = {}
             for line in frontmatter.split("\n"):
                 line = line.strip()
                 if ":" in line and not line.startswith("#"):
                     key, value = line.split(":", 1)
                     key = key.strip()
                     value = value.strip()
-
-                    # Handle arrays
                     if value.startswith("[") and value.endswith("]"):
-                        # Parse array
                         items = re.findall(r'"([^"]*)"', value)
                         data[key] = items
                     elif value.startswith("["):
-                        # Multi-line array
                         data[key] = []
                     else:
                         data[key] = value
-
             return {
                 "name": data.get("name", skill_path.name),
                 "description": data.get("description", ""),
@@ -73,7 +68,6 @@ def parse_skill_md_frontmatter(skill_path: Path) -> Dict[str, Any]:
                 "intents": data.get("intents", []),
                 "authors": data.get("authors", []),
             }
-
     except Exception as e:
         print(f"  ⚠️ Error reading {skill_md}: {e}")
 
@@ -86,9 +80,9 @@ def parse_skill_md_frontmatter(skill_path: Path) -> Dict[str, Any]:
     }
 
 
-def scan_tools_in_scripts(skill_path: Path) -> List[Dict[str, Any]]:
+def scan_tools_in_scripts(skill_path: Path) -> list[dict[str, Any]]:
     """Scan scripts/*.py for tool definitions."""
-    tools = []
+    tools: list[dict[str, Any]] = []
     scripts_dir = skill_path / "scripts"
 
     if not scripts_dir.exists():
@@ -98,46 +92,42 @@ def scan_tools_in_scripts(skill_path: Path) -> List[Dict[str, Any]]:
         if script_file.name.startswith("_"):
             continue
         try:
-            with open(script_file, "r") as f:
-                content = f.read()
-                # Look for function definitions with docstrings
-                # Simple pattern: def command_xxx
-                lines = content.split("\n")
-                current_func = None
-                docstring = []
+            content = script_file.read_text(encoding="utf-8")
+            lines = content.split("\n")
+            current_func: str | None = None
+            docstring: list[str] = []
 
-                for line in lines:
-                    stripped = line.strip()
-                    if stripped.startswith("def "):
-                        if current_func and docstring:
-                            tools.append(
-                                {
-                                    "name": current_func,
-                                    "description": " ".join(docstring).strip()[:200],
-                                }
-                            )
-                        current_func = stripped.split("(")[0].replace("def ", "")
-                        docstring = []
-                    elif current_func and stripped.startswith('"""'):
-                        docstring.append(stripped.replace('"""', ""))
-                    elif current_func and docstring:
-                        if stripped and not stripped.startswith("#"):
-                            docstring.append(stripped)
+            for line in lines:
+                stripped = line.strip()
+                if stripped.startswith("def "):
+                    if current_func and docstring:
+                        tools.append(
+                            {
+                                "name": current_func,
+                                "description": " ".join(docstring).strip()[:200],
+                            }
+                        )
+                    current_func = stripped.split("(")[0].replace("def ", "")
+                    docstring = []
+                elif current_func and stripped.startswith('"""'):
+                    docstring.append(stripped.replace('"""', ""))
+                elif current_func and docstring:
+                    if stripped and not stripped.startswith("#"):
+                        docstring.append(stripped)
 
-                # Don't forget the last function
-                if current_func and docstring:
-                    tools.append(
-                        {"name": current_func, "description": " ".join(docstring).strip()[:200]}
-                    )
+            if current_func and docstring:
+                tools.append(
+                    {"name": current_func, "description": " ".join(docstring).strip()[:200]}
+                )
         except Exception as e:
             print(f"  ⚠️ Error reading script {script_file}: {e}")
 
     return tools
 
 
-def scan_skills() -> List[Dict[str, Any]]:
+def scan_skills() -> list[dict[str, Any]]:
     """Scan all skills and build index."""
-    skill_index = []
+    skill_index: list[dict[str, Any]] = []
 
     if not SKILLS_DIR.exists():
         print(f"❌ Skills directory not found: {SKILLS_DIR}")
@@ -148,9 +138,7 @@ def scan_skills() -> List[Dict[str, Any]]:
     for item in SKILLS_DIR.iterdir():
         if item.is_dir() and not item.name.startswith("_"):
             metadata = parse_skill_md_frontmatter(item)
-
-            # Extract high-level metadata for LLM context
-            entry = {
+            entry: dict[str, Any] = {
                 "name": metadata.get("name", item.name),
                 "description": metadata.get("description", ""),
                 "version": metadata.get("version", "1.0.0"),
@@ -161,7 +149,6 @@ def scan_skills() -> List[Dict[str, Any]]:
                 "authors": metadata.get("authors", []),
             }
 
-            # Check for standard OSS 1.0 files
             has_skill_md = (item / "SKILL.md").exists()
             has_readme = (item / "README.md").exists()
             has_guide = (item / "guide.md").exists()
@@ -176,9 +163,7 @@ def scan_skills() -> List[Dict[str, Any]]:
                 "tests": has_tests,
             }
 
-            # Check OSS 1.0 compliance
-            # Required: SKILL.md + (README.md or guide.md) + scripts/
-            compliance = []
+            compliance: list[str] = []
             if has_skill_md:
                 compliance.append("SKILL.md")
             if has_readme:
@@ -192,7 +177,6 @@ def scan_skills() -> List[Dict[str, Any]]:
             if has_tests:
                 compliance.append("tests")
 
-            # OSS 1.0 compliant: SKILL.md + at least one guide + scripts/
             entry["oss_compliant"] = has_skill_md and entry["tools"] and (has_readme or has_guide)
             entry["compliance_details"] = compliance
 
@@ -205,8 +189,8 @@ def scan_skills() -> List[Dict[str, Any]]:
     return skill_index
 
 
-def generate_system_prompt_snippet(index: List[Dict[str, Any]]) -> str:
-    """Generates a compact XML snippet for insertion into system_context.xml"""
+def generate_system_prompt_snippet(index: list[dict[str, Any]]) -> str:
+    """Generate a compact XML snippet for insertion into system_context.xml."""
     lines = ["<available_skills>"]
     for skill in sorted(index, key=lambda x: x["name"]):
         lines.append(f'  <skill name="{skill["name"]}" version="{skill["version"]}">')
@@ -222,19 +206,18 @@ def generate_system_prompt_snippet(index: List[Dict[str, Any]]) -> str:
 
 
 def main():
+    """Main entry point."""
     index = scan_skills()
 
     if not index:
         print("No skills found.")
         return
 
-    # 1. Write JSON Index (Machine Readable)
-    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(OUTPUT_FILE, "w") as f:
-        json.dump(index, f, indent=2)
-    print(f"\n💾 Generated index at {OUTPUT_FILE}")
+    output_file = _PRJ_ROOT / ".cache" / "skill_index.json"
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    output_file.write_text(json.dumps(index, indent=2), encoding="utf-8")
+    print(f"\n💾 Generated index at {output_file}")
 
-    # 2. Output XML Snippet (for System Prompt)
     print("\n" + "=" * 60)
     print("📋 XML Snippet for system_context.xml:")
     print("=" * 60)
@@ -242,9 +225,8 @@ def main():
     print(snippet)
     print("=" * 60)
 
-    # Summary
     compliant = sum(1 for s in index if s["oss_compliant"])
-    print(f"\n📊 Summary: {len(index)} skills scanned, {compliant} OSS 1.0 compliant")
+    print(f"\n📊 Summary: {len(index)} skills scanned, {compliant} compliant")
 
 
 if __name__ == "__main__":

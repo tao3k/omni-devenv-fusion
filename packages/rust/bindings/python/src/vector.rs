@@ -1,12 +1,12 @@
 //! Vector Store - Python Bindings for omni-vector / LanceDB
 //!
-//! Phase 53/57: Provides semantic search and vector storage capabilities.
+//! Provides semantic search and vector storage capabilities.
 
 use omni_vector::{ToolRecord, VectorStore};
 use pyo3::prelude::*;
 use std::path::Path;
 
-/// Python wrapper for ToolRecord (Phase 62)
+/// Python wrapper for ToolRecord
 /// Represents a discovered tool from script scanning.
 #[pyclass]
 #[derive(Debug, Clone)]
@@ -172,7 +172,7 @@ impl PyVectorStore {
         })
     }
 
-    /// Phase 67: Hybrid search with keyword boosting.
+    /// Hybrid search with keyword boosting.
     ///
     /// Combines vector similarity with keyword matching for better relevance.
     /// Formula: Score = Vector_Score * 0.7 + Keyword_Match * 0.3
@@ -289,7 +289,7 @@ impl PyVectorStore {
         })
     }
 
-    /// Phase 62: Index all tools from skills scripts directory.
+    /// Index all tools from skills scripts directory.
     ///
     /// Scans `base_path/skills/*/scripts/*.py` for `@skill_command` decorated
     /// functions and indexes them for discovery.
@@ -325,7 +325,7 @@ impl PyVectorStore {
         })
     }
 
-    /// Phase 64: Scan for skill tools without indexing (sync version).
+    /// Scan for skill tools without indexing (sync version).
     ///
     /// This method discovers @skill_command decorated functions without
     /// attempting schema extraction. Returns raw tool records as JSON strings
@@ -380,7 +380,7 @@ impl PyVectorStore {
         Ok(json_tools)
     }
 
-    /// Phase 62: Get all tools for a skill.
+    /// Get all tools for a skill.
     ///
     /// Args:
     ///   skill_name: Name of the skill (e.g., "git")
@@ -410,7 +410,7 @@ impl PyVectorStore {
         })
     }
 
-    /// Phase 64: Get all file hashes from the database for incremental sync.
+    /// Get all file hashes from the database for incremental sync.
     ///
     /// Args:
     ///   table_name: Name of the table (default: "skills")
@@ -436,7 +436,7 @@ impl PyVectorStore {
         })
     }
 
-    /// Phase 64: Delete documents by file path.
+    /// Delete documents by file path.
     ///
     /// Args:
     ///   file_paths: List of file paths to delete

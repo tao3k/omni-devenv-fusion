@@ -43,7 +43,7 @@ pub enum VectorStoreError {
     #[error("Embedding dimension must be positive")]
     InvalidEmbeddingDimension,
 
-    /// General anyhow error (Phase 62: Script scanning)
+    /// General anyhow error (Script scanning)
     #[error("Script scanning error: {0}")]
     ScriptScanning(#[from] anyhow::Error),
 }

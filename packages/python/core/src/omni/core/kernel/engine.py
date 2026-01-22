@@ -1,0 +1,627 @@
+"""
+kernel/engine.py - Core Agent Engine
+
+Trinity Architecture - Core Layer
+
+Single entry point for agent core, providing:
+- Unified lifecycle management
+- Component registry
+- Dependency injection
+- Clean separation between core and domain modules
+- Zero-Code skill loading via UniversalScriptSkill
+- Hot Reload for skill development
+
+Logging: Uses Foundation layer (omni.foundation.config.logging)
+"""
+
+from __future__ import annotations
+
+import asyncio
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from omni.foundation.config.logging import get_logger, configure_logging
+
+from .lifecycle import LifecycleManager, LifecycleState
+from .watcher import KernelWatcher
+
+if TYPE_CHECKING:
+    from omni.core.skills.runtime import SkillContext
+    from omni.core.router.sniffer import IntentSniffer
+    from omni.core.security import SecurityValidator
+
+# Ensure logging is configured before getting logger
+configure_logging(level="INFO")
+logger = get_logger("omni.core.kernel")
+
+# Global kernel singleton
+_kernel_instance: Kernel | None = None
+
+
+class Kernel:
+    """Kernel - single entry point for agent core.
+
+    Responsibilities:
+    - Lifecycle management (init -> ready -> running -> shutdown)
+    - Component registry for dependency injection
+    - Clean separation between core and domain modules
+    - Bridge to existing skill_runtime system
+    - Rust-powered skill discovery integration
+    - Hot Reload for skill development
+    - Security Enforcement (Permission Gatekeeper)
+
+    Usage:
+        kernel = get_kernel()
+        await kernel.initialize()
+        await kernel.start()
+        # Secure execution:
+        await kernel.execute_tool("filesystem.read_file", {"path": "..."}, caller="calculator")
+        await kernel.shutdown()
+    """
+
+    __slots__ = (
+        "_lifecycle",
+        "_components",
+        "_skill_context",
+        "_discovery_service",
+        "_discovered_skills",
+        "_project_root",
+        "_skills_dir",
+        "_watcher",
+        "_router",
+        "_sniffer",  # Intent Sniffer for context detection
+        "_security",  # Security Validator (Permission Gatekeeper)
+    )
+
+    def __init__(
+        self,
+        *,
+        project_root: Path | None = None,
+        skills_dir: Path | None = None,
+    ) -> None:
+        """Initialize kernel with optional paths.
+
+        Args:
+            project_root: Project root directory (auto-detected if None)
+            skills_dir: Skills directory (defaults to project_root/assets/skills)
+        """
+        self._lifecycle = LifecycleManager(
+            on_ready=self._on_ready,
+            on_running=self._on_running,
+            on_shutdown=self._on_shutdown,
+        )
+        self._components: dict[str, Any] = {}
+        self._skill_context: SkillContext | None = None
+        self._discovery_service = None
+        self._discovered_skills: list[Any] = []
+        self._watcher: KernelWatcher | None = None
+        self._router = None
+        self._sniffer: "IntentSniffer | None" = None  # Lazy init in sniffer property
+        self._security = None  # Security Validator (Permission Gatekeeper) - lazy init
+
+        # Resolve paths
+        from omni.foundation.runtime.gitops import get_project_root
+
+        self._project_root = project_root or get_project_root()
+        self._skills_dir = skills_dir or self._project_root / "assets" / "skills"
+
+    # =========================================================================
+    # Lifecycle
+    # =========================================================================
+
+    @property
+    def state(self) -> LifecycleState:
+        """Get current lifecycle state."""
+        return self._lifecycle.state
+
+    @property
+    def is_ready(self) -> bool:
+        """Check if kernel is ready."""
+        return self._lifecycle.is_ready()
+
+    @property
+    def is_running(self) -> bool:
+        """Check if kernel is running."""
+        return self._lifecycle.is_running()
+
+    async def initialize(self) -> None:
+        """Initialize kernel and all components."""
+        await self._lifecycle.initialize()
+
+    async def start(self) -> None:
+        """Start kernel (transition to running state)."""
+        await self._lifecycle.start()
+
+    async def shutdown(self) -> None:
+        """Shutdown kernel and cleanup all components."""
+        await self._lifecycle.shutdown()
+
+    # =========================================================================
+    # Components
+    # =========================================================================
+
+    def register_component(self, name: str, component: Any) -> None:
+        """Register a component by name.
+
+        Args:
+            name: Component name
+            component: Component instance
+
+        Raises:
+            ValueError: If component already registered
+        """
+        if name in self._components:
+            raise ValueError(f"Component '{name}' already registered")
+        self._components[name] = component
+
+    def get_component(self, name: str) -> Any:
+        """Get a registered component.
+
+        Args:
+            name: Component name
+
+        Returns:
+            Component instance
+
+        Raises:
+            KeyError: If component not found
+        """
+        return self._components[name]
+
+    def has_component(self, name: str) -> bool:
+        """Check if a component is registered."""
+        return name in self._components
+
+    # =========================================================================
+    # Security (Permission Gatekeeper)
+    # =========================================================================
+
+    @property
+    def security(self) -> "SecurityValidator":
+        """Get the Security Validator (Permission Gatekeeper).
+
+        Uses Rust-powered PermissionGatekeeper for high-performance checks.
+        Lazy initialization to avoid startup overhead.
+        """
+        if self._security is None:
+            from omni.core.security import SecurityValidator
+
+            self._security = SecurityValidator()
+        return self._security
+
+    async def execute_tool(
+        self,
+        tool_name: str,
+        args: dict[str, Any],
+        caller: str | None = None,
+    ) -> Any:
+        """
+        Execute a tool with mandatory security checks.
+
+        This is the primary entry point for all skill-to-skill and agent-to-skill calls.
+        All tool invocations must pass through this method for proper permission enforcement.
+
+        Args:
+            tool_name: Full tool name in format "skill.command" (e.g., "filesystem.read_file")
+            args: Tool arguments as a dictionary
+            caller: Name of the calling skill (e.g., "calculator"). None = Root/User (full access)
+
+        Returns:
+            Tool execution result (CommandResult)
+
+        Raises:
+            SecurityError: If permission is denied
+            ValueError: If tool name format is invalid or tool not found
+        """
+        from omni.core.security import SecurityError
+
+        # 1. Validate Tool Identifier
+        if "." not in tool_name:
+            raise ValueError(
+                f"Invalid tool name format '{tool_name}'. Expected 'skill.command' format."
+            )
+
+        target_skill_name, command_name = tool_name.split(".", 1)
+
+        # 2. Permission Gatekeeper (Enforcement)
+        if caller:
+            # Look up the caller's manifest to check permissions
+            caller_skill = self.skill_context.get_skill(caller)
+            if not caller_skill:
+                raise SecurityError(
+                    skill_name=caller,
+                    tool_name=tool_name,
+                    required_permission="identity_verification_failed",
+                )
+
+            # Check if caller has permission to invoke target_tool
+            # Uses Rust-powered PermissionGatekeeper under the hood
+            permissions = getattr(caller_skill.metadata, "permissions", [])
+            self.security.validate_or_raise(
+                skill_name=caller,
+                tool_name=tool_name,
+                skill_permissions=permissions,
+            )
+
+        # 3. Resolve Target
+        target_skill = self.skill_context.get_skill(target_skill_name)
+        if not target_skill:
+            raise ValueError(f"Target skill '{target_skill_name}' not found.")
+
+        # 4. Execute
+        if not hasattr(target_skill, "execute"):
+            raise ValueError(f"Skill '{target_skill_name}' is not executable.")
+
+        logger.debug(f"🔐 Executing {tool_name} (Caller: {caller or 'ROOT'})")
+        return await target_skill.execute(command_name, args)
+
+    # =========================================================================
+    # Skill Discovery (Rust-Powered)
+    # =========================================================================
+
+    @property
+    def discovery_service(self):
+        """Get the skill discovery service (lazy initialization).
+
+        Uses Rust scanner for high-performance batch scanning.
+        """
+        if self._discovery_service is None:
+            from omni.core.skills.discovery import SkillDiscoveryService
+
+            self._discovery_service = SkillDiscoveryService()
+        return self._discovery_service
+
+    @property
+    def discovered_skills(self) -> list[Any]:
+        """Get list of discovered skills."""
+        return self._discovered_skills
+
+    def discover_skills(self) -> list[Any]:
+        """Discover all skills using Rust scanner.
+
+        This is called during kernel boot for fast skill discovery.
+
+        Returns:
+            List of DiscoveredSkill objects
+        """
+        if not self._discovered_skills:
+            logger.info(f"🔍 Discovering skills in {self._skills_dir}")
+            self._discovered_skills = self.discovery_service.discover_all([str(self._skills_dir)])
+            # Note: Discovery count is logged by discovery_service.discover_all()
+        return self._discovered_skills
+
+    def load_universal_skill(self, skill_name: str) -> Any:
+        """Load a skill using UniversalScriptSkill (Zero-Code Architecture).
+
+        Args:
+            skill_name: Name of the skill (e.g., "git", "filesystem")
+
+        Returns:
+            UniversalScriptSkill instance (loaded and ready)
+        """
+        from omni.core.skills.universal import UniversalScriptSkill
+
+        skill_path = self._skills_dir / skill_name
+        if not skill_path.exists():
+            raise ValueError(f"Skill not found: {skill_name} (path: {skill_path})")
+
+        skill = UniversalScriptSkill(skill_name=skill_name, skill_path=skill_path)
+        return skill
+
+    def load_all_universal_skills(self) -> list[Any]:
+        """Load all discovered skills using UniversalScriptSkill.
+
+        Returns:
+            List of loaded UniversalScriptSkill instances
+        """
+        from omni.core.skills.universal import UniversalSkillFactory
+
+        # Use project root for path resolution (discovered paths are relative to project root)
+        factory = UniversalSkillFactory(self._project_root)
+
+        # Use Index-based discovery (Rust-First Indexing)
+        discovered_skills = self.discover_skills()
+
+        skills = []
+        for ds in discovered_skills:
+            try:
+                # Use create_from_discovered to avoid SKILL.md parsing
+                skill = factory.create_from_discovered(ds)
+                skills.append(skill)
+                logger.debug(f"Loaded universal skill: {skill.name}")
+            except Exception as e:
+                logger.error(f"Failed to load skill {ds.name}: {e}")
+
+        logger.info(f"Loaded {len(skills)} universal skills via Index")
+        return skills
+
+    # =========================================================================
+    # Skill Runtime Integration
+    # =========================================================================
+
+    @property
+    def skill_context(self) -> SkillContext:
+        """Get the skill context (lazy initialization)."""
+        if self._skill_context is None:
+            from omni.core.skills.runtime import get_skill_context
+
+            self._skill_context = get_skill_context(self._skills_dir)
+        return self._skill_context
+
+    # =========================================================================
+    # Semantic Router (The Cortex)
+    # =========================================================================
+
+    @property
+    def router(self):
+        """Get the semantic router (lazy initialization).
+
+        The Cortex provides intent-to-action mapping using vector search.
+        """
+        if self._router is None:
+            from omni.core.router import SkillIndexer, SemanticRouter, UnifiedRouter, FallbackRouter
+
+            indexer = SkillIndexer()
+            semantic_router = SemanticRouter(indexer)
+            self._router = UnifiedRouter(semantic_router, FallbackRouter())
+        return self._router
+
+    # =========================================================================
+    # Intent Sniffer (The Nose) - Context Detection
+    # =========================================================================
+
+    @property
+    def sniffer(self) -> "IntentSniffer":
+        """Get the intent sniffer (lazy initialization).
+
+        The Sniffer detects context from the file system to activate skills.
+        Powered by Rust-generated skill_index.json.
+        """
+        if self._sniffer is None:
+            from omni.core.router.sniffer import IntentSniffer
+
+            self._sniffer = IntentSniffer()
+        return self._sniffer
+
+    def load_sniffer_rules(self) -> int:
+        """Load declarative sniffing rules from skill_index.json.
+
+        This bridges the Rust Scanner (Producer) and Python Sniffer (Consumer).
+        Returns the number of rules loaded.
+        """
+        count = self.sniffer.load_from_index(index_path=None)
+        logger.info(f"👃 Sniffer loaded with {count} declarative rules from Index")
+        return count
+
+    async def build_cortex(self) -> None:
+        """Build the semantic cortex from loaded skills.
+
+        Called during kernel boot to index all skills for routing.
+        """
+        from omni.core.router import SkillIndexer
+
+        indexer = SkillIndexer()
+        # Pass kernel reference for keyword routing access to skill_context
+        indexer._kernel = self
+
+        self._router = self.router
+        self._router._semantic._indexer = indexer
+
+        # Collect skill metadata for indexing
+        skills_data = []
+        if self._skill_context is not None:
+            for skill in self._skill_context._skills.values():
+                # Get command names and create command entries
+                cmd_names = skill.list_commands() if hasattr(skill, "list_commands") else []
+                commands = [{"name": cmd, "description": ""} for cmd in cmd_names]
+
+                skills_data.append(
+                    {
+                        "name": skill.name,
+                        "description": getattr(skill.metadata, "description", ""),
+                        "commands": commands,
+                    }
+                )
+
+        await indexer.index_skills(skills_data)
+        logger.info(f"Cortex built with {indexer.get_stats()['entries_indexed']} entries")
+
+    # =========================================================================
+    # Paths
+    # =========================================================================
+
+    @property
+    def project_root(self) -> Path:
+        """Get project root directory."""
+        return self._project_root
+
+    @property
+    def skills_dir(self) -> Path:
+        """Get skills directory."""
+        return self._skills_dir
+
+    # =========================================================================
+    # Hot Reload
+    # =========================================================================
+
+    def enable_hot_reload(self) -> None:
+        """Start the file system watcher for hot reload (development mode).
+
+        Watches:
+        - assets/skills/ directory for skill script changes
+        - skill_index.json for sniffer rule changes
+
+        Handles both skill reload and sniffer index reload.
+        """
+        import os
+        from pathlib import Path
+
+        if self._watcher is not None and self._watcher.is_running:
+            return  # Already running
+
+        def callback_bridge(event_path: str) -> None:
+            """Bridge watchdog callback to async reload.
+
+            Handles both skill directories and skill_index.json changes.
+            """
+            filename = os.path.basename(event_path)
+
+            # Handle Index Change
+            if filename == "skill_index.json":
+                logger.info("📜 Skill Index changed, reloading sniffer rules...")
+                self._reload_sniffer_sync_wrapper()
+                return
+
+            # Handle Skill Script Change
+            try:
+                rel = Path(event_path).relative_to(self._skills_dir)
+                if len(rel.parts) > 0:
+                    skill_name = rel.parts[0]
+                    if not skill_name.startswith("_"):
+                        logger.info(f"🔄 Triggering reload for {skill_name}...")
+                        self._reload_skill_sync_wrapper(skill_name)
+            except ValueError:
+                pass  # Path not relative to skills_dir
+
+        self._watcher = KernelWatcher(self._skills_dir, callback_bridge)
+        if self._watcher is not None:
+            self._watcher.start()
+            logger.info("🔁 Hot reload enabled (watches skills/ and skill_index.json)")
+
+    def _reload_sniffer_sync_wrapper(self) -> None:
+        """Sync wrapper for sniffer reload (triggered by index change)."""
+        try:
+            count = self.sniffer.load_from_index()
+            logger.info(f"✅ Sniffer rules reloaded ({count} rules active)")
+        except Exception as e:
+            logger.error(f"❌ Failed to reload sniffer rules: {e}")
+
+    def _reload_skill_sync_wrapper(self, skill_name: str) -> None:
+        """Sync wrapper to trigger reload task."""
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self.reload_skill(skill_name))
+        except RuntimeError:
+            # No loop running, run synchronously
+            asyncio.run(self.reload_skill(skill_name))
+
+    async def reload_skill(self, skill_name: str) -> None:
+        """Reload a single skill (for hot reload)."""
+        logger.info(f"♻️ Reloading skill: {skill_name}")
+
+        try:
+            # Load fresh skill instance
+            skill = self.load_universal_skill(skill_name)
+            await skill.load({"cwd": str(self._project_root)})
+
+            # Update in skill context
+            self.skill_context.register_skill(skill)
+            logger.info(f"✅ Hot Reload Complete: {skill_name}")
+        except Exception as e:
+            logger.error(f"❌ Hot Reload Failed for {skill_name}: {e}")
+
+    # =========================================================================
+    # Lifecycle Callbacks
+    # =========================================================================
+
+    async def _on_ready(self) -> None:
+        """Called when kernel reaches READY state."""
+        logger.info("🟢 Kernel initializing...")
+
+        # Step 1: Initialize skill context
+        skill_ctx = self.skill_context
+        logger.debug(f"Skill context initialized: {self._skills_dir}")
+
+        # Step 2: Load and Register Universal Skills
+        # Use UniversalScriptSkill to load all skills from assets
+        logger.info(f"📦 Loading skills from {self._skills_dir}...")
+        loaded_skills = self.load_all_universal_skills()
+
+        # Count total commands
+        total_commands = 0
+        skills_loaded = 0
+        for skill in loaded_skills:
+            # Step 3: Load the skill (extensions & scripts)
+            try:
+                await skill.load({"cwd": str(self._project_root)})
+                skill_ctx.register_skill(skill)
+                cmd_count = len(skill.list_commands())
+                total_commands += cmd_count
+                skills_loaded += 1
+                logger.debug(f"  ✅ {skill.name}: {cmd_count} commands")
+            except Exception as e:
+                logger.error(f"  ❌ Failed to load skill '{skill.name}': {e}")
+
+        # Step 4: Build Semantic Cortex (The Cortex)
+        logger.info("🧠 Building Semantic Cortex...")
+        await self.build_cortex()
+
+        # Step 5: Initialize Intent Sniffer (The Nose)
+        # Loads declarative rules from skill_index.json (generated by Rust scanner)
+        logger.info("👃 Initializing Context Sniffer...")
+        self.load_sniffer_rules()
+
+        # Step 6: Log extension summary (if any extensions were loaded)
+        from omni.core.skills.extensions.loader import log_extension_summary
+
+        log_extension_summary()
+
+        # Summary of active services
+        logger.info("━" * 60)
+        logger.info("🚀 Kernel Services Active:")
+        logger.info(f"   • Skills:    {skills_loaded} loaded, {total_commands} commands")
+        logger.info(f"   • Cortex:    Semantic routing index ready")
+        logger.info(f"   • Sniffer:   Context detection active")
+        logger.info(f"   • Security:  Permission Gatekeeper active (Zero Trust)")
+        logger.info(f"   • Watcher:   File monitoring enabled (hot reload)")
+        logger.info("━" * 60)
+
+    async def _on_running(self) -> None:
+        """Called when kernel reaches RUNNING state."""
+        pass
+
+    async def _on_shutdown(self) -> None:
+        """Called when kernel starts shutting down - graceful cleanup."""
+        logger.info("🛑 Kernel shutting down...")
+
+        # Step 1: Stop file watcher first (no more file events)
+        if self._watcher is not None:
+            self._watcher.stop()
+            self._watcher = None
+            logger.debug("File watcher stopped")
+
+        # Step 2: Save any persistent state (vector index, caches)
+        # Note: In-memory stores can't be persisted, but we log the intent
+        if hasattr(self, "_router") and self._router is not None:
+            if hasattr(self._router, "_semantic") and hasattr(self._router._semantic, "_indexer"):
+                indexer = self._router._semantic._indexer
+                stats = indexer.get_stats()
+                if stats.get("entries_indexed", 0) > 0:
+                    logger.info(f"💾 Index contains {stats['entries_indexed']} entries (in-memory)")
+
+        # Step 3: Unregister all skills gracefully
+        if self._skill_context is not None:
+            skills_count = self._skill_context.skills_count
+            from omni.core.skills.runtime import reset_context
+
+            reset_context()
+            logger.debug(f"Unregistered {skills_count} skills")
+
+        # Step 4: Cleanup components
+        self._components.clear()
+
+        logger.info("👋 Kernel shutdown complete")
+
+
+def get_kernel() -> Kernel:
+    """Get the global kernel instance (singleton)."""
+    global _kernel_instance
+    if _kernel_instance is None:
+        _kernel_instance = Kernel()
+    return _kernel_instance
+
+
+def reset_kernel() -> None:
+    """Reset the global kernel instance (for testing)."""
+    global _kernel_instance
+    _kernel_instance = None

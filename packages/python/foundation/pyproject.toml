@@ -1,0 +1,40 @@
+[project]
+name = "omni-foundation"
+version = "0.5.0"
+description = "Omni Foundation - Infrastructure Layer (AI, VCS, Text, Logging)"
+readme = "README.md"
+requires-python = ">=3.12"
+
+dependencies = [
+    "structlog>=24.0.0",
+    "orjson>=3.10.0",
+    # AI & Embeddings
+    "fastembed>=0.5.0",
+    "openai>=1.0.0",
+    # VCS
+    "gitpython>=3.1.0",
+    "libvcs>=0.14.0",
+    # Text & Data
+    "jinja2>=3.1.0",
+    "python-frontmatter>=1.1.0",
+    # Workflow Engine
+    "langgraph>=1.0.5",
+    "langsmith>=0.6.0",
+    "langgraph-checkpoint-sqlite>=3.0.2",
+    # Utils
+    "pydantic>=2.7.0",
+    "anthropic>=0.75.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/omni"]
+
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"

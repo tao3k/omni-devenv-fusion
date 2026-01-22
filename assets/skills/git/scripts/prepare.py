@@ -1,5 +1,5 @@
 """
-git/scripts/prepare.py - Commit preparation workflow (Phase 35.2)
+git/scripts/prepare.py - Commit preparation workflow
 
 Implements the prepare_commit command for /commit workflow:
 1. Stage all changes with security scan
@@ -57,8 +57,8 @@ def _check_sensitive_files(staged_files: List[str]) -> List[str]:
 def _get_cog_scopes(project_root: Optional[Path] = None) -> List[str]:
     """Read allowed scopes from cog.toml."""
     try:
-        from common.config.settings import get_setting
-        from common.gitops import get_project_root
+        from omni.foundation.config.settings import get_setting
+        from omni.foundation.runtime.gitops import get_project_root
 
         root = project_root or get_project_root()
         cog_path = root / get_setting("config.cog_toml", "cog.toml")

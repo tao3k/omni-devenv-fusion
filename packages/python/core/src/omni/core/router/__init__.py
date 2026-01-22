@@ -1,0 +1,59 @@
+"""
+omni.core.router - Semantic Routing Module
+
+High-performance intent-to-action mapping using vector search.
+Migrated from: src/agent/core/router/
+
+Modules:
+- indexer: Build semantic index from skills
+- router: Route natural language to commands
+- hive: The Hive Mind (advanced routing strategy)
+- sniffer: Context-aware skill suggestions
+- main: Unified router facade
+
+Usage:
+    from omni.core.router import OmniRouter, HiveRouter, IntentSniffer
+
+    # Use unified router
+    router = OmniRouter()
+    await router.initialize(skills)
+    result = await router.route("帮我提交代码")
+
+    # Or use components directly
+    hive = HiveRouter(semantic_router)
+    sniffer = IntentSniffer()
+    suggestions = sniffer.sniff("/path/to/project")
+"""
+
+from .indexer import SkillIndexer, IndexedSkill
+from .router import (
+    SemanticRouter,
+    FallbackRouter,
+    UnifiedRouter,
+    RouteResult,
+)
+from .hive import HiveRouter, MultiHiveRouter
+from .sniffer import IntentSniffer, ContextualSniffer, ActivationRule
+from .main import OmniRouter, RouterRegistry, get_router
+
+__all__ = [
+    # Indexer
+    "SkillIndexer",
+    "IndexedSkill",
+    # Router
+    "SemanticRouter",
+    "FallbackRouter",
+    "UnifiedRouter",
+    "RouteResult",
+    # Hive
+    "HiveRouter",
+    "MultiHiveRouter",
+    # Sniffer
+    "IntentSniffer",
+    "ContextualSniffer",
+    "ActivationRule",
+    # Facade
+    "OmniRouter",
+    "RouterRegistry",
+    "get_router",
+]

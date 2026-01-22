@@ -1,47 +1,113 @@
-# MCP Python SDK Best Practices
+# MCP Best Practices - Omni-Dev-Fusion
 
-> Pure MCP Server Architecture
+> Trinity Architecture - Agent Layer (L3 Transport)
+> Last Updated: 2026-01-21
 
-This document records best practices for developing MCP Servers using the [MCP Python SDK](https://modelcontextprotocol.github.io/python-sdk/api/) with Omni's pure `mcp.server.Server` implementation.
+This document describes best practices for the Omni MCP implementation using the custom `omni.mcp` transport layer.
 
 ---
 
-## 1. Pure MCP Server vs FastMCP
+## Architecture Overview
 
-### Why Pure Server?
+Omni uses a **custom MCP transport layer** (`omni.mcp`) instead of the MCP Python SDK:
 
-Omni uses pure `mcp.server.Server` instead of FastMCP for:
-
-- Direct control over tool listing/execution
-- Explicit error handling for TaskGroup
-- Optional uvloop (SSE mode) + orjson for performance
-- No FastMCP dependency overhead
-
-### Best Practice
-
-```python
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
-from mcp.types import Tool, TextContent
-
-server = Server("omni-agent")
-
-@server.list_tools()
-async def list_tools() -> list[Tool]:
-    """Dynamic tool discovery from SkillContext."""
-    # Your tool listing logic here
-    return []
-
-@server.call_tool()
-async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
-    """Execute tool via SkillContext."""
-    # Your tool execution logic here
-    return [TextContent(type="text", text="result")]
+```
+┌─────────────────────────────────────────────────┐
+│              Omni MCP Architecture              │
+├─────────────────────────────────────────────────┤
+│  Transport (omni.mcp.transport)                 │
+│    ├── StdioTransport (Claude Desktop)          │
+│    └── SSEServer (Claude Code CLI)              │
+├─────────────────────────────────────────────────┤
+│  Server (omni.mcp.server.MCPServer)             │
+│    └── Pure orchestration, no business logic    │
+├─────────────────────────────────────────────────┤
+│  Handler (omni.agent.server.AgentMCPHandler)    │
+│    └── Delegates to Kernel for all operations   │
+└─────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. Async-First
+## 1. AgentMCPHandler Pattern
+
+### Handler Structure
+
+```python
+from omni.agent.server import AgentMCPHandler
+from omni.mcp.types import JSONRPCRequest, JSONRPCResponse
+
+class AgentMCPHandler:
+    def __init__(self):
+        self._kernel = get_kernel()  # Core Layer
+        self._initialized = False
+
+    async def handle_request(self, request: JSONRPCRequest) -> JSONRPCResponse:
+        """Route JSON-RPC requests to appropriate handlers."""
+        if not self._initialized:
+            await self.initialize()
+
+        method = request.method
+        if method == "initialize":
+            return await self._handle_initialize(request)
+        elif method == "tools/list":
+            return await self._handle_list_tools(request)
+        elif method == "tools/call":
+            return await self._handle_call_tool(request)
+        # ... handle other methods
+```
+
+### Tool Listing
+
+```python
+async def _handle_list_tools(self, request: JSONRPCRequest) -> JSONRPCResponse:
+    """List all skills as MCP tools."""
+    context = self._kernel.skill_context
+    tools = []
+
+    for skill_name in context.list_skills():
+        skill = context.get_skill(skill_name)
+        for cmd_name in skill.list_commands():
+            cmd = skill.get_command(cmd_name)
+            description = getattr(cmd, "description", f"Run {skill_name}.{cmd_name}")
+            raw_schema = getattr(cmd, "input_schema", {}) if cmd else {}
+            input_schema = raw_schema.copy() if raw_schema else {}
+            input_schema.setdefault("type", "object")  # MCP requirement!
+
+            tools.append({
+                "name": f"{skill_name}.{cmd_name}",
+                "description": description,
+                "inputSchema": input_schema,
+            })
+
+    return make_success_response(request.id, {"tools": tools})
+```
+
+---
+
+## 2. MCP Protocol Compliance
+
+### inputSchema Requirement
+
+**Critical**: Every tool MUST have `inputSchema.type === "object"`:
+
+```python
+# Correct ✓
+{"type": "object", "properties": {...}}
+
+# Incorrect ✗ (will cause "expected 'object'" error)
+{}  # or {"properties": {...}}
+```
+
+### Test Protocol Compliance
+
+```bash
+uv run pytest packages/python/agent/tests/integration/test_mcp_stdio.py::TestMCPProtocolCompliance -v
+```
+
+---
+
+## 3. Async-First Design
 
 ### Why?
 
@@ -51,241 +117,162 @@ MCP Server runs on an async Event Loop. Calling `asyncio.run()` inside the loop 
 
 ```python
 # Correct: Native async/await
-class SkillContext:
-    async def run(self, skill_name: str, command_name: str, args: dict = None) -> str:
-        if asyncio.iscoroutinefunction(func):
-            result = await func(**args)
-        else:
-            result = func(**args)
-        return str(result)
+async def execute_command(self, skill_name: str, cmd_name: str, args: dict) -> str:
+    skill = self._kernel.skill_context.get_skill(skill_name)
+    return await skill.execute(cmd_name, **args)
 
-# Wrong: ThreadPoolExecutor (thread overhead + potential deadlock)
-async def run(self, ...):
-    if asyncio.iscoroutinefunction(func):
-        loop = asyncio.get_running_loop()
-        with ThreadPoolExecutor() as executor:
-            result = await loop.run_in_executor(executor, lambda: asyncio.run(func(**args)))
+# Wrong: asyncio.run() in loop (causes RuntimeError)
+async def bad_example(self, ...):
+    result = asyncio.run(some_async_func())
 ```
-
-### Benefits
-
-- Eliminate event loop conflicts
-- No thread switching overhead
-- Simpler code
 
 ---
 
-## 3. One Tool Pattern
-
-### Why?
-
-Fewer tools for Claude to see is better. A single entry point:
-
-- Keeps context clean
-- Simplifies tool registration
-- Unifies error handling
+## 4. Error Handling
 
 ### Best Practice
 
 ```python
-from mcp.server import Server
-from mcp.types import Tool, TextContent
+async def _handle_call_tool(self, request: JSONRPCRequest) -> JSONRPCResponse:
+    params = request.params or {}
+    name = params.get("name", "")
+    arguments = params.get("arguments", {})
 
-server = Server("omni-agent")
-
-@server.list_tools()
-async def list_tools() -> list[Tool]:
-    """Expose skill commands as individual tools."""
-    from agent.core.skill_runtime import get_skill_context
-
-    context = get_skill_context()
-    tools = []
-
-    for skill_name in context.list_loaded():
-        for cmd_name in context.get_commands(skill_name):
-            tools.append(Tool(
-                name=f"{skill_name}.{cmd_name}",
-                description=f"Execute {skill_name}.{cmd_name}",
-                inputSchema={"type": "object", "properties": {}, "required": []}
-            ))
-
-    return tools
-
-@server.call_tool()
-async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
-    """Single entry point for all skill commands."""
-    from agent.core.skill_runtime import get_skill_context
-
-    args = arguments or {}
-    context = get_skill_context()
-
-    if "." in name:
-        skill_name, command_name = name.split(".", 1)
-    else:
-        skill_name = name
-        command_name = "help"
-
-    result = await context.run(skill_name, command_name, args)
-    return [TextContent(type="text", text=str(result))]
-```
-
-### Benefits
-
-- Claude only needs to learn one tool pattern (`skill.command`)
-- Avoid tool explosion
-- Unified help system
-
----
-
-## 4. Multimodal Returns (Image Support)
-
-### Why?
-
-MCP protocol natively supports image returns. If your tool generates charts or visualizations, use `Image` type.
-
-### Best Practice
-
-```python
-from mcp.types import Image, TextContent
-
-async def generate_chart(data: dict) -> list[TextContent]:
-    """Generate a chart image from data."""
-    # Generate chart
-    chart_bytes = create_chart(data)
-
-    return [
-        TextContent(type="text", text="Chart generated successfully"),
-        Image(data=chart_bytes, format="png")
-    ]
-```
-
-### Return Types
-
-| Type            | Use Case      |
-| --------------- | ------------- |
-| `str`           | Text results  |
-| `Image`         | Images/charts |
-| `list[Content]` | Mixed content |
-
----
-
-## 5. Error Handling
-
-### Why?
-
-Tool errors should return user-friendly messages, not internal stack traces.
-
-### Best Practice
-
-```python
-@server.call_tool()
-async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
     try:
-        result = await perform_operation(name, arguments)
-        return [TextContent(type="text", text=str(result))]
+        result = await self._execute_tool(name, arguments)
+        return make_success_response(
+            request.id,
+            {"content": [{"type": "text", "text": str(result)}]}
+        )
     except ValueError as e:
-        return [TextContent(type="text", text=f"Invalid input: {e}")]
+        return make_error_response(
+            request.id,
+            ErrorCode.INVALID_PARAMS,
+            str(e)
+        )
     except Exception as e:
-        logger.error(f"Operation failed: {e}")
-        return [TextContent(type="text", text=f"Error: {e}")]
+        logger.error(f"Tool execution failed: {e}")
+        return make_error_response(
+            request.id,
+            ErrorCode.INTERNAL_ERROR,
+            str(e)
+        )
 ```
+
+---
+
+## 5. Notifications vs Requests
+
+### Key Difference
+
+| Type         | Has `id` | Requires Response |
+| ------------ | -------- | ----------------- |
+| Request      | Yes      | Yes               |
+| Notification | No       | No                |
+
+### Handling Notifications
+
+```python
+async def handle_notification(self, method: str, params: Any) -> None:
+    """Handle notifications - no response needed."""
+    if method == "notifications/state":
+        logger.info("Client state notification received")
+    # Other notifications...
+```
+
+**Important**: Don't return a response for notifications in `handle_request()`!
 
 ---
 
 ## 6. Performance Optimizations
 
-### SSE Mode: uvloop + orjson
+### Stdio Transport (Zero-Copy orjson)
 
 ```python
-async def run_mcp_server(transport: str = "stdio"):
-    if transport == "sse" and uvloop:
-        uvloop.install()
-        logger.info("uvloop enabled for SSE")
+from omni.mcp.transport.stdio import StdioTransport
 
-    # orjson for fast JSON serialization
-    def json_dumps(obj):
-        return orjson.dumps(obj).decode("utf-8")
+transport = StdioTransport()
+# Features:
+# - Reads raw bytes from stdin.buffer
+# - orjson.loads() directly on bytes
+# - Writes raw bytes to stdout.buffer
+```
+
+### SSE Transport (HTTP + SSE)
+
+```python
+from omni.mcp.transport.sse import SSEServer
+
+transport = SSEServer(host="127.0.0.1", port=3000)
+# Features:
+# - uvloop for high-performance async
+# - orjson for fast serialization
+# - Automatic ping every 25s
 ```
 
 ---
 
-## 7. Directory Structure Reference
+## 7. Directory Structure
 
 ```
-src/
-└── agent/
-    ├── mcp_server.py          # Pure MCP Server entry (mcp.server.Server)
-    ├── core/
-    │   ├── skill_manager.py   # Command dispatcher (Trinity Architecture)
-    │   └── registry/          # Skill registry
-    │       ├── core.py
-    │       └── loader.py
-    └── skills/                # Skill modules
-        └── {skill}/
-            ├── SKILL.md       # Skill manifest + rules
-            └── scripts/       # @skill_command decorated commands
-```
-
----
-
-## 8. Testing Async Tools
-
-### Using pytest-asyncio
-
-```python
-import pytest
-from agent.core.skill_runtime import get_skill_context
-
-@pytest.mark.asyncio
-async def test_skill_command():
-    context = get_skill_context()
-    result = await context.run("git", "status", {})
-    assert "Git Status" in result
+packages/python/
+├── mcp-server/src/omni/mcp/
+│   ├── __init__.py              # Exports (MCPServer, StdioTransport, SSEServer)
+│   ├── types.py                 # JSON-RPC 2.0 types (OrjsonModel-based)
+│   ├── interfaces.py            # Protocol interfaces
+│   ├── server.py                # MCPServer orchestration
+│   └── transport/
+│       ├── stdio.py             # StdioTransport
+│       └── sse.py               # SSEServer
+│
+└── agent/src/omni/agent/
+    └── server.py                # AgentMCPHandler (MCP handler)
 ```
 
 ---
 
-## 9. Common Pitfalls
+## 8. Common Pitfalls
 
-| Issue                                      | Cause                           | Solution                                             |
-| ------------------------------------------ | ------------------------------- | ---------------------------------------------------- |
-| `RuntimeError: event loop already running` | Calling `asyncio.run()` in loop | Use native `await`                                   |
-| Tool not registered                        | Missing handler decorators      | Use `@server.list_tools()` and `@server.call_tool()` |
+| Issue               | Cause                              | Solution                                      |
+| ------------------- | ---------------------------------- | --------------------------------------------- |
+| "expected 'object'" | `inputSchema.type` missing         | Add `"type": "object"`                        |
+| Empty tools list    | Handler not initialized            | Call `await handler.initialize()` first       |
+| Notification errors | Handling notifications as requests | Use `handle_notification()` for notifications |
+| Event loop error    | Calling `asyncio.run()` in loop    | Use native `await`                            |
 
 ---
 
-## 10. Transport Modes
+## Debugging
 
-### Stdio Mode (Claude Desktop)
+> **When MCP issues occur, check Claude Code's debug logs first:**
+>
+> ```bash
+> cat ~/.claude/debug/latest/*.log
+> ```
 
-```python
-async def _run_stdio():
-    async with server_lifespan():
-        async with stdio_server() as (read_stream, write_stream):
-            await server.run(
-                read_stream,
-                write_stream,
-                server.create_initialization_options(),
-            )
-```
+### Debugging Steps
 
-### SSE Mode (Claude Code CLI)
+1. **Check Claude Code logs**:
 
-```python
-async def _run_sse(host: str, port: int):
-    sse = SseServerTransport("/sse")
+   ```bash
+   cat ~/.claude/debug/latest/*.log | grep -i mcp
+   ```
 
-    async def handle_sse(request):
-        async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
-            await server.run(streams[0], streams[1], server.create_initialization_options())
+2. **Validate tool schema**:
 
-    app = Starlette(routes=[Route("/sse", handle_sse)])
-    uvicorn.run(app, host=host, port=port)
-```
+   ```bash
+   uv run pytest packages/python/agent/tests/integration/test_mcp_stdio.py::TestMCPProtocolCompliance -v
+   ```
+
+3. **Test server startup**:
+   ```bash
+   uv run omni mcp --transport stdio 2>&1 | head -50
+   ```
 
 ---
 
 ## References
 
-- [MCP Python SDK Documentation](https://modelcontextprotocol.github.io/python-sdk/api/)
+- [MCP Transport Reference](mcp-transport.md)
+- [MCP Server Architecture](../architecture/mcp-server.md)
 - [MCP Protocol Specification](https://modelcontextprotocol.io/specification)

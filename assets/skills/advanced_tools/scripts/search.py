@@ -1,179 +1,187 @@
 """
-advanced_search/scripts/search.py - Advanced Search Commands
+Advanced Search Tools (Modernized)
 
-Phase 63: Migrated from tools.py to scripts pattern.
+Wraps modern Rust-based CLI tools for high-performance retrieval.
+Responsibilities:
+- Fast Search: ripgrep (rg)
+- Fast Location: fd-find (fd)
+- Output: Structured JSON for LLM consumption
 """
 
-import asyncio
-import re
 import subprocess
-import time
-from dataclasses import dataclass
-from pathlib import Path
-from typing import TypedDict, Any
+import shutil
+import json
+import os
+from typing import Any
+from omni.foundation.api.decorators import skill_command
+from omni.foundation.config.paths import ConfigPaths
+from omni.foundation.config.logging import get_logger
 
-import structlog
-
-from agent.skills.decorators import skill_command
-
-logger = structlog.get_logger(__name__)
-
-
-class SearchResult(TypedDict):
-    """Represents a single search match result."""
-
-    file: str
-    line_number: int
-    line_content: str
-    match: str
+logger = get_logger("skill.advanced_tools.search")
 
 
 # =============================================================================
-# Core Tools
+# Ripgrep (rg) - High Performance Search
 # =============================================================================
-
-
-def _build_ripgrep_command(
-    pattern: str, path: str, file_type: str | None, include_hidden: bool, context_lines: int = 2
-) -> list[str]:
-    """Build ripgrep command with proper arguments."""
-    cmd = ["rg", "--color=never", "--heading", "-n"]
-
-    if not include_hidden:
-        cmd.append("--hidden=false")
-
-    if file_type:
-        cmd.extend(["-t", file_type])
-
-    cmd.extend(["-C", str(context_lines)])
-
-    cmd.append(pattern)
-    cmd.append(path)
-
-    return cmd
-
-
-async def _execute_search(cmd: list[str], cwd: str) -> tuple[str, str]:
-    """Execute ripgrep command asynchronously."""
-    try:
-        process = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=cwd
-        )
-        stdout, stderr = await process.communicate()
-        return (stdout.decode("utf-8", errors="replace"), stderr.decode("utf-8", errors="replace"))
-    except FileNotFoundError:
-        raise RuntimeError("ripgrep (rg) is not installed. Please install ripgrep.")
-
-
-def _parse_ripgrep_output(output: str, context_lines: int = 2) -> list[SearchResult]:
-    """Parse ripgrep output into structured SearchResult objects."""
-    results: list[SearchResult] = []
-
-    if not output.strip():
-        return results
-
-    lines = output.split("\n")
-    current_file = ""
-
-    for line in lines:
-        if not line:
-            continue
-
-        # Check if this is a file header (no colon, doesn't look like match)
-        if ":" not in line:
-            current_file = line.strip()
-            continue
-
-        # Parse match line: "filepath:line_number:content"
-        parts = line.split(":", 2)
-        if len(parts) >= 3:
-            file_path = parts[0].strip()
-            try:
-                line_number = int(parts[1].strip())
-                line_content = parts[2].strip()
-
-                results.append(
-                    SearchResult(
-                        file=file_path,
-                        line_number=line_number,
-                        line_content=line_content,
-                        match=line_content,
-                    )
-                )
-            except ValueError:
-                continue
-
-    return results
 
 
 @skill_command(
-    name="search_project_code",
-    category="read",
-    description="""
-    Searches for a regex pattern in code files using ripgrep.
-
-    Uses high-performance parallel searching with context lines around matches.
-
-    Args:
-        pattern: Regex pattern to search for. Cannot be empty.
-        path: Directory or file to search. Defaults to `.` (current directory).
-        file_type: Filter by file type (e.g., `py`, `rs`, `js`). Defaults to all types.
-        include_hidden: If `true`, includes hidden files. Defaults to `false`.
-        context_lines: Number of context lines around matches. Defaults to `2`.
-
-    Returns:
-        Formatted search results with file paths, line numbers, and content.
-        Limited to 100 results. Returns error if pattern empty or path not found.
-
-    Example:
-        @omni("advanced_search.search_project_code", {"pattern": "def test_", "file_type": "py"})
-    """,
+    name="smart_search",
+    description="High-performance code search using 'ripgrep' (rg). Respects .gitignore.",
+    autowire=True,
 )
-async def search_project_code(
+def smart_search(
     pattern: str,
-    path: str = ".",
-    file_type: str | None = None,
-    include_hidden: bool = False,
-    context_lines: int = 2,
-) -> str:
-    start_time = time.perf_counter()
+    file_globs: str | None = None,  # e.g. "*.py *.ts"
+    case_sensitive: bool = True,
+    context_lines: int = 0,
+    paths: ConfigPaths | None = None,
+) -> dict[str, Any]:
+    """
+    Search using `rg --json`.
+    Much faster than grep and provides structured output.
+    """
+    if paths is None:
+        paths = ConfigPaths()
 
-    # Validate pattern is not empty
-    if not pattern or not pattern.strip():
-        return "Error: Pattern cannot be empty"
+    root = paths.project_root
 
-    # Validate path exists
-    search_path = Path(path)
-    if not search_path.exists():
-        return f"Error: Path does not exist: {path}"
+    # 1. Environment Check (Environment Driven)
+    rg_exec = shutil.which("rg")
+    if not rg_exec:
+        return {
+            "success": False,
+            "error": "Tool 'rg' (ripgrep) not found. Please install it in your environment.",
+        }
 
-    # Build ripgrep command
-    cmd = _build_ripgrep_command(
-        pattern=pattern,
-        path=path,
-        file_type=file_type,
-        include_hidden=include_hidden,
-        context_lines=context_lines,
-    )
+    # 2. Build Command (JSON mode is safer for parsing)
+    cmd = [rg_exec, "--json", pattern]
+
+    if not case_sensitive:
+        cmd.append("--ignore-case")
+    else:
+        cmd.append("--case-sensitive")
+
+    if context_lines > 0:
+        cmd.extend(["--context", str(context_lines)])
+
+    if file_globs:
+        # rg expects globs like -g '*.py'
+        for glob in file_globs.split():
+            cmd.extend(["-g", glob])
 
     try:
-        stdout, stderr = await _execute_search(cmd, cwd=path)
-    except RuntimeError as e:
-        return f"Error: {e}"
+        # 3. Execute
+        # cwd=root ensures we search in project context
+        process = subprocess.Popen(
+            cmd,
+            cwd=root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        stdout, stderr = process.communicate()
 
-    # Parse output into structured results
-    results = _parse_ripgrep_output(stdout, context_lines=context_lines)
+        if process.returncode > 1:  # 0=found, 1=not found, >1=error
+            return {"success": False, "error": f"rg failed: {stderr}"}
 
-    elapsed_ms = (time.perf_counter() - start_time) * 1000
+        # 4. Parse JSON Stream
+        matches = []
+        file_matches = 0
+        limit_reached = False
 
-    # Calculate unique files searched (approximation)
-    files_searched = len(set(r["file"] for r in results))
+        for line in stdout.splitlines():
+            try:
+                data = json.loads(line)
+                if data["type"] == "match":
+                    file_matches += 1
+                    # Hard limit to protect Context Window
+                    if file_matches > 300:
+                        limit_reached = True
+                        continue
 
-    # Format response
-    lines = []
-    lines.append(f"Found {len(results)} matches in {files_searched} files ({elapsed_ms:.2f}ms):\n")
+                    matches.append(
+                        {
+                            "file": data["data"]["path"]["text"],
+                            "line": data["data"]["line_number"],
+                            "content": data["data"]["lines"]["text"].strip(),
+                        }
+                    )
+            except (json.JSONDecodeError, KeyError):
+                continue
 
-    for result in results:
-        lines.append(f"{result['file']}:{result['line_number']}: {result['line_content']}")
+        return {
+            "success": True,
+            "tool": "ripgrep",
+            "count": len(matches),
+            "matches": matches,
+            "truncated": limit_reached,
+        }
 
-    return "\n".join(lines[:100])  # Limit to 100 results for display
+    except Exception as e:
+        logger.error(f"Smart search failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
+# fd-find - Fast File Location
+# =============================================================================
+
+
+@skill_command(
+    name="smart_find",
+    description="Fast file location using 'fd'. Respects .gitignore.",
+    autowire=True,
+)
+def smart_find(
+    pattern: str = ".",
+    extension: str | None = None,
+    exclude: str | None = None,
+    paths: ConfigPaths | None = None,
+) -> dict[str, Any]:
+    """
+    Find files using `fd`.
+    """
+    if paths is None:
+        paths = ConfigPaths()
+
+    root = paths.project_root
+
+    # 1. Env Check (Handle ubuntu/debian renaming 'fd' to 'fdfind')
+    fd_exec = shutil.which("fd") or shutil.which("fdfind")
+    if not fd_exec:
+        return {"success": False, "error": "Tool 'fd' not found in PATH."}
+
+    cmd = [fd_exec, "--type", "f"]  # Files only
+
+    if extension:
+        cmd.extend(["--extension", extension])
+
+    if exclude:
+        cmd.extend(["--exclude", exclude])
+
+    cmd.append(pattern)
+
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=root,
+            capture_output=True,
+            text=True,
+        )
+
+        files = [f for f in result.stdout.splitlines() if f.strip()]
+
+        return {
+            "success": True,
+            "tool": "fd",
+            "count": len(files),
+            "files": files[:200],  # Limit
+            "truncated": len(files) > 200,
+        }
+    except Exception as e:
+        logger.error(f"Smart find failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
+__all__ = ["smart_search", "smart_find"]

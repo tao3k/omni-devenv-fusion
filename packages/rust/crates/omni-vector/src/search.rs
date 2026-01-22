@@ -15,6 +15,8 @@ use crate::{CONTENT_COLUMN, ID_COLUMN, METADATA_COLUMN, VECTOR_COLUMN, VectorSto
 const KEYWORD_WEIGHT: f64 = 0.3;
 /// Boost per keyword match
 const KEYWORD_BOOST: f64 = 0.1;
+/// Multiplier for fetch count to account for filtering loss
+const FETCH_MULTIPLIER: usize = 2;
 
 impl crate::VectorStore {
     /// Search for similar documents.
@@ -130,8 +132,9 @@ impl crate::VectorStore {
 
         // Create scanner and execute nearest neighbor search
         let mut scanner = dataset.scan();
+        let fetch_count = limit.saturating_mul(FETCH_MULTIPLIER).max(limit + 10);
         scanner
-            .nearest(VECTOR_COLUMN, &query_arr, limit * 3) // Fetch more to account for filtering
+            .nearest(VECTOR_COLUMN, &query_arr, fetch_count)
             .map_err(VectorStoreError::LanceDB)?;
 
         // Get results as stream

@@ -62,7 +62,7 @@ pub struct Symbol {
 }
 
 // ============================================================================
-// Search Results (Phase 51: The Hunter)
+// Search Results (The Hunter)
 // ============================================================================
 
 /// A single search match result

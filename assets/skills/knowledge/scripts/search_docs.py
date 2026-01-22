@@ -1,161 +1,196 @@
 """
-assets/skills/knowledge/scripts/search_docs.py
-Phase 70: The Knowledge Matrix - Project Knowledge Search Tool
+Knowledge Skill (Modernized)
 
-Provides semantic + keyword search over project documentation.
+Responsibilities:
+- Search documentation and references.
+- Retrieve project standards (The Librarian).
+- Uses 'rg' under the hood for speed.
 """
 
-from __future__ import annotations
-
+import subprocess
+import shutil
 import json
-from agent.skills.decorators import skill_command
+from pathlib import Path
+from typing import Any
+from omni.foundation.api.decorators import skill_command
+from omni.foundation.config.paths import ConfigPaths
+from omni.foundation.config.logging import get_logger
+
+logger = get_logger("skill.knowledge.search_docs")
 
 
 @skill_command(
-    name="search_project_knowledge",
-    category="read",
-    description="""
-    [Knowledge RAG] Searches project documentation, specs, and guides using hybrid search.
-
-    Use this for architecture, conventions, and how-to guides.
-    Combines semantic similarity with keyword boosting.
-
-    Args:
-        query: Natural language query (e.g., "coding standards", "git workflow").
-        limit: Maximum results to return. Defaults to `5`. Maximum: `10`.
-        keywords: Optional list of keywords to boost relevance.
-                  Example: `["python", "style"]`
-
-    Returns:
-        JSON string with results or advice if table missing.
-        Includes `content`, `preview`, `doc_path`, `title`, `section`, `score`.
-
-    Example:
-        @omni("knowledge.search_project_knowledge", {"query": "coding standards", "limit": 5})
-    """,
+    name="search_documentation",
+    description="Search markdown documentation and references for specific topics.",
+    autowire=True,
 )
-async def search_project_knowledge(
+def search_documentation(
     query: str,
-    limit: int = 5,
-    keywords: list[str] | None = None,
-) -> str:
+    paths: ConfigPaths | None = None,
+) -> dict[str, Any]:
+    """Search documentation and reference files for specific topics."""
+    if paths is None:
+        paths = ConfigPaths()
+
+    root = paths.project_root
+
+    # Env Check
+    rg_exec = shutil.which("rg")
+    if not rg_exec:
+        return {"success": False, "error": "ripgrep (rg) not found in PATH."}
+
+    # Define Knowledge Base directories
+    knowledge_bases = [
+        root / "docs",
+        root / "assets" / "references",
+        root / "assets" / "skills",
+        root / "README.md",
+    ]
+
+    targets = [str(p) for p in knowledge_bases if p.exists()]
+
+    if not targets:
+        return {"success": False, "error": "No documentation directories found in project."}
+
+    # Execute Search using ripgrep with JSON output
+    cmd = [rg_exec, "--json", "-t", "markdown", "-i", query] + targets
+
     try:
-        limit = int(limit)
-    except (ValueError, TypeError):
-        limit = 5
-    limit = min(max(1, limit), 10)
-    keywords = keywords or []
-
-    from agent.core.vector_store import get_vector_memory
-
-    vm = get_vector_memory()
-
-    try:
-        results = await vm.search_knowledge_hybrid(
-            query=query,
-            keywords=keywords,
-            limit=limit,
-            table_name="knowledge",
+        process = subprocess.Popen(
+            cmd, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
         )
+        stdout, stderr = process.communicate()
 
-        if not results:
-            return json.dumps(
-                {
-                    "query": query,
-                    "results": [],
-                    "message": "No matching knowledge found in documentation. Try searching memory/experience instead.",
-                },
-                ensure_ascii=False,
-                indent=2,
-            )
+        if process.returncode > 1:
+            return {"success": False, "error": f"ripgrep failed: {stderr}"}
 
-        formatted_results = []
-        for r in results:
-            formatted_results.append(
-                {
-                    "content": r.get("content", ""),
-                    "preview": r.get("preview", ""),
-                    "doc_path": r.get("doc_path", ""),
-                    "title": r.get("title", ""),
-                    "section": r.get("section", ""),
-                    "score": round(1.0 - r.get("distance", 1.0), 3),
-                }
-            )
+        # Parse JSON output
+        matches = []
+        for line in stdout.splitlines():
+            try:
+                data = json.loads(line)
+                if data["type"] == "match":
+                    file_path = data["data"]["path"]["text"]
+                    line_num = data["data"]["line_number"]
+                    content = data["data"]["lines"]["text"].strip()
 
-        response = {
-            "query": query,
-            "keywords": keywords,
-            "found": len(formatted_results),
-            "results": formatted_results,
-        }
+                    matches.append(
+                        {
+                            "file": file_path,
+                            "line": line_num,
+                            "content": content,
+                            "header": _find_nearest_header(Path(file_path), line_num),
+                        }
+                    )
+            except (json.JSONDecodeError, KeyError):
+                continue
 
-        return json.dumps(response, ensure_ascii=False, indent=2)
+        # Group results by file (deduplicate and limit)
+        grouped: dict[str, list[str]] = {}
+        for m in matches:
+            if m["file"] not in grouped:
+                grouped[m["file"]] = []
+            if len(grouped[m["file"]]) < 3:
+                grouped[m["file"]].append(m["content"])
 
-    except Exception as e:
-        error_msg = str(e)
-        if "Table not found" in error_msg or "knowledge" in error_msg.lower():
-            return json.dumps(
-                {
-                    "query": query,
-                    "error": "Knowledge Base Not Initialized",
-                    "message": "The documentation index (knowledge table) is empty. Please run 'omni ingest' to build it.",
-                    "suggestion": "Try using 'search_memory' to find past experiences instead.",
-                },
-                indent=2,
-            )
-
-        error_response = {
-            "query": query,
-            "error": str(e),
-            "results": [],
-        }
-        return json.dumps(error_response, ensure_ascii=False)
-
-
-def format_knowledge_results(json_output: str) -> str:
-    """Format knowledge search results as markdown for display."""
-    try:
-        data = json.loads(json_output)
-
-        if "error" in data:
-            msg = data.get("message", "")
-            sugg = data.get("suggestion", "")
-            return f"**Knowledge Search Error**: {data['error']}\n\n{msg}\n{sugg}"
-
-        results = data.get("results", [])
-        if not results:
-            return f"**No documentation found for**: `{data.get('query')}`"
-
-        lines = [
-            f"# Knowledge Search Results",
-            f"**Query**: `{data.get('query', '')}`",
-            f"**Found**: {data.get('found', 0)} results",
-            "",
-            "---",
+        results = [
+            {"file": k, "snippets": v, "header": _get_header_for_file(k, matches)}
+            for k, v in list(grouped.items())[:10]
         ]
 
-        for i, result in enumerate(results, 1):
-            title = result.get("title", "Unknown")
-            section = result.get("section", "")
-            doc_path = result.get("doc_path", "")
-            score = result.get("score", 0)
-            preview = result.get("preview", "")[:300]
+        return {
+            "success": True,
+            "query": query,
+            "count": len(matches),
+            "results": results,
+        }
 
-            lines.append(f"## {i}. {title}")
-            if section:
-                lines.append(f"**Section**: {section}")
-            lines.append(f"**Relevance**: {score:.1%}")
-            lines.append(f"**Source**: `{doc_path}`")
-            lines.append("")
-            lines.append(f"> {preview}...")
-            lines.append("")
-            lines.append("---")
-            lines.append("")
-
-        return "\n".join(lines)
-
-    except json.JSONDecodeError:
-        return json_output
+    except Exception as e:
+        logger.error(f"Documentation search failed: {e}")
+        return {"success": False, "error": str(e)}
 
 
-__all__ = ["search_project_knowledge", "format_knowledge_results"]
+@skill_command(
+    name="search_standards",
+    description="Search for coding standards and engineering guidelines.",
+    autowire=True,
+)
+def search_standards(
+    topic: str,
+    paths: ConfigPaths | None = None,
+) -> dict[str, Any]:
+    """Search specifically in docs/reference/ for engineering standards."""
+    if paths is None:
+        paths = ConfigPaths()
+
+    root = paths.project_root
+    ref_dir = root / "docs" / "reference"
+
+    if not ref_dir.exists():
+        return {"success": False, "error": "docs/reference/ directory not found."}
+
+    rg_exec = shutil.which("rg")
+    if not rg_exec:
+        return {"success": False, "error": "ripgrep (rg) not found."}
+
+    cmd = [rg_exec, "--json", "-t", "markdown", "-i", topic, str(ref_dir)]
+
+    try:
+        process = subprocess.Popen(
+            cmd, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        )
+        stdout, stderr = process.communicate()
+
+        matches = []
+        for line in stdout.splitlines():
+            try:
+                data = json.loads(line)
+                if data["type"] == "match":
+                    file_path = data["data"]["path"]["text"]
+                    matches.append(
+                        {
+                            "file": file_path,
+                            "line": data["data"]["line_number"],
+                            "content": data["data"]["lines"]["text"].strip(),
+                        }
+                    )
+            except (json.JSONDecodeError, KeyError):
+                continue
+
+        grouped: dict[str, list[str]] = {}
+        for m in matches:
+            if m["file"] not in grouped:
+                grouped[m["file"]] = []
+            if len(grouped[m["file"]]) < 2:
+                grouped[m["file"]].append(m["content"])
+
+        results = [{"file": k, "snippets": v} for k, v in list(grouped.items())[:5]]
+
+        return {"success": True, "topic": topic, "count": len(matches), "results": results}
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def _find_nearest_header(file_path: Path, line_num: int) -> str:
+    """Find the nearest markdown header above a line."""
+    try:
+        lines = file_path.read_text().splitlines()
+        for i in range(min(line_num, len(lines)) - 1, -1, -1):
+            line = lines[i].strip()
+            if line.startswith("#"):
+                return line.lstrip("# ").strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _get_header_for_file(file_path: str, matches: list[dict]) -> str:
+    """Get the header for a file from the first match."""
+    for m in matches:
+        if m["file"] == file_path:
+            return m.get("header", "")
+    return ""
+
+
+__all__ = ["search_documentation", "search_standards"]

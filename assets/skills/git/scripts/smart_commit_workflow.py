@@ -17,10 +17,10 @@ from pathlib import Path
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, StateGraph
 
-from agent.core.state import GraphState
-from .commit_state import create_initial_state
-from .rendering import render_commit_message, render_template
-from .prepare import _get_cog_scopes
+from omni.core.skills.state import GraphState
+from commit_state import create_initial_state
+from rendering import render_commit_message, render_template
+from prepare import _get_cog_scopes
 
 _DB_PATH = Path.home() / ".cache" / "omni-dev-fusion" / "workflows.db"
 
@@ -123,7 +123,7 @@ def _build_workflow() -> Any:
     return builder.compile(checkpointer=checkpointer)
 
 
-from agent.skills.decorators import skill_command
+from omni.core.skills.script_loader import skill_command
 
 
 @skill_command(
@@ -286,7 +286,7 @@ async def _start_smart_commit_async(
 ) -> Dict[str, Any]:
     """Start smart commit workflow - stage and scan files."""
     from pathlib import Path as PathType
-    from .prepare import stage_and_scan
+    from prepare import stage_and_scan
 
     wf_id = str(uuid.uuid4())[:8]
     root = PathType(project_root)

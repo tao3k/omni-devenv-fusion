@@ -1,53 +1,70 @@
 ---
 name: "{{ skill_name }}"
-version: "1.0.0"
+version: "0.1.0"
 description: "{{ description }}"
 authors: ["{{ author | default('omni-dev') }}"]
-execution_mode: "library"
-routing_strategy: "keyword"
-routing_keywords:
-  - "{{ skill_name }}"
-{% if keywords %}
-{% for keyword in keywords %}
-{% if keyword != skill_name %}
-  - "{{ keyword }}"
-{% endif %}
-{% endfor %}
-{% endif %}
-intents: []
+license: MIT
+execution_mode: library
+routing_strategy: keyword
+routing_keywords: {{ routing_keywords | tojson }}
+require_refs: []
+permissions:
+{%- if permissions %}
+{%- for perm in permissions %}
+  - "{{ perm }}"
+{%- endfor %}
+{%- else %}
+  []
+{%- endif %}
+intents:
+  - "Use functionality from {{ skill_name }}"
 ---
 
-# {{ skill_name | replace('-', ' ') | title }}
+# {{ skill_name | replace('-', ' ') | title }} Skill
 
 ## Overview
 
 {{ description }}
 
+This skill is generated via **Omni Hybrid Generator** (Jinja2 + LLM).
+It follows the Trinity Architecture v2.0 standard with `@skill_command` pattern.
+
+## Commands
+
+{% for command in commands | default([]) %}
+### {{ command.name }}
+
+{{ command.description | default('No description available.') }}
+
+**Usage:**
+```python
+@omni("{{ skill_name }}.{{ command.name }}", {"param": "value"})
+```
+{% else %}
+### Available Commands
+
+Check available commands with `@omni("{{ skill_name }}.list_tools")`.
+{% endfor %}
+
 ## Trinity Architecture Context
 
-This skill operates within the **Trinity Architecture**:
-
-| Component   | Description                                                      |
-| ----------- | ---------------------------------------------------------------- |
-| **Code**    | `tools.py` - Hot-reloaded via ModuleLoader on `tools.py` changes |
-| **Context** | `@omni("{{ skill_name }}.help")` - Full skill context via Repomix XML |
-| **State**   | `SKILL.md` - Skill metadata in YAML Frontmatter                  |
+| Component | Description |
+| --------- | ----------- |
+| **Code** | `scripts/commands.py` - Implementation with `@skill_command` |
+| **Context** | `SKILL.md` - Skill metadata in YAML Frontmatter |
+| **State** | Configured permissions: `{{ permissions | join(', ') | default('none') }}` |
 
 ## Usage
 
-### Run a command
-
-```bash
+```python
+# Run a command
 @omni("{{ skill_name }}.example", {"param": "value"})
-```
 
-### Get skill context
-
-```bash
-@omni("{{ skill_name }}.help")
+# List all commands
+@omni("{{ skill_name }}.list_tools")
 ```
 
 ## Related Documentation
 
 - [Skills Documentation](../../docs/skills.md) - Comprehensive guide
-- [mcp-core-architecture](../../docs/developer/mcp-core-architecture.md)
+- [ODF-EP Protocol](../../docs/reference/odf-ep-protocol.md) - Engineering standards

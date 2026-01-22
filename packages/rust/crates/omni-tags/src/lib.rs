@@ -7,7 +7,7 @@
 //! - Syntax-aware matching for Python, Rust, JavaScript, TypeScript
 //! - CCA-aligned: Generate outlines to reduce token consumption 10-50x
 //!
-//! Part of Phase 50: The Cartographer (CCA-Aligned Code Navigation)
+//! Part of The Cartographer (CCA-Aligned Code Navigation)
 //!
 //! # Architecture (ODF-REP Compliant)
 //!

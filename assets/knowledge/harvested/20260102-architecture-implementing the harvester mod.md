@@ -6,7 +6,7 @@
 
 ## Context
 
-Phase 12 required building a learning capability for the Agentic OS that can automatically distill development experience into permanent knowledge cards. The system needed to harvest insights from development sessions and make them accessible for future work.
+The Harvester required building a learning capability for the Agentic OS that can automatically distill development experience into permanent knowledge cards. The system needed to harvest insights from development sessions and make them accessible for future work.
 
 ## Solution
 

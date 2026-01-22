@@ -8,8 +8,8 @@
 
 _A modular, extensible stress testing framework for MCP servers and agents, enabling systematic performance, stability, and logic depth testing across all development phases._
 
-- **Goal**: Provide a standardized, pluggable infrastructure for stress testing that can scale from Phase 9 (Code Intelligence) to Phase 10+ (Hive Architecture) without major refactoring.
-- **User Story**: As a developer working on Phase 10, I want a stress test framework that I can easily extend with new suites and collectors, so I don't have to rebuild testing infrastructure for each phase.
+- **Goal**: Provide a standardized, pluggable infrastructure for stress testing that can scale from Code Intelligence to Hive Architecture without major refactoring.
+- **User Story**: As a developer, I want a stress test framework that I can easily extend with new suites and collectors, so I don't have to rebuild testing infrastructure for each phase.
 
 ## 2. Architecture & Interface (What)
 
@@ -21,7 +21,7 @@ _Defines the framework contract for stress testing infrastructure._
 
 - `mcp-server/tests/stress/__init__.py`: Core framework (Config, Runner, Collectors, Reporters)
 - `mcp-server/tests/test_stress.py`: Main entry point (`just stress-test`)
-- `mcp-server/tests/test_phase9_stress.py`: Phase 9 standalone entry point
+- `mcp-server/tests/test_phase9_stress.py`: Code Intelligence standalone entry point
 - `docs/reference/stress-test-framework.md`: User documentation
 
 #### Modified Files
@@ -142,27 +142,27 @@ class MarkdownReporter(Reporter)
 
 ## 3. Implementation Plan (How)
 
-### Phase 1: Core Infrastructure
+### Stage 1: Core Infrastructure
 
 1. [x] **Define core data structures** (TestResult, SuiteResult, Metric, StressConfig)
 2. [x] **Implement TestRunner** with suite registration and execution
 3. [x] **Create base TestSuite and TestCase classes**
 4. [x] **Add metric collectors** (Performance, Stability, Memory)
 
-### Phase 2: Reporting System
+### Stage 2: Reporting System
 
 1. [x] **Implement Reporter base class**
 2. [x] **Create TextReporter** for console output
 3. [x] **Create JSONReporter** for CI/CD integration
 4. [x] **Create MarkdownReporter** for documentation
 
-### Phase 3: Phase 9 Integration
+### Stage 3: Code Intelligence Integration
 
-1. [x] **Implement Phase9Suite** with Performance, Logic, Stability tests
+1. [x] **Implement CodeIntelligenceSuite** with Performance, Logic, Stability tests
 2. [x] **Create test data generators** in fixtures.py
 3. [x] **Add justfile command** for easy execution
 
-### Phase 4: Extensibility
+### Stage 4: Extensibility
 
 1. [x] **Define plugin interface** for custom collectors
 2. [x] **Add configuration loading** from YAML/JSON
@@ -178,7 +178,7 @@ _How do we know it works? Matches `agent/standards/feature-lifecycle.md` require
 - [x] **Suite registration**: Suites can be registered and listed
 - [x] **Test execution**: Tests run and return valid results
 - [x] **Report generation**: All three formats produce valid output
-- [x] **Phase 9 suite**: All 3 tests pass (Performance, Logic, Stability)
+- [x] **Code Intelligence suite**: All 3 tests pass (Performance, Logic, Stability)
 
 ### 4.2 Performance Tests
 
@@ -232,7 +232,7 @@ from stress import TestRunner, StressConfig, Phase9Suite
 config = StressConfig(max_duration=1.0)
 runner = TestRunner(config)
 
-# Run Phase 9 suite
+# Run Code Intelligence suite
 result = runner.run_suite("Phase9 Code Intelligence")
 
 # Get JSON report
@@ -264,14 +264,16 @@ class Phase10Suite(TestSuite):
 
 ## 7. Roadmap
 
-| Phase    | Status | Description                               |
-| -------- | ------ | ----------------------------------------- |
-| Phase 9  | Done   | Code Intelligence (ast-grep) testing      |
-| Phase 10 | Done   | Hive Architecture (microservices) testing |
-| Phase 11 | TBD    | Advanced load balancing tests             |
-| Future   | TBD    | Distributed stress testing                |
+| Phase                   | Status   | Description                                  |
+| ----------------------- | -------- | -------------------------------------------- |
+| Suite                   | Status   | Description                                  |
+| ----------              | -------- | -------------------------------------------- |
+| Code Intelligence       | Done     | Code Intelligence (ast-grep) testing         |
+| Hive Architecture       | Done     | Hive Architecture (microservices) testing    |
+| Advanced Load Balancing | TBD      | Advanced load balancing tests                |
+| Future                  | TBD      | Distributed stress testing                   |
 
-**Phase 10 Completed**:
+**Hive Architecture Completed**:
 
 - `test_hive_robustness.py` - Chaos engineering tests for auto-healing
 - `swarm_status()` - Health monitoring with metrics

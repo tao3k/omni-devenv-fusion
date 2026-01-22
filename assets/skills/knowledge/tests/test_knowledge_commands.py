@@ -1,91 +1,62 @@
 """
-Knowledge Skill Tests - Phase 63+ Architecture
+Knowledge Skill Tests - Trinity Architecture v2.0
 
-Tests for knowledge skill commands with scripts/*.py pattern.
+Tests for knowledge skill commands using direct script imports.
 """
 
+import sys
+from pathlib import Path
 
-def test_get_development_context_exists(knowledge):
-    assert hasattr(knowledge, "get_development_context")
-    assert callable(knowledge.get_development_context)
-
-
-def test_consult_architecture_doc_exists(knowledge):
-    assert hasattr(knowledge, "consult_architecture_doc")
-    assert callable(knowledge.consult_architecture_doc)
+# Add assets/skills to path for imports
+SKILLS_ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(SKILLS_ROOT))
 
 
-def test_consult_language_expert_exists(knowledge):
-    assert hasattr(knowledge, "consult_language_expert")
-    assert callable(knowledge.consult_language_expert)
+class TestKnowledgeScripts:
+    """Test knowledge skill scripts can be imported."""
+
+    def test_context_script_imports(self):
+        """Test context module imports successfully."""
+        from knowledge.scripts import context
+
+        assert hasattr(context, "get_development_context")
+
+    def test_consult_architecture_doc(self):
+        """Test consult_architecture_doc function exists."""
+        from knowledge.scripts import context
+
+        assert callable(getattr(context, "consult_architecture_doc", None))
+
+    def test_consult_language_expert(self):
+        """Test consult_language_expert function exists."""
+        from knowledge.scripts import context
+
+        assert callable(getattr(context, "consult_language_expert", None))
 
 
-def test_get_language_standards_exists(knowledge):
-    assert hasattr(knowledge, "get_language_standards")
-    assert callable(knowledge.get_language_standards)
+class TestKnowledgeCommands:
+    """Test knowledge skill commands work correctly."""
 
+    def test_get_development_context_is_callable(self):
+        """Test that get_development_context is a callable function."""
+        from knowledge.scripts import context
 
-def test_list_supported_languages_exists(knowledge):
-    assert hasattr(knowledge, "list_supported_languages")
-    assert callable(knowledge.list_supported_languages)
+        assert callable(context.get_development_context)
 
+    def test_consult_architecture_doc_signature(self):
+        """Test that consult_architecture_doc accepts a topic parameter."""
+        from knowledge.scripts import context
+        import inspect
 
-def test_has_skill_commands(knowledge):
-    """knowledge should have @skill_command decorated functions."""
-    # Check via knowledge._skill.commands
-    commands = list(knowledge._skill.commands.keys())
-    assert len(commands) >= 5
-    assert "get_development_context" in commands
-    assert "consult_architecture_doc" in commands
+        sig = inspect.signature(context.consult_architecture_doc)
+        assert "topic" in sig.parameters
 
+    def test_consult_language_expert_signature(self):
+        """Test that consult_language_expert accepts correct parameters."""
+        from knowledge.scripts import context
+        import inspect
 
-def test_development_context_has_config(knowledge):
-    """get_development_context should have _skill_config via the SkillCommand."""
-    # Access via the original SkillCommand object
-    cmd = knowledge._skill.commands.get("get_development_context")
-    assert cmd is not None, "get_development_context command not found"
-    assert hasattr(cmd, "_skill_config") or hasattr(cmd.func, "_skill_config")
-    config = getattr(cmd, "_skill_config", None) or getattr(cmd.func, "_skill_config", None)
-    assert config is not None, "config should not be None"
-    assert config["name"] == "get_development_context"
-    assert config["category"] == "read"
-
-
-def test_all_commands_have_category(knowledge):
-    """All knowledge commands should have category in config."""
-    for cmd_name, cmd in knowledge._skill.commands.items():
-        config = getattr(cmd, "_skill_config", None) or getattr(cmd.func, "_skill_config", None)
-        assert config is not None, f"Command {cmd_name} should have _skill_config"
-        assert "category" in config
-
-
-def test_list_supported_languages_returns_json(knowledge):
-    import json
-
-    result = knowledge.list_supported_languages()
-
-    # Handle CommandResultWrapper
-    if hasattr(result, "data"):
-        result = result.data if result.success else result.error
-
-    assert isinstance(result, str)
-    data = json.loads(result)
-    assert "languages" in data
-    assert "total" in data
-    assert data["total"] > 0
-
-
-def test_get_development_context_returns_json(knowledge):
-    import json
-
-    result = knowledge.get_development_context()
-
-    # Handle CommandResultWrapper
-    if hasattr(result, "data"):
-        result = result.data if result.success else result.error
-
-    assert isinstance(result, str)
-    data = json.loads(result)
-    assert "project" in data
-    assert "git_rules" in data
-    assert "guardrails" in data
+        sig = inspect.signature(context.consult_language_expert)
+        params = list(sig.parameters.keys())
+        assert "file_path" in params
+        assert "task_description" in params

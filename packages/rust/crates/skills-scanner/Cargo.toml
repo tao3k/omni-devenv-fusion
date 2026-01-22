@@ -16,6 +16,7 @@ serde = { workspace = true }
 serde_yaml = "0.9"
 serde_json = { workspace = true }
 schemars = "=1.2.0"
+toml = "0.8"
 
 # Async runtime
 tokio = { workspace = true, features = ["fs"] }

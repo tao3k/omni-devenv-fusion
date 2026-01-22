@@ -1,7 +1,5 @@
 """
 testing_protocol/scripts/protocol.py - Testing Protocol Skill Commands
-
-Phase 63: Migrated from tools.py to scripts pattern.
 """
 
 import json
@@ -12,7 +10,7 @@ from typing import Dict, Any, Optional
 
 import structlog
 
-from agent.skills.decorators import skill_command
+from omni.core.skills.script_loader import skill_command
 
 logger = structlog.get_logger(__name__)
 

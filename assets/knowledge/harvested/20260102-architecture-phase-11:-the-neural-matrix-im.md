@@ -1,4 +1,4 @@
-# [ARCHIVAL] Phase 11: The Neural Matrix Implementation
+# [ARCHIVAL] The Neural Matrix Implementation
 
 > **WARNING**: This document describes OLD architecture that has been migrated to LanceDB.
 > Current implementation uses omni-vector (Rust + LanceDB). See `docs/reference/librarian.md`.

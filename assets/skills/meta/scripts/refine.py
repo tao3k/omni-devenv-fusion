@@ -5,7 +5,7 @@ Uses the injected InferenceClient to fix broken code.
 
 from pathlib import Path
 
-from agent.skills.decorators import skill_command
+from omni.core.skills.script_loader import skill_command
 
 
 @skill_command(

@@ -38,6 +38,12 @@ require_refs:
   - "assets/skills/writer/references/writing-style/00_index.md"
   - "assets/skills/writer/references/writing-style/01_philosophy.md"
   - "assets/skills/writer/references/writing-style/02_mechanics.md"
+permissions:
+  - "filesystem:*"
+  - "knowledge:search"
+  - "knowledge:ingest"
+---
+
 ---
 
 # Writer Skill System Prompts
@@ -86,8 +92,9 @@ When editing files (MOST COMMON):
 
 When writing documentation:
 
-1. Call `load_writing_memory()` (if available)
-2. Draft content (style guide loaded above)
-3. Call `polish_text()` before saving
-4. Call `run_vale_check()` for final verification
-5. Use `save_file()` with auto_check_writing=True
+1. **Trust the Context**: The writing style guide has been auto-loaded above. Rely on it.
+2. **Draft Content**: Write following the style rules in your context.
+3. **Polish**: Use `writer.polish_text()` before saving if needed.
+4. **Save**: Use `filesystem.write_file()` or `writer.rewrite()`.
+
+**DO NOT** run external validation tools like `vale` unless explicitly requested. The style guide in context is sufficient.

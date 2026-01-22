@@ -18,8 +18,8 @@ from typing import Any
 
 import structlog
 
-from common.gitops import get_project_root
-from common.skills_path import SKILLS_DIR
+from omni.foundation.runtime.gitops import get_project_root
+from omni.foundation.config.skills import SKILLS_DIR
 
 logger = structlog.get_logger(__name__)
 

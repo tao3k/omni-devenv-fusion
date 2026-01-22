@@ -1,7 +1,10 @@
 """
 filesystem/scripts/io.py - File I/O Operations
 
-Phase 63: Migrated from tools.py to scripts pattern.
+Modernized:
+- @skill_command with autowire=True for clean dependency injection
+- ConfigPaths for security-constrained file operations within project_root
+- Path traversal protection using is_safe_path
 
 NOTE: This skill is for FILE I/O operations ONLY.
 For text search, use: advanced_search.search_project_code (ripgrep)
@@ -18,12 +21,12 @@ from pathlib import Path
 from typing import List, Literal, Any
 
 from pydantic import BaseModel, Field
-from common.mcp_core import is_safe_path, normalize_path
-import structlog
+from omni.foundation.api.decorators import skill_command
+from omni.foundation.config.paths import ConfigPaths
+from omni.foundation.config.logging import get_logger
+from omni.foundation.utils.system import is_safe_path, normalize_path
 
-from agent.skills.decorators import skill_command
-
-logger = structlog.get_logger(__name__)
+logger = get_logger("skill.filesystem")
 
 _ALLOWED_HIDDEN_FILES = {
     ".gitignore",
@@ -105,12 +108,23 @@ def _create_backup(filepath: Path) -> bool:
         File content with line numbers, or error message if file not found,
         is not a file, or exceeds 100KB size limit.
     """,
+    autowire=True,
 )
-async def read_file(file_path: str) -> str:
+def read_file(
+    file_path: str,
+    encoding: str = "utf-8",
+    paths: ConfigPaths | None = None,
+) -> str:
+    """Read content from a file within the project."""
+    # Resolve paths using ConfigPaths (Layer 1 Semantic)
+    if paths is None:
+        paths = ConfigPaths()
+    project_root: Path = paths.project_root  # type: ignore[assignment]
+
     if file_path.startswith("/"):
         is_safe, error_msg = is_safe_path(file_path, allow_absolute=True)
     else:
-        is_safe, error_msg = is_safe_path(file_path)
+        is_safe, error_msg = is_safe_path(file_path, project_root=project_root)
 
     if not is_safe:
         return f"Error: {error_msg}"
@@ -118,7 +132,6 @@ async def read_file(file_path: str) -> str:
     if file_path.startswith("/"):
         full_path = Path(file_path)
     else:
-        project_root = Path.cwd()
         full_path = project_root / file_path
 
     if not full_path.exists():
@@ -129,7 +142,7 @@ async def read_file(file_path: str) -> str:
         return f"Error: File '{file_path}' is too large (> 100KB)."
 
     try:
-        with open(full_path, "r", encoding="utf-8") as f:
+        with open(full_path, "r", encoding=encoding) as f:
             lines = f.readlines()
         numbered_lines = [f"{i + 1:4d} | {line}" for i, line in enumerate(lines)]
         content = "".join(numbered_lines)
@@ -162,7 +175,7 @@ async def read_file(file_path: str) -> str:
     Returns:
         Success message with byte count, or error message.
     """,
-    inject_root=True,
+    autowire=True,
 )
 async def save_file(
     path: str,
@@ -170,16 +183,22 @@ async def save_file(
     create_backup: bool = True,
     validate_syntax: bool = True,
     auto_check_writing: bool = True,
+    paths: ConfigPaths | None = None,
 ) -> str:
+    """Write content to a file within the project."""
+    if paths is None:
+        paths = ConfigPaths()
+    project_root: Path = paths.project_root  # type: ignore[assignment]
+
     is_safe, error_msg = is_safe_path(
         path,
+        project_root=project_root,
         allow_hidden=False,
         allowed_hidden_files=_ALLOWED_HIDDEN_FILES,
     )
     if not is_safe:
         return f"Error: {error_msg}"
 
-    project_root = Path.cwd()
     full_path = project_root / path
 
     try:
@@ -260,10 +279,17 @@ async def save_file(
             {"action": "append", "path": "README.md", "content": "..."}
         ]})
     """,
-    inject_root=True,
+    autowire=True,
 )
-async def apply_file_changes(changes: List[FileOperation]) -> str:
-    project_root = Path.cwd()
+async def apply_file_changes(
+    changes: List[FileOperation],
+    paths: ConfigPaths | None = None,
+) -> str:
+    """Apply multiple file changes in one operation."""
+    if paths is None:
+        paths = ConfigPaths()
+    project_root: Path = paths.project_root  # type: ignore[assignment]
+
     report = []
     success_count = 0
     error_count = 0
@@ -277,6 +303,7 @@ async def apply_file_changes(changes: List[FileOperation]) -> str:
 
             is_safe, error_msg = is_safe_path(
                 change.path,
+                project_root=project_root,
                 allow_hidden=False,
                 allowed_hidden_files=_ALLOWED_HIDDEN_FILES,
             )
@@ -304,7 +331,7 @@ async def apply_file_changes(changes: List[FileOperation]) -> str:
                     new_content = change.content
                 full_path.write_text(new_content, encoding="utf-8")
                 report.append(
-                    f"- **Replaced**: `{change.path}` ({len(change.search_for)} chars → {len(change.content)} chars)"
+                    f"- **Replaced**: `{change.path}` ({len(change.search_for)} chars -> {len(change.content)} chars)"
                 )
 
             success_count += 1
@@ -333,12 +360,19 @@ async def apply_file_changes(changes: List[FileOperation]) -> str:
     Returns:
         Formatted directory listing with file/directory type and size.
     """,
-    inject_root=True,
+    autowire=True,
 )
-async def list_directory(path: str = ".") -> str:
+async def list_directory(
+    path: str = ".",
+    paths: ConfigPaths | None = None,
+) -> str:
+    """List contents of a directory."""
+    if paths is None:
+        paths = ConfigPaths()
+    project_root: Path = paths.project_root  # type: ignore[assignment]
+
     try:
-        base = Path.cwd()
-        target = (base / path).resolve()
+        target = (project_root / path).resolve()
         if not target.exists():
             return f"Path does not exist: {path}"
         if not target.is_dir():
@@ -373,12 +407,20 @@ async def list_directory(path: str = ".") -> str:
     Returns:
         Success message with byte count, or error message.
     """,
-    inject_root=True,
+    autowire=True,
 )
-async def write_file(path: str, content: str) -> str:
+async def write_file(
+    path: str,
+    content: str,
+    paths: ConfigPaths | None = None,
+) -> str:
+    """Simple file write operation."""
+    if paths is None:
+        paths = ConfigPaths()
+    project_root: Path = paths.project_root  # type: ignore[assignment]
+
     try:
-        base = Path.cwd()
-        target = (base / path).resolve()
+        target = (project_root / path).resolve()
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         return f"Successfully wrote {len(content)} bytes to {path}"
@@ -398,12 +440,19 @@ async def write_file(path: str, content: str) -> str:
     Returns:
         File/directory information including path, size, type, and absolute path.
     """,
-    inject_root=True,
+    autowire=True,
 )
-async def get_file_info(path: str) -> str:
+async def get_file_info(
+    path: str,
+    paths: ConfigPaths | None = None,
+) -> str:
+    """Get metadata about a file or directory."""
+    if paths is None:
+        paths = ConfigPaths()
+    project_root: Path = paths.project_root  # type: ignore[assignment]
+
     try:
-        base = Path.cwd()
-        target = (base / path).resolve()
+        target = (project_root / path).resolve()
         if not target.exists():
             return "File not found."
         stat = target.stat()
@@ -415,3 +464,14 @@ async def get_file_info(path: str) -> str:
         )
     except Exception as e:
         return f"Error: {e}"
+
+
+__all__ = [
+    "read_file",
+    "save_file",
+    "apply_file_changes",
+    "list_directory",
+    "write_file",
+    "get_file_info",
+    "FileOperation",
+]

@@ -11,9 +11,6 @@ inputs:
     description: "MiniMax API Key"
 runs:
   using: "composite"
-  permissions:
-    contents: read
-    id-token: write
   steps:
     - uses: DeterminateSystems/nix-installer-action@main
       with:

@@ -27,7 +27,7 @@ import structlog
 
 from .prompt import MetaAgentPrompt, parse_skill_response, extract_json_from_response
 from .validator import SandboxValidator, ValidationResult
-from common.skills_path import SKILLS_DIR
+from omni.foundation.config.skills import SKILLS_DIR
 
 logger = structlog.get_logger(__name__)
 
@@ -74,7 +74,7 @@ class MetaAgent:
     def _init_llm_client(self) -> None:
         """Initialize the default LLM client."""
         try:
-            from common.mcp_core.inference import InferenceClient
+            from omni.foundation.services.llm import InferenceClient
 
             self.llm_client = InferenceClient()
             logger.info("MetaAgent: LLM client initialized (InferenceClient)")
@@ -417,7 +417,7 @@ See `{skill_name}.py` for implementation details.
         return f'''"""Generated skill: {skill_name}."""
 
 from typing import Any
-from agent.skills.decorators import skill_command
+from omni.core.skills.script_loader import skill_command
 
 
 {implementation}

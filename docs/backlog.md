@@ -17,61 +17,62 @@
 
 ## High Priority
 
-### Skill Ecosystem Standardization
-
-After refactoring the core (`LoopState`, `ActionGuard`, `AdaptivePlanner`), existing skills need to align with the new architecture.
-
-**Goal**: Ensure new skills created via `omni skill create` have proper schema metadata, and existing skills follow the new conventions.
-
-| Task                       | Status | Description                                                                                  |
-| -------------------------- | ------ | -------------------------------------------------------------------------------------------- |
-| **Upgrade Skill Template** | `Todo` | Add schema fields (`require_refs`, `routing_keywords`) to `assets/skills/_template/SKILL.md` |
-| **Add Guard Tests**        | `Todo` | Create `test_omni_guards.py` to verify `ActionGuard` blocks redundant reads                  |
-| **Cleanup Writer Skill**   | `Todo` | Remove outdated "self-validation" instructions, emphasize "Trust the Context"                |
-| **Verify All Skills**      | `Todo` | Run skill validation to ensure compatibility with new architecture                           |
-
-**Related Files:**
-
-- `assets/skills/_template/SKILL.md`
-- `assets/skills/writer/SKILL.md`
-- `packages/python/agent/src/agent/core/omni/interceptors.py`
-- `packages/python/agent/src/agent/tests/unit/test_omni_guards.py`
+_(No active high priority items - see Medium Priority below)_
 
 ---
 
 ## Medium Priority
 
-### Schema-Driven Security
+### Schema-Driven Security (Permission Gatekeeper)
 
 Implement permission boundaries for skills before allowing external/untrusted tools.
 
-| Task                         | Status | Description                                                                  |
-| ---------------------------- | ------ | ---------------------------------------------------------------------------- |
-| **Define Permission Schema** | `Todo` | Design YAML schema for skill permissions (`fs:read`, `fs:write`, `net:http`) |
-| **Permission Validator**     | `Todo` | Build `security/validator.py` to enforce permission boundaries               |
-| **Integration Tests**        | `Todo` | Add tests for permission enforcement scenarios                               |
+| Task                         | Status | Description                                                                    |
+| ---------------------------- | ------ | ------------------------------------------------------------------------------ |
+| **Define Permission Schema** | `Done` | Added `permissions` field to Rust `SkillMetadata` (auto-generates JSON Schema) |
+| **Permission Validator**     | `Done` | Rust `PermissionGatekeeper` + Python `SecurityValidator` wrapper               |
+| **Integration Tests**        | `Done` | 14 Rust tests + 12 Python tests passing                                        |
+
+**Architecture:**
+
+- **Rust Core**: `omni-security` crate with `PermissionGatekeeper.check()`
+- **Python Wrapper**: `omni.core.security.SecurityValidator`
+- **Schema**: Generated from Rust via `schemars` derive macro
 
 **Related Files:**
 
-- `packages/python/agent/src/agent/core/security/`
-- `assets/schemas/`
+- `packages/rust/crates/omni-security/src/lib.rs`
+- `packages/rust/bindings/python/src/security.rs`
+- `packages/python/core/src/omni/core/security/`
+- `docs/explanation/permission-gatekeeper.md`
 
 ---
 
-### Context Optimization
+### Context Optimization (The Token Diet)
 
 Reduce token usage in the CCA loop without losing context quality.
 
-| Task                          | Status | Description                                                 |
-| ----------------------------- | ------ | ----------------------------------------------------------- |
-| **Smart Context Trimming**    | `Todo` | Implement tiered context (must-have vs nice-to-have layers) |
-| **Vector Index Optimization** | `Todo` | Fine-tune LanceDB index parameters for faster retrieval     |
-| **Compression Pipeline**      | `Todo` | Add message compression for long conversations              |
+| Task                          | Status | Description                                                |
+| ----------------------------- | ------ | ---------------------------------------------------------- |
+| **Smart Context Trimming**    | `Done` | Implement `ContextPruner` with tiered priority layers      |
+| **Auto-Summarization API**    | `Done` | Add `ContextManager.prune_with_summary()` method           |
+| **Vector Index Optimization** | `Done` | Adaptive IVF-FLAT partitions (256 vectors/partition)       |
+| **TikToken Integration**      | `Todo` | Replace char-based token estimation with accurate tiktoken |
+
+**Documentation:**
+
+- [Context Optimization Guide](./explanation/context-optimization.md)
+- [Vector Index Guide](./explanation/vector-index.md)
+- [Rust-Python Bridge](./explanation/rust-python-bridge.md)
 
 **Related Files:**
 
-- `packages/python/agent/src/agent/core/context_orchestrator/`
-- `packages/python/agent/src/agent/core/vector_store/`
+- `packages/python/agent/src/omni/agent/core/context/pruner.py`
+- `packages/python/agent/src/omni/agent/core/context/manager.py`
+- `packages/python/agent/src/omni/agent/core/omni.py`
+- `packages/python/agent/tests/unit/test_context/`
+- `packages/rust/crates/omni-vector/src/index.rs`
+- `packages/rust/crates/omni-vector/src/search.rs`
 
 ---
 
@@ -92,12 +93,15 @@ Improvements that make development easier but aren't blocking core functionality
 
 ## Completed
 
-| Feature                    | Date       | Notes                                   |
-| -------------------------- | ---------- | --------------------------------------- |
-| **Core Omni Refactoring**  | 2026-01-19 | LoopState, ActionGuard, AdaptivePlanner |
-| **Anti-Confusion Loop**    | 2026-01-19 | Prevents repeated file reads            |
-| **Adaptive Planning**      | 2026-01-18 | Dynamic step estimation                 |
-| **NoteTaker Optimization** | 2026-01-18 | Token reduction from 4000 to 500        |
+| Feature                             | Date       | Notes                                                    |
+| ----------------------------------- | ---------- | -------------------------------------------------------- |
+| **Permission Gatekeeper**           | 2026-01-21 | Zero Trust security with Rust PermissionGatekeeper       |
+| **Context Optimization**            | 2026-01-21 | ContextPruner + ContextManager for token diet            |
+| **Skill Ecosystem Standardization** | 2026-01-20 | Template upgrades, writer cleanup, skill check --example |
+| **Core Omni Refactoring**           | 2026-01-19 | LoopState, ActionGuard, AdaptivePlanner                  |
+| **Anti-Confusion Loop**             | 2026-01-19 | Prevents repeated file reads                             |
+| **Adaptive Planning**               | 2026-01-18 | Dynamic step estimation                                  |
+| **NoteTaker Optimization**          | 2026-01-18 | Token reduction from 4000 to 500                         |
 
 ---
 

@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from common.prj_dirs import PRJ_DATA
+from omni.foundation.config.dirs import PRJ_DATA
 
 
 def save(

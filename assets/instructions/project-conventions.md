@@ -75,9 +75,9 @@ User: "Help me commit these changes"
 
 ## 4. Feature Development Workflow
 
-Three-phase process for building features with quality and context.
+Three-step process for building features with quality and context.
 
-### Phase 1: Startup (Load Process Standards)
+### Step 1: Startup (Load Process Standards)
 
 Before starting any feature, load the development process standards:
 
@@ -93,7 +93,7 @@ User: "Implement a new MCP tool for X"
 - `agent/how-to/` - Development process guides
 - `agent/standards/feature-lifecycle.md` - Spec-driven development workflow
 
-### Phase 2: Coding (Load Language Standards)
+### Step 2: Coding (Load Language Standards)
 
 When writing code, load language-specific conventions:
 
@@ -110,7 +110,7 @@ User: "Write the Rust implementation"
 - `agent/standards/lang-rust.md` - Rust conventions
 - `agent/standards/lang-julia.md` - Julia conventions
 
-### Phase 3: Completion (Verify Lifecycle)
+### Step 3: Completion (Verify Lifecycle)
 
 Before finishing, verify all lifecycle requirements are met:
 

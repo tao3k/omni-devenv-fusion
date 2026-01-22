@@ -3,8 +3,6 @@ scripts/engine.py - Terminal execution controller
 
 This is an isolated script module - it runs in the same process but with
 isolated namespace. Uses subprocess for command execution.
-
-Phase 36: Extracted from tools.py for atomic structure.
 """
 
 import asyncio

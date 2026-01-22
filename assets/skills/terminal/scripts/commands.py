@@ -9,7 +9,7 @@ import platform
 from pathlib import Path
 from typing import Optional
 
-from agent.skills.decorators import skill_command
+from omni.core.skills.script_loader import skill_command
 
 
 def _is_git_commit_blocked(command: str, args: list[str]) -> tuple[bool, str]:
@@ -131,7 +131,7 @@ async def run_task(command: str, args: Optional[list[str]] = None, **kwargs) -> 
 )
 async def analyze_last_error() -> str:
     try:
-        from common.mcp_core.memory import ProjectMemory
+        from omni.foundation.services.memory import ProjectMemory
 
         pm = ProjectMemory()
         scratchpad_path = pm.active_dir / "SCRATCHPAD.md"

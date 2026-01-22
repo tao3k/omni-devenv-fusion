@@ -1,5 +1,5 @@
 """
-git/scripts/rendering.py - Cascading Template Rendering (Phase 35.2)
+git/scripts/rendering.py - Cascading Template Rendering
 
 Implements "User Overrides > Skill Defaults" cascading loader pattern.
 
@@ -37,9 +37,9 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 
 # ODF Core Imports: SSOT path resolution
-from common.skills_path import SKILLS_DIR
-from common.config.settings import get_setting
-from common.gitops import get_project_root
+from omni.foundation.config.skills import SKILLS_DIR
+from omni.foundation.config.settings import get_setting
+from omni.foundation.runtime.gitops import get_project_root
 
 
 def _get_search_paths() -> list:
@@ -82,7 +82,7 @@ def _get_jinja_env() -> jinja2.Environment:
 
     return jinja2.Environment(
         loader=jinja2.FileSystemLoader(search_paths),
-        autoescape=False,  # Markdown 不需要 HTML escape
+        autoescape=False,  # Markdown doesn't need HTML escape
         trim_blocks=True,
         lstrip_blocks=True,
     )

@@ -30,7 +30,7 @@ def summarize(
         Path to the generated summary file
     """
     # Ensure knowledge directory exists (git-ignored runtime data)
-    from common.prj_dirs import PRJ_DATA
+    from omni.foundation.config.dirs import PRJ_DATA
 
     knowledge_dir = PRJ_DATA / "knowledge" / "sessions"
     knowledge_dir.mkdir(parents=True, exist_ok=True)

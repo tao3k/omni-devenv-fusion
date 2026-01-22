@@ -1,0 +1,373 @@
+# Router Architecture - Omni-Dev-Fusion
+
+> Semantic Routing System (The Cortex)
+> Last Updated: 2026-01-20
+
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [OmniRouter](#omnirouter)
+3. [HiveRouter](#hiverouter)
+4. [SemanticRouter](#semanticrouter)
+5. [IntentSniffer](#intentsniffer)
+6. [SkillIndexer](#skillindexer)
+7. [Routing Flow](#routing-flow)
+
+---
+
+## Overview
+
+The **Router System** (The Cortex) provides intent-to-action mapping:
+
+```
+User Query
+    │
+    ▼
+┌─────────────────────────────────────┐
+│         OmniRouter (Facade)          │
+└─────────────────────────────────────┘
+    │           │           │
+    ▼           ▼           ▼
+┌─────────┐ ┌─────────┐ ┌─────────┐
+│  Hive   │ │ Semantic │ │ Sniffer │
+│ (Logic) │ │ (Match)  │ │(Context)│
+└─────────┘ └─────────┘ └─────────┘
+```
+
+### Components
+
+| Component        | Purpose               | Location                   |
+| ---------------- | --------------------- | -------------------------- |
+| `OmniRouter`     | Unified entry point   | `omni.core.router.main`    |
+| `HiveRouter`     | Decision logic        | `omni.core.router.hive`    |
+| `SemanticRouter` | Vector-based matching | `omni.core.router.router`  |
+| `IntentSniffer`  | Context detection     | `omni.core.router.sniffer` |
+| `SkillIndexer`   | Index building        | `omni.core.router.indexer` |
+
+---
+
+## OmniRouter
+
+**Location**: `packages/python/core/src/omni/core/router/main.py`
+
+The unified entry point for all routing operations.
+
+### Architecture
+
+```
+OmniRouter
+    │
+    ├── _indexer  → SkillIndexer (Memory)
+    ├── _semantic → SemanticRouter (Vector Search)
+    ├── _hive     → HiveRouter (Decision Logic)
+    └── _sniffer  → IntentSniffer (Context)
+```
+
+### Key Methods
+
+```python
+from omni.core.router import get_router
+
+router = get_router()
+
+# Initialize with skills
+await router.initialize(skills)
+
+# Route a query
+result = await router.route("commit git changes")
+
+# Suggest skills based on context
+skills = await router.suggest_skills("/project/path")
+```
+
+### Properties
+
+| Property   | Type             | Description          |
+| ---------- | ---------------- | -------------------- |
+| `indexer`  | `SkillIndexer`   | Vector index manager |
+| `semantic` | `SemanticRouter` | Semantic matching    |
+| `hive`     | `HiveRouter`     | Decision logic       |
+| `sniffer`  | `IntentSniffer`  | Context detection    |
+
+### Router Registry
+
+Multiple router instances can be managed:
+
+```python
+# Get default router
+router = get_router()
+
+# Get named router
+router = get_router("session-1")
+
+# Set default router
+RouterRegistry.set_default("session-1")
+
+# Reset router
+RouterRegistry.reset("session-1")
+RouterRegistry.reset_all()
+```
+
+---
+
+## HiveRouter
+
+**Location**: `packages/python/core/src/omni/core/router/hive.py`
+
+The **Decision Logic** layer that orchestrates routing:
+
+```python
+class HiveRouter:
+    """Multi-hive routing strategy.
+
+    Routes through:
+    1. Direct match (command name)
+    2. Semantic search (vector similarity)
+    3. Fallback (LLM or error)
+    """
+```
+
+### Routing Strategy
+
+```
+Query: "帮我提交代码"
+        │
+        ▼
+┌─────────────────────────┐
+│ 1. Direct Match?        │ ──No──►
+│ (command: commit)       │        │
+└─────────────────────────┘        │
+         │ Yes                     │
+         ▼                         ▼
+┌─────────────────────────┐ ┌─────────────────────────┐
+│ 2. Semantic Match?      │ │ 3. Fallback             │
+│ (vector similarity)     │ │ (LLM or error)          │
+└─────────────────────────┘ └─────────────────────────┘
+         │ Yes                     │
+         ▼                         │
+┌─────────────────────────┐        │
+│ Return RouteResult      │◄───────┘
+└─────────────────────────┘
+```
+
+---
+
+## SemanticRouter
+
+**Location**: `packages/python/core/src/omni/core/router/router.py`
+
+The **Vector Search** layer using embeddings:
+
+```python
+class SemanticRouter:
+    """Semantic routing using vector similarity.
+
+    Uses:
+    - omni-vector (Rust) for vector storage
+    - omni-embedding (Python) for query encoding
+    """
+
+    def __init__(self, indexer: SkillIndexer):
+        self._indexer = indexer
+        self._threshold = 0.7
+        self._limit = 5
+```
+
+### Search Parameters
+
+| Parameter   | Default | Description               |
+| ----------- | ------- | ------------------------- |
+| `threshold` | 0.7     | Minimum similarity score  |
+| `limit`     | 5       | Maximum results to return |
+
+### Usage
+
+```python
+router = get_router()
+results = await router.semantic.search("git commit", limit=3)
+```
+
+---
+
+## IntentSniffer
+
+**Location**: `packages/python/core/src/omni/core/router/sniffer.py`
+
+The **Context Detection** layer (The Nose):
+
+```python
+class IntentSniffer:
+    """Context detector using file system patterns.
+
+    Uses skill_index.json (generated by Rust scanner) to:
+    - Detect project type from directory structure
+    - Suggest relevant skills
+    - Auto-activate context-aware routing
+    """
+```
+
+### Sniffing Rules
+
+Rules are loaded from `skill_index.json`:
+
+```json
+{
+  "rules": [
+    {
+      "pattern": ".git/**",
+      "skill": "git"
+    },
+    {
+      "pattern": "**/*.py",
+      "skill": "python_engineering"
+    },
+    {
+      "pattern": "**/*.rs",
+      "skill": "rust_engineering"
+    }
+  ]
+}
+```
+
+### Usage
+
+```python
+router = get_router()
+
+# Get context-based suggestions
+suggestions = router.sniffer.sniff("/project/path")
+# Returns: ["git", "python_engineering"]
+
+# Load rules from index
+count = router.sniffer.load_from_index()
+```
+
+---
+
+## SkillIndexer
+
+**Location**: `packages/python/core/src/omni/core/router/indexer.py`
+
+The **Index Building** component:
+
+```python
+class SkillIndexer:
+    """Builds and manages the skill index.
+
+    Uses:
+    - RustVectorStore for vector storage
+    - Embedding service for query encoding
+    """
+
+    def __init__(self, storage_path: str = ":memory:", dimension: int = 1536):
+        self._storage_path = storage_path
+        self._dimension = dimension
+```
+
+### Key Methods
+
+```python
+indexer = SkillIndexer()
+
+# Index skills
+await indexer.index_skills(skills)
+
+# Search
+results = await indexer.search("git commit", limit=5, threshold=0.7)
+
+# Get stats
+stats = indexer.get_stats()
+```
+
+### Indexed Entries
+
+Each skill creates multiple entries:
+
+| Entry Type      | Description                |
+| --------------- | -------------------------- |
+| Skill entry     | Overall skill description  |
+| Command entries | Each command's description |
+
+---
+
+## Routing Flow
+
+### Complete Flow
+
+```
+1. User Input
+   @omni("git.commit", message="Fix bug")
+
+2. Query Parsing
+   - Extract skill: "git"
+   - Extract command: "commit"
+   - Extract params: {message: "Fix bug"}
+
+3. HiveRouter Decision
+   ├─ Direct Match: "git.commit" → Found!
+   └─ Return RouteResult(skill, command, params)
+
+4. Execution
+   └─ skill.execute(command, params)
+
+5. Response
+   └─ Return result to user
+```
+
+### Fallback Flow (No Direct Match)
+
+```
+1. User Input
+   @omni("帮我提交代码")
+
+2. Query Parsing
+   - No direct match found
+
+3. HiveRouter Fallback
+   ├─ Semantic Search
+   │  └─ "commit" → 85% match with git.commit
+   │
+   └─ Return RouteResult(git, commit, {})
+
+4. Execution & Response
+```
+
+---
+
+## Integration with Kernel
+
+```python
+from omni.core.kernel.engine import get_kernel
+
+kernel = get_kernel()
+
+# Router is available via kernel
+router = kernel.router
+
+# Build cortex (index all skills)
+await kernel.build_cortex()
+
+# Sniffer loads rules
+kernel.load_sniffer_rules()
+```
+
+---
+
+## Performance
+
+| Operation       | Performance             |
+| --------------- | ----------------------- |
+| Direct match    | O(1)                    |
+| Semantic search | ~1ms for 10K entries    |
+| Sniffing        | ~5ms for directory scan |
+
+---
+
+## Related Documentation
+
+- [Kernel Architecture](kernel.md)
+- [Skills System](skills.md)
+- [Rust Crates](rust-crates.md)
+- [RAG/Representation Protocol](../reference/odf-rep-protocol.md)

@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
-from agent.skills.decorators import skill_command
+from omni.core.skills.script_loader import skill_command
 
 
 def _run(cmd: list[str], cwd: Optional[Path] = None) -> tuple[str, str, int]:
@@ -19,7 +19,7 @@ def _run(cmd: list[str], cwd: Optional[Path] = None) -> tuple[str, str, int]:
 
 
 @skill_command(
-    name="git_commit",
+    name="commit",
     category="write",
     description="""
     Commits staged changes with a message.
@@ -35,7 +35,7 @@ def _run(cmd: list[str], cwd: Optional[Path] = None) -> tuple[str, str, int]:
         Success or failure message with commit hash.
 
     Example:
-        @omni("git.git_commit", {"message": "feat(core): add new feature"})
+        @omni("git.commit", {"message": "feat(core): add new feature"})
     """,
 )
 def commit(message: str, project_root: Optional[Path] = None) -> str:
@@ -48,7 +48,7 @@ def commit(message: str, project_root: Optional[Path] = None) -> str:
 
 
 @skill_command(
-    name="git_commit_amend",
+    name="commit_amend",
     category="write",
     description="""
     Amends the previous commit with a new message.
@@ -72,7 +72,7 @@ def commit_with_amend(message: str, project_root: Optional[Path] = None) -> str:
 
 
 @skill_command(
-    name="git_commit_no_verify",
+    name="commit_no_verify",
     category="write",
     description="""
     Commits staged changes without running pre-commit hooks.
@@ -108,7 +108,7 @@ def get_last_commit_msg(project_root: Optional[Path] = None) -> str:
 
 
 @skill_command(
-    name="git_revert",
+    name="revert",
     category="write",
     description="""
     Reverts a specific commit by creating a new reverse commit.

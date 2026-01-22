@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from agent.skills.decorators import skill_command
+from omni.core.skills.script_loader import skill_command
 
 
 @skill_command(
@@ -39,7 +39,7 @@ def summarize_session(
     trajectory: list[dict[str, Any]],
     include_failures: bool = True,
 ) -> dict[str, Any]:
-    from common.prj_dirs import PRJ_DATA
+    from omni.foundation.config.dirs import PRJ_DATA
 
     knowledge_dir = PRJ_DATA / "knowledge" / "sessions"
     knowledge_dir.mkdir(parents=True, exist_ok=True)

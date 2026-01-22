@@ -1,441 +1,249 @@
-# mcp_core Architecture
+# MCP Core Architecture
 
-> **Architecture**: Modular Design | Performance Optimized | Import Optimized | Trinity v2.0 Compatible
+> Trinity Architecture - Agent Layer (L3 Transport)
+> Last Updated: 2026-01-21
 
-> **Important**: The `mcp_core/execution/` module has been **DELETED**. Execution is now handled by `skills/terminal/tools.py`. Protocol definitions remain for compatibility.
+This document details the implementation of the Model Context Protocol (MCP) within the Trinity Architecture.
 
-Shared library providing common functionality for orchestrator and coder MCP servers.
-
-## Overview
-
-mcp_core is a modular, protocol-based design for type-safe, testable code with ODEP-aligned performance optimizations.
+## Architecture Overview
 
 ```
-common/mcp_core/
-├── protocols.py          # Protocol definitions (405 lines)
-├── lazy_cache/           # Lazy-loading singleton caches
-├── utils/                # Common utilities
-├── context/              # Project-specific coding context
-├── inference/            # LLM inference client
-├── memory/               # Project memory persistence
-├── api/                  # API key management
-└── instructions/         # Project instructions loader
-
-# DELETED (Trinity v2.0)
-# execution/              # Moved to skills/terminal/tools.py
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           Trinity Architecture                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                         Layer 3: Agent (Thin)                        │   │
+│  │   ┌─────────────────────────────────────────────────────────────┐   │   │
+│  │   │              omni.agent.server (AgentMCPHandler)             │   │   │
+│  │   │  ┌─────────────────┐    ┌─────────────────┐                  │   │   │
+│  │   │  │  AgentMCPHandler│    │   StdioTransport│                  │   │   │
+│  │   │  │  (Thin Client)  │───►│   (orjson)      │                  │   │   │
+│  │   │  └────────┬────────┘    └────────┬────────┘                  │   │   │
+│  │   └───────────┼──────────────────────┼───────────────────────────┘   │   │
+│  │               │                      │                               │   │
+│  └───────────────┼──────────────────────┼───────────────────────────────┘   │
+│                  │                      │                                   │
+│  ┌───────────────┼──────────────────────┼───────────────────────────────┐   │
+│  │               ▼                      ▼                               │   │
+│  │   ┌─────────────────────────────────────────────────────────────┐   │   │
+│  │   │                    Layer 2: Core (Fat)                       │   │   │
+│  │   │   ┌─────────────────────────────────────────────────────┐   │   │   │
+│  │   │   │              omni.core.kernel                         │   │   │   │
+│  │   │   │   ┌─────────────┐  ┌─────────────┐  ┌───────────┐   │   │   │   │
+│  │   │   │   │ SkillContext│  │DiscoverySvc │  │Sniffer    │   │   │   │   │
+│  │   │   │   └─────────────┘  └─────────────┘  └───────────┘   │   │   │   │
+│  │   │   └─────────────────────────────────────────────────────┘   │   │   │
+│  │   └─────────────────────────────────────────────────────────────┘   │   │
+│  │                                                                         │   │
+│  └───────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Module Structure
+## Components
 
-### protocols.py
+### 1. omni.mcp (The Framework)
 
-Protocol definitions for type-safe, testable code. All major components implement these protocols for mocking capability.
+**Location**: `packages/python/mcp-server/src/omni/mcp/`
+
+A generic, reusable MCP implementation.
+
+```
+omni/mcp/
+├── __init__.py              # Exports (MCPServer, StdioTransport, SSEServer)
+├── server.py                # MCPServer orchestration
+├── interfaces.py            # Protocol definitions
+├── types.py                 # JSON-RPC types (OrjsonModel-based)
+└── transport/
+    ├── stdio.py             # StdioTransport (zero-copy orjson)
+    └── sse.py               # SSEServer (HTTP-based)
+```
+
+### 2. StdioTransport (High-Performance)
+
+Optimized stdin/stdout transport using orjson for 10-50x faster serialization.
+
+**Performance Optimizations:**
+
+| Optimization         | Description                                        |
+| -------------------- | -------------------------------------------------- |
+| Zero-copy Reading    | Direct bytes from `stdin.buffer` (no UTF-8 decode) |
+| orjson Serialization | Rust-powered JSON processing                       |
+| Binary Writing       | Direct to `stdout.buffer` (bypass TextIOWrapper)   |
+
+**Usage:**
 
 ```python
-from mcp_core.protocols import ISafeExecutor, IInferenceClient
+from omni.mcp.transport.stdio import StdioTransport
+from omni.mcp.server import MCPServer
+from omni.agent.server import create_agent_handler
 
-# For testing, mock the protocol
-from unittest.mock import MagicMock
-mock_executor: ISafeExecutor = MagicMock()
+transport = StdioTransport()
+handler = create_agent_handler()
+server = MCPServer(handler, transport)
+
+await server.start()
+await transport.run_loop(server)
 ```
 
-**Available Protocols:**
+### 3. SSEServer (HTTP-Based)
 
-- `ILazyCache` - Lazy-loading singleton caches
-- `IFileCache` - File content caching
-- `IConfigCache` - Configuration caching
-- `ISettings` - Project settings management
-- `ISafeExecutor` - Safe command execution
-- `IInferenceClient` - LLM inference client
-- `IProjectContext` - Project-specific context
-- `IContextRegistry` - Context registry
-- `IPathSafety` - Path safety checking
-- `IEnvironmentLoader` - Environment variable loading
-- `IMCPLogger` - Structured logging
+Server-Sent Events transport for Claude Code CLI.
 
-### execution/ (DELETED - Trinity v2.0)
+**Endpoints:**
 
-> **Migration**: Execution is now handled by `skills/terminal/tools.py`
+| Method | Path       | Purpose                                  |
+| ------ | ---------- | ---------------------------------------- |
+| POST   | `/message` | Send JSON-RPC requests                   |
+| GET    | `/sse`     | SSE stream for responses & notifications |
+| GET    | `/health`  | Health check                             |
+| GET    | `/ready`   | Readiness check                          |
+
+### 4. AgentMCPHandler (The Adapter)
+
+**Location**: `packages/python/agent/src/omni/agent/server.py`
+
+**Responsibilities:**
+
+- Implements `MCPRequestHandler` protocol
+- Boots the Kernel on first `initialize` request
+- Delegates `tools/list` and `tools/call` to Kernel's skill context
 
 ```python
-# OLD (deprecated)
-from mcp_core.execution import SafeExecutor, check_dangerous_patterns
+class AgentMCPHandler(MCPRequestHandler):
+    def __init__(self):
+        self._initialized = False
+        self._kernel = get_kernel()
 
-# NEW (current)
-@omni("terminal.run_task", {"command": "ls", "args": ["-la"]})
+    async def handle_request(self, request: JSONRPCRequest) -> JSONRPCResponse:
+        """Route requests to appropriate handlers."""
+        if not self._initialized:
+            await self.initialize()
 
-# Or directly via Swarm Engine
-from agent.core.swarm import get_swarm
-result = await get_swarm().execute_skill("terminal", "run_task", {...})
+        if request.method == "tools/list":
+            return await self._handle_list_tools(request)
+        elif request.method == "tools/call":
+            return await self._handle_call_tool(request)
+        # ... other methods
 ```
 
-**What Changed:**
+### 5. CLI Entry Point
 
-| Before                        | After                             |
-| ----------------------------- | --------------------------------- |
-| `mcp_core.execution` module   | `skills/terminal/tools.py`        |
-| Python class (`SafeExecutor`) | Skill command (`run_task`)        |
-| Direct import                 | MCP call or Swarm Engine dispatch |
+**Location**: `packages/python/agent/src/omni/agent/cli/commands/mcp.py`
 
-**Security**: `check_dangerous_patterns()` moved to `skills/terminal/tools.py` with same logic.
+**Usage:**
 
-### lazy_cache/
+```bash
+# STDIO mode (for Claude Desktop)
+uv run omni mcp --transport stdio
 
-Lazy-loading singleton caches for protocols and configs.
+# SSE mode (default for Claude Code CLI)
+uv run omni mcp
 
-```python
-from mcp_core.lazy_cache import FileCache, ConfigCache, MarkdownCache
-
-# First access triggers lazy load
-config = ConfigCache()
-content = config.get()  # Loads from file
+# SSE with custom port
+uv run omni mcp --port 8080
 ```
 
-**Modules:**
+---
 
-- `base.py` - LazyCacheBase class
-- `file_cache.py` - File content caching
-- `config_cache.py` - Configuration caching
-- `markdown_cache.py` - Markdown content caching
-- `repomix_cache.py` - Repomix output caching
+## Data Flow
 
-### utils/
+### Tool List Request
 
-Common utilities including logging and path checking.
-
-```python
-from mcp_core.utils import setup_logging, is_safe_path, load_env_from_file
-
-# Setup structured logging
-logger = setup_logging("my_module")
-
-# Check if path is safe
-is_safe, error = is_safe_path("/path/to/file")
+```
+Claude Desktop/Code CLI
+     │
+     ▼ JSON-RPC: {"method": "tools/list", "id": 1}
+     │
+StdioTransport.readline() → orjson.loads()
+     │
+     ▼
+MCPServer._route_message() → handler.handle_request()
+     │
+     ▼
+AgentMCPHandler._handle_list_tools()
+     │
+     ├─► Kernel.skill_context.list_skills()
+     │        │
+     │        ▼
+     │   UniversalScriptSkill.list_commands()
+     │
+     ▼ JSON-RPC Response: {"result": {"tools": [...]}}
+     │
+StdioTransport._write_response() → orjson.dumps()
+     │
+     ▼
+stdout.buffer.write()
 ```
 
-**Modules:**
+### Tool Call Request
 
-- `logging.py` - Structured logging with structlog
-- `path_safety.py` - Path safety checking
-- `file_ops.py` - Safe file reading/writing
-- `env.py` - Environment variable utilities
-
-### context/
-
-Project-specific coding context framework.
-
-```python
-from mcp_core.context import get_project_context, ContextRegistry, ProjectContext
-
-# Get context for Python development
-python_context = get_project_context("python")
-python_context = get_project_context("python", category="tooling")
+```
+Claude Desktop/Code CLI
+     │
+     ▼ JSON-RPC: {"method": "tools/call", "params": {"name": "git.status"}}
+     │
+     ▼
+AgentMCPHandler._handle_call_tool()
+     │
+     ├─► Parse skill.command format: "git" + "status"
+     │
+     ├─► Kernel.skill_context.get_skill("git")
+     │
+     ├─► skill.execute("status", arguments={})
+     │        │
+     │        ▼
+     │   Load scripts/commands.py
+     │   Execute git_status()
+     │
+     ▼ JSON-RPC Response: {"result": {"content": [{"type": "text", "text": "..."}]}}
 ```
 
-**Built-in Contexts:**
+---
 
-- `PythonContext` - Python development guidelines
-- `NixContext` - Nix/Devenv development guidelines
+## Debugging
 
-**Categories:** tooling, patterns, architecture, conventions
+> **When MCP issues occur, check Claude Code's debug logs first:**
+>
+> ```bash
+> cat ~/.claude/debug/latest/*.log
+> ```
 
-### inference/
+### Quick Debug Commands
 
-LLM inference client with persona support.
+```bash
+# Validate tool schema compliance
+uv run pytest packages/python/agent/tests/integration/test_mcp_stdio.py::TestMCPProtocolCompliance -v
 
-```python
-from mcp_core.inference import InferenceClient, PERSONAS, build_persona_prompt
+# Test server startup
+uv run omni mcp --transport stdio 2>&1 | head -50
 
-client = InferenceClient()
-result = await client.complete(
-    system_prompt=build_persona_prompt("architect"),
-    user_query="Design a REST API..."
-)
+# Check kernel initialization
+uv run omni mcp 2>&1 | grep -E "(Kernel|Skills|Error)"
 ```
 
-**Modules:**
-
-- `client.py` - InferenceClient class
-- `personas.py` - Persona definitions (architect, platform_expert, sre, etc.)
-- `api.py` - API key loading
-
-### memory/
-
-Project memory persistence using ADR (Architectural Decision Records) pattern.
-
-```python
-from mcp_core.memory import ProjectMemory
-
-memory = ProjectMemory()
-memory.add_decision(title="ADR-Title", problem="...", solution="...")
-decisions = memory.list_decisions()
-```
-
-**Features:**
-
-- Architectural Decision Records (ADRs)
-- Task tracking (backlog-md compatible)
-- Context snapshots
-- Active context management (The "RAM")
-- Spec path management (Legislation Workflow)
-
-### api/
-
-API key management with multiple source support.
-
-```python
-from mcp_core.api import get_anthropic_api_key
-
-api_key = get_anthropic_api_key()
-```
-
-**Priority:**
-
-1. Environment variable (`ANTHROPIC_API_KEY`)
-2. `.claude/settings.json`
-3. `.mcp.json` (Claude Desktop format)
-
-### instructions/
-
-Eager-loaded project instructions.
-
-```python
-from mcp_core.instructions import get_instructions, get_instruction
-
-# First call triggers lazy load
-all_instructions = get_instructions()
-guide = get_instruction("project-conventions")
-```
-
-## Settings (common.settings)
-
-Settings uses a fast import path for performance:
-
-```python
-# Recommended (fastest - single module)
-from common.settings import get_setting, Settings
-
-# Also supported (backward compatible)
-from mcp_core import get_setting
-```
-
-**Features:**
-
-- Dot-notation access (`"config.cog_toml"`)
-- Thread-safe singleton
-- `--conf` flag support for custom config directory
-- YAML with fallback to simple parsing
-
-## Path Utilities (common.skills_path)
-
-A centralized module for skill path handling:
-
-```python
-from common.skills_path import SKILLS_DIR, load_skill_module
-from common.gitops import get_project_root
-
-# Get base skills directory from settings.yaml
-base = SKILLS_DIR()  # -> Path("assets/skills")
-
-# Get skill directory
-git_dir = SKILLS_DIR(skill="git")  # -> Path("assets/skills/git")
-
-# Get skill file with keyword args
-git_tools = SKILLS_DIR(skill="git", filename="tools.py")
-
-# Get nested path (e.g., known_skills.json index)
-known_skills = SKILLS_DIR(skill="skill", path="data/known_skills.json")
-
-# Load skill module directly
-git_tools = load_skill_module("git")
-```
-
-**Configuration** (`settings.yaml`):
-
-```yaml
-assets:
-  skills_dir: "assets/skills" # Read by SKILLS_DIR
-```
-
-**Benefits:**
-
-- Single source of truth for skills path
-- GitOps-aware project root detection (via `git rev-parse --show-toplevel`)
-- Replaces verbose `Path(__file__).resolve().parent.parent.parent` patterns
-- Cached for performance
-
-**Replaced Patterns:**
-
-| Old Pattern                                                            | New Pattern                                    |
-| ---------------------------------------------------------------------- | ---------------------------------------------- |
-| `get_project_root() / get_setting("skills.path") / "git" / "tools.py"` | `SKILLS_DIR(skill="git", filename="tools.py")` |
-| `importlib.util.spec_from_file_location(...)`                          | `load_skill_module("git")`                     |
-
-## Import Guidelines
-
-### For Fastest Import (Recommended)
-
-```python
-from common.settings import get_setting
-from common.gitops import get_project_root
-```
-
-### For Protocol-Based Testing
-
-```python
-from mcp_core.protocols import ISafeExecutor, IInferenceClient
-from mcp_core.execution import ISafeExecutor as ExecutionProtocol
-```
-
-### For Modular Components
-
-```python
-from mcp_core.execution import SafeExecutor
-from mcp_core.context import get_project_context
-from mcp_core.inference import InferenceClient
-```
-
-## Performance Optimizations
-
-### Import Optimizations
-
-**Key Optimizations:**
-
-| Module                     | Before | After | Speedup  |
-| -------------------------- | ------ | ----- | -------- |
-| `agent.core.schema`        | 421ms  | 3.6ms | **117x** |
-| `agent.core.skill_manager` | 200ms  | 3.5ms | **57x**  |
-| `agent.core.bootstrap`     | 169ms  | 0.8ms | **211x** |
-| `agent.mcp_server`         | 156ms  | 0.8ms | **195x** |
-
-**Techniques Applied:**
-
-1. **Lazy Logger Initialization**
-
-   ```python
-   # Before: Eager import
-   import structlog
-   logger = structlog.get_logger(__name__)
-
-   # After: Lazy initialization
-   _cached_logger = None
-
-   def _get_logger():
-       global _cached_logger
-       if _cached_logger is None:
-           import structlog
-           _cached_logger = structlog.get_logger(__name__)
-       return _cached_logger
-   ```
-
-2. **Schema Lazy Loading**
-
-   ```python
-   # Before: All schemas loaded at import
-   from agent.core.schema import SkillManifest, ComplexityLevel, ...
-
-   # After: On-demand loading
-   def __getattr__(name):
-       if name in _loaded_schemas:
-           return _loaded_schemas[name]
-       mod = _schema_registry.get(name)
-       if mod:
-           schema_module = import_module(mod, package=__name__)
-           obj = getattr(schema_module, name)
-           _loaded_schemas[name] = obj
-           return obj
-   ```
-
-3. **RepomixCache Lazy Creation**
-
-   ```python
-   # Before: Created immediately
-   context_cache = RepomixCache(target_path=skill_path)
-
-   # After: Created only when accessed
-   @property
-   def context_cache(self):
-       if self._context_cache is None and self._context_path is not None:
-           self._context_cache = RepomixCache(target_path=self._context_path)
-       return self._context_cache
-   ```
-
-### Pre-compiled Regex
-
-Location: `mcp_core/execution/security.py`
-
-**Before:** Regex patterns compiled on every call
-
-```python
-for pattern in DANGEROUS_PATTERNS:
-    if re.search(pattern, full_cmd, re.IGNORECASE):  # O(n) compile
-```
-
-**After:** Patterns pre-compiled at module load
-
-```python
-_COMPILED_PATTERNS = [re.compile(p, re.IGNORECASE) for p in DANGEROUS_PATTERNS]
-```
-
-**Result:** 70% faster (0.137s → 0.040s for 20,000 calls)
-
-### Hot Path vs Setup Path
-
-Per ODEP 80/20 matrix:
-
-| Path       | Focus                                         | Optimization               |
-| ---------- | --------------------------------------------- | -------------------------- |
-| Hot Path   | `get_setting()`, `check_dangerous_patterns()` | Pre-compile, O(1) lookups  |
-| Setup Path | Module imports                                | Fast single-source imports |
-
-## Version History
-
-| Version | Date       | Changes                             |
-| ------- | ---------- | ----------------------------------- |
-| 2.4.0   | 2026-01-10 | Trinity v2.0 - `execution/` DELETED |
-| 2.3.0   | 2026-01-07 | Path utilities (SKILLS_DIR)         |
-| 2.2.0   | 2026-01-07 | Import optimizations (117x faster)  |
-| 2.1.0   | 2026-01-07 | Performance optimizations           |
-| 2.0.0   | 2026-01-07 | Fully modular architecture          |
-| 1.0.0   | Earlier    | Monolithic single-file modules      |
+---
+
+## Related Files
+
+| File                                                         | Purpose            |
+| ------------------------------------------------------------ | ------------------ |
+| `packages/python/mcp-server/src/omni/mcp/server.py`          | Generic MCP server |
+| `packages/python/mcp-server/src/omni/mcp/transport/stdio.py` | STDIO transport    |
+| `packages/python/mcp-server/src/omni/mcp/transport/sse.py`   | SSE transport      |
+| `packages/python/agent/src/omni/agent/server.py`             | Agent MCP handler  |
+| `packages/python/agent/src/omni/agent/cli/commands/mcp.py`   | CLI entry point    |
+| `packages/python/core/src/omni/core/kernel/engine.py`        | Kernel lifecycle   |
+
+---
 
 ## Testing
 
 ```bash
-# All tests
-just test-mcp
+# Run MCP protocol compliance tests
+uv run pytest packages/python/agent/tests/integration/test_mcp_stdio.py::TestMCPProtocolCompliance -v
 
-# Stress tests
-uv run pytest packages/python/agent/src/agent/tests/stress_tests/
-
-# Performance benchmarks
-uv run pytest packages/python/agent/src/agent/tests/stress_tests/test_performance_omni.py -v
-```
-
-## Backward Compatibility
-
-> **Breaking Change**: `mcp_core.execution` module is removed. Use `skills/terminal` instead.
-
-```python
-# BEFORE (no longer works)
-from mcp_core.execution import SafeExecutor
-
-# AFTER (current)
-from agent.core.swarm import get_swarm
-result = await get_swarm().execute_skill("terminal", "run_task", {...})
-
-# OR via MCP
-@omni("terminal.run_task", {"command": "ls", "args": ["-la"]})
-```
-
-**Remaining Compatible Exports:**
-
-```python
-from mcp_core import (
-    # From protocols
-    ISafeExecutor, IInferenceClient,
-    # From settings (via common.settings)
-    Settings, get_setting,
-    # ... other modules unchanged
-)
+# Run all MCP tests
+uv run pytest packages/python/agent/tests/integration/test_mcp_stdio.py -v
 ```

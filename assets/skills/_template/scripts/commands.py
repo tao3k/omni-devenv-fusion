@@ -1,7 +1,6 @@
 """
 _template/scripts/commands.py - Skill Commands
 
-Phase 63+: Commands defined directly with @skill_command decorator.
 No tools.py needed - this is the single source of skill commands.
 
 Architecture:
@@ -14,7 +13,7 @@ Usage:
     commands.example(...)
 """
 
-from agent.skills.decorators import skill_command
+from omni.core.skills.script_loader import skill_command
 
 
 @skill_command(

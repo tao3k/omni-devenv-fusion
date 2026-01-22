@@ -1,6 +1,6 @@
 """
 skill/scripts/search_tools.py
-Phase 67: Adaptive Context - Intent-Driven Tool Loading
+Adaptive Context - Intent-Driven Tool Loading
 
 Provides semantic + keyword search over registered tools.
 Allows Agent to dynamically discover tools based on intent.
@@ -9,7 +9,7 @@ Allows Agent to dynamically discover tools based on intent.
 import json
 from typing import Any
 
-from agent.skills.decorators import skill_command
+from omni.core.skills.script_loader import skill_command
 
 
 @skill_command(
@@ -61,9 +61,9 @@ async def search_tools(
     limit = min(max(1, limit), 50)
     keywords = keywords or []
 
-    from agent.core.vector_store import get_vector_memory
+    from omni.foundation import get_vector_store
 
-    vm = get_vector_memory()
+    vm = get_vector_store()
 
     try:
         results = await vm.search_tools_hybrid(query, keywords=keywords, limit=limit)

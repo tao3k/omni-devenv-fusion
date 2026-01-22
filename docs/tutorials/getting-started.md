@@ -1,8 +1,8 @@
-# Tutorial: Getting Started with Omni-Dev-Fusion
+# Tutorial: Getting Started with Omni-Dev-Fusion (v2.0)
 
-> **Duration**: 15 minutes | **Goal**: Run the Omni Agent
+> **Duration**: 10 minutes | **Goal**: Run the Omni Agent with Trinity Architecture
 
-This tutorial gets you from zero to a working Omni agent. We assume you know basic terminal commands.
+This tutorial gets you from zero to a working Omni agent using the new **Rust-First Indexing** architecture.
 
 ---
 
@@ -10,9 +10,10 @@ This tutorial gets you from zero to a working Omni agent. We assume you know bas
 
 In this tutorial, you will:
 
-1. Enter the development environment
-2. Run the Omni MCP server
-3. Execute your first skill command
+1. Enter the development environment (Nix + uv).
+2. Generate the Skill Index (Rust).
+3. Run the Omni MCP server (Python).
+4. Experience the "Zero-Scan" startup and Hot Reload.
 
 ---
 
@@ -20,126 +21,204 @@ In this tutorial, you will:
 
 | Tool   | Required Version |
 | ------ | ---------------- |
-| Nix    | 2.4+             |
-| direnv | 2.21+            |
+| Nix    | 2.18+            |
+| direnv | 2.30+            |
 | uv     | 0.4+             |
 
 ---
 
 ## Step 1: Enter the Development Environment
 
-The project uses `direnv` to auto-activate the Nix shell.
+The project uses `direnv` to auto-activate the Nix shell, providing a hermetic environment for both Rust and Python.
 
 ```bash
-# From the project root, allow direnv
+# From the project root
 direnv allow
 
 # Expected output:
 direnv: loading .envrc
 direnv: using nix
 ...
-direnv: export +ARTEFACT_ROOT ~PATH
+
 ```
 
-You now have all tools (Python, uv, ast-grep, vale) in your PATH.
+You now have `cargo`, `python`, `uv`, and system dependencies in your PATH.
 
 ---
 
-## Step 2: Sync Python Dependencies
+## Step 2: Sync Dependencies
+
+Install both Python and Rust dependencies.
 
 ```bash
-uv sync
+# Sync Python environment (v2.0 workspace)
+uv sync --all-extras
 
 # Expected output:
-Using Python 3.13
-Resolved 15 packages in 23ms
+Resolved X packages in ...ms
+
 ```
 
 ---
 
-## Step 3: Run the Omni Agent (Trinity Architecture)
+## Step 3: Generate Skill Index (Rust Layer)
 
-Omni uses a single `omni` tool that dispatches to skills via the Skill Registry.
-
-**Terminal 1 (Start the Omni MCP Server):**
+In the v2.0 architecture, Python does not scan files. We must generate the **Single Source of Truth** (`skill_index.json`) using Rust.
 
 ```bash
-cd packages/python/agent
-python -m agent.mcp_server
+# Run the Rust Scanner
+omni skill sync
 
-# Expected output:
-🚀 Omni MCP Server started
-📦 Skill Registry initialized with {N} skills
-🎯 Ready to accept commands via omni("skill.command")
+# OR using cargo directly if alias is not set:
+cargo run -p skills-scanner --bin omni-skill-sync
+
+# Expected Output:
+✅ Scanned 12 skills
+📜 Generated assets/skills/skill_index.json (Fast!)
+
 ```
 
 ---
 
-## Step 4: Execute Your First Skill
+## Step 4: Run the Omni Agent (Trinity Architecture)
 
-With Claude Desktop connected to Omni, try:
+Now start the Agent. It will act as a "Thin Client," loading business logic from the Kernel via the Index.
+
+**Terminal 1 (Start the MCP Server using CLI):**
+
+```bash
+# STDIO mode (for Claude Desktop)
+uv run omni mcp --transport stdio
+
+# OR SSE mode (for HTTP clients)
+uv run omni mcp --transport sse --port 8080
+
+# OR with verbose mode (shows hot reload logs)
+uv run omni mcp --transport sse --port 8080 --verbose
+```
+
+**Expected output (STDIO mode):**
 
 ```
-> @omni("git.status")
+🚀 Starting Agent MCP Server (STDIO Mode)
+🟢 Kernel initializing...
+🧠 Building Semantic Cortex...
+👃 Initializing Context Sniffer...
+📚 Loaded {N} sniffing rules from Skill Index
+🚀 Omni MCP Server started (STDIO Mode)
 ```
 
-This dispatches to the git skill's `git_status` command.
+> **Note**: The `omni` CLI is the unified entry point. Use `uv run omni --help` to see all available commands.
 
 ---
 
-## Step 4: Test with Claude Desktop
+## Step 5: Connect to Claude Desktop (STDIO Mode)
 
-The Omni MCP server registers with Claude Desktop automatically.
+The Omni MCP server supports **two transport modes**:
 
-1. Restart Claude Desktop
-2. Run `/mcp` to verify the server appears:
+### Option A: STDIO Mode (Recommended for Claude Desktop)
+
+Configure your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "omni": {
+      "command": "uv",
+      "args": ["run", "omni", "mcp", "--transport", "stdio"],
+      "cwd": "/absolute/path/to/omni-dev-fusion"
+    }
+  }
+}
+```
+
+**Expected startup output:**
 
 ```
-Available MCP Servers:
-- omni (connected)
+🚀 Starting Agent MCP Server (STDIO Mode)
+🟢 Kernel initializing...
+🧠 Building Semantic Cortex...
+👃 Initializing Context Sniffer...
+📚 Loaded {N} sniffing rules from Skill Index
+🚀 Omni MCP Server started (STDIO Mode)
 ```
+
+### Option B: SSE Mode (For Claude Code CLI / HTTP Clients)
+
+Run the server in SSE mode using the CLI:
+
+```bash
+uv run omni mcp --transport sse --port 8080
+```
+
+Or with verbose mode for hot reload debug logs:
+
+```bash
+uv run omni mcp --transport sse --port 8080 --verbose
+```
+
+**Endpoints:**
+
+- `POST /message` - Send JSON-RPC requests
+- `GET /events` - SSE stream for responses & notifications
+- `GET /health` - Health check
+- `GET /ready` - Readiness check
 
 ---
 
-## Step 5: Execute a Skill Command
+## Step 6: Execute a Skill Command
 
-Try your first skill command:
+Try a command that triggers the **Intent Sniffer**.
+
+In Claude:
+
+```text
+> Check the status of this repo
 
 ```
-> @omni("git.status")
-```
+
+**What happens internally:**
+
+1. **Sniffer** (Core Layer) detects `.git` folder via Declarative Rules.
+2. **Router** activates `git` skill.
+3. **Kernel** executes `git.status`.
 
 **Expected Response:**
 
-```
+```text
 On branch main
-Changes to be committed:
-  M   docs/README.md
+Your branch is up to date...
+
 ```
 
 ---
 
-## Step 6: Verify Your Environment
+## Step 7: Verify Architecture
 
-Run the validation suite to confirm everything works:
+Run the test suite to ensure the Trinity Architecture (Rust + Foundation + Core) is intact.
 
 ```bash
-just test
+# Run Rust tests (Scanner & Vector Store)
+cargo test
+
+# Run Python tests (Core Kernel & Agent)
+just test  # or: uv run pytest
 
 # Expected output:
-577 passed, 1 skipped in 25.82s
+... passed in ...s
+
 ```
 
 ---
 
 ## Next Steps
 
-| If you want to...      | Go to...                                                       |
-| ---------------------- | -------------------------------------------------------------- |
-| Learn the architecture | [Trinity Architecture](../explanation/trinity-architecture.md) |
-| Create a new skill     | [Skills Guide](../skills.md)                                   |
-| Browse API commands    | [Reference](../reference/)                                     |
+| If you want to...        | Go to...                                                                                       |
+| ------------------------ | ---------------------------------------------------------------------------------------------- |
+| Understand v2.0 Layers   | [Trinity Architecture](https://www.google.com/search?q=../explanation/trinity-architecture.md) |
+| Create a Zero-Code Skill | [Skills Guide](https://www.google.com/search?q=../skills.md)                                   |
+| Debug Hot Reload         | [Hot Reload Guide](https://www.google.com/search?q=../developer/hot-reload.md)                 |
 
 ---
 
-_Built on standards. Not reinventing the wheel._
+_Omni-Dev Fusion v2.0: Rust Foundation. Python Intelligence._

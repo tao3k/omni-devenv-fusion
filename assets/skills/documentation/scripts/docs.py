@@ -1,7 +1,5 @@
 """
 documentation/scripts/docs.py - Documentation Skill Commands
-
-Phase 63: Migrated from tools.py to scripts pattern.
 """
 
 import datetime
@@ -10,8 +8,8 @@ from typing import Optional
 
 import structlog
 
-from agent.skills.decorators import skill_command
-from common.gitops import get_project_root
+from omni.core.skills.script_loader import skill_command
+from omni.foundation.runtime.gitops import get_project_root
 
 logger = structlog.get_logger(__name__)
 

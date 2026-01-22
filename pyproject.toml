@@ -9,8 +9,9 @@ dynamic = ["version"]
 [dependency-groups]
 dev = [
     "omni-core-rs",
-    "omni-dev-fusion-agent",
-    "omni-dev-fusion-common",
+    "omni-agent",
+    "omni-foundation",
+    "omni-core",
     "polyfactory>=3.2.0",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",
@@ -19,6 +20,7 @@ dev = [
     "dirty-equals>=0.11",
     "ruff>=0.14.10",
     "vulture>=2.14",
+    "pytest-json-report>=1.5.0",
 ]
 
 [build-system]
@@ -30,8 +32,10 @@ source = "vcs"
 
 
 [tool.uv.sources]
-omni-dev-fusion-common = { workspace = true }
-omni-dev-fusion-agent = { workspace = true }
+omni-foundation = { workspace = true }
+omni-agent = { workspace = true }
+omni-core = { workspace = true }
+omni-mcp = { workspace = true }
 omni-core-rs = { path = "packages/rust/bindings/python", editable = true }
 
 
@@ -45,21 +49,50 @@ bypass-selection = true
 
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py313"
 line-length = 100
+src = ["packages/python/agent/src", "packages/python/core/src", "packages/python/foundation/src"]
 
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["omni.agent", "omni.core", "omni.foundation"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
 
 
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+namespace_packages = true
+explicit_package_bases = true
+mypy_path = ["packages/python/agent/src", "packages/python/core/src", "packages/python/foundation/src"]
+
+
 [tool.pytest.ini_options]
-# Auto-load skill testing plugin for zero-configuration tests
-addopts = "-p agent.testing.plugin --tb=short"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-testpaths = ["packages/python/agent/src/agent/tests", "assets/skills"]
+testpaths = [
+    "packages/python/agent/tests",
+    "packages/python/core/tests",
+    "packages/python/mcp-server/tests",
+    "packages/python/foundation/tests",
+    "assets/skills"
+]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -71,7 +104,7 @@ norecursedirs = ["stress_tests"]
 
 [tool.vulture]
 # Vulture configuration for dead code detection
-paths = ["packages/python/agent/src", "packages/python/common/src"]
+paths = ["packages/python/agent/src", "packages/python/foundation/src"]
 min_confidence = 80
 # Exclude generated or third-party code
 exclude = ["*/tests/*", "*/__pycache__/*", "*/.venv/*", "*/venv/*"]

@@ -4,7 +4,7 @@ skill/scripts/list_tools.py - List All Registered MCP Tools
 Lists all registered MCP tools from loaded skills with descriptions.
 """
 
-from agent.skills.decorators import skill_command
+from omni.core.skills.script_loader import skill_command
 
 
 @skill_command(
@@ -29,27 +29,25 @@ from agent.skills.decorators import skill_command
     """,
 )
 def list_tools(compact: bool = False) -> str:
-    from agent.core.skill_runtime import get_skill_context
+    from omni.core.kernel import get_kernel
 
-    manager = get_skill_context()
+    kernel = get_kernel()
+    ctx = kernel.skill_context
 
+    # Get tools from skill context
     tools = []
-    for skill_name in manager.list_loaded():
-        skill_info = manager.get_info(skill_name)
-        if not skill_info:
+    for skill_name in ctx.list_skills():
+        skill_obj = ctx.get_skill(skill_name)
+        if skill_obj is None:
             continue
 
-        commands = manager.get_commands(skill_name)
+        commands = skill_obj.list_commands() if hasattr(skill_obj, "list_commands") else []
         for cmd_name in commands:
-            cmd = manager.get_command(skill_name, cmd_name)
-            if cmd is None:
-                continue
-
             tools.append(
                 {
                     "skill": skill_name,
                     "command": cmd_name,
-                    "description": cmd.description or "",
+                    "description": getattr(skill_obj, "description", "") or "",
                 }
             )
 
@@ -60,7 +58,7 @@ def list_tools(compact: bool = False) -> str:
         return "\n".join(lines)
 
     lines = ["# Registered MCP Tools", ""]
-    lines.append(f"**Total**: {len(tools)} tools from {len(manager.list_loaded())} loaded skills")
+    lines.append(f"**Total**: {len(tools)} tools from {len(ctx.list_skills())} loaded skills")
     lines.append("")
 
     current_skill = None

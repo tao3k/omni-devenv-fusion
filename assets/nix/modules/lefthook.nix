@@ -66,7 +66,7 @@ let
                     # "agent/**"
                   ];
                 };
-                # Phase 17: Update knowledge XML with repomix
+                # Update knowledge XML with repomix
                 "update-knowledge-xml" = {
                   glob = "agent/knowledge/**/*.md";
                   run = ''cd agent/knowledge && repomix --config repomix.json --output "$PRJ_ROOT"/.data/project_knowledge.xml '';

@@ -6,6 +6,97 @@
 
 Librarian is the **retrieval interface** layer of the Knowledge Matrix, providing semantic search capabilities over project documentation, specifications, and harvested experiences. It bridges the gap between raw vector storage and high-level agent reasoning.
 
+## The Librarian's Exam: Real-World Scenarios
+
+Librarian is validated through 6 key scenarios representing common user needs:
+
+### Scenario 1: "The Architect" - Semantic Search
+
+**Goal**: Understand concepts, not just keywords.
+
+```
+User Query: "How is the system structured?"
+              ↓
+Librarian searches for conceptual matches
+              ↓
+Returns: "The Trinity Architecture divides the system into Foundation, Core, and Agent layers."
+```
+
+**Test Case**: Semantic search should understand 'system structure' even when querying with different words.
+
+### Scenario 2: "The Debugger" - Keyword Search
+
+**Goal**: Find exact error codes and messages.
+
+```
+User Query: "ERROR_503"
+              ↓
+Librarian searches for exact matches
+              ↓
+Returns: "ERROR_503: Service Unavailable - Retry after backoff."
+```
+
+**Test Case**: Search for ERROR_503 should find the service unavailable message.
+
+### Scenario 3: "The Developer" - Code Search
+
+**Goal**: Retrieve function definitions and code patterns.
+
+```
+User Query: "connect_to_db"
+              ↓
+Librarian searches code chunks
+              ↓
+Returns: "def connect_to_db(timeout: int) -> bool: Establishes connection to the database."
+```
+
+**Test Case**: Search for function name should find its definition with context.
+
+### Scenario 4: "The Updater" - Incremental Updates
+
+**Goal**: Document changes reflect in search immediately.
+
+```
+Step 1: Ingest "Status: GREEN - All systems operational."
+Step 2: Search for "Status" → Returns GREEN
+Step 3: Modify file to "Status: RED - Critical Failure!"
+Step 4: Re-ingest file
+Step 5: Search for "Status" → Returns RED
+```
+
+**Test Case**: Updated content should immediately reflect in search results.
+
+### Scenario 5: "The Hybrid Search" - Combined Search
+
+**Goal**: Both semantic and keyword queries work seamlessly.
+
+```
+Semantic Query: "database connection"
+              ↓
+Returns function definition with docstring
+
+Keyword Query: "ERROR_500"
+              ↓
+Returns exact error code entry
+```
+
+**Test Case**: Both semantic and keyword queries return relevant results.
+
+### Scenario 6: "Edge Cases" - Robustness
+
+**Goal**: Handle errors gracefully.
+
+```
+Edge Cases Tested:
+├── Empty knowledge base → Returns empty results
+├── Nonexistent file → Returns (False, 0)
+├── Empty file → Returns success with 1+ chunks
+├── Low relevance score → Filtered by threshold
+└── Search error → Returns empty, logs warning
+```
+
+**Test Case**: All edge cases handled without crashes.
+
 ## Position in Architecture
 
 ```

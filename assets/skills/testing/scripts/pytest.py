@@ -1,103 +1,275 @@
 """
-testing/scripts/pytest.py - Testing Skill Commands
+Testing Skill (Modernized)
 
-Phase 63: Migrated from tools.py to scripts pattern.
+Responsibilities:
+- Execute Pytest suites safely within Project Root.
+- Parse output for LLM consumption (Pass/Fail/Traceback).
+- Structured failure data for auto-fixing workflows.
+- Auto-wired dependencies.
 """
 
+import re
 import subprocess
-from pathlib import Path
+import shutil
+from typing import Any
+from omni.foundation.api.decorators import skill_command
+from omni.foundation.config.paths import ConfigPaths
+from omni.foundation.config.logging import get_logger
 
-import structlog
+logger = get_logger("skill.testing.pytest")
 
-from agent.skills.decorators import skill_command
 
-logger = structlog.get_logger(__name__)
+def _parse_failures(stdout: str, stderr: str) -> list[dict[str, Any]]:
+    """
+    Parse pytest output to extract structured failure info.
+
+    Returns list of failures with file, line, error, and test name.
+    """
+    failures: list[dict[str, Any]] = []
+    lines = stdout.splitlines()
+
+    # Track current state for multi-line failure parsing
+    current_failure: dict[str, Any] | None = None
+    traceback_lines: list[str] = []
+    in_traceback = False
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Detect FAILED header line
+        # Format: "FAILED tests/unit/test_x.py::test_name - ErrorType: message"
+        if stripped.startswith("FAILED "):
+            # Save previous failure if exists
+            if current_failure:
+                current_failure["traceback"] = "\n".join(traceback_lines[-20:])
+                failures.append(current_failure)
+
+            # Parse new failure
+            parts = stripped[7:].split(" - ", 1)  # Remove "FAILED "
+            location = parts[0]
+            error_msg = parts[1] if len(parts) > 1 else "Unknown Error"
+
+            # Parse file:line from traceback format or location
+            file_path = ""
+            line_num = 0
+            test_name = ""
+
+            if "::" in location:
+                file_part, test_part = location.split("::", 1)
+                file_path = file_part
+                test_name = test_part
+            else:
+                file_path = location
+
+            # Try to extract line number from traceback pattern
+            # Format: "File "...", line 42, in test_function"
+            tb_line_match = None
+            for tb_line in lines:
+                if file_path in tb_line and "line " in tb_line:
+                    match = re.search(r"line (\d+)", tb_line)
+                    if match:
+                        line_num = int(match.group(1))
+                        tb_line_match = tb_line
+                        break
+
+            current_failure = {
+                "file": file_path,
+                "line": line_num,
+                "test": test_name,
+                "error": error_msg,
+                "traceback": "",
+            }
+            traceback_lines = []
+            in_traceback = True
+            continue
+
+        # Collect traceback context
+        if in_traceback:
+            if stripped.startswith("=" * 20) or stripped.startswith("---"):
+                # End of this failure's traceback
+                in_traceback = False
+            elif (
+                stripped
+                and not stripped.startswith("ceres_prompt>")
+                and not stripped.startswith("-")
+            ):
+                traceback_lines.append(line)
+
+    # Don't forget the last failure
+    if current_failure:
+        current_failure["traceback"] = "\n".join(traceback_lines[-20:])
+        failures.append(current_failure)
+
+    # Also parse short test summary for quick overview
+    short_summary = []
+    in_summary = False
+    for line in lines:
+        if "=== short test summary info ===" in line:
+            in_summary = True
+            continue
+        if in_summary and line.startswith("FAILED "):
+            short_summary.append(line)
+        elif in_summary and line.startswith("==="):
+            in_summary = False
+
+    return failures
 
 
 @skill_command(
-    name="run_tests",
-    category="read",
-    description="""
-    Runs tests using pytest with the project test runner.
+    name="run_pytest",
+    description="Run pytest and return STRUCTURED failure data for auto-fixing.",
+    autowire=True,
+)
+def run_pytest(
+    target: str = ".",
+    verbose: bool = False,
+    max_fail: int = 5,
+    include_traceback: bool = True,
+    paths: ConfigPaths | None = None,
+) -> dict[str, Any]:
+    """
+    Execute pytest safely within project root.
 
-    Constructs and executes pytest command with common helpful flags.
-    Uses `uv run pytest` for isolated environment.
+    Returns structured failure data with file:line:error for auto-fixing.
 
     Args:
-        path: File or directory to test. Defaults to current directory (`.`).
-        verbose: If `true`, shows detailed output (`-v`). Defaults to `false`.
-        max_fail: Stop after N failures to save time. Defaults to `5`.
-                 Use `0` to disable this limit.
+        target: File or directory to test. Defaults to ".".
+        verbose: If True, shows detailed output (-vv). Defaults to False.
+        max_fail: Stop after N failures. Defaults to 5. Use 0 to disable.
+        include_traceback: Include traceback snippets in failures. Defaults to True.
+        paths: ConfigPaths instance (auto-wired).
 
     Returns:
-        Test output with last 2000 chars on success, 4000 chars on failure.
-        Returns error message if path not found or execution fails.
+        Structured dict with success status, failure list, and output summary.
+    """
+    if paths is None:
+        paths = ConfigPaths()
 
-    Example:
-        @omni("testing.run_tests", {"path": "tests/unit", "verbose": true})
-        @omni("testing.run_tests", {"max_fail": 10})
-    """,
-    inject_root=True,
-)
-async def run_tests(path: str = ".", verbose: bool = False, max_fail: int = 5) -> str:
-    target = Path(path)
-    if not target.exists():
-        return f"Path not found: {path}"
+    root = paths.project_root
+    target_path = (root / target).resolve()
 
-    cmd = ["uv", "run", "pytest", str(target)]
+    # Security Sandbox
+    if not str(target_path).startswith(str(root)):
+        return {
+            "success": False,
+            "error": "Access denied: Cannot run tests outside project root.",
+        }
+
+    # Env Check
+    pytest_exec = shutil.which("pytest")
+    if not pytest_exec:
+        return {
+            "success": False,
+            "error": "pytest not found. Please ensure it is installed in your environment.",
+        }
+
+    # Build Command
+    cmd = [pytest_exec]
     if verbose:
+        cmd.append("-vv")
+    else:
         cmd.append("-v")
     if max_fail > 0:
-        cmd.append(f"--maxfail={max_fail}")
-
-    cmd.extend(["-ra", "--tb=short"])
+        cmd.extend(["--maxfail", str(max_fail)])
+    cmd.extend(["-p", "no:cacheprovider", "--tb=short"])
+    cmd.append(str(target_path))
 
     try:
-        logger.info(f"Running tests: {' '.join(cmd)}")
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
+        result = subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=300)
 
-        output = result.stdout + "\n" + result.stderr
+        is_success = result.returncode == 0
+        has_failures = result.returncode == 1
+        output_summary = _summarize_output(result.stdout, result.stderr)
+        failures = _parse_failures(result.stdout, result.stderr)
 
-        if result.returncode == 0:
-            return f"Tests Passed:\n{output[-2000:]}"
-        else:
-            return f"Tests Failed:\n{output[-4000:]}"
+        # Limit failures to prevent token explosion
+        max_failures = 10
+        if len(failures) > max_failures:
+            failures = failures[:max_failures]
+
+        response: dict[str, Any] = {
+            "success": is_success,
+            "failed": has_failures,
+            "exit_code": result.returncode,
+            "target": str(target_path.relative_to(root))
+            if str(target_path).startswith(str(root))
+            else str(target_path),
+            "summary": output_summary,
+            "failure_count": len(failures),
+            "failures": failures,
+        }
+
+        if not is_success:
+            # Include last part of raw output for context
+            response["raw_output"] = result.stdout[-3000:]
+
+        return response
 
     except subprocess.TimeoutExpired:
-        return "Error: Test execution timed out (300s)."
+        return {"success": False, "error": "Test execution timed out (300s)."}
     except Exception as e:
-        return f"Execution Error: {str(e)}"
+        logger.error(f"Pytest execution failed: {e}")
+        return {"success": False, "error": str(e)}
 
 
 @skill_command(
     name="list_tests",
-    category="read",
-    description="""
-    Discovers and lists available tests without running them.
-
-    Uses `pytest --collect-only` to find test functions and classes.
-    Useful to find the correct test ID for targeted debugging.
-
-    Args:
-        path: Directory or file to search for tests. Defaults to current directory (`.`).
-
-    Returns:
-        Formatted list of discovered tests with their IDs.
-
-    Example:
-        @omni("testing.list_tests", {"path": "tests/"})
-    """,
-    inject_root=True,
+    description="Discover and list available tests without running them.",
+    autowire=True,
 )
-async def list_tests(path: str = ".") -> str:
-    cmd = ["uv", "run", "pytest", path, "--collect-only", "-q"]
+def list_tests(
+    target: str = ".",
+    paths: ConfigPaths | None = None,
+) -> dict[str, Any]:
+    """Discover tests using pytest --collect-only."""
+    if paths is None:
+        paths = ConfigPaths()
+
+    root = paths.project_root
+    target_path = (root / target).resolve()
+
+    if not str(target_path).startswith(str(root)):
+        return {"success": False, "error": "Access denied: Cannot search outside project root."}
+
+    pytest_exec = shutil.which("pytest")
+    if not pytest_exec:
+        return {"success": False, "error": "pytest not found."}
+
+    cmd = [pytest_exec, str(target_path), "--collect-only", "-q"]
+
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        return f"Discovered Tests:\n{result.stdout}"
+        result = subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=60)
+        lines = result.stdout.splitlines()
+        tests = [line for line in lines if line.strip() and not line.startswith("<")]
+
+        return {
+            "success": result.returncode == 0 or "collected" in result.stdout,
+            "target": str(target_path.relative_to(root))
+            if str(target_path).startswith(str(root))
+            else str(target_path),
+            "count": len(tests),
+            "tests": tests[:50],
+        }
     except Exception as e:
-        return f"Error listing tests: {str(e)}"
+        return {"success": False, "error": str(e)}
+
+
+def _summarize_output(stdout: str, stderr: str) -> str:
+    """Extract the essence of pytest output for LLM consumption."""
+    lines = stdout.splitlines()
+    summary = []
+    capture = False
+
+    for line in lines:
+        if "=== FAILURES ===" in line or "=== short test summary info ===" in line:
+            capture = True
+        if capture or "FAILED" in line or "ERROR" in line:
+            summary.append(line)
+
+    if lines:
+        summary.append(lines[-1])
+
+    return "\n".join(summary[-50:])
+
+
+__all__ = ["run_pytest", "list_tests"]

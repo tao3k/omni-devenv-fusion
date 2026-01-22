@@ -1,0 +1,46 @@
+# Rust Engineering Sniffing Rules
+# Migrated from legacy sniffer logic
+# Architecture: Rust-First Indexing
+
+# Project root markers (file_exists - O(1) fast match)
+[[match]]
+type = "file_exists"
+pattern = "Cargo.toml"
+
+[[match]]
+type = "file_exists"
+pattern = "Cargo.lock"
+
+[[match]]
+type = "file_exists"
+pattern = "rust-toolchain.toml"
+
+[[match]]
+type = "file_exists"
+pattern = "rust-toolchain"
+
+[[match]]
+type = "file_exists"
+pattern = ".cargo/config.toml"
+
+[[match]]
+type = "file_exists"
+pattern = ".cargo/config"
+
+# Build system markers
+[[match]]
+type = "file_exists"
+pattern = "build.rs"
+
+# File patterns (file_pattern - O(N) glob matching)
+[[match]]
+type = "file_pattern"
+pattern = "*.rs"
+
+[[match]]
+type = "file_pattern"
+pattern = "*.toml"
+
+[[match]]
+type = "file_pattern"
+pattern = "**/Cargo.toml"

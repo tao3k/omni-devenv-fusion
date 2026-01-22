@@ -1,30 +1,20 @@
 [project]
-name = "omni-dev-fusion-agent"
+name = "omni-agent"
 version = "0.4.0-dev"
-description = "Orchestrator MCP server - The Brain for omni-dev-fusion"
+description = "Omni Agent - Thin MCP/Web Client Interface"
 readme = "README.md"
 requires-python = ">=3.12"
 
 dependencies = [
-    "fastembed>=0.5.0",  # Local embedding with ONNX
-    "gitpython>=3.1.0",
-    "jinja2>=3.1.0",
-    "openai>=1.0.0",  # Cloud embedding fallback
-    "structlog>=25.5.0",
-    "langgraph>=1.0.5",
-    "langsmith>=0.6.0",
-    "libvcs>=0.14.0",
-    "mcp>=1.1.0",
-    "orjson>=3.10.0",
-    "python-frontmatter>=1.1.0",
-    "pydantic-ai>=1.39.0",
-    "structlog>=24.0.0",
+    # Core + Foundation (via transitive deps)
+    "omni-core",
+    "omni-mcp>=0.1.0",
+    # Web & CLI
     "starlette>=0.40.0",
-    "uvicorn[standard]>=0.30.0",  # standard includes uvloop
+    "uvicorn[standard]>=0.30.0",
     "typer>=0.15.0",
-    "watchdog>=3.0.0",  # File watching for auto-sync
-    "omni-dev-fusion-common",
-    "langgraph-checkpoint-sqlite>=3.0.2",
+    # Logging (pervasive)
+    "structlog>=25.5.0",
 ]
 
 
@@ -34,44 +24,39 @@ build-backend = "hatchling.build"
 
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/agent"]
-
+packages = ["src/omni"]
 
 
 [project.scripts]
-orchestrator = "agent.main:main"
-omni = "agent.cli:main"
+omni = "omni.agent.cli.app:entry_point"
 
 
 [tool.uv.sources]
-omni-dev-fusion-common = { workspace = true }
+omni-core = { workspace = true }
+omni-mcp = { workspace = true }
 
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
     "pytest-asyncio>=0.25.0",
     "pytest-xdist>=3.6.0",
-    "pytest-randomly>=4.0.1",
+    "pytest-randomly>=4.0.0",
     "dirty-equals>=0.11.0",
     "polyfactory>=3.2.0",
+    "ruff>=0.14.0",
 ]
 
 
+# --- Testing Configuration ---
 [tool.pytest.ini_options]
-# Enable parallel execution with all CPU cores
+minversion = "7.0"
 addopts = [
     "-n", "auto",
-    "--randomly-seed", "42",
     "--tb", "short",
-    "-v",
+    "-q",
 ]
-# Filter warnings to reduce noise
+pythonpath = ["src"]
+asyncio_mode = "auto"
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
-# Set asyncio mode for async tests
-asyncio_mode = "auto"
-# Test discovery patterns
-python_files = ["test_*.py", "*_test.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]

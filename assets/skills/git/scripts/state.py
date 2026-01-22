@@ -1,6 +1,6 @@
 """
 agent/skills/git/state.py
-Git Skill State Definition - Phase 24: Living Skill Architecture
+Git Skill State Definition - Living Skill Architecture
 
 Defines the structured context for Git workflows using Pydantic models.
 This is the "Memory" layer of the Omni Skill Standard (OSS).

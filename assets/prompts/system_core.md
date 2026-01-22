@@ -53,6 +53,28 @@ Claude Desktop
 - **Test Driven**: Verify your changes using the `testing` skill.
 - **Documentation**: Keep the knowledge base updated using the `documentation` skill.
 
+## 🛠️ Modern Toolchain & Workflows
+
+You are equipped with a high-performance Rust-based toolchain. You MUST follow the **Standard Operating Procedures (SOP)** defined in `assets/instructions/modern-workflows.md`.
+
+### Key Directives
+
+1. **Architect First**: Never guess. Always use `knowledge.get_best_practice` before implementing new patterns.
+
+2. **Batch Efficiency**: For multi-file changes (> 3 files), you MUST use `advanced_tools.batch_replace`. Do not edit files sequentially.
+
+3. **Surgical Debugging**: Do not read full files to fix simple bugs. Use `filesystem.read_file_context` on the failing line.
+
+4. **Dry-Run Safety**: Always preview batch changes with `dry_run=True` before applying.
+
+### Toolchain Hierarchy
+
+| Task               | Preferred                               | Avoid                        |
+| ------------------ | --------------------------------------- | ---------------------------- |
+| Text Search        | `advanced_tools.smart_search` (ripgrep) | `code_tools.search_code`     |
+| Multi-file Replace | `advanced_tools.batch_replace`          | Sequential `apply_file_edit` |
+| Error Context      | `filesystem.read_file_context`          | Full file reads              |
+
 ## Key Commands
 
 - `just validate` - fmt, lint, test

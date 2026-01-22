@@ -73,10 +73,10 @@ pub use document_scanner::{DirectoryInventory, DocumentScanner, FileEntry, Skill
 pub use script_scanner::ScriptScanner;
 pub use skill_metadata::{
     AssetRecord, DataRecord, DocsAvailable, IndexToolEntry, ReferencePath, ReferenceRecord,
-    ScanConfig, SkillIndexEntry, SkillMetadata, SkillStructure, StructureItem, TemplateRecord,
-    TestRecord, ToolRecord,
+    ScanConfig, SkillIndexEntry, SkillMetadata, SkillStructure, SnifferRule, StructureItem,
+    TemplateRecord, TestRecord, ToolRecord,
 };
-pub use skill_scanner::SkillScanner;
+pub use skill_scanner::{SkillScanner, extract_frontmatter};
 
 // ============================================================================
 // JSON Schema Generation
@@ -98,85 +98,4 @@ pub fn skill_index_schema() -> String {
 /// Crate version.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-// ============================================================================
-// Tests
-// ============================================================================
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-    use tempfile::TempDir;
-
-    #[test]
-    fn test_full_scan_workflow() {
-        let temp_dir = TempDir::new().unwrap();
-        let skills_dir = temp_dir.path().join("skills");
-        fs::create_dir_all(&skills_dir).unwrap();
-
-        // Create writer skill
-        let writer_path = skills_dir.join("writer");
-        fs::create_dir_all(&writer_path).unwrap();
-        fs::write(
-            &writer_path.join("SKILL.md"),
-            r#"---
-name: "writer"
-version: "1.1.0"
-routing_keywords: ["write", "edit", "polish"]
----
-# Writer
-"#,
-        )
-        .unwrap();
-
-        let writer_scripts = writer_path.join("scripts");
-        fs::create_dir_all(&writer_scripts).unwrap();
-        fs::write(
-            &writer_scripts.join("text.py"),
-            r#"
-@skill_command(name="write_text")
-def write_text(content: str) -> str:
-    '''Write text to file.'''
-    return "written"
-"#,
-        )
-        .unwrap();
-
-        // Create git skill
-        let git_path = skills_dir.join("git");
-        fs::create_dir_all(&git_path).unwrap();
-        fs::write(
-            &git_path.join("SKILL.md"),
-            r#"---
-name: "git"
-version: "1.0"
-routing_keywords: ["commit", "branch"]
----
-# Git
-"#,
-        )
-        .unwrap();
-
-        // Scan metadatas
-        let skill_scanner = SkillScanner::new();
-        let metadatas = skill_scanner.scan_all(&skills_dir, None).unwrap();
-        assert_eq!(metadatas.len(), 2);
-
-        // Scan scripts for writer
-        let script_scanner = ScriptScanner::new();
-        let writer_metadata = metadatas.iter().find(|m| m.skill_name == "writer").unwrap();
-        let tools = script_scanner
-            .scan_scripts(&writer_scripts, "writer", &writer_metadata.routing_keywords)
-            .unwrap();
-
-        assert_eq!(tools.len(), 1);
-        assert_eq!(tools[0].tool_name, "writer.write_text");
-        // Verify routing keywords are included
-        assert!(tools[0].keywords.contains(&"write".to_string()));
-    }
-
-    #[test]
-    fn test_version_constant() {
-        assert!(!VERSION.is_empty());
-    }
-}
+// Note: Comprehensive tests are in tests/

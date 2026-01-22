@@ -23,6 +23,7 @@ intents:
   - "Execute build scripts"
   - "Run tests in terminal"
   - "System administration tasks"
+permissions: []
 ---
 
 You have loaded the **Terminal Skill**.

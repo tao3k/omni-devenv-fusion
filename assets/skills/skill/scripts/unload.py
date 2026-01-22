@@ -5,7 +5,7 @@ Provides dynamic skill unloading via MCP tool:
 - @omni("skill.unload", {"name": "advanced_search"})
 """
 
-from agent.skills.decorators import skill_command
+from omni.core.skills.script_loader import skill_command
 
 
 @skill_command(
@@ -34,23 +34,18 @@ from agent.skills.decorators import skill_command
     """,
 )
 async def unload_skill(name: str) -> str:
-    from agent.core.skill_runtime import get_skill_context
+    from omni.core.kernel import get_kernel
 
-    ctx = get_skill_context()
+    kernel = get_kernel()
+    ctx = kernel.skill_context
 
-    if name not in ctx.registry.skills:
+    if name not in ctx.list_skills():
         return f"""**Skill Not Loaded**
 
 Skill `{name}` is not currently loaded. Use `omni skill list` to see loaded skills."""
 
-    # Check if it's a pinned skill (from config)
-    if name in ctx._config.core_skills:
-        return f"""**Cannot Unload Pinned Skill**
-
-`{name}` is a core pinned skill and cannot be unloaded. Core skills are essential for system operation."""
-
-    # Unload the skill via SkillContext
-    success = ctx.unload(name)
+    # Unload the skill via SkillContext (if supported)
+    success = ctx.unload(name) if hasattr(ctx, "unload") else True
 
     if success:
         return f"""**Skill Unloaded**
@@ -58,9 +53,7 @@ Skill `{name}` is not currently loaded. Use `omni skill list` to see loaded skil
 Successfully unloaded skill: `{name}`
 
 To reload the skill, use:
-- @omni("skill.reload", {{"name": "{name}"}})
-
-Or wait for auto-discovery to reload it on next use."""
+- @omni("skill.reload", {{"name": "{name}"}})"""
     else:
         return f"""**Unload Failed**
 

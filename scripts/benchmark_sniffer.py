@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Benchmark script for Phase 46: The Neural Bridge.
+Benchmark script for The Neural Bridge.
 
 Compares performance between:
 - Python subprocess implementation
@@ -63,7 +63,7 @@ def main():
     runs = 100
 
     print("=" * 65)
-    print("Phase 46 Benchmark: Rust vs Python Git Operations")
+    print("Neural Bridge Benchmark: Rust vs Python Git Operations")
     print("=" * 65)
     print(f"Project Root: {project_root}")
     print(f"Rust Bindings: {'Available' if RUST_AVAILABLE else 'NOT FOUND'}")
@@ -94,7 +94,7 @@ def main():
         print("=" * 65)
 
         if speedup >= 2:
-            print("\n✅ Phase 46 Confirmed: Rust provides significant acceleration!")
+            print("\n✅ Neural Bridge Confirmed: Rust provides significant acceleration!")
             print(f"   Eliminated {py_result['avg_ms'] - rs_result['avg_ms']:.1f}ms per call")
             print("   No subprocess spawn overhead = better scalability")
         elif speedup >= 1.5:

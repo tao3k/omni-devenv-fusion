@@ -1,0 +1,6 @@
+# Git Skill - Declarative Sniffer Rules
+
+# Git repository marker (exact directory)
+[[match]]
+type = "file_exists"
+pattern = ".git"

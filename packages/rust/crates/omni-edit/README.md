@@ -4,7 +4,7 @@
 
 ## Overview
 
-Omni Edit is a high-performance AST-based code modification library using ast-grep. Part of Phase 52: The Surgeon (CCA-Aligned Code Modification).
+Omni Edit is a high-performance AST-based code modification library using ast-grep. Part of The Surgeon (CCA-Aligned Code Modification).
 
 ## Features
 

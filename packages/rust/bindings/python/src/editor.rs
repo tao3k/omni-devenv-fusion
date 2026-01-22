@@ -1,4 +1,4 @@
-//! Structural Editor - Phase 52: The Surgeon / Phase 58: The Ouroboros
+//! Structural Editor - The Surgeon / The Ouroboros
 //!
 //! Provides AST-based structural search and replace capabilities.
 

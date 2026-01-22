@@ -167,22 +167,41 @@ Omni Loop implements a complete read/write cycle:
    └─ Saves to memory via save_memory
 ```
 
-## File Structure
+## Trinity Architecture Integration
+
+Omni Loop integrates with the **Trinity Architecture** layers:
 
 ```
-packages/python/agent/src/agent/core/
-├── omni_agent.py           # Main CCA runtime
-├── context_orchestrator.py # Layered context assembly
-├── note_taker.py          # Session reflection
-├── vector_store.py        # Semantic memory
-└── skill_manager/
-    ├── jit_loader.py      # JIT skill loading
-    └── watcher.py         # File change detection
+┌─────────────────────────────────────────────────────────────┐
+│                    Omni Loop (CCA Runtime)                   │
+│  Kernel → Router → Skills → Knowledge → Memory → MCP Tools  │
+└─────────────────────────────────────────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Trinity Architecture                                         │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │ Foundation (L1): Config, MCP, Utils                  │    │
+│  │   → omni.foundation.config.settings                  │    │
+│  │   → omni.foundation.mcp_core                         │    │
+│  └─────────────────────────────────────────────────────┘    │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │ Core (L2): Kernel, Router, Skills, Knowledge         │    │
+│  │   → omni.core.kernel.engine                          │    │
+│  │   → omni.core.router                                 │    │
+│  │   → omni.core.skills.discovery                       │    │
+│  │   → omni.core.knowledge.librarian                    │    │
+│  └─────────────────────────────────────────────────────┘    │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │ MCP-Server (L3): Protocol handlers                   │    │
+│  │   → omni.mcp.server                                  │    │
+│  └─────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Related Documentation
 
-- [Trinity Core](trinity-core.md) (Architecture foundation)
-- [Knowledge Matrix](knowledge-matrix.md) (Documentation RAG)
-- [Memory Mesh](memory-mesh.md) (Episodic memory)
-- [Skill Standard](skill-standard.md) (Skill format)
+- [Kernel Architecture](../../architecture/kernel.md) - Microkernel engine
+- [Router Architecture](../../architecture/router.md) - Semantic routing system
+- [MCP-Server Architecture](../../architecture/mcp-server.md) - MCP protocol
+- [Knowledge Matrix](knowledge-matrix.md) - Documentation RAG

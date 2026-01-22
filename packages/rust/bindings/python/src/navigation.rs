@@ -1,4 +1,4 @@
-//! Code Navigation - Phase 50: The Cartographer / Phase 51: The Hunter
+//! Code Navigation - The Cartographer / The Hunter
 //!
 //! Provides AST-based code navigation and structural search capabilities.
 

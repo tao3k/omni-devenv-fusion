@@ -1,8 +1,21 @@
 # MCP Transport Interface
 
-Omni Agent supports two transport mechanisms for MCP (Model Context Protocol) connections: **STDIO** for Claude Desktop and **SSE** for Claude Code CLI. This document describes the architecture, endpoints, and usage patterns.
+> Trinity Architecture - Agent Layer (L3 Transport)
+> Last Updated: 2026-01-21
 
-## Overview
+Omni Agent supports two transport mechanisms for MCP (Model Context Protocol) connections: **STDIO** for Claude Desktop and **SSE** for Claude Code CLI.
+
+## Quick Start
+
+```bash
+# Claude Desktop (STDIO)
+uv run omni mcp --transport stdio
+
+# Claude Code CLI (SSE - default)
+uv run omni mcp
+```
+
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -18,16 +31,14 @@ Omni Agent supports two transport mechanisms for MCP (Model Context Protocol) co
 └─────────────────────────────────────────────────────────────┘
 ```
 
+---
+
 ## STDIO Transport (Claude Desktop)
 
 ### Usage
 
 ```bash
-# Start in STDIO mode (default for Claude Desktop)
 uv run omni mcp --transport stdio
-
-# With verbose logging
-uv run omni mcp --transport stdio --log-level DEBUG
 ```
 
 ### Architecture
@@ -37,52 +48,34 @@ uv run omni mcp --transport stdio --log-level DEBUG
 │  Claude Desktop │──stdin──► omni-mcp-server
 └─────────────────┘                │
                     stdout ◄──────┘
+```
 
-The server runs directly as a single process:
 - Direct stdin/stdout communication (MCP JSON-RPC protocol)
 - Signal handling for graceful shutdown
-- Background thread for skill file watcher (hot-reload)
-- Stderr is isolated for logging (does not interfere with MCP protocol)
-```
+- Background watcher for hot-reload
+- **Logging goes to stderr** (does not interfere with MCP protocol)
 
 ### Key Behaviors
 
-| Behavior        | Description                                    |
-| --------------- | ---------------------------------------------- |
-| Auto-reconnect  | Server waits for client connection after EOF   |
-| Signal handling | Ctrl+C gracefully shuts down                   |
-| Hot-reload      | Background watcher monitors skills/ directory  |
-| Clean stderr    | Logging goes to stderr, MCP protocol to stdout |
+| Behavior        | Description                                   |
+| --------------- | --------------------------------------------- |
+| Auto-reconnect  | Server waits for client connection after EOF  |
+| Signal handling | Ctrl+C gracefully shuts down                  |
+| Hot-reload      | Background watcher monitors skills/ directory |
+| Clean stderr    | Logging to stderr, MCP protocol to stdout     |
 
-### Code Structure
-
-```python
-# packages/python/agent/src/agent/mcp_server/stdio.py
-
-async def run_stdio() -> None:
-    """Run server in stdio mode for Claude Desktop."""
-    _setup_signal_handler()  # Signal handlers
-    server = get_server()
-
-    async with server_lifespan(enable_watcher=True):  # Lifespan + watcher
-        while True:
-            async with stdio_server() as (read_stream, write_stream):
-                await server.run(read_stream, write_stream, get_init_options())
-```
+---
 
 ## SSE Transport (Claude Code CLI)
 
 ### Usage
 
 ```bash
-# Start in SSE mode (default)
+# Default (port 3000)
 uv run omni mcp
 
 # Custom host and port
 uv run omni mcp --host 0.0.0.0 --port 8080
-
-# With debug logging
-uv run omni mcp --log-level DEBUG
 ```
 
 ### Endpoints
@@ -112,150 +105,99 @@ uv run omni mcp --log-level DEBUG
 - **orjson**: Fast JSON serialization
 - **Async**: Non-blocking request handling
 
-## Lifespan Management
+---
 
-Both transports share the same lifespan pattern:
+## Code Structure
 
-```python
-async with server_lifespan():
-    # 1. Preload skills from settings.yaml
-    # 2. Register hot-reload observers
-    # 3. Start file watcher for skills directory
-    # 4. Signal "Server ready"
+**Location**: `packages/python/mcp-server/src/omni/mcp/`
 
-    await server.run(...)  # Transport-specific run loop
-
-    # On shutdown:
-    # 1. Stop file watcher
-    # 2. Cleanup resources
+```
+omni/mcp/
+├── __init__.py              # Exports (MCPServer, StdioTransport, SSEServer)
+├── types.py                 # JSON-RPC 2.0 types (OrjsonModel-based)
+├── interfaces.py            # Protocol interfaces
+├── server.py                # MCPServer orchestration
+└── transport/
+    ├── __init__.py
+    ├── stdio.py             # StdioTransport (zero-copy orjson)
+    └── sse.py               # SSEServer (HTTP/SSE)
 ```
 
-## Configuration
+**Agent Handler**: `packages/python/agent/src/omni/agent/server.py`
 
-### Via Command Line
-
-```bash
-# STDIO mode
-omni mcp --transport stdio
-
-# SSE mode
-omni mcp --transport sse --host 127.0.0.1 --port 3000
+```
+AgentMCPHandler
+    │
+    ├── _kernel: Kernel      # Core Layer (skill context, routing)
+    ├── _handle_initialize() # MCP handshake
+    ├── _handle_list_tools() # List skills as MCP tools
+    └── _handle_call_tool()  # Execute skill commands
 ```
 
-### Via Python API
-
-```python
-from agent.mcp_server import run
-
-# STDIO mode
-await run(transport="stdio")
-
-# SSE mode
-await run(transport="sse", host="0.0.0.0", port=8080)
-```
-
-### Settings (settings.yaml)
-
-```yaml
-skills:
-  preload:
-    - git
-    - memory
-    - filesystem
-  on_demand:
-    - writer
-    - knowledge
-```
+---
 
 ## Troubleshooting
 
+> **Important**: When MCP issues occur, check Claude Code's debug logs first:
+>
+> ```
+> cat ~/.claude/debug/latest/*.log
+> ```
+
+### Tools Not Loading
+
+**Problem**: Claude Code shows no tools available after connection.
+
+**Debugging Steps**:
+
+1. **Check Claude Code debug logs**:
+
+   ```bash
+   cat ~/.claude/debug/latest/*.log | grep -i mcp
+   ```
+
+2. **Verify server starts correctly**:
+
+   ```bash
+   uv run omni mcp --transport stdio 2>&1 | head -50
+   ```
+
+3. **Validate tool schema**:
+   ```bash
+   uv run pytest packages/python/agent/tests/integration/test_mcp_stdio.py::TestMCPProtocolCompliance -v
+   ```
+
 ### STDIO Connection Timeout
 
-**Problem**: Server starts but Claude Desktop shows "Connection timeout after 30000ms"
+**Problem**: Server starts but Claude Desktop shows "Connection timeout".
 
-**Solution**: Check the following:
+**Solutions**:
 
-1. **Stderr interference**: Ensure no output goes to stdout (MCP requires clean stdout)
-2. **Working directory**: Configure `--directory` in MCP config to project root
-3. **Environment**: Set `PRJ_ROOT` environment variable
-
-Example Claude Desktop MCP config:
-
-```json
-{
-  "mcpServers": {
-    "omniAgent": {
-      "command": "/path/to/.local/bin/uv",
-      "args": [
-        "--directory",
-        "/path/to/project",
-        "run",
-        "omni",
-        "mcp",
-        "--transport",
-        "stdio"
-      ],
-      "env": { "PRJ_ROOT": "/path/to/project" }
-    }
-  }
-}
-```
-
-### STDIO Exits Immediately
-
-**Problem**: Server starts but exits immediately
-
-**Solution**: The server expects a Claude Desktop connection. Run in background or use SSE for testing:
-
-```bash
-# Use SSE for testing
-uv run omni mcp
-
-# Or keep STDIO running
-timeout 60 uv run omni mcp --transport stdio
-```
-
-### SSE Connection Refused
-
-**Problem**: Cannot connect to SSE endpoint
-
-**Solution**: Check if server is running and binding to correct interface:
-
-```bash
-# Check port
-lsof -i :8765
-
-# Verify server is listening
-curl http://127.0.0.1:8765/health
-```
+1. Check stderr interference (logging must go to stderr, not stdout)
+2. Verify working directory in MCP config
+3. Check environment variables
 
 ### Skills Not Loading
 
-**Problem**: No tools available after connection
+**Problem**: Server starts but tools list is empty.
 
-**Solution**: Check preload configuration:
+**Solutions**:
 
-```bash
-# Verify settings.yaml
-cat settings.yaml | grep -A 10 "skills:"
+1. Run validation test:
 
-# Check logs
-uv run omni mcp --log-level DEBUG
-```
+   ```bash
+   uv run pytest packages/python/agent/tests/integration/test_mcp_stdio.py::TestMCPProtocolCompliance -v
+   ```
 
-## File Structure
+2. Check kernel initialization logs:
+   ```bash
+   uv run omni mcp 2>&1 | grep -E "(Kernel|Skills|Error)"
+   ```
 
-```
-packages/python/agent/src/agent/mcp_server/
-├── __init__.py          # Main exports (run, run_stdio, run_sse)
-├── server.py            # Server instance, handlers (list_tools, call_tool)
-├── stdio.py             # STDIO transport implementation
-├── sse.py               # SSE transport implementation (Starlette)
-└── lifespan.py          # Lifecycle management
-```
+---
 
-## See Also
+## Related Documentation
 
 - [MCP Best Practices](mcp-best-practices.md)
-- [MCP Orchestrator](mcp-orchestrator.md)
-- [Project Execution Standard](project-execution-standard.md)
+- [MCP Server Architecture](../architecture/mcp-server.md)
+- [Kernel Architecture](../architecture/kernel.md)

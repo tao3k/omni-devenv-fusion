@@ -1,6 +1,6 @@
 """
 assets/skills/note_taker/scripts/update_knowledge_base.py
-Phase 63: Knowledge Base Update Command.
+Knowledge Base Update Command.
 
 Saves extracted knowledge to the knowledge base for future retrieval.
 """
@@ -11,8 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from agent.skills.decorators import skill_command
-from common.prj_dirs import PRJ_DATA
+from omni.core.skills.script_loader import skill_command
+from omni.foundation.config.dirs import PRJ_DATA
 
 
 @skill_command(

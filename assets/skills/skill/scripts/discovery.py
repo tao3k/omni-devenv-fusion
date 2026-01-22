@@ -1,10 +1,8 @@
 """
 skill/scripts/discovery.py - Skill Discovery Commands
-
-Phase 63: Migrated from tools.py
 """
 
-from agent.skills.decorators import skill_command
+from omni.core.skills.script_loader import skill_command
 
 
 def _get_discovery():

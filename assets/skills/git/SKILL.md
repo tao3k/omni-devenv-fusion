@@ -13,7 +13,7 @@ routing_keywords: [
     "checkout",
     "stash",
     "tag",
-    # High-frequency phrases (Phase 38 optimization)
+    # High-frequency phrases
     "commit code",
     "save changes",
     "commit changes",
@@ -21,9 +21,8 @@ routing_keywords: [
     "save work",
     "check in",
     "submit code",
-    # Context keywords
-    "branch",
     "version control",
+    "branch",
     "repo",
     "repository",
     "history",
@@ -48,6 +47,10 @@ intents:
     "status",
   ]
 authors: ["omni-dev-fusion"]
+permissions:
+  - "filesystem:*"
+  - "terminal:run_command"
+  - "knowledge:ingest"
 ---
 
 # Git Skill
@@ -89,7 +92,7 @@ git.smart_commit(action="approve", workflow_id="xxx", message="feat: description
 
 ### Stage and Scan Workflow
 
-The `stage_and_scan` function (Phase 35.2) provides automatic staging with security validation:
+The `stage_and_scan` function provides automatic staging with security validation:
 
 ```
 Stage All Files → Security Scan → Lefthook Pre-commit → Finalize

@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "omni-mcp"
+version = "0.1.0"
+description = "High-performance, pure MCP transport layer powered by Rust (orjson)"
+requires-python = ">=3.10"
+dependencies = [
+    "omni-foundation",
+    "orjson>=3.9.0",
+    "pydantic>=2.0.0",
+    "starlette>=0.30.0",
+    "uvicorn>=0.23.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/omni"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[tool.uv.sources]
+omni-foundation = { workspace = true }

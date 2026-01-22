@@ -1,19 +1,30 @@
 """
-code_tools/scripts/refactor.py - Structural Editing Commands
+Code Refactoring Skill (Refactored)
 
-Phase 68: Migrated from structural_editing.
-AST-based code refactoring with preview-before-apply workflow.
+Philosophy:
+- Atomic Operations: Provide the "brick" (edit file), let Agent build the "wall".
+- Verification: Always return a diff to verify the change.
+- Security: All operations constrained to ConfigPaths.project_root.
+
+Commands:
+- apply_file_edit: String-based file replacement with diff output
+- structural_replace: AST-based pattern matching (Rust-powered)
+- structural_preview: Preview changes before applying
+- structural_apply: Apply AST-based changes
+- refactor_repository: Batch refactoring across repository
 """
 
 import re
 from pathlib import Path
 from typing import Any
+import difflib
 
-import structlog
+# Modern Foundation API
+from omni.foundation.api.decorators import skill_command
+from omni.foundation.config.paths import ConfigPaths
+from omni.foundation.config.logging import get_logger
 
-from agent.skills.decorators import skill_command
-
-logger = structlog.get_logger(__name__)
+logger = get_logger("skill.code_tools.refactor")
 
 try:
     import omni_core_rs
@@ -21,14 +32,89 @@ try:
     RUST_AVAILABLE = True
 except ImportError:
     RUST_AVAILABLE = False
-    logger.warning("omni_core_rs not found. StructuralEditing will use fallback.")
+    logger.debug("omni_core_rs not found. StructuralEditing will use fallback.")
+
+
+# =============================================================================
+# Atomic String-Based Editing (Zero Dependencies)
+# =============================================================================
+
+
+@skill_command(
+    name="apply_file_edit",
+    description="Replace specific string block in a file. Requires exact match.",
+    autowire=True,
+)
+def apply_file_edit(
+    file_path: str,
+    search_text: str,
+    replace_text: str,
+    paths: ConfigPaths | None = None,
+) -> dict[str, Any]:
+    """
+    Perform a safe string replacement.
+    This is the fundamental actuator for code modification.
+    """
+    if paths is None:
+        paths = ConfigPaths()
+
+    try:
+        # 1. Safe Path Resolution
+        root = paths.project_root
+        target = (root / file_path).resolve()
+
+        # Sandbox Check
+        if not str(target).startswith(str(root)):
+            return {"success": False, "error": "Access denied: Path traversal detected."}
+
+        if not target.exists():
+            return {"success": False, "error": f"File not found: {file_path}"}
+
+        # 2. Read
+        content = target.read_text(encoding="utf-8")
+
+        # 3. Verify Uniqueness (Critical for LLM safety)
+        count = content.count(search_text)
+
+        if count == 0:
+            return {
+                "success": False,
+                "error": "Context not found. Ensure whitespace and indentation match exactly.",
+            }
+
+        if count > 1:
+            return {
+                "success": False,
+                "error": f"Ambiguous match: Found {count} occurrences. Provide more context.",
+            }
+
+        # 4. Apply
+        new_content = content.replace(search_text, replace_text)
+        target.write_text(new_content, encoding="utf-8")
+
+        # 5. Generate Diff (Feedback Loop)
+        diff = difflib.unified_diff(
+            search_text.splitlines(),
+            replace_text.splitlines(),
+            fromfile=f"a/{file_path}",
+            tofile=f"b/{file_path}",
+            lineterm="",
+        )
+
+        return {"success": True, "path": file_path, "diff": "\n".join(list(diff))}
+
+    except Exception as e:
+        logger.error(f"Edit failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
+# Rust-Powered Structural Editing (Advanced Feature)
+# =============================================================================
 
 
 def _fallback_replace(content: str, pattern: str, replacement: str) -> str:
-    """Fallback implementation using simple string replace.
-
-    This is less precise than AST-based matching but provides basic functionality.
-    """
+    """Fallback implementation using simple string replace."""
     literal_pattern = re.sub(r"\$\w+", ".*?", pattern)
 
     try:
@@ -52,29 +138,8 @@ def _fallback_replace(content: str, pattern: str, replacement: str) -> str:
 
 @skill_command(
     name="structural_replace",
-    category="write",
-    description="""
-    Performs structural replace on content using AST patterns.
-
-    Unlike regex replace, this understands code structure:
-    - Pattern `connect($ARGS)` matches function calls, not strings containing "connect"
-    - Variables like `$ARGS` capture actual code constructs
-
-    AX Philosophy: "The Surgeon operates with precision, not force."
-
-    Args:
-        pattern: ast-grep pattern to match (e.g., `connect($ARGS)`).
-        replacement: Replacement pattern (e.g., `async_connect($ARGS)`).
-        language: Programming language (`python`, `rust`, `javascript`, `typescript`).
-        content: Source code content to modify (optional if path provided).
-        path: Path to file to modify (optional if content provided).
-
-    Returns:
-        Formatted string showing diff and edit locations.
-
-    Example:
-        @omni("code_tools.structural_replace", {"pattern": "connect($ARGS)", "replacement": "async_connect($ARGS)", "language": "python"})
-    """,
+    description="Performs structural replace on content using AST patterns.",
+    autowire=True,
 )
 def structural_replace(
     pattern: str,
@@ -84,9 +149,7 @@ def structural_replace(
     path: str | None = None,
 ) -> str:
     if path and not content:
-        from pathlib import Path as PathLib
-
-        file_path = PathLib(path)
+        file_path = Path(path)
         if not file_path.exists():
             return f"Error: File not found: {path}"
         content = file_path.read_text()
@@ -101,36 +164,15 @@ def structural_replace(
         return omni_core_rs.structural_replace(content, pattern, replacement, language)
     except Exception as e:
         logger.error(
-            "Structural replace failed",
-            pattern=pattern,
-            replacement=replacement,
-            error=str(e),
+            "Structural replace failed", pattern=pattern, replacement=replacement, error=str(e)
         )
         return f"Error in structural replace: {str(e)}"
 
 
 @skill_command(
     name="structural_preview",
-    category="read",
-    description="""
-    Previews structural replace on a file without modifying it.
-
-    Always use this before structural_apply to verify changes are correct.
-
-    AX Philosophy: "Preview twice, apply once."
-
-    Args:
-        path: Path to the file to preview changes on.
-        pattern: ast-grep pattern to match.
-        replacement: Replacement pattern.
-        language: Programming language (optional, auto-detected if not provided).
-
-    Returns:
-        Preview output showing what would be changed, or error message.
-
-    Example:
-        @omni("code_tools.structural_preview", {"path": "src/main.py", "pattern": "print($MSG)", "replacement": "logger.info($MSG)"})
-    """,
+    description="Previews structural replace on a file without modifying it.",
+    autowire=True,
 )
 def structural_preview(
     path: str,
@@ -144,37 +186,14 @@ def structural_preview(
     try:
         return omni_core_rs.structural_preview(path, pattern, replacement, language)
     except Exception as e:
-        logger.error(
-            "Structural preview failed",
-            path=path,
-            pattern=pattern,
-            error=str(e),
-        )
+        logger.error("Structural preview failed", path=path, pattern=pattern, error=str(e))
         return f"Error in structural preview: {str(e)}"
 
 
 @skill_command(
     name="structural_apply",
-    category="write",
-    description="""
-    Applies structural replace to a file (MODIFIES THE FILE).
-
-    CAUTION: This modifies the file in place. Always use structural_preview first.
-
-    AX Philosophy: "The Surgeon cuts only where necessary."
-
-    Args:
-        path: Path to the file to modify.
-        pattern: ast-grep pattern to match.
-        replacement: Replacement pattern.
-        language: Programming language (optional, auto-detected if not provided).
-
-    Returns:
-        Confirmation message with change details, or error message.
-
-    Example:
-        @omni("code_tools.structural_apply", {"path": "src/main.py", "pattern": "print($MSG)", "replacement": "logger.info($MSG)"})
-    """,
+    description="Applies structural replace to a file (MODIFIES THE FILE).",
+    autowire=True,
 )
 def structural_apply(
     path: str,
@@ -188,37 +207,14 @@ def structural_apply(
     try:
         return omni_core_rs.structural_apply(path, pattern, replacement, language)
     except Exception as e:
-        logger.error(
-            "Structural apply failed",
-            path=path,
-            pattern=pattern,
-            error=str(e),
-        )
+        logger.error("Structural apply failed", path=path, pattern=pattern, error=str(e))
         return f"Error in structural apply: {str(e)}"
 
 
 @skill_command(
     name="refactor_repository",
-    category="write",
-    description="""
-    MASS REFACTORING TOOL. Changes code patterns across the ENTIRE repository.
-
-    This is the "nuclear option" - processes thousands of files in parallel
-    using Rust's rayon thread pool.
-
-    Args:
-        search_pattern: Pattern to search for (ast-grep syntax).
-        rewrite_pattern: Replacement pattern.
-        path: Root directory to search. Defaults to current directory (`.`).
-        file_pattern: File glob pattern. Defaults to `**/*.py`.
-        dry_run: If `true`, only show what would be changed. Defaults to `true`.
-
-    Returns:
-        Report with files scanned, changed, replacements count, and errors.
-
-    Example:
-        @omni("code_tools.refactor_repository", {"search_pattern": "print($MSG)", "rewrite_pattern": "logger.info($MSG)", "dry_run": false})
-    """,
+    description="MASS REFACTORING TOOL. Changes code patterns across the entire repository.",
+    autowire=True,
 )
 def refactor_repository(
     search_pattern: str,
@@ -226,30 +222,35 @@ def refactor_repository(
     path: str = ".",
     file_pattern: str = "**/*.py",
     dry_run: bool = True,
+    paths: ConfigPaths | None = None,
 ) -> str:
+    if paths is None:
+        paths = ConfigPaths()
+
     if not RUST_AVAILABLE:
         return (
             "Error: Rust bindings (omni_core_rs) not available.\n"
-            "This feature requires Phase 58's heavy-duty batch refactoring.\n"
+            "This feature requires heavy-duty batch refactoring.\n"
             "Run 'just build-rust' to enable."
         )
 
-    root_path = Path(path)
-    if not root_path.exists():
+    root_path = paths.project_root / path
+    resolved_path = root_path.resolve()
+
+    if not resolved_path.exists():
         return f"Error: Path does not exist: {path}"
-    if not root_path.is_dir():
+    if not resolved_path.is_dir():
         return f"Error: Path is not a directory: {path}"
 
     try:
         stats = omni_core_rs.batch_structural_replace(
-            str(root_path.resolve()),
+            str(resolved_path),
             search_pattern,
             rewrite_pattern,
             file_pattern,
             dry_run,
         )
 
-        status_emoji = "DRY RUN" if dry_run else "APPLIED"
         status_text = "DRY RUN" if dry_run else "APPLIED"
 
         report_lines = [
@@ -282,25 +283,14 @@ def refactor_repository(
         return "\n".join(report_lines)
 
     except Exception as e:
-        logger.error(
-            "Batch refactor failed",
-            path=path,
-            pattern=search_pattern,
-            error=str(e),
-        )
+        logger.error("Batch refactor failed", path=path, pattern=search_pattern, error=str(e))
         return f"Critical Batch Error: {str(e)}"
 
 
 @skill_command(
     name="get_edit_info",
-    category="read",
-    description="""
-    Gets information about the structural editing capability.
-
-    Returns:
-        Dict with name, version, rust_available status, supported languages,
-        features list, phase info, and performance characteristics.
-    """,
+    description="Get information about the structural editing capability.",
+    autowire=True,
 )
 def get_edit_info() -> dict[str, Any]:
     return {
@@ -313,12 +303,21 @@ def get_edit_info() -> dict[str, Any]:
             "Variable capture ($ARGS, $NAME, etc.)",
             "Unified diff generation",
             "Preview before apply workflow",
-            "Phase 58: Heavy-duty batch refactoring (rayon parallel)",
+            "Batch refactoring (rayon parallel)",
         ],
-        "phase": "Phase 68: Code Tools Merge",
         "performance": {
             "batch_mode": "10,000 files = 1 FFI call",
             "parallelism": "Uses all CPU cores",
             "speedup": "~100x vs Python loop",
         },
     }
+
+
+__all__ = [
+    "apply_file_edit",
+    "structural_replace",
+    "structural_preview",
+    "structural_apply",
+    "refactor_repository",
+    "get_edit_info",
+]

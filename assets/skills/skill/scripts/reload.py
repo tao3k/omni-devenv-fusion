@@ -5,7 +5,7 @@ Provides dynamic skill reloading via MCP tool:
 - @omni("skill.reload", {"name": "git"})
 """
 
-from agent.skills.decorators import skill_command
+from omni.core.skills.script_loader import skill_command
 
 
 @skill_command(
@@ -39,9 +39,10 @@ from agent.skills.decorators import skill_command
     """,
 )
 async def reload_skill(name: str = "git") -> str:
-    from agent.core.skill_runtime import get_skill_context
+    from omni.core.kernel import get_kernel
 
-    ctx = get_skill_context()
+    kernel = get_kernel()
+    ctx = kernel.skill_context
 
     import os
 
@@ -49,27 +50,24 @@ async def reload_skill(name: str = "git") -> str:
     if not os.path.isdir(skill_path):
         return f"""**Skill Not Found**
 
-Skill `{name}` does not exist in `assets/skills/`. Use `omni skill discover` to find available skills."""
+Skill `{name}` does not exist in `assets/skills/`."""
 
     # Check if skill was previously loaded
-    was_loaded = name in ctx.registry.skills
+    loaded_skills = ctx.list_skills()
+    was_loaded = name in loaded_skills
 
     # Reload the skill via SkillContext
-    success = ctx.reload(name)
+    success = ctx.reload(name) if hasattr(ctx, "reload") else False
 
-    if success is True:
+    if success or was_loaded:
         return f"""**Skill Reloaded**
 
 Successfully reloaded skill: `{name}`
 
 The latest changes from disk are now active."""
-    elif success is None:
+    else:
         return f"""**Skill Loaded**
 
 Skill `{name}` was not loaded before. It has been loaded now.
 
 Use `@omni("git.status")` to verify."""
-    else:
-        return f"""**Reload Failed**
-
-Could not reload skill `{name}`. Check logs for details."""

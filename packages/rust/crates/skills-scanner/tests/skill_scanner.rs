@@ -263,3 +263,141 @@ version: "1.0"
 
     assert_eq!(result.skill_name, "custom_skill_name");
 }
+
+// =============================================================================
+// TOML Rules Parsing Tests
+// =============================================================================
+
+/// Test parsing valid rules.toml file.
+#[test]
+fn test_parse_rules_toml_valid() {
+    let temp_dir = TempDir::new().unwrap();
+    let skill_path = temp_dir.path().join("python");
+    fs::create_dir_all(&skill_path).unwrap();
+
+    // Create required SKILL.md
+    fs::write(
+        &skill_path.join("SKILL.md"),
+        r#"---
+name: "python"
+version: "1.0"
+routing_keywords: ["python", "py"]
+---
+# Python Skill
+"#,
+    )
+    .unwrap();
+
+    let rules_path = skill_path.join("extensions/sniffer");
+    fs::create_dir_all(&rules_path).unwrap();
+
+    fs::write(
+        &rules_path.join("rules.toml"),
+        r#"
+[[match]]
+type = "file_exists"
+pattern = "pyproject.toml"
+
+[[match]]
+type = "file_pattern"
+pattern = "*.py"
+"#,
+    )
+    .unwrap();
+
+    use skills_scanner::SkillScanner;
+    let scanner = SkillScanner::new();
+    let structure = SkillScanner::default_structure();
+
+    // Scan and build index entry
+    let result = scanner
+        .scan_skill(&skill_path, Some(&structure))
+        .unwrap()
+        .unwrap();
+    assert_eq!(result.skill_name, "python");
+
+    // Verify the skill directory has rules
+    let rules = scanner.scan_skill(&skill_path, Some(&structure)).unwrap();
+    assert!(rules.is_some());
+}
+
+/// Test parsing missing rules.toml returns empty rules.
+#[test]
+fn test_parse_rules_toml_missing() {
+    let temp_dir = TempDir::new().unwrap();
+    let skill_path = temp_dir.path().join("test_skill");
+    fs::create_dir_all(&skill_path).unwrap();
+
+    // No rules.toml created - scanner should still work
+    use skills_scanner::SkillScanner;
+    let scanner = SkillScanner::new();
+
+    let result = scanner.scan_skill(&skill_path, None).unwrap();
+    // Should return Some because SKILL.md exists (not created, so None)
+    assert!(result.is_none());
+}
+
+/// Test build_index_entry includes sniffer rules from rules.toml.
+#[test]
+fn test_build_index_entry_with_sniffer_rules() {
+    let temp_dir = TempDir::new().unwrap();
+    let skills_dir = temp_dir.path().join("skills");
+    fs::create_dir_all(&skills_dir).unwrap();
+
+    let python_path = skills_dir.join("python");
+    fs::create_dir_all(&python_path).unwrap();
+
+    // Create SKILL.md
+    fs::write(
+        &python_path.join("SKILL.md"),
+        r#"---
+name: "python"
+version: "1.0"
+routing_keywords: ["python", "py"]
+---
+# Python Skill
+"#,
+    )
+    .unwrap();
+
+    // Create rules.toml
+    let rules_path = python_path.join("extensions/sniffer");
+    fs::create_dir_all(&rules_path).unwrap();
+    fs::write(
+        &rules_path.join("rules.toml"),
+        r#"
+[[match]]
+type = "file_exists"
+pattern = "pyproject.toml"
+"#,
+    )
+    .unwrap();
+
+    use skills_scanner::{ScriptScanner, SkillScanner};
+    let scanner = SkillScanner::new();
+    let script_scanner = ScriptScanner::new();
+
+    let metadatas = scanner.scan_all(&skills_dir, None).unwrap();
+    assert_eq!(metadatas.len(), 1);
+
+    let metadata = &metadatas[0];
+    let scripts_path = python_path.join("scripts");
+    let tools = if scripts_path.exists() {
+        script_scanner
+            .scan_scripts(
+                &scripts_path,
+                &metadata.skill_name,
+                &metadata.routing_keywords,
+            )
+            .unwrap()
+    } else {
+        Vec::new()
+    };
+
+    let entry = scanner.build_index_entry(metadata.clone(), &tools, &python_path);
+
+    // Verify sniffer rules are populated
+    assert!(!entry.sniffing_rules.is_empty());
+    assert_eq!(entry.sniffing_rules[0].pattern, "pyproject.toml");
+    assert_eq!(entry.sniffing_rules[0].rule_type, "file_exists");
+}

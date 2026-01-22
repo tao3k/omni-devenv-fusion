@@ -1,4 +1,4 @@
-# Spec: Phase 9 - Code Intelligence (ast-grep Integration)
+# Spec: Code Intelligence (ast-grep Integration)
 
 > **Status**: Approved
 > **Complexity**: L3

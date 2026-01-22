@@ -158,3 +158,115 @@ mod tests {
         assert_eq!(violations.len(), 2);
     }
 }
+
+// =============================================================================
+// Permission Gatekeeper - Access Control for Skills
+// =============================================================================
+
+/// PermissionGatekeeper - Zero Trust Access Control
+///
+/// Validates skill tool calls against declared permissions.
+///
+/// Permission Format:
+/// - Exact: "filesystem:read" allows only "filesystem:read"
+/// - Wildcard category: "filesystem:*" allows any "filesystem:*" tool
+/// - Admin: "*" allows everything
+pub struct PermissionGatekeeper;
+
+impl PermissionGatekeeper {
+    /// Check if a tool execution is allowed by the given permissions.
+    ///
+    /// Args:
+    ///     tool_name: Full tool name (e.g., "filesystem.read_file")
+    ///     permissions: List of permission patterns (e.g., ["filesystem:*"])
+    ///
+    /// Returns:
+    ///     True if allowed, False otherwise.
+    pub fn check(tool_name: &str, permissions: &[String]) -> bool {
+        for pattern in permissions {
+            if Self::matches_pattern(tool_name, pattern) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn matches_pattern(tool: &str, pattern: &str) -> bool {
+        // Admin permission allows everything
+        if pattern == "*" {
+            return true;
+        }
+
+        // Handle wildcard patterns
+        // "filesystem:*" should match "filesystem.read_file"
+        if let Some(prefix) = pattern.strip_suffix(":*") {
+            let standardized_prefix = prefix.replace(':', ".");
+            return tool.starts_with(&standardized_prefix);
+        }
+
+        if let Some(prefix) = pattern.strip_suffix(".*") {
+            return tool.starts_with(prefix);
+        }
+
+        // Normalize separators for comparison
+        let normalized_tool = tool.replace(":", ".");
+        let normalized_pattern = pattern.replace(":", ".");
+
+        normalized_tool == normalized_pattern
+    }
+}
+
+#[cfg(test)]
+mod permission_tests {
+    use super::*;
+
+    #[test]
+    fn test_wildcard_permission() {
+        let perms = vec!["filesystem:*".to_string()];
+        assert!(PermissionGatekeeper::check("filesystem.read_file", &perms));
+        assert!(PermissionGatekeeper::check("filesystem.write_file", &perms));
+        assert!(!PermissionGatekeeper::check("git.status", &perms));
+    }
+
+    #[test]
+    fn test_wildcard_with_colon_separator() {
+        let perms = vec!["filesystem:*".to_string()];
+        assert!(PermissionGatekeeper::check("filesystem:read", &perms));
+        assert!(!PermissionGatekeeper::check("git:status", &perms));
+    }
+
+    #[test]
+    fn test_exact_permission() {
+        let perms = vec!["git.status".to_string()];
+        assert!(PermissionGatekeeper::check("git.status", &perms));
+        assert!(!PermissionGatekeeper::check("git.commit", &perms));
+    }
+
+    #[test]
+    fn test_exact_permission_with_colon() {
+        let perms = vec!["git:status".to_string()];
+        assert!(PermissionGatekeeper::check("git.status", &perms));
+        assert!(!PermissionGatekeeper::check("git.commit", &perms));
+    }
+
+    #[test]
+    fn test_admin_permission() {
+        let perms = vec!["*".to_string()];
+        assert!(PermissionGatekeeper::check("any.thing", &perms));
+        assert!(PermissionGatekeeper::check("filesystem.read", &perms));
+    }
+
+    #[test]
+    fn test_empty_permissions() {
+        assert!(!PermissionGatekeeper::check("filesystem.read", &[]));
+        assert!(!PermissionGatekeeper::check("any.tool", &[]));
+    }
+
+    #[test]
+    fn test_multiple_permissions() {
+        let perms = vec!["git.status".to_string(), "filesystem:*".to_string()];
+        assert!(PermissionGatekeeper::check("git.status", &perms));
+        assert!(PermissionGatekeeper::check("filesystem.read", &perms));
+        assert!(!PermissionGatekeeper::check("git.commit", &perms));
+    }
+}

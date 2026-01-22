@@ -85,7 +85,7 @@ result = await load_skill("git")
 The Memory skill can be loaded externally via `load_skill_module`:
 
 ```python
-from common.skills_path import load_skill_module
+from omni.foundation.skills_path import load_skill_module
 
 memory = load_skill_module("memory")
 

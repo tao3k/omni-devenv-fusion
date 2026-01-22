@@ -1,7 +1,7 @@
 """
 _template/scripts/ - Isolated Implementation Module
 
-Phase 63+: Uses importlib.util for dynamic module loading.
+Uses importlib.util for dynamic module loading.
 No circular imports, hot-reload support.
 
 Architecture:

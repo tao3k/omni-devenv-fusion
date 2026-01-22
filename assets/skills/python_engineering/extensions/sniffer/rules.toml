@@ -1,0 +1,45 @@
+# Python Engineering Skill - Declarative Sniffer Rules
+# Mode 1: file_exists (O(1) exact match - fast)
+# Mode 2: file_pattern (glob-style matching - O(N))
+
+# Python project markers (exact files)
+[[match]]
+type = "file_exists"
+pattern = "pyproject.toml"
+
+[[match]]
+type = "file_exists"
+pattern = "requirements.txt"
+
+[[match]]
+type = "file_exists"
+pattern = "setup.py"
+
+[[match]]
+type = "file_exists"
+pattern = "setup.cfg"
+
+[[match]]
+type = "file_exists"
+pattern = "Pipfile"
+
+[[match]]
+type = "file_exists"
+pattern = "pyrightconfig.json"
+
+[[match]]
+type = "file_exists"
+pattern = "mypy.ini"
+
+[[match]]
+type = "file_exists"
+pattern = "pytest.ini"
+
+# Python file patterns (glob matching)
+[[match]]
+type = "file_pattern"
+pattern = "*.py"
+
+[[match]]
+type = "file_pattern"
+pattern = "pyproject.toml"

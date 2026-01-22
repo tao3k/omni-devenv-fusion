@@ -30,8 +30,62 @@ use serde::Deserialize;
 
 use crate::script_scanner::ScriptScanner;
 use crate::skill_metadata::{
-    IndexToolEntry, ReferencePath, SkillIndexEntry, SkillMetadata, SkillStructure,
+    IndexToolEntry, ReferencePath, SkillIndexEntry, SkillMetadata, SkillStructure, SnifferRule,
 };
+
+/// TOML structure for rules.toml parsing.
+#[derive(Debug, Deserialize)]
+struct RulesToml {
+    #[serde(default, rename = "match")]
+    matches: Vec<RuleMatch>,
+}
+
+/// Single match rule in rules.toml.
+#[derive(Debug, Deserialize)]
+struct RuleMatch {
+    #[serde(rename = "type")]
+    rule_type: Option<String>,
+    pattern: Option<String>,
+}
+
+/// Parse extensions/sniffer/rules.toml for sniffer rules.
+///
+/// Returns a vector of `SnifferRule` extracted from the TOML file.
+/// If the file doesn't exist or is invalid, returns an empty vector.
+#[inline]
+fn parse_rules_toml(skill_path: &Path) -> Vec<SnifferRule> {
+    let rules_path = skill_path.join("extensions/sniffer/rules.toml");
+    if !rules_path.exists() {
+        return Vec::new();
+    }
+
+    let content = match fs::read_to_string(&rules_path) {
+        Ok(c) => c,
+        Err(e) => {
+            log::warn!("Failed to read rules.toml: {}", e);
+            return Vec::new();
+        }
+    };
+
+    let rules_toml: RulesToml = match toml::from_str(&content) {
+        Ok(r) => r,
+        Err(e) => {
+            log::warn!("Failed to parse rules.toml: {}", e);
+            return Vec::new();
+        }
+    };
+
+    let mut rules = Vec::new();
+    for rule in rules_toml.matches {
+        if let (Some(rule_type), Some(pattern)) = (rule.rule_type, rule.pattern) {
+            rules.push(SnifferRule::new(rule_type, pattern));
+        }
+    }
+
+    log::debug!("Parsed {} sniffer rules from {:?}", rules.len(), rules_path);
+
+    rules
+}
 
 /// YAML frontmatter structure (inner YAML in SKILL.md).
 #[derive(Debug, Deserialize, PartialEq, Default)]
@@ -52,6 +106,9 @@ struct SkillFrontmatter {
     require_refs: Option<Vec<String>>,
     #[serde(default)]
     repository: Option<String>,
+    /// Permissions required by this skill (e.g., "filesystem:read", "network:http")
+    #[serde(default)]
+    permissions: Option<Vec<String>>,
 }
 
 /// Skill Scanner - Extracts metadata from SKILL.md files.
@@ -303,9 +360,9 @@ impl SkillScanner {
         &self,
         metadata: SkillMetadata,
         tools: &[crate::skill_metadata::ToolRecord],
-        _skill_path: &Path,
+        skill_path: &Path,
     ) -> SkillIndexEntry {
-        let path = format!(r#""assets/skills/{}""#, metadata.skill_name);
+        let path = format!("assets/skills/{}", metadata.skill_name);
 
         let mut entry = SkillIndexEntry::new(
             metadata.skill_name.clone(),
@@ -326,10 +383,16 @@ impl SkillScanner {
         // Add require_refs from frontmatter
         entry.require_refs = metadata.require_refs;
 
-        // Add tools
+        // Add permissions (Zero Trust: empty = no access)
+        entry.permissions = metadata.permissions;
+
+        // Add sniffer rules from rules.toml
+        entry.sniffing_rules = parse_rules_toml(skill_path);
+
+        // Add tools (tool.tool_name already includes skill_name prefix from script_scanner)
         for tool in tools {
             let tool_entry = IndexToolEntry {
-                name: format!("{}.{}", metadata.skill_name, tool.tool_name),
+                name: tool.tool_name.clone(), // Already in format "skill.command"
                 description: tool.description.clone(),
             };
             entry.add_tool(tool_entry);
@@ -456,6 +519,7 @@ impl SkillScanner {
                     intents: Vec::new(),
                     require_refs: Vec::new(),
                     repository: String::new(),
+                    permissions: Vec::new(),
                 });
             }
         };
@@ -477,6 +541,7 @@ impl SkillScanner {
                     .collect()
             }),
             repository: frontmatter_data.repository.unwrap_or_default(),
+            permissions: frontmatter_data.permissions.unwrap_or_default(),
         })
     }
 }
@@ -505,7 +570,7 @@ impl Default for SkillScanner {
 /// assert!(frontmatter.contains("name:"));
 /// assert!(frontmatter.contains("version:"));
 /// ```
-fn extract_frontmatter(content: &str) -> Option<String> {
+pub fn extract_frontmatter(content: &str) -> Option<String> {
     let start_marker = "---";
     let end_marker = "---";
 
@@ -519,136 +584,4 @@ fn extract_frontmatter(content: &str) -> Option<String> {
     Some(content_after_start[..end].to_string())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::TempDir;
-
-    #[test]
-    fn test_parse_skill_md_with_frontmatter() {
-        let content = r#"---
-name: "writer"
-version: "1.1.0"
-description: "Text manipulation skill"
-routing_keywords: ["write", "edit", "polish"]
-authors: ["omni-dev-fusion"]
-intents: ["Update documentation"]
----
-
-# Writer Skill
-"#;
-
-        let scanner = SkillScanner::new();
-        let temp_dir = TempDir::new().unwrap();
-        let skill_path = temp_dir.path().join("writer");
-
-        let metadata = scanner.parse_skill_md(content, &skill_path).unwrap();
-
-        assert_eq!(metadata.skill_name, "writer");
-        assert_eq!(metadata.version, "1.1.0");
-        assert_eq!(metadata.description, "Text manipulation skill");
-        assert_eq!(metadata.routing_keywords, vec!["write", "edit", "polish"]);
-        assert_eq!(metadata.authors, vec!["omni-dev-fusion"]);
-        assert_eq!(metadata.intents, vec!["Update documentation"]);
-    }
-
-    #[test]
-    fn test_parse_skill_md_without_frontmatter() {
-        let content = "# Writer Skill\n\nJust a skill without frontmatter.";
-
-        let scanner = SkillScanner::new();
-        let temp_dir = TempDir::new().unwrap();
-        let skill_path = temp_dir.path().join("writer");
-
-        let metadata = scanner.parse_skill_md(content, &skill_path).unwrap();
-
-        assert_eq!(metadata.skill_name, "writer");
-        assert!(metadata.version.is_empty());
-        assert!(metadata.routing_keywords.is_empty());
-    }
-
-    #[test]
-    fn test_scan_skill_missing_skill_md() {
-        let scanner = SkillScanner::new();
-        let temp_dir = TempDir::new().unwrap();
-        let skill_path = temp_dir.path().join("empty_skill");
-        std::fs::create_dir_all(&skill_path).unwrap();
-
-        let result = scanner.scan_skill(&skill_path, None).unwrap();
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_scan_all_multiple_skills() {
-        let temp_dir = TempDir::new().unwrap();
-        let skills_dir = temp_dir.path().join("skills");
-        std::fs::create_dir_all(&skills_dir).unwrap();
-
-        // Create writer skill
-        let writer_path = skills_dir.join("writer");
-        std::fs::create_dir_all(&writer_path).unwrap();
-        std::fs::write(
-            &writer_path.join("SKILL.md"),
-            r#"---
-name: "writer"
-version: "1.0"
-routing_keywords: ["write", "edit"]
----
-# Writer
-"#,
-        )
-        .unwrap();
-
-        // Create git skill
-        let git_path = skills_dir.join("git");
-        std::fs::create_dir_all(&git_path).unwrap();
-        std::fs::write(
-            &git_path.join("SKILL.md"),
-            r#"---
-name: "git"
-version: "1.0"
-routing_keywords: ["commit", "branch"]
----
-# Git
-"#,
-        )
-        .unwrap();
-
-        let scanner = SkillScanner::new();
-        let metadatas = scanner.scan_all(&skills_dir, None).unwrap();
-
-        assert_eq!(metadatas.len(), 2);
-        assert!(metadatas.iter().any(|m| m.skill_name == "writer"));
-        assert!(metadatas.iter().any(|m| m.skill_name == "git"));
-    }
-
-    #[test]
-    fn test_extract_frontmatter() {
-        let content = r#"---
-name: "test"
-version: "1.0"
----
-# Content
-"#;
-
-        let frontmatter = extract_frontmatter(content).unwrap();
-        assert!(frontmatter.contains("name:"));
-        assert!(frontmatter.contains("version:"));
-    }
-
-    #[test]
-    fn test_extract_frontmatter_no_frontmatter() {
-        let content = "# Just content\nNo frontmatter here.";
-        assert!(extract_frontmatter(content).is_none());
-    }
-
-    #[test]
-    fn test_skill_scanner_new() {
-        let _scanner = SkillScanner::new();
-        // Just verify it can be created
-        assert!(true);
-    }
-
-    // Note: Comprehensive integration tests are in tests/skill_scanner.rs
-    // These basic tests verify core functionality without complex setup.
-}
+// Note: Comprehensive tests are in tests/test_skill_scanner.rs

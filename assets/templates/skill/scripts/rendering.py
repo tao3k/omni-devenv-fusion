@@ -1,5 +1,5 @@
 """
-{{ skill_name }}/scripts/rendering.py - Rendering Layer (Phase 35.2)
+{{ skill_name }}/scripts/rendering.py - Rendering Layer
 
 Jinja2 templates for structured output.
 

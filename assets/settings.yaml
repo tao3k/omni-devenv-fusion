@@ -22,14 +22,14 @@
 conf_dir: "assets"
 
 # =============================================================================
-# Asset Directories (Phase 25: Moving from agent/ to assets/)
+# Asset Directories (Migration: agent/ -> assets/)
 # =============================================================================
 # All paths are relative to project root
 assets:
   # Skills directory
   skills_dir: "assets/skills"
 
-  # Templates directory (Phase 35.2: Cascading template loading)
+  # Templates directory (Cascading template loading)
   # User overrides > Skill defaults pattern
   templates_dir: "assets/templates"
 
@@ -130,7 +130,7 @@ logging:
   level: "info"
 
 # =============================================================================
-# Phase 13.8: Configuration-Driven Context
+# Configuration-Driven Context
 # =============================================================================
 prompts:
   core_path: "assets/prompts/system_core.md"
@@ -168,7 +168,7 @@ specs:
   example: "assets/specs/auth_module.md"
 
 # =============================================================================
-# Memory Configuration (Phase 13.10: Hippocampus)
+# Memory Configuration (The Hippocampus)
 # =============================================================================
 # Memory path follows prj-spec: {git_toplevel}/.cache/{project}/.memory/
 # Override with custom path if needed
@@ -217,7 +217,7 @@ skills:
     auto_confirm: false
 
   # =============================================================================
-  # Phase 34: Skill Architecture Standards (ODF-EP v7.0)
+  # Skill Architecture Standards (ODF-EP v7.0)
   # =============================================================================
   # Defines the canonical structure for all Omni skills.
   # Aligned with Anthropic's Skill Standard but extended for Omni's MCP features.
@@ -251,7 +251,7 @@ skills:
           type: "dir"
 
         - path: "templates/"
-          description: "Jinja2 templates for skill output (Phase 35.2: Cascading loader)"
+          description: "Jinja2 templates for skill output (Cascading loader)"
           type: "dir"
 
         - path: "references/"
@@ -274,7 +274,7 @@ skills:
           description: "Repomix configuration (auto-generated if missing)"
           type: "file"
 
-        # Phase 35.2: Sidecar Execution Pattern support
+        # Sidecar Execution Pattern support
         - path: "pyproject.toml"
           description: "Skill dependencies for subprocess mode (crawl4ai, playwright, etc.)"
           type: "file"
@@ -286,7 +286,7 @@ skills:
       # Optional structure examples (for documentation and validation)
       # These show common patterns but are not required
       optional:
-        # Example: Cascading template structure (Phase 35.2)
+        # Example: Cascading template structure
         - path: "templates/"
           description: "Skill-local Jinja2 templates (defaults)"
           example: |
@@ -344,7 +344,7 @@ skills:
         - "prompts.md" # Redundant - prompts in SKILL.md body
 
   # =============================================================================
-  # Phase 36: Configuration-Driven Tool Aliasing (Native Mimicry)
+  # Configuration-Driven Tool Aliasing (Native Mimicry)
   # =============================================================================
   # Defines how skill commands are presented to Claude (aliasing and behavioral hints).
   # This enables "Configuration over Convention" - no Python code changes needed.
@@ -416,7 +416,7 @@ skills:
       append_doc: "\n\nPersist important context for future sessions."
 
 # =============================================================================
-# Phase 19.7: Claude Code Symbiosis - Context Compression
+# Claude Code Symbiosis - Context Compression
 # =============================================================================
 # Settings for Dynamic Context Compression when injecting context to Claude Code
 # Prevents context bloat by summarizing large RAG results
@@ -437,7 +437,7 @@ context_compression:
   method: "llm"
 
 # =============================================================================
-# Phase 19.7: Claude Code Symbiosis - Post-Mortem Audit
+# Claude Code Symbiosis - Post-Mortem Audit
 # =============================================================================
 # Settings for automatic review after Claude Code execution
 
@@ -449,7 +449,7 @@ post_mortem:
   confidence_threshold: 0.8
 
 # =============================================================================
-# Phase 68-69: Adaptive Context Injection (Dynamic Tool Loading)
+# Adaptive Context Injection (Dynamic Tool Loading)
 # =============================================================================
 # Configuration for "Core + Dynamic" tool loading strategy
 # Reduces token consumption by loading only relevant tools per request
@@ -457,7 +457,7 @@ post_mortem:
 adaptive:
   # Core Tools - Always present in LLM context (life support system)
   # CRITICAL: skill.search_tools MUST be included - enables tool discovery
-  # Phase 72: Added terminal and filesystem tools for essential operations
+  # Added terminal and filesystem tools for essential operations
   core_tools:
     - "terminal.run_command" # Terminal - Shell command execution
     - "terminal.run_task" # Terminal - Safe development task runner

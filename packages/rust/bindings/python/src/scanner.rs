@@ -1,9 +1,9 @@
-//! Script Scanner - Phase 62: Direct Python Bindings
+//! Script Scanner - Direct Python Bindings
 //!
 //! Provides direct Python bindings for scanning skill tools.
 //! Scans all directories defined in settings.yaml's skills.architecture.
 //!
-//! Phase 64: Added scan_skill() and scan_skill_from_content() for parsing
+//! Added scan_skill() and scan_skill_from_content() for parsing
 //! SKILL.md frontmatter (replaces python-frontmatter dependency).
 
 use crate::vector::PyToolRecord;

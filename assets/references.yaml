@@ -118,6 +118,24 @@ cli:
     - "skills"
     - "all"
     - "status"
+  skill_subcommands:
+    list: "List installed and loaded skills."
+    discover: "Discover skills from remote index. [DEPRECATED]"
+    info: "Show information about a skill."
+    install: "Install a skill from a remote repository. [DEPRECATED]"
+    update: "Update an installed skill. [DEPRECATED]"
+    test: "Test skills using the testing framework."
+    check: "Validate skill structure."
+    templates: "Manage skill templates."
+    create: "Create a new skill from template."
+  files:
+    - "__init__.py"
+    - "app.py"
+    - "console.py"
+    - "runner.py"
+    - "omni_loop.py"
+  directories:
+    - "commands"
 knowledge_caches:
   git_protocol:
     class: "GitWorkflowCache"
@@ -139,7 +157,7 @@ knowledge_caches:
 # =============================================================================
 context:
   system_context: "docs/llm/system_context.xml"
-  skill_index: "docs/llm/skill_index.json"
+  skill_index: ".cache/skill_index.json"
   architecture_docs_dir: "docs/human/architecture"
   description: "Context orchestrator and LLM system paths"
 
@@ -166,6 +184,9 @@ knowledge_dirs:
   - path: "assets/skills/knowledge/standards"
     domain: "standards"
     description: "Coding standards"
+  - path: "packages/python/core/tests"
+    domain: "testing"
+    description: "Test infrastructure (Core layer)"
 
 # =============================================================================
 # Prompts References (SSOT)
@@ -184,3 +205,46 @@ howto:
   documentation_workflow: "assets/how-to/documentation-workflow.md"
   agent_native: "assets/how-to/agent-native-development.md"
   description: "How-to guide paths"
+
+# =============================================================================
+# Trinity Architecture v2.0 References (SSOT)
+# =============================================================================
+trinity:
+  architecture: "docs/explanation/trinity-architecture.md"
+  core: "docs/human/architecture/trinity-core.md"
+  kernel: "docs/architecture/kernel.md"
+  router: "docs/architecture/router.md"
+  skills: "docs/architecture/skills.md"
+  description: "Trinity Architecture v2.0 - Thin Agent, Fat Kernel"
+
+# =============================================================================
+# Zero-Code Skills References (SSOT)
+# =============================================================================
+skills:
+  zero_code: "docs/explanation/zero-code-skill-architecture.md"
+  architecture: "docs/human/architecture/skills-architecture.md"
+  lifecycle: "docs/human/architecture/skill-lifecycle.md"
+  standard: "docs/human/architecture/skill-standard.md"
+  directory: "assets/skills"
+  cache: "SkillIndexCache"
+  description: "Zero-Code Skill System"
+
+# =============================================================================
+# Test Infrastructure References (SSOT)
+# =============================================================================
+test:
+  infrastructure: "packages/python/core/tests"
+  utils: "packages/python/core/tests/utils"
+  fixtures: "packages/python/core/tests/fixtures"
+  plugins: "packages/python/core/tests/plugins"
+  conftest: "packages/python/core/tests/conftest.py"
+  description: "Test infrastructure (moved to Core layer)"
+
+# =============================================================================
+# Extension System References (SSOT)
+# =============================================================================
+extensions:
+  system: "docs/reference/extension-system.md"
+  llm: "docs/reference/extension-system-llm.md"
+  rust_bridge: "assets/skills/git/extensions/rust_bridge"
+  description: "Skill extension system for Rust/Python bridging"

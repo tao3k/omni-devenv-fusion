@@ -1,7 +1,5 @@
 """
 knowledge/scripts/context.py - Knowledge Skill Commands
-
-Phase 63: Migrated from tools.py to scripts pattern.
 """
 
 import json
@@ -14,9 +12,9 @@ try:
 except ImportError:
     import tomli as tomllib
 
-from agent.skills.decorators import skill_command
-from common.gitops import get_project_root
-from common.skills_path import SKILLS_DIR
+from omni.core.skills.script_loader import skill_command
+from omni.foundation.runtime.gitops import get_project_root
+from omni.foundation.config.skills import SKILLS_DIR
 
 
 EXT_TO_LANG = {
@@ -141,7 +139,7 @@ def _get_project_name() -> str:
 
 def _load_scopes() -> List[str]:
     """Load valid git scopes from cog.toml."""
-    from common.settings import get_setting
+    from omni.foundation.config.settings import get_setting
 
     try:
         cog_toml_path = Path(get_setting("config.cog_toml", "cog.toml"))
@@ -157,7 +155,7 @@ def _load_scopes() -> List[str]:
 
 def _analyze_lefthook() -> List[Dict[str, str]]:
     """Analyze lefthook configuration to determine active guardrails."""
-    from common.settings import get_setting
+    from omni.foundation.config.settings import get_setting
 
     hooks = []
 
@@ -207,7 +205,7 @@ def _get_architecture_summary() -> Dict[str, str]:
 
 def _search_docs(topic: str) -> str:
     """Search documentation for a topic."""
-    from common.gitops import get_project_root
+    from omni.foundation.runtime.gitops import get_project_root
 
     docs_dir = get_project_root() / "docs"
     if not docs_dir.exists():
@@ -244,7 +242,7 @@ def _search_docs(topic: str) -> str:
 
 def _read_file_content(path: str) -> str:
     """Read file content safely."""
-    from common.gitops import get_project_root
+    from omni.foundation.runtime.gitops import get_project_root
 
     try:
         project_root = get_project_root()

@@ -1,7 +1,7 @@
 //! High-performance AST-based symbol extractor for code navigation.
 //!
 //! Extracts symbols (functions, classes, etc.) from source code using ast-grep
-//! patterns. Part of Phase 50: The Cartographer.
+//! patterns. Part of The Cartographer.
 
 use std::path::Path;
 use std::str::FromStr;
@@ -19,7 +19,7 @@ use crate::types::{SearchConfig, SearchMatch, Symbol, SymbolKind};
 /// High-performance AST-based symbol extractor for code navigation.
 ///
 /// Extracts symbols (functions, classes, etc.) from source code using ast-grep
-/// patterns. Part of Phase 50: The Cartographer.
+/// patterns. Part of The Cartographer.
 pub struct TagExtractor;
 
 impl TagExtractor {
@@ -78,7 +78,7 @@ impl TagExtractor {
     }
 
     // ============================================================================
-    // Phase 51: The Hunter - Structural Code Search
+    // The Hunter - Structural Code Search
     // ============================================================================
 
     /// Search for a pattern in a single file using ast-grep

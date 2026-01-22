@@ -39,6 +39,7 @@
 
 mod async_io;
 mod detect;
+mod dirs;
 mod error;
 mod sync;
 
@@ -47,6 +48,7 @@ mod sync;
 // ============================================================================
 
 pub use async_io::read_text_safe_async;
+pub use dirs::{PrjDirs, get_cache_home, get_config_home, get_data_home};
 pub use error::IoError;
 pub use sync::read_text_safe;
 

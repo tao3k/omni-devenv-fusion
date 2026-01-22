@@ -9,8 +9,6 @@
 //! - Structural refactoring (structural_replace, structural_preview)
 //! - Vector Store (PyVectorStore for LanceDB)
 //! - Skill Tool Scanner (scan_skill_tools)
-//!
-//! Phase 53 Vector Store moved to omni-vector-rs package for faster builds.
 
 use pyo3::prelude::*;
 
@@ -34,13 +32,15 @@ pub use editor::{
     PyBatchRefactorStats, batch_structural_replace, structural_apply, structural_preview,
     structural_replace,
 };
-pub use io::{count_tokens, read_file_safe, truncate_tokens};
+pub use io::{
+    count_tokens, get_cache_home, get_config_home, get_data_home, read_file_safe, truncate_tokens,
+};
 pub use navigation::{get_file_outline, search_code, search_directory};
 pub use scanner::{
     PySkillMetadata, export_skill_index, get_skill_index_schema, scan_skill,
     scan_skill_from_content, scan_skill_tools,
 };
-pub use security::{contains_secrets, scan_secrets};
+pub use security::{check_permission, contains_secrets, scan_secrets};
 pub use sniffer::{PyEnvironmentSnapshot, PyOmniSniffer, get_environment_snapshot, py_get_sniffer};
 pub use vector::{PyToolRecord, PyVectorStore, create_vector_store};
 
@@ -62,9 +62,10 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(pyo3::wrap_pyfunction!(count_tokens, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(truncate_tokens, m)?)?;
 
-    // Hyper-Immune System (Security)
+    // Hyper-Immune System (Security) + Permission Gatekeeper
     m.add_function(pyo3::wrap_pyfunction!(scan_secrets, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(contains_secrets, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(check_permission, m)?)?;
 
     // Cartographer and Hunter (Code Navigation)
     m.add_function(pyo3::wrap_pyfunction!(get_file_outline, m)?)?;
@@ -85,15 +86,20 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyVectorStore>()?;
     m.add_class::<PyToolRecord>()?;
 
-    // Script Scanner (Phase 62)
+    // Script Scanner
     m.add_function(pyo3::wrap_pyfunction!(scan_skill_tools, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(export_skill_index, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(get_skill_index_schema, m)?)?;
 
-    // Phase 64: SKILL.md Frontmatter Parser (replaces python-frontmatter)
+    // SKILL.md Frontmatter Parser
     m.add_function(pyo3::wrap_pyfunction!(scan_skill, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(scan_skill_from_content, m)?)?;
     m.add_class::<PySkillMetadata>()?;
+
+    // Rust Bridge Config Sync (PRJ_SPEC Compliance)
+    m.add_function(pyo3::wrap_pyfunction!(get_config_home, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(get_data_home, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(get_cache_home, m)?)?;
 
     m.add("VERSION", "0.5.0")?;
     Ok(())

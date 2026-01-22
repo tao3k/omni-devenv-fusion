@@ -1,7 +1,5 @@
 """
 writer/scripts/text.py - Writer Skill Commands
-
-Phase 63: Migrated from tools.py to scripts pattern.
 """
 
 import asyncio
@@ -13,8 +11,8 @@ from typing import Dict, List, Any, Optional
 
 import structlog
 
-from agent.skills.decorators import skill_command
-from common.skills_path import SKILLS_DIR
+from omni.core.skills.script_loader import skill_command
+from omni.foundation.config.skills import SKILLS_DIR
 
 logger = structlog.get_logger(__name__)
 

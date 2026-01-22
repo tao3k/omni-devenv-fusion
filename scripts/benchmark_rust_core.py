@@ -2,7 +2,7 @@
 """
 benchmark_rust_core.py - Rust Core Performance Benchmarks
 
-Phase 57: The Hardening - Benchmark Rust vs Python implementations.
+The Hardening - Benchmark Rust vs Python implementations.
 
 Usage:
     python scripts/benchmark_rust_core.py
@@ -89,7 +89,7 @@ def format_speedup(speedup: float) -> str:
 def benchmark_file_read_rust(file_path: Path, iterations: int = 100) -> float:
     """Read file using Rust omni-core-rs read_file_safe."""
     try:
-        # Phase 57: Use omni_core_rs.read_file_safe
+        # Use omni_core_rs.read_file_safe
         import omni_core_rs
 
         total_time = 0.0
@@ -155,7 +155,7 @@ def run_io_benchmark() -> BenchmarkResult:
 def benchmark_tokenize_rust(text: str, iterations: int = 100) -> float:
     """Tokenize using Rust omni-core-rs count_tokens."""
     try:
-        # Phase 57: Use omni_core_rs.count_tokens
+        # Use omni_core_rs.count_tokens
         import omni_core_rs
 
         # Warm-up: First call initializes the BPE cache
@@ -255,8 +255,8 @@ def benchmark_vector_search_rust(n_vectors: int = 1000, dim: int = 768) -> float
     For production use, this is the fair comparison (database vs database).
     """
     try:
-        # Phase 57: Use omni_vector_rs.create_vector_store
-        # Phase 58.9: Merged into omni_core_rs
+        # Use omni_vector_rs.create_vector_store
+        # Merged into omni_core_rs
         import omni_core_rs
 
         # Use temp directory for test with unique name
@@ -458,7 +458,7 @@ def main():
     args = parser.parse_args()
 
     console.print("[bold cyan]Rust Core Performance Benchmarks[/bold cyan]")
-    console.print("[dim]Phase 57: The Hardening[/dim]\n")
+    console.print("[dim]The Hardening[/dim]\n")
 
     categories = args.category if args.category else None
 

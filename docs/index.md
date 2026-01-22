@@ -30,15 +30,16 @@ Problem-oriented. Recipes for solving specific tasks.
 
 Information-oriented. Technical details, API specs, and configuration options.
 
-| Document                                                          | Description                                   |
-| ----------------------------------------------------------------- | --------------------------------------------- |
-| [Version Control](./reference/versioning.md)                      | Monorepo versioning with hatch-vcs + Justfile |
-| [MCP Orchestrator](./reference/mcp-orchestrator.md)               | Omni MCP tool configuration and usage         |
-| [MCP Best Practices](./reference/mcp-best-practices.md)           | MCP server design patterns and anti-patterns  |
-| [Documentation Standards](./reference/documentation-standards.md) | Doc guidelines for this project               |
-| [ODF-EP Protocol](./reference/odf-ep-protocol.md)                 | MANDATORY for LLMs - Engineering Protocol     |
-| [Skill Discovery](./developer/discover.md)                        | Vector-Enhanced Discovery & Hot Reload        |
-| [CLI Reference](./reference/cli.md)                               | Omni run, omni run exec commands              |
+| Document                                                          | Description                                  |
+| ----------------------------------------------------------------- | -------------------------------------------- |
+| [MCP Orchestrator](./reference/mcp-orchestrator.md)               | Omni MCP tool configuration and usage        |
+| [MCP Best Practices](./reference/mcp-best-practices.md)           | MCP server design patterns and anti-patterns |
+| [Documentation Standards](./reference/documentation-standards.md) | Doc guidelines for this project              |
+| [ODF-EP Protocol](./reference/odf-ep-protocol.md)                 | MANDATORY for LLMs - Engineering Protocol    |
+| [CLI Reference](./reference/cli.md)                               | Omni run, omni run exec commands             |
+| [Code Tools Skill](./reference/code-tools.md)                     | AST-based code navigation and refactoring    |
+| [AST-Based Search](./reference/ast-grep.md)                       | ast-grep patterns and Cartographer/Hunter    |
+| [Skill Generator](./reference/skill-generator.md)                 | Hybrid skill generator (Jinja2 + LLM)        |
 
 ---
 
@@ -46,13 +47,13 @@ Information-oriented. Technical details, API specs, and configuration options.
 
 Internal documentation for Omni-Dev Fusion developers.
 
-| Document                                                      | Description                                       |
-| ------------------------------------------------------------- | ------------------------------------------------- |
-| [Skill Discovery](./developer/discover.md)                    | Vector-Enhanced Discovery & Hot Reload            |
-| [Testing Guide](./developer/testing.md)                       | Test system architecture and developer guide      |
-| [CLI Guide](./developer/cli.md)                               | CLI developer documentation                       |
-| [MCP Core Architecture](./developer/mcp-core-architecture.md) | Shared library architecture guide                 |
-| [LangGraph Builder](./developer/langgraph-builder.md)         | DynamicGraphBuilder API for workflow construction |
+| Document                                                      | Description                                  |
+| ------------------------------------------------------------- | -------------------------------------------- |
+| [Skill Discovery](./developer/discover.md)                    | Skill discovery (MIGRATION GUIDE)            |
+| [Testing Guide](./developer/testing.md)                       | Test system architecture and developer guide |
+| [CLI Guide](./developer/cli.md)                               | CLI developer documentation (OUTDATED)       |
+| [MCP Core Architecture](./developer/mcp-core-architecture.md) | Shared library architecture guide            |
+| [Routing Guide](./developer/routing.md)                       | Routing architecture (MIGRATION GUIDE)       |
 
 ---
 
@@ -79,18 +80,7 @@ Skills, Knowledge, and Memory integration:
 | **Knowledge** | Unified Knowledge Index        | [Knowledge Matrix](./human/architecture/knowledge-matrix.md)           | Active |
 | **Memory**    | Episodic Memory                | [Memory Mesh](./human/architecture/memory-mesh.md)                     | Active |
 | **Cognition** | CCA Runtime                    | [Cognitive Scaffolding](./human/architecture/cognitive-scaffolding.md) | Active |
-| **Omni Loop** | CCA Runtime                    | [Omni Loop](./human/architecture/omni-loop.md)                         | Active |
-
----
-
-## LangGraph Workflows
-
-Building complex workflows with DynamicGraphBuilder:
-
-| Document                                                  | Description                               |
-| --------------------------------------------------------- | ----------------------------------------- |
-| [LangGraph Builder API](./developer/langgraph-builder.md) | DynamicGraphBuilder API reference         |
-| [Workflow Guide](./llm/langgraph-workflow-guide.md)       | LLM guide for writing LangGraph workflows |
+| **Omni Loop** | CCA Runtime                    | [Omni Loop](./human/architecture/omni-loop.md)                         | ACTIVE |
 
 ---
 
@@ -98,11 +88,25 @@ Building complex workflows with DynamicGraphBuilder:
 
 Guides specifically for LLMs interacting with the system:
 
-| Document                                    | Description                               |
-| ------------------------------------------- | ----------------------------------------- |
-| [Skill Discovery](./llm/skill-discovery.md) | How LLMs discover and use skills          |
-| [Routing Guide](./llm/routing-guide.md)     | How routing works with confidence scoring |
-| [Memory Context](./llm/memory-context.md)   | Memory hierarchy and usage patterns       |
+| Document                                  | Description                               |
+| ----------------------------------------- | ----------------------------------------- |
+| [Routing Guide](./llm/routing-guide.md)   | How routing works with confidence scoring |
+| [Memory Context](./llm/memory-context.md) | Memory hierarchy and usage patterns       |
+
+---
+
+## Architecture
+
+Detailed codebase structure and architecture documentation.
+
+| Document                                                   | Description                                        |
+| ---------------------------------------------------------- | -------------------------------------------------- |
+| [Codebase Structure](./architecture/codebase-structure.md) | Complete directory tree and file descriptions      |
+| [Rust Crates](./architecture/rust-crates.md)               | Rust crates reference with modules and performance |
+| [Skills System](./architecture/skills.md)                  | Zero-Code skill architecture and development guide |
+| [Kernel Architecture](./architecture/kernel.md)            | Microkernel engine, lifecycle management           |
+| [Router Architecture](./architecture/router.md)            | Semantic routing system (OmniRouter, HiveRouter)   |
+| [MCP-Server Architecture](./architecture/mcp-server.md)    | MCP protocol implementation                        |
 
 ---
 
@@ -110,5 +114,4 @@ Guides specifically for LLMs interacting with the system:
 
 | Document                                       | Description                           |
 | ---------------------------------------------- | ------------------------------------- |
-| [Backlog](./backlog.md)                        | Feature-based task tracking           |
 | [Skills Directory](../assets/skills/README.md) | Skill packages and commands reference |

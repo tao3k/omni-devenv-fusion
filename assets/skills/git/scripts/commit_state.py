@@ -1,6 +1,6 @@
 """
 assets/skills/git/scripts/commit_state.py
-Phase 36.7: Commit-Specific State Schema for Smart Commit Workflow
+Commit-Specific State Schema for Smart Commit Workflow
 
 Defines the structured state for LangGraph-driven commit workflow
 with Human-in-the-Loop (HITL) approval.

@@ -1,5 +1,5 @@
 """
-skill/scripts/templates.py - Template Management (Phase 35.2)
+skill/scripts/templates.py - Template Management
 
 Implements cascading template loading with "User Overrides > Skill Defaults" pattern.
 
@@ -11,10 +11,10 @@ Template Locations:
 from pathlib import Path
 from typing import Dict, Optional
 
-from agent.skills.decorators import skill_command
-from common.skills_path import SKILLS_DIR
-from common.config.settings import get_setting
-from common.gitops import get_project_root
+from omni.core.skills.script_loader import skill_command
+from omni.foundation.config.skills import SKILLS_DIR
+from omni.foundation.config.settings import get_setting
+from omni.foundation.runtime.gitops import get_project_root
 
 
 def get_template_dirs(skill_name: str) -> Dict[str, Path]:

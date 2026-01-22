@@ -1,4 +1,4 @@
-//! Safe I/O and Tokenization - Phase 47: The Iron Lung
+//! Safe I/O and Tokenization
 //!
 //! Provides high-performance file reading and token counting for Python.
 
@@ -31,4 +31,23 @@ pub fn count_tokens(text: &str) -> usize {
 #[pyo3(signature = (text, max_tokens))]
 pub fn truncate_tokens(text: &str, max_tokens: usize) -> String {
     omni_tokenizer::truncate(text, max_tokens)
+}
+
+/// Get PRJ_CONFIG_HOME from Rust side (PRJ_SPEC Compliance).
+/// This allows Python to verify that Rust reads the same env var.
+#[pyfunction]
+pub fn get_config_home() -> String {
+    omni_io::get_config_home()
+}
+
+/// Get PRJ_DATA_HOME from Rust side.
+#[pyfunction]
+pub fn get_data_home() -> String {
+    omni_io::get_data_home()
+}
+
+/// Get PRJ_CACHE_HOME from Rust side.
+#[pyfunction]
+pub fn get_cache_home() -> String {
+    omni_io::get_cache_home()
 }

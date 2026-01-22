@@ -23,14 +23,14 @@ Use this prompt when planning any code refactoring or implementation task.
 
 ## Planning Checklist
 
-### Phase 1: Discovery
+### Discovery
 
 - [ ] Read existing architecture documentation (`docs/developer/mcp-core-architecture.md`)
 - [ ] Identify modules to refactor
 - [ ] Map dependencies and imports
 - [ ] Note any existing patterns to preserve
 
-### Phase 2: Pillar A - Pydantic Shield
+### Pillar A - Pydantic Shield
 
 Convert DTOs from `@dataclass` or `BaseModel` to frozen Pydantic:
 
@@ -52,7 +52,7 @@ class ExecutionResult(BaseModel):
     error: str | None = None
 ```
 
-### Phase 3: Pillar B - Protocol Design
+### Pillar B - Protocol Design
 
 Define protocols for major interfaces:
 
@@ -69,7 +69,7 @@ class IOrchestrator(Protocol):
     ) -> str: ...
 ```
 
-### Phase 4: Pillar C - Tenacity Resilience
+### Pillar C - Tenacity Resilience
 
 Add retry decorators to I/O operations:
 
@@ -84,12 +84,12 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 async def _append_to_file(self, event: SessionEvent) -> None: ...
 ```
 
-### Phase 5: Pillar D - Context Logging
+### Pillar D - Context Logging
 
 Use lazy logger initialization and context binding:
 
 ```python
-# Lazy logger (Phase 32 optimization)
+# Lazy logger
 _cached_logger = None
 
 def _get_logger() -> Any:

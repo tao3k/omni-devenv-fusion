@@ -2,7 +2,7 @@
 git/scripts/workflow.py - Git workflow orchestration (LangGraph)
 
 This module implements LangGraph-based workflow orchestration for Git operations.
-Uses relative imports to stay isolated within git/scripts namespace.
+Uses absolute imports for proper module resolution.
 
 Architecture:
     scripts/workflow.py -> Node functions and workflow definition
@@ -16,13 +16,13 @@ from typing import Dict, Any, Optional
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
-from .state import GitWorkflowState, WorkflowStep
-from .status import status as git_status
-from .branch import list_branches as _git_branch, create_branch as _git_checkout
-from . import stash
-from . import add
-from . import commit
-from .rendering import render_workflow_result, render_error
+from state import GitWorkflowState, WorkflowStep
+from status import status as git_status
+from branch import list_branches as _git_branch, create_branch as _git_checkout
+import stash
+import add
+import commit
+from rendering import render_workflow_result, render_error
 
 
 # ==============================================================================

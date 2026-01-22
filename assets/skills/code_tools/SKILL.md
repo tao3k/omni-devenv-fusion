@@ -34,6 +34,11 @@ intents:
   - "Refactor and rename symbols"
   - "Find class or function definitions"
   - "Count symbols and lines in codebase"
+permissions:
+  - "filesystem:read_file"
+  - "filesystem:list_dir"
+  - "filesystem:search"
+  - "knowledge:search"
 ---
 
 You have loaded the **Code Tools Skill**.
