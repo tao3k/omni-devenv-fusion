@@ -15,8 +15,9 @@ import os
 import subprocess
 from pathlib import Path
 
-# Cache for project root (singleton pattern)
+# Cache for project root (singleton pattern) - module level cache
 _project_root: Path | None = None
+_project_root_searched: bool = False  # Flag to avoid repeated searches
 
 
 def _find_project_root_from_file(file_path: Path) -> Path | None:
@@ -42,6 +43,13 @@ def _is_project_root(path: Path) -> bool:
     return any((path / indicator).exists() for indicator in indicators)
 
 
+def clear_project_root_cache() -> None:
+    """Clear the project root cache. Useful for testing."""
+    global _project_root, _project_root_searched
+    _project_root = None
+    _project_root_searched = False
+
+
 def get_project_root() -> Path:
     """
     Get the project root directory.
@@ -55,10 +63,26 @@ def get_project_root() -> Path:
     Returns:
         Path to project root
     """
-    global _project_root
+    global _project_root, _project_root_searched
 
+    # Fast path: already searched and cached
     if _project_root is not None:
         return _project_root
+
+    # Already searched but not found (to avoid repeated failures)
+    if _project_root_searched:
+        # Try cwd as last resort
+        cwd = Path.cwd()
+        if _is_project_root(cwd):
+            _project_root = cwd
+            return _project_root
+        raise RuntimeError(
+            "CRITICAL: Cannot determine project root. "
+            "Not in a git repository and no project indicators found. "
+            f"Current working directory: {Path.cwd()}"
+        )
+
+    _project_root_searched = True  # Mark that we've searched
 
     # Method 1: PRJ_ROOT environment variable
     prj_root = os.environ.get("PRJ_ROOT")
@@ -73,13 +97,12 @@ def get_project_root() -> Path:
             ["git", "-C", str(Path.cwd()), "rev-parse", "--show-toplevel"],
             capture_output=True,
             text=True,
-            timeout=2,  # Reduced timeout for faster failure in test environments
+            timeout=1,  # Reduced to 1s for faster failure
         )
         if result.returncode == 0:
             _project_root = Path(result.stdout.strip())
             return _project_root
     except subprocess.TimeoutExpired:
-        # Fast fail on timeout - common in test environments
         pass
     except Exception:
         pass

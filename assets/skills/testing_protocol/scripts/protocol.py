@@ -10,7 +10,7 @@ from typing import Dict, Any, Optional
 
 import structlog
 
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 
 logger = structlog.get_logger(__name__)
 

@@ -12,7 +12,7 @@ try:
 except ImportError:
     import tomli as tomllib
 
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 from omni.foundation.runtime.gitops import get_project_root
 from omni.foundation.config.skills import SKILLS_DIR
 

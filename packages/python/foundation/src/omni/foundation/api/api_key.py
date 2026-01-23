@@ -32,9 +32,9 @@ def _find_project_root() -> Path:
 
 
 def _load_settings_yaml() -> dict:
-    """Load agent/settings.yaml configuration."""
+    """Load assets/settings.yaml configuration."""
     project_root = _find_project_root()
-    settings_path = project_root / "agent" / "settings.yaml"
+    settings_path = project_root / "assets" / "settings.yaml"
 
     if not settings_path.exists():
         return {}

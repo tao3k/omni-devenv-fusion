@@ -11,7 +11,7 @@ Template Locations:
 from pathlib import Path
 from typing import Dict, Optional
 
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 from omni.foundation.config.skills import SKILLS_DIR
 from omni.foundation.config.settings import get_setting
 from omni.foundation.runtime.gitops import get_project_root
@@ -42,16 +42,12 @@ def get_template_dirs(skill_name: str) -> Dict[str, Path]:
     name="list_templates",
     category="read",
     description="""
-    Lists all available templates for a skill with their sources.
+    List all available templates for a skill with their sources.
 
-    Templates follow the cascading pattern: User Overrides > Skill Defaults.
+    **Parameters**:
+    - `skill_name` (required): Name of the skill (e.g., "git", "docker")
 
-    Args:
-        skill_name: Name of the skill (e.g., `git`, `docker`).
-
-    Returns:
-        Dictionary mapping template names to their source (`user` or `skill`)
-        and absolute file paths.
+    **Returns**: Dictionary mapping template names to source ("user" or "skill") and path.
     """,
 )
 def list_templates(skill_name: str) -> Dict[str, Dict[str, str]]:
@@ -76,15 +72,13 @@ def list_templates(skill_name: str) -> Dict[str, Dict[str, str]]:
     name="get_template_info",
     category="read",
     description="""
-    Gets information about a specific template.
+    Get information about a specific template.
 
-    Args:
-        skill_name: Name of the skill.
-        template_name: Template filename (e.g., `commit_message.j2`).
+    **Parameters**:
+    - `skill_name` (required): Name of the skill
+    - `template_name` (required): Template filename (e.g., "commit_message.j2")
 
-    Returns:
-        Dictionary with `source` (`user` or `skill`), `path`,
-        or `None` if not found.
+    **Returns**: Dictionary with source ("user" or "skill"), path, or null if not found.
     """,
 )
 def get_template_info(skill_name: str, template_name: str) -> Optional[Dict[str, str]]:
@@ -96,14 +90,13 @@ def get_template_info(skill_name: str, template_name: str) -> Optional[Dict[str,
     name="get_template_source",
     category="read",
     description="""
-    Gets the source code content of a template.
+    Get the source code content of a template.
 
-    Args:
-        skill_name: Name of the skill.
-        template_name: Template filename.
+    **Parameters**:
+    - `skill_name` (required): Name of the skill
+    - `template_name` (required): Template filename
 
-    Returns:
-        Template file content as string, or `None` if not found.
+    **Returns**: Template file content as string, or null if not found.
     """,
 )
 def get_template_source(skill_name: str, template_name: str) -> Optional[str]:
@@ -119,21 +112,13 @@ def get_template_source(skill_name: str, template_name: str) -> Optional[str]:
     name="eject_template",
     category="write",
     description="""
-    Copies a skill default template to the user directory for customization.
+    Copy a skill default template to the user directory for customization.
 
-    Creates a user override that takes precedence over skill defaults.
+    **Parameters**:
+    - `skill_name` (required): Name of the skill
+    - `template_name` (required): Template filename (e.g., "commit_message"). .j2 added automatically
 
-    Args:
-        skill_name: Name of the skill.
-        template_name: Template filename (e.g., `commit_message.j2`).
-                      The `.j2` extension is added automatically if missing.
-
-    Returns:
-        Dictionary with `status` (`success`, `already_exists`, `not_found`),
-        `message`, `source` path, and destination `path`.
-
-    Example:
-        @omni("skill.eject_template", {"skill_name": "git", "template_name": "commit_message"})
+    **Returns**: Dictionary with status ("success", "already_exists", "not_found"), message, source, path.
     """,
 )
 def eject_template(skill_name: str, template_name: str) -> Dict[str, str]:

@@ -9,29 +9,23 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 
 
 @skill_command(
     name="summarize_session",
     category="write",
     description="""
-    Summarizes current session trajectory into structured markdown notes.
+    Summarize current session trajectory into structured markdown notes.
 
     Extracts key decisions, failures, solutions, and file modifications.
 
-    Args:
-        session_id: Unique identifier for this session.
-        trajectory: List of execution steps with decisions and outcomes.
-        include_failures: Whether to include failed approaches.
-                          Defaults to `true`.
+    **Parameters**:
+    - `session_id` (required): Unique identifier for this session
+    - `trajectory` (required): List of execution steps with decisions and outcomes
+    - `include_failures` (optional, default: true): Whether to include failed approaches
 
-    Returns:
-        Dict with success status, path to generated summary,
-        counts of decisions, failures, and files modified.
-
-    Example:
-        @omni("note_taker.summarize_session", {"session_id": "session_123", "trajectory": [...]})
+    **Returns**: Dictionary with success, path, session_id, counts of decisions/failures/files.
     """,
 )
 def summarize_session(

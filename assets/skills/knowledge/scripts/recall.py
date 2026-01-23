@@ -18,7 +18,7 @@ from typing import Any
 
 import structlog
 
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 from omni.foundation import get_vector_store
 
 logger = structlog.get_logger(__name__)
@@ -65,28 +65,17 @@ class RecallResult:
     name="recall",
     category="read",
     description="""
-    [Neural Recall] Semantic + Keyword Hybrid Search over Project Knowledge.
+    Semantic + Keyword Hybrid Search over Project Knowledge (The Neural Matrix).
 
-    This is the PRIMARY interface for retrieving knowledge from the vector store.
-    Combines semantic similarity with keyword boosting for accurate results.
+    PRIMARY interface for retrieving knowledge from the vector store.
 
-    Use this when you need to:
-    - Answer questions about project architecture
-    - Find implementation details
-    - Recall design decisions
-    - Search documentation and specs
+    **Parameters**:
+    - `query` (required): Natural language query (e.g., "ActionGuard infinite loop prevention")
+    - `limit` (optional, default: 5): Maximum results to return (max: 10)
+    - `keywords` (optional): List of keywords to boost precision
+    - `collection` (optional, default: `knowledge`): Collection to search
 
-    Args:
-        query: Natural language query (e.g., "ActionGuard infinite loop prevention").
-        limit: Maximum results (default 5, max 10).
-        keywords: Optional keywords to boost (improves precision).
-        collection: Collection to search (default: "knowledge").
-
-    Returns:
-        JSON with recall results including content, source, score, and metadata.
-
-    Example:
-        @omni("knowledge.recall", {"query": "ActionGuard prevention mechanism"})
+    **Returns**: JSON with recall results including content, source, score, and metadata.
     """,
 )
 async def recall(
@@ -222,24 +211,15 @@ async def recall(
     name="ingest",
     category="write",
     description="""
-    [Knowledge Ingestion] Add content to the knowledge base.
+    Add content to the knowledge base for semantic retrieval.
 
-    Embeds and stores content for semantic retrieval.
+    **Parameters**:
+    - `content` (required): Text content to embed and store
+    - `source` (required): Source path/identifier (e.g., "docs/guide.md")
+    - `metadata` (optional): Dictionary of metadata (tags, title, etc.)
+    - `collection` (optional, default: `knowledge`): Collection name
 
-    Args:
-        content: Text content to ingest.
-        source: Source path/identifier (e.g., "docs/guide.md").
-        metadata: Optional metadata dictionary.
-        collection: Collection name (default: "knowledge").
-
-    Returns:
-        JSON with ingestion status and document ID.
-
-    Example:
-        @omni("knowledge.ingest", {
-            "content": "# Architecture\\n\\nThis project uses...",
-            "source": "docs/architecture.md"
-        })
+    **Returns**: JSON with ingestion status, document_id, source, and content_length.
     """,
 )
 async def ingest(
@@ -311,9 +291,12 @@ async def ingest(
     name="stats",
     category="read",
     description="""
-    [Knowledge Stats] Get knowledge base statistics.
+    Get knowledge base statistics including document count and vector dimension.
 
-    Returns the number of indexed documents and storage info.
+    **Parameters**:
+    - `collection` (optional, default: `knowledge`): Collection name
+
+    **Returns**: JSON with status, collection, document_count, and vector_dimension.
     """,
 )
 async def stats(collection: str = "knowledge") -> str:
@@ -370,9 +353,12 @@ async def stats(collection: str = "knowledge") -> str:
     name="clear",
     category="write",
     description="""
-    [Knowledge Clear] Clear all knowledge from a collection.
+    Clear all knowledge from a collection. WARNING: Permanently deletes indexed knowledge.
 
-    WARNING: This permanently deletes all indexed knowledge.
+    **Parameters**:
+    - `collection` (optional, default: `knowledge`): Collection name to clear
+
+    **Returns**: JSON with status and message.
     """,
 )
 async def clear(collection: str = "knowledge") -> str:

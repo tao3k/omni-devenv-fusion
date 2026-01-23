@@ -8,6 +8,12 @@ Usage:
     from omni.core.skills.runtime import get_skill_context, SkillContext
     ctx = get_skill_context(skills_dir)
     ctx.register_skill(universal_skill)
+
+    # Get filtered core commands
+    core_commands = ctx.get_core_commands()
+
+    # Get all commands (including filtered)
+    all_commands = ctx.list_commands()
 """
 
 from __future__ import annotations
@@ -136,12 +142,52 @@ class SkillContext:
         return list(self._skills.keys())
 
     def list_commands(self) -> list[str]:
-        """List all registered commands.
+        """List all registered commands (including filtered).
 
         Returns:
             List of command names
         """
         return list(self._commands.keys())
+
+    def get_filtered_commands(self) -> list[str]:
+        """List commands that should be filtered from core tools.
+
+        Returns commands matching filter_commands config.
+
+        Returns:
+            List of filtered command names
+        """
+        from omni.core.config.loader import is_filtered
+
+        return [cmd for cmd in self._commands.keys() if is_filtered(cmd)]
+
+    def get_core_commands(self) -> list[str]:
+        """List commands available in core tools (filtered excluded).
+
+        Applies filter_commands config to exclude certain commands
+        from being considered core tools.
+
+        Returns:
+            List of core command names (filter_commands excluded)
+        """
+        from omni.core.config.loader import is_filtered
+
+        return [cmd for cmd in self._commands.keys() if not is_filtered(cmd)]
+
+    def get_dynamic_commands(self) -> list[str]:
+        """List commands available as dynamic tools.
+
+        These are commands that were filtered from core tools
+        but can still be loaded on demand.
+
+        Returns:
+            List of dynamic command names (filter_commands included)
+        """
+        from omni.core.config.loader import load_filter_commands
+
+        filter_config = load_filter_commands()
+        filter_set = set(filter_config.commands)
+        return [cmd for cmd in self._commands.keys() if cmd in filter_set]
 
     def clear(self) -> None:
         """Clear all registered skills and commands."""

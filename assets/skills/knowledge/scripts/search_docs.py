@@ -21,7 +21,15 @@ logger = get_logger("skill.knowledge.search_docs")
 
 @skill_command(
     name="search_documentation",
-    description="Search markdown documentation and references for specific topics.",
+    category="read",
+    description="""
+    Search markdown documentation and references for specific topics.
+
+    **Parameters**:
+    - `query` (required): The search term or topic to find in docs
+
+    **Returns**: Dictionary with success, query, count, and results (file, snippets, header).
+    """,
     autowire=True,
 )
 def search_documentation(
@@ -112,7 +120,15 @@ def search_documentation(
 
 @skill_command(
     name="search_standards",
-    description="Search for coding standards and engineering guidelines.",
+    category="read",
+    description="""
+    Search for coding standards and engineering guidelines in docs/reference/.
+
+    **Parameters**:
+    - `topic` (required): The engineering topic to search standards for
+
+    **Returns**: Dictionary with success, topic, count, and results (file, snippets).
+    """,
     autowire=True,
 )
 def search_standards(

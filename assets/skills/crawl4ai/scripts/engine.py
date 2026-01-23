@@ -41,7 +41,16 @@ except ImportError:
 
 @skill_command(
     name="crawl_url",
-    description="Crawl a web page and extract its content as markdown using Playwright.",
+    category="read",
+    description="""
+    Crawl a web page and extract its content as markdown using Playwright.
+
+    **Parameters**:
+    - `url` (required): Target URL to crawl
+    - `fit_markdown` (optional, default: true): Whether to clean and simplify the markdown
+
+    **Returns**: Dictionary with success, url, content, error, and metadata (title, description).
+    """,
 )
 async def crawl_url(
     url: str,
@@ -100,7 +109,14 @@ async def crawl_url(
 
 @skill_command(
     name="check_crawler_ready",
-    description="Check if the crawler skill is properly configured and ready.",
+    category="read",
+    description="""
+    Check if the crawler skill is properly configured and Playwright browsers are installed.
+
+    **Parameters**: None
+
+    **Returns**: Dictionary with ready status and browsers info or error message.
+    """,
 )
 async def check_crawler_ready() -> dict:
     """

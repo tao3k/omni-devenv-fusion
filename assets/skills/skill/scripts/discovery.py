@@ -2,7 +2,7 @@
 skill/scripts/discovery.py - Skill Discovery Commands
 """
 
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 
 
 def _get_discovery():
@@ -16,21 +16,14 @@ def _get_discovery():
     name="discover",
     category="workflow",
     description="""
-    Searches for skills using semantic vector matching.
+    Search for skills using semantic vector matching.
 
-    Uses LanceDB-based semantic search to find skills that match your query,
-    even when keywords don't exactly match. Returns results with similarity scores.
+    **Parameters**:
+    - `query` (optional): Search query (e.g., "process pdf files"). Empty = browse all skills
+    - `limit` (optional, default: 5): Maximum number of results
+    - `local_only` (optional, default: false): If true, only search installed skills
 
-    Args:
-        query: Search query (e.g., "process pdf files", "git workflow").
-               Leave empty to browse all skills.
-        limit: Maximum number of results to return. Defaults to `5`.
-        local_only: If `true`, only search installed skills.
-                    Defaults to `false`.
-
-    Returns:
-        Formatted skill list with names, match percentages, and keywords.
-        Shows `installed` or `remote` status for each skill.
+    **Returns**: Formatted skill list with names, match percentages, and keywords.
     """,
 )
 async def discover(query: str = "", limit: int = 5, local_only: bool = False) -> str:
@@ -72,15 +65,12 @@ async def discover(query: str = "", limit: int = 5, local_only: bool = False) ->
     name="suggest",
     category="workflow",
     description="""
-    Analyzes a task description and suggests the best skill using semantic matching.
+    Analyze a task description and suggest the best skill using semantic matching.
 
-    Args:
-        task: Description of what you want to do.
-              Example: "commit code with message", "search files recursively"
+    **Parameters**:
+    - `task` (required): Description of what you want to do (e.g., "commit code", "search files")
 
-    Returns:
-        Recommendation with the best matching skill name, confidence score,
-        and the skill's description.
+    **Returns**: Recommendation with best matching skill name, confidence score, and description.
     """,
 )
 async def suggest(task: str) -> str:
@@ -107,17 +97,13 @@ async def suggest(task: str) -> str:
     name="jit_install",
     category="workflow",
     description="""
-    Installs and loads a skill from the skill index on-demand.
+    Install and load a skill from the skill index on-demand.
 
-    Just-in-Time skill installation for dynamic capability expansion.
+    **Parameters**:
+    - `skill_id` (required): The unique identifier of the skill to install
+    - `auto_load` (optional, default: true): If true, automatically load after installation
 
-    Args:
-        skill_id: The unique identifier of the skill to install.
-        auto_load: If `true`, automatically loads the skill after installation.
-                   Defaults to `true`.
-
-    Returns:
-        Status message confirming the installation request.
+    **Returns**: Status message confirming the installation request.
     """,
 )
 def jit_install(skill_id: str, auto_load: bool = True) -> str:
@@ -128,16 +114,11 @@ def jit_install(skill_id: str, auto_load: bool = True) -> str:
     name="list_index",
     category="workflow",
     description="""
-    Lists all skills in the known skills index.
+    List all skills in the known skills index (installed and available).
 
-    Returns both installed and remote (available) skills with counts.
+    **Parameters**: None
 
-    Args:
-        None
-
-    Returns:
-        Formatted list showing installed skills and available remote skills.
-        Grouped by status with count totals.
+    **Returns**: Formatted list with total skill count and collection info.
     """,
 )
 async def list_index() -> str:

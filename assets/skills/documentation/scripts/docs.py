@@ -8,7 +8,7 @@ from typing import Optional
 
 import structlog
 
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 from omni.foundation.runtime.gitops import get_project_root
 
 logger = structlog.get_logger(__name__)
@@ -21,7 +21,16 @@ knowledge_dir = root / "agent" / "knowledge"
 @skill_command(
     name="create_knowledge_entry",
     category="write",
-    description="Create a new standardized knowledge entry.",
+    description="""
+    Create a new standardized knowledge entry in agent/knowledge/harvested/.
+
+    **Parameters**:
+    - `title` (required): Human readable title (e.g., "Fixing Deadlocks")
+    - `category` (required): One of [architecture, debugging, pattern, workflow]
+    - `content` (required): The Markdown content (header is auto-generated)
+
+    **Returns**: Success message with filename.
+    """,
 )
 async def create_knowledge_entry(title: str, category: str, content: str) -> str:
     """
@@ -57,7 +66,13 @@ async def create_knowledge_entry(title: str, category: str, content: str) -> str
 @skill_command(
     name="rebuild_knowledge_index",
     category="write",
-    description="Scan all markdown files and update the main README.md index.",
+    description="""
+    Scan all markdown files in agent/knowledge and update the main README.md index.
+
+    **Parameters**: None
+
+    **Returns**: Success message with entry count.
+    """,
 )
 async def rebuild_knowledge_index() -> str:
     """
@@ -96,7 +111,14 @@ async def rebuild_knowledge_index() -> str:
 @skill_command(
     name="search_knowledge_base",
     category="read",
-    description="Simple text search across the knowledge base.",
+    description="""
+    Simple text search across the knowledge base markdown files.
+
+    **Parameters**:
+    - `query` (required): Search term to find in knowledge base
+
+    **Returns**: Search results with matches or "No matches found" message.
+    """,
 )
 async def search_knowledge_base(query: str) -> str:
     """

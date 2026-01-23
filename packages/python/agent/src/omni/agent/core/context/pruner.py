@@ -219,6 +219,7 @@ class ContextPruner:
     def segment(
         self,
         messages: List[Dict[str, Any]],
+        system_msgs: List[Dict[str, Any]] | None = None,
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
         """
         Segment message history into three distinct parts for compression.
@@ -229,23 +230,29 @@ class ContextPruner:
         3. Recent Messages (short-term memory - preserved)
 
         Args:
-            messages: Full message history with system and chat messages.
+            messages: Chat message history (user/assistant roles only).
+            system_msgs: Optional system messages. If None, extracted from messages.
 
         Returns:
             Tuple of (system_msgs, to_summarize, recent_msgs):
-            - system_msgs: All messages with role="system"
+            - system_msgs: All messages with role="system" (or provided system_msgs)
             - to_summarize: Chat messages before the recent window
             - recent_msgs: Last N turns of chat messages
         """
         if not messages:
-            return [], [], []
+            return (system_msgs or []), [], []
 
-        # Separate system messages (always preserved)
-        system_msgs = [m for m in messages if m.get("role") == "system"]
+        # Use provided system_msgs or extract from messages (backward compat)
+        if system_msgs is not None:
+            extracted_system = system_msgs
+        else:
+            extracted_system = [m for m in messages if m.get("role") == "system"]
+
+        # Chat messages are those without system role
         chat_msgs = [m for m in messages if m.get("role") != "system"]
 
         if not chat_msgs:
-            return system_msgs, [], []
+            return extracted_system, [], []
 
         # Calculate retention for recent messages
         retain_count = self.config.retained_turns * 2  # user + assistant pairs
@@ -256,4 +263,4 @@ class ContextPruner:
         # To-summarize: everything before the recent window
         to_summarize = chat_msgs[:-retain_count] if len(chat_msgs) > retain_count else []
 
-        return system_msgs, to_summarize, recent_msgs
+        return extracted_system, to_summarize, recent_msgs

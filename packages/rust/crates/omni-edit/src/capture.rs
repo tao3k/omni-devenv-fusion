@@ -86,22 +86,3 @@ fn extract_variadic_fallback(replacement: &str, original_text: &str) -> String {
 
     new_text
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_variadic_fallback() {
-        let replacement = "new_func($$$)";
-        let original = "old_func(a, b, c)";
-        let result = super::extract_variadic_fallback(replacement, original);
-        assert_eq!(result, "new_func(a, b, c)");
-    }
-
-    #[test]
-    fn test_named_variadic_fallback() {
-        let replacement = "new_func($$$ARGS)";
-        let original = "old_func(x, y)";
-        let result = super::extract_variadic_fallback(replacement, original);
-        assert_eq!(result, "new_func(x, y)");
-    }
-}

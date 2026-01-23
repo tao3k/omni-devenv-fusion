@@ -95,15 +95,16 @@ def search_code(
             cmd.extend(["--include", include])
 
         cmd.append(pattern)
-        cmd.append(".")  # Search from current cwd (which we set to root)
+        cmd.append(".")
 
-        # 3. Execute
+        # 3. Execute with timeout (10 seconds max)
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            cwd=root,  # SECURITY: Enforce root as working directory
+            cwd=str(root),  # SECURITY: Enforce root as working directory
             check=False,
+            timeout=10,  # Prevent hanging
         )
 
         if result.returncode > 1:
@@ -141,6 +142,8 @@ def search_code(
             "matches": matches,
         }
 
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "Search timed out after 10 seconds"}
     except Exception as e:
         logger.error(f"Search failed: {e}")
         return {"success": False, "error": str(e)}

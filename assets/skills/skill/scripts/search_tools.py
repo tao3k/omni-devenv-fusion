@@ -9,7 +9,7 @@ Allows Agent to dynamically discover tools based on intent.
 import json
 from typing import Any
 
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 
 
 @skill_command(

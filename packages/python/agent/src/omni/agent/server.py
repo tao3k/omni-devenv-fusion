@@ -121,28 +121,63 @@ class AgentMCPHandler(MCPRequestHandler):
         )
 
     async def _handle_list_tools(self, request: JSONRPCRequest) -> JSONRPCResponse:
-        """List skills directly from Kernel Context."""
+        """List skills directly from Kernel Context.
+
+        Applies dynamic loading configuration:
+        - filter_commands: Excludes certain commands from core tools
+        - Limits the number of tools returned based on config
+        """
         context = self._kernel.skill_context
         tools = []
 
+        # Import dynamic loading config
+        from omni.core.config.loader import load_skill_limits, is_filtered
+
+        limits = load_skill_limits()
+        filtered_commands = set(context.get_filtered_commands())
+
         # Iterate over all skills loaded by Kernel
+        skill_command_counts: dict[str, int | str] = {}
         for skill_name in context.list_skills():
             skill = context.get_skill(skill_name)
+            if skill is None:
+                logger.warning(f"[MCP] Skill '{skill_name}' not found in context")
+                skill_command_counts[skill_name] = -1  # NOT_FOUND
+                continue
             # UniversalScriptSkill uses list_commands() and get_command()
             if hasattr(skill, "list_commands") and callable(skill.list_commands):
-                for cmd_name in skill.list_commands():
+                commands: list[str] = skill.list_commands()  # type: ignore[assignment]
+                skill_command_counts[skill_name] = len(commands)
+                # Debug log for skills with commands
+                if len(commands) > 0:
+                    logger.debug(f"[MCP] {skill_name}: {len(commands)} commands - {commands[:5]}")
+                for cmd_name in commands:
                     # Format tool name: skill.command
-                    full_name = f"{skill_name}.{cmd_name}" if "." not in cmd_name else cmd_name
+                    # Note: list_commands() already returns full names like "git.git_commit"
+                    full_name = cmd_name  # cmd_name already has full format
+
+                    # Apply filter_commands - skip if filtered
+                    if is_filtered(full_name):
+                        continue
 
                     # Get command details
                     cmd = skill.get_command(cmd_name)
+                    if cmd is None:
+                        continue
+
+                    # Get description - check _skill_config first (Foundation V2), then direct attr
+                    config = getattr(cmd, "_skill_config", {})
                     description = (
-                        getattr(cmd, "description", f"Run {full_name}")
-                        if cmd
-                        else f"Run {full_name}"
+                        config.get("description", "")
+                        or getattr(cmd, "description", "")
+                        or f"Run {full_name}"
                     )
-                    # Ensure inputSchema has required "type": "object"
-                    raw_schema = getattr(cmd, "input_schema", {}) if cmd else {}
+
+                    # Get input_schema - check _skill_config first (Foundation V2), then direct attr
+                    raw_schema = config.get("input_schema") if config else None
+                    if raw_schema is None:
+                        raw_schema = getattr(cmd, "input_schema", {})
+
                     input_schema = raw_schema.copy() if raw_schema else {}
                     if "type" not in input_schema:
                         input_schema["type"] = "object"
@@ -154,6 +189,30 @@ class AgentMCPHandler(MCPRequestHandler):
                             "inputSchema": input_schema,
                         }
                     )
+            else:
+                skill_command_counts[skill_name] = 0  # NO_LIST_COMMANDS
+
+        # Debug: Log skill command counts
+        logger.debug(f"[MCP] Skills command counts: {skill_command_counts}")
+
+        # Apply dynamic_tools limit if auto_optimize is enabled
+        if limits.auto_optimize and len(tools) > limits.dynamic_tools:
+            tools = tools[: limits.dynamic_tools]
+            logger.info(
+                f"📦 [Dynamic Loader] Limited to {limits.dynamic_tools} tools "
+                f"(auto_optimize=true, total available: {len(context.list_commands())}, "
+                f"skills: {len(context.list_skills())})"
+            )
+        else:
+            logger.info(
+                f"📦 [Dynamic Loader] {len(tools)} core tools ready "
+                f"(|filtered|: {len(filtered_commands)}, |available|: {len(context.list_commands())}, "
+                f"skills: {len(context.list_skills())})"
+            )
+
+        # Log filtered commands if verbose
+        if filtered_commands and self._verbose:
+            logger.debug(f"🔇 Filtered commands: {sorted(filtered_commands)}")
 
         return make_success_response(request.id, {"tools": tools})
 

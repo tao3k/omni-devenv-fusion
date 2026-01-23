@@ -180,65 +180,46 @@ except ValueError as e:
         return """## 🏗️ Architecture (Skill-Centric OS)
 
 ### Core Components
-- **src/agent/main.py**: MCP server entry point
-- **agent/skills/**: Dynamic skill modules (Software Engineering, Documentation, etc.)
+- **packages/python/agent/src/omni/agent/**: MCP server entry point
+- **assets/skills/**: Dynamic skill modules (Researcher, Git, etc.)
 
 ### Skill System
 Skills are self-contained units with:
-- `manifest.json` - Skill metadata and dependencies
-- `tools.py` - MCP tool implementations
+- `SKILL.md` - Skill metadata (frontmatter YAML)
+- `scripts/*.py` - @skill_command decorated functions
 - `README.md` - LLM guidance for the skill
-- `prompts.md` - Persona and behavior prompts
 
 ### Skill Discovery
-```python
-from agent.skills import SkillRegistry
-
-# List all available skills
-skills = SkillRegistry.list_skills()
-
-# Load a skill
-skill = SkillRegistry.load_skill("software_engineering")
-```
-
-### Shared Library (mcp_core)
-- `mcp_core/execution.py` - Safe command execution
-- `mcp_core/memory.py` - Project memory persistence
-- `mcp_core/inference.py` - LLM inference client
-- `mcp_core/lazy_cache/` - Lazy-loading singleton caches
-- `mcp_core/context/` - Project-specific contexts
-- `mcp_core/gitops.py` - Git workflow integration
+Skills are loaded from `assets/skills/` directory.
+Use `omni skill list` to see available skills.
 
 ### Project Structure
 ```
-agent/
-├── skills/                    # Skill modules
-│   ├── software_engineering/  # The Architect skill (root)
-│   ├── documentation/         # Scribe skill
+omni-dev-fusion/
+├── assets/skills/             # Skill modules
+│   ├── researcher/
+│   ├── git/
 │   └── ...
-├── main.py                    # MCP server entry point
-src/
-├── mcp_server/                # MCP server implementation
-└── common/
-    └── mcp_core/              # Shared library
+├── packages/python/agent/     # MCP server implementation
+└── packages/python/foundation/  # Shared library
 ```"""
 
     def _load_conventions(self) -> str:
         return """## 📏 Project Conventions
 
 ### File Naming
-- **Skills**: `agent/skills/<skill_name>/` directory
-- **Shared library**: `mcp_core/*.py`
-- **Tests**: `tests/test_*.py`
-- **MCP tools**: One tool per function with `@mcp.tool()` decorator
+- **Skills**: `assets/skills/<skill_name>/` directory
+- **Shared library**: `packages/python/foundation/src/omni/foundation/*.py`
+- **Tests**: `packages/python/*/tests/**/*.py`
 
 ### Skill Structure
 ```
-agent/skills/<skill_name>/
-├── manifest.json   # Skill metadata
-├── tools.py        # MCP tool implementations
-├── README.md       # LLM guidance
-└── prompts.md      # Persona prompts
+assets/skills/<skill_name>/
+├── SKILL.md        # Skill metadata (frontmatter)
+├── scripts/        # @skill_command functions
+│   ├── __init__.py
+│   └── tools.py
+└── README.md       # LLM guidance
 ```
 
 ### Docstrings (Google-style)
@@ -268,7 +249,6 @@ def calculate_metrics(values: list[float]) -> dict[str, float]:
 <type>(<scope>): <description>
 
 Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
-Scopes: nix, mcp, router, docs, cli, deps, ci
 ```"""
 
 

@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 from omni.foundation.config.dirs import PRJ_DATA
 
 
@@ -19,22 +19,17 @@ from omni.foundation.config.dirs import PRJ_DATA
     name="update_knowledge_base",
     category="write",
     description="""
-    Saves extracted knowledge to the knowledge base for future retrieval.
+    Save extracted knowledge to the knowledge base for future retrieval.
 
     Stores knowledge in PRJ_DATA/knowledge/harvested/ for runtime persistence.
 
-    Args:
-        category: Knowledge category (`patterns`, `solutions`, `errors`,
-                  `techniques`, `notes`).
-        title: Title of the knowledge entry.
-        content: Markdown content of the knowledge.
-        tags: Optional tags for categorization.
+    **Parameters**:
+    - `category` (required): Knowledge category (patterns, solutions, errors, techniques, notes)
+    - `title` (required): Title of the knowledge entry
+    - `content` (required): Markdown content of the knowledge
+    - `tags` (optional): List of tags for categorization
 
-    Returns:
-        Dict with success status, path to saved file, category, and title.
-
-    Example:
-        @omni("note_taker.update_knowledge_base", {"category": "patterns", "title": "Fix pattern", "content": "...", "tags": ["fix", "pattern"]})
+    **Returns**: Dictionary with success, path, category, and title.
     """,
 )
 def update_knowledge_base(
@@ -86,16 +81,14 @@ created: {timestamp_full}
     name="search_notes",
     category="read",
     description="""
-    Searches existing notes and knowledge entries.
+    Search existing notes and knowledge entries.
 
-    Args:
-        query: Search query string.
-        category: Optional category filter (`patterns`, `solutions`, etc.).
-        limit: Maximum number of results. Defaults to `10`.
+    **Parameters**:
+    - `query` (required): Search query string
+    - `category` (optional): Category filter (patterns, solutions, errors, techniques, notes)
+    - `limit` (optional, default: 10): Maximum number of results
 
-    Returns:
-        Dict with success status, query, count, and list of results.
-        Each result includes category, title, path, tags, and content snippet.
+    **Returns**: Dictionary with success, query, count, and list of results with category, title, path, tags, snippet.
     """,
 )
 def search_notes(

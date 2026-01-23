@@ -4,28 +4,19 @@ skill/scripts/list_tools.py - List All Registered MCP Tools
 Lists all registered MCP tools from loaded skills with descriptions.
 """
 
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 
 
 @skill_command(
     name="list_tools",
     category="read",
     description="""
-    [CRITICAL] Lists all registered MCP tools with their names, descriptions,
-    and usage information. Use this to discover available capabilities.
+    List all registered MCP tools with names, descriptions, and usage information.
 
-    Args:
-        compact: If `true`, shows minimal output with tool names only.
-                 Defaults to `false`.
+    **Parameters**:
+    - `compact` (optional, default: false): If true, shows minimal output with tool names only
 
-    Returns:
-        Markdown-formatted list of all tools grouped by skill.
-        Full format includes tool names, descriptions, and usage examples.
-        Compact format shows only `skill.command` names.
-
-    Usage:
-        @omni("skill.list_tools", {"compact": true})
-        @omni("skill.list_tools", {"compact": false})
+    **Returns**: Markdown-formatted list of all tools grouped by skill.
     """,
 )
 def list_tools(compact: bool = False) -> str:

@@ -101,64 +101,6 @@ impl SecretScanner {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_aws_detection() {
-        let text = "export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE";
-        let violation = SecretScanner::scan(text).expect("Should detect AWS Key");
-        assert_eq!(violation.description, "AWS Access Key");
-        assert_eq!(violation.rule_id, "SEC-001");
-    }
-
-    #[test]
-    fn test_stripe_detection() {
-        // Using a clearly fake/test key to avoid GitHub secret scanning false positives
-        let text = "stripe_key = 'sk_test_000000000000000000000000000'";
-        let violation = SecretScanner::scan(text).expect("Should detect Stripe Key");
-        assert_eq!(violation.description, "Stripe Secret Key");
-    }
-
-    #[test]
-    fn test_slack_detection() {
-        let text = "xoxb-1234-5678-abcdefghijklmnop";
-        let violation = SecretScanner::scan(text).expect("Should detect Slack Token");
-        assert_eq!(violation.description, "Slack Token");
-    }
-
-    #[test]
-    fn test_private_key_detection() {
-        let text = "-----BEGIN RSA PRIVATE KEY-----\nMIIE...";
-        let violation = SecretScanner::scan(text).expect("Should detect Private Key");
-        assert_eq!(violation.description, "PEM Private Key");
-    }
-
-    #[test]
-    fn test_generic_api_key() {
-        let text = r#"api_key = "abcdefghijklmnopqrst""#;
-        let violation = SecretScanner::scan(text).expect("Should detect Generic API Key");
-        assert_eq!(violation.description, "Generic High-Entropy Secret");
-    }
-
-    #[test]
-    fn test_safe_content() {
-        let text = "This is a safe config file with no secrets.";
-        assert!(SecretScanner::scan(text).is_none());
-        assert!(!SecretScanner::contains_secrets(text));
-    }
-
-    #[test]
-    fn test_scan_all() {
-        // AWS key (24 chars) + Stripe key (32 chars, meets 24 char minimum)
-        // Using clearly fake/test keys to avoid GitHub secret scanning false positives
-        let text = "AWS: AKIAIOSFODNN7EXAMPLE and Stripe: sk_test_000000000000000000000000000";
-        let violations = SecretScanner::scan_all(text);
-        assert_eq!(violations.len(), 2);
-    }
-}
-
 // =============================================================================
 // Permission Gatekeeper - Access Control for Skills
 // =============================================================================
@@ -213,60 +155,5 @@ impl PermissionGatekeeper {
         let normalized_pattern = pattern.replace(":", ".");
 
         normalized_tool == normalized_pattern
-    }
-}
-
-#[cfg(test)]
-mod permission_tests {
-    use super::*;
-
-    #[test]
-    fn test_wildcard_permission() {
-        let perms = vec!["filesystem:*".to_string()];
-        assert!(PermissionGatekeeper::check("filesystem.read_file", &perms));
-        assert!(PermissionGatekeeper::check("filesystem.write_file", &perms));
-        assert!(!PermissionGatekeeper::check("git.status", &perms));
-    }
-
-    #[test]
-    fn test_wildcard_with_colon_separator() {
-        let perms = vec!["filesystem:*".to_string()];
-        assert!(PermissionGatekeeper::check("filesystem:read", &perms));
-        assert!(!PermissionGatekeeper::check("git:status", &perms));
-    }
-
-    #[test]
-    fn test_exact_permission() {
-        let perms = vec!["git.status".to_string()];
-        assert!(PermissionGatekeeper::check("git.status", &perms));
-        assert!(!PermissionGatekeeper::check("git.commit", &perms));
-    }
-
-    #[test]
-    fn test_exact_permission_with_colon() {
-        let perms = vec!["git:status".to_string()];
-        assert!(PermissionGatekeeper::check("git.status", &perms));
-        assert!(!PermissionGatekeeper::check("git.commit", &perms));
-    }
-
-    #[test]
-    fn test_admin_permission() {
-        let perms = vec!["*".to_string()];
-        assert!(PermissionGatekeeper::check("any.thing", &perms));
-        assert!(PermissionGatekeeper::check("filesystem.read", &perms));
-    }
-
-    #[test]
-    fn test_empty_permissions() {
-        assert!(!PermissionGatekeeper::check("filesystem.read", &[]));
-        assert!(!PermissionGatekeeper::check("any.tool", &[]));
-    }
-
-    #[test]
-    fn test_multiple_permissions() {
-        let perms = vec!["git.status".to_string(), "filesystem:*".to_string()];
-        assert!(PermissionGatekeeper::check("git.status", &perms));
-        assert!(PermissionGatekeeper::check("filesystem.read", &perms));
-        assert!(!PermissionGatekeeper::check("git.commit", &perms));
     }
 }

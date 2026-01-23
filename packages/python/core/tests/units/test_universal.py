@@ -109,7 +109,7 @@ description: Loaded from SKILL.md
 
         # Create a script file with @skill_command decorator
         (scripts_dir / "hello.py").write_text("""
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 
 @skill_command(name="hello", description="Say hello")
 def hello(name: str = "World"):

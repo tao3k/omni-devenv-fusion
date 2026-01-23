@@ -59,7 +59,7 @@
 
 mod batch;
 mod capture;
-mod diff;
+pub mod diff;
 mod editor;
 mod error;
 mod types; // Heavy-duty batch refactoring

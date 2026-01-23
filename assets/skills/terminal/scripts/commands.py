@@ -9,7 +9,7 @@ import platform
 from pathlib import Path
 from typing import Optional
 
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 
 
 def _is_git_commit_blocked(command: str, args: list[str]) -> tuple[bool, str]:
@@ -66,22 +66,22 @@ Use git_commit in git skill instead.
     FLIGHT RECORDER captures command execution for debugging and audit trails.
 
     Args:
-        command: The command to run (e.g., `git`, `just`, `nix`).
+        cmd: The command to run (e.g., `git`, `just`, `nix`).
                 Can include args in single string like `"just validate"`.
         args: Optional list of arguments as separate strings.
-                Example: `{"command": "git", "args": ["status"]}`
+                Example: `{"cmd": "git", "args": ["status"]}`
         inject_root: Auto-inject $PRJ_ROOT to args (enabled by default).
 
     Returns:
         Command output with execution status and timing.
 
     Examples:
-        @omni("terminal.run_task", {"command": "git", "args": ["status"]})
-        @omni("terminal.run_task", {"command": "just validate"})
+        @omni("terminal.run_task", {"cmd": "git", "args": ["status"]})
+        @omni("terminal.run_task", {"cmd": "just validate"})
     """,
     inject_root=True,
 )
-async def run_task(command: str, args: Optional[list[str]] = None, **kwargs) -> str:
+async def run_task(cmd: str, args: Optional[list[str]] = None, **kwargs) -> str:
     if args is None:
         args = []
 
@@ -93,23 +93,23 @@ async def run_task(command: str, args: Optional[list[str]] = None, **kwargs) -> 
         and " " in args[0]
     ):
         parts = args[0].split()
-        command = parts[0]
+        cmd = parts[0]
         args = parts[1:]
-    elif " " in command:
-        parts = command.split()
-        command = parts[0]
+    elif " " in cmd:
+        parts = cmd.split()
+        cmd = parts[0]
         extra_args = parts[1:]
         if extra_args:
             args = extra_args + args
 
-    blocked, msg = _is_git_commit_blocked(command, args)
+    blocked, msg = _is_git_commit_blocked(cmd, args)
     if blocked:
         return msg
 
-    from agent.skills.terminal.scripts import engine
+    from . import engine
 
-    result = engine.run_command(command, args, timeout=60)
-    return engine.format_result(result, command, args)
+    result = engine.run_command(cmd, args, timeout=60)
+    return engine.format_result(result, cmd, args)
 
 
 @skill_command(
@@ -186,11 +186,11 @@ async def inspect_environment() -> str:
     Use this for general-purpose command execution.
 
     Args:
-        command: The command to execute (e.g., `ls`, `git`, `echo`).
+        cmd: The command to execute (e.g., `ls`, `git`, `echo`).
                 Can include arguments in a single string like `"ls -la"`.
         args: Optional list of arguments as separate strings.
-                Example: `{"command": "git", "args": ["status"]}`
-                If not provided, command is parsed for args.
+                Example: `{"cmd": "git", "args": ["status"]}`
+                If not provided, cmd is parsed for args.
         timeout: Command timeout in seconds. Defaults to `60`.
         tail_lines: If set, only show last N lines (default: None = show all).
                     Use this for commands with large output like `pytest`, `cargo test`.
@@ -199,14 +199,14 @@ async def inspect_environment() -> str:
         Command stdout and stderr output.
 
     Examples:
-        @omni("terminal.run_command", {"command": "git", "args": ["status"]})
-        @omni("terminal.run_command", {"command": "ls -la"})
-        @omni("terminal.run_command", {"command": "just test", "tail_lines": 50})
+        @omni("terminal.run_command", {"cmd": "git", "args": ["status"]})
+        @omni("terminal.run_command", {"cmd": "ls -la"})
+        @omni("terminal.run_command", {"cmd": "just test", "tail_lines": 50})
     """,
     inject_root=True,
 )
 async def run_command(
-    command: str,
+    cmd: str,
     args: Optional[list[str]] = None,
     timeout: int = 60,
     tail_lines: Optional[int] = None,
@@ -214,14 +214,14 @@ async def run_command(
     if args is None:
         args = []
 
-    if " " in command:
-        parts = command.split()
-        command = parts[0]
+    if " " in cmd:
+        parts = cmd.split()
+        cmd = parts[0]
         extra_args = parts[1:]
         if extra_args:
             args = extra_args + args
 
-    from agent.skills.terminal.scripts import engine
+    from . import engine
 
-    result = engine.run_command(command, args, timeout=timeout)
-    return engine.format_result(result, command, args, tail_lines=tail_lines)
+    result = engine.run_command(cmd, args, timeout=timeout)
+    return engine.format_result(result, cmd, args, tail_lines=tail_lines)

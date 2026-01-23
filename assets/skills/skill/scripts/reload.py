@@ -5,37 +5,21 @@ Provides dynamic skill reloading via MCP tool:
 - @omni("skill.reload", {"name": "git"})
 """
 
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 
 
 @skill_command(
     name="reload",
     category="admin",
     description="""
-    Reloads a skill from disk to pick up the latest changes.
+    Reload a skill from disk to pick up the latest changes.
 
-    ⚠️  **Use sparingly!** The system has hot-reload (auto-reloads on first use).
-    Only reload when:
-    - Cache issues occur (old data persists)
-    - Modified configs/tools don't take effect
-    - A @skill_command decorator's description was updated (LLM needs new schema)
-    - Explicit debugging required
+    Use when cache issues occur, configs don't take effect, or descriptions were updated.
 
-    If the skill was unloaded, this will load it. If it was modified,
-    this will reload the updated version.
+    **Parameters**:
+    - `name` (optional, default: `git`): Skill name to reload
 
-    Args:
-        name: Skill name to reload. Defaults to `git`.
-
-    Returns:
-        Status message with reload result:
-        - `success`: Skill was previously loaded and is now reloaded.
-        - `not_loaded`: Skill was not loaded, has been loaded now.
-        - `not_found`: Skill does not exist in `assets/skills/`.
-
-    Examples:
-        @omni("skill.reload", {"name": "git"})  # Only if git tools show stale data
-        @omni("skill.reload", {"name": "filesystem"})  # Only after modifying scripts/
+    **Returns**: Status message with reload result (success, not_loaded, or not_found).
     """,
 )
 async def reload_skill(name: str = "git") -> str:

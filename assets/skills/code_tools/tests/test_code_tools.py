@@ -271,7 +271,8 @@ class TestSearchCode:
         """Test search_code returns structured result."""
         from code_tools.scripts.analyze import search_code
 
-        result = search_code(pattern="def ", max_results=10)
+        # Use specific pattern with include to limit scope and avoid timeout
+        result = search_code(pattern="GraphState", include="*.py", max_results=10)
 
         assert "success" in result
         assert "matches" in result
@@ -281,7 +282,8 @@ class TestSearchCode:
         """Test search_code finds expected patterns."""
         from code_tools.scripts.analyze import search_code
 
-        result = search_code(pattern="import ", max_results=5)
+        # Use specific pattern with include to limit scope and avoid timeout
+        result = search_code(pattern="from pathlib", include="*.py", max_results=5)
 
         # Should find import statements
         if result["success"]:

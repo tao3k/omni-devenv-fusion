@@ -179,7 +179,7 @@ def ingest_all(
         omni ingest all --json            # JSON output
     """
     from omni.core.knowledge.librarian import Librarian
-    from omni.core.skills.discovery import SkillDiscovery
+    from omni.core.skills.discovery import SkillDiscoveryService
     from omni.foundation.config.skills import SKILLS_DIR
 
     combined_stats = {}
@@ -207,14 +207,11 @@ def ingest_all(
 
         # Index skills
         console.print("Indexing skills...")
-        discovery = SkillDiscovery()
+        discovery = SkillDiscoveryService()
         skills_path = str(SKILLS_DIR())
 
         if os.path.isdir(skills_path):
-            if clear:
-                discovery.clear_skill_cache()
-
-            skills = discovery.discover_skills(skills_path)
+            skills = discovery.discover_all()
             combined_stats["skills"] = {"skills_found": len(skills)}
             console.print(f"  Skills: {len(skills)} skills indexed")
         else:

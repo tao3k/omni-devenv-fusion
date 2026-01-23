@@ -74,6 +74,9 @@ let
                 # Add ruff for Python formatting
                 "format-python" = {
                   glob = "*.py";
+                  exclude = [
+                    "assets/skills/_template/**" # Template folder - not real code
+                  ];
                   run = "uv run ruff format {staged_files}";
                 };
                 cog-check = {

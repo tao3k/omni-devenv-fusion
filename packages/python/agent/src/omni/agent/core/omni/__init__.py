@@ -1,0 +1,28 @@
+"""
+omni - CCA Loop Implementation with Context Optimization (Token Diet)
+
+A modular ReAct (Reasoning + Acting) loop for intelligent task execution.
+
+Modules:
+- config: Configuration dataclasses
+- logging: Pretty console output helpers
+- schemas: Tool schema extraction from handlers
+- react: Simple ReAct workflow implementation
+- loop: Main OmniLoop orchestrator
+
+Usage:
+    from omni.agent.core.omni import OmniLoop, OmniLoopConfig
+
+    loop = OmniLoop()
+    result = await loop.run("Your task here")
+"""
+
+from .config import OmniLoopConfig
+from .loop import OmniLoop
+from .react import ReActWorkflow
+
+__all__ = [
+    "OmniLoop",
+    "OmniLoopConfig",
+    "ReActWorkflow",
+]

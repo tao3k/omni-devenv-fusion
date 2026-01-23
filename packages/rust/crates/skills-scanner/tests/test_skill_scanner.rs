@@ -97,6 +97,58 @@ intents: ["Update documentation"]
     assert_eq!(metadata.intents, vec!["Update documentation"]);
 }
 
+/// Test parsing a skill with spaces in routing keywords (Researcher skill).
+#[test]
+fn test_parse_skill_md_with_spaces_in_keywords() {
+    let content = r#"---
+name: "researcher"
+version: "1.0.0"
+description: "Deep research capabilities"
+routing_keywords: [
+    "analyze repo",
+    "git clone",
+    "research github",
+    "repomix",
+    "code analysis",
+    "repository map",
+    "compress code",
+    "read codebase",
+    "compare architecture"
+]
+authors: ["omni-dev-fusion"]
+intents: [
+    "research_repository",
+    "analyze_codebase",
+    "compare_architecture"
+]
+permissions: []
+---
+
+# Researcher Skill
+"#;
+
+    let scanner = SkillScanner::new();
+    let temp_dir = TempDir::new().unwrap();
+    let skill_path = temp_dir.path().join("researcher");
+
+    let metadata = scanner.parse_skill_md(content, &skill_path).unwrap();
+
+    assert_eq!(metadata.skill_name, "researcher");
+    assert_eq!(metadata.version, "1.0.0");
+    assert!(
+        metadata
+            .routing_keywords
+            .contains(&"analyze repo".to_string())
+    );
+    assert!(
+        metadata
+            .routing_keywords
+            .contains(&"repository map".to_string())
+    );
+    assert!(metadata.routing_keywords.contains(&"git clone".to_string()));
+    assert_eq!(metadata.routing_keywords.len(), 9);
+}
+
 /// Test parsing a skill without frontmatter.
 #[test]
 fn test_parse_skill_md_without_frontmatter() {

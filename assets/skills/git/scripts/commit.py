@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 
 
 def _run(cmd: list[str], cwd: Optional[Path] = None) -> tuple[str, str, int]:
@@ -22,20 +22,14 @@ def _run(cmd: list[str], cwd: Optional[Path] = None) -> tuple[str, str, int]:
     name="commit",
     category="write",
     description="""
-    Commits staged changes with a message.
+    Commit staged changes with a message. Re-stages all modified files before committing.
 
-    Re-stages all modified files before committing to handle lefthook reformatting.
-    Skips pre-commit hooks (use git_commit for hook execution).
+    Skips pre-commit hooks - use git.commit for hook execution.
 
-    Args:
-        message: The commit message for the changes.
-        project_root: The project root directory. Auto-injected if not provided.
+    **Parameters**:
+    - `message` (required): The commit message for the changes.
 
-    Returns:
-        Success or failure message with commit hash.
-
-    Example:
-        @omni("git.commit", {"message": "feat(core): add new feature"})
+    **Returns**: Success or failure message with commit hash.
     """,
 )
 def commit(message: str, project_root: Optional[Path] = None) -> str:
@@ -51,17 +45,14 @@ def commit(message: str, project_root: Optional[Path] = None) -> str:
     name="commit_amend",
     category="write",
     description="""
-    Amends the previous commit with a new message.
+    Amend the previous commit with a new message without changing its content.
 
-    Modifies the most recent commit without changing its content.
     Does not run pre-commit hooks.
 
-    Args:
-        message: The new commit message to replace the previous one.
-        project_root: The project root directory. Auto-injected if not provided.
+    **Parameters**:
+    - `message` (required): The new commit message to replace the previous one.
 
-    Returns:
-        Success or failure message.
+    **Returns**: Success or failure message.
     """,
 )
 def commit_with_amend(message: str, project_root: Optional[Path] = None) -> str:
@@ -75,17 +66,14 @@ def commit_with_amend(message: str, project_root: Optional[Path] = None) -> str:
     name="commit_no_verify",
     category="write",
     description="""
-    Commits staged changes without running pre-commit hooks.
+    Commit staged changes without running pre-commit hooks.
 
-    Bypasses git hooks (lefthook, etc.) for faster commits.
-    Use with caution - skips code quality checks.
+    Bypasses git hooks for faster commits. Use with caution.
 
-    Args:
-        message: The commit message for the changes.
-        project_root: The project root directory. Auto-injected if not provided.
+    **Parameters**:
+    - `message` (required): The commit message for the changes.
 
-    Returns:
-        Success or failure message.
+    **Returns**: Success or failure message.
     """,
 )
 def commit_no_verify(message: str, project_root: Optional[Path] = None) -> str:
@@ -111,18 +99,13 @@ def get_last_commit_msg(project_root: Optional[Path] = None) -> str:
     name="revert",
     category="write",
     description="""
-    Reverts a specific commit by creating a new reverse commit.
+    Revert a specific commit by creating a new reverse commit.
 
-    Creates a new commit that undoes the changes from the specified commit.
+    **Parameters**:
+    - `commit` (required): The commit hash or reference to revert (e.g., `HEAD~1`, `abc1234`).
+    - `no_commit` (optional, default: `false`): If true, stages the revert but does not commit.
 
-    Args:
-        commit: The commit hash or reference to revert (e.g., `HEAD~1`, `abc1234`).
-        no_commit: If `true`, stages the revert but does not commit.
-                   Defaults to `false`.
-        project_root: The project root directory. Auto-injected if not provided.
-
-    Returns:
-        Success or failure message.
+    **Returns**: Success or failure message.
     """,
 )
 def revert(commit: str, no_commit: bool = False, project_root: Optional[Path] = None) -> str:

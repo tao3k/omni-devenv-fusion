@@ -52,8 +52,13 @@ class Settings:
         return cls._instance
 
     def __init__(self) -> None:
-        """Initialize settings instance."""
-        self._data: dict[str, Any] = {}
+        """Initialize settings instance.
+
+        Note: _data is only initialized once to preserve loaded settings
+        across multiple Settings() calls (Python calls __init__ each time).
+        """
+        if not hasattr(self, "_data"):
+            self._data: dict[str, Any] = {}
 
     def _ensure_loaded(self) -> None:
         """Ensure settings are loaded (Thread-Safe)."""

@@ -4,6 +4,7 @@
 //! - Secret scanning to detect API keys, tokens, and sensitive data
 //! - Permission validation for skill tool execution (Zero Trust)
 
+use crate::utils::run_safe;
 use omni_security::{PermissionGatekeeper, SecretScanner};
 use pyo3::prelude::*;
 
@@ -12,16 +13,19 @@ use pyo3::prelude::*;
 /// Releases GIL for CPU-intensive regex scanning.
 #[pyfunction]
 pub fn scan_secrets(content: &str) -> Option<String> {
-    Python::attach(|py| {
-        py.detach(|| {
-            SecretScanner::scan(content).map(|v| {
-                format!(
-                    "[SECURITY VIOLATION] Found {}: {}",
-                    v.rule_id, v.description
-                )
-            })
+    run_safe(|| {
+        Python::attach(|py| {
+            Ok(py.detach(|| {
+                SecretScanner::scan(content).map(|v| {
+                    format!(
+                        "[SECURITY VIOLATION] Found {}: {}",
+                        v.rule_id, v.description
+                    )
+                })
+            }))
         })
     })
+    .unwrap_or(None)
 }
 
 /// Check if content contains any secrets (boolean check only).
@@ -29,7 +33,8 @@ pub fn scan_secrets(content: &str) -> Option<String> {
 /// Releases GIL for CPU-intensive regex scanning.
 #[pyfunction]
 pub fn contains_secrets(content: &str) -> bool {
-    Python::attach(|py| py.detach(|| SecretScanner::contains_secrets(content)))
+    run_safe(|| Python::attach(|py| Ok(py.detach(|| SecretScanner::contains_secrets(content)))))
+        .unwrap_or(false)
 }
 
 /// Check if a tool execution is allowed by the given permissions.
@@ -57,5 +62,5 @@ pub fn contains_secrets(content: &str) -> bool {
 ///     check_permission("any.tool", ["*"]) -> True
 #[pyfunction]
 pub fn check_permission(tool_name: &str, permissions: Vec<String>) -> bool {
-    PermissionGatekeeper::check(tool_name, &permissions)
+    run_safe(|| Ok(PermissionGatekeeper::check(tool_name, &permissions))).unwrap_or(false)
 }

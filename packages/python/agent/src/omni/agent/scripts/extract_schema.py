@@ -60,7 +60,7 @@ def load_module_isolated(path: Path, skill_name: str) -> types.ModuleType:
     """Load a script module with proper package context.
 
     This mimics SkillLoaderMixin._load_script_module to ensure skill scripts
-    can import from omni.agent.skills.decorators.
+    can import from omni.foundation.api.decorators.
 
     The key is to load the skill's __init__.py first, which registers
     the decorators module and sets up the proper package hierarchy.
@@ -70,11 +70,23 @@ def load_module_isolated(path: Path, skill_name: str) -> types.ModuleType:
     # SSOT: Use SKILLS_DIR to get skills directory
     skills_dir = SKILLS_DIR()
 
-    pkg_namespace = f"agent.skills.{skill_name}.scripts"
+    # Use simple package path for consistency
+    pkg_namespace = f"omni.skills.{skill_name}.scripts"
     module_name = f"{pkg_namespace}.{path.stem}"
-    parent_package = f"agent.skills.{skill_name}"
+    parent_package = f"omni.skills.{skill_name}"
 
-    # First, ensure the parent package (agent.skills.{skill_name}) is registered
+    # Ensure parent package exists in sys.modules
+    for parent in ["omni", "omni.skills", parent_package]:
+        if parent not in sys.modules:
+            try:
+                import types
+
+                pkg = types.ModuleType(parent)
+                sys.modules[parent] = pkg
+            except Exception:
+                pass
+
+    # First, ensure the parent package (omni.skills.{skill_name}) is registered
     # by loading its __init__.py which typically imports the decorators
     if parent_package not in sys.modules:
         skill_init = skills_dir / skill_name / "__init__.py"

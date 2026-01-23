@@ -1,8 +1,7 @@
 """script_loader.py - Dynamic Skill Loading Strategy
 
-Updates:
-- Added support for Foundation V2 Decorator (_skill_config)
-- Maintains backward compatibility for legacy decorators
+Uses Foundation V2 @skill_command decorator from omni.foundation.api.decorators.
+V1 decorator has been removed - migrate to V2.
 """
 
 from __future__ import annotations
@@ -15,50 +14,11 @@ from pathlib import Path
 from typing import Any
 
 from omni.foundation.config.logging import get_logger
-from omni.foundation.api.decorators import get_script_config
 
 logger = get_logger("omni.core.script_loader")
 
 # Storage for decorator registration - populated by framework
 _skill_command_registry: dict[str, dict[str, Any]] = {}
-
-
-def skill_command(
-    name: str | None = None,
-    skill_name: str | None = None,
-    category: str = "general",
-    description: str = "",
-    inject_root: bool = False,
-):
-    """Decorator to mark a function as a skill command.
-
-    Args:
-        name: Command name (defaults to function name)
-        skill_name: Skill namespace (auto-filled by framework)
-        category: Command category (for organization)
-        description: Command description (for documentation)
-        inject_root: Whether to inject project root path
-
-    Usage:
-        @skill_command()
-        def status():
-            ...
-
-        @skill_command(name="log", category="write")
-        def get_log(limit: int = 10):
-            ...
-    """
-
-    def decorator(func: Callable) -> Callable:
-        func._is_skill_command = True
-        func._command_name = name or func.__name__
-        func._skill_name = skill_name  # Will be set by ScriptLoader after module load
-        func._category = category
-        func._description = description
-        func._inject_root = inject_root
-        return func
-
-    return decorator
 
 
 class ScriptLoader:
@@ -86,6 +46,16 @@ class ScriptLoader:
         path_str = str(self.scripts_path)
         sys.path.insert(0, path_str)
 
+        # Ensure parent package exists in sys.modules to avoid import errors
+        # This fixes "No module named 'omni.skills'" when scripts have relative imports
+        parent_pkg = f"omni.skills.{self.skill_name}"
+        if parent_pkg not in sys.modules:
+            import types
+
+            pkg = types.ModuleType(parent_pkg)
+            pkg.__path__ = [str(self.scripts_path.parent)]
+            sys.modules[parent_pkg] = pkg
+
         try:
             for py_file in self.scripts_path.glob("*.py"):
                 if py_file.name.startswith("_"):
@@ -110,7 +80,7 @@ class ScriptLoader:
 
             # Set __package__ to enable relative imports within scripts directory
             # The package path matches the skill name for proper relative import resolution
-            scripts_pkg = f"omni.agent.skills.{self.skill_name}.scripts"
+            scripts_pkg = f"omni.skills.{self.skill_name}.scripts"
             module.__package__ = scripts_pkg
 
             # Inject context into module globals

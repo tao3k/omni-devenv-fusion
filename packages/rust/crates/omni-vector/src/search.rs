@@ -238,7 +238,7 @@ impl crate::VectorStore {
     }
 
     /// Check if a metadata value matches the filter conditions.
-    fn matches_filter(metadata: &serde_json::Value, conditions: &serde_json::Value) -> bool {
+    pub fn matches_filter(metadata: &serde_json::Value, conditions: &serde_json::Value) -> bool {
         match conditions {
             serde_json::Value::Object(obj) => {
                 // Check each condition
@@ -303,7 +303,7 @@ impl crate::VectorStore {
     /// Apply keyword boosting to search results.
     ///
     /// Modifies the distance field using: `new_distance = (vector_score * 0.7) + (keyword_score * 0.3)`
-    fn apply_keyword_boost(results: &mut Vec<VectorSearchResult>, keywords: &[String]) {
+    pub fn apply_keyword_boost(results: &mut Vec<VectorSearchResult>, keywords: &[String]) {
         // Return early if no keywords to process
         if keywords.is_empty() {
             return;

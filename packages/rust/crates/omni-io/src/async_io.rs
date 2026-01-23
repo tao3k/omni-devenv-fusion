@@ -46,29 +46,3 @@ pub async fn read_text_safe_async<P: AsRef<Path>>(
 
     decode_buffer(buffer)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tokio::io::AsyncWriteExt;
-
-    #[tokio::test]
-    async fn test_async_read() {
-        let dir = tempfile::TempDir::new().unwrap();
-        let p = dir.path().join("async.txt");
-        tokio_fs::write(&p, "Async Read").await.unwrap();
-        assert_eq!(read_text_safe_async(&p, 1024).await.unwrap(), "Async Read");
-    }
-
-    #[tokio::test]
-    async fn test_async_binary() {
-        let dir = tempfile::TempDir::new().unwrap();
-        let p = dir.path().join("async_binary.bin");
-        let mut file = tokio_fs::File::create(&p).await.unwrap();
-        file.write_all(b"\x00\x01\x02\x03").await.unwrap();
-        assert!(matches!(
-            read_text_safe_async(&p, 1024).await,
-            Err(IoError::BinaryFile)
-        ));
-    }
-}

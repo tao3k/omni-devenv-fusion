@@ -9,9 +9,12 @@ This module is imported by __init__.py and delegates to subprocess execution.
 
 from typing import Any
 import json
+import logging
+import shutil
 import subprocess
-import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 async def _run_subprocess(command: str, **kwargs) -> dict[str, Any]:
@@ -30,13 +33,37 @@ async def _run_subprocess(command: str, **kwargs) -> dict[str, Any]:
     # Build JSON payload for stdin
     payload = json.dumps(kwargs, default=str)
 
-    # Run in isolated environment
+    # Find uv executable
+    uv_path = shutil.which("uv")
+    if uv_path is None:
+        return {
+            "success": False,
+            "error": "uv not found in PATH",
+        }
+
+    # Debug logging
+    logger.debug(f"[crawl4ai] Command: {command}, kwargs: {kwargs}")
+    logger.debug(f"[crawl4ai] Skill dir: {skill_dir}")
+    logger.debug(f"[crawl4ai] pyproject.toml exists: {(skill_dir / 'pyproject.toml').exists()}")
+    logger.debug(f"[crawl4ai] uv.lock exists: {(skill_dir / 'uv.lock').exists()}")
+
+    # Run in isolated environment using uv run
+    # Use --no-project to prevent using parent project (omni-dev-fusion)
+    cmd = [
+        uv_path,
+        "run",
+        "--no-project",  # Don't use parent project
+        "--directory",
+        str(skill_dir),
+        "python",
+        str(skill_dir / "scripts" / "engine.py"),
+        "--stdin",
+    ]
+
+    logger.debug(f"[crawl4ai] Running: {' '.join(cmd)}")
+
     result = subprocess.run(
-        [
-            sys.executable,
-            str(skill_dir / "scripts" / "engine.py"),
-            "--stdin",
-        ],
+        cmd,
         input=payload,
         capture_output=True,
         text=True,

@@ -84,7 +84,7 @@ def fixtures_skills_data_skill_factory(
             "name": name,
             "version": "0.1.0",
             "description": f"Test skill: {name}",
-            "tools_module": f"agent.skills.{name}.tools",
+            "tools_module": f"omni.skills.{name}.tools",
         }
 
         skill_md = skill_dir / "SKILL.md"
@@ -168,7 +168,7 @@ def parse_skill_manifest(skill_dir: Path) -> dict:
 
     # Use Rust scanner for high-performance parsing
     data = parse_skill_md(skill_dir) or {}
-    data["tools_module"] = f"agent.skills.{skill_dir.name}.tools"
+    data["tools_module"] = f"omni.skills.{skill_dir.name}.tools"
     return data
 
 

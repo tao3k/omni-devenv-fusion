@@ -17,7 +17,7 @@ from typing import Any
 
 import structlog
 
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 from omni.foundation.config.paths import get_project_root
 
 logger = structlog.get_logger(__name__)
@@ -183,7 +183,19 @@ def count_symbols(path: str, language: str | None = None) -> dict[str, Any]:
 @skill_command(
     name="search_code",
     category="read",
-    description="Search for AST patterns in a single file using ast-grep syntax.",
+    description="""
+    Search for AST patterns in a single file using ast-grep syntax.
+
+    Unlike text search (grep), this searches for **code patterns**, not strings.
+    Perfect for finding function calls, class definitions, imports, etc.
+
+    **Parameters**:
+    - `path` (required): File path to search in
+    - `pattern` (required): AST pattern to match (e.g., `console.log($ARG)` finds all log calls)
+    - `language` (optional): Force language detection (auto-detected if not provided)
+
+    **Returns**: Matched code lines with AST context.
+    """,
 )
 def search_code(path: str, pattern: str, language: str | None = None) -> str:
     """

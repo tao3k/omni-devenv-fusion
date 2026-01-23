@@ -253,7 +253,7 @@ class Kernel:
             raise ValueError(f"Skill '{target_skill_name}' is not executable.")
 
         logger.debug(f"🔐 Executing {tool_name} (Caller: {caller or 'ROOT'})")
-        return await target_skill.execute(command_name, args)
+        return await target_skill.execute(command_name, **args)
 
     # =========================================================================
     # Skill Discovery (Rust-Powered)

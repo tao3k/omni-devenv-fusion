@@ -156,8 +156,28 @@ class TestSkillScriptDecorators:
 
     @pytest.fixture
     def terminal_module(self):
-        """Load terminal skill module."""
-        return load_skill_module("terminal")
+        """Load terminal skill module (commands.py specifically)."""
+        from omni.foundation.config.skills import SKILLS_DIR
+        from importlib import util
+        import types
+        import sys
+
+        skills_dir = SKILLS_DIR()
+        scripts_dir = skills_dir / "terminal" / "scripts"
+        commands_path = scripts_dir / "commands.py"
+
+        # Set up package context
+        _setup_skill_package_context("terminal", skills_dir)
+
+        # Load commands.py specifically
+        spec = util.spec_from_file_location("terminal_commands", commands_path)
+        if spec and spec.loader:
+            module = types.ModuleType("terminal_commands")
+            module.__package__ = "omni.skills.terminal.scripts"
+            sys.modules["terminal_commands"] = spec.loader.exec_module(module)
+            return module
+
+        raise RuntimeError(f"Failed to load terminal commands.py")
 
     @pytest.fixture
     def filesystem_module(self):
@@ -174,14 +194,14 @@ class TestSkillScriptDecorators:
         assert terminal_module.run_task._is_skill_command is True
 
     def test_run_task_has_command_name(self, terminal_module):
-        """run_task should have _command_name attribute."""
-        assert hasattr(terminal_module.run_task, "_command_name")
-        assert terminal_module.run_task._command_name == "run_task"
+        """run_task should have _skill_config with name."""
+        assert hasattr(terminal_module.run_task, "_skill_config")
+        assert terminal_module.run_task._skill_config["name"] == "run_task"
 
     def test_run_task_has_category(self, terminal_module):
-        """run_task should have _category attribute."""
-        assert hasattr(terminal_module.run_task, "_category")
-        assert terminal_module.run_task._category == "workflow"
+        """run_task should have _skill_config with category."""
+        assert hasattr(terminal_module.run_task, "_skill_config")
+        assert terminal_module.run_task._skill_config["category"] == "workflow"
 
     def test_read_file_has_marker(self, filesystem_module):
         """read_file should have _is_skill_command marker."""

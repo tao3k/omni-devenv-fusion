@@ -3,7 +3,7 @@
 Inference Client - LLM API client.
 
 Modularized for testability.
-Configuration-driven from settings.yaml.
+Configuration-driven from settings.yaml (inference section).
 """
 
 import asyncio
@@ -13,7 +13,8 @@ from typing import Any
 import structlog
 from anthropic import AsyncAnthropic
 
-from .api import get_inference_config, load_api_key
+from omni.foundation.config.settings import get_setting
+from omni.foundation.api.api_key import get_anthropic_api_key
 
 log = structlog.get_logger("mcp-core.inference")
 
@@ -41,16 +42,18 @@ class InferenceClient:
             timeout: Request timeout in seconds
             max_tokens: Max tokens per response
         """
-        config = get_inference_config()
-
-        self.api_key = api_key or load_api_key()
-        self.base_url = base_url or config["base_url"]
-        self.model = model or config["model"]
-        self.timeout = timeout or config["timeout"]
-        self.max_tokens = max_tokens or config["max_tokens"]
+        # Read directly from settings.yaml
+        self.api_key = api_key or get_anthropic_api_key()
+        self.base_url = base_url or get_setting("inference.base_url", "https://api.anthropic.com")
+        self.model = model or get_setting("inference.model", "claude-sonnet-4-20250514")
+        self.timeout = timeout or get_setting("inference.timeout", 120)
+        self.max_tokens = max_tokens or get_setting("inference.max_tokens", 4096)
 
         if not self.api_key:
-            log.warning("inference.no_api_key", configured_env=config["api_key_env"])
+            log.warning(
+                "inference.no_api_key",
+                configured_env=get_setting("inference.api_key_env", "ANTHROPIC_API_KEY"),
+            )
 
         # MiniMax requires Authorization: Bearer header (auth_token) instead of x-api-key
         if self.base_url and "minimax" in self.base_url.lower():
@@ -89,7 +92,7 @@ class InferenceClient:
 
         message_list = messages or [{"role": "user", "content": user_query}]
 
-        log.info(
+        log.debug(
             "inference.request",
             model=actual_model,
             prompt_length=len(system_prompt),
@@ -130,6 +133,29 @@ class InferenceClient:
                         )
                         content += f"[TOOL_CALL: {block.name}]\n"
 
+            # Fallback: Parse tool calls from text content (for MiniMax compatibility)
+            # Looks for patterns like: [TOOL_CALL: skill.command] or tool_use XML tags
+            if not tool_calls and content:
+                import re
+
+                # Match [TOOL_CALL: filesystem.read_file]
+                pattern = r"\[TOOL_CALL:\s*([^\]]+)\]"
+                matches = re.findall(pattern, content)
+                for i, tool_name in enumerate(matches):
+                    tool_calls.append(
+                        {
+                            "id": f"call_{i}",
+                            "name": tool_name.strip(),
+                            "input": {},
+                        }
+                    )
+                    # Also try to extract parameters from XML-like tags
+                    param_pattern = rf"<parameter\s+name=\"(\w+)\">([^<]+)</parameter>"
+                    params = re.findall(param_pattern, content)
+                    if params:
+                        last_call = tool_calls[-1]
+                        last_call["input"] = {k: v for k, v in params}
+
             result = {
                 "success": True,
                 "content": content,
@@ -142,7 +168,7 @@ class InferenceClient:
                 "error": "",
             }
 
-            log.info(
+            log.debug(
                 "inference.success",
                 model=actual_model,
                 input_tokens=result["usage"]["input_tokens"],

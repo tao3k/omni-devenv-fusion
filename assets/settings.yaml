@@ -217,6 +217,27 @@ skills:
     auto_confirm: false
 
   # =============================================================================
+  # Filter Commands from Core Tools
+  # =============================================================================
+  # Commands to FILTER from being in core tools.
+  # Use Claude's native capabilities instead - MCP adds unnecessary latency.
+  # These commands are still available via dynamic loading when explicitly needed.
+  filter_commands:
+    - "terminal.run_command" # Use Claude's native bash runner
+    - "terminal.run_task" # Value not proven, use direct commands
+    - "terminal.inspect_environment" # Use pwd/uname directly
+
+  # =============================================================================
+  # Dynamic Tool Loading Limits
+  # =============================================================================
+  limits:
+    dynamic_tools: 100 # Max dynamic tools per request
+    core_min: 3 # Minimum guaranteed tools
+    rerank_threshold: 20 # If tools found > this, re-rank by score
+    schema_cache_ttl: 300 # Tool schema cache TTL (seconds)
+    auto_optimize: true # Enable automatic context optimization
+
+  # =============================================================================
   # Skill Architecture Standards (ODF-EP v7.0)
   # =============================================================================
   # Defines the canonical structure for all Omni skills.
@@ -447,42 +468,6 @@ post_mortem:
 
   # Confidence threshold: audits below this are flagged for manual review
   confidence_threshold: 0.8
-
-# =============================================================================
-# Adaptive Context Injection (Dynamic Tool Loading)
-# =============================================================================
-# Configuration for "Core + Dynamic" tool loading strategy
-# Reduces token consumption by loading only relevant tools per request
-
-adaptive:
-  # Core Tools - Always present in LLM context (life support system)
-  # CRITICAL: skill.search_tools MUST be included - enables tool discovery
-  # Added terminal and filesystem tools for essential operations
-  core_tools:
-    - "terminal.run_command" # Terminal - Shell command execution
-    - "terminal.run_task" # Terminal - Safe development task runner
-    - "filesystem.read_file" # Filesystem - Read file contents
-    - "filesystem.write_file" # Filesystem - Write file contents
-    - "filesystem.search_files" # Filesystem - Search for files
-    - "skill.search_tools" # [CRITICAL] Tool discovery - Agent finds other tools
-    - "skill.list_tools" # [CRITICAL] List all registered tools - Discover available capabilities
-    - "memory.add_note" # Memory - Save insights
-    - "memory.search_memory" # Memory - Recall past context
-    - "task.update" # Task management
-    - "knowledge.get_development_context" # System context
-
-  # Limits
-  dynamic_tools_limit: 15 # Max dynamic tools per request
-  min_core_tools: 3 # Minimum guaranteed tools
-
-  # Re-ranking
-  rerank_threshold: 20 # If tools found > this, re-rank by score
-
-  # Caching
-  schema_cache_ttl: 300 # Tool schema cache TTL (seconds)
-
-  # Features
-  auto_optimize: true # Enable automatic context optimization
 
 # =============================================================================
 # LLM Context Limits

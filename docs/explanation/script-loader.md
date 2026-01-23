@@ -4,79 +4,70 @@
 
 ## Overview
 
-The Script Loader dynamically discovers and loads skill commands from `scripts/*.py` files using `importlib.util`. It supports hot-reload and auto-wiring with Foundation decorators.
+The Script Loader dynamically discovers and loads skill commands from `scripts/*.py` files using `importlib.util`. It supports hot-reload, relative imports between scripts, and auto-wiring with Foundation decorators.
 
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ L2: Core Layer (omni.core.skills)                          │
-│                                                              │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │ ScriptLoader                                           │  │
-│  │                                                        │  │
-│  │  - scripts_path: Path to skill scripts                 │  │
-│  │  - commands: Dict[full_name -> function]               │  │
-│  │  - native_functions: Raw functions (no decorator)      │  │
-│  │  - _context: Injected dependencies                     │  │
-│  │                                                        │  │
-│  │  + load_all(): Scan and register all commands         │  │
-│  │  + get_command(name): Retrieve command function        │  │
-│  │  + inject(key, value): Add dependency to context       │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                                                              │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │ @skill_command Decorator                               │  │
-│  │                                                        │  │
-│  │  - Generates Pydantic V2 input_schema                 │  │
-│  │  - Stores _skill_config with command metadata         │  │
-│  │  - Auto-wires skill name from ScriptLoader            │  │
-│  └───────────────────────────────────────────────────────┘  │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────────┐
-│ L1: Foundation Layer (omni.foundation)                      │
-│  - @skill_command decorator                                 │
-│  - get_script_config()                                      │
-│  - OrjsonModel (for CommandResult)                          │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## Directory Structure
+## Module Architecture
 
 ```
-assets/skills/{skill_name}/
-├── SKILL.md              # Skill manifest + system prompts
-├── scripts/
-│   ├── __init__.py       # Module loader (importlib.util)
-│   └── commands.py       # @skill_command decorated functions
-├── tests/
-│   └── test_*.py
-└── extensions/
-    └── sniffer/
-        └── rules.toml    # Declarative sniffer rules
+assets/skills/{skill_name}/scripts/
+├── commands.py      # @skill_command decorated functions
+├── engine.py        # Helper functions (imported via relative import)
+└── utils.py         # Utility functions (imported via relative import)
 ```
 
-## Usage
+Each script is loaded as an isolated module registered under:
 
-### Defining a Skill Command
+```
+omni.skills.{skill_name}.scripts.{module_name}
+```
+
+Example: `omni.skills.terminal.scripts.engine`
+
+## Package Registration
 
 ```python
-# assets/skills/git/scripts/commands.py
-from omni.core.skills.script_loader import skill_command
+# File: packages/python/core/src/omni/core/skills/script_loader.py
+
+scripts_pkg = f"omni.skills.{self.skill_name}.scripts"
+full_module_name = f"{scripts_pkg}.{module_name}"
+
+spec = importlib.util.spec_from_file_location(full_module_name, path)
+module = importlib.util.module_from_spec(spec)
+module.__package__ = scripts_pkg  # Enables relative imports
+spec.loader.exec_module(module)
+```
+
+## Relative Imports
+
+Scripts in the same `scripts/` directory can use relative imports:
+
+```python
+# assets/skills/terminal/scripts/commands.py
+from . import engine  # Imports omni.skills.terminal.scripts.engine
+
+def run_command(cmd: str, args: list[str]) -> str:
+    result = engine.run_command(cmd, args)
+    return engine.format_result(result, cmd, args)
+```
+
+## Defining a Skill Command
+
+```python
+# assets/skills/git/scripts/status.py
+from omni.foundation.api.decorators import skill_command
+from pathlib import Path
 
 @skill_command(
     name="status",
     category="read",
     description="Show git repository status"
 )
-def git_status(project_root: Path) -> CommandResult[dict]:
+def git_status(project_root: Path) -> dict:
     """Get current git status."""
-    result = run_git_status(project_root)
-    return CommandResult(success=True, data=result)
+    return {"status": "clean"}
 ```
 
-### Loading Commands
+## Loading Commands
 
 ```python
 from omni.core.skills.script_loader import ScriptLoader
@@ -89,47 +80,17 @@ loader.load_all()
 
 # Access commands
 status_cmd = loader.commands["git.status"]
-config = get_script_config(status_cmd)
-# {
-#     "name": "git_status",
-#     "category": "read",
-#     "input_schema": {...},
-#     "execution": {...}
-# }
-```
-
-### Hot Reload
-
-```python
-# Reload scripts on file change
-loader.load_all()  # Re-scans scripts directory
 ```
 
 ## Decorator Registration
 
-The `@skill_command` decorator stores metadata on the function:
+The `@skill_command` decorator (from Foundation V2) stores metadata:
 
-| Attribute           | Purpose                                  |
-| ------------------- | ---------------------------------------- |
-| `_is_skill_command` | Marker for skill command detection       |
-| `_command_name`     | Command name (defaults to function name) |
-| `_skill_name`       | Auto-wired by ScriptLoader               |
-| `_category`         | Command category (read/write/execute)    |
-| `_description`      | Human-readable description               |
-| `_inject_root`      | Whether to inject project root path      |
-| `_skill_config`     | Generated by Foundation (V2)             |
-
-## Context Injection
-
-```python
-# Inject Rust accelerator
-loader.inject("git_accelerator", rust_git_bridge)
-
-# Access in command function
-@skill_command(name="commit")
-def git_commit(..., git_accelerator=None):
-    git_accelerator.commit(message)
-```
+| Attribute           | Purpose                                   |
+| ------------------- | ----------------------------------------- |
+| `_is_skill_command` | Marker for skill command detection        |
+| `_skill_config`     | Generated by Foundation with input_schema |
+| `_skill_name`       | Auto-wired by ScriptLoader                |
 
 ## Hot Reload Workflow
 
@@ -140,6 +101,18 @@ def git_commit(..., git_accelerator=None):
 4. New commands registered
 5. Agent sends notifications/tools/list_changed
 6. Client refreshes tools list
+```
+
+## Context Injection
+
+```python
+# Inject Rust accelerator
+loader.inject("rust", rust_git_bridge)
+
+# Access in command function
+@skill_command(name="commit")
+def git_commit(message: str, rust=None):
+    rust.commit(message)
 ```
 
 ## Performance
@@ -162,6 +135,6 @@ def git_commit(..., git_accelerator=None):
 
 - `packages/python/foundation/src/omni/foundation/api/decorators.py`
 
-**Tests:**
+**Kernel:**
 
-- `packages/python/core/tests/units/test_script_loader.py`
+- `packages/python/core/src/omni/core/kernel/components/skill_loader.py`

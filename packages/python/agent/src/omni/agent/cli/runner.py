@@ -1,7 +1,7 @@
 """
 runner.py - Skill Execution Runner (Kernel Native)
 
-Lightweight CLI for executing skill commands using omni.core.kernel.
+Lightweight CLI for executing skill commands using omni-core Kernel.
 Supports skill.command format with JSON arguments.
 
 UNIX Philosophy:
@@ -27,7 +27,7 @@ def run_skills(
     json_output: bool = False,
     log_handler: Callable[[str], None] | None = None,
 ) -> None:
-    """Execute skill commands using omni.core.kernel.
+    """Execute skill commands using omni-core Kernel.
 
     Args:
         commands: List of command arguments
@@ -63,8 +63,8 @@ def run_skills(
             err_console.print(Panel(f"Invalid JSON args: {e}", title="❌ Error", style="red"))
             raise typer.Exit(1)
 
-    # Use Kernel for execution
-    from omni.core.kernel import get_kernel
+    # Use omni-core Kernel (from installed package)
+    from omni.core import get_kernel
 
     kernel = get_kernel()
 
@@ -118,7 +118,8 @@ def run_skills(
 
 def _show_help() -> None:
     """Show available skills and commands."""
-    from omni.core.kernel import get_kernel
+    # Use omni-core Kernel (from installed package)
+    from omni.core import get_kernel
 
     kernel = get_kernel()
 
@@ -137,8 +138,6 @@ def _show_help() -> None:
         err_console.print(f"## {skill_name}")
         err_console.print(f"- **Commands**: {len(commands)}")
         for cmd in commands[:5]:
-            # Extract just the command name
-            cmd_base = cmd.split(".", 1)[1] if "." in cmd else cmd
             err_console.print(f"  - `{cmd}`")
         if len(commands) > 5:
             err_console.print(f"  - ... and {len(commands) - 5} more")

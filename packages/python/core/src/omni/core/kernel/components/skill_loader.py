@@ -33,19 +33,21 @@ async def load_skill_scripts(skill_name: str, scripts_dir: Path) -> dict[str, An
     if not scripts_dir.exists():
         return commands
 
-    # Set up package context for imports
-    pkg_name = f"agent.skills.{skill_name}"
-    parent_pkg = "agent.skills"
+    # Set up package context for imports - use omni.skills for simplicity
+    pkg_name = f"omni.skills.{skill_name}"
+    scripts_pkg_name = f"{pkg_name}.scripts"
 
-    # Ensure parent package exists
-    if parent_pkg not in sys.modules:
-        try:
-            pass
-        except Exception:
-            pass
+    # Ensure parent packages exist in sys.modules
+    parent_pkgs = ["omni", "omni.skills"]
+    for parent in parent_pkgs:
+        if parent not in sys.modules:
+            try:
+                pkg = types.ModuleType(parent)
+                sys.modules[parent] = pkg
+            except Exception:
+                pass
 
     # Register scripts package
-    scripts_pkg_name = f"{pkg_name}.scripts"
     if scripts_pkg_name not in sys.modules:
         scripts_init = scripts_dir / "__init__.py"
         if scripts_init.exists():

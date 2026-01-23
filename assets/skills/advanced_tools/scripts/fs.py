@@ -16,7 +16,17 @@ logger = get_logger("skill.advanced_tools.fs")
 
 @skill_command(
     name="tree_view",
-    description="Generate a visual directory tree structure.",
+    description="""
+    Generate a visual directory tree structure.
+
+    **Parameters**:
+    - `directory` (required): Root directory to start tree from (default: `.`)
+    - `depth` (optional, default: 2): How many directory levels to show
+    - `show_hidden` (optional, default: false): Include hidden files starting with `.`
+    - `only_directories` (optional, default: false): Show only directories, no files
+
+    **Returns**: Visual tree representation or error if `tree` command not found.
+    """,
     autowire=True,
 )
 def tree_view(

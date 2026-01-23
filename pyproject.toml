@@ -98,6 +98,9 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 filterwarnings = [
     "ignore::pytest.PytestReturnNotNoneWarning",
+    # websockets library deprecation warnings (from starlette dependency)
+    "ignore::DeprecationWarning:websockets",
+    "ignore::DeprecationWarning:starlette",
 ]
 norecursedirs = ["stress_tests"]
 

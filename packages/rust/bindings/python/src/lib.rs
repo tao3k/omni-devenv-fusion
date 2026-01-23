@@ -16,18 +16,24 @@ use pyo3::prelude::*;
 // Module Declarations
 // ============================================================================
 
+pub mod checkpoint;
 mod editor;
 mod io;
 mod navigation;
 mod scanner;
 mod security;
 mod sniffer;
+pub mod utils;
 mod vector;
+
+#[cfg(test)]
+mod tests;
 
 // ============================================================================
 // Re-exports from submodules
 // ============================================================================
 
+pub use checkpoint::PyCheckpointStore;
 pub use editor::{
     PyBatchRefactorStats, batch_structural_replace, structural_apply, structural_preview,
     structural_replace,
@@ -42,6 +48,7 @@ pub use scanner::{
 };
 pub use security::{check_permission, contains_secrets, scan_secrets};
 pub use sniffer::{PyEnvironmentSnapshot, PyOmniSniffer, get_environment_snapshot, py_get_sniffer};
+pub use utils::run_safe;
 pub use vector::{PyToolRecord, PyVectorStore, create_vector_store};
 
 // ============================================================================
@@ -85,6 +92,13 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(pyo3::wrap_pyfunction!(create_vector_store, m)?)?;
     m.add_class::<PyVectorStore>()?;
     m.add_class::<PyToolRecord>()?;
+
+    // Checkpoint Store (LanceDB-based state persistence)
+    m.add_function(pyo3::wrap_pyfunction!(
+        checkpoint::create_checkpoint_store,
+        m
+    )?)?;
+    m.add_class::<PyCheckpointStore>()?;
 
     // Script Scanner
     m.add_function(pyo3::wrap_pyfunction!(scan_skill_tools, m)?)?;

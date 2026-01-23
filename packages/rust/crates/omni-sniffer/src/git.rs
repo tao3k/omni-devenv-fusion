@@ -55,16 +55,3 @@ pub fn scan_git_status(
 
     Ok((branch, modified, staged, dirty_files))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::TempDir;
-
-    #[test]
-    fn test_scan_git_status_non_repo() {
-        let dir = TempDir::new().unwrap();
-        let result = scan_git_status(dir.path());
-        assert!(matches!(result, Err(SnifferError::RepoOpen(_))));
-    }
-}

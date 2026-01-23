@@ -63,7 +63,7 @@ from .script_loader import (
     ScriptLoader,
     SkillScriptLoader,
     create_script_loader,
-    skill_command,
+    # skill_command removed - use omni.foundation.api.decorators.skill_command
 )
 
 # Universal skill module
@@ -108,7 +108,6 @@ __all__ = [
     "ScriptLoader",
     "SkillScriptLoader",
     "create_script_loader",
-    "skill_command",
     # Universal
     "UniversalScriptSkill",
     "UniversalSkillFactory",

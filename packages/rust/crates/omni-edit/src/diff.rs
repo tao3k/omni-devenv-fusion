@@ -40,34 +40,3 @@ pub fn generate_unified_diff(original: &str, modified: &str) -> String {
 
     output
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_simple_diff() {
-        let original = "line1\nold_text\nline3";
-        let modified = "line1\nnew_text\nline3";
-        let diff = generate_unified_diff(original, modified);
-
-        assert!(diff.contains("-old_text"));
-        assert!(diff.contains("+new_text"));
-    }
-
-    #[test]
-    fn test_no_changes() {
-        let content = "unchanged content";
-        let diff = generate_unified_diff(content, content);
-        assert!(diff.is_empty() || !diff.contains('-') && !diff.contains('+'));
-    }
-
-    #[test]
-    fn test_addition_only() {
-        let original = "line1\nline2";
-        let modified = "line1\nline2\nline3";
-        let diff = generate_unified_diff(original, modified);
-
-        assert!(diff.contains("+line3"));
-    }
-}

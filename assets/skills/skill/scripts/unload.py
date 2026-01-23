@@ -5,7 +5,7 @@ Provides dynamic skill unloading via MCP tool:
 - @omni("skill.unload", {"name": "advanced_search"})
 """
 
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 
 
 @skill_command(

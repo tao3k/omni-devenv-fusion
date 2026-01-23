@@ -1,18 +1,21 @@
-"""Tests for omni.core.skills.script_loader module."""
+"""Tests for omni.core.skills.script_loader module.
+
+Uses Foundation V2 @skill_command decorator from omni.foundation.api.decorators.
+"""
 
 from __future__ import annotations
 
 import pytest
 from pathlib import Path
+from omni.foundation.api.decorators import skill_command
 from omni.core.skills.script_loader import (
     ScriptLoader,
-    skill_command,
     _skill_command_registry,
 )
 
 
 class TestSkillCommand:
-    """Test skill_command decorator."""
+    """Test skill_command decorator (V2 from foundation)."""
 
     def test_basic_decorator(self):
         """Test basic decorator usage."""
@@ -21,11 +24,12 @@ class TestSkillCommand:
         def test_function():
             return "test"
 
-        # The decorator sets attributes on the function
+        # The decorator sets _is_skill_command and _skill_config
         assert hasattr(test_function, "_is_skill_command")
         assert test_function._is_skill_command is True
-        assert test_function._command_name == "test_cmd"
-        assert test_function._description == "A test command"
+        assert hasattr(test_function, "_skill_config")
+        assert test_function._skill_config["name"] == "test_cmd"
+        assert test_function._skill_config["description"] == "A test command"
 
     def test_decorator_with_args(self):
         """Test decorator with parameters."""
@@ -59,9 +63,9 @@ class TestScriptLoader:
         scripts_dir = tmp_path / "scripts"
         scripts_dir.mkdir()
 
-        # Create a test script with @skill_command decorator
+        # Create a test script with @skill_command decorator (V2)
         (scripts_dir / "example.py").write_text("""
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 
 @skill_command(name="hello", description="Say hello")
 def hello():
@@ -81,7 +85,7 @@ __all__ = ["hello"]
         scripts_dir.mkdir()
 
         (scripts_dir / "context_test.py").write_text("""
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 
 @skill_command(name="get_rust", description="Get rust context")
 def get_rust():
@@ -102,7 +106,7 @@ __all__ = ["get_rust"]
         scripts_dir.mkdir()
 
         (scripts_dir / "my_script.py").write_text("""
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 
 @skill_command(name="my_command", description="Multiply value")
 def my_command(value: int = 10):
@@ -125,7 +129,7 @@ __all__ = ["my_command"]
         scripts_dir.mkdir()
 
         (scripts_dir / "cmd1.py").write_text("""
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 
 @skill_command(name="cmd1", description="Command 1")
 def cmd1():
@@ -133,7 +137,7 @@ def cmd1():
 __all__ = ["cmd1"]
 """)
         (scripts_dir / "cmd2.py").write_text("""
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 
 @skill_command(name="cmd2", description="Command 2")
 def cmd2():

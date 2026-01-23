@@ -364,11 +364,14 @@ test:
     @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     @echo "                              TEST PIPELINE"
     @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ packages/python/mcp-server/tests/ \
-        -v --tb=short --ignore=packages/python/mcp-server/tests/integration/test_sse.py \
-        --ignore=packages/python/mcp-server/tests/unit/test_interfaces.py \
-        --ignore=packages/python/mcp-server/tests/unit/test_types.py \
-        --ignore=packages/python/mcp-server/tests/unit/test_transport/test_sse.py
+    @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ \
+        -v --tb=short
+    @echo ""
+    @cd packages/python/mcp-server && uv run pytest tests/ \
+        -v --tb=short --ignore=tests/integration/test_sse.py \
+        --ignore=tests/unit/test_interfaces.py \
+        --ignore=tests/unit/test_types.py \
+        --ignore=tests/unit/test_transport/test_sse.py
     @echo ""
     @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     @echo "                              COMPLETE"
@@ -379,8 +382,11 @@ test-quick:
     @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     @echo "                              TEST PIPELINE (QUICK)"
     @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ packages/python/mcp-server/tests/ \
-        -q --tb=short
+    @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ -q --tb=short
+    @cd packages/python/mcp-server && uv run pytest tests/ -q --tb=short --ignore=tests/integration/test_sse.py \
+        --ignore=tests/unit/test_interfaces.py \
+        --ignore=tests/unit/test_types.py \
+        --ignore=tests/unit/test_transport/test_sse.py
 
 [group('validate')]
 test-skills:
@@ -390,7 +396,11 @@ test-skills:
 [group('validate')]
 test-parallel:
     @echo "Running tests in parallel (faster)..."
-    @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ packages/python/mcp-server/tests/ -n auto --tb=short
+    @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ -n auto --tb=short
+    @cd packages/python/mcp-server && uv run pytest tests/ -n auto --tb=short --ignore=tests/integration/test_sse.py \
+        --ignore=tests/unit/test_interfaces.py \
+        --ignore=tests/unit/test_types.py \
+        --ignore=tests/unit/test_transport/test_sse.py
 
 [group('validate')]
 vulture:

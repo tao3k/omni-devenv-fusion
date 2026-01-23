@@ -43,7 +43,7 @@ class SkillDescriptionAnalyzer:
     """Analyzes skill scripts for description compliance."""
 
     def __init__(self, skills_dir: Path | None = None):
-        self.skills_dir = skills_dir or SKILLS_DIR
+        self.skills_dir = skills_dir or SKILLS_DIR()
         self.issues: list[dict[str, Any]] = []
         self.stats = {
             "total_skills": 0,
@@ -178,6 +178,7 @@ class SkillDescriptionAnalyzer:
         if not description:
             return ["Empty description"]
 
+        # Get non-empty lines, preserving order
         lines = [l.strip() for l in description.strip().split("\n") if l.strip()]
 
         if not lines:
@@ -218,7 +219,7 @@ class SkillDescriptionAnalyzer:
             "Commit",
             "Amend",
             "Revert",
-            "Installs",
+            "Install",
             "Lists",
             "Retrieves",
             "Returns",
@@ -249,6 +250,11 @@ class SkillDescriptionAnalyzer:
             "Preview",
             "Replace",
             "Retrieve",
+            "Fast",  # For "Fast file location..."
+            "Mass",  # For "MASS REFACTORING TOOL"
+            "Performs",  # For "Performs structural replace..."
+            "Previews",  # For "Previews structural replace..."
+            "Copies",  # For "Copies a skill default template..."
         ]
 
         line_lower = first_line.lower().strip()
@@ -305,7 +311,7 @@ class SkillDescriptionAnalyzer:
 def main() -> int:
     """Main entry point."""
     skills_dir_arg = sys.argv[1] if len(sys.argv) > 1 else None
-    skills_dir = Path(skills_dir_arg) if skills_dir_arg else SKILLS_DIR
+    skills_dir = Path(skills_dir_arg) if skills_dir_arg else SKILLS_DIR()
 
     if not skills_dir.exists():
         print(f"Error: Skills directory not found: {skills_dir}")

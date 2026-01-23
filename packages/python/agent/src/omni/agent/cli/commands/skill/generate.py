@@ -1,15 +1,114 @@
-"""
-generate.py - Hybrid Skill Generator (Jinja2 + LLM)
+r"""
+generate.py - Omni Hybrid Skill Generator (Jinja2 + LLM)
 
-Hybrid Generation Pipeline:
-1. Wizard (Deterministic) -> Collect metadata & permissions
-2. Template (Jinja2) -> Render SKILL.md, __init__.py
-3. LLM (Creative) -> Generate commands.py, README.md
-4. Materialize (Disk) -> Write all files
+Architecture: Hybrid Generation Pipeline
+=========================================
 
-This combines the best of both worlds:
-- Structure safety from Jinja2 templates
-- Creative flexibility from LLM
+This generator combines deterministic structure with AI creativity:
+
+    +---------------------------------------------------------------------+
+    |  STEP 1: WIZARD (Deterministic)                                     |
+    |  - Collect skill name, description, permissions                     |
+    |  - Auto-infer routing keywords                                      |
+    +---------------------------------------------------------------------+
+                                  |
+                                  v
+    +---------------------------------------------------------------------+
+    |  STEP 2: SKELETON (Jinja2)                                          |
+    |  - Render SKILL.md (YAML Frontmatter metadata)                      |
+    +---------------------------------------------------------------------+
+                                  |
+                                  v
+    +---------------------------------------------------------------------+
+    |  STEP 3: FLESH (LLM)                                                |
+    |  - Generate scripts/commands.py (@skill_command decorators)         |
+    |  - Generate README.md (documentation)                               |
+    +---------------------------------------------------------------------+
+                                  |
+                                  v
+    +---------------------------------------------------------------------+
+    |  STEP 4: MATERIALIZE (Disk)                                         |
+    |  - Write all files to assets/skills/<skill-name>/                   |
+    +---------------------------------------------------------------------+
+
+Generated Skill Structure
+=========================
+
+    <skill-name>/
+    |-- SKILL.md              # Metadata + documentation (YAML Frontmatter)
+    |-- README.md             # Usage guide (LLM-generated)
+    +-- scripts/
+        +-- commands.py       # Skill implementation (LLM + ODF-EP Protocol)
+                                # ScriptLoader auto-discovers *.py files
+
+Usage
+=====
+
+    # Interactive mode (default)
+    omni skill generate "Parse CSV files"
+
+    # Non-interactive with name and description
+    omni skill generate fibonacci-tool -d "Calculate fibonacci sequence"
+
+    # With permissions (CI/CD friendly)
+    omni skill generate file-processor -d "Process files" -p filesystem:read -p filesystem:write
+
+    # Fully automated
+    omni skill generate my-skill -d "My skill description" --no-interactive
+
+Output Format
+=============
+
+    [bold green]Omni Hybrid Skill Generator[/bold green]
+
+    [bold yellow]Step 1: Skill Metadata[/bold yellow]
+    [bold yellow]Step 2: Security Permissions[/bold yellow]
+    [bold yellow]Step 3: Generating Skeleton (Jinja2)[/bold yellow]
+    [bold blue]Step 4: AI Engineering (LLM)[/bold blue]
+    [bold green]Step 5: Writing Files[/bold green]
+
+    [green]Skill Generated: fibonacci-calculator[/green]
+    [cyan]Description: A fibonacci calculator skill[/cyan]
+    [yellow]Permissions: none[/yellow]
+    [yellow]Files: SKILL.md, scripts/commands.py, README.md[/yellow]
+
+    Usage: @omni("fibonacci_calculator.example")
+
+ODF-EP Protocol Compliance
+==========================
+
+The LLM is instructed to generate code following ODF-EP Protocol.
+
+Example:
+
+    @skill_command(
+        name="calculate",
+        description="Calculate fibonacci sequence up to n.",
+        autowire=True,
+    )
+    def calculate(n: int) -> CommandResult:
+        ...
+
+Fallback Mode
+=============
+
+When LLM is unavailable, the generator uses a fallback template that
+produces minimal working code with placeholders for implementation.
+
+Error Handling
+==============
+
+    - KeyboardInterrupt: Generation cancelled (exit code 130)
+    - Template errors: Jinja2 template rendering failed
+    - LLM errors: Fallback to template mode
+    - Permission denied: Check skill directory permissions
+
+Related Files
+=============
+
+    - assets/templates/skill/SKILL.md.j2
+    - docs/skills.md
+    - docs/reference/odf-ep-protocol.md
 """
 
 from __future__ import annotations
@@ -148,24 +247,31 @@ def skill_generate(
             # ============================================================
             err_console.print("\n[bold yellow]📝 Step 1: Skill Metadata[/bold yellow]")
 
+            # Use local variables to avoid closure scoping issues
+            _name = name
+            _description = description
+
             # Derive skill name from description if not provided
-            if not name and not description:
-                description = Prompt.ask(
+            if not _name and not _description:
+                _description = Prompt.ask(
                     "What should this skill do?", default="A useful utility skill"
                 )
-                name = _sanitize_skill_name(description.split()[0] if description else "utility")
+                _name = _sanitize_skill_name(_description.split()[0] if _description else "utility")
 
-            if name and not description:
-                description = Prompt.ask(
-                    f"Describe the '{name}' skill", default=f"Provides {name} functionality"
-                )
-            elif description and not name:
-                name = _sanitize_skill_name(description.split()[0] if description else "utility")
+            if _name and not _description:
+                if interactive:
+                    _description = Prompt.ask(
+                        f"Describe the '{_name}' skill", default=f"Provides {_name} functionality"
+                    )
+                else:
+                    _description = f"Provides {_name} functionality"
+            elif _description and not _name:
+                _name = _sanitize_skill_name(_description.split()[0] if _description else "utility")
 
-            name = _sanitize_skill_name(name)
+            _name = _sanitize_skill_name(_name)
 
             # Auto-infer routing keywords
-            routing_keywords = _infer_routing_keywords(name, description)
+            routing_keywords = _infer_routing_keywords(_name, _description)
 
             if interactive:
                 keywords_str = Prompt.ask(
@@ -205,19 +311,27 @@ def skill_generate(
             err_console.print("\n[bold yellow]🏗️ Step 3: Generating Skeleton (Jinja2)[/bold yellow]")
 
             skills_dir = SKILLS_DIR()
-            target_dir = skills_dir / name
+            target_dir = skills_dir / _name
 
             if target_dir.exists():
-                if not Confirm.ask(f"Skill '{name}' exists. Overwrite?", default=False):
-                    err_console.print("⚠️  Generation cancelled.")
-                    return
-            else:
-                target_dir.mkdir(parents=True, exist_ok=True)
+                if interactive:
+                    if not Confirm.ask(f"Skill '{_name}' exists. Overwrite?", default=False):
+                        err_console.print("⚠️  Generation cancelled.")
+                        return
+                else:
+                    # In non-interactive mode, overwrite by default
+                    err_console.print(
+                        f"⚠️  Skill '{_name}' exists. Overwriting in non-interactive mode."
+                    )
+                    import shutil
+
+                    shutil.rmtree(target_dir)
+            target_dir.mkdir(parents=True, exist_ok=True)
 
             # Prepare context for templates
             context = {
-                "skill_name": name,
-                "description": description,
+                "skill_name": _name,
+                "description": _description,
                 "routing_keywords": routing_keywords,
                 "permissions": selected_permissions,
                 "author": "omni-hybrid-gen",
@@ -235,14 +349,10 @@ def skill_generate(
             generated_files = {}
 
             # Render SKILL.md
-            skill_md = engine.render("skill/SKILL.md.j2", context)
+            skill_md = engine.render("SKILL.md.j2", context)
             generated_files["SKILL.md"] = skill_md
 
-            # Render scripts/__init__.py
-            init_py = engine.render("skill/scripts/__init__.py.j2", context)
-            generated_files["scripts/__init__.py"] = init_py
-
-            err_console.print(f"  ✅ Rendered {len(generated_files)} skeleton files")
+            err_console.print(f"  ✅ Rendered {len(generated_files)} skeleton file(s)")
 
             # ============================================================
             # STEP 3: THE FLESH (LLM Logic Generation)
@@ -250,6 +360,7 @@ def skill_generate(
             err_console.print("\n[bold blue]🧠 Step 4: AI Engineering (LLM)[/bold blue]")
 
             # Build prompts for LLM
+            permissions_str = ", ".join(selected_permissions) if selected_permissions else "none"
             commands_prompt = f"""# ODF-EP PROTOCOL: skill_command Description Standards
 
 ## CRITICAL: This is a MANDATORY PROTOCOL, not a suggestion.
@@ -279,9 +390,9 @@ The @skill_command decorator MUST have an explicit description= parameter. Funct
 
 Task: Write the `scripts/commands.py` file for a new skill.
 
-Skill Name: {name}
-Description: {description}
-Permissions: {", ".join(selected_permissions) if selected_permissions else "none"}
+Skill Name: {_name}
+Description: {_description}
+Permissions: {permissions_str}
 
 Commands to implement:
 - `list_tools()`: List all commands (REQUIRED, always include this exact signature)
@@ -289,9 +400,9 @@ Commands to implement:
 
 Write ONLY the Python code for `scripts/commands.py`. Do NOT include markdown code blocks."""
 
-            readme_prompt = f"""Write a short README.md for skill '{name}'.
+            readme_prompt = f"""Write a short README.md for skill '{_name}'.
 
-Description: {description}
+Description: {_description}
 
 Include:
 1. Brief overview
@@ -332,8 +443,8 @@ Write in Markdown format. No code blocks needed since this is markdown."""
             duration_ms = (time.perf_counter() - start_time) * 1000
 
             success_panel = _build_success_panel(
-                skill_name=name,
-                description=description,
+                skill_name=_name,
+                description=_description,
                 permissions=selected_permissions,
                 files=list(generated_files.keys()),
                 duration_ms=duration_ms,
@@ -341,7 +452,7 @@ Write in Markdown format. No code blocks needed since this is markdown."""
             err_console.print(success_panel)
 
             # Usage hint
-            err_console.print(f'\n📖 Usage: @omni("{name.replace("-", "_")}.example")')
+            err_console.print(f'\n📖 Usage: @omni("{_name.replace("-", "_")}.example")')
 
             # Auto-load if requested
             if auto_load:

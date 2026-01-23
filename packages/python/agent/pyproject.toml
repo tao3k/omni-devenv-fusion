@@ -11,10 +11,12 @@ dependencies = [
     "omni-mcp>=0.1.0",
     # Web & CLI
     "starlette>=0.40.0",
-    "uvicorn[standard]>=0.30.0",
+    "uvicorn>=0.30.0",
     "typer>=0.15.0",
     # Logging (pervasive)
     "structlog>=25.5.0",
+    # Stress testing
+    "psutil>=5.9.0",
 ]
 
 

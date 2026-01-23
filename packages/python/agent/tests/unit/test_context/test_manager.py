@@ -1,4 +1,9 @@
-"""Tests for ContextManager."""
+"""Tests for ContextManager.
+
+Tests verify LLM API message format compliance:
+- Messages array contains only 'user' and 'assistant' roles
+- System prompts are handled separately via get_system_prompt()
+"""
 
 import pytest
 from omni.agent.core.context.manager import ContextManager, Turn
@@ -30,6 +35,142 @@ class TestTurn:
         assert "assistant" in data
         assert "timestamp" in data
         assert data["user"]["content"] == "Test"
+
+
+class TestContextManagerMessagesFormat:
+    """Tests for LLM API message format compliance.
+
+    Per Anthropic/MiniMax API standards:
+    - system_prompt is passed as a separate parameter
+    - messages array contains only 'user' and 'assistant' roles
+    """
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.ctx = ContextManager()
+        self.ctx_with_config = ContextManager(pruner=ContextPruner(PruningConfig(retained_turns=3)))
+
+    def test_messages_contains_only_user_and_assistant(self):
+        """Verify get_active_context returns only user/assistant roles."""
+        self.ctx.add_system_message("You are an AI assistant.")  # System stored separately
+        self.ctx.add_user_message("Hello")
+        self.ctx.update_last_assistant("Hi there!")
+
+        messages = self.ctx.get_active_context(strategy="full")
+
+        # Should have exactly 2 messages
+        assert len(messages) == 2
+
+        # All messages should be user or assistant
+        roles = {msg["role"] for msg in messages}
+        assert roles == {"user", "assistant"}
+
+        # No system role should be present
+        assert "system" not in roles
+
+    def test_system_messages_not_in_messages_array(self):
+        """Ensure system messages are not included in messages array."""
+        self.ctx.add_system_message("System prompt 1")
+        self.ctx.add_system_message("System prompt 2")
+        self.ctx.add_turn("User message", "Assistant response")
+
+        messages = self.ctx.get_active_context(strategy="full")
+
+        # Only user and assistant messages should be present
+        assert len(messages) == 2
+        for msg in messages:
+            assert msg["role"] in ("user", "assistant")
+            assert msg["role"] != "system"
+
+    def test_system_prompt_separate_from_messages(self):
+        """System prompts are retrieved separately, not in messages."""
+        self.ctx.add_system_message("You are a helpful assistant.")
+        self.ctx.add_turn("User 1", "Assistant 1")
+
+        # System prompt is separate
+        system_prompt = self.ctx.get_system_prompt()
+        assert system_prompt == "You are a helpful assistant."
+
+        # Messages don't contain system
+        messages = self.ctx.get_active_context()
+        assert all(msg["role"] != "system" for msg in messages)
+
+    def test_empty_context_returns_empty_messages(self):
+        """Empty context should return empty messages array."""
+        messages = self.ctx.get_active_context(strategy="full")
+        assert messages == []
+        assert len(messages) == 0
+
+    def test_multiple_turns_message_format(self):
+        """Test multiple turns maintain correct message format."""
+        for i in range(5):
+            self.ctx.add_turn(f"User {i}", f"Assistant {i}")
+
+        messages = self.ctx.get_active_context(strategy="full")
+
+        # Should have 10 messages (5 user + 5 assistant)
+        assert len(messages) == 10
+
+        # All should be user or assistant
+        for msg in messages:
+            assert msg["role"] in ("user", "assistant")
+            assert "content" in msg
+
+    def test_message_roles_alternate_correctly(self):
+        """Messages should alternate user -> assistant -> user."""
+        self.ctx.add_turn("First user", "First assistant")
+        self.ctx.add_turn("Second user", "Second assistant")
+
+        messages = self.ctx.get_active_context(strategy="full")
+
+        assert messages[0]["role"] == "user"
+        assert messages[0]["content"] == "First user"
+        assert messages[1]["role"] == "assistant"
+        assert messages[1]["content"] == "First assistant"
+        assert messages[2]["role"] == "user"
+        assert messages[2]["content"] == "Second user"
+        assert messages[3]["role"] == "assistant"
+        assert messages[3]["content"] == "Second assistant"
+
+    def test_recent_strategy_no_system(self):
+        """Recent strategy should not include system messages."""
+        self.ctx.add_system_message("System")
+        for i in range(10):
+            self.ctx.add_turn(f"User {i}", f"Assistant {i}")
+
+        messages = self.ctx.get_active_context(strategy="recent")
+
+        # No system messages
+        for msg in messages:
+            assert msg["role"] != "system"
+
+        # Limited to retained turns
+        max_msgs = self.ctx.pruner.config.retained_turns * 2
+        assert len(messages) <= max_msgs
+
+    def test_full_strategy_no_system(self):
+        """Full strategy should not include system messages."""
+        self.ctx.add_system_message("System")
+        self.ctx.add_turn("User", "Assistant")
+
+        messages = self.ctx.get_active_context(strategy="full")
+
+        # Only user and assistant
+        assert len(messages) == 2
+        for msg in messages:
+            assert msg["role"] in ("user", "assistant")
+
+    def test_pruned_strategy_no_system(self):
+        """Pruned strategy should not include system messages."""
+        self.ctx.add_system_message("System")
+        for i in range(10):
+            self.ctx.add_turn(f"User {i}", f"Assistant {i}")
+
+        messages = self.ctx.get_active_context(strategy="pruned")
+
+        # No system messages
+        for msg in messages:
+            assert msg["role"] != "system"
 
 
 class TestContextManager:
@@ -82,35 +223,36 @@ class TestContextManager:
 
     def test_get_active_context_pruned(self):
         """Test getting pruned context."""
-        self.pruner.add_system_message("System")
         self.pruner.add_turn("User 1", "Assistant 1")
         self.pruner.add_turn("User 2", "Assistant 2")
         self.pruner.add_turn("User 3", "Assistant 3")
 
         context = self.pruner.get_active_context(strategy="pruned")
-        # Should include system + some chat messages
-        assert len(context) >= 1  # At least system
+        # Should have user/assistant messages (no system)
+        assert len(context) >= 2  # At least user + assistant
+        for msg in context:
+            assert msg["role"] in ("user", "assistant")
 
     def test_get_active_context_recent(self):
         """Test getting recent context only."""
-        self.pruner.add_system_message("System")
         for i in range(10):
             self.pruner.add_turn(f"User {i}", f"Assistant {i}")
 
         context = self.pruner.get_active_context(strategy="recent")
-        # Should include system + last N turns
-        assert context[0]["role"] == "system"
+        # Should have only user/assistant messages (no system)
+        assert len(context) >= 2  # At least one turn
+        for msg in context:
+            assert msg["role"] in ("user", "assistant")
         # Should have limited number of messages
-        max_msgs = 1 + (self.pruner.pruner.config.retained_turns * 2)
+        max_msgs = self.pruner.pruner.config.retained_turns * 2
         assert len(context) <= max_msgs
 
     def test_get_active_context_full(self):
         """Test getting full context."""
-        self.pruner.add_system_message("System")
         self.pruner.add_turn("User 1", "Assistant 1")
 
         context = self.pruner.get_active_context(strategy="full")
-        assert len(context) == 3  # system + user + assistant
+        assert len(context) == 2  # user + assistant (no system in messages)
 
     def test_clear(self):
         """Test clearing context."""
@@ -172,7 +314,7 @@ class TestContextManager:
 
         # Should have pruned some turns (keep only 2)
         assert len(ctx.turns) <= 2
-        assert len(ctx.system_prompts) > 0  # Summary added
+        assert len(ctx.system_prompts) > 0  # Summary added as system
 
 
 class TestContextManagerCompression:
@@ -201,9 +343,12 @@ class TestContextManagerCompression:
 
         # Recent should have last 4 messages (2 turns)
         assert len(recent) == 4
+        for msg in recent:
+            assert msg["role"] in ("user", "assistant")
 
-        # To-summarize should have remaining
-        assert len(to_summarize) == 6  # 5 user + 5 assistant = 10, minus 4 recent = 6
+        # To-summarize should have remaining (only user/assistant)
+        for msg in to_summarize:
+            assert msg["role"] in ("user", "assistant")
 
     def test_segment_empty_context(self):
         """Test segmenting empty context."""

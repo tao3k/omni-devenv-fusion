@@ -95,18 +95,13 @@ def _create_backup(filepath: Path) -> bool:
     name="read_file",
     category="read",
     description="""
-    Reads a single file with line numbering.
+    Read a single file with line numbers.
 
-    Supports:
-    - Project-relative paths (e.g., `src/main.py`)
-    - Trusted absolute paths (e.g., `/nix/store/*`)
+    **Parameters**:
+    - `file_path` (required): Path to the file to read. Supports project-relative paths (e.g., `src/main.py`) or trusted absolute paths (e.g., `/nix/store/*`)
+    - `encoding` (optional, default: utf-8): File encoding
 
-    Args:
-        file_path: Path to the file to read.
-
-    Returns:
-        File content with line numbers, or error message if file not found,
-        is not a file, or exceeds 100KB size limit.
+    **Returns**: File content with line numbers, or error if not found/not a file/exceeds 100KB.
     """,
     autowire=True,
 )
@@ -116,7 +111,6 @@ def read_file(
     paths: ConfigPaths | None = None,
 ) -> str:
     """Read content from a file within the project."""
-    # Resolve paths using ConfigPaths (Layer 1 Semantic)
     if paths is None:
         paths = ConfigPaths()
     project_root: Path = paths.project_root  # type: ignore[assignment]
@@ -226,7 +220,7 @@ async def save_file(
     writing_warnings = []
     if auto_check_writing and path.endswith(".md"):
         try:
-            from agent.skills.writer.scripts.text import polish_text
+            from ..writer.scripts.text import polish_text
 
             polish_result = await polish_text(content)
             polish_data = json.loads(polish_result)
@@ -352,13 +346,12 @@ async def apply_file_changes(
     name="list_directory",
     category="read",
     description="""
-    Lists files and directories in the given path.
+    List files and directories at a path.
 
-    Args:
-        path: Path to list. Defaults to current directory (`.`).
+    **Parameters**:
+    - `path` (required): Directory path to list. Use `.` for current directory, or relative path like `src/`
 
-    Returns:
-        Formatted directory listing with file/directory type and size.
+    **Returns**: Formatted listing with file/directory type and size.
     """,
     autowire=True,
 )

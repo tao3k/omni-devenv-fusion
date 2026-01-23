@@ -118,15 +118,14 @@ def test_commands_submodules():
     """Test command submodules are importable."""
     print("\n[Commands Submodules]")
 
-    from omni.agent.cli.commands import register_mcp_command
+    from omni.agent.cli.commands import register_mcp_command, register_run_command
     from omni.agent.cli.commands.ingest import ingest_app
     from omni.agent.cli.commands.route import route_app
-    from omni.agent.cli.commands.run import run_app
     from omni.agent.cli.commands.skill import skill_app
 
     assert skill_app is not None, "skill_app is None"
+    assert register_run_command is not None, "register_run_command is None"
     assert callable(register_mcp_command), "register_mcp_command is not callable"
-    assert run_app is not None, "run_app is None"
     assert route_app is not None, "route_app is None"
     assert ingest_app is not None, "ingest_app is None"
 

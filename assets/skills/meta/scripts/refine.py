@@ -5,30 +5,23 @@ Uses the injected InferenceClient to fix broken code.
 
 from pathlib import Path
 
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 
 
 @skill_command(
     name="refine_code",
     category="evolution",
     description="""
-    Analyzes test failure and generates fixed code using AI.
+    Analyze test failure and generate fixed code using AI.
 
-    Uses the `refiner.md` prompt from skills/meta/prompts/ to guide the LLM
-    in understanding the requirement and fixing the broken implementation.
+    Uses the `refiner.md` prompt from skills/meta/prompts/ to guide the LLM.
 
-    Args:
-        inference_client: The injected AI inference client.
-        project_root: Root directory of the project.
-        requirement: The original requirement for the code.
-        code: The current implementation that failed.
-        error: The error message from test execution.
+    **Parameters**:
+    - `requirement` (required): The original requirement for the code
+    - `code` (required): The current implementation that failed
+    - `error` (required): The error message from test execution
 
-    Returns:
-        Fixed Python code with markdown fences stripped.
-
-    Example:
-        @omni("meta.refine_code", {"requirement": "Add two numbers", "code": "def add(a, b):\\n    return a + b", "error": "NameError: name 'a' not defined"})
+    **Returns**: Fixed Python code with markdown fences stripped.
     """,
     inject_root=True,
 )

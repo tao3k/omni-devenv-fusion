@@ -70,6 +70,17 @@ class ContextManager:
         msg = {"role": "system", "content": content, **kwargs}
         self.system_prompts.append(msg)
 
+    def get_system_prompt(self) -> Optional[str]:
+        """
+        Get the primary system prompt content.
+
+        Returns:
+            The content of the first system message, or None if no system prompts exist.
+        """
+        if self.system_prompts:
+            return self.system_prompts[0].get("content")
+        return None
+
     def add_user_message(self, content: str, **kwargs) -> None:
         """Add a user message (opens a new turn)."""
         turn = Turn(
@@ -105,13 +116,15 @@ class ContextManager:
             strategy: Context retrieval strategy.
                 - "pruned": Apply smart trimming (default)
                 - "full": Return all messages (may exceed context window)
-                - "recent": Return only system + last N turns
+                - "recent": Return only last N turns (no system)
 
         Returns:
-            Message list ready for LLM.
+            Message list ready for LLM (user/assistant roles only).
+            System prompts are handled separately via get_system_prompt().
         """
-        # Build full message list
-        messages = list(self.system_prompts)
+        # Build message list with user/assistant roles only
+        # System prompts are managed separately and passed via system_prompt param
+        messages: List[Dict[str, Any]] = []
 
         # Add chat messages as flat list
         for turn in self.turns:
@@ -124,11 +137,10 @@ class ContextManager:
 
         if strategy == "recent":
             retain = self.pruner.config.retained_turns
-            system_count = len(self.system_prompts)
-            # Keep system + last N turns (2 messages per turn)
-            cutoff = len(messages) - system_count - (retain * 2)
+            # Keep only last N turns (2 messages per turn)
+            cutoff = len(messages) - (retain * 2)
             if cutoff > 0:
-                return messages[:system_count] + messages[-retain * 2 :]
+                return messages[-retain * 2 :]
             return messages
 
         # Default: pruned strategy
@@ -239,9 +251,18 @@ class ContextManager:
 
         Returns:
             Tuple of (system, to_summarize, recent) message lists.
+            - system: System prompts from system_prompts
+            - to_summarize: Old user/assistant messages to compress
+            - recent: Recent user/assistant messages to keep
         """
-        messages = self.get_active_context(strategy="full")
-        return self.pruner.segment(messages)
+        # Get system prompts directly
+        system_msgs = list(self.system_prompts)
+
+        # Get chat messages (user/assistant only)
+        chat_messages = self.get_active_context(strategy="full")
+
+        # Delegate to pruner for segmentation
+        return self.pruner.segment(chat_messages, system_msgs)
 
     async def compress(self) -> bool:
         """

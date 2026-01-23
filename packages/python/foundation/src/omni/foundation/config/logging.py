@@ -253,12 +253,26 @@ def configure_logging(
 
 def _setup_log_filters(level: int) -> None:
     """Configure log filter levels for third-party libraries."""
+    # Always suppress HTTP tracing logs (connect/send/receive details)
+    # These are too verbose for human-readable output
+    http_tracing = [
+        "httpx.dispatch",
+        "httpx.client",
+        "httpcore.dispatch",
+        "httpcore.connection",
+        "httpcore.http11",
+        "httpcore.pool",
+    ]
+
+    for logger_name in http_tracing:
+        logging.getLogger(logger_name).setLevel(logging.WARNING)
+
     noisy_loggers = [
         ("uvicorn", logging.WARNING),
         ("uvicorn.access", logging.WARNING),
         ("starlette", logging.WARNING),
-        ("httpx", logging.WARNING if level > logging.DEBUG else logging.DEBUG),
-        ("httpcore", logging.WARNING if level > logging.DEBUG else logging.DEBUG),
+        ("httpx", logging.WARNING if level > logging.DEBUG else logging.INFO),
+        ("httpcore", logging.WARNING if level > logging.DEBUG else logging.INFO),
     ]
 
     for logger_name, log_lvl in noisy_loggers:

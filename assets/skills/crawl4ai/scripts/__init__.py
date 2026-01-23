@@ -9,7 +9,7 @@ for command discovery. The actual implementation is in engine.py.
 """
 
 from typing import Any
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 
 
 @skill_command(

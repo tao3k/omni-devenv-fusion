@@ -4427,6 +4427,7 @@ dependencies = [
  "serde",
  "serde_json",
  "skills-scanner",
+ "tempfile",
  "tokio",
 ]
 

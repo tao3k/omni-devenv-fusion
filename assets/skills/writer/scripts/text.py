@@ -11,7 +11,7 @@ from typing import Dict, List, Any, Optional
 
 import structlog
 
-from omni.core.skills.script_loader import skill_command
+from omni.foundation.api.decorators import skill_command
 from omni.foundation.config.skills import SKILLS_DIR
 
 logger = structlog.get_logger(__name__)

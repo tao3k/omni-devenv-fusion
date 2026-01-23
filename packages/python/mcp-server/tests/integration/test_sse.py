@@ -24,8 +24,8 @@ def get_unused_port() -> int:
         return s.getsockname()[1]
 
 
-class TestHandler:
-    """Test request handler for integration tests."""
+class MockRequestHandler:
+    """Mock request handler for integration tests."""
 
     def __init__(self):
         self.notifications: list[tuple[str, dict]] = []
@@ -57,7 +57,7 @@ class TestHandler:
 @pytest.fixture
 def handler():
     """Create test handler."""
-    return TestHandler()
+    return MockRequestHandler()
 
 
 @pytest.fixture

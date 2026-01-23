@@ -107,7 +107,15 @@ def _load_skill_manifest(skill_name: str) -> tuple[Optional[Dict[str, Any]], Opt
 @skill_command(
     name="save_memory",
     category="write",
-    description="Store a key insight into long-term memory.",
+    description="""
+    Store a key insight into long-term memory (LanceDB).
+
+    **Parameters**:
+    - `content` (required): The insight to store (what you learned)
+    - `metadata` (optional): Dictionary of metadata (tags, domain, etc.)
+
+    **Returns**: Confirmation message with stored content preview.
+    """,
     autowire=True,
 )
 async def save_memory(
@@ -166,7 +174,15 @@ async def save_memory(
 @skill_command(
     name="search_memory",
     category="read",
-    description="Semantically search memory for relevant past experiences.",
+    description="""
+    Semantically search memory for relevant past experiences or rules.
+
+    **Parameters**:
+    - `query` (required): What you're looking for
+    - `limit` (optional, default: 5): Number of results to return
+
+    **Returns**: Relevant memories found, or "No relevant memories found".
+    """,
     autowire=True,
 )
 async def search_memory(
@@ -211,7 +227,15 @@ async def search_memory(
 @skill_command(
     name="index_memory",
     category="write",
-    description="Optimize memory index for faster search (IVF-FLAT).",
+    description="""
+    Optimize memory index for faster search using IVF-FLAT algorithm.
+
+    Call this after bulk imports to improve search performance.
+
+    **Parameters**: None
+
+    **Returns**: Confirmation of index creation.
+    """,
     autowire=True,
 )
 async def index_memory(
@@ -238,7 +262,13 @@ async def index_memory(
 @skill_command(
     name="get_memory_stats",
     category="view",
-    description="Get statistics about stored memories.",
+    description="""
+    Get statistics about stored memories.
+
+    **Parameters**: None
+
+    **Returns**: Count of stored memories.
+    """,
     autowire=True,
 )
 async def get_memory_stats(
@@ -260,7 +290,14 @@ async def get_memory_stats(
 @skill_command(
     name="load_skill",
     category="write",
-    description="Load a skill's manifest into semantic memory.",
+    description="""
+    Load a skill's manifest into semantic memory for LLM recall.
+
+    **Parameters**:
+    - `skill_name` (required): Name of the skill to load (e.g., "git", "terminal")
+
+    **Returns**: Confirmation message with skill details.
+    """,
     autowire=True,
 )
 async def load_skill(

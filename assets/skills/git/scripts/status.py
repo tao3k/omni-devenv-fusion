@@ -32,7 +32,15 @@ def _run_git(cmd: list[str], cwd: Path) -> tuple[str, int]:
 
 @skill_command(
     name="status",
-    description="Get the status of the git repository (clean/dirty, changed files)",
+    category="read",
+    description="""
+    Get detailed status of the git repository including branch, clean/dirty state, and change counts.
+
+    **Parameters**:
+    - `repo_path` (optional): Path to the repository. Defaults to project root.
+
+    **Returns**: Dictionary with success, repo_path, branch, is_clean, staged, unstaged, untracked counts.
+    """,
     autowire=True,
 )
 def git_status(
@@ -95,7 +103,15 @@ def git_status(
 
 @skill_command(
     name="status_short",
-    description="Get a short summary of git status",
+    category="read",
+    description="""
+    Get a short one-line summary of git status with branch and change counts.
+
+    **Parameters**:
+    - `repo_path` (optional): Path to the repository. Defaults to project root.
+
+    **Returns**: String summary like "Branch: main | Clean" or "Branch: main | Staged: 2 | Unstaged: 3".
+    """,
     autowire=True,
 )
 def git_status_short(

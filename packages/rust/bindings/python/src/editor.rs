@@ -2,6 +2,7 @@
 //!
 //! Provides AST-based structural search and replace capabilities.
 
+use crate::utils::run_safe;
 use omni_edit::{BatchConfig, BatchRefactorStats, StructuralEditor};
 use pyo3::prelude::*;
 use std::path::Path;
@@ -61,14 +62,17 @@ pub fn structural_replace(
     replacement: &str,
     language: &str,
 ) -> String {
-    Python::attach(|py| {
-        py.detach(
-            || match StructuralEditor::replace(content, pattern, replacement, language) {
-                Ok(result) => StructuralEditor::format_result(&result, None),
-                Err(e) => format!("[Structural replace error: {}]", e),
-            },
-        )
+    run_safe(|| {
+        Python::attach(|py| {
+            Ok(py.detach(|| {
+                match StructuralEditor::replace(content, pattern, replacement, language) {
+                    Ok(result) => StructuralEditor::format_result(&result, None),
+                    Err(e) => format!("[Structural replace error: {}]", e),
+                }
+            }))
+        })
     })
+    .unwrap_or_else(|e| format!("[Rust panic caught: {}]", e))
 }
 
 /// Preview structural replace on a file (no modification).
@@ -91,14 +95,17 @@ pub fn structural_preview(
     replacement: &str,
     language: Option<&str>,
 ) -> String {
-    Python::attach(|py| {
-        py.detach(
-            || match StructuralEditor::preview(&path, pattern, replacement, language) {
-                Ok(result) => StructuralEditor::format_result(&result, Some(&path)),
-                Err(e) => format!("[Structural preview error: {}]", e),
-            },
-        )
+    run_safe(|| {
+        Python::attach(|py| {
+            Ok(py.detach(|| {
+                match StructuralEditor::preview(&path, pattern, replacement, language) {
+                    Ok(result) => StructuralEditor::format_result(&result, Some(&path)),
+                    Err(e) => format!("[Structural preview error: {}]", e),
+                }
+            }))
+        })
     })
+    .unwrap_or_else(|e| format!("[Rust panic caught: {}]", e))
 }
 
 /// Apply structural replace to a file (modifies the file).
@@ -121,20 +128,23 @@ pub fn structural_apply(
     replacement: &str,
     language: Option<&str>,
 ) -> String {
-    Python::attach(|py| {
-        py.detach(
-            || match StructuralEditor::apply(&path, pattern, replacement, language) {
-                Ok(result) => {
-                    let mut output = StructuralEditor::format_result(&result, Some(&path));
-                    if result.count > 0 {
-                        output.push_str("\n[FILE MODIFIED]\n");
+    run_safe(|| {
+        Python::attach(|py| {
+            Ok(py.detach(
+                || match StructuralEditor::apply(&path, pattern, replacement, language) {
+                    Ok(result) => {
+                        let mut output = StructuralEditor::format_result(&result, Some(&path));
+                        if result.count > 0 {
+                            output.push_str("\n[FILE MODIFIED]\n");
+                        }
+                        output
                     }
-                    output
-                }
-                Err(e) => format!("[Structural apply error: {}]", e),
-            },
-        )
+                    Err(e) => format!("[Structural apply error: {}]", e),
+                },
+            ))
+        })
     })
+    .unwrap_or_else(|e| format!("[Rust panic caught: {}]", e))
 }
 
 /// Perform batch structural refactoring across a directory.
@@ -160,22 +170,34 @@ pub fn batch_structural_replace(
     file_pattern: &str,
     dry_run: bool,
 ) -> PyResult<PyBatchRefactorStats> {
-    Python::attach(|py| {
-        py.detach(|| {
-            let config = BatchConfig {
-                file_pattern: file_pattern.to_string(),
-                dry_run,
-                ..Default::default()
-            };
+    run_safe(|| {
+        Python::attach(|py| {
+            Ok(py.detach(|| {
+                let config = BatchConfig {
+                    file_pattern: file_pattern.to_string(),
+                    dry_run,
+                    ..Default::default()
+                };
 
-            let stats = StructuralEditor::batch_replace(
-                Path::new(&root_path),
-                &search_pattern,
-                &rewrite_pattern,
-                &config,
-            );
+                let stats = StructuralEditor::batch_replace(
+                    Path::new(&root_path),
+                    &search_pattern,
+                    &rewrite_pattern,
+                    &config,
+                );
 
-            Ok(PyBatchRefactorStats::from(stats))
+                Ok(PyBatchRefactorStats::from(stats))
+            }))
+        })
+    })
+    .unwrap_or_else(|e| {
+        // Return stats with error message
+        Ok(PyBatchRefactorStats {
+            files_scanned: 0,
+            files_changed: 0,
+            replacements: 0,
+            modified_files: vec![],
+            errors: vec![format!("Rust panic during batch operation: {}", e)],
         })
     })
 }
