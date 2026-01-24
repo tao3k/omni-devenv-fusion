@@ -2,14 +2,22 @@
 crawl4ai/scripts/ - Crawl4ai Skill Interface
 
 This module exposes command interfaces for the main agent.
-Commands are executed via Sidecar Execution Pattern (isolated subprocess).
+Commands are executed via Foundation's Isolation Pattern.
 
 IMPORTANT: These function signatures are scanned by Rust AST Scanner
 for command discovery. The actual implementation is in engine.py.
 """
 
+from pathlib import Path
 from typing import Any
+
 from omni.foundation.api.decorators import skill_command
+from omni.foundation.runtime.isolation import run_skill_command
+
+
+def _get_skill_dir() -> Path:
+    """Get the skill directory for isolation."""
+    return Path(__file__).parent.parent
 
 
 @skill_command(
@@ -30,10 +38,12 @@ async def crawl_url(
     Returns:
         dict with keys: success, url, content, error, metadata
     """
-    # Delegate to subprocess execution
-    from . import isolation
-
-    return await isolation.execute_crawl(url, fit_markdown=fit_markdown)
+    result = run_skill_command(
+        skill_dir=_get_skill_dir(),
+        script_name="engine.py",
+        args={"url": url, "fit_markdown": fit_markdown},
+    )
+    return result
 
 
 @skill_command(
@@ -47,6 +57,13 @@ async def check_crawler_ready() -> dict[str, Any]:
     Returns:
         dict with 'ready' status and any error messages
     """
-    from . import isolation
+    # For check_crawler_ready, we run a simple version inline
+    # to avoid the complexity of the engine.py main() interface
+    try:
+        from playwright.sync_api import sync_playwright
 
-    return await isolation.execute_check_ready()
+        with sync_playwright() as p:
+            browsers = p.chromium.executable_path
+            return {"ready": True, "browsers": str(browsers)}
+    except Exception as e:
+        return {"ready": False, "error": str(e)}

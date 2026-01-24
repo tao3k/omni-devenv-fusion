@@ -13,7 +13,7 @@ The Hive Mind orchestrates multiple routing strategies:
 from __future__ import annotations
 
 import re
-from typing import Any, Optional
+from typing import Any
 
 from omni.foundation.config.logging import get_logger
 
@@ -27,7 +27,7 @@ class FallbackRouter:
 
     async def route(
         self, query: str, context: dict[str, Any] | None = None
-    ) -> Optional[RouteResult]:
+    ) -> RouteResult | None:
         """Return None to indicate no route found."""
         return None
 
@@ -64,7 +64,7 @@ class HiveRouter:
 
     async def route(
         self, query: str, context: dict[str, Any] | None = None
-    ) -> Optional[RouteResult]:
+    ) -> RouteResult | None:
         """Route a query using the Hive Mind strategy.
 
         Args:
@@ -109,7 +109,7 @@ class HiveRouter:
         logger.debug(f"🐝 Hive could not route: '{query}'")
         return None
 
-    def _route_from_context(self, query: str, context: dict[str, Any]) -> Optional[RouteResult]:
+    def _route_from_context(self, query: str, context: dict[str, Any]) -> RouteResult | None:
         """Route based on current context (cwd, file types, etc.).
 
         Args:
@@ -179,7 +179,7 @@ class MultiHiveRouter:
 
     async def route(
         self, query: str, domain: str = "default", context: dict | None = None
-    ) -> Optional[RouteResult]:
+    ) -> RouteResult | None:
         """Route to a specific hive based on domain."""
         hive = self._hives.get(domain, self._default_hive)
         if hive:

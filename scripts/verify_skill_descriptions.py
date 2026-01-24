@@ -25,7 +25,6 @@ if str(_foundation_src) not in sys.path:
 
 from omni.foundation.config.skills import SKILLS_DIR
 
-
 STANDARD_TEMPLATE = '''description="""
 One-line summary of what this command does.
 

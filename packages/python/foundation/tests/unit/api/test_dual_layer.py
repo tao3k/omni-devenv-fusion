@@ -9,6 +9,8 @@ from __future__ import annotations
 import subprocess
 import sys
 
+from omni.foundation.runtime.gitops import get_project_root
+
 
 def run_test(script: str) -> tuple[int, str, str]:
     """Run a test script in a subprocess and return (exit_code, stdout, stderr)."""
@@ -16,7 +18,7 @@ def run_test(script: str) -> tuple[int, str, str]:
         [sys.executable, "-c", script],
         capture_output=True,
         text=True,
-        cwd="/Users/guangtao/ghq/github.com/tao3k/omni-dev-fusion",
+        cwd=str(get_project_root()),
     )
     return result.returncode, result.stdout, result.stderr
 

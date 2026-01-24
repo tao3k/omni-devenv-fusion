@@ -1,48 +1,50 @@
 """
 types.py - Python-side Data Structures for Bridge Layer
 
-Defines dataclasses that wrap Rust types, ensuring type safety
+Defines Pydantic models that wrap Rust types, ensuring type safety
 and preventing PyObject leaks into the business layer.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Any
 
+from pydantic import BaseModel, field_validator
 
-@dataclass
-class SearchResult:
+
+class SearchResult(BaseModel):
     """Represents a single search result from vector store."""
 
     score: float
     payload: dict[str, Any]
     id: str
 
-    def __post_init__(self):
+    @field_validator("score")
+    @classmethod
+    def validate_score(cls, v: float) -> float:
         """Validate score is in valid range."""
-        if not 0.0 <= self.score <= 1.0:
-            raise ValueError(f"Score must be between 0.0 and 1.0, got {self.score}")
+        if not 0.0 <= v <= 1.0:
+            raise ValueError(f"Score must be between 0.0 and 1.0, got {v}")
+        return v
 
 
-@dataclass
-class FileContent:
+class FileContent(BaseModel):
     """Represents file content with metadata for ingestion."""
 
     path: str
     content: str
     metadata: dict[str, Any] | None = None
 
-    def __post_init__(self):
-        """Validate required fields."""
-        if not self.path:
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, v: str) -> str:
+        """Validate path is not empty."""
+        if not v:
             raise ValueError("File path cannot be empty")
-        if not isinstance(self.content, str):
-            raise ValueError("Content must be a string")
+        return v
 
 
-@dataclass
-class VectorMetadata:
+class VectorMetadata(BaseModel):
     """Metadata for vector operations."""
 
     dimension: int
@@ -50,8 +52,7 @@ class VectorMetadata:
     index_path: str | None = None
 
 
-@dataclass
-class CodeSymbol:
+class CodeSymbol(BaseModel):
     """Represents a code symbol (function, class, variable) found by AST."""
 
     name: str
@@ -60,36 +61,33 @@ class CodeSymbol:
     line_number: int
     end_line_number: int | None = None
     docstring: str | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = {}
 
 
-@dataclass
-class ScanResult:
+class ScanResult(BaseModel):
     """Result of a file or skill scan operation."""
 
     success: bool
     file_path: str
-    symbols: list[CodeSymbol] = field(default_factory=list)
-    references: list[str] = field(default_factory=list)
-    metadata: dict[str, Any] = field(default_factory=dict)
+    symbols: list[CodeSymbol] = []
+    references: list[str] = []
+    metadata: dict[str, Any] = {}
     error: str | None = None
 
 
-@dataclass
-class SkillStructure:
+class SkillStructure(BaseModel):
     """Represents a parsed skill structure."""
 
     skill_name: str
     skill_path: str
-    routing_keywords: list[str] = field(default_factory=list)
-    scripts: list[str] = field(default_factory=list)
-    commands: list[dict[str, Any]] = field(default_factory=list)
-    resources: list[dict[str, Any]] = field(default_factory=list)
-    metadata: dict[str, Any] = field(default_factory=dict)
+    routing_keywords: list[str] = []
+    scripts: list[str] = []
+    commands: list[dict[str, Any]] = []
+    resources: list[dict[str, Any]] = []
+    metadata: dict[str, Any] = {}
 
 
-@dataclass
-class IngestResult:
+class IngestResult(BaseModel):
     """Result of ingesting content into vector store."""
 
     success: bool
@@ -99,11 +97,11 @@ class IngestResult:
 
 
 __all__ = [
-    "SearchResult",
-    "FileContent",
-    "VectorMetadata",
     "CodeSymbol",
-    "ScanResult",
-    "SkillStructure",
+    "FileContent",
     "IngestResult",
+    "ScanResult",
+    "SearchResult",
+    "SkillStructure",
+    "VectorMetadata",
 ]

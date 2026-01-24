@@ -4,10 +4,9 @@ test_vector_store.py - Vector Store Tests
 Tests for the Foundation VectorStoreClient and embedding services.
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-import pytest_asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
-import json
 
 
 class TestEmbeddingService:

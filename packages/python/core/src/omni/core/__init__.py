@@ -17,7 +17,7 @@ from .kernel import Kernel, LifecycleManager, LifecycleState, get_kernel
 
 __all__ = [
     "Kernel",
-    "get_kernel",
-    "LifecycleState",
     "LifecycleManager",
+    "LifecycleState",
+    "get_kernel",
 ]

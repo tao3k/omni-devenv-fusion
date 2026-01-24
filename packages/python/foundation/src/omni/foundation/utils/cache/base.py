@@ -3,18 +3,19 @@ lazy_cache/base.py
 Base classes for lazy-loading singleton caches.
 
 Protocol-based design with slots=True for memory efficiency.
+
+Python 3.12+ Features:
+- PEP 695: Generic type parameter syntax (Section 4)
 """
 
 from __future__ import annotations
 
 import threading
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
-
-T = TypeVar("T")
+from typing import Any
 
 
-class LazyCacheBase(ABC, Generic[T]):
+class LazyCacheBase[T](ABC):
     """Abstract base class for lazy-loading singleton caches.
 
     Subclasses must implement _load() to define how data is loaded.
@@ -41,17 +42,17 @@ class LazyCacheBase(ABC, Generic[T]):
         guidelines = cache.get()  # Auto-loaded on first call
     """
 
-    _instance: LazyCacheBase[T] | None = None
+    _instance: LazyCacheBase[Any] | None = None
     _instance_lock = threading.Lock()
     _loaded: bool = False
 
-    def __new__(cls, eager: bool = False) -> LazyCacheBase[T]:
+    def __new__(cls, eager: bool = False) -> LazyCacheBase[Any]:
         """Create singleton instance with optional eager loading."""
         if cls._instance is None:
             with cls._instance_lock:
                 if cls._instance is None:
                     cls._instance = super().__new__(cls)
-                    cls._instance._data: T | None = None
+                    cls._instance._data = None  # type: ignore[attr-defined]
                     if eager:
                         cls._instance._ensure_loaded()
         return cls._instance

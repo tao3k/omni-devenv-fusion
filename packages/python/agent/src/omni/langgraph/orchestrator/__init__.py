@@ -23,8 +23,8 @@ from omni.langgraph.orchestrator.compiled import CompiledGraph
 from omni.langgraph.orchestrator.dispatch import dispatch_graph_mode
 
 __all__ = [
+    "CompiledGraph",
     "DynamicGraphBuilder",
     "NodeMetadata",
-    "CompiledGraph",
     "dispatch_graph_mode",
 ]

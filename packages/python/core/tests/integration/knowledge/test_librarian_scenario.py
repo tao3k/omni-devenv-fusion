@@ -14,9 +14,10 @@ implementation requires embedding generation which is handled by a separate
 embedding service.
 """
 
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
+
+import pytest
 
 from omni.core.knowledge.librarian import Librarian
 from omni.foundation.bridge.types import SearchResult as BridgeSearchResult

@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-import pytest
-from unittest.mock import patch, MagicMock
-from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from omni.core.router.sniffer import (
-    IntentSniffer,
-    ContextualSniffer,
     ActivationRule,
-    DynamicSniffer,
+    ContextualSniffer,
     DeclarativeRule,
+    DynamicSniffer,
+    IntentSniffer,
 )
 
 

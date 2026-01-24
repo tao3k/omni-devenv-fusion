@@ -9,15 +9,14 @@ Template Locations:
 """
 
 from pathlib import Path
-from typing import Dict, Optional
 
 from omni.foundation.api.decorators import skill_command
-from omni.foundation.config.skills import SKILLS_DIR
 from omni.foundation.config.settings import get_setting
+from omni.foundation.config.skills import SKILLS_DIR
 from omni.foundation.runtime.gitops import get_project_root
 
 
-def get_template_dirs(skill_name: str) -> Dict[str, Path]:
+def get_template_dirs(skill_name: str) -> dict[str, Path]:
     """
     Get template directories for a skill.
 
@@ -40,17 +39,18 @@ def get_template_dirs(skill_name: str) -> Dict[str, Path]:
 
 @skill_command(
     name="list_templates",
-    category="read",
+    category="view",
     description="""
     List all available templates for a skill with their sources.
 
-    **Parameters**:
-    - `skill_name` (required): Name of the skill (e.g., "git", "docker")
+    Args:
+        - skill_name: str - Name of the skill (e.g., git, docker) (required)
 
-    **Returns**: Dictionary mapping template names to source ("user" or "skill") and path.
+    Returns:
+        Dictionary mapping template names to source (user or skill) and path.
     """,
 )
-def list_templates(skill_name: str) -> Dict[str, Dict[str, str]]:
+def list_templates(skill_name: str) -> dict[str, dict[str, str]]:
     dirs = get_template_dirs(skill_name)
     user_dir = dirs["user"]
     skill_dir = dirs["skill"]
@@ -74,14 +74,15 @@ def list_templates(skill_name: str) -> Dict[str, Dict[str, str]]:
     description="""
     Get information about a specific template.
 
-    **Parameters**:
-    - `skill_name` (required): Name of the skill
-    - `template_name` (required): Template filename (e.g., "commit_message.j2")
+    Args:
+        - skill_name: str - Name of the skill (required)
+        - template_name: str - Template filename (e.g., commit_message.j2) (required)
 
-    **Returns**: Dictionary with source ("user" or "skill"), path, or null if not found.
+    Returns:
+        Dictionary with source (user or skill), path, or null if not found.
     """,
 )
-def get_template_info(skill_name: str, template_name: str) -> Optional[Dict[str, str]]:
+def get_template_info(skill_name: str, template_name: str) -> dict[str, str] | None:
     templates = list_templates(skill_name)
     return templates.get(template_name)
 
@@ -92,14 +93,15 @@ def get_template_info(skill_name: str, template_name: str) -> Optional[Dict[str,
     description="""
     Get the source code content of a template.
 
-    **Parameters**:
-    - `skill_name` (required): Name of the skill
-    - `template_name` (required): Template filename
+    Args:
+        - skill_name: str - Name of the skill (required)
+        - template_name: str - Template filename (required)
 
-    **Returns**: Template file content as string, or null if not found.
+    Returns:
+        Template file content as string, or null if not found.
     """,
 )
-def get_template_source(skill_name: str, template_name: str) -> Optional[str]:
+def get_template_source(skill_name: str, template_name: str) -> str | None:
     info = get_template_info(skill_name, template_name)
     if info and info.get("path"):
         path = Path(info["path"])
@@ -114,14 +116,15 @@ def get_template_source(skill_name: str, template_name: str) -> Optional[str]:
     description="""
     Copy a skill default template to the user directory for customization.
 
-    **Parameters**:
-    - `skill_name` (required): Name of the skill
-    - `template_name` (required): Template filename (e.g., "commit_message"). .j2 added automatically
+    Args:
+        - skill_name: str - Name of the skill (required)
+        - template_name: str - Template filename (e.g., commit_message). .j2 added automatically (required)
 
-    **Returns**: Dictionary with status ("success", "already_exists", "not_found"), message, source, path.
+    Returns:
+        Dictionary with status (success, already_exists, not_found), message, source, path.
     """,
 )
-def eject_template(skill_name: str, template_name: str) -> Dict[str, str]:
+def eject_template(skill_name: str, template_name: str) -> dict[str, str]:
     dirs = get_template_dirs(skill_name)
     user_dir = dirs["user"]
     skill_dir = dirs["skill"]
@@ -151,7 +154,7 @@ def eject_template(skill_name: str, template_name: str) -> Dict[str, str]:
 
     return {
         "status": "success",
-        "message": f"Template ejected from skill default to user override",
+        "message": "Template ejected from skill default to user override",
         "source": str(skill_path),
         "path": str(user_path),
     }
@@ -216,10 +219,10 @@ def format_eject_result(skill_name: str, template_name: str) -> str:
     if result["status"] == "success":
         return "\n".join(
             [
-                f"# Template Ejected",
+                "# Template Ejected",
                 "",
                 f"Template: `{template_name}`",
-                f"Source: Skill Default",
+                "Source: Skill Default",
                 f"Location: `{result['path']}`",
                 "",
                 "## Next Steps",

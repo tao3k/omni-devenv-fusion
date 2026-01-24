@@ -32,7 +32,7 @@ import sqlite3
 import threading
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import field
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -108,7 +108,7 @@ class StateCheckpoint(BaseModel):
         return self.model_dump_json()
 
     @classmethod
-    def from_json(cls, data: str) -> "StateCheckpoint":
+    def from_json(cls, data: str) -> StateCheckpoint:
         """Deserialize from JSON string."""
         return cls.model_validate_json(data)
 
@@ -544,11 +544,11 @@ def merge_state(existing: GraphState, updates: dict[str, Any]) -> GraphState:
 
 
 __all__ = [
+    "CheckpointMetadata",
     "GraphState",
     "StateCheckpoint",
-    "CheckpointMetadata",
     "StateCheckpointer",
-    "get_checkpointer",
     "create_initial_state",
+    "get_checkpointer",
     "merge_state",
 ]

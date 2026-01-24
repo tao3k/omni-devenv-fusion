@@ -118,19 +118,19 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Any
 
 import typer
 from rich.panel import Panel
-from rich.prompt import Prompt, Confirm
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.prompt import Confirm, Prompt
 from rich.text import Text
 
-from .base import SKILLS_DIR, err_console, skill_app
+from omni.foundation.config.logging import get_logger
 
 # Template engine from foundation
 from omni.foundation.utils.templating import TemplateEngine
-from omni.foundation.config.logging import get_logger
+
+from .base import SKILLS_DIR, err_console, skill_app
 
 logger = get_logger("omni.cli.generate")
 

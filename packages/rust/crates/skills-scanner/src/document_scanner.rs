@@ -257,8 +257,16 @@ impl DocumentScanner {
             return inventories;
         }
 
-        for entry in fs::read_dir(base_path).unwrap() {
-            let entry = entry.unwrap();
+        let entries = match fs::read_dir(base_path) {
+            Ok(entries) => entries,
+            Err(_) => return inventories,
+        };
+
+        for entry in entries {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(_) => continue,
+            };
             let path = entry.path();
 
             if !path.is_dir() {

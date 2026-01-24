@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from omni.foundation.runtime.gitops import get_project_root
 from omni.foundation.config.skills import SKILLS_DIR
+from omni.foundation.runtime.gitops import get_project_root
 
 _PROJECT_ROOT = get_project_root()
 

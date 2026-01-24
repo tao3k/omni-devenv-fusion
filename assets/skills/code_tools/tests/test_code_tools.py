@@ -11,9 +11,9 @@ Verifies:
 - Zero-config tool discovery
 """
 
+import os
 import sys
 import tempfile
-import os
 from pathlib import Path
 
 # Add assets/skills to path for imports
@@ -196,7 +196,6 @@ class TestApplyFileEdit:
         root = paths.project_root
 
         # Create temp file in project root
-        import tempfile
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=suffix, dir=root, delete=False) as f:
             f.write(content)

@@ -6,9 +6,10 @@ Tests for:
 - Graph compilation
 """
 
-import pytest
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
-from typing import Dict, Any
+
+import pytest
 
 from omni.langgraph.orchestrator.builder import DynamicGraphBuilder, NodeMetadata
 
@@ -63,7 +64,7 @@ class TestDynamicGraphBuilder:
     def test_add_function_node(self, mock_skill_runner):
         """Should add a function node."""
 
-        async def my_func(state: Dict[str, Any]) -> Dict[str, Any]:
+        async def my_func(state: dict[str, Any]) -> dict[str, Any]:
             return {"result": "processed"}
 
         builder = DynamicGraphBuilder(skill_runner=mock_skill_runner)
@@ -99,7 +100,7 @@ class TestDynamicGraphBuilder:
         builder.add_skill_node("fix", "skill2", "cmd2")
         builder.add_skill_node("end", "skill3", "cmd3")
 
-        def should_continue(state: Dict[str, Any]) -> str:
+        def should_continue(state: dict[str, Any]) -> str:
             needs_fix = state.get("scratchpad", [{}])[-1].get("needs_fix", False)
             return "fix" if needs_fix else "__end__"
 

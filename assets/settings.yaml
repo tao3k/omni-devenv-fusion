@@ -178,6 +178,24 @@ memory:
   path: ""
 
 # =============================================================================
+# Checkpoint / Workflow State Configuration
+# =============================================================================
+# Unified checkpoint storage using Rust LanceDB backend
+# All workflow state persists here - no separate SQLite per workflow
+
+checkpoint:
+  # LanceDB database path (relative to project root or absolute)
+  # Default: .cache/checkpoints.lance (LanceDB format)
+  db_path: ".cache/checkpoints.lance"
+
+  # Table prefix for different workflow types
+  # smart_commit -> table: checkpoint_smart_commit
+  table_prefix: "checkpoint_"
+
+  # Default dimension for embeddings (OpenAI text-embedding-3-small)
+  embedding_dimension: 1536
+
+# =============================================================================
 # Cache Configuration
 # =============================================================================
 cache:

@@ -149,7 +149,7 @@ impl StructuralEditor {
             let content = match std::fs::read_to_string(&path) {
                 Ok(c) => c,
                 Err(e) => {
-                    errors.insert(path.display().to_string(), format!("Read error: {}", e));
+                    errors.insert(path.display().to_string(), format!("Read error: {e}"));
                     return;
                 }
             };
@@ -167,14 +167,14 @@ impl StructuralEditor {
                             if let Err(e) = std::fs::write(&path, &result.modified) {
                                 errors.insert(
                                     path.display().to_string(),
-                                    format!("Write error: {}", e),
+                                    format!("Write error: {e}"),
                                 );
                             }
                         }
                     }
                 }
                 Err(e) => {
-                    errors.insert(path.display().to_string(), format!("Edit error: {}", e));
+                    errors.insert(path.display().to_string(), format!("Edit error: {e}"));
                 }
             }
         });

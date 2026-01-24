@@ -7,13 +7,14 @@ Can be used without the full agent stack.
 
 from __future__ import annotations
 
-import time
 import gc
-from dataclasses import dataclass, field
-from typing import List, Optional, Callable, Any
-from contextlib import contextmanager
-import psutil
 import os
+import time
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import Any
+
+import psutil
 
 
 @dataclass
@@ -33,7 +34,7 @@ class TestMetrics:
     test_name: str = "unknown"
     start_time: float = 0.0
     end_time: float | None = None
-    memory_snapshots: List[MemorySnapshot] = field(default_factory=list)
+    memory_snapshots: list[MemorySnapshot] = field(default_factory=list)
     custom_metrics: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -76,7 +77,7 @@ class MetricsCollector:
 
     def __init__(self, process: psutil.Process | None = None):
         self._process = process or psutil.Process(os.getpid())
-        self._snapshots: List[MemorySnapshot] = []
+        self._snapshots: list[MemorySnapshot] = []
         self._start_time: float | None = None
         self._running = False
 
@@ -182,8 +183,8 @@ class MemoryThresholdChecker:
 
 __all__ = [
     "MemorySnapshot",
-    "TestMetrics",
-    "MetricsCollector",
-    "measure_memory",
     "MemoryThresholdChecker",
+    "MetricsCollector",
+    "TestMetrics",
+    "measure_memory",
 ]

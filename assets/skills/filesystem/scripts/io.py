@@ -11,20 +11,18 @@ For text search, use: advanced_search.search_project_code (ripgrep)
 For AST search, use: code_navigation.search_code (AST patterns)
 """
 
-import fnmatch
 import json
-import os
-import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import List, Literal, Any
+from typing import Literal
 
 from pydantic import BaseModel, Field
+
 from omni.foundation.api.decorators import skill_command
-from omni.foundation.config.paths import ConfigPaths
 from omni.foundation.config.logging import get_logger
-from omni.foundation.utils.system import is_safe_path, normalize_path
+from omni.foundation.config.paths import ConfigPaths
+from omni.foundation.utils.system import is_safe_path
 
 logger = get_logger("skill.filesystem")
 
@@ -97,16 +95,17 @@ def _create_backup(filepath: Path) -> bool:
     description="""
     Read a single file with line numbers.
 
-    **Parameters**:
-    - `file_path` (required): Path to the file to read. Supports project-relative paths (e.g., `src/main.py`) or trusted absolute paths (e.g., `/nix/store/*`)
-    - `encoding` (optional, default: utf-8): File encoding
+    Args:
+        - file_path: str - Path to the file to read. Supports project-relative paths (e.g., src/main.py) or trusted absolute paths (e.g., /nix/store/*) (required)
+        - encoding: str = utf-8 - File encoding
 
-    **Returns**: File content with line numbers, or error if not found/not a file/exceeds 100KB.
+    Returns:
+        File content with line numbers, or error if not found/not a file/exceeds 100KB.
     """,
     autowire=True,
 )
 def read_file(
-    file_path: str,
+    path: str,
     encoding: str = "utf-8",
     paths: ConfigPaths | None = None,
 ) -> str:
@@ -115,34 +114,34 @@ def read_file(
         paths = ConfigPaths()
     project_root: Path = paths.project_root  # type: ignore[assignment]
 
-    if file_path.startswith("/"):
-        is_safe, error_msg = is_safe_path(file_path, allow_absolute=True)
+    if path.startswith("/"):
+        is_safe, error_msg = is_safe_path(path, allow_absolute=True)
     else:
-        is_safe, error_msg = is_safe_path(file_path, project_root=project_root)
+        is_safe, error_msg = is_safe_path(path, project_root=project_root)
 
     if not is_safe:
         return f"Error: {error_msg}"
 
-    if file_path.startswith("/"):
-        full_path = Path(file_path)
+    if path.startswith("/"):
+        full_path = Path(path)
     else:
-        full_path = project_root / file_path
+        full_path = project_root / path
 
     if not full_path.exists():
-        return f"Error: File '{file_path}' does not exist."
+        return f"Error: File '{path}' does not exist."
     if not full_path.is_file():
-        return f"Error: '{file_path}' is not a file."
+        return f"Error: '{path}' is not a file."
     if full_path.stat().st_size > 100 * 1024:
-        return f"Error: File '{file_path}' is too large (> 100KB)."
+        return f"Error: File '{path}' is too large (> 100KB)."
 
     try:
-        with open(full_path, "r", encoding=encoding) as f:
+        with open(full_path, encoding=encoding) as f:
             lines = f.readlines()
         numbered_lines = [f"{i + 1:4d} | {line}" for i, line in enumerate(lines)]
         content = "".join(numbered_lines)
-        return f"--- File: {file_path} ({len(lines)} lines) ---\n{content}"
+        return f"--- File: {path} ({len(lines)} lines) ---\n{content}"
     except UnicodeDecodeError:
-        return f"Error: Cannot read '{file_path}' - not a text file."
+        return f"Error: Cannot read '{path}' - not a text file."
     except Exception as e:
         return f"Error reading file: {e}"
 
@@ -154,17 +153,17 @@ def read_file(
     Writes content to a file within the project directory.
 
     Features:
-    - Auto-creates `.bak` backup before overwriting (safe rollback)
+    - Auto-creates .bak backup before overwriting (safe rollback)
     - Syntax validation for Python and Nix files
     - Auto-writing-check for markdown files (check style + structure)
     - Security checks for path safety
 
     Args:
-        path: Relative path to the file.
-        content: Content to write.
-        create_backup: If `true`, creates `.bak` backup. Defaults to `true`.
-        validate_syntax: If `true`, validates Python/Nix syntax. Defaults to `true`.
-        auto_check_writing: If `true`, runs writer checks on `.md` files. Defaults to `true`.
+        - path: str - Relative path to the file (required)
+        - content: str - Content to write (required)
+        - create_backup: bool = true - If true, creates .bak backup
+        - validate_syntax: bool = true - If true, validates Python/Nix syntax
+        - auto_check_writing: bool = true - If true, runs writer checks on .md files
 
     Returns:
         Success message with byte count, or error message.
@@ -257,26 +256,18 @@ async def save_file(
     description="""
     [BATCH] Efficiently applies changes to multiple files in one go.
 
-    Use this for code generation or refactoring tasks to minimize tool calls
-    and reduce permission confirmations.
+    Use this for code generation or refactoring tasks to minimize tool calls and reduce permission confirmations.
 
     Args:
-        changes: List of FileOperation objects with action (`write` or `append`),
-                path, and content.
+        - changes: List[FileOperation] - List of file operations with action (write, append, replace), path, and content (required)
 
     Returns:
         Summary of successful and failed operations with details.
-
-    Example:
-        @omni("filesystem.apply_changes", {"changes": [
-            {"action": "write", "path": "src/main.py", "content": "..."},
-            {"action": "append", "path": "README.md", "content": "..."}
-        ]})
     """,
     autowire=True,
 )
 async def apply_file_changes(
-    changes: List[FileOperation],
+    changes: list[FileOperation],
     paths: ConfigPaths | None = None,
 ) -> str:
     """Apply multiple file changes in one operation."""
@@ -331,10 +322,10 @@ async def apply_file_changes(
             success_count += 1
 
         except Exception as e:
-            report.append(f"- **Failed**: `{change.path}` - {str(e)}")
+            report.append(f"- **Failed**: `{change.path}` - {e!s}")
             error_count += 1
 
-    summary = f"**File Operations Summary**\n\n"
+    summary = "**File Operations Summary**\n\n"
     summary += f"- Success: {success_count}\n"
     summary += f"- Errors: {error_count}\n\n"
     summary += "**Details:**\n" + "\n".join(report)
@@ -344,14 +335,15 @@ async def apply_file_changes(
 
 @skill_command(
     name="list_directory",
-    category="read",
+    category="view",
     description="""
     List files and directories at a path.
 
-    **Parameters**:
-    - `path` (required): Directory path to list. Use `.` for current directory, or relative path like `src/`
+    Args:
+        - path: str = "." - Directory path to list (use . for current directory, or relative path like src/)
 
-    **Returns**: Formatted listing with file/directory type and size.
+    Returns:
+        Formatted listing with file/directory type and size.
     """,
     autowire=True,
 )
@@ -390,12 +382,11 @@ async def list_directory(
     description="""
     Creates or overwrites a file with new content.
 
-    Simple file write without backup or validation.
-    Use `save_file` for safer write with backup support.
+    Simple file write without backup or validation. Use save_file for safer write with backup support.
 
     Args:
-        path: Relative path to the file.
-        content: Content to write.
+        - path: str - Relative path to the file (required)
+        - content: str - Content to write (required)
 
     Returns:
         Success message with byte count, or error message.
@@ -423,12 +414,12 @@ async def write_file(
 
 @skill_command(
     name="get_file_info",
-    category="read",
+    category="view",
     description="""
     Gets metadata about a file.
 
     Args:
-        path: Path to the file or directory.
+        - path: str - Path to the file or directory (required)
 
     Returns:
         File/directory information including path, size, type, and absolute path.
@@ -460,11 +451,11 @@ async def get_file_info(
 
 
 __all__ = [
+    "FileOperation",
+    "apply_file_changes",
+    "get_file_info",
+    "list_directory",
     "read_file",
     "save_file",
-    "apply_file_changes",
-    "list_directory",
     "write_file",
-    "get_file_info",
-    "FileOperation",
 ]

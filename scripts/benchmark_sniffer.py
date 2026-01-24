@@ -14,9 +14,9 @@ Performance Analysis:
 Note: The speedup is more pronounced in larger repositories.
 """
 
-import time
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 # Add agent source to path

@@ -21,7 +21,7 @@ from .loader import SkillExtensionLoader, get_extension_loader
 from .wrapper import ExtensionWrapper
 
 __all__ = [
+    "ExtensionWrapper",
     "SkillExtensionLoader",
     "get_extension_loader",
-    "ExtensionWrapper",
 ]

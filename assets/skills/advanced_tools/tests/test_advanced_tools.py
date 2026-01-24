@@ -13,9 +13,9 @@ Verifies:
 - Environment-driven tool discovery
 """
 
+import os
 import sys
 import tempfile
-import os
 from pathlib import Path
 
 # Add assets/skills to path for imports
@@ -110,8 +110,9 @@ class TestSmartSearch:
 
     def test_smart_search_not_found(self):
         """Test smart_search handles no matches."""
-        from advanced_tools.scripts.search import smart_search
         import uuid
+
+        from advanced_tools.scripts.search import smart_search
 
         # Use a UUID pattern that definitely won't exist anywhere
         unique_pattern = f"__UUID_PATTERN_{uuid.uuid4().hex.upper()}__"
@@ -189,8 +190,9 @@ class TestTreeView:
 
     def test_tree_view_returns_structure(self):
         """Test tree_view returns structured result."""
-        from advanced_tools.scripts.fs import tree_view
         import shutil
+
+        from advanced_tools.scripts.fs import tree_view
 
         # Skip if tree is not installed
         if not shutil.which("tree"):
@@ -207,8 +209,9 @@ class TestTreeView:
 
     def test_tree_view_error_when_missing(self):
         """Test tree_view returns error when tree is not installed."""
-        from advanced_tools.scripts.fs import tree_view
         import shutil
+
+        from advanced_tools.scripts.fs import tree_view
 
         # If tree is not installed, we should get an error
         if not shutil.which("tree"):
@@ -218,8 +221,9 @@ class TestTreeView:
 
     def test_tree_view_ignores_hidden(self):
         """Test tree_view ignores hidden directories by default."""
-        from advanced_tools.scripts.fs import tree_view
         import shutil
+
+        from advanced_tools.scripts.fs import tree_view
 
         # Skip if tree is not installed
         if not shutil.which("tree"):
@@ -278,8 +282,9 @@ class TestRegexReplace:
 
     def test_regex_replace_success(self):
         """Test successful regex replace."""
-        from advanced_tools.scripts.mutation import regex_replace
         import shutil
+
+        from advanced_tools.scripts.mutation import regex_replace
 
         # Skip if sed is not installed
         if not shutil.which("sed"):
@@ -346,7 +351,7 @@ class TestExports:
     def test_main_all_exports(self):
         """Test main scripts __all__ is defined."""
         # Import the search module and check it exports everything
-        from advanced_tools.scripts import search, fs, mutation
+        from advanced_tools.scripts import fs, mutation, search
 
         expected = ["smart_search", "smart_find", "tree_view", "regex_replace"]
         for item in expected:

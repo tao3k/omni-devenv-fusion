@@ -181,8 +181,9 @@ class TestMCPProtocolCompliance:
     @pytest.mark.asyncio
     async def test_tool_list_returns_valid_schema(self):
         """Test that tools/list returns valid MCP-compliant inputSchema."""
-        from omni.agent.server import create_agent_handler
         from omni.mcp.types import JSONRPCRequest
+
+        from omni.agent.server import create_agent_handler
 
         handler = create_agent_handler()
         await handler.initialize()
@@ -207,8 +208,9 @@ class TestMCPProtocolCompliance:
     @pytest.mark.asyncio
     async def test_tool_names_follow_skill_command_pattern(self):
         """Test that tool names follow 'skill.command' pattern."""
-        from omni.agent.server import create_agent_handler
         from omni.mcp.types import JSONRPCRequest
+
+        from omni.agent.server import create_agent_handler
 
         handler = create_agent_handler()
         await handler.initialize()
@@ -225,8 +227,9 @@ class TestMCPProtocolCompliance:
     @pytest.mark.asyncio
     async def test_tool_descriptions_are_present(self):
         """Test that all tools have descriptions."""
-        from omni.agent.server import create_agent_handler
         from omni.mcp.types import JSONRPCRequest
+
+        from omni.agent.server import create_agent_handler
 
         handler = create_agent_handler()
         await handler.initialize()

@@ -7,18 +7,17 @@ Tests for:
 - State utilities
 """
 
-import pytest
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from omni.langgraph.state import (
     GraphState,
     StateCheckpoint,
-    CheckpointMetadata,
     StateCheckpointer,
-    get_checkpointer,
     create_initial_state,
+    get_checkpointer,
     merge_state,
 )
 

@@ -8,8 +8,9 @@ Note: Full MetaAgent integration requires proper package setup.
 This lightweight version detects patterns and logs them for review.
 """
 
+from typing import Any
+
 import structlog
-from typing import List, Dict, Any
 
 logger = structlog.get_logger(__name__)
 
@@ -32,7 +33,7 @@ class SkillHarvester:
         """
         self._meta_agent = meta_agent
 
-    async def process_session(self, session_id: str, history: List[Dict[str, Any]]):
+    async def process_session(self, session_id: str, history: list[dict[str, Any]]):
         """
         Analyze session for skill creation patterns.
         """
@@ -69,7 +70,7 @@ class SkillHarvester:
                 print(f'            → Run: omni skill generate "{req[:40]}..."')
                 logger.info("harvester_candidate", requirement=req[:100])
 
-    def _detect_patterns(self, history: List[Dict[str, Any]]) -> List[str]:
+    def _detect_patterns(self, history: list[dict[str, Any]]) -> list[str]:
         """
         Detect skill creation requests from history.
         Flexible pattern matching for various phrasing.

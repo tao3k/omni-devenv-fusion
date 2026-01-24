@@ -2,16 +2,21 @@
 
 Uses Foundation V2 @skill_command decorator from omni.foundation.api.decorators.
 V1 decorator has been removed - migrate to V2.
+
+PEP 420 Namespace Package Support:
+- Skills use implicit namespace packages (no __init__.py required)
+- Scripts can use absolute imports like 'from git.scripts.commit_state import ...'
+- Skills root directory is added to sys.path for proper package resolution
 """
 
 from __future__ import annotations
 
-import importlib.util
+import importlib
 import inspect
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, override
 
 from omni.foundation.config.logging import get_logger
 
@@ -37,51 +42,64 @@ class ScriptLoader:
         logger.debug(f"[{self.skill_name}] Injected context: {key}")
 
     def load_all(self) -> None:
-        """Load all scripts and register commands."""
+        """Load all scripts and register commands.
+
+        Uses PEP 420 namespace packages:
+        - Adds skill root to sys.path for proper package resolution
+        - Uses importlib.import_module for full module path loading
+        - Enables 'from git.scripts.commit_state import ...' style imports
+        """
         if not self.scripts_path.exists():
             logger.debug(f"Scripts path does not exist: {self.scripts_path}")
             return
 
-        # Add scripts path to sys.path for imports
-        path_str = str(self.scripts_path)
-        sys.path.insert(0, path_str)
+        # PEP 420: Add parent of skill root to sys.path for namespace package resolution
+        # This allows 'from git.scripts.commit_state import ...' to work
+        # For real skills: assets/skills/git/scripts -> parent is assets/skills
+        # For tests: tmp/scripted_skill/scripts -> parent is tmp
+        skill_root = self.scripts_path.parent
+        parent_of_skill = str(skill_root.parent)
 
-        # Ensure parent package exists in sys.modules to avoid import errors
-        # This fixes "No module named 'omni.skills'" when scripts have relative imports
-        parent_pkg = f"omni.skills.{self.skill_name}"
-        if parent_pkg not in sys.modules:
-            import types
+        paths_added: list[str] = []
+        if parent_of_skill not in sys.path:
+            sys.path.insert(0, parent_of_skill)
+            paths_added.append(parent_of_skill)
 
-            pkg = types.ModuleType(parent_pkg)
-            pkg.__path__ = [str(self.scripts_path.parent)]
-            sys.modules[parent_pkg] = pkg
+        # Also ensure the skill_root itself is accessible
+        if str(skill_root) not in sys.path:
+            sys.path.insert(0, str(skill_root))
+            paths_added.append(str(skill_root))
+
+        # Full module path for this skill's scripts (e.g., "git.scripts")
+        full_scripts_pkg = f"{self.skill_name}.scripts"
 
         try:
             for py_file in self.scripts_path.glob("*.py"):
                 if py_file.name.startswith("_"):
                     continue
-                self._load_script(py_file)
+                self._load_script(py_file, full_scripts_pkg)
 
             logger.debug(f"[{self.skill_name}] {len(self.commands)} commands")
         finally:
-            if path_str in sys.path:
-                sys.path.remove(path_str)
+            # Clean up sys.path
+            for path in paths_added:
+                if path in sys.path:
+                    sys.path.remove(path)
 
-    def _load_script(self, path: Path) -> None:
-        """Load a single script file."""
+    def _load_script(self, path: Path, scripts_pkg: str) -> None:
+        """Load a single script file using importlib.
+
+        Args:
+            path: Path to the .py file
+            scripts_pkg: Full package path (e.g., "git.scripts")
+        """
         module_name = path.stem
+        full_module_name = f"{scripts_pkg}.{module_name}"  # e.g., "git.scripts.commit_state"
 
         try:
-            spec = importlib.util.spec_from_file_location(module_name, path)
-            if spec is None or spec.loader is None:
-                return
-
-            module = importlib.util.module_from_spec(spec)
-
-            # Set __package__ to enable relative imports within scripts directory
-            # The package path matches the skill name for proper relative import resolution
-            scripts_pkg = f"omni.skills.{self.skill_name}.scripts"
-            module.__package__ = scripts_pkg
+            # Use importlib.import_module for proper namespace package support
+            # This handles PEP 420 implicit namespace packages correctly
+            module = importlib.import_module(full_module_name)
 
             # Inject context into module globals
             # Scripts can use 'rust' directly without importing
@@ -90,8 +108,6 @@ class ScriptLoader:
 
             # Add skill_name for decorator registration
             module.skill_name = self.skill_name
-
-            spec.loader.exec_module(module)
 
             # Scan for @skill_command decorated functions AND native functions
             # Only process functions defined in THIS module (not imported from elsewhere)
@@ -106,7 +122,7 @@ class ScriptLoader:
                 # Skip functions imported from other modules
                 # Check if function's __module__ matches current module's name
                 func_module = getattr(attr, "__module__", None)
-                if func_module is not None and func_module != module_name:
+                if func_module is not None and func_module != full_module_name:
                     continue
 
                 if getattr(attr, "_is_skill_command", False):
@@ -132,7 +148,7 @@ class ScriptLoader:
 
         except Exception as e:
             # Script loading is best-effort - log at debug level
-            logger.debug(f"[{self.skill_name}] Failed to load script {module_name}: {e}")
+            logger.debug(f"[{self.skill_name}] Failed to load script {full_module_name}: {e}")
 
     def get_command(self, full_name: str) -> Callable | None:
         """Get a command by its full name (e.g., 'git.status')."""
@@ -164,6 +180,7 @@ class ScriptLoader:
 class SkillScriptLoader(ScriptLoader):
     """Backward-compatible alias for ScriptLoader."""
 
+    @override
     def __init__(self, scripts_path: str | Path):
         # Will be initialized with skill_name later
         super().__init__(scripts_path, skill_name="unknown")

@@ -11,10 +11,7 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
-import os
 from pathlib import Path
-from typing import List, Optional
 
 import typer
 from rich.box import ROUNDED
@@ -60,16 +57,17 @@ def _print_ingest_result(name: str, stats: dict, json_output: bool = False):
     console.print(Panel(grid, title="Ingest Complete", border_style="green"))
 
 
-def _find_markdown_files(directory: str) -> List[str]:
-    """Find all markdown files in a directory."""
-    if not os.path.isdir(directory):
+def _find_markdown_files(directory: str) -> list[str]:
+    """Find all markdown files in a directory using Path.walk() (Python 3.12+)."""
+    path = Path(directory)
+    if not path.is_dir():
         return []
 
     files = []
-    for root, _, filenames in os.walk(directory):
+    for root, _, filenames in path.walk():
         for filename in filenames:
             if filename.endswith((".md", ".markdown")):
-                files.append(os.path.join(root, filename))
+                files.append(str(root / filename))
     return files
 
 
@@ -118,7 +116,7 @@ def ingest_knowledge(
 
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 @ingest_app.command("skills", help="Index skills into skills table")
@@ -143,7 +141,7 @@ def ingest_skills(
     try:
         skills_path = str(SKILLS_DIR())
 
-        if not os.path.isdir(skills_path):
+        if not Path(skills_path).is_dir():
             console.print(f"[yellow]Skills directory not found: {skills_path}[/yellow]")
             return
 
@@ -159,7 +157,7 @@ def ingest_skills(
 
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 @ingest_app.command("all", help="Index knowledge and skills")
@@ -210,7 +208,7 @@ def ingest_all(
         discovery = SkillDiscoveryService()
         skills_path = str(SKILLS_DIR())
 
-        if os.path.isdir(skills_path):
+        if Path(skills_path).is_dir():
             skills = discovery.discover_all()
             combined_stats["skills"] = {"skills_found": len(skills)}
             console.print(f"  Skills: {len(skills)} skills indexed")
@@ -244,7 +242,7 @@ def ingest_all(
 
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 @ingest_app.command("status", help="Show ingest status")
@@ -282,7 +280,7 @@ def ingest_status(json_output: bool = typer.Option(False, "--json", "-j", help="
             grid.add_row("[bold]Ingest Status[/bold]")
             grid.add_row("")
 
-            for table_name, table_stats in stats.items():
+            for _table_name, table_stats in stats.items():
                 metrics = Table(show_header=True, header_style="bold magenta", box=ROUNDED)
                 metrics.add_column("Component")
                 metrics.add_column("Status", style="yellow")
@@ -297,7 +295,7 @@ def ingest_status(json_output: bool = typer.Option(False, "--json", "-j", help="
 
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 def register_ingest_command(parent_app: typer.Typer) -> None:

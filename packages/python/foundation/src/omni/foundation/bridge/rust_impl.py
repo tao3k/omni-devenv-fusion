@@ -13,6 +13,7 @@ This module re-exports from the new modular files for backward compatibility.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 from omni.foundation.config.logging import get_logger
@@ -90,18 +91,25 @@ class RustFileScanner(FileScannerProvider):
         max_depth: int | None = None,
         exclude_patterns: list[str] | None = None,
     ) -> list[str]:
-        """Scan a directory and return matching file paths."""
-        results = []
-        for root, dirs, files in os.walk(path):
+        """Scan a directory and return matching file paths.
+
+        Uses Python 3.12+ pathlib.Path.walk() for modern file traversal.
+        """
+        results: list[str] = []
+        base_path = Path(path)
+
+        for root, dirs, files in base_path.walk():
             if max_depth:
-                depth = root.replace(path, "").count(os.sep)
-                if depth >= max_depth:
-                    dirs.clear()
+                # Calculate depth using relative path parts
+                rel_depth = len(root.relative_to(base_path).parts)
+                if rel_depth >= max_depth:
+                    dirs.clear()  # Don't descend further
                     continue
+
             for f in files:
                 if pattern and pattern not in f:
                     continue
-                results.append(os.path.join(root, f))
+                results.append(str(root / f))
         return results
 
     def get_file_info(self, path: str) -> dict[str, Any] | None:

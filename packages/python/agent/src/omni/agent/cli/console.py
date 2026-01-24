@@ -137,8 +137,8 @@ def print_result(result: Any, is_tty: bool = False, json_output: bool = False) -
 
 
 __all__ = [
-    "err_console",
     "cli_log_handler",
+    "err_console",
     "print_metadata_box",
     "print_result",
 ]

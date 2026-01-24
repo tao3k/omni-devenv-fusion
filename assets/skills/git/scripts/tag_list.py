@@ -3,11 +3,10 @@ git/scripts/tag_list.py - Git tag operations
 """
 
 import subprocess
-from typing import Optional
 from pathlib import Path
 
 
-def _run(cmd: list[str], cwd: Optional[Path] = None) -> str:
+def _run(cmd: list[str], cwd: Path | None = None) -> str:
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
     return result.stdout.strip()
 
@@ -17,7 +16,7 @@ def list_tags() -> str:
     return _run(["git", "tag", "-l"])
 
 
-def create_tag(name: str, msg: Optional[str] = None) -> str:
+def create_tag(name: str, msg: str | None = None) -> str:
     """Create an annotated tag."""
     cmd = ["git", "tag"]
     if msg:

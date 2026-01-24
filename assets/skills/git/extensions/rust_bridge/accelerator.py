@@ -4,7 +4,8 @@ Git Rust accelerator that provides high-performance operations.
 Falls back gracefully if Rust bindings are unavailable.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from .bindings import RustBindings, is_rust_available
 
 
@@ -29,7 +30,7 @@ class RustAccelerator:
             if sniffer_cls:
                 try:
                     self._sniffer = sniffer_cls(self.repo_path)
-                except Exception as e:
+                except Exception:
                     # Repo might not exist or be a git repo
                     pass
 
@@ -50,7 +51,7 @@ class RustAccelerator:
         if self._sniffer is not None:
             self._init_sniffer()
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         """Get Git repository status using Rust.
 
         Returns:
@@ -63,7 +64,7 @@ class RustAccelerator:
                 pass
         return {}
 
-    def log(self, limit: int = 100) -> List[Dict[str, Any]]:
+    def log(self, limit: int = 100) -> list[dict[str, Any]]:
         """Get Git commit log using Rust.
 
         Args:
@@ -79,7 +80,7 @@ class RustAccelerator:
                 pass
         return []
 
-    def branch_info(self) -> Dict[str, Any]:
+    def branch_info(self) -> dict[str, Any]:
         """Get current branch information using Rust.
 
         Returns:
@@ -92,7 +93,7 @@ class RustAccelerator:
                 pass
         return {}
 
-    def staged_files(self) -> List[str]:
+    def staged_files(self) -> list[str]:
         """Get list of staged files using Rust.
 
         Returns:
@@ -105,7 +106,7 @@ class RustAccelerator:
                 pass
         return []
 
-    def modified_files(self) -> List[str]:
+    def modified_files(self) -> list[str]:
         """Get list of modified (but not staged) files using Rust.
 
         Returns:

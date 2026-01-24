@@ -8,8 +8,9 @@ Tests the run command execution flow including:
 - Output formatting
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 class TestRunCommandExecution:
@@ -36,10 +37,10 @@ class TestRunCommandExecution:
     def test_run_functions_exist(self):
         """Verify helper functions exist."""
         from omni.agent.cli.commands.run import (
-            _print_session_report,
-            _print_banner,
-            _run_repl,
             _execute_task_via_kernel,
+            _print_banner,
+            _print_session_report,
+            _run_repl,
         )
 
         assert callable(_print_session_report)
@@ -98,8 +99,8 @@ class TestRunCommandExecutionPath:
     async def test_omni_loop_respects_config(self, mock_inference_client):
         """Should respect configuration settings."""
         with patch("omni.agent.core.omni.loop.InferenceClient", return_value=mock_inference_client):
-            from omni.agent.core.omni.loop import OmniLoop
             from omni.agent.core.omni.config import OmniLoopConfig
+            from omni.agent.core.omni.loop import OmniLoop
 
             config = OmniLoopConfig(
                 max_tokens=64000,

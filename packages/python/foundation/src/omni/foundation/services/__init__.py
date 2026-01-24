@@ -11,12 +11,12 @@ Usage:
     from omni.foundation.services.embedding import get_embedding_service
 """
 
+from .embedding import embed_batch, embed_text, get_embedding_service
 from .vector import VectorStoreClient
-from .embedding import get_embedding_service, embed_text, embed_batch
 
 __all__ = [
     "VectorStoreClient",
-    "get_embedding_service",
-    "embed_text",
     "embed_batch",
+    "embed_text",
+    "get_embedding_service",
 ]

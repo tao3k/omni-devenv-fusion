@@ -154,7 +154,7 @@ def get_api_key() -> str | None:
 
 
 __all__ = [
+    "ensure_api_key",
     "get_anthropic_api_key",
     "get_api_key",
-    "ensure_api_key",
 ]

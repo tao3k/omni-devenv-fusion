@@ -4,10 +4,10 @@ Foundation Test Configuration
 Shared fixtures for omni.foundation tests.
 """
 
-import pytest
-from pathlib import Path
-import tempfile
 import sys
+from pathlib import Path
+
+import pytest
 
 # Ensure omni.foundation is importable
 _foundation_path = Path(__file__).parent.parent.parent

@@ -13,16 +13,16 @@ Usage:
 
 import asyncio
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
+from omni.agent.core.context.manager import ContextManager
+from omni.agent.core.context.pruner import ContextPruner, PruningConfig
 from omni.foundation.config.settings import get_setting
 from omni.foundation.services.llm import InferenceClient
-from omni.agent.core.context.manager import ContextManager
-from omni.agent.core.context.pruner import PruningConfig, ContextPruner
 
 from .config import OmniLoopConfig
-from .schemas import extract_tool_schemas
 from .react import ReActWorkflow
+from .schemas import extract_tool_schemas
 
 logger = None  # Set in __init__ after import
 
@@ -44,7 +44,7 @@ class OmniLoop:
 
     def __init__(
         self,
-        config: Optional[OmniLoopConfig] = None,
+        config: OmniLoopConfig | None = None,
         kernel: Any = None,
     ):
         """Initialize the OmniLoop.
@@ -69,7 +69,7 @@ class OmniLoop:
         self.engine = InferenceClient()
 
         # Session history
-        self.history: List[Dict[str, Any]] = []
+        self.history: list[dict[str, Any]] = []
 
         # Internal state
         self._initialized: bool = False
@@ -81,7 +81,7 @@ class OmniLoop:
             self.context.add_system_message(system_prompt)
             self._initialized = True
 
-    async def _get_tool_schemas(self) -> List[Dict[str, Any]]:
+    async def _get_tool_schemas(self) -> list[dict[str, Any]]:
         """Get tool schemas from kernel skill context with optimization.
 
         Applies:
@@ -90,8 +90,8 @@ class OmniLoop:
         - rerank_threshold: Re-rank by frequency if exceeded
         - schema_cache_ttl: Use cached schemas
         """
+        from omni.core.cache.tool_schema import get_cached_schema, get_schema_cache
         from omni.core.config.loader import load_skill_limits
-        from omni.core.cache.tool_schema import get_schema_cache, get_cached_schema
 
         if self.kernel and hasattr(self.kernel, "skill_context"):
             skill_context = self.kernel.skill_context
@@ -120,7 +120,7 @@ class OmniLoop:
                 commands = skill_context.list_commands()
 
             # Use cached schema extraction
-            def extract_schema(cmd: str) -> Dict[str, Any]:
+            def extract_schema(cmd: str) -> dict[str, Any]:
                 handler = skill_context.get_command(cmd)
                 if handler:
                     return extract_tool_schemas([cmd], lambda c: handler)[0]
@@ -139,7 +139,7 @@ class OmniLoop:
         # Fallback: basic filesystem tools
         return self.engine.get_tool_schema(skill_names=["filesystem"])
 
-    async def _execute_tool_call(self, tool_name: str, args: Dict[str, Any]) -> str:
+    async def _execute_tool_call(self, tool_name: str, args: dict[str, Any]) -> str:
         """Execute a single tool call via kernel."""
         if self.kernel and hasattr(self.kernel, "execute_tool"):
             return await self.kernel.execute_tool(
@@ -163,7 +163,7 @@ class OmniLoop:
             verbose=self.config.verbose,
         )
 
-    async def run(self, task: str, max_steps: Optional[int] = None) -> str:
+    async def run(self, task: str, max_steps: int | None = None) -> str:
         """Execute a task through the ReAct loop.
 
         ReAct Pattern:
@@ -220,6 +220,7 @@ class OmniLoop:
     async def interactive_mode(self):
         """Run in interactive REPL mode."""
         from rich.console import Console
+
         from omni.foundation.config.settings import get_setting
 
         await self._ensure_initialized()
@@ -283,10 +284,10 @@ class OmniLoop:
             return
 
         try:
-            from omni.foundation.config.skills import SKILLS_DIR
-            import sys
             import importlib.util
-            from pathlib import Path
+            import sys
+
+            from omni.foundation.config.skills import SKILLS_DIR
 
             factory_dir = SKILLS_DIR() / "skill" / "extensions" / "factory"
             harvester_path = factory_dir / "harvester.py"
@@ -311,11 +312,11 @@ class OmniLoop:
                     harvester = module.SkillHarvester(meta_agent=None)
                     await harvester.process_session(self.session_id, self.history)
 
-        except Exception as e:
+        except Exception:
             # Subconscious failure should not affect main process exit
             pass
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get session statistics."""
         return {
             "session_id": self.session_id,
@@ -325,7 +326,7 @@ class OmniLoop:
             "context_stats": self.context.stats(),
         }
 
-    def snapshot(self) -> Dict[str, Any]:
+    def snapshot(self) -> dict[str, Any]:
         """Create a serializable snapshot of the current session."""
         return {
             "session_id": self.session_id,

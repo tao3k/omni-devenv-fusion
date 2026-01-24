@@ -1,13 +1,13 @@
 """Unit tests for omni.mcp.interfaces."""
 
-import pytest
-from typing import Protocol, Any, Optional
+from typing import Any
 
+import pytest
 from omni.mcp.interfaces import (
-    MCPRequestHandler,
-    MCPTransport,
-    MCPSession,
     MCPRequestContext,
+    MCPRequestHandler,
+    MCPSession,
+    MCPTransport,
 )
 from omni.mcp.types import JSONRPCRequest, JSONRPCResponse
 
@@ -83,7 +83,7 @@ class TestMCPSessionProtocol:
             def session_id(self) -> str:
                 return "test-session-123"
 
-            async def send_notification(self, method: str, params: Optional[Any] = None) -> None:
+            async def send_notification(self, method: str, params: Any | None = None) -> None:
                 pass
 
         session = MockSession()
@@ -104,10 +104,10 @@ class TestMCPRequestContextProtocol:
 
         class MockContext:
             @property
-            def session(self) -> Optional[MCPSession]:
+            def session(self) -> MCPSession | None:
                 return None
 
-            async def send_notification(self, method: str, params: Optional[Any] = None) -> None:
+            async def send_notification(self, method: str, params: Any | None = None) -> None:
                 pass
 
         context = MockContext()

@@ -14,10 +14,10 @@ Covers:
 7. Skill registration and command availability
 """
 
-import pytest
-import tempfile
 import os
-from pathlib import Path
+import tempfile
+
+import pytest
 
 
 def _get_code_tools_skill():
@@ -428,21 +428,20 @@ class TestGetEditInfo:
 
     def test_get_edit_info_returns_dict(self):
         """Test that get_edit_info returns capability info."""
+        # Import via skill's script loader
         skill = _get_code_tools_skill()
         if skill is None:
             pytest.skip("Skill not loaded - requires running kernel")
             return
 
-        # Find get_edit_info command
-        cmd = None
-        for name, c in skill.commands.items():
-            if name.endswith("_get_edit_info") or name == "get_edit_info":
-                cmd = c
-                break
+        # get_edit_info is registered as a command
+        cmd = skill.get_command("get_edit_info")
+        if cmd is None:
+            # Try the full name pattern
+            cmd = skill.get_command("code_tools.get_edit_info")
 
-        assert cmd is not None
-        # The command is a function, call it
-        result = cmd.func()
+        assert cmd is not None, "get_edit_info command not found"
+        result = cmd()
         assert isinstance(result, dict)
         assert result["name"] == "code_tools"
         assert "rust_available" in result
@@ -479,12 +478,16 @@ class TestSkillRegistration:
         assert "apply" in command_names_str
 
     def test_commands_have_valid_schemas(self):
-        """Verify all commands have valid input schemas."""
+        """Verify all commands have valid _skill_config attributes."""
         skill = _get_code_tools_skill()
         if skill is None:
             pytest.skip("Skill not loaded - requires running kernel")
         assert skill is not None
 
         for cmd_name, cmd in skill.commands.items():
-            assert isinstance(cmd.input_schema, dict)
-            assert "properties" in cmd.input_schema
+            # New pattern: commands have _skill_config with name, description, category
+            assert hasattr(cmd, "_skill_config") or hasattr(cmd, "_command_name")
+            if hasattr(cmd, "_skill_config"):
+                config = cmd._skill_config
+                assert "name" in config
+                assert isinstance(config.get("category"), str)

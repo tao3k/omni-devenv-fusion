@@ -2,18 +2,17 @@
 result.py
  Meta-Agent Result Types
 
-Defines result dataclasses for skill generation and validation.
+Defines result types for skill generation and validation.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+
+from pydantic import BaseModel
 
 
-@dataclass
-class GenerationResult:
+class GenerationResult(BaseModel):
     """Result of skill generation attempt."""
 
     success: bool

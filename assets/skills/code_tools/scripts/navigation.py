@@ -105,8 +105,19 @@ def _validate_path(path: str) -> tuple[Path | None, str | None]:
 
 @skill_command(
     name="outline_file",
-    category="read",
-    description="Generate a high-level outline (skeleton) of a source file.",
+    category="view",
+    description="""
+    Generate a high-level outline (skeleton) of a source file.
+
+    Reduces context usage by providing symbolic representation instead of full content.
+
+    Args:
+        - path: str - Path to the file to outline (required)
+        - language: Optional[str] - Programming language (auto-detected if not specified)
+
+    Returns:
+        File outline with symbols (classes, functions, etc.) and line numbers.
+    """,
 )
 def outline_file(path: str, language: str | None = None) -> str:
     """
@@ -131,7 +142,7 @@ def outline_file(path: str, language: str | None = None) -> str:
                 return f"// 🗺️ OUTLINE: {path}\n[No structural symbols found.]"
             return "\n".join(outline)
         except Exception as e:
-            return f"Error reading file: {str(e)}"
+            return f"Error reading file: {e!s}"
 
     try:
         outline = omni_core_rs.get_file_outline(path, language)
@@ -140,13 +151,24 @@ def outline_file(path: str, language: str | None = None) -> str:
         return outline
     except Exception as e:
         logger.error("Failed to outline file", path=path, error=str(e))
-        return f"Error generating outline: {str(e)}"
+        return f"Error generating outline: {e!s}"
 
 
 @skill_command(
     name="count_symbols",
     category="read",
-    description="Count the number of symbols (classes, functions, etc.) in a file.",
+    description="""
+    Count the number of symbols (classes, functions, etc.) in a file.
+
+    Useful for quickly assessing file complexity before reading.
+
+    Args:
+        - path: str - Path to the file to analyze (required)
+        - language: Optional[str] - Programming language (auto-detected if not specified)
+
+    Returns:
+        Dictionary with total symbol count and counts by kind (class, function, etc.).
+    """,
 )
 def count_symbols(path: str, language: str | None = None) -> dict[str, Any]:
     """
@@ -182,19 +204,20 @@ def count_symbols(path: str, language: str | None = None) -> dict[str, Any]:
 
 @skill_command(
     name="search_code",
-    category="read",
+    category="search",
     description="""
     Search for AST patterns in a single file using ast-grep syntax.
 
-    Unlike text search (grep), this searches for **code patterns**, not strings.
+    Unlike text search (grep), this searches for code patterns, not strings.
     Perfect for finding function calls, class definitions, imports, etc.
 
-    **Parameters**:
-    - `path` (required): File path to search in
-    - `pattern` (required): AST pattern to match (e.g., `console.log($ARG)` finds all log calls)
-    - `language` (optional): Force language detection (auto-detected if not provided)
+    Args:
+        - path: str - File path to search in (required)
+        - pattern: str - AST pattern to match (e.g., console.log($ARG)) (required)
+        - language: Optional[str] - Force language detection (auto-detected if not provided)
 
-    **Returns**: Matched code lines with AST context.
+    Returns:
+        Matched code lines with AST context.
     """,
 )
 def search_code(path: str, pattern: str, language: str | None = None) -> str:
@@ -217,20 +240,32 @@ def search_code(path: str, pattern: str, language: str | None = None) -> str:
                 return f"[No matches for pattern in {path}]"
             return "\n".join(results)
         except Exception as e:
-            return f"Error searching file: {str(e)}"
+            return f"Error searching file: {e!s}"
 
     try:
         result = omni_core_rs.search_code(path, pattern, language)
         return result
     except Exception as e:
         logger.error("Failed to search file", path=path, pattern=pattern, error=str(e))
-        return f"Error searching: {str(e)}"
+        return f"Error searching: {e!s}"
 
 
 @skill_command(
     name="search_directory",
-    category="read",
-    description="Search for AST patterns recursively in a directory.",
+    category="search",
+    description="""
+    Search for AST patterns recursively in a directory.
+
+    Unlike naive grep, this uses AST patterns for precise, semantic matching.
+
+    Args:
+        - path: str - Directory path to search (required)
+        - pattern: str - AST pattern to match (required)
+        - file_pattern: Optional[str] - File pattern to filter (e.g., *.py)
+
+    Returns:
+        Search results with matched code lines and locations.
+    """,
 )
 def search_directory(path: str, pattern: str, file_pattern: str | None = None) -> str:
     """
@@ -251,7 +286,7 @@ def search_directory(path: str, pattern: str, file_pattern: str | None = None) -
             pattern=pattern,
             error=str(e),
         )
-        return f"Error searching directory: {str(e)}"
+        return f"Error searching directory: {e!s}"
 
 
 # =============================================================================
@@ -261,8 +296,17 @@ def search_directory(path: str, pattern: str, file_pattern: str | None = None) -
 
 @skill_command(
     name="list_symbols",
-    category="read",
-    description="Extract and list all symbols (classes, functions, methods) from a file in structured format.",
+    category="view",
+    description="""
+    Extract and list all symbols (classes, functions, methods) from a file in structured format.
+
+    Args:
+        - file_path: str - Path to the file to extract symbols from (required)
+        - language: Optional[str] - Programming language (auto-detected if not specified)
+
+    Returns:
+        List of symbols with name, kind, line number, and signature.
+    """,
 )
 def list_symbols(file_path: str, language: str | None = None) -> list[dict]:
     """
@@ -326,7 +370,18 @@ def list_symbols(file_path: str, language: str | None = None) -> list[dict]:
 @skill_command(
     name="goto_definition",
     category="search",
-    description="Find the file and line number where a symbol is defined.",
+    description="""
+    Find the file and line number where a symbol is defined.
+
+    Uses AST patterns to find class/function definitions matching the symbol name.
+
+    Args:
+        - symbol: str - The symbol name to find (e.g., Kernel, Agent, connect) (required)
+        - root_path: str = "." - Root directory to search in
+
+    Returns:
+        List of locations with file path and line number.
+    """,
 )
 def goto_definition(symbol: str, root_path: str = ".") -> list[dict]:
     """
@@ -443,7 +498,19 @@ def goto_definition(symbol: str, root_path: str = ".") -> list[dict]:
 @skill_command(
     name="find_references",
     category="search",
-    description="Find all references/usage of a symbol in the project.",
+    description="""
+    Find all references/usage of a symbol in the project.
+
+    Searches for patterns where the symbol is used (not just defined).
+    This includes function calls, class instantiations, type annotations, etc.
+
+    Args:
+        - symbol: str - The symbol name to search for (required)
+        - root_path: str = "." - Root directory to search in
+
+    Returns:
+        List of usage locations with file path and line number.
+    """,
 )
 def find_references(symbol: str, root_path: str = ".") -> list[dict]:
     """

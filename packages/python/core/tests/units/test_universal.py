@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
+
+import pytest
+
 from omni.core.skills.universal import (
+    SimpleSkillMetadata,
     UniversalScriptSkill,
     UniversalSkillFactory,
-    SimpleSkillMetadata,
 )
 
 
@@ -102,7 +104,8 @@ description: Loaded from SKILL.md
     @pytest.mark.asyncio
     async def test_load_skill_with_scripts(self, tmp_path: Path):
         """Test loading a skill with scripts."""
-        skill_path = tmp_path / "scripted_skill"
+        # Directory name must match skill_name for PEP 420 namespace packages
+        skill_path = tmp_path / "scripted"
         skill_path.mkdir()
         scripts_dir = skill_path / "scripts"
         scripts_dir.mkdir()

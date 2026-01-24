@@ -6,6 +6,6 @@ Commands:
 - list_tests: Discover available tests
 """
 
-from .pytest import run_pytest, list_tests
+from .pytest import list_tests, run_pytest
 
-__all__ = ["run_pytest", "list_tests"]
+__all__ = ["list_tests", "run_pytest"]

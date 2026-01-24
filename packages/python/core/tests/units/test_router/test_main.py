@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
 
 from omni.core.router.main import OmniRouter, RouterRegistry, get_router
 from omni.core.router.router import RouteResult

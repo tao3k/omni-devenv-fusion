@@ -31,14 +31,16 @@ Usage:
     )
 """
 
-import jinja2
-from functools import lru_cache
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from functools import lru_cache
+from typing import Any
+
+import jinja2
+
+from omni.foundation.config.settings import get_setting
 
 # ODF Core Imports: SSOT path resolution
 from omni.foundation.config.skills import SKILLS_DIR
-from omni.foundation.config.settings import get_setting
 from omni.foundation.runtime.gitops import get_project_root
 
 
@@ -96,7 +98,7 @@ def render_commit_message(
     file_count: int = 0,
     verified_by: str = "omni Git Skill (cog)",
     security_status: str = "No sensitive files detected",
-    security_issues: Optional[List[str]] = None,
+    security_issues: list[str] | None = None,
     error: str = "",
     workflow_id: str = "",
     commit_type: str = "feat",
@@ -150,7 +152,7 @@ def render_workflow_result(
     intent: str,
     success: bool,
     message: str,
-    details: Optional[Dict[str, Any]] = None,
+    details: dict[str, Any] | None = None,
 ) -> str:
     """
     Render workflow execution result.
@@ -183,7 +185,7 @@ def render_workflow_result(
 def render_error(
     error_type: str,
     message: str,
-    suggestion: Optional[str] = None,
+    suggestion: str | None = None,
 ) -> str:
     """
     Render error message for LLM parsing.
@@ -216,7 +218,7 @@ def render_error(
 # =============================================================================
 
 
-def list_templates() -> Dict[str, Dict[str, str]]:
+def list_templates() -> dict[str, dict[str, str]]:
     """
     List all available git templates with their source locations.
 
@@ -246,7 +248,7 @@ def list_templates() -> Dict[str, Dict[str, str]]:
     return templates_info
 
 
-def get_template_info(template_name: str) -> Optional[Dict[str, str]]:
+def get_template_info(template_name: str) -> dict[str, str] | None:
     """
     Get information about a specific template.
 
@@ -260,7 +262,7 @@ def get_template_info(template_name: str) -> Optional[Dict[str, str]]:
     return templates.get(template_name)
 
 
-def get_template_source(template_name: str) -> Optional[str]:
+def get_template_source(template_name: str) -> str | None:
     """Get the source code of a template (for debugging)."""
     try:
         env = _get_jinja_env()

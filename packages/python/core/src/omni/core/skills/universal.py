@@ -13,35 +13,33 @@ import inspect
 import os
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from omni.foundation.config.logging import get_logger
+from pydantic import BaseModel
 
 logger = get_logger("omni.core.universal")
 
 
-@dataclass
-class SkillActivationConfig:
+class SkillActivationConfig(BaseModel):
     """Skill activation configuration from SKILL.md frontmatter."""
 
-    files: list[str] = field(default_factory=list)
-    pattern: Optional[str] = None
+    files: list[str] = []
+    pattern: str | None = None
 
 
-@dataclass
-class SimpleSkillMetadata:
+class SimpleSkillMetadata(BaseModel):
     """Simple skill metadata for universal skills."""
 
     name: str
     version: str = "1.0.0"
     description: str = ""
-    capabilities: list[str] = field(default_factory=list)
-    activation: Optional[SkillActivationConfig] = None
+    capabilities: list[str] = []
+    activation: SkillActivationConfig | None = None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any], name: str) -> "SimpleSkillMetadata":
+    def from_dict(cls, data: dict[str, Any], name: str) -> SimpleSkillMetadata:
         """Create metadata from Index dictionary.
 
         Args:
@@ -279,7 +277,7 @@ class UniversalScriptSkill:
         return self._metadata
 
     @property
-    def activation(self) -> Optional[SkillActivationConfig]:
+    def activation(self) -> SkillActivationConfig | None:
         """Skill activation configuration."""
         return self._metadata.activation
 
@@ -288,7 +286,14 @@ class UniversalScriptSkill:
         """Check if skill is loaded."""
         return self._loaded
 
-    def get_activation_rule(self) -> Optional[tuple[str, list[str]]]:
+    @property
+    def commands(self) -> dict[str, Callable]:
+        """Get all registered commands (for backward compatibility)."""
+        if self._script_loader:
+            return self._script_loader.commands
+        return {}
+
+    def get_activation_rule(self) -> tuple[str, list[str]] | None:
         """Get activation rule tuple for this skill.
 
         Returns:
@@ -477,7 +482,7 @@ class UniversalSkillFactory:
 
         return UniversalScriptSkill(skill_name=name, skill_path=path)
 
-    def create_from_discovered(self, discovered_skill: "DiscoveredSkill") -> UniversalScriptSkill:
+    def create_from_discovered(self, discovered_skill: DiscoveredSkill) -> UniversalScriptSkill:
         """Create a skill from a DiscoveredSkill object (Index mode).
 
         This is the preferred method for Rust-First Indexing.

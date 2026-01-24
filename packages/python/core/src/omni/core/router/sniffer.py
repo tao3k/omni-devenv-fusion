@@ -18,8 +18,9 @@ from __future__ import annotations
 
 import fnmatch
 import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import List, Dict, Set, Callable, Any, Optional, Tuple
+from typing import Any
 
 from omni.foundation.config.logging import get_logger
 
@@ -35,14 +36,14 @@ class ActivationRule:
     def __init__(
         self,
         skill_name: str,
-        files: Optional[List[str]] = None,
-        pattern: Optional[str] = None,
+        files: list[str] | None = None,
+        pattern: str | None = None,
     ):
         self.skill_name = skill_name
         self.files = set(files) if files else set()
         self.pattern = pattern  # Regex pattern for advanced matching
 
-    def matches(self, cwd: str, root_files: Optional[Set[str]] = None) -> bool:
+    def matches(self, cwd: str, root_files: set[str] | None = None) -> bool:
         """Check if this rule matches the given directory.
 
         Args:
@@ -106,7 +107,7 @@ class DeclarativeRule:
         self.rule_type = rule_type  # "file_exists" or "file_pattern"
         self.pattern = pattern
 
-    def matches(self, cwd: str, root_files: Set[str]) -> bool:
+    def matches(self, cwd: str, root_files: set[str]) -> bool:
         """Check if rule matches in given directory."""
         if self.rule_type == "file_exists":
             # O(1) exact match
@@ -157,10 +158,10 @@ class IntentSniffer:
     """
 
     def __init__(self):
-        self._rules: List[ActivationRule] = []
-        self._dynamic_sniffers: List[DynamicSniffer] = []
-        self._declarative_rules: List[DeclarativeRule] = []
-        self._cached_suggestions: Dict[str, List[str]] = {}
+        self._rules: list[ActivationRule] = []
+        self._dynamic_sniffers: list[DynamicSniffer] = []
+        self._declarative_rules: list[DeclarativeRule] = []
+        self._cached_suggestions: dict[str, list[str]] = {}
         self._score_threshold: float = SNIFTER_SCORE_THRESHOLD
 
     @property
@@ -181,7 +182,7 @@ class IntentSniffer:
         logger.debug(f"Registered static rule for skill: {rule.skill_name}")
 
     def register_skill_activation(
-        self, skill_name: str, files: Optional[List[str]] = None, pattern: Optional[str] = None
+        self, skill_name: str, files: list[str] | None = None, pattern: str | None = None
     ) -> None:
         """Convenience method to register a skill with file triggers."""
         rule = ActivationRule(skill_name=skill_name, files=files, pattern=pattern)
@@ -189,7 +190,7 @@ class IntentSniffer:
 
     # === Declarative Rule Registration ===
 
-    def register_rules(self, skill_name: str, rules: List[Dict[str, str]]) -> None:
+    def register_rules(self, skill_name: str, rules: list[dict[str, str]]) -> None:
         """Register declarative rules from rules.toml format.
 
         Args:
@@ -240,7 +241,7 @@ class IntentSniffer:
         if count > 0:
             logger.debug(f"Cleared {count} declarative rules")
 
-    def load_from_index(self, index_path: Optional[str] = None) -> int:
+    def load_from_index(self, index_path: str | None = None) -> int:
         """Load rules from skill_index.json (Single Source of Truth).
 
         This method clears existing declarative rules before loading
@@ -285,7 +286,7 @@ class IntentSniffer:
         self,
         func: Callable[[str], float],
         skill_name: str,
-        name: Optional[str] = None,
+        name: str | None = None,
         priority: int = 100,
     ) -> None:
         """Register a dynamic sniffer function."""
@@ -304,7 +305,7 @@ class IntentSniffer:
         priority = getattr(func, "_sniffer_priority", 100)
         self.register_dynamic(func, skill_name, name, priority)
 
-    def register_sniffer_loaders(self, loaders: List[Tuple[Callable[[str], float], str]]) -> None:
+    def register_sniffer_loaders(self, loaders: list[tuple[Callable[[str], float], str]]) -> None:
         """Register multiple sniffer functions from (func, skill_name) tuples."""
         for func, skill_name in loaders:
             self.register_sniffer_func(func, skill_name)
@@ -315,7 +316,7 @@ class IntentSniffer:
         """Clear the suggestion cache."""
         self._cached_suggestions.clear()
 
-    def sniff(self, cwd: str) -> List[str]:
+    def sniff(self, cwd: str) -> list[str]:
         """Scan directory and return matching skill names.
 
         Args:
@@ -328,7 +329,7 @@ class IntentSniffer:
         if cwd in self._cached_suggestions:
             return self._cached_suggestions[cwd].copy()
 
-        active_skills: Set[str] = set()
+        active_skills: set[str] = set()
 
         # Get directory contents once (for efficiency)
         try:
@@ -376,7 +377,7 @@ class IntentSniffer:
         self._cached_suggestions[cwd] = result
         return result
 
-    def sniff_with_scores(self, cwd: str) -> List[Tuple[str, float]]:
+    def sniff_with_scores(self, cwd: str) -> list[tuple[str, float]]:
         """Scan directory and return skill names with their activation scores.
 
         Args:
@@ -385,7 +386,7 @@ class IntentSniffer:
         Returns:
             List of (skill_name, score) tuples, sorted by score descending
         """
-        scores: Dict[str, float] = {}
+        scores: dict[str, float] = {}
 
         # Get directory contents once (for efficiency)
         try:
@@ -423,7 +424,7 @@ class IntentSniffer:
         # Sort by score descending
         return sorted(scores.items(), key=lambda x: x[1], reverse=True)
 
-    def sniff_file(self, file_path: str) -> List[str]:
+    def sniff_file(self, file_path: str) -> list[str]:
         """Sniff a specific file path (static rules only).
 
         Args:
@@ -433,7 +434,7 @@ class IntentSniffer:
             List of skill names that might handle this file
         """
         file_name = Path(file_path).name
-        active_skills: Set[str] = set()
+        active_skills: set[str] = set()
 
         for rule in self._rules:
             if file_name in rule.files:
@@ -452,15 +453,15 @@ class ContextualSniffer:
 
     def __init__(self):
         self._sniffer = IntentSniffer()
-        self._session_context: Dict[str, Any] = {}
-        self._last_suggestions: List[str] = []
+        self._session_context: dict[str, Any] = {}
+        self._last_suggestions: list[str] = []
 
     # Delegate static rule registration
     def register_rule(self, rule: ActivationRule) -> None:
         self._sniffer.register_rule(rule)
 
     def register_skill_activation(
-        self, skill_name: str, files: Optional[List[str]] = None, pattern: Optional[str] = None
+        self, skill_name: str, files: list[str] | None = None, pattern: str | None = None
     ) -> None:
         self._sniffer.register_skill_activation(skill_name, files, pattern)
 
@@ -469,7 +470,7 @@ class ContextualSniffer:
         self,
         func: Callable[[str], float],
         skill_name: str,
-        name: Optional[str] = None,
+        name: str | None = None,
         priority: int = 100,
     ) -> None:
         self._sniffer.register_dynamic(func, skill_name, name, priority)
@@ -485,7 +486,7 @@ class ContextualSniffer:
         """Get from session context."""
         return self._session_context.get(key, default)
 
-    def sniff(self, cwd: str) -> List[str]:
+    def sniff(self, cwd: str) -> list[str]:
         """Sniff with session memory."""
         suggestions = self._sniffer.sniff(cwd)
 
@@ -503,10 +504,10 @@ class ContextualSniffer:
 
 
 __all__ = [
-    "IntentSniffer",
-    "ContextualSniffer",
-    "ActivationRule",
-    "DynamicSniffer",
-    "DeclarativeRule",
     "SNIFTER_SCORE_THRESHOLD",
+    "ActivationRule",
+    "ContextualSniffer",
+    "DeclarativeRule",
+    "DynamicSniffer",
+    "IntentSniffer",
 ]

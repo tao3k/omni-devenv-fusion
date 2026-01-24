@@ -6,9 +6,10 @@ Lightweight template rendering for skill prompts and text generation.
 
 from __future__ import annotations
 
-import jinja2
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
+
+import jinja2
 
 logger = __import__("logging").getLogger(__name__)
 
@@ -30,7 +31,7 @@ class TemplateEngine:
             lstrip_blocks=True,
         )
 
-    def render(self, template_name: str, context: Dict[str, Any]) -> str:
+    def render(self, template_name: str, context: dict[str, Any]) -> str:
         """Render a template file.
 
         Args:
@@ -43,7 +44,7 @@ class TemplateEngine:
         template = self.env.get_template(template_name)
         return template.render(**context)
 
-    def render_string(self, source: str, context: Dict[str, Any]) -> str:
+    def render_string(self, source: str, context: dict[str, Any]) -> str:
         """Render a template string.
 
         Args:

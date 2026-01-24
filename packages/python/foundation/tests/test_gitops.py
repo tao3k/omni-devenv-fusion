@@ -4,7 +4,6 @@ GitOps Tests - Simplified
 Tests for omni.foundation.runtime.gitops module - project root detection.
 """
 
-import pytest
 from pathlib import Path
 
 
@@ -123,14 +122,14 @@ class TestGitOpsFunctions:
 
     def test_is_git_repo_true(self):
         """Test is_git_repo() returns True for project root."""
-        from omni.foundation.runtime.gitops import is_git_repo, get_project_root
+        from omni.foundation.runtime.gitops import get_project_root, is_git_repo
 
         result = is_git_repo(get_project_root())
         assert result is True
 
     def test_is_project_root_true(self):
         """Test is_project_root() returns True for project root."""
-        from omni.foundation.runtime.gitops import is_project_root, get_project_root
+        from omni.foundation.runtime.gitops import get_project_root, is_project_root
 
         result = is_project_root(get_project_root())
         assert result is True

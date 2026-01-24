@@ -2,8 +2,7 @@
 Tests for omni.core.config.loader
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 
 class TestSkillLimitsConfig:
@@ -172,8 +171,8 @@ class TestResetConfig:
     def test_resets_singletons(self):
         """Test that reset_config clears cached configs."""
         from omni.core.config.loader import (
-            load_skill_limits,
             load_filter_commands,
+            load_skill_limits,
             reset_config,
         )
 

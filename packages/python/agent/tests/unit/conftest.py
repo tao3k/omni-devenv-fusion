@@ -4,8 +4,9 @@ conftest.py - Pytest Configuration and Shared Fixtures for Agent Tests
 Provides common fixtures for testing OmniLoop, ContextManager, and CLI commands.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 
 @pytest.fixture

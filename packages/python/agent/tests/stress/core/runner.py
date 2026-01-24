@@ -7,15 +7,15 @@ Designed to be independent from the main agent codebase.
 
 from __future__ import annotations
 
-import asyncio
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import List, Type, Callable, Any, Awaitable
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from typing import Any
 
-from .metrics import MetricsCollector, TestMetrics, MemoryThresholdChecker
 from rich.console import Console
 from rich.table import Table
 
+from .metrics import MemoryThresholdChecker, MetricsCollector, TestMetrics
 
 console = Console()
 
@@ -83,19 +83,19 @@ class StressRunner:
 
     def __init__(self, config: StressConfig | None = None):
         self.config = config or StressConfig()
-        self._tests: List[Type[StressTest]] = []
-        self._results: List[TestMetrics] = []
+        self._tests: list[type[StressTest]] = []
+        self._results: list[TestMetrics] = []
         self._collector = MetricsCollector()
         self._thresholds = MemoryThresholdChecker(
             warning_threshold_mb=self.config.warning_threshold_mb,
             error_threshold_mb=self.config.fail_threshold_mb,
         )
 
-    def register(self, test_class: Type[StressTest]) -> None:
+    def register(self, test_class: type[StressTest]) -> None:
         """Register a stress test class."""
         self._tests.append(test_class)
 
-    async def run_single(self, test_class: Type[StressTest]) -> TestMetrics:
+    async def run_single(self, test_class: type[StressTest]) -> TestMetrics:
         """Run a single stress test."""
         # Create test instance first to access properties
         test = test_class()
@@ -148,7 +148,7 @@ class StressRunner:
 
         return metrics
 
-    async def run(self) -> List[TestMetrics]:
+    async def run(self) -> list[TestMetrics]:
         """Run all registered stress tests."""
         console.print("\n[bold red]╔══════════════════════════════════════════╗[/bold red]")
         console.print("[bold red]║     STRESS & STABILITY TEST SUITE        ║[/bold red]")
@@ -224,7 +224,7 @@ class SimpleStressRunner:
     def __init__(self, turns: int = 20, warm_up: int = 2):
         self.turns = turns
         self.warm_up = warm_up
-        self._tests: List[tuple[str, Callable[..., Awaitable[Any]]]] = []
+        self._tests: list[tuple[str, Callable[..., Awaitable[Any]]]] = []
 
     def add(self, name: str, coro: Callable[..., Awaitable[Any]]) -> None:
         """Add an async test function."""
@@ -232,7 +232,7 @@ class SimpleStressRunner:
 
     async def run(self) -> None:
         """Run all tests."""
-        from .metrics import MetricsCollector, MemoryThresholdChecker
+        from .metrics import MemoryThresholdChecker, MetricsCollector
 
         collector = MetricsCollector()
         thresholds = MemoryThresholdChecker()
@@ -264,8 +264,8 @@ class SimpleStressRunner:
 
 
 __all__ = [
-    "StressConfig",
-    "StressTest",
-    "StressRunner",
     "SimpleStressRunner",
+    "StressConfig",
+    "StressRunner",
+    "StressTest",
 ]

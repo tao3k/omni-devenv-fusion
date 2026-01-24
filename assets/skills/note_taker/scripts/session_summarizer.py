@@ -8,9 +8,7 @@ and generates structured markdown summaries.
 
 from __future__ import annotations
 
-import json
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 
@@ -64,7 +62,7 @@ This session executed {len(trajectory)} steps to achieve the stated goal.
         markdown += f"**Choice**: {decision['choice']}\n\n"
         markdown += f"**Rationale**: {decision['rationale']}\n\n"
         if decision.get("alternatives"):
-            markdown += f"**Alternatives Considered**:\n"
+            markdown += "**Alternatives Considered**:\n"
             for alt in decision["alternatives"]:
                 markdown += f"  - {alt}\n"
             markdown += "\n"

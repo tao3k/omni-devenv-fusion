@@ -12,7 +12,7 @@ import typer
 from rich.panel import Panel
 from rich.table import Table
 
-from .base import SKILLS_DIR, cli_log_handler, err_console, run_skills, skill_app
+from .base import cli_log_handler, err_console, run_skills, skill_app
 
 
 @skill_app.command("run")
@@ -70,10 +70,11 @@ def skill_test(
     all_skills: bool = typer.Option(False, "--all", help="Test all skills with tests/ directory"),
 ):
     """Test skills using the testing framework."""
-    from omni.foundation.config.skills import SKILLS_DIR
-    import subprocess
     import json
+    import subprocess
     import tempfile
+
+    from omni.foundation.config.skills import SKILLS_DIR
 
     skills_dir = SKILLS_DIR()
 
@@ -219,7 +220,7 @@ def skill_test(
                 err_console.print(
                     Panel(
                         f"Total: {total} | Passed: {total_passed} | Failed: {total_failed} | Skipped: {total_skipped}",
-                        title=f"📊 Summary",
+                        title="📊 Summary",
                         style=summary_style,
                     )
                 )
@@ -274,7 +275,6 @@ def skill_check(
     ),
 ):
     """Validate skill structure or show template example."""
-    from pathlib import Path
 
     from omni.foundation.config.skills import SKILLS_DIR
 

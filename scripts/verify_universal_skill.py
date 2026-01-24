@@ -1,17 +1,16 @@
 #!/usr/bin/env uv run python
 """verify_universal_skill.py - Verify Zero-Code Skill Architecture."""
 
-import sys
 import os
-import tempfile
 import shutil
+import sys
+import tempfile
 from pathlib import Path
 
 # Add packages to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "packages/python/agent/src"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "packages/python/core/src"))
 
-from pathlib import Path
 
 # Test paths
 SKILLS_PATH = Path(__file__).parent / "assets/skills"
@@ -23,9 +22,9 @@ def test_universal_skill_import():
     print("Test 1: Universal Skill Imports")
     print("=" * 60)
 
-    from omni.core.skills.universal import UniversalScriptSkill, UniversalSkillFactory
-    from omni.core.skills.script_loader import ScriptLoader, skill_command
     from omni.core.skills.extensions import SkillExtensionLoader
+    from omni.core.skills.script_loader import ScriptLoader
+    from omni.core.skills.universal import UniversalScriptSkill, UniversalSkillFactory
 
     print("UniversalScriptSkill:", UniversalScriptSkill)
     print("UniversalSkillFactory:", UniversalSkillFactory)
@@ -66,6 +65,7 @@ def test_git_skill_universal_loading():
 
     import asyncio
     import subprocess
+
     from omni.core.skills.universal import UniversalScriptSkill
 
     # Create a temp directory with a git repo
@@ -109,6 +109,7 @@ def test_git_commit_in_tmpdir():
 
     import asyncio
     import subprocess
+
     from omni.core.skills.universal import UniversalScriptSkill
 
     # Create a temp directory with a git repo
@@ -155,6 +156,7 @@ def test_filesystem_skill():
     print("=" * 60)
 
     import asyncio
+
     from omni.core.skills.universal import UniversalScriptSkill
 
     # Use temp directory to avoid polluting project
@@ -185,6 +187,7 @@ def test_all_skills_loading():
 
     import asyncio
     import subprocess
+
     from omni.core.skills.universal import UniversalSkillFactory
 
     # Create a temp directory for git operations

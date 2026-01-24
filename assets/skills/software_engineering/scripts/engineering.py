@@ -19,8 +19,8 @@ from typing import Any
 
 # Modern Foundation API
 from omni.foundation.api.decorators import skill_command
-from omni.foundation.config.paths import ConfigPaths
 from omni.foundation.config.logging import get_logger
+from omni.foundation.config.paths import ConfigPaths
 
 logger = get_logger("skill.software_engineering")
 
@@ -186,4 +186,4 @@ def detect_tech_stack(paths: ConfigPaths | None = None) -> str:
     )
 
 
-__all__ = ["run_tests", "analyze_project_structure", "detect_tech_stack"]
+__all__ = ["analyze_project_structure", "detect_tech_stack", "run_tests"]

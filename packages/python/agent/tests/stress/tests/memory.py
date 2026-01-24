@@ -7,12 +7,10 @@ Independent from main agent code - can run standalone.
 
 from __future__ import annotations
 
-import asyncio
 import gc
 from typing import Any
 
 from ..core.runner import StressTest
-from ..core.metrics import MetricsCollector
 
 
 class MemoryEnduranceTest(StressTest):
@@ -186,7 +184,7 @@ class RustBridgeMemoryTest(StressTest):
 
 
 __all__ = [
-    "MemoryEnduranceTest",
     "ContextPruningTest",
+    "MemoryEnduranceTest",
     "RustBridgeMemoryTest",
 ]

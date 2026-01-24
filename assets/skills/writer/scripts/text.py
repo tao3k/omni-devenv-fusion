@@ -2,12 +2,10 @@
 writer/scripts/text.py - Writer Skill Commands
 """
 
-import asyncio
 import json
 import re
 import subprocess
-from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Any, Optional
 
 import structlog
 
@@ -25,7 +23,7 @@ class WritingStyleCache:
     _instance: Optional["WritingStyleCache"] = None
     _loaded: bool = False
     _guidelines: str = ""
-    _guidelines_dict: Dict[str, str] = {}
+    _guidelines_dict: dict[str, str] = {}
 
     def __new__(cls) -> "WritingStyleCache":
         if cls._instance is None:
@@ -76,7 +74,7 @@ class WritingStyleCache:
         return cls._guidelines
 
     @classmethod
-    def get_guidelines_dict(cls) -> Dict[str, str]:
+    def get_guidelines_dict(cls) -> dict[str, str]:
         """Get guidelines as dict for structured access."""
         if not cls._loaded:
             _ = cls()
@@ -84,7 +82,7 @@ class WritingStyleCache:
         return cls._guidelines_dict.copy()
 
 
-CLUTTER_WORDS: Dict[str, str] = {
+CLUTTER_WORDS: dict[str, str] = {
     r"\butilize\b": "use",
     r"\bfacilitate\b": "help",
     r"\bin order to\b": "to",
@@ -112,7 +110,7 @@ PASSIVE_VOICE_PATTERNS = [
 ]
 
 
-def _check_passive_voice(line: str) -> List[str]:
+def _check_passive_voice(line: str) -> list[str]:
     """Detect passive voice in a line."""
     violations = []
     for pattern in PASSIVE_VOICE_PATTERNS:
@@ -135,18 +133,14 @@ def _check_passive_voice(line: str) -> List[str]:
     - Weak language (basically, essentially, very)
 
     Args:
-        text: The text content to check for style violations.
+        - text: str - The text content to check for style violations (required)
 
     Returns:
-        JSON string with status (`clean` or `violations`), message,
-        and list of violations with line numbers and suggestions.
-
-    Example:
-        @omni("writer.lint_writing_style", {"text": "This is basically very useful."})
+        JSON with status (clean or violations), message, and list of violations with line numbers and suggestions.
     """,
 )
 async def lint_writing_style(text: str) -> str:
-    violations: List[Dict[str, Any]] = []
+    violations: list[dict[str, Any]] = []
     lines = text.split("\n")
 
     for i, line in enumerate(lines, 1):
@@ -226,20 +220,16 @@ async def lint_writing_style(text: str) -> str:
     - Code blocks with language tags
 
     Args:
-        text: The markdown text to validate.
+        - text: str - The markdown text to validate (required)
 
     Returns:
-        JSON string with status (`clean` or `violations`), message,
-        and list of structure violations.
-
-    Example:
-        @omni("writer.check_markdown_structure", {"text": "# Title\n## Sub"})
+        JSON with status (clean or violations), message, and list of structure violations.
     """,
 )
 async def check_markdown_structure(text: str) -> str:
-    violations: List[Dict[str, Any]] = []
+    violations: list[dict[str, Any]] = []
     lines = text.split("\n")
-    header_levels: List[int] = []
+    header_levels: list[int] = []
     h1_count = 0
     in_code_block = False
     code_lang = None
@@ -323,18 +313,13 @@ async def check_markdown_structure(text: str) -> str:
     description="""
     Polishes text using writing guidelines.
 
-    Combines lint_writing_style and check_markdown_structure checks
-    to provide comprehensive writing feedback.
+    Combines lint_writing_style and check_markdown_structure checks to provide comprehensive writing feedback.
 
     Args:
-        text: The text to polish and check.
+        - text: str - The text to polish and check (required)
 
     Returns:
-        JSON string with status (`clean` or `needs_polish`),
-        total violation count, and separate lint/structure violations.
-
-    Example:
-        @omni("writer.polish_text", {"text": "This is basically very active text."})
+        JSON with status (clean or needs_polish), total violation count, and separate lint/structure violations.
     """,
 )
 async def polish_text(text: str) -> str:
@@ -364,15 +349,13 @@ async def polish_text(text: str) -> str:
     description="""
     Loads writing guidelines into LLM context.
 
-    Reads from skills/writer/writing-style/*.md and returns all guidelines
-    as a single content string. Call this at the start of a writing task.
+    Reads from skills/writer/writing-style/*.md and returns all guidelines as a single content string.
 
     Args:
-        None
+        - None
 
     Returns:
-        JSON string with status (`loaded`), source path, files loaded count,
-        and full guidelines content.
+        JSON with status (loaded), source path, files loaded count, and full guidelines content.
     """,
 )
 async def load_writing_memory() -> str:
@@ -399,14 +382,10 @@ async def load_writing_memory() -> str:
     Runs Vale CLI on a markdown file for professional writing checks.
 
     Args:
-        file_path: Path to the markdown file to check.
+        - file_path: str - Path to the markdown file to check (required)
 
     Returns:
-        JSON string with status (`success`, `error`), message,
-        and list of Vale violations with line, severity, and check name.
-
-    Note:
-        Requires Vale CLI to be installed (`brew install vale`).
+        JSON with status (success or error), message, and list of Vale violations with line, severity, and check name.
     """,
 )
 async def run_vale_check(file_path: str) -> str:
@@ -465,7 +444,7 @@ async def run_vale_check(file_path: str) -> str:
         return json.dumps(
             {
                 "status": "error",
-                "message": f"Vale error: {str(e)}",
+                "message": f"Vale error: {e!s}",
                 "violations": [],
             }
         )

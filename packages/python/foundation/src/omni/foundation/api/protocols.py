@@ -24,6 +24,7 @@ from typing import (
     TypeVar,
     runtime_checkable,
 )
+from pydantic import BaseModel, ConfigDict
 
 # Type aliases (PEP 695)
 type ContextData = dict[str, Any]
@@ -238,16 +239,14 @@ class IContextRegistry(Protocol):
 
 
 # =============================================================================
-# Base Dataclasses (with slots=True for memory efficiency)
+# Base Pydantic Models (replaced dataclass with slots)
 # =============================================================================
 
 
-from dataclasses import dataclass
-
-
-@dataclass(slots=True)
-class ExecutionResult:
+class ExecutionResult(BaseModel):
     """Result of command execution."""
+
+    model_config = ConfigDict(slots=True)
 
     success: bool
     stdout: str = ""
@@ -256,44 +255,42 @@ class ExecutionResult:
     error: str = ""
 
 
-@dataclass(slots=True)
-class InferenceResult:
+class InferenceResult(BaseModel):
     """Result of LLM inference."""
+
+    model_config = ConfigDict(slots=True)
 
     success: bool
     content: str = ""
-    tool_calls: list[dict[str, Any]] = None  # type: ignore[assignment]
+    tool_calls: list[dict[str, Any]] = []
     model: str = ""
-    usage: dict[str, int] = None  # type: ignore[assignment]
+    usage: dict[str, int] = {}
     error: str = ""
 
-    def __post_init__(self) -> None:
-        if self.tool_calls is None:
-            self.tool_calls = []
-        if self.usage is None:
-            self.usage = {}
 
-
-@dataclass(slots=True)
-class CacheEntry:
+class CacheEntry(BaseModel):
     """Entry for cache storage."""
+
+    model_config = ConfigDict(slots=True)
 
     value: CacheValue
     created_at: float = 0.0
     version: int = 0
 
 
-@dataclass(slots=True)
-class PathSafetyResult:
+class PathSafetyResult(BaseModel):
     """Result of path safety check."""
+
+    model_config = ConfigDict(slots=True)
 
     is_safe: bool
     error_message: str = ""
 
 
-@dataclass(slots=True)
-class SettingsEntry:
+class SettingsEntry(BaseModel):
     """Entry for settings storage."""
+
+    model_config = ConfigDict(slots=True)
 
     value: ConfigValue
     source: str = "default"

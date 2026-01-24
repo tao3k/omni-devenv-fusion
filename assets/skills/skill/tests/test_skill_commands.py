@@ -51,8 +51,9 @@ class TestSkillCommands:
 
     def test_list_templates_requires_skill_name(self):
         """Test that list_templates requires skill_name parameter."""
-        from skill.scripts import templates
         import inspect
+
+        from skill.scripts import templates
 
         sig = inspect.signature(templates.list_templates)
         assert "skill_name" in sig.parameters

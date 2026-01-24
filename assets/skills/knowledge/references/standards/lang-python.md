@@ -212,10 +212,17 @@ For Python-specific issues (threading, uv, concurrency), see:
 - `agent/knowledge/threading-lock-deadlock.md`
 - `agent/knowledge/uv-workspace-config.md`
 
-## 5. Related Documentation
+## 5. Modern Python (3.12+)
 
-| Document                         | Purpose               |
-| -------------------------------- | --------------------- |
-| `design/writing-style/`          | Writing standards     |
-| `mcp-server/tests/test_basic.py` | Test patterns         |
-| `pyproject.toml`                 | Project configuration |
+For Python >= 3.12 specific standards including `StrEnum`, `match/case`, `@override`, and structured concurrency, see:
+
+**[lang-python-modern.md](lang-python-modern.md)**
+
+## 6. Related Documentation
+
+| Document                         | Purpose                    |
+| -------------------------------- | -------------------------- |
+| `lang-python-modern.md`          | Modern Python 3.12+ standards |
+| `design/writing-style/`          | Writing standards          |
+| `mcp-server/tests/test_basic.py` | Test patterns              |
+| `pyproject.toml`                 | Project configuration      |

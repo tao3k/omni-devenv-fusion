@@ -8,7 +8,7 @@ Submodules:
 - manager: Context lifecycle and state management
 """
 
-from .pruner import ContextPruner
 from .manager import ContextManager
+from .pruner import ContextPruner
 
-__all__ = ["ContextPruner", "ContextManager"]
+__all__ = ["ContextManager", "ContextPruner"]

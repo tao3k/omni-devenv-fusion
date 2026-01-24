@@ -11,8 +11,6 @@ Architecture:
 The heavy lifting is done by Rust's PermissionGatekeeper via omni_core_rs.
 """
 
-from typing import Optional
-
 try:
     from omni_core_rs import check_permission as _check_permission
 
@@ -72,7 +70,7 @@ class SecurityValidator:
         self,
         skill_name: str,
         tool_name: str,
-        skill_permissions: Optional[list[str]] = None,
+        skill_permissions: list[str] | None = None,
     ) -> bool:
         """
         Validate if a skill is authorized to use a tool.
@@ -93,7 +91,7 @@ class SecurityValidator:
         self,
         skill_name: str,
         tool_name: str,
-        skill_permissions: Optional[list[str]] = None,
+        skill_permissions: list[str] | None = None,
     ) -> None:
         """
         Validate permission or raise SecurityError.
@@ -118,4 +116,4 @@ class SecurityValidator:
         return _RUST_AVAILABLE
 
 
-__all__ = ["SecurityValidator", "SecurityError"]
+__all__ = ["SecurityError", "SecurityValidator"]

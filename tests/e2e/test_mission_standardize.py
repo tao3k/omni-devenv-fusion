@@ -15,7 +15,7 @@ Mission Flow:
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -76,7 +76,7 @@ class TestMissionLogStandardization:
 
         # Import the skills directly for testing
         from assets.skills.advanced_tools.scripts.mutation import batch_replace
-        from omni.foundation.config.paths import ConfigPaths
+
 
         # Create a proper mock paths object
         class MockPaths:
@@ -133,7 +133,7 @@ class TestMissionLogStandardization:
             assert dry_run_res["success"] is True
             assert dry_run_res["mode"] == "Dry-Run"
             assert dry_run_res["files_matched"] >= 1
-            print(f"    ✅ Dry-Run complete:")
+            print("    ✅ Dry-Run complete:")
             print(f"       - Files matched: {dry_run_res['files_matched']}")
             print(f"       - Files to change: {dry_run_res['files_changed']}")
             print(f"       - Total replacements: {dry_run_res['total_replacements']}")
@@ -175,13 +175,13 @@ class TestMissionLogStandardization:
             new_content = legacy_file.read_text()
             assert "logger.debug" in new_content
             assert "print" not in new_content
-            print(f"    ✅ Code modified successfully:")
+            print("    ✅ Code modified successfully:")
             print(f"       - {live_res['files_changed']} file(s) changed")
             print(f"       - {live_res['total_replacements']} replacement(s) made")
 
             # Show diff preview
             diff = live_res["changes"][0]["diff"]
-            print(f"    📋 Diff preview:")
+            print("    📋 Diff preview:")
             for line in diff.split("\n")[:8]:
                 print(f"       {line}")
 
@@ -212,7 +212,7 @@ test_legacy.py::test_cleanup PASSED
 
             assert test_res["success"] is True
             assert test_res["failed"] is False
-            print(f"    ✅ Tests passed")
+            print("    ✅ Tests passed")
 
         print("\n" + "=" * 60)
         print("🎉 Mission Complete: Log Standardization Successful!")
@@ -232,7 +232,7 @@ class TestBatchReplaceIntegration:
     def test_batch_replace_dry_run_no_modification(self, tmp_path):
         """Verify dry_run does not modify files."""
         from assets.skills.advanced_tools.scripts.mutation import batch_replace
-        from omni.foundation.config.paths import ConfigPaths
+
 
         # Setup
         test_file = tmp_path / "test.txt"
@@ -286,7 +286,8 @@ class TestBatchReplaceIntegration:
         ):
             mock_proc = MagicMock()
             mock_proc.returncode = 0
-            mock_proc.stdout = "test.txt\0"
+            # Return relative path (as ripgrep would with cwd)
+            mock_proc.stdout = "test.txt"
             mock_run.return_value = mock_proc
 
             result = batch_replace(
@@ -294,12 +295,13 @@ class TestBatchReplaceIntegration:
             )
 
         # Verify
-        assert result["success"] is True
+        assert result["success"] is True, f"Failed: {result.get('error')}"
         assert result["mode"] == "Live"
+        assert result["count"] == 1, f"Expected 1 change, got {result['count']}: {result}"
         content = test_file.read_text()
-        assert "baz bar" in content
-        assert "baz baz" in content
-        assert "foo" not in content  # All replaced
+        assert "baz bar" in content, f"Expected 'baz bar' in: {content!r}"
+        assert "baz baz" in content, f"Expected 'baz baz' in: {content!r}"
+        assert "foo" not in content, f"Should have no 'foo' in: {content!r}"
 
     def test_batch_replace_generates_diff(self, tmp_path):
         """Verify diff is generated correctly."""
@@ -322,19 +324,19 @@ class TestBatchReplaceIntegration:
         ):
             mock_proc = MagicMock()
             mock_proc.returncode = 0
-            mock_proc.stdout = "test.txt\0"
+            mock_proc.stdout = "test.txt"
             mock_run.return_value = mock_proc
 
             result = batch_replace(
                 pattern="old_value", replacement="new_value", dry_run=True, paths=MockPaths()
             )
 
-        # Verify diff
-        assert result["success"] is True
-        assert len(result["changes"]) == 1
+        # Verify diff (uses ed diff format: < for old, > for new)
+        assert result["success"] is True, f"Failed: {result.get('error')}"
+        assert result["count"] == 1, f"Expected 1 change, got {result['count']}: {result}"
         diff = result["changes"][0]["diff"]
-        assert "-old_value" in diff
-        assert "+new_value" in diff
+        assert "< old_value" in diff, f"Expected '< old_value' in diff: {diff}"
+        assert "> new_value" in diff, f"Expected '> new_value' in diff: {diff}"
 
 
 if __name__ == "__main__":

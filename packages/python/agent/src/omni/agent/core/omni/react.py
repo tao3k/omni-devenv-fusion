@@ -10,12 +10,11 @@ ReAct (Reasoning + Acting) pattern for tool-augmented LLM:
 This module can be replaced with LangGraph for more complex workflows.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from omni.foundation.services.llm import InferenceClient
 
-from .logging import log_step, log_result, log_completion
-from .schemas import extract_tool_schemas
+from .logging import log_completion, log_result, log_step
 
 
 class ReActWorkflow:
@@ -58,7 +57,7 @@ class ReActWorkflow:
         self,
         task: str,
         system_prompt: str,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
     ) -> str:
         """Execute the ReAct workflow.
 
@@ -73,7 +72,7 @@ class ReActWorkflow:
         tools = await self.get_tool_schemas()
 
         # ReAct loop: continue until no more tool calls
-        response: Dict[str, Any] = {"content": "", "tool_calls": []}
+        response: dict[str, Any] = {"content": "", "tool_calls": []}
 
         while True:
             self.step_count += 1
@@ -145,7 +144,7 @@ class ReActWorkflow:
 
         return f"[Tool: {tool_name}] {result_str}"
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get workflow statistics."""
         return {
             "step_count": self.step_count,

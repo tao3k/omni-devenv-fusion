@@ -1,10 +1,9 @@
 """Tests for ContextPruner."""
 
-import pytest
 from omni.agent.core.context.pruner import (
     ContextPruner,
-    PruningConfig,
     ImportanceLevel,
+    PruningConfig,
 )
 
 

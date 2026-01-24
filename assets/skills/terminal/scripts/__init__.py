@@ -6,8 +6,7 @@ Uses relative imports to avoid circular dependencies.
 """
 
 # Import submodules using relative imports
-from . import engine
-from . import commands
+from . import commands, engine
 
 # Re-export functions for skill loader
 run_task = commands.run_task

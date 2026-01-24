@@ -9,15 +9,15 @@ Modules:
 """
 
 from .librarian import (
-    Librarian,
-    KnowledgeEntry,
-    SearchResult,
     HyperSearch,
+    KnowledgeEntry,
+    Librarian,
+    SearchResult,
 )
 
 __all__ = [
-    "Librarian",
-    "KnowledgeEntry",
-    "SearchResult",
     "HyperSearch",
+    "KnowledgeEntry",
+    "Librarian",
+    "SearchResult",
 ]

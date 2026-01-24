@@ -12,9 +12,10 @@ Future Enhancements:
 - RAG-backed summary generation
 """
 
-from typing import List, Dict, Any, Literal, Tuple
-from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Literal
+
+from pydantic import BaseModel
 
 
 class ImportanceLevel(Enum):
@@ -26,8 +27,7 @@ class ImportanceLevel(Enum):
     LOW = 0  # Error logs, trivial acknowledgments
 
 
-@dataclass
-class PruningConfig:
+class PruningConfig(BaseModel):
     """Configuration for context pruning behavior."""
 
     max_tokens: int = 128000
@@ -52,7 +52,7 @@ class ContextPruner:
         """
         self.config = config or PruningConfig()
 
-    def estimate_tokens(self, messages: List[Dict[str, Any]]) -> int:
+    def estimate_tokens(self, messages: list[dict[str, Any]]) -> int:
         """
         Estimate token count for messages.
 
@@ -71,7 +71,7 @@ class ContextPruner:
         total_chars = sum(len(str(m.get("content", ""))) for m in messages)
         return total_chars // 4
 
-    def classify_importance(self, message: Dict[str, Any]) -> ImportanceLevel:
+    def classify_importance(self, message: dict[str, Any]) -> ImportanceLevel:
         """
         Classify a message by its semantic importance.
 
@@ -104,9 +104,9 @@ class ContextPruner:
 
     def prune(
         self,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         summary_content: str | None = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Prune messages to fit within context window limits.
 
@@ -147,7 +147,7 @@ class ContextPruner:
             older_msgs = chat_msgs
 
         # Step 3: If still over limit, prune older messages by importance
-        result_msgs: List[Dict[str, Any]] = []
+        result_msgs: list[dict[str, Any]] = []
 
         if self.config.preserve_system:
             result_msgs.extend(system_msgs)
@@ -180,9 +180,9 @@ class ContextPruner:
 
     def get_summary_candidates(
         self,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         max_candidates: int = 5,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Identify messages that are good candidates for summarization.
 
@@ -218,9 +218,9 @@ class ContextPruner:
 
     def segment(
         self,
-        messages: List[Dict[str, Any]],
-        system_msgs: List[Dict[str, Any]] | None = None,
-    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+        messages: list[dict[str, Any]],
+        system_msgs: list[dict[str, Any]] | None = None,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
         """
         Segment message history into three distinct parts for compression.
 

@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
-from omni.foundation.config.logging import get_logger
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
+
+from omni.foundation.config.logging import get_logger
 
 logger = get_logger("omni.core.watcher")
 
@@ -32,9 +33,9 @@ class SkillChangeHandler(FileSystemEventHandler):
         self.callback = callback
         self.debounce_seconds = debounce_seconds
         self._last_trigger: dict[str, float] = {}
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._loop: asyncio.AbstractEventLoop | None = None
 
-    def _get_loop(self) -> Optional[asyncio.AbstractEventLoop]:
+    def _get_loop(self) -> asyncio.AbstractEventLoop | None:
         """Get the current event loop safely."""
         if self._loop is None:
             try:

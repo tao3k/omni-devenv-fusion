@@ -17,42 +17,45 @@ Logging: Uses Foundation layer (omni.foundation.config.logging)
 
 import asyncio
 import uuid
-from typing import Optional, Dict, Any
-from dataclasses import dataclass, field
 
 import orjson
 import uvicorn
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.applications import Starlette
-from starlette.responses import JSONResponse, StreamingResponse
-from starlette.routing import Route
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response, StreamingResponse
+from starlette.routing import Route
 
 from omni.foundation.config.logging import get_logger
 
+from ..interfaces import MCPRequestHandler
 from ..types import (
-    JSONRPCRequest,
-    JSONRPCResponse,
-    make_error_response,
     ErrorCode,
+    JSONRPCRequest,
+    make_error_response,
 )
-from ..interfaces import MCPRequestHandler, MCPTransport, MCPSession, MCPRequestContext
 
 logger = get_logger("omni.mcp.sse")
 
 
-@dataclass
-class SSESession:
+def _create_queue() -> asyncio.Queue:
+    """Factory for creating fresh asyncio.Queue instances."""
+    return asyncio.Queue()
+
+
+class SSESession(BaseModel):
     """SSE Session with notification queue."""
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     session_id: str
-    handler: MCPRequestHandler
-    notification_queue: asyncio.Queue = field(default_factory=asyncio.Queue)
+    handler: MCPRequestHandler | None = None
+    notification_queue: asyncio.Queue = Field(default_factory=_create_queue)
     connected: bool = True
 
-    async def send_notification(self, method: str, params: Optional[dict] = None) -> None:
+    async def send_notification(self, method: str, params: dict | None = None) -> None:
         """Queue a notification to be sent to this session."""
         if not self.connected:
             return
@@ -79,10 +82,10 @@ class SSESessionManager:
     """Manages SSE sessions and notification routing."""
 
     def __init__(self):
-        self._sessions: Dict[str, SSESession] = {}
+        self._sessions: dict[str, SSESession] = {}
         self._lock = asyncio.Lock()
 
-    async def create_session(self, handler: MCPRequestHandler) -> SSESession:
+    async def create_session(self, handler: MCPRequestHandler | None = None) -> SSESession:
         """Create a new SSE session."""
         async with self._lock:
             session_id = str(uuid.uuid4())[:8]
@@ -91,7 +94,7 @@ class SSESessionManager:
             logger.info(f"SSE session created: {session_id}")
             return session
 
-    async def get_session(self, session_id: str) -> Optional[SSESession]:
+    async def get_session(self, session_id: str) -> SSESession | None:
         """Get a session by ID."""
         return self._sessions.get(session_id)
 
@@ -103,7 +106,7 @@ class SSESessionManager:
                 del self._sessions[session_id]
                 logger.info(f"SSE session removed: {session_id}")
 
-    async def broadcast_notification(self, method: str, params: Optional[dict] = None) -> None:
+    async def broadcast_notification(self, method: str, params: dict | None = None) -> None:
         """Broadcast a notification to all connected sessions."""
         async with self._lock:
             sessions = list(self._sessions.values())
@@ -146,8 +149,8 @@ class SSEServer:
         self.handler = handler
         self.host = host
         self.port = port
-        self._app: Optional[Starlette] = None
-        self._server: Optional[uvicorn.Server] = None
+        self._app: Starlette | None = None
+        self._server: uvicorn.Server | None = None
         self._session_manager = SSESessionManager()
 
     def _create_app(self) -> Starlette:
@@ -238,7 +241,7 @@ class SSEServer:
                             yield f"data: {data}\n\n".encode()
                             logger.debug(f"Sent notification to session {session_id}")
 
-                        except asyncio.TimeoutError:
+                        except TimeoutError:
                             # Send ping to keep connection alive
                             yield f"data: {orjson.dumps({'type': 'ping'}).decode()}\n\n".encode()
 
@@ -333,7 +336,7 @@ class SSEServer:
 
         logger.info("SSE server stopped")
 
-    async def broadcast_notification(self, method: str, params: Optional[dict] = None) -> None:
+    async def broadcast_notification(self, method: str, params: dict | None = None) -> None:
         """Broadcast a notification to all connected clients."""
         await self._session_manager.broadcast_notification(method, params)
 
@@ -341,7 +344,7 @@ class SSEServer:
         self,
         session_id: str,
         method: str,
-        params: Optional[dict] = None,
+        params: dict | None = None,
     ) -> bool:
         """Send a notification to a specific session."""
         session = await self._session_manager.get_session(session_id)

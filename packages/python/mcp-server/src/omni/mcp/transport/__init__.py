@@ -2,7 +2,7 @@
 Transport implementations for MCP.
 """
 
-from .stdio import StdioTransport
 from .sse import SSEServer
+from .stdio import StdioTransport
 
-__all__ = ["StdioTransport", "SSEServer"]
+__all__ = ["SSEServer", "StdioTransport"]

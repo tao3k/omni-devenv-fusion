@@ -184,11 +184,11 @@ def is_safe_command(
 
 
 __all__ = [
-    "is_safe_path",
-    "is_safe_command",
-    "resolve_project_path",
     "get_relative_path",
+    "is_safe_command",
+    "is_safe_path",
     "normalize_path",
+    "resolve_project_path",
 ]
 
 

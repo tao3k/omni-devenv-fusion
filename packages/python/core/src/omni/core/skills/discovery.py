@@ -28,20 +28,19 @@ Architecture:
 """
 
 import os
-from dataclasses import dataclass
-from typing import Any, List
+from typing import Any
 
 from omni.foundation.bridge.scanner import (
-    PythonSkillScanner,
     DiscoveredSkillRules,
+    PythonSkillScanner,
 )
 from omni.foundation.config.logging import get_logger
+from pydantic import BaseModel
 
 logger = get_logger("omni.core.discovery")
 
 
-@dataclass
-class DiscoveredSkill:
+class DiscoveredSkill(BaseModel):
     """Represents a discovered skill with its metadata.
 
     Created from Foundation's DiscoveredSkillRules via from_index_entry().
@@ -114,7 +113,7 @@ class SkillDiscoveryService:
         """Initialize the discovery service with Index Reader."""
         self._scanner = PythonSkillScanner()
 
-    def discover_all(self, locations: list[str] | None = None) -> List[DiscoveredSkill]:
+    def discover_all(self, locations: list[str] | None = None) -> list[DiscoveredSkill]:
         """Discover all skills from the Index.
 
         Args:
@@ -156,7 +155,7 @@ class SkillDiscoveryService:
                 return skill
         return None
 
-    def get_skills_with_extensions(self) -> List[DiscoveredSkill]:
+    def get_skills_with_extensions(self) -> list[DiscoveredSkill]:
         """Get all skills that have extensions directory."""
         skills = self.discover_all()
         return [s for s in skills if s.has_extensions]
@@ -172,7 +171,7 @@ def is_rust_available() -> bool:
 
 
 __all__ = [
-    "SkillDiscoveryService",
     "DiscoveredSkill",
+    "SkillDiscoveryService",
     "is_rust_available",
 ]

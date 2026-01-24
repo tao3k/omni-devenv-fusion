@@ -3,16 +3,15 @@ git/scripts/diff.py - Git diff operations
 """
 
 import subprocess
-from typing import Optional
 from pathlib import Path
 
 
-def _run(cmd: list[str], cwd: Optional[Path] = None) -> str:
+def _run(cmd: list[str], cwd: Path | None = None) -> str:
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
     return result.stdout.strip()
 
 
-def get_diff(staged: bool = False, filename: Optional[str] = None) -> str:
+def get_diff(staged: bool = False, filename: str | None = None) -> str:
     """Show working directory or staged changes."""
     cmd = ["git", "diff"]
     if staged:

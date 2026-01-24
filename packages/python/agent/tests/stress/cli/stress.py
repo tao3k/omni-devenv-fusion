@@ -12,8 +12,8 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import sys
 import os
+import sys
 
 # Ensure stress package is importable by adding its parent (tests/)
 _STRESS_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -62,8 +62,8 @@ def stress_run(
     """
     _print_banner()
 
-    from stress.core.runner import StressRunner, StressConfig
-    from stress.tests.memory import MemoryEnduranceTest, ContextPruningTest, RustBridgeMemoryTest
+    from stress.core.runner import StressConfig, StressRunner
+    from stress.tests.memory import ContextPruningTest, MemoryEnduranceTest, RustBridgeMemoryTest
 
     config = StressConfig(
         turns=turns,
@@ -83,7 +83,7 @@ def stress_run(
         runner.register(RustBridgeMemoryTest)
 
     if not runner._tests:
-        console.print(f"[red]No tests selected. Available: memory, context, rust, all[/red]")
+        console.print("[red]No tests selected. Available: memory, context, rust, all[/red]")
         raise typer.Exit(1)
 
     try:
@@ -109,8 +109,9 @@ def stress_quick(
     """
     _print_banner()
 
-    from stress.core.metrics import MetricsCollector, MemoryThresholdChecker
     import gc
+
+    from stress.core.metrics import MemoryThresholdChecker, MetricsCollector
 
     console.print(f"[bold]Quick Memory Test ({turns} turns)[/bold]\n")
 
@@ -145,7 +146,7 @@ def stress_quick(
     growth = metrics.memory_growth_mb()
     passed, msg = thresholds.check(growth)
 
-    console.print(f"\n[bold]Results:[/bold]")
+    console.print("\n[bold]Results:[/bold]")
     console.print(f"  Start: {collector._snapshots[0].rss_mb:.1f} MB")
     console.print(f"  End: {collector._snapshots[-1].rss_mb:.1f} MB")
     console.print(f"  Growth: +{growth:.1f} MB")

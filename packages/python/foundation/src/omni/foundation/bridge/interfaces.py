@@ -137,8 +137,8 @@ class SkillScannerProvider(Protocol):
 
 
 __all__ = [
-    "VectorStoreProvider",
     "CodeAnalysisProvider",
     "FileScannerProvider",
     "SkillScannerProvider",
+    "VectorStoreProvider",
 ]

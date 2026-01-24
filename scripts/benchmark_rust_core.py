@@ -19,14 +19,12 @@ Benchmark Categories:
 
 from __future__ import annotations
 
-import asyncio
 import json
-import os
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
 
 # Setup import paths
 _PRJ_ROOT = Path(__file__).parent.parent
@@ -35,7 +33,6 @@ sys.path.insert(0, str(_PRJ_ROOT / "packages" / "python" / "common" / "src"))
 
 from rich.console import Console
 from rich.table import Table
-from rich.text import Text
 
 console = Console()
 
@@ -257,11 +254,11 @@ def benchmark_vector_search_rust(n_vectors: int = 1000, dim: int = 768) -> float
     try:
         # Use omni_vector_rs.create_vector_store
         # Merged into omni_core_rs
-        import omni_core_rs
-
         # Use temp directory for test with unique name
         import tempfile
         import uuid
+
+        import omni_core_rs
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create store with specified dimension

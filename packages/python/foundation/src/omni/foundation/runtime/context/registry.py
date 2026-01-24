@@ -333,6 +333,6 @@ ContextRegistry.register(NixContext())
 
 __all__ = [
     "ContextRegistry",
-    "PythonContext",
     "NixContext",
+    "PythonContext",
 ]

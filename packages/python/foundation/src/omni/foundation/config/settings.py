@@ -16,9 +16,10 @@ import sys
 import threading
 from typing import Any
 
+from omni.foundation.runtime.gitops import get_project_root
+
 # Layer 0: Physical Directory Management
 from .dirs import PRJ_CONFIG, PRJ_DIRS
-from omni.foundation.runtime.gitops import get_project_root
 
 # YAML support
 try:
@@ -260,11 +261,11 @@ def set_configuration_directory(path: str) -> None:
 
 __all__ = [
     "Settings",
+    "get_conf_directory",
+    "get_config_path",
     "get_setting",
     "get_settings",
-    "get_config_path",
     "has_setting",
     "list_setting_sections",
-    "get_conf_directory",
     "set_configuration_directory",
 ]

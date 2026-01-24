@@ -55,14 +55,21 @@ src = ["packages/python/agent/src", "packages/python/core/src", "packages/python
 
 [tool.ruff.lint]
 select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "B",   # flake8-bugbear
-    "UP",  # pyupgrade
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "UP",     # pyupgrade (Python 3.13+ modernization)
+    "ASYNC",  # flake8-async (TaskGroup over gather)
+    "SIM",    # flake8-simplify
+    "TCH",    # flake8-type-checking
+    "RUF",    # Ruff-specific rules
 ]
 ignore = ["E501"]
+
+[tool.ruff.lint.pyupgrade]
+keep-runtime-typing = true
 
 [tool.ruff.lint.isort]
 known-first-party = ["omni.agent", "omni.core", "omni.foundation"]

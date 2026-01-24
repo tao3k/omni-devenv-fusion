@@ -17,11 +17,10 @@ Cross-Language Sync:
 Note: Tests run in subprocess to avoid OnceLock caching issues.
 """
 
-import os
 import subprocess
 import sys
-import tempfile
-from pathlib import Path
+
+from omni.foundation.runtime.gitops import get_project_root
 
 
 def run_rust_test(script: str) -> tuple[int, str, str]:
@@ -30,7 +29,7 @@ def run_rust_test(script: str) -> tuple[int, str, str]:
         [sys.executable, "-c", script],
         capture_output=True,
         text=True,
-        cwd="/Users/guangtao/ghq/github.com/tao3k/omni-dev-fusion",
+        cwd=str(get_project_root()),
     )
     return result.returncode, result.stdout, result.stderr
 

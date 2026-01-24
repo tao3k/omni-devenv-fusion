@@ -26,9 +26,9 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
-from langgraph.types import Command, StreamMode, StateSnapshot
+from langgraph.types import Command, StateSnapshot, StreamMode
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ class CompiledGraph:
         self,
         graph: Any,
         thread_id: str | None = None,
-        stream_modes: List[StreamMode] | None = None,
+        stream_modes: list[StreamMode] | None = None,
     ):
         """
         Initialize the CompiledGraph wrapper.
@@ -71,7 +71,7 @@ class CompiledGraph:
     # Configuration
     # =========================================================================
 
-    def get_config(self, thread_id: str | None = None) -> Dict[str, Any]:
+    def get_config(self, thread_id: str | None = None) -> dict[str, Any]:
         """
         Get the configuration for a thread.
 
@@ -123,7 +123,7 @@ class CompiledGraph:
 
     def update_state(
         self,
-        values: Dict[str, Any],
+        values: dict[str, Any],
         thread_id: str | None = None,
         as_node: str | None = None,
     ) -> None:
@@ -162,7 +162,7 @@ class CompiledGraph:
 
     def aupdate_state(
         self,
-        values: Dict[str, Any],
+        values: dict[str, Any],
         thread_id: str | None = None,
         as_node: str | None = None,
     ) -> None:
@@ -239,9 +239,9 @@ class CompiledGraph:
 
     async def invoke(
         self,
-        input_state: Dict[str, Any],
+        input_state: dict[str, Any],
         thread_id: str | None = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Invoke the graph synchronously.
 
@@ -257,9 +257,9 @@ class CompiledGraph:
 
     async def ainvoke(
         self,
-        input_state: Dict[str, Any],
+        input_state: dict[str, Any],
         thread_id: str | None = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Invoke the graph asynchronously.
 
@@ -280,7 +280,7 @@ class CompiledGraph:
 
     async def stream(
         self,
-        input_state: Dict[str, Any] | Command,
+        input_state: dict[str, Any] | Command,
         thread_id: str | None = None,
         stream_mode: StreamMode | None = None,
     ):
@@ -306,7 +306,7 @@ class CompiledGraph:
 
     async def astream(
         self,
-        input_state: Dict[str, Any] | Command,
+        input_state: dict[str, Any] | Command,
         thread_id: str | None = None,
     ):
         """
@@ -332,7 +332,7 @@ class CompiledGraph:
         self,
         value: Any,
         thread_id: str | None = None,
-        update: Dict[str, Any] | None = None,
+        update: dict[str, Any] | None = None,
     ) -> Command:
         """
         Create a Command to resume from an interrupt.
@@ -357,7 +357,7 @@ class CompiledGraph:
         self,
         node: str,
         thread_id: str | None = None,
-        update: Dict[str, Any] | None = None,
+        update: dict[str, Any] | None = None,
     ) -> Command:
         """
         Create a Command to go to a specific node.

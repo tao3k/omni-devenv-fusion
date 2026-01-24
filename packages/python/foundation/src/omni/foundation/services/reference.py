@@ -309,8 +309,8 @@ def list_reference_sections() -> list[str]:
 
 __all__ = [
     "ReferenceLibrary",
-    "get_reference_path",
     "get_reference_cache",
+    "get_reference_path",
     "has_reference",
     "list_reference_sections",
 ]

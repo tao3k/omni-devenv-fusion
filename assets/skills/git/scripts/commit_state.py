@@ -8,7 +8,7 @@ with Human-in-the-Loop (HITL) approval.
 Architecture: Tool provides data, LLM provides intelligence.
 """
 
-from typing import TypedDict, List, Optional
+from typing import TypedDict
 
 
 class CommitState(TypedDict):
@@ -29,9 +29,9 @@ class CommitState(TypedDict):
     # ==========================================================================
     # Processing Fields (populated by prepare node)
     # ==========================================================================
-    staged_files: List[str]
+    staged_files: list[str]
     diff_content: str  # Raw diff for LLM analysis
-    security_issues: List[str]
+    security_issues: list[str]
 
     # ==========================================================================
     # Workflow State (managed by graph)
@@ -43,10 +43,10 @@ class CommitState(TypedDict):
     # Output Fields (populated by execute node)
     # ==========================================================================
     final_message: str  # LLM-generated commit message
-    commit_hash: Optional[str]
-    error: Optional[str]
-    retry_note: Optional[str]  # Note about retry attempts
-    scope_warning: Optional[str]  # Warning about invalid scope
+    commit_hash: str | None
+    error: str | None
+    retry_note: str | None  # Note about retry attempts
+    scope_warning: str | None  # Warning about invalid scope
 
 
 def create_initial_state(

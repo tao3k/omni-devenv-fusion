@@ -46,6 +46,7 @@ class TestGitCommands:
     def test_commit_returns_string(self, tmp_path, monkeypatch):
         """Test that commit returns a string result."""
         import subprocess
+
         from git.scripts import commit
 
         monkeypatch.chdir(tmp_path)
@@ -57,6 +58,7 @@ class TestGitCommands:
     def test_stage_and_scan_returns_dict(self, tmp_path, monkeypatch):
         """Test that stage_and_scan returns a dict."""
         import subprocess
+
         from git.scripts import prepare
 
         monkeypatch.chdir(tmp_path)

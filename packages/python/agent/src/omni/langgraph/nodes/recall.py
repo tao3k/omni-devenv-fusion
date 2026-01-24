@@ -16,7 +16,8 @@ Usage:
 from __future__ import annotations
 
 import json
-from typing import Any, TypedDict, Literal
+from typing import Any, Literal, TypedDict
+
 from structlog import get_logger
 
 from omni.langgraph.state import GraphState
@@ -283,9 +284,9 @@ def _format_recall_results(
 
 if __name__ == "__main__":
     import asyncio
-    from unittest.mock import Mock
-    from omni.langgraph.checkpoint.lance import LanceCheckpointer
     import tempfile
+
+    from omni.langgraph.checkpoint.lance import LanceCheckpointer
 
     async def test_recall_node():
         """Test the recall node with a mock checkpointer."""

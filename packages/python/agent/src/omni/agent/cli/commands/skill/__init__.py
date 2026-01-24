@@ -37,4 +37,4 @@ def register_skill_command(app_instance: typer.Typer) -> None:
     app_instance.add_typer(skill_app, name="skill")
 
 
-__all__ = ["skill_app", "register_skill_command"]
+__all__ = ["register_skill_command", "skill_app"]

@@ -9,12 +9,12 @@ Logging: Uses Foundation layer (omni.foundation.config.logging)
 """
 
 import asyncio
-from typing import Any, Optional
+from typing import Any
 
 from omni.foundation.config.logging import get_logger
 
 from .interfaces import MCPRequestHandler, MCPTransport
-from .types import JSONRPCRequest, JSONRPCResponse, make_error_response, ErrorCode
+from .types import ErrorCode, JSONRPCRequest, JSONRPCResponse, make_error_response
 
 logger = get_logger("omni.mcp.server")
 
@@ -75,14 +75,14 @@ class MCPServer:
                 message=str(e),
             )
 
-    async def _route_notification(self, method: str, params: Optional[Any]) -> None:
+    async def _route_notification(self, method: str, params: Any | None) -> None:
         """Route notification to handler."""
         try:
             await self.handler.handle_notification(method, params)
         except Exception as e:
             logger.error(f"Notification handling error: {e}")
 
-    async def _route_message(self, data: dict) -> tuple[Optional[JSONRPCResponse], bool]:
+    async def _route_message(self, data: dict) -> tuple[JSONRPCResponse | None, bool]:
         """
         Route incoming message to appropriate handler.
 

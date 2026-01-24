@@ -9,14 +9,15 @@ Commands:
 - get_best_practice: Retrieve documentation AND code examples for a topic.
 """
 
-import subprocess
-import shutil
 import json
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
+
 from omni.foundation.api.decorators import skill_command
-from omni.foundation.config.paths import ConfigPaths
 from omni.foundation.config.logging import get_logger
+from omni.foundation.config.paths import ConfigPaths
 
 logger = get_logger("skill.knowledge.best_practices")
 

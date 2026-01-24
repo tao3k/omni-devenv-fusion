@@ -10,9 +10,10 @@ Usage:
     uv run pytest packages/python/agent/tests/stress_tests/test_performance_omni.py -v
 """
 
-import pytest
 import time
 from pathlib import Path
+
+import pytest
 
 
 class TestOmniPerformance:
@@ -31,7 +32,7 @@ class TestOmniPerformance:
             latencies.append(elapsed)
 
         avg_latency = sum(latencies) / len(latencies)
-        print(f"\n[Performance] Git Status Dispatch Latency:")
+        print("\n[Performance] Git Status Dispatch Latency:")
         print(f"   Average: {avg_latency:.1f}ms")
         print(f"   Min: {min(latencies):.1f}ms")
         print(f"   Max: {max(latencies):.1f}ms")
@@ -55,7 +56,7 @@ class TestOmniPerformance:
             latencies.append(elapsed)
 
         avg_latency = sum(latencies) / len(latencies)
-        print(f"\n[Performance] Skill Load Time:")
+        print("\n[Performance] Skill Load Time:")
         print(f"   Average: {avg_latency:.1f}ms")
         print(f"   Min: {min(latencies):.1f}ms")
         print(f"   Max: {max(latencies):.1f}ms")

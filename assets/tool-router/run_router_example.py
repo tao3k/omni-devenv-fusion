@@ -4,10 +4,8 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 from anthropic import Anthropic
-
 
 DEFAULT_MODEL = "claude-3-5-sonnet-20240620"
 LOGGER = logging.getLogger("tool_router")
@@ -19,8 +17,8 @@ class ToolCard:
     body: str
 
 
-def load_examples(path: Path) -> List[Dict]:
-    rows: List[Dict] = []
+def load_examples(path: Path) -> list[dict]:
+    rows: list[dict] = []
     with path.open() as f:
         for line in f:
             if not line.strip():
@@ -29,7 +27,7 @@ def load_examples(path: Path) -> List[Dict]:
     return rows
 
 
-def format_tool_card(example: Dict) -> ToolCard:
+def format_tool_card(example: dict) -> ToolCard:
     lines = [
         f"Tool ID: {example['id']}",
         f"Intent: {example.get('intent', '').strip()}",
@@ -49,7 +47,7 @@ def format_tool_card(example: Dict) -> ToolCard:
     return ToolCard(tool_id=example["id"], body="\n".join(lines))
 
 
-def build_messages(example: Dict, cards: List[ToolCard]) -> List[Dict]:
+def build_messages(example: dict, cards: list[ToolCard]) -> list[dict]:
     """
     Build Claude-style router prompt following the cookbook pattern:
     - System: explain routing goal and output schema.
@@ -71,8 +69,8 @@ def build_messages(example: Dict, cards: List[ToolCard]) -> List[Dict]:
 
 
 def route_example(
-    client: Anthropic, model: str, example: Dict, cards: List[ToolCard]
-) -> Tuple[str, float, str]:
+    client: Anthropic, model: str, example: dict, cards: list[ToolCard]
+) -> tuple[str, float, str]:
     messages = build_messages(example, cards)
     LOGGER.debug("Routing example %s", example["id"])
     response = client.messages.create(model=model, max_tokens=256, messages=messages)
@@ -99,7 +97,7 @@ def route_example(
     return tool_id, confidence, reasoning
 
 
-def evaluate(dataset: List[Dict], model: str, base_url: Optional[str]) -> None:
+def evaluate(dataset: list[dict], model: str, base_url: str | None) -> None:
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise RuntimeError("ANTHROPIC_API_KEY is required to run routing.")

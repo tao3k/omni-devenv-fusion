@@ -66,8 +66,8 @@ setup_import_paths()
 
 
 __all__ = [
-    "project_root",
-    "common_src",
     "agent_src",
+    "common_src",
+    "project_root",
     "setup_import_paths",
 ]

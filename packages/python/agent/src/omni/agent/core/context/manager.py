@@ -5,25 +5,24 @@ Orchestrates memory retention, pruning, and state updates.
 Provides a clean API for the omni_loop to manage conversation history.
 """
 
-from typing import List, Dict, Any, Optional, Literal, Tuple
-from dataclasses import dataclass, field
-from datetime import datetime
-import json
 import uuid
+from datetime import datetime
+from typing import Any, Literal
 
-from .pruner import ContextPruner, PruningConfig, ImportanceLevel
+from pydantic import BaseModel
+
+from .pruner import ContextPruner
 
 
-@dataclass
-class Turn:
+class Turn(BaseModel):
     """Represents a single conversation turn (user + assistant)."""
 
-    user_message: Dict[str, Any]
-    assistant_message: Dict[str, Any]
-    timestamp: datetime = field(default_factory=datetime.now)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    user_message: dict[str, Any]
+    assistant_message: dict[str, Any]
+    timestamp: datetime = datetime.now()
+    metadata: dict[str, Any] = {}
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "user": self.user_message,
             "assistant": self.assistant_message,
@@ -45,7 +44,7 @@ class ContextManager:
     def __init__(
         self,
         pruner: ContextPruner | None = None,
-        system_prompts: List[Dict[str, Any]] | None = None,
+        system_prompts: list[dict[str, Any]] | None = None,
     ):
         """
         Initialize the context manager.
@@ -55,8 +54,8 @@ class ContextManager:
             system_prompts: Initial system messages to preload.
         """
         self.pruner = pruner or ContextPruner()
-        self.system_prompts: List[Dict[str, Any]] = system_prompts or []
-        self.turns: List[Turn] = []
+        self.system_prompts: list[dict[str, Any]] = system_prompts or []
+        self.turns: list[Turn] = []
         self._turn_count = 0
         self.summary: str | None = None  # Persistent summary from compression
 
@@ -70,7 +69,7 @@ class ContextManager:
         msg = {"role": "system", "content": content, **kwargs}
         self.system_prompts.append(msg)
 
-    def get_system_prompt(self) -> Optional[str]:
+    def get_system_prompt(self) -> str | None:
         """
         Get the primary system prompt content.
 
@@ -108,7 +107,7 @@ class ContextManager:
     def get_active_context(
         self,
         strategy: Literal["pruned", "full", "recent"] = "pruned",
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get the context ready for LLM inference.
 
@@ -124,7 +123,7 @@ class ContextManager:
         """
         # Build message list with user/assistant roles only
         # System prompts are managed separately and passed via system_prompt param
-        messages: List[Dict[str, Any]] = []
+        messages: list[dict[str, Any]] = []
 
         # Add chat messages as flat list
         for turn in self.turns:
@@ -146,7 +145,7 @@ class ContextManager:
         # Default: pruned strategy
         return self.pruner.prune(messages)
 
-    def get_summary_candidates(self, max_candidates: int = 5) -> List[Dict[str, Any]]:
+    def get_summary_candidates(self, max_candidates: int = 5) -> list[dict[str, Any]]:
         """Get messages that are good candidates for summarization."""
         messages = self.get_active_context(strategy="full")
         return self.pruner.get_summary_candidates(messages, max_candidates)
@@ -183,7 +182,7 @@ class ContextManager:
 
         return old_count - len(self.turns)
 
-    def snapshot(self) -> Dict[str, Any]:
+    def snapshot(self) -> dict[str, Any]:
         """
         Create a serializable snapshot of the current context.
 
@@ -201,7 +200,7 @@ class ContextManager:
             },
         }
 
-    def load_snapshot(self, data: Dict[str, Any]) -> None:
+    def load_snapshot(self, data: dict[str, Any]) -> None:
         """
         Load context from a snapshot.
 
@@ -230,7 +229,7 @@ class ContextManager:
         self.system_prompts = []
         self.summary = None
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Get statistics about the current context."""
         messages = self.get_active_context(strategy="full")
         return {
@@ -245,7 +244,7 @@ class ContextManager:
             "has_summary": self.summary is not None,
         }
 
-    def segment(self) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+    def segment(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
         """
         Segment current context into three parts for compression.
 
@@ -314,7 +313,7 @@ class ContextManager:
 
         return True
 
-    def _messages_to_trajectory(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _messages_to_trajectory(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
         Convert message list to NoteTaker trajectory format.
 
@@ -387,7 +386,7 @@ class ContextManager:
 
         return " ".join(summary_lines)[:2000]  # Limit summary size
 
-    def _simple_summarize(self, messages: List[Dict[str, Any]]) -> str:
+    def _simple_summarize(self, messages: list[dict[str, Any]]) -> str:
         """
         Create a simple extractive summary from messages.
 
@@ -420,8 +419,8 @@ class ContextManager:
 
     def _apply_compression(
         self,
-        system_msgs: List[Dict[str, Any]],
-        recent_msgs: List[Dict[str, Any]],
+        system_msgs: list[dict[str, Any]],
+        recent_msgs: list[dict[str, Any]],
     ) -> None:
         """
         Apply compression by replacing old messages with summary.
@@ -445,7 +444,7 @@ class ContextManager:
             )
 
         # Rebuild turns from recent messages
-        current_turn: Optional[Turn] = None
+        current_turn: Turn | None = None
 
         for msg in recent_msgs:
             role = msg.get("role", "")

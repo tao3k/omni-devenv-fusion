@@ -1,7 +1,8 @@
 """Tests for SecurityValidator (Python wrapper for Rust PermissionGatekeeper)."""
 
 import pytest
-from omni.core.security import SecurityValidator, SecurityError
+
+from omni.core.security import SecurityError, SecurityValidator
 
 
 class TestSecurityValidator:

@@ -17,6 +17,7 @@ import signal as _signal
 import sys
 
 import structlog
+
 from omni.mcp.transport.stdio import stdio_server
 
 from .lifespan import server_lifespan

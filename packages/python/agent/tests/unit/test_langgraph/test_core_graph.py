@@ -7,21 +7,20 @@ Tests for:
 - Graph execution
 """
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from typing import Dict, Any
 
 from omni.langgraph.graph import (
-    OmniGraph,
-    get_graph,
-    reset_graph,
-    plan_node,
-    execute_node,
-    reflect_node,
-    should_continue,
-    audit_decision,
     GraphInput,
     GraphOutput,
+    OmniGraph,
+    audit_decision,
+    execute_node,
+    get_graph,
+    plan_node,
+    reset_graph,
+    should_continue,
 )
 from omni.langgraph.state import create_initial_state
 
@@ -212,7 +211,7 @@ class TestEdgeLogic:
         }
 
         result = audit_decision(state)
-        assert result == "execute"
+        assert result == "recall"
 
     def test_audit_decision_max_retries(self):
         """Should end when max retries exceeded."""

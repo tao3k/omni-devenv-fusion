@@ -13,9 +13,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from omni.foundation.config.logging import get_logger
-
 from omni.core.kernel import get_kernel
+from omni.foundation.config.logging import get_logger
 from omni.mcp.interfaces import MCPRequestHandler
 from omni.mcp.types import (
     ErrorCode,
@@ -131,7 +130,7 @@ class AgentMCPHandler(MCPRequestHandler):
         tools = []
 
         # Import dynamic loading config
-        from omni.core.config.loader import load_skill_limits, is_filtered
+        from omni.core.config.loader import is_filtered, load_skill_limits
 
         limits = load_skill_limits()
         filtered_commands = set(context.get_filtered_commands())

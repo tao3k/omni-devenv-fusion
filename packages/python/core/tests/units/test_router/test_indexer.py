@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from omni.core.router.indexer import SkillIndexer, IndexedSkill
+
+from omni.core.router.indexer import IndexedSkill, SkillIndexer
 
 
 def _is_indexing_available() -> bool:

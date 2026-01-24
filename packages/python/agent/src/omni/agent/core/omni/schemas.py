@@ -8,14 +8,13 @@ CRITICAL: This prevents the bug where LLM guesses 'path' instead of 'file_path'.
 """
 
 import inspect
-from typing import Any, Dict, List, Optional
-
+from typing import Any
 
 # Parameters that are injected by the framework (skip these)
 SKIPPED_PARAMS = frozenset({"cwd", "skills_dir", "paths"})
 
 
-def extract_tool_schemas(commands: List[str], get_command) -> List[Dict[str, Any]]:
+def extract_tool_schemas(commands: list[str], get_command) -> list[dict[str, Any]]:
     """Extract tool schemas from skill command handlers.
 
     Args:
@@ -47,7 +46,7 @@ def extract_tool_schemas(commands: List[str], get_command) -> List[Dict[str, Any
 
 def _extract_schema_from_handler(
     handler, skill_name: str, command_name: str
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Extract a single tool schema from a handler function.
 
     Uses _skill_config first (Foundation V2), then falls back to inspect.signature.

@@ -3,8 +3,6 @@ documentation/scripts/docs.py - Documentation Skill Commands
 """
 
 import datetime
-from pathlib import Path
-from typing import Optional
 
 import structlog
 
@@ -24,12 +22,13 @@ knowledge_dir = root / "agent" / "knowledge"
     description="""
     Create a new standardized knowledge entry in agent/knowledge/harvested/.
 
-    **Parameters**:
-    - `title` (required): Human readable title (e.g., "Fixing Deadlocks")
-    - `category` (required): One of [architecture, debugging, pattern, workflow]
-    - `content` (required): The Markdown content (header is auto-generated)
+    Args:
+        - title: str - Human readable title (e.g., Fixing Deadlocks) (required)
+        - category: str - One of [architecture, debugging, pattern, workflow] (required)
+        - content: str - The Markdown content (header is auto-generated) (required)
 
-    **Returns**: Success message with filename.
+    Returns:
+        Success message with filename.
     """,
 )
 async def create_knowledge_entry(title: str, category: str, content: str) -> str:
@@ -69,9 +68,13 @@ async def create_knowledge_entry(title: str, category: str, content: str) -> str
     description="""
     Scan all markdown files in agent/knowledge and update the main README.md index.
 
-    **Parameters**: None
+    Call this after adding or deleting files.
 
-    **Returns**: Success message with entry count.
+    Args:
+        - None
+
+    Returns:
+        Success message with entry count.
     """,
 )
 async def rebuild_knowledge_index() -> str:
@@ -110,14 +113,15 @@ async def rebuild_knowledge_index() -> str:
 
 @skill_command(
     name="search_knowledge_base",
-    category="read",
+    category="search",
     description="""
     Simple text search across the knowledge base markdown files.
 
-    **Parameters**:
-    - `query` (required): Search term to find in knowledge base
+    Args:
+        - query: str - Search term to find in knowledge base (required)
 
-    **Returns**: Search results with matches or "No matches found" message.
+    Returns:
+        Search results with matches or "No matches found" message.
     """,
 )
 async def search_knowledge_base(query: str) -> str:

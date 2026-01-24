@@ -57,6 +57,7 @@ def skill_list():
 def skill_info(name: str = typer.Argument(..., help="Skill name")):
     """Show information about a skill."""
     import logging
+
     import yaml
 
     from omni.foundation.bridge.scanner import PythonSkillScanner

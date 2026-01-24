@@ -14,8 +14,7 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Callable, Any
-
+from collections.abc import Callable
 
 # Sniffer function signature: (cwd: str) -> float (0.0 ~ 1.0)
 SnifferFunc = Callable[[str], float]
@@ -65,7 +64,7 @@ class SnifferResult:
     def __repr__(self) -> str:
         return f"SnifferResult({self.skill_name}, score={self.score:.2f})"
 
-    def __lt__(self, other: "SnifferResult") -> bool:
+    def __lt__(self, other: SnifferResult) -> bool:
         return self.score < other.score
 
     def __eq__(self, other: object) -> bool:
@@ -74,4 +73,4 @@ class SnifferResult:
         return self.skill_name == other.skill_name and self.score == other.score
 
 
-__all__ = ["sniffer", "SnifferFunc", "SnifferResult"]
+__all__ = ["SnifferFunc", "SnifferResult", "sniffer"]

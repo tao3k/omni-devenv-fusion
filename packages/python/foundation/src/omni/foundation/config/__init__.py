@@ -15,21 +15,21 @@ Usage:
 """
 
 from .dirs import (
-    PRJ_DIRS,
-    PRJ_CONFIG,
-    PRJ_RUNTIME,
-    PRJ_DATA,
     PRJ_CACHE,
+    PRJ_CONFIG,
+    PRJ_DATA,
+    PRJ_DIRS,
+    PRJ_RUNTIME,
     get_config_dir,
+)
+from .paths import (
+    ConfigPaths,
+    get_config_paths,
 )
 from .settings import (
     Settings,
     get_setting,
     get_settings,
-)
-from .paths import (
-    ConfigPaths,
-    get_config_paths,
 )
 
 

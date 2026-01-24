@@ -5,7 +5,6 @@ Tests the framework for extracting input schemas from function signatures
 using _generate_tool_schema (Pydantic V2 create_model).
 """
 
-import pytest
 
 
 class TestInputSchemaExtractionFramework:
@@ -149,15 +148,15 @@ class TestSkillCommandDecorator:
 
     def test_skill_command_with_complex_types(self):
         """@skill_command should handle complex types in schema."""
+
         from omni.foundation.api.decorators import skill_command
-        from typing import Optional
 
         @skill_command(category="test")
         def test_func(
             name: str,
             tags: list[str],
             count: int,
-            optional_val: Optional[str] = None,
+            optional_val: str | None = None,
         ):
             """Test function with complex types."""
             pass

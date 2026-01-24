@@ -6,8 +6,9 @@ Tests verify LLM API message format compliance:
 - MiniMax API uses auth_token instead of api_key header
 """
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 
 from omni.foundation.services.llm.client import InferenceClient
 
@@ -303,8 +304,8 @@ class TestInferenceClientToolSchema:
             # Get only filesystem tools
             filesystem_schemas = client.get_tool_schema(skill_names=["filesystem"])
 
-            # Should have filesystem-related tools
+            # Should have filesystem-related tools (full names like "filesystem.read_file")
             tool_names = [s["name"] for s in filesystem_schemas]
-            assert "read_file" in tool_names
-            assert "write_file" in tool_names
-            assert "list_directory" in tool_names
+            assert "filesystem.read_file" in tool_names
+            assert "filesystem.write_file" in tool_names
+            assert "filesystem.list_directory" in tool_names

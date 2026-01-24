@@ -10,6 +10,9 @@ Supports multi-file structure:
         venv_check.py     # @sniffer functions
         pyproject.py      # @sniffer functions
         runtime.py        # @sniffer functions
+
+Python 3.12+ Features:
+- pathlib.Path.walk() for recursive directory traversal (Section 7.1)
 """
 
 from __future__ import annotations
@@ -18,9 +21,11 @@ import importlib.util
 import inspect
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Iterator
 
 from omni.foundation.config.logging import get_logger
+
+from .decorators import SnifferFunc
 
 logger = get_logger("omni.core.ext.sniffer")
 
@@ -43,15 +48,15 @@ class SnifferLoader:
             sniffer_path: Path to extensions/sniffer/ directory
         """
         self.path = Path(sniffer_path)
-        self._sniffers: List[SnifferFunc] = []
+        self._sniffers: list[SnifferFunc] = []
         self._loaded: bool = False
 
     @property
-    def sniffers(self) -> List[SnifferFunc]:
+    def sniffers(self) -> list[SnifferFunc]:
         """Get loaded sniffer functions."""
         return self._sniffers
 
-    def load_all(self) -> List[SnifferFunc]:
+    def load_all(self) -> list[SnifferFunc]:
         """Load all sniffer functions from the directory.
 
         Returns:
@@ -77,11 +82,9 @@ class SnifferLoader:
             sys.path.insert(0, path_str)
 
         try:
-            # Scan all .py files in the directory
-            for py_file in sorted(self.path.glob("*.py")):
-                if py_file.name.startswith("_"):
-                    # Skip __init__.py and other private modules
-                    continue
+            # Method 1: Use Path.walk() (Python 3.12+)
+            py_files = list(self.find_py_files(self.path))
+            for py_file in sorted(py_files):
                 self._load_module(py_file)
 
             # Sort by priority (highest first)
@@ -96,6 +99,23 @@ class SnifferLoader:
                 sys.path.remove(path_str)
 
         return self._sniffers
+
+    @staticmethod
+    def find_py_files(root_path: Path) -> Iterator[Path]:
+        """Find all Python files recursively using Path.walk() (Python 3.12+).
+
+        Args:
+            root_path: Root directory to search
+
+        Yields:
+            Path objects for each .py file found
+        """
+        for root, dirs, files in root_path.walk():
+            # Prune unwanted directories in-place
+            dirs[:] = [d for d in dirs if d not in ("__pycache__", ".git", "node_modules", ".venv", "venv")]
+            for file in files:
+                if file.endswith(".py") and not file.startswith("_"):
+                    yield root / file
 
     def _load_module(self, path: Path) -> None:
         """Load a single Python module and extract sniffer functions.
@@ -136,7 +156,7 @@ class SnifferLoader:
         except Exception as e:
             logger.error(f"   ❌ Failed to load sniffer module {module_name}: {e}")
 
-    def get_by_name(self, name: str) -> Optional[SnifferFunc]:
+    def get_by_name(self, name: str) -> SnifferFunc | None:
         """Get a sniffer function by name.
 
         Args:
@@ -159,7 +179,7 @@ class SnifferLoader:
         return iter(self._sniffers)
 
 
-def load_sniffers_from_path(sniffer_path: str | Path) -> List[SnifferFunc]:
+def load_sniffers_from_path(sniffer_path: str | Path) -> list[SnifferFunc]:
     """Convenience function to load sniffers from a path.
 
     Args:

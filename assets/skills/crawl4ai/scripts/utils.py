@@ -18,7 +18,7 @@ Usage:
 """
 
 import functools
-from typing import Any, Callable
+from collections.abc import Callable
 
 
 def skill_command(**kwargs):

@@ -7,7 +7,6 @@ Allows Agent to dynamically discover tools based on intent.
 """
 
 import json
-from typing import Any
 
 from omni.foundation.api.decorators import skill_command
 
@@ -151,4 +150,4 @@ def format_search_result(json_output: str) -> str:
         return json_output
 
 
-__all__ = ["search_tools", "format_search_result"]
+__all__ = ["format_search_result", "search_tools"]

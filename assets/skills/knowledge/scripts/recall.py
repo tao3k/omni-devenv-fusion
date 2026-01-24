@@ -18,8 +18,8 @@ from typing import Any
 
 import structlog
 
-from omni.foundation.api.decorators import skill_command
 from omni.foundation import get_vector_store
+from omni.foundation.api.decorators import skill_command
 
 logger = structlog.get_logger(__name__)
 
@@ -63,19 +63,20 @@ class RecallResult:
 
 @skill_command(
     name="recall",
-    category="read",
+    category="search",
     description="""
     Semantic + Keyword Hybrid Search over Project Knowledge (The Neural Matrix).
 
     PRIMARY interface for retrieving knowledge from the vector store.
 
-    **Parameters**:
-    - `query` (required): Natural language query (e.g., "ActionGuard infinite loop prevention")
-    - `limit` (optional, default: 5): Maximum results to return (max: 10)
-    - `keywords` (optional): List of keywords to boost precision
-    - `collection` (optional, default: `knowledge`): Collection to search
+    Args:
+        - query: str - Natural language query (e.g., ActionGuard infinite loop prevention) (required)
+        - limit: int = 5 - Maximum results to return (max: 10)
+        - keywords: Optional[list[str]] - List of keywords to boost precision
+        - collection: str = knowledge - Collection to search
 
-    **Returns**: JSON with recall results including content, source, score, and metadata.
+    Returns:
+        JSON with recall results including content, source, score, and metadata.
     """,
 )
 async def recall(
@@ -213,13 +214,14 @@ async def recall(
     description="""
     Add content to the knowledge base for semantic retrieval.
 
-    **Parameters**:
-    - `content` (required): Text content to embed and store
-    - `source` (required): Source path/identifier (e.g., "docs/guide.md")
-    - `metadata` (optional): Dictionary of metadata (tags, title, etc.)
-    - `collection` (optional, default: `knowledge`): Collection name
+    Args:
+        - content: str - Text content to embed and store (required)
+        - source: str - Source path/identifier (e.g., docs/guide.md) (required)
+        - metadata: Optional[Dict[str, Any]] - Dictionary of metadata (tags, title, etc.)
+        - collection: str = knowledge - Collection name
 
-    **Returns**: JSON with ingestion status, document_id, source, and content_length.
+    Returns:
+        JSON with ingestion status, document_id, source, and content_length.
     """,
 )
 async def ingest(
@@ -289,14 +291,15 @@ async def ingest(
 
 @skill_command(
     name="stats",
-    category="read",
+    category="view",
     description="""
     Get knowledge base statistics including document count and vector dimension.
 
-    **Parameters**:
-    - `collection` (optional, default: `knowledge`): Collection name
+    Args:
+        - collection: str = knowledge - Collection name
 
-    **Returns**: JSON with status, collection, document_count, and vector_dimension.
+    Returns:
+        JSON with status, collection, document_count, and vector_dimension.
     """,
 )
 async def stats(collection: str = "knowledge") -> str:
@@ -355,10 +358,11 @@ async def stats(collection: str = "knowledge") -> str:
     description="""
     Clear all knowledge from a collection. WARNING: Permanently deletes indexed knowledge.
 
-    **Parameters**:
-    - `collection` (optional, default: `knowledge`): Collection name to clear
+    Args:
+        - collection: str = knowledge - Collection name to clear
 
-    **Returns**: JSON with status and message.
+    Returns:
+        JSON with status and message.
     """,
 )
 async def clear(collection: str = "knowledge") -> str:
@@ -426,7 +430,7 @@ def format_recall_results(json_output: str) -> str:
             return f"**No knowledge found for**: `{data.get('query', '')}`"
 
         lines = [
-            f"# Knowledge Recall",
+            "# Knowledge Recall",
             f"**Query**: `{data.get('query', '')}`",
             f"**Found**: {data.get('found', 0)} results",
             "",
@@ -457,4 +461,4 @@ def format_recall_results(json_output: str) -> str:
         return json_output
 
 
-__all__ = ["recall", "ingest", "stats", "clear", "format_recall_results"]
+__all__ = ["clear", "format_recall_results", "ingest", "recall", "stats"]

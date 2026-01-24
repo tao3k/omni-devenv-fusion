@@ -337,4 +337,4 @@ class ProjectMemory:
             return None
 
 
-__all__ = ["ProjectMemory", "MEMORY_DIR", "init_memory_dir", "format_decision", "parse_decision"]
+__all__ = ["MEMORY_DIR", "ProjectMemory", "format_decision", "init_memory_dir", "parse_decision"]

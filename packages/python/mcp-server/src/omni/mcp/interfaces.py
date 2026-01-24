@@ -5,7 +5,8 @@ Dependency inversion: MCP server only talks to these interfaces.
 Business layer (Agent) implements them.
 """
 
-from typing import Protocol, Any, Optional, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
+
 from .types import JSONRPCRequest, JSONRPCResponse
 
 
@@ -24,7 +25,7 @@ class MCPRequestHandler(Protocol):
         """
         ...
 
-    async def handle_notification(self, method: str, params: Optional[Any]) -> None:
+    async def handle_notification(self, method: str, params: Any | None) -> None:
         """
         Handle a JSON-RPC notification (no response expected).
         """
@@ -71,7 +72,7 @@ class MCPSession(Protocol):
         """Unique session identifier."""
         ...
 
-    async def send_notification(self, method: str, params: Optional[Any] = None) -> None:
+    async def send_notification(self, method: str, params: Any | None = None) -> None:
         """
         Send a JSON-RPC notification to this session.
 
@@ -91,18 +92,18 @@ class MCPRequestContext(Protocol):
     """
 
     @property
-    def session(self) -> Optional[MCPSession]:
+    def session(self) -> MCPSession | None:
         """Get the current session."""
         ...
 
-    async def send_notification(self, method: str, params: Optional[Any] = None) -> None:
+    async def send_notification(self, method: str, params: Any | None = None) -> None:
         """Send notification to the client that initiated this request."""
         ...
 
 
 __all__ = [
-    "MCPRequestHandler",
-    "MCPTransport",
-    "MCPSession",
     "MCPRequestContext",
+    "MCPRequestHandler",
+    "MCPSession",
+    "MCPTransport",
 ]

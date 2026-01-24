@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock
 
 from omni.core.router.router import (
-    SemanticRouter,
     FallbackRouter,
-    UnifiedRouter,
     RouteResult,
+    SemanticRouter,
+    UnifiedRouter,
 )
 
 

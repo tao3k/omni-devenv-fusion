@@ -42,8 +42,9 @@ async def dispatch_graph_mode(
         Agent's response content
     """
     # Lazy import to avoid circular import
-    from omni.langgraph.graph import GraphOutput, get_graph
     import structlog
+
+    from omni.langgraph.graph import GraphOutput, get_graph
 
     logger = structlog.get_logger(__name__)
     logger.bind(
@@ -113,7 +114,7 @@ async def dispatch_graph_mode(
         if hasattr(orchestrator, "ux") and orchestrator.ux:
             orchestrator.ux.end_task(success=False)
 
-        return f"System Error during graph execution: {str(e)}"
+        return f"System Error during graph execution: {e!s}"
 
 
 __all__ = ["dispatch_graph_mode"]

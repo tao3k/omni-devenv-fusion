@@ -37,12 +37,12 @@ class LifecycleManager:
     """
 
     __slots__ = (
-        "_state",
         "_lock",
         "_on_ready",
         "_on_running",
         "_on_shutdown",
         "_on_stopped",
+        "_state",
     )
 
     def __init__(

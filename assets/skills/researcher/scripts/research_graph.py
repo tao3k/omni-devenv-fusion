@@ -1,75 +1,99 @@
 """
-researcher/graph.py - LangGraph Deep Research Workflow
+research_graph.py - Sharded Deep Research Workflow
 
-A cognitive graph that uses LLM reasoning to dynamically decide:
-- What to look at (file tree mapping)
-- What to read (module selection)
-- How to compare (analysis synthesis)
+Uses unified Rust LanceDB CheckpointStore for persistent state:
+- State persists across skill reloads
+- Supports workflow_id-based retrieval
+- Centralized at path from settings (default: .cache/checkpoints.lance)
 
-Architecture:
-    clone -> survey -> scout (LLM) -> digest -> synthesize (LLM) -> save
+Architecture: Map -> Plan -> Loop(Process Shards) -> Synthesize
+
+This implements a cognitive graph that:
+1. Maps repository structure
+2. Plans analysis shards (subsystem breakdown)
+3. Iteratively processes each shard (compress + analyze)
+4. Synthesizes final index
 
 Usage:
-    from .graph import create_research_graph, run_research_workflow
-    graph = create_research_graph()
-    result = await graph.ainvoke(initial_state)
+    from research_graph import run_research_workflow
+    result = await run_research_workflow(
+        repo_url="https://github.com/...",
+        request="Analyze security patterns"
+    )
 """
 
 from __future__ import annotations
 
 import json
-import re
-import sys
-from pathlib import Path
-from typing import Any, TypedDict, List, Annotated
 import operator
+from pathlib import Path
+from typing import Annotated, Any, TypedDict
 
-from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, StateGraph
 
+from omni.foundation.checkpoint import (
+    load_workflow_state,
+    save_workflow_state,
+)
 from omni.foundation.config.logging import get_logger
 from omni.foundation.services.llm.client import InferenceClient
 
 logger = get_logger("researcher.graph")
 
-# =============================================================================
-# Module Imports Setup
-# =============================================================================
+# Workflow type identifier for checkpoint table
+_WORKFLOW_TYPE = "research"
 
-# Add scripts directory to sys.path for imports
-_SCRIPTS_DIR = Path(__file__).parent
-if str(_SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS_DIR))
-
-# Import research module functions (available because scripts dir is in sys.path)
-from research import clone_repo, repomix_map, repomix_compress, save_report
-
+# Import research module functions using absolute import (PEP 420 namespace package)
+from researcher.scripts.research import (
+    clone_repo,
+    init_harvest_structure,
+    repomix_compress_shard,
+    repomix_map,
+    save_index,
+    save_shard_result,
+)
 
 # =============================================================================
 # State Definition
 # =============================================================================
 
 
+class ShardDef(TypedDict):
+    """Definition of an analysis shard."""
+    name: str
+    targets: list[str]
+    description: str
+
+
 class ResearchState(TypedDict):
-    """State for the Deep Research Workflow."""
+    """State for the Sharded Deep Research Workflow."""
 
     # Inputs
     request: str  # User's research goal
     repo_url: str  # Target repository URL
 
-    # Internal State
+    # Setup Phase
     repo_path: str  # Local clone path
-    file_tree: str  # File tree (god view)
-    selected_targets: List[str]  # LLM-chosen reading targets (Glob patterns)
-    ignore_patterns: List[str]  # Patterns to exclude from compression
-    remove_comments: bool  # Whether to remove comments during compression
-    context_xml: str  # Compressed code context
-    final_report: str  # Final analysis report
+    file_tree: str  # Repository structure map
+    repo_name: str  # Repository name for filenames
+
+    # Planning Phase
+    shards_queue: list[ShardDef]  # Shards to process (Plan output)
+
+    # Loop Phase (per shard)
+    current_shard: ShardDef  # Shard being processed
+    shard_counter: int  # For ordering files (01_, 02_, etc.)
+    shard_analyses: list[str]  # Accumulated shard summaries
+
+    # Final Phase
+    harvest_dir: str  # Path to .data/harvested/...
+    final_report: str  # Complete analysis
 
     # Control
-    messages: Annotated[List[dict], operator.add]
+    messages: Annotated[list[dict], operator.add]
     steps: int
-    error: str | None  # Allow None
+    error: str | None
 
 
 # =============================================================================
@@ -77,52 +101,45 @@ class ResearchState(TypedDict):
 # =============================================================================
 
 
-async def node_clone(state: ResearchState) -> dict:
-    """Action: Clone the repository."""
-    logger.info("[Graph] Cloning repository...", url=state["repo_url"])
+async def node_setup(state: ResearchState) -> dict:
+    """Setup: Clone repository and generate file tree map."""
+    logger.info("[Graph] Setting up research...", url=state["repo_url"])
 
     try:
-        result = clone_repo(state["repo_url"])
-        path = result.get("path", "") if isinstance(result, dict) else str(result)
+        # Extract repo name
+        repo_url = state["repo_url"]
+        repo_name = repo_url.split("/")[-1]
+        if repo_name.endswith(".git"):
+            repo_name = repo_name[:-4]
 
-        if not path:
-            return {"error": "Failed to clone repository", "steps": state["steps"] + 1}
+        # Clone repository
+        path = clone_repo(repo_url)
 
-        logger.info("[Graph] Clone complete", path=path)
-        return {"repo_path": path, "steps": state["steps"] + 1}
+        # Generate file tree map
+        tree = repomix_map(path, max_depth=4)
 
-    except Exception as e:
-        logger.error("[Graph] Clone failed", error=str(e))
-        return {"error": f"Clone failed: {e}", "steps": state["steps"] + 1}
+        logger.info("[Graph] Setup complete", path=path, tree_length=len(tree))
 
-
-async def node_survey(state: ResearchState) -> dict:
-    """Action: Map the repository structure."""
-    logger.info("[Graph] Mapping structure...", path=state.get("repo_path"))
-
-    try:
-        repo_path = state.get("repo_path", "")
-        if not repo_path:
-            return {"error": "No repo_path available", "steps": state["steps"] + 1}
-
-        result = repomix_map(repo_path, max_depth=4)
-
-        if isinstance(result, dict) and "tree" in result:
-            tree = result["tree"]
-        else:
-            tree = str(result)
-
-        logger.info("[Graph] Survey complete", tree_length=len(tree))
-        return {"file_tree": tree, "steps": state["steps"] + 1}
+        return {
+            "repo_path": path,
+            "file_tree": tree,
+            "repo_name": repo_name,
+            "steps": state["steps"] + 1,
+        }
 
     except Exception as e:
-        logger.error("[Graph] Survey failed", error=str(e))
-        return {"error": f"Survey failed: {e}", "steps": state["steps"] + 1}
+        logger.error("[Graph] Setup failed", error=str(e))
+        return {"error": f"Setup failed: {e}", "steps": state["steps"] + 1}
 
 
-async def node_scout(state: ResearchState) -> dict:
-    """Thinking: LLM designs Repomix filter strategy for precise context."""
-    logger.info("[Graph] Smart Scouting (Designing Context Filter)...")
+async def node_architect(state: ResearchState) -> dict:
+    """
+    Plan: Analyze file tree and define analysis shards.
+
+    The LLM breaks down the repository into logical subsystems,
+    each becoming a separate shard for analysis.
+    """
+    logger.info("[Graph] Architecting shards...")
 
     try:
         client = InferenceClient()
@@ -130,15 +147,9 @@ async def node_scout(state: ResearchState) -> dict:
         request = state.get("request", "Analyze architecture")
 
         if not file_tree:
-            logger.warning("[Graph] No file tree, using fallback")
-            return {
-                "selected_targets": ["src"],
-                "ignore_patterns": ["**/test_*", "**/*_test.py"],
-                "remove_comments": False,
-                "steps": state["steps"] + 1,
-            }
+            raise ValueError("No file tree available for planning")
 
-        prompt = f"""You are a Code Context Engineer designing a precise code extraction strategy.
+        prompt = f"""You are a Software Architect. Break down this repository for deep analysis.
 
 Goal: {request}
 
@@ -147,205 +158,265 @@ File Tree:
 {file_tree}
 ```
 
-Task: Design a Repomix configuration to extract ONLY the most relevant code for the goal.
+Task: Define 3-5 logical analysis shards (subsystems). Each shard should focus on a specific area.
+
+Return JSON array:
+```json
+[
+    {{
+        "name": "Core Kernel",
+        "targets": ["src/core/**/*.py", "crates/core/src/**/*.rs"],
+        "description": "Main business logic and core types"
+    }},
+    {{
+        "name": "API Layer",
+        "targets": ["src/api/**", "src/routes/**", "**/*handler*.py"],
+        "description": "HTTP handlers and route definitions"
+    }},
+    {{
+        "name": "Infrastructure",
+        "targets": ["src/db/**", "src/services/**", "**/*repository*.py"],
+        "description": "Database and external service integrations"
+    }}
+]
+```
 
 Guidelines:
-1. Use precise Glob patterns with full paths (e.g., "crates/agentgateway/src/lib.rs")
-2. Focus on Interfaces, Abstract Classes, and Core Logic
-3. Exclude tests, configs, assets, docs unless relevant
-4. Decide if comments should be removed (true for architecture analysis to save tokens)
-
-Return a JSON object with your strategy:
-{{
-    "targets": ["crates/agentgateway/src/lib.rs", "crates/agentgateway/src/config.rs"],
-    "ignore": ["**/__init__.py", "**/*_test.py", "**/migrations/**"],
-    "remove_comments": true,
-    "reasoning": "Focusing on core abstract classes to understand the inheritance hierarchy"
-}}
-
-Only return valid JSON, nothing else."""
+- Focus on subsystems relevant to the research goal
+- Use precise glob patterns
+- Keep each shard focused (avoid catch-all targets)
+- Order from core to peripheral"""
 
         response = await client.complete(
-            system_prompt="You are a context engineer.",
+            system_prompt="You are a software architect.",
             user_query=prompt,
-            max_tokens=2048,
+            max_tokens=4096,
         )
 
         content = response.get("content", "").strip()
+        shards = _extract_json_list(content)
 
-        # Parse the JSON response
-        plan = _extract_json_dict(content)
+        if not shards:
+            # Fallback: single shard with whole src
+            shards = [{
+                "name": "Full Analysis",
+                "targets": ["src", "lib", "packages"],
+                "description": "Complete codebase analysis"
+            }]
 
-        if not plan:
-            logger.warning("[Graph] JSON parse failed, using fallback")
-            return {
-                "selected_targets": ["src"],
-                "ignore_patterns": ["**/test_*", "**/*_test.py"],
-                "remove_comments": False,
-                "steps": state["steps"] + 1,
-            }
+        # Convert to ShardDef objects
+        shard_defs: list[ShardDef] = []
+        for s in shards:
+            if isinstance(s, dict):
+                shard_defs.append({
+                    "name": s.get("name", "Unknown"),
+                    "targets": s.get("targets", ["src"]),
+                    "description": s.get("description", ""),
+                })
+            else:
+                shard_defs.append({
+                    "name": str(s),
+                    "targets": ["src"],
+                    "description": str(s),
+                })
 
-        targets = plan.get("targets", ["src"])
-        ignore = plan.get("ignore", [])
-        remove_comments = plan.get("remove_comments", False)
-        reasoning = plan.get("reasoning", "No reasoning provided")
+        logger.info("[Graph] Architecting complete", shard_count=len(shard_defs))
 
-        logger.info("[Graph] Scout Plan", reasoning=reasoning, targets=targets)
         return {
-            "selected_targets": targets,
-            "ignore_patterns": ignore,
-            "remove_comments": remove_comments,
+            "shards_queue": shard_defs,
+            "shard_counter": 0,
+            "shard_analyses": [],
             "steps": state["steps"] + 1,
         }
 
     except Exception as e:
-        logger.error("[Graph] Scout failed", error=str(e))
-        return {"error": f"Scout failed: {e}", "steps": state["steps"] + 1}
+        logger.error("[Graph] Architecting failed", error=str(e))
+        return {"error": f"Architecting failed: {e}", "steps": state["steps"] + 1}
 
 
-async def node_digest(state: ResearchState) -> dict:
-    """Action: Compress selected code with precision settings."""
-    targets = state.get("selected_targets", [])
-    ignore = state.get("ignore_patterns", [])
-    remove_comments = state.get("remove_comments", False)
+async def node_process_shard(state: ResearchState) -> dict:
+    """
+    Process: Compress and analyze a single shard.
 
-    logger.info("[Graph] Digesting context with smart filtering...", targets=targets)
+    For each shard in the queue:
+    1. Compress code with repomix (using shard-specific config)
+    2. Analyze with LLM
+    3. Save shard result
+    4. Accumulate summary for final index
+    """
+    logger.info("[Graph] Processing shard...")
 
     try:
+        shards_queue = state.get("shards_queue", [])
+        if not shards_queue:
+            raise ValueError("No shards in queue")
+
+        # Get current shard
+        shard = shards_queue[0]
+        shard_name = shard["name"]
+        targets = shard["targets"]
+        description = shard["description"]
+
         repo_path = state.get("repo_path", "")
+        repo_name = state.get("repo_name", "")
 
-        if not repo_path or not targets:
-            return {"error": "Missing repo_path or targets", "steps": state["steps"] + 1}
+        logger.info("[Graph] Processing shard", name=shard_name, targets=targets)
 
-        result = repomix_compress(
+        # Step 1: Compress shard with repomix
+        compress_result = repomix_compress_shard(
             path=repo_path,
             targets=targets,
-            ignore=ignore,
-            remove_comments=remove_comments,
+            shard_name=shard_name,
         )
 
-        if isinstance(result, dict):
-            xml_content = result.get("xml_content", str(result))
-            char_count = result.get("char_count", len(xml_content))
-        else:
-            xml_content = str(result)
-            char_count = len(xml_content)
+        xml_content = compress_result["xml_content"]
+        token_count = compress_result.get("token_count", len(xml_content) // 4)
 
-        logger.info(
-            "[Graph] Digest complete", char_count=char_count, remove_comments=remove_comments
-        )
-        return {"context_xml": xml_content, "steps": state["steps"] + 1}
-
-    except Exception as e:
-        logger.error("[Graph] Digest failed", error=str(e))
-        return {"error": f"Digest failed: {e}", "steps": state["steps"] + 1}
-
-
-async def node_synthesize(state: ResearchState) -> dict:
-    """Thinking: LLM generates deep analysis report."""
-    logger.info("[Graph] Synthesizing report (LLM Analysis)...")
-
-    try:
+        # Step 2: Analyze with LLM
         client = InferenceClient()
-        request = state.get("request", "Analyze architecture")
-        context = state.get("context_xml", "")
-        file_tree = state.get("file_tree", "")
 
-        if not context:
-            return {"error": "No context available", "steps": state["steps"] + 1}
+        # Truncate to stay within limits (use first 60K chars for analysis)
+        max_input = 60000
+        truncated = xml_content[:max_input]
+        if len(xml_content) > max_input:
+            truncated += "\n\n[...code truncated for analysis...]"
 
-        # Truncate for safety (LLM context limits)
-        max_context = 40000
-        truncated_context = context[:max_context]
-        if len(context) > max_context:
-            truncated_context += "\n\n[...context truncated for length...]"
+        prompt = f"""You are a Senior Tech Architect. Analyze this subsystem shard in detail.
 
-        prompt = f"""You are a Senior Tech Architect. Analyze the codebase and produce a detailed research report.
+Shard: {shard_name}
+Focus: {description}
 
-User Request: {request}
+Research Goal: {state.get("request", "Analyze architecture")}
 
-File Tree Overview:
-```
-{file_tree[:2000]}
-```
+Code Context:
+{truncated}
 
-Code Context (XML):
-{truncated_context}
+Produce a detailed Markdown section covering:
 
-Produce a Markdown report covering:
+## Architecture Patterns
+- Key design patterns and patterns used
+- How this subsystem fits into the larger system
 
-## 1. Core Architecture Patterns
-- What architectural style is used (MVC, microservices, layered, etc.)?
-- Key design patterns observed
+## Key Components
+- Main entry points and classes
+- Critical functions and their responsibilities
 
-## 2. Key Components
-- Main entry points and their responsibilities
-- Critical modules and their interactions
+## Interfaces & Contracts
+- How this subsystem interacts with others
+- Public APIs and data structures
 
-## 3. Technology Stack
-- Frameworks and libraries used
-- Infrastructure dependencies
+## Technology Decisions
+- Why certain libraries/approaches were chosen
 
-## 4. Analysis & Comparison
-- Strengths of this implementation
-- Potential improvements or concerns
-
-## 5. Relevance to Agent Systems (if applicable)
-- How this relates to Omni-Dev architecture patterns
-
-Format as clean Markdown with proper headings and code blocks."""
+Format as a standalone Markdown section that can be combined with other shard analyses."""
 
         response = await client.complete(
             system_prompt="You are a tech writer.",
             user_query=prompt,
-            max_tokens=2048,
+            max_tokens=4096,
         )
 
-        report = response.get("content", "Error: No report generated")
+        analysis = response.get("content", "Error: No analysis generated")
 
-        logger.info("[Graph] Synthesis complete", report_length=len(report))
-        return {"final_report": report, "steps": state["steps"] + 1}
+        # Step 3: Save shard result
+        counter = state.get("shard_counter", 0) + 1
 
-    except Exception as e:
-        logger.error("[Graph] Synthesis failed", error=str(e))
-        return {"error": f"Synthesis failed: {e}", "steps": state["steps"] + 1}
+        # Initialize harvest structure if needed
+        harvest_dir = state.get("harvest_dir")
+        if not harvest_dir:
+            harvest_path = init_harvest_structure(repo_name)
+            harvest_dir = str(harvest_path)
+        else:
+            harvest_path = Path(harvest_dir)
 
+        save_shard_result(
+            base_dir=harvest_path,
+            shard_id=counter,
+            title=shard_name,
+            content=analysis,
+        )
 
-async def node_save(state: ResearchState) -> dict:
-    """Action: Save the research report to knowledge base."""
-    logger.info("[Graph] Saving report...")
+        # Step 4: Accumulate summary for index
+        summary = f"- **[{shard_name}](./shards/{counter:02d}_{shard_name.lower().replace(' ', '_')}.md)**: {description} (~{token_count} tokens)"
 
-    try:
-        repo_url = state.get("repo_url", "")
-        report = state.get("final_report", "")
+        # Remove processed shard from queue - accumulate shard_analyses
+        remaining_queue = shards_queue[1:]
+        previous_summaries = state.get("shard_analyses", [])
 
-        if not repo_url or not report:
-            return {"error": "Missing repo_url or report", "steps": state["steps"] + 1}
-
-        # Extract repo name from URL
-        repo_name = repo_url.split("/")[-1]
-        if repo_name.endswith(".git"):
-            repo_name = repo_name[:-4]
-
-        result = save_report(repo_name, report, category="deep-research")
-
-        report_path = result.get("report_path", "") if isinstance(result, dict) else ""
-
-        logger.info("[Graph] Report saved", path=report_path)
+        logger.info("[Graph] Shard processed", name=shard_name, tokens=token_count)
 
         return {
-            "messages": [
-                {
-                    "role": "assistant",
-                    "content": f"Research Complete!\n\nReport saved to: {report_path}\n\n## Summary\n\n{report[:500]}...",
-                }
-            ],
+            "shards_queue": remaining_queue,
+            "current_shard": shard,
+            "shard_counter": counter,
+            "shard_analyses": previous_summaries + [summary],
+            "harvest_dir": harvest_dir,
             "steps": state["steps"] + 1,
         }
 
     except Exception as e:
-        logger.error("[Graph] Save failed", error=str(e))
-        return {"error": f"Save failed: {e}", "steps": state["steps"] + 1}
+        logger.error("[Graph] Shard processing failed", error=str(e))
+        return {"error": f"Shard processing failed: {e}", "steps": state["steps"] + 1}
+
+
+def router_loop(state: ResearchState) -> str:
+    """Router: Decide whether to process another shard or synthesize."""
+    if len(state.get("shards_queue", [])) > 0:
+        return "process_shard"
+    return "synthesize"
+
+
+async def node_synthesize(state: ResearchState) -> dict:
+    """
+    Synthesize: Generate final index.md with all shard summaries.
+
+    Combines the accumulated shard analyses into a coherent report.
+    """
+    logger.info("[Graph] Synthesizing final report...")
+
+    try:
+        repo_name = state.get("repo_name", "")
+        repo_url = state.get("repo_url", "")
+        request = state.get("request", "Analyze architecture")
+        harvest_dir = state.get("harvest_dir", "")
+        shard_summaries = state.get("shard_analyses", [])
+
+        if not harvest_dir:
+            raise ValueError("No harvest directory available")
+
+        # Generate index.md
+        save_index(
+            base_dir=Path(harvest_dir),
+            title=repo_name,
+            repo_url=repo_url,
+            request=request,
+            shard_summaries=shard_summaries,
+        )
+
+        # Generate final summary message
+        index_path = Path(harvest_dir) / "index.md"
+        summary_msg = f"""Research Complete!
+
+**Output:** {harvest_dir}
+
+## Summary
+Analyzed {len(shard_summaries)} subsystems:
+
+{chr(10).join(shard_summaries)}
+
+View full report at: index.md"""
+
+        logger.info("[Graph] Synthesis complete", shards=len(shard_summaries))
+
+        return {
+            "final_report": f"Research on {repo_name} complete. {len(shard_summaries)} shards analyzed.",
+            "messages": [{"role": "assistant", "content": summary_msg}],
+            "steps": state["steps"] + 1,
+        }
+
+    except Exception as e:
+        logger.error("[Graph] Synthesis failed", error=str(e))
+        return {"error": f"Synthesis failed: {e}", "steps": state["steps"] + 1}
 
 
 # =============================================================================
@@ -353,38 +424,11 @@ async def node_save(state: ResearchState) -> dict:
 # =============================================================================
 
 
-def _extract_json_dict(text: str) -> dict | None:
-    """Extract a JSON dict from LLM response text."""
+def _extract_json_list(text: str) -> list[Any]:
+    """Extract a JSON list from LLM response."""
     text = text.strip()
 
-    # Find first { and last }
-    start = text.find("{")
-    end = text.rfind("}")
-
-    if start != -1 and end != -1 and end > start:
-        json_str = text[start : end + 1]
-        try:
-            return json.loads(json_str)
-        except json.JSONDecodeError:
-            pass
-
-    # Try parsing entire response
-    try:
-        parsed = json.loads(text)
-        if isinstance(parsed, dict):
-            return parsed
-    except json.JSONDecodeError:
-        pass
-
-    return None
-
-
-def _extract_json_list(text: str) -> List[str]:
-    """Extract a JSON list from LLM response text."""
-    # Try to find JSON array pattern
-    text = text.strip()
-
-    # Find the first [ and last ]
+    # Find first [ and last ]
     start = text.find("[")
     end = text.rfind("]")
 
@@ -393,25 +437,17 @@ def _extract_json_list(text: str) -> List[str]:
         try:
             parsed = json.loads(json_str)
             if isinstance(parsed, list):
-                # Filter out empty strings
-                return [str(x) for x in parsed if x]
+                return parsed
         except json.JSONDecodeError:
             pass
 
-    # Fallback: try to parse the entire response
+    # Try parsing entire response
     try:
         parsed = json.loads(text)
         if isinstance(parsed, list):
-            return [str(x) for x in parsed if x]
-        if isinstance(parsed, dict) and "targets" in parsed:
-            return [str(x) for x in parsed["targets"] if x]
+            return parsed
     except json.JSONDecodeError:
         pass
-
-    # Last resort: regex extract quoted strings
-    quoted = re.findall(r'"([^"]+)"', text)
-    if quoted:
-        return quoted
 
     return []
 
@@ -421,78 +457,127 @@ def _extract_json_list(text: str) -> List[str]:
 # =============================================================================
 
 
-def create_research_graph() -> StateGraph:
-    """Create the Deep Research StateGraph."""
+def create_sharded_research_graph() -> StateGraph:
+    """Create the Sharded Research StateGraph."""
     workflow = StateGraph(ResearchState)
 
     # Add nodes
-    workflow.add_node("clone", node_clone)
-    workflow.add_node("survey", node_survey)
-    workflow.add_node("scout", node_scout)
-    workflow.add_node("digest", node_digest)
+    workflow.add_node("setup", node_setup)
+    workflow.add_node("architect", node_architect)
+    workflow.add_node("process_shard", node_process_shard)
     workflow.add_node("synthesize", node_synthesize)
-    workflow.add_node("save", node_save)
 
     # Set entry point
-    workflow.set_entry_point("clone")
+    workflow.set_entry_point("setup")
 
-    # Add edges (linear flow for now)
-    workflow.add_edge("clone", "survey")
-    workflow.add_edge("survey", "scout")
-    workflow.add_edge("scout", "digest")
-    workflow.add_edge("digest", "synthesize")
-    workflow.add_edge("synthesize", "save")
-    workflow.add_edge("save", END)
+    # Linear: setup -> architect
+    workflow.add_edge("setup", "architect")
+
+    # Parallel: architect -> loop
+    workflow.add_edge("architect", "process_shard")
+
+    # Conditional: loop -> (process_shard | synthesize)
+    workflow.add_conditional_edges(
+        "process_shard",
+        router_loop,
+        {
+            "process_shard": "process_shard",
+            "synthesize": "synthesize",
+        },
+    )
+
+    # Final: synthesize -> END
+    workflow.add_edge("synthesize", END)
 
     return workflow
 
 
-# Compile with memory checkpoint for state persistence
+# Compile with memory checkpoint
 _memory = MemorySaver()
-_app = create_research_graph().compile(checkpointer=_memory)
+_app = create_sharded_research_graph().compile(checkpointer=_memory)
 
 
 async def run_research_workflow(
     repo_url: str,
     request: str = "Analyze the architecture",
-    thread_id: str = "research-default",
+    thread_id: str | None = None,
 ) -> dict[str, Any]:
     """
-    Convenience function to run the research workflow.
+    Run the sharded research workflow.
+
+    Uses unified Rust LanceDB CheckpointStore for persistent state:
+    - State persists across skill reloads
+    - Supports workflow_id-based retrieval
 
     Args:
-        repo_url: Git repository URL to analyze
-        request: Research goal/question
-        thread_id: Optional thread ID for checkpointing
+        repo_url: Git repository URL to analyze.
+        request: Research goal/question.
+        thread_id: Optional thread ID for checkpointing.
+            If not provided, generates one from repo_url hash.
 
     Returns:
-        Final state dictionary with results
+        Final state dictionary with results.
     """
-    logger.info("Running research workflow", repo_url=repo_url, request=request)
+    # Generate workflow_id if not provided
+    workflow_id = thread_id or f"research-{hash(repo_url) % 10000}"
+    logger.info("Running sharded research workflow", repo_url=repo_url, request=request, workflow_id=workflow_id)
 
-    initial_state = ResearchState(
-        request=request,
-        repo_url=repo_url,
-        repo_path="",
-        file_tree="",
-        selected_targets=[],
-        ignore_patterns=[],
-        remove_comments=False,
-        context_xml="",
-        final_report="",
-        steps=0,
-        messages=[],
-        error=None,
-    )
+    # Try to load existing state from checkpoint store
+    saved_state = load_workflow_state(_WORKFLOW_TYPE, workflow_id)
+
+    if saved_state:
+        logger.info("Resuming workflow from checkpoint", workflow_id=workflow_id, steps=saved_state.get("steps", 0))
+        initial_state = ResearchState(
+            request=saved_state.get("request", request),
+            repo_url=saved_state.get("repo_url", repo_url),
+            repo_path=saved_state.get("repo_path", ""),
+            file_tree=saved_state.get("file_tree", ""),
+            repo_name=saved_state.get("repo_name", ""),
+            shards_queue=saved_state.get("shards_queue", []),
+            current_shard=saved_state.get("current_shard"),
+            shard_counter=saved_state.get("shard_counter", 0),
+            shard_analyses=saved_state.get("shard_analyses", []),
+            harvest_dir=saved_state.get("harvest_dir", ""),
+            final_report=saved_state.get("final_report", ""),
+            steps=saved_state.get("steps", 0),
+            messages=saved_state.get("messages", []),
+            error=saved_state.get("error"),
+        )
+    else:
+        logger.info("Starting new workflow", workflow_id=workflow_id)
+        initial_state = ResearchState(
+            request=request,
+            repo_url=repo_url,
+            repo_path="",
+            file_tree="",
+            repo_name="",
+            shards_queue=[],
+            current_shard=None,
+            shard_counter=0,
+            shard_analyses=[],
+            harvest_dir="",
+            final_report="",
+            steps=0,
+            messages=[],
+            error=None,
+        )
 
     try:
-        # Use typed config dict
-        config: dict = {"configurable": {"thread_id": thread_id}}
+        config: dict = {"configurable": {"thread_id": workflow_id}}
         result = await _app.ainvoke(initial_state, config=config)
+
+        # Save final state to checkpoint store
+        save_workflow_state(
+            _WORKFLOW_TYPE,
+            workflow_id,
+            dict(result),
+            metadata={"repo_url": repo_url, "request": request},
+        )
+
         return result
     except Exception as e:
         logger.error("Workflow failed", error=str(e))
-        return {"error": str(e), "steps": 1}
+        return {"error": str(e), "steps": initial_state.get("steps", 1)}
 
 
 # =============================================================================
@@ -502,12 +587,11 @@ async def run_research_workflow(
 
 __all__ = [
     "ResearchState",
-    "create_research_graph",
-    "run_research_workflow",
-    "node_clone",
-    "node_survey",
-    "node_scout",
-    "node_digest",
+    "ShardDef",
+    "create_sharded_research_graph",
+    "node_architect",
+    "node_process_shard",
+    "node_setup",
     "node_synthesize",
-    "node_save",
+    "run_research_workflow",
 ]

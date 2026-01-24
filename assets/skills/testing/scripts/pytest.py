@@ -9,12 +9,13 @@ Responsibilities:
 """
 
 import re
-import subprocess
 import shutil
+import subprocess
 from typing import Any
+
 from omni.foundation.api.decorators import skill_command
-from omni.foundation.config.paths import ConfigPaths
 from omni.foundation.config.logging import get_logger
+from omni.foundation.config.paths import ConfigPaths
 
 logger = get_logger("skill.testing.pytest")
 
@@ -117,7 +118,20 @@ def _parse_failures(stdout: str, stderr: str) -> list[dict[str, Any]]:
 
 @skill_command(
     name="run_pytest",
-    description="Run pytest and return STRUCTURED failure data for auto-fixing.",
+    category="workflow",
+    description="""
+    Run pytest and return STRUCTURED failure data for auto-fixing.
+
+    Args:
+        - target: str = "." - File or directory to test
+        - verbose: bool = false - Show detailed output (-vv)
+        - max_fail: int = 5 - Stop after N failures (0 to disable)
+        - include_traceback: bool = true - Include traceback snippets in failures
+        - paths: Optional[ConfigPaths] - Injected ConfigPaths instance
+
+    Returns:
+        Structured dict with success status, failure list, and output summary.
+    """,
     autowire=True,
 )
 def run_pytest(
@@ -214,7 +228,17 @@ def run_pytest(
 
 @skill_command(
     name="list_tests",
-    description="Discover and list available tests without running them.",
+    category="read",
+    description="""
+    Discover and list available tests without running them.
+
+    Args:
+        - target: str = "." - File or directory to search for tests
+        - paths: Optional[ConfigPaths] - Injected ConfigPaths instance
+
+    Returns:
+        Dictionary with success status, target path, test count, and list of tests.
+    """,
     autowire=True,
 )
 def list_tests(
@@ -272,4 +296,4 @@ def _summarize_output(stdout: str, stderr: str) -> str:
     return "\n".join(summary[-50:])
 
 
-__all__ = ["run_pytest", "list_tests"]
+__all__ = ["list_tests", "run_pytest"]

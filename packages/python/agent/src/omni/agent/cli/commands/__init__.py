@@ -9,12 +9,12 @@ from .run import register_run_command
 from .skill import register_skill_command, skill_app
 
 __all__ = [
-    "skill_app",
-    "register_skill_command",
-    "register_mcp_command",
-    "route_app",
-    "register_route_command",
-    "register_run_command",
     "ingest_app",
     "register_ingest_command",
+    "register_mcp_command",
+    "register_route_command",
+    "register_run_command",
+    "register_skill_command",
+    "route_app",
+    "skill_app",
 ]

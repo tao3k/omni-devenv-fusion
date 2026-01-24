@@ -14,7 +14,6 @@ import asyncio
 import signal
 import sys
 from enum import Enum
-from typing import Optional
 
 import typer
 from rich.panel import Panel

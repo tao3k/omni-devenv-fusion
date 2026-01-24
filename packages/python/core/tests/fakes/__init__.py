@@ -18,8 +18,8 @@ from .fake_registry import FakeSkillRegistry
 from .fake_vectorstore import FakeVectorStore
 
 __all__ = [
-    "FakeVectorStore",
-    "FakeMCPServer",
     "FakeInference",
+    "FakeMCPServer",
     "FakeSkillRegistry",
+    "FakeVectorStore",
 ]

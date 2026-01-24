@@ -30,11 +30,11 @@ class UnifiedRegistry:
 
     __slots__ = (
         "_initialized",
-        "_project_root",
-        "_skills_dir",
         "_loaded_skills",
         "_module_cache",
+        "_project_root",
         "_skill_tools",
+        "_skills_dir",
     )
 
     _instance: UnifiedRegistry | None = None
@@ -49,8 +49,8 @@ class UnifiedRegistry:
         if self._initialized:
             return
 
-        from omni.foundation.runtime.gitops import get_project_root
         from omni.foundation.config.skills import SKILLS_DIR
+        from omni.foundation.runtime.gitops import get_project_root
 
         self._project_root = get_project_root()
         self._skills_dir = SKILLS_DIR()

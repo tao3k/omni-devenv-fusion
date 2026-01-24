@@ -3,21 +3,24 @@ indexer.py - The Cortex Builder
 
 Builds semantic index from skills' metadata and commands.
 Uses RustVectorStore for high-performance vector operations.
+
+Python 3.12+ Features:
+- itertools.batched() for batch processing (Section 7.2)
 """
 
 from __future__ import annotations
 
+from itertools import batched
 from typing import Any
-from dataclasses import dataclass
 
 from omni.foundation.bridge import RustVectorStore, SearchResult
 from omni.foundation.config.logging import get_logger
+from pydantic import BaseModel
 
 logger = get_logger("omni.core.router.indexer")
 
 
-@dataclass
-class IndexedSkill:
+class IndexedSkill(BaseModel):
     """Represents an indexed skill entry."""
 
     skill_name: str
@@ -115,6 +118,70 @@ class SkillIndexer:
         logger.info(f"Cortex indexing complete. Total entries: {self._indexed_count}")
         return self._indexed_count
 
+    async def index_skills_batched(
+        self, skills: list[dict[str, Any]], batch_size: int = 50
+    ) -> int:
+        """Index skills in batches using itertools.batched (Python 3.12+).
+
+        Args:
+            skills: List of skill metadata dicts
+            batch_size: Number of skills per batch (default: 50)
+
+        Returns:
+            Number of entries indexed
+
+        Example:
+            >>> await indexer.index_skills_batched(all_skills, batch_size=100)
+        """
+        self.initialize()
+
+        if self._store is None:
+            logger.warning("Cannot index: vector store unavailable")
+            return 0
+
+        total_skills = len(skills)
+        logger.info(f"Building Semantic Cortex for {total_skills} skills (batch_size={batch_size})...")
+
+        # Process in batches using itertools.batched (Python 3.12+)
+        for batch_num, skill_batch in enumerate(batched(skills, batch_size), 1):
+            batch_skills = list(skill_batch)
+            logger.debug(f"Processing batch {batch_num} ({len(batch_skills)} skills)")
+
+            for skill in batch_skills:
+                skill_name = skill.get("name", "unknown")
+                skill_desc = skill.get("description", "")
+
+                # Index skill description
+                if skill_desc:
+                    await self._add_entry(
+                        content=f"Skill {skill_name}: {skill_desc}",
+                        metadata={
+                            "type": "skill",
+                            "skill_name": skill_name,
+                            "weight": 1.0,
+                        },
+                    )
+
+                # Index commands
+                commands = skill.get("commands", [])
+                for cmd in commands:
+                    cmd_name = cmd.get("name", "")
+                    cmd_desc = cmd.get("description", "") or cmd_name
+                    doc = f"Command {cmd_name}: {cmd_desc}"
+
+                    await self._add_entry(
+                        content=doc,
+                        metadata={
+                            "type": "command",
+                            "skill_name": skill_name,
+                            "command": cmd_name,
+                            "weight": 2.0,
+                        },
+                    )
+
+        logger.info(f"Cortex indexing complete. Total entries: {self._indexed_count}")
+        return self._indexed_count
+
     async def _add_entry(self, content: str, metadata: dict[str, Any]) -> None:
         """Add a single entry to the index."""
         if self._store is None:
@@ -167,4 +234,4 @@ class SkillIndexer:
         }
 
 
-__all__ = ["SkillIndexer", "IndexedSkill"]
+__all__ = ["IndexedSkill", "SkillIndexer"]

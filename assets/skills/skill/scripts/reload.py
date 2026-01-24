@@ -16,10 +16,11 @@ from omni.foundation.api.decorators import skill_command
 
     Use when cache issues occur, configs don't take effect, or descriptions were updated.
 
-    **Parameters**:
-    - `name` (optional, default: `git`): Skill name to reload
+    Args:
+        - name: str = git - Skill name to reload
 
-    **Returns**: Status message with reload result (success, not_loaded, or not_found).
+    Returns:
+        Status message with reload result (success, not_loaded, or not_found).
     """,
 )
 async def reload_skill(name: str = "git") -> str:

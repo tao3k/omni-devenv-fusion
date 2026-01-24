@@ -6,8 +6,6 @@ Migrated from tools.py to scripts pattern.
 
 import os
 import platform
-from pathlib import Path
-from typing import Optional
 
 from omni.foundation.api.decorators import skill_command
 
@@ -81,13 +79,18 @@ Use git_commit in git skill instead.
     """,
     inject_root=True,
 )
-async def run_task(cmd: str, args: Optional[list[str]] = None, **kwargs) -> str:
+async def run_task(cmd: str, args: list[str] | None = None, **kwargs) -> str:
+    # Ensure args is a list of strings
     if args is None:
         args = []
+    elif not isinstance(args, list):
+        args = [str(args)] if args else []
+    else:
+        # Ensure all elements are strings
+        args = [str(a) for a in args]
 
     if (
         args
-        and isinstance(args, list)
         and len(args) == 1
         and isinstance(args[0], str)
         and " " in args[0]
@@ -181,47 +184,35 @@ async def inspect_environment() -> str:
     name="run_command",
     category="workflow",
     description="""
-    Runs a shell command and returns stdout/stderr.
-
-    Use this for general-purpose command execution.
+    Run a shell command and return output.
 
     Args:
-        cmd: The command to execute (e.g., `ls`, `git`, `echo`).
-                Can include arguments in a single string like `"ls -la"`.
-        args: Optional list of arguments as separate strings.
-                Example: `{"cmd": "git", "args": ["status"]}`
-                If not provided, cmd is parsed for args.
-        timeout: Command timeout in seconds. Defaults to `60`.
-        tail_lines: If set, only show last N lines (default: None = show all).
-                    Use this for commands with large output like `pytest`, `cargo test`.
+        - cmd: str - Command to run
+        - working_dir: Optional[str] - Working directory
+        - timeout: int = 60 - Timeout in seconds
+        - tail_lines: Optional[int] - Show only last N lines
 
     Returns:
         Command stdout and stderr output.
-
-    Examples:
-        @omni("terminal.run_command", {"cmd": "git", "args": ["status"]})
-        @omni("terminal.run_command", {"cmd": "ls -la"})
-        @omni("terminal.run_command", {"cmd": "just test", "tail_lines": 50})
     """,
     inject_root=True,
 )
 async def run_command(
     cmd: str,
-    args: Optional[list[str]] = None,
+    working_dir: str | None = None,
     timeout: int = 60,
-    tail_lines: Optional[int] = None,
+    tail_lines: int | None = None,
 ) -> str:
-    if args is None:
-        args = []
-
-    if " " in cmd:
-        parts = cmd.split()
-        cmd = parts[0]
-        extra_args = parts[1:]
-        if extra_args:
-            args = extra_args + args
-
     from . import engine
 
-    result = engine.run_command(cmd, args, timeout=timeout)
-    return engine.format_result(result, cmd, args, tail_lines=tail_lines)
+    # Parse cmd string if it contains spaces
+    if " " in cmd:
+        parts = cmd.split()
+        cmd_name = parts[0]
+        cmd_args = [str(a) for a in parts[1:]]
+    else:
+        cmd_name = str(cmd)
+        cmd_args = []
+
+    result = engine.run_command(cmd_name, cmd_args, timeout=timeout, working_dir=working_dir)
+    return engine.format_result(result, cmd_name, cmd_args, tail_lines=tail_lines)

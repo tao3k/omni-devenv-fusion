@@ -12,11 +12,11 @@ import json
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from omni.foundation.api.decorators import skill_command
-from omni.foundation.config.paths import ConfigPaths
 from omni.foundation.config.logging import get_logger
+from omni.foundation.config.paths import ConfigPaths
 from omni.foundation.services.embedding import get_embedding_service
 from omni.foundation.services.vector import get_vector_store
 
@@ -39,7 +39,7 @@ MEMORY_ROOT = _get_memory_path()
 DEFAULT_TABLE = "knowledge_base"
 
 
-def _get_embedding(text: str) -> List[float]:
+def _get_embedding(text: str) -> list[float]:
     """
     Get embedding using Foundation embedding service.
 
@@ -60,7 +60,7 @@ def _get_embedding(text: str) -> List[float]:
         return (vector * repeats)[:dimension]
 
 
-def _load_skill_manifest(skill_name: str) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+def _load_skill_manifest(skill_name: str) -> tuple[dict[str, Any] | None, str | None]:
     """Load a skill's manifest and prompts."""
     from omni.foundation.config import get_setting
 
@@ -110,17 +110,23 @@ def _load_skill_manifest(skill_name: str) -> tuple[Optional[Dict[str, Any]], Opt
     description="""
     Store a key insight into long-term memory (LanceDB).
 
-    **Parameters**:
-    - `content` (required): The insight to store (what you learned)
-    - `metadata` (optional): Dictionary of metadata (tags, domain, etc.)
+    Use this when you've learned something reusable:
+    - "Use scope 'nix' for flake changes"
+    - "The project uses Conventional Commits"
+    - "Always run 'just validate' before committing"
 
-    **Returns**: Confirmation message with stored content preview.
+    Args:
+        - content: str - The insight to store (what you learned) (required)
+        - metadata: Optional[Dict[str, Any]] - Dictionary of metadata (tags, domain, etc.)
+
+    Returns:
+        Confirmation message with stored content preview.
     """,
     autowire=True,
 )
 async def save_memory(
     content: str,
-    metadata: Optional[Dict[str, Any]] = None,
+    metadata: dict[str, Any] | None = None,
     paths: ConfigPaths | None = None,
 ) -> str:
     """
@@ -168,7 +174,7 @@ async def save_memory(
         return "Failed to store memory."
     except Exception as e:
         logger.error("save_memory failed", error=str(e))
-        return f"Error saving memory: {str(e)}"
+        return f"Error saving memory: {e!s}"
 
 
 @skill_command(
@@ -177,11 +183,17 @@ async def save_memory(
     description="""
     Semantically search memory for relevant past experiences or rules.
 
-    **Parameters**:
-    - `query` (required): What you're looking for
-    - `limit` (optional, default: 5): Number of results to return
+    Examples:
+    - search_memory("git commit message format")
+    - search_memory("nixfmt error solution")
+    - search_memory("how to add a new skill")
 
-    **Returns**: Relevant memories found, or "No relevant memories found".
+    Args:
+        - query: str - What you're looking for (required)
+        - limit: int = 5 - Number of results to return
+
+    Returns:
+        Relevant memories found, or "No relevant memories found".
     """,
     autowire=True,
 )
@@ -221,7 +233,7 @@ async def search_memory(
         return "\n".join(output)
     except Exception as e:
         logger.error("search_memory failed", error=str(e))
-        return f"Error searching memory: {str(e)}"
+        return f"Error searching memory: {e!s}"
 
 
 @skill_command(
@@ -232,9 +244,11 @@ async def search_memory(
 
     Call this after bulk imports to improve search performance.
 
-    **Parameters**: None
+    Args:
+        - None
 
-    **Returns**: Confirmation of index creation.
+    Returns:
+        Confirmation of index creation.
     """,
     autowire=True,
 )
@@ -256,7 +270,7 @@ async def index_memory(
             return "Index creation/optimization complete. Search performance improved."
         return "Failed to create index."
     except Exception as e:
-        return f"Error creating index: {str(e)}"
+        return f"Error creating index: {e!s}"
 
 
 @skill_command(
@@ -265,9 +279,11 @@ async def index_memory(
     description="""
     Get statistics about stored memories.
 
-    **Parameters**: None
+    Args:
+        - None
 
-    **Returns**: Count of stored memories.
+    Returns:
+        Count of stored memories.
     """,
     autowire=True,
 )
@@ -284,7 +300,7 @@ async def get_memory_stats(
         count = await get_vector_store().count(collection=DEFAULT_TABLE)
         return f"Stored memories: {count}"
     except Exception as e:
-        return f"Error getting stats: {str(e)}"
+        return f"Error getting stats: {e!s}"
 
 
 @skill_command(
@@ -293,10 +309,15 @@ async def get_memory_stats(
     description="""
     Load a skill's manifest into semantic memory for LLM recall.
 
-    **Parameters**:
-    - `skill_name` (required): Name of the skill to load (e.g., "git", "terminal")
+    Usage:
+    - load_skill("git") - Load git skill
+    - load_skill("terminal") - Load terminal skill
 
-    **Returns**: Confirmation message with skill details.
+    Args:
+        - skill_name: str - Name of the skill to load (e.g., git, terminal) (required)
+
+    Returns:
+        Confirmation message with skill details.
     """,
     autowire=True,
 )
@@ -364,11 +385,11 @@ async def load_skill(
 
 
 __all__ = [
+    "DEFAULT_TABLE",
+    "MEMORY_ROOT",
+    "get_memory_stats",
+    "index_memory",
+    "load_skill",
     "save_memory",
     "search_memory",
-    "index_memory",
-    "get_memory_stats",
-    "load_skill",
-    "MEMORY_ROOT",
-    "DEFAULT_TABLE",
 ]

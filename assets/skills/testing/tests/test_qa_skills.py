@@ -13,8 +13,6 @@ Verifies:
 """
 
 import sys
-import tempfile
-import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -80,8 +78,9 @@ class TestRunPytest:
 
     def test_run_pytest_returns_structure(self):
         """Test run_pytest returns structured result with mocked subprocess."""
+        from unittest.mock import MagicMock, patch
+
         from testing.scripts.pytest import run_pytest
-        from unittest.mock import patch, MagicMock
 
         # Mock subprocess.run to avoid actual pytest execution
         mock_result = MagicMock()
@@ -100,6 +99,7 @@ class TestRunPytest:
     def test_run_pytest_security_sandbox(self):
         """Test run_pytest cannot escape project root."""
         from testing.scripts.pytest import run_pytest
+
         from omni.foundation.config.paths import ConfigPaths
 
         # Create mock ConfigPaths
@@ -136,8 +136,9 @@ class TestListTests:
 
     def test_list_tests_returns_structure(self):
         """Test list_tests returns structured result with mocked subprocess."""
+        from unittest.mock import MagicMock, patch
+
         from testing.scripts.pytest import list_tests
-        from unittest.mock import patch, MagicMock
 
         mock_result = MagicMock()
         mock_result.returncode = 0
@@ -154,6 +155,7 @@ class TestListTests:
     def test_list_tests_security_sandbox(self):
         """Test list_tests cannot escape project root."""
         from testing.scripts.pytest import list_tests
+
         from omni.foundation.config.paths import ConfigPaths
 
         mock_paths = MagicMock(spec=ConfigPaths)
@@ -216,9 +218,10 @@ class TestSearchDocumentation:
 
     def test_search_documentation_returns_structure(self):
         """Test search_documentation returns structured result with mocked rg."""
-        from knowledge.scripts.search_docs import search_documentation
-        from unittest.mock import patch, MagicMock
         import json
+        from unittest.mock import MagicMock, patch
+
+        from knowledge.scripts.search_docs import search_documentation
 
         # Mock ripgrep JSON output
         fake_output = (
@@ -249,8 +252,9 @@ class TestSearchDocumentation:
 
     def test_search_documentation_no_rg(self):
         """Test search_documentation returns error when rg missing."""
-        from knowledge.scripts import search_docs
         import shutil
+
+        from knowledge.scripts import search_docs
 
         # Temporarily hide rg
         original_which = shutil.which
@@ -265,8 +269,9 @@ class TestSearchDocumentation:
 
     def test_search_documentation_empty_query(self):
         """Test search_documentation with empty results (mocked)."""
+        from unittest.mock import MagicMock, patch
+
         from knowledge.scripts.search_docs import search_documentation
-        from unittest.mock import patch, MagicMock
 
         # Mock empty ripgrep output
         mock_proc = MagicMock()
@@ -285,9 +290,10 @@ class TestSearchStandards:
 
     def test_search_standards_returns_structure(self):
         """Test search_standards returns structured result with mocked rg."""
-        from knowledge.scripts.search_docs import search_standards
-        from unittest.mock import patch, MagicMock
         import json
+        from unittest.mock import MagicMock, patch
+
+        from knowledge.scripts.search_docs import search_standards
 
         # Mock ripgrep JSON output
         fake_output = (
@@ -318,6 +324,7 @@ class TestSearchStandards:
     def test_search_standards_missing_ref_dir(self):
         """Test search_standards when docs/reference/ missing."""
         from knowledge.scripts.search_docs import search_standards
+
         from omni.foundation.config.paths import ConfigPaths
 
         mock_paths = MagicMock(spec=ConfigPaths)

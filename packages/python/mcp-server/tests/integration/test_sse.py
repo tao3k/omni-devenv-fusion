@@ -7,9 +7,8 @@ Use the SSE server directly in manual tests for streaming functionality.
 import asyncio
 import socket
 
-import pytest
 import httpx
-
+import pytest
 from omni.mcp.transport.sse import SSEServer
 from omni.mcp.types import (
     JSONRPCRequest,
@@ -79,7 +78,7 @@ async def sse_server(handler):
     server_task.cancel()
     try:
         await asyncio.wait_for(server_task, timeout=2.0)
-    except (asyncio.CancelledError, asyncio.TimeoutError):
+    except (TimeoutError, asyncio.CancelledError):
         pass
 
 

@@ -12,25 +12,20 @@ Architecture:
     scripts/rendering.py-> Jinja2 templates for output
 """
 
-from typing import Dict, Any, Optional
-from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
+from typing import Any
 
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, StateGraph
+from rendering import render_error, render_workflow_result
 from state import GitWorkflowState, WorkflowStep
 from status import status as git_status
-from branch import list_branches as _git_branch, create_branch as _git_checkout
-import stash
-import add
-import commit
-from rendering import render_workflow_result, render_error
-
 
 # ==============================================================================
 # Node Functions (Pure Functions)
 # ==============================================================================
 
 
-def node_check_env(state: GitWorkflowState) -> Dict[str, Any]:
+def node_check_env(state: GitWorkflowState) -> dict[str, Any]:
     """
     Check the current Git environment.
 
@@ -62,13 +57,13 @@ def node_check_env(state: GitWorkflowState) -> Dict[str, Any]:
         }
     except GitError as e:
         return {
-            "error_message": f"Failed to check environment: {str(e)}",
+            "error_message": f"Failed to check environment: {e!s}",
             "current_step": WorkflowStep.ERROR.value,
             "success": False,
         }
 
 
-def node_stash(state: GitWorkflowState) -> Dict[str, Any]:
+def node_stash(state: GitWorkflowState) -> dict[str, Any]:
     """
     Stash current changes.
 
@@ -96,13 +91,13 @@ def node_stash(state: GitWorkflowState) -> Dict[str, Any]:
         }
     except GitError as e:
         return {
-            "error_message": f"Failed to stash changes: {str(e)}",
+            "error_message": f"Failed to stash changes: {e!s}",
             "current_step": WorkflowStep.ERROR.value,
             "success": False,
         }
 
 
-def node_switch_branch(state: GitWorkflowState) -> Dict[str, Any]:
+def node_switch_branch(state: GitWorkflowState) -> dict[str, Any]:
     """
     Switch to the target branch.
 
@@ -124,13 +119,13 @@ def node_switch_branch(state: GitWorkflowState) -> Dict[str, Any]:
         }
     except GitError as e:
         return {
-            "error_message": f"Failed to switch branch: {str(e)}",
+            "error_message": f"Failed to switch branch: {e!s}",
             "current_step": WorkflowStep.ERROR.value,
             "success": False,
         }
 
 
-def node_add(state: GitWorkflowState) -> Dict[str, Any]:
+def node_add(state: GitWorkflowState) -> dict[str, Any]:
     """
     Stage all changes for commit.
 
@@ -145,13 +140,13 @@ def node_add(state: GitWorkflowState) -> Dict[str, Any]:
         }
     except GitError as e:
         return {
-            "error_message": f"Failed to stage changes: {str(e)}",
+            "error_message": f"Failed to stage changes: {e!s}",
             "current_step": WorkflowStep.ERROR.value,
             "success": False,
         }
 
 
-def node_commit(state: GitWorkflowState) -> Dict[str, Any]:
+def node_commit(state: GitWorkflowState) -> dict[str, Any]:
     """
     Commit staged changes.
 
@@ -187,13 +182,13 @@ def node_commit(state: GitWorkflowState) -> Dict[str, Any]:
         }
     except GitError as e:
         return {
-            "error_message": f"Failed to commit: {str(e)}",
+            "error_message": f"Failed to commit: {e!s}",
             "current_step": WorkflowStep.ERROR.value,
             "success": False,
         }
 
 
-def node_pop_stash(state: GitWorkflowState) -> Dict[str, Any]:
+def node_pop_stash(state: GitWorkflowState) -> dict[str, Any]:
     """
     Apply stashed changes and remove from stash.
 
@@ -215,7 +210,7 @@ def node_pop_stash(state: GitWorkflowState) -> Dict[str, Any]:
         }
     except GitError as e:
         return {
-            "error_message": f"Failed to pop stash: {str(e)}",
+            "error_message": f"Failed to pop stash: {e!s}",
             "current_step": WorkflowStep.ERROR.value,
             "success": False,
         }
@@ -285,9 +280,7 @@ def route_after_switch(state: GitWorkflowState) -> str:
     if intent == "hotfix" and state.stashed_hash:
         # For hotfix, we might want to pop stash after commit
         return "add"
-    elif intent == "pr":
-        return "add"
-    elif state.target_branch:
+    elif intent == "pr" or state.target_branch:
         return "add"
 
     return END
@@ -395,8 +388,8 @@ async def run_git_workflow(
     intent: str,
     target_branch: str = "",
     commit_message: str = "",
-    resume_id: Optional[str] = None,
-    config: Optional[Dict[str, Any]] = None,
+    resume_id: str | None = None,
+    config: dict[str, Any] | None = None,
 ) -> GitWorkflowState:
     """
     Convenience function to run a Git workflow.

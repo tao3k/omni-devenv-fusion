@@ -20,4 +20,4 @@ from .app import app, main
 from .console import err_console
 from .runner import run_skills
 
-__all__ = ["app", "main", "err_console", "run_skills"]
+__all__ = ["app", "err_console", "main", "run_skills"]

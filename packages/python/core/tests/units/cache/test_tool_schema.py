@@ -3,8 +3,6 @@ Tests for omni.core.cache.tool_schema
 """
 
 import time
-import pytest
-from unittest.mock import patch
 
 
 class TestToolSchemaCache:
@@ -99,8 +97,9 @@ class TestToolSchemaCache:
 
     def test_thread_safety(self):
         """Test thread-safe operations."""
-        from omni.core.cache.tool_schema import ToolSchemaCache
         import threading
+
+        from omni.core.cache.tool_schema import ToolSchemaCache
 
         cache = ToolSchemaCache()
         errors = []

@@ -12,20 +12,19 @@ import os
 import subprocess
 import tempfile
 import time
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import structlog
 
-from omni.foundation.runtime.gitops import get_project_root
 from omni.foundation.config.skills import SKILLS_DIR
+from omni.foundation.runtime.gitops import get_project_root
+from pydantic import BaseModel
 
 logger = structlog.get_logger(__name__)
 
 
-@dataclass
-class ValidationResult:
+class ValidationResult(BaseModel):
     """Result of validating a skill in the sandbox."""
 
     success: bool

@@ -159,4 +159,4 @@ def build_persona_prompt(role: str) -> str:
     )
 
 
-__all__ = ["PERSONAS", "load_personas_from_file", "get_persona", "build_persona_prompt"]
+__all__ = ["PERSONAS", "build_persona_prompt", "get_persona", "load_personas_from_file"]

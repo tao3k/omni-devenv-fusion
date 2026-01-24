@@ -59,6 +59,6 @@ def get_conf_dir() -> str:
 
 
 __all__ = [
-    "set_conf_dir",
     "get_conf_dir",
+    "set_conf_dir",
 ]

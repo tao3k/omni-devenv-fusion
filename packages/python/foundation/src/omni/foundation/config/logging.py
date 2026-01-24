@@ -25,11 +25,11 @@ from __future__ import annotations
 
 import logging
 import sys
+from collections.abc import Callable
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 import structlog
-
 
 # =============================================================================
 # ANSI Color Codes
@@ -350,21 +350,21 @@ def log_data(label: str, data: dict[str, Any]) -> None:
     logger.info(f"📊 {label}", **data)
 
 
-# Type alias for log handlers
-LogHandler = Optional[callable]
+# Type alias for log handlers (PEP 695 syntax)
+type LogHandler = Callable[..., Any] | None
 
 __all__ = [
+    "Colors",
+    "LogHandler",
     "configure_logging",
+    "format_log",
     "get_logger",
-    "setup_verbose_logging",
     "log_banner",
-    "log_ready",
+    "log_data",
     "log_error",
     "log_loading",
-    "log_task_start",
+    "log_ready",
     "log_task_done",
-    "log_data",
-    "format_log",
-    "LogHandler",
-    "Colors",
+    "log_task_start",
+    "setup_verbose_logging",
 ]

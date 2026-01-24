@@ -47,14 +47,14 @@ class RepomixCache:
     """
 
     __slots__ = (
-        "_target_path",
+        "_cache_dir",
+        "_cached",
         "_explicit_config",
         "_ignore_patterns",
-        "_repomix_bin",
-        "_cache_dir",
-        "_output_file",
-        "_cached",
         "_loaded",
+        "_output_file",
+        "_repomix_bin",
+        "_target_path",
     )
 
     def __init__(

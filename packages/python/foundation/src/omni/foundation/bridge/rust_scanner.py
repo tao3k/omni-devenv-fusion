@@ -151,6 +151,6 @@ class RustSkillScanner(SkillScannerProvider):
 
 
 __all__ = [
-    "RustSkillScanner",
     "RUST_AVAILABLE",
+    "RustSkillScanner",
 ]

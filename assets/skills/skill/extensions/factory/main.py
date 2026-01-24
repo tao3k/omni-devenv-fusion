@@ -11,7 +11,6 @@ Usage (from CLI plugin):
 """
 
 import sys
-from pathlib import Path
 from typing import Any
 
 from rich.console import Console
@@ -37,7 +36,6 @@ async def run(
         Dict with success status and result details
     """
     from .core import MetaAgent
-    from .result import GenerationResult
 
     console.print(
         Panel(
@@ -96,6 +94,7 @@ def main():
     CLI entry point when running this module directly.
     """
     import asyncio
+
     import typer
 
     app = typer.Typer(

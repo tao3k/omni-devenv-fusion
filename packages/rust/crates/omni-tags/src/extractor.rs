@@ -188,33 +188,29 @@ impl TagExtractor {
                 _ => None,
             };
 
-            if lang.is_none() {
-                continue;
-            }
-
-            let lang = lang.unwrap();
-
-            // Check file size
-            if let Ok(metadata) = entry.metadata() {
-                if metadata.len() > config.max_file_size {
-                    continue;
-                }
-            }
-
-            file_count += 1;
-
-            match std::fs::read_to_string(path) {
-                Ok(content) => {
-                    let matches = Self::search_content(&content, pattern, lang, path)?;
-                    all_matches.extend(matches);
-
-                    if all_matches.len() >= config.max_matches_per_file * 10 {
-                        // Stop if we have too many matches
-                        break;
+            if let Some(lang) = lang {
+                // Check file size
+                if let Ok(metadata) = entry.metadata() {
+                    if metadata.len() > config.max_file_size {
+                        continue;
                     }
                 }
-                Err(_) => continue,
-            };
+
+                file_count += 1;
+
+                match std::fs::read_to_string(path) {
+                    Ok(content) => {
+                        let matches = Self::search_content(&content, pattern, lang, path)?;
+                        all_matches.extend(matches);
+
+                        if all_matches.len() >= config.max_matches_per_file * 10 {
+                            // Stop if we have too many matches
+                            break;
+                        }
+                    }
+                    Err(_) => continue,
+                };
+            }
         }
 
         if all_matches.is_empty() {

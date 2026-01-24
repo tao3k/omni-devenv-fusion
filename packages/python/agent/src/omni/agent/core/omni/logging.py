@@ -7,7 +7,7 @@ Provides clean, human-readable logging for tool execution:
 - Completion summaries: ✅ Completed in N steps, M tool calls
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from rich.console import Console
 from rich.text import Text
@@ -21,7 +21,7 @@ def _truncate(text: Any, max_len: int = 50) -> str:
     return s[:max_len] + "..." if len(s) > max_len else s
 
 
-def log_step(step: int, total: int, tool_name: str, args: Dict[str, Any]) -> None:
+def log_step(step: int, total: int, tool_name: str, args: dict[str, Any]) -> None:
     """Log a tool call step with clean format.
 
     Example output:

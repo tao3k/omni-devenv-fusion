@@ -4,9 +4,10 @@ test_librarian.py - Librarian Tests
 Tests for the Librarian knowledge management class.
 """
 
-import pytest
-import tempfile
 import os
+import tempfile
+
+import pytest
 
 
 class TestKnowledgeEntry:
@@ -68,8 +69,9 @@ class TestLibrarian:
 
     def test_ingest_file_not_found(self):
         """ingest_file should return False for non-existent file."""
-        from omni.core.knowledge.librarian import Librarian
         import unittest.mock as mock
+
+        from omni.core.knowledge.librarian import Librarian
 
         with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
             librarian = Librarian()
@@ -80,8 +82,9 @@ class TestLibrarian:
 
     def test_ingest_file_success(self):
         """ingest_file should return True and cache entries."""
-        from omni.core.knowledge.librarian import Librarian
         import unittest.mock as mock
+
+        from omni.core.knowledge.librarian import Librarian
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             f.write("# Test Document\n\nSome content here.")
@@ -101,8 +104,9 @@ class TestLibrarian:
 
     def test_ingest_file_with_metadata(self):
         """ingest_file should use provided metadata."""
-        from omni.core.knowledge.librarian import Librarian
         import unittest.mock as mock
+
+        from omni.core.knowledge.librarian import Librarian
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("Test content")
@@ -124,8 +128,9 @@ class TestLibrarian:
 
     def test_ingest_directory_not_found(self):
         """ingest_directory should return 0 for non-existent directory."""
-        from omni.core.knowledge.librarian import Librarian
         import unittest.mock as mock
+
+        from omni.core.knowledge.librarian import Librarian
 
         with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
             librarian = Librarian()
@@ -136,8 +141,9 @@ class TestLibrarian:
 
     def test_ingest_directory_success(self):
         """ingest_directory should return count of ingested files."""
-        from omni.core.knowledge.librarian import Librarian
         import unittest.mock as mock
+
+        from omni.core.knowledge.librarian import Librarian
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create test files
@@ -154,8 +160,9 @@ class TestLibrarian:
 
     def test_ingest_directory_filters_by_extension(self):
         """ingest_directory should filter by extension."""
-        from omni.core.knowledge.librarian import Librarian
         import unittest.mock as mock
+
+        from omni.core.knowledge.librarian import Librarian
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create files with different extensions
@@ -177,8 +184,9 @@ class TestLibrarian:
     @pytest.mark.asyncio
     async def test_search_not_ready(self):
         """search() should return empty list when not ready."""
-        from omni.core.knowledge.librarian import Librarian
         import unittest.mock as mock
+
+        from omni.core.knowledge.librarian import Librarian
 
         with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
             librarian = Librarian()
@@ -189,8 +197,9 @@ class TestLibrarian:
 
     def test_get_stats_not_ready(self):
         """get_stats() should return ready: False when not initialized."""
-        from omni.core.knowledge.librarian import Librarian
         import unittest.mock as mock
+
+        from omni.core.knowledge.librarian import Librarian
 
         with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
             librarian = Librarian()
@@ -205,8 +214,9 @@ class TestLibrarianChunking:
 
     def test_chunk_text_small(self):
         """Small text should not be chunked."""
-        from omni.core.knowledge.librarian import Librarian
         import unittest.mock as mock
+
+        from omni.core.knowledge.librarian import Librarian
 
         with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
             librarian = Librarian()
@@ -217,8 +227,9 @@ class TestLibrarianChunking:
 
     def test_chunk_text_large(self):
         """Large text should be split into chunks."""
-        from omni.core.knowledge.librarian import Librarian
         import unittest.mock as mock
+
+        from omni.core.knowledge.librarian import Librarian
 
         with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
             librarian = Librarian()
@@ -230,8 +241,9 @@ class TestLibrarianChunking:
 
     def test_chunk_text_preserves_lines(self):
         """Chunked text should preserve line boundaries."""
-        from omni.core.knowledge.librarian import Librarian
         import unittest.mock as mock
+
+        from omni.core.knowledge.librarian import Librarian
 
         with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
             librarian = Librarian()
@@ -251,13 +263,14 @@ class TestHyperSearch:
     @pytest.mark.asyncio
     async def test_search_with_highlighting(self):
         """search_with_highlighting should return highlighted results."""
+        import unittest.mock as mock
+
         from omni.core.knowledge.librarian import (
-            Librarian,
             HyperSearch,
             KnowledgeEntry,
+            Librarian,
             SearchResult,
         )
-        import unittest.mock as mock
 
         with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
             librarian = Librarian()
@@ -294,13 +307,14 @@ class TestHyperSearch:
     @pytest.mark.asyncio
     async def test_find_related(self):
         """find_related should search for related entries."""
+        import unittest.mock as mock
+
         from omni.core.knowledge.librarian import (
-            Librarian,
             HyperSearch,
             KnowledgeEntry,
+            Librarian,
             SearchResult,
         )
-        import unittest.mock as mock
 
         with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
             librarian = Librarian()

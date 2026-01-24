@@ -18,13 +18,13 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from omni.foundation.config.logging import get_logger
 
+from .hive import HiveRouter
 from .indexer import SkillIndexer
 from .router import RouteResult, SemanticRouter
-from .hive import HiveRouter
 from .sniffer import IntentSniffer
 
 logger = get_logger("omni.core.router.main")
@@ -100,7 +100,7 @@ class OmniRouter:
 
     async def route(
         self, query: str, context: dict[str, Any] | None = None
-    ) -> Optional[RouteResult]:
+    ) -> RouteResult | None:
         """Route a query using the unified routing strategy.
 
         Args:

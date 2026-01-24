@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 # Layer 0: Physical Directory Management
-from .dirs import PRJ_DIRS, PRJ_CONFIG, PRJ_RUNTIME, PRJ_DATA, PRJ_CACHE
+from .dirs import PRJ_CACHE, PRJ_CONFIG, PRJ_DATA, PRJ_DIRS, PRJ_RUNTIME
 
 # =============================================================================
 # Semantic Path Manager
@@ -300,14 +300,14 @@ def get_mcp_config_path() -> Path:
 # =============================================================================
 
 __all__ = [
-    "ConfigPaths",
-    "get_config_paths",
-    "get_api_key",
-    "get_mcp_config",
-    "get_anthropic_settings_path",
-    "get_mcp_config_path",
     "AuthorizationWait",
+    "ConfigPaths",
     "format_authorization_wait",
+    "get_anthropic_settings_path",
+    "get_api_key",
+    "get_config_paths",
+    "get_mcp_config",
+    "get_mcp_config_path",
 ]
 
 

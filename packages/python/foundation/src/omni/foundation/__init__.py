@@ -26,6 +26,7 @@ _services_module = None
 _utils_module = None
 _runtime_module = None
 _config_module = None
+_checkpoint_module = None
 
 
 def __getattr__(name: str):
@@ -36,7 +37,8 @@ def __getattr__(name: str):
         _services_module, \
         _utils_module, \
         _runtime_module, \
-        _config_module
+        _config_module, \
+        _checkpoint_module
 
     if name == "__version__":
         return _get_version()
@@ -74,15 +76,32 @@ def __getattr__(name: str):
         "PRJ_CONFIG",
         "PRJ_RUNTIME",
         "PRJ_PATH",
+        "PRJ_CHECKPOINT",
         "get_prj_dir",
         "get_data_dir",
         "get_cache_dir",
         "get_config_dir",
         "get_runtime_dir",
+        "get_checkpoint_db_path",
+        "get_checkpoint_table_name",
     ):
         from . import config
 
         return getattr(config.dirs, name)
+
+    # Lazy load checkpoint module (unified checkpoint storage)
+    if name in (
+        "get_checkpointer",
+        "save_workflow_state",
+        "load_workflow_state",
+        "get_workflow_history",
+        "delete_workflow_state",
+        "save_workflow_state_sqlite",
+        "load_workflow_state_sqlite",
+    ):
+        if _checkpoint_module is None:
+            _checkpoint_module = __import__("omni.foundation.checkpoint", fromlist=[""])
+        return getattr(_checkpoint_module, name)
 
     # Lazy load config.settings
     if name in ("get_setting",):

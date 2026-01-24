@@ -4,8 +4,6 @@ Settings Tests - Simplified
 Tests for omni.foundation.config.settings module (basic functionality only).
 """
 
-import pytest
-from pathlib import Path
 
 
 class TestSettingsClass:

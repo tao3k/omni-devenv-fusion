@@ -3,16 +3,15 @@ git/scripts/stash.py - Git stash operations
 """
 
 import subprocess
-from typing import Optional
 from pathlib import Path
 
 
-def _run(cmd: list[str], cwd: Optional[Path] = None) -> str:
+def _run(cmd: list[str], cwd: Path | None = None) -> str:
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
     return result.stdout.strip()
 
 
-def stash_save(msg: Optional[str] = None) -> str:
+def stash_save(msg: str | None = None) -> str:
     """Stash working directory changes."""
     cmd = ["git", "stash", "push"]
     if msg:

@@ -53,9 +53,9 @@ def skill_create(
     force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing skill"),
 ):
     """Create a new skill from template."""
-    from omni.foundation.config.skills import SKILLS_DIR
-    from pathlib import Path
     import shutil
+
+    from omni.foundation.config.skills import SKILLS_DIR
 
     skills_dir = SKILLS_DIR()
     skill_dir = skills_dir / skill_name

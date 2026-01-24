@@ -1,18 +1,16 @@
 """Unit tests for SSE transport."""
 
-import pytest
-import asyncio
 
+import pytest
 from omni.mcp.transport.sse import SSESession, SSESessionManager
-from omni.mcp.types import JSONRPCRequest
 
 
 class TestSSESession:
-    """Tests for SSESession dataclass."""
+    """Tests for SSESession Pydantic model."""
 
     def test_session_creation(self):
         """Test session creation with required fields."""
-        session = SSESession(session_id="test-123", handler=None)
+        session = SSESession(session_id="test-123")
         assert session.session_id == "test-123"
         assert session.connected is True
         assert session.notification_queue is not None
@@ -20,7 +18,7 @@ class TestSSESession:
     @pytest.mark.asyncio
     async def test_send_notification_queues_message(self):
         """Test that send_notification queues the message."""
-        session = SSESession(session_id="test-123", handler=None)
+        session = SSESession(session_id="test-123")
 
         await session.send_notification("test/method", {"key": "value"})
 
@@ -35,7 +33,7 @@ class TestSSESession:
     @pytest.mark.asyncio
     async def test_send_notification_to_disconnected_session(self):
         """Test that notifications are skipped for disconnected sessions."""
-        session = SSESession(session_id="test-123", handler=None)
+        session = SSESession(session_id="test-123")
         session.connected = False
 
         # This should not raise and should not queue anything
@@ -45,7 +43,7 @@ class TestSSESession:
 
     def test_disconnect(self):
         """Test session disconnect."""
-        session = SSESession(session_id="test-123", handler=None)
+        session = SSESession(session_id="test-123")
         assert session.connected is True
 
         session.disconnect()
@@ -61,7 +59,7 @@ class TestSSESessionManager:
         """Test session creation."""
         manager = SSESessionManager()
 
-        session = await manager.create_session(handler=None)
+        session = await manager.create_session()
 
         assert session.session_id is not None
         assert len(session.session_id) == 8  # UUID truncated
@@ -71,7 +69,7 @@ class TestSSESessionManager:
         """Test getting an existing session."""
         manager = SSESessionManager()
 
-        created = await manager.create_session(handler=None)
+        created = await manager.create_session()
         retrieved = await manager.get_session(created.session_id)
 
         assert retrieved is not None
@@ -91,7 +89,7 @@ class TestSSESessionManager:
         """Test session removal."""
         manager = SSESessionManager()
 
-        session = await manager.create_session(handler=None)
+        session = await manager.create_session()
         session_id = session.session_id
 
         await manager.remove_session(session_id)
@@ -109,8 +107,8 @@ class TestSSESessionManager:
         assert manager.active_sessions == 0
 
         # Add sessions
-        await manager.create_session(handler=None)
-        await manager.create_session(handler=None)
+        await manager.create_session()
+        await manager.create_session()
 
         assert manager.active_sessions == 2
 
@@ -120,8 +118,8 @@ class TestSSESessionManager:
         manager = SSESessionManager()
 
         # Create multiple sessions
-        session1 = await manager.create_session(handler=None)
-        session2 = await manager.create_session(handler=None)
+        session1 = await manager.create_session()
+        session2 = await manager.create_session()
 
         # Broadcast a notification
         await manager.broadcast_notification("broadcast/test", {"broadcast": True})

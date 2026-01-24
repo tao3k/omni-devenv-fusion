@@ -7,7 +7,6 @@ Centralized access to omni-vector (LanceDB).
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +14,7 @@ import structlog
 
 from omni.foundation.config.dirs import PRJ_CACHE
 from omni.foundation.services.embedding import get_embedding_service
+from pydantic import BaseModel
 
 logger = structlog.get_logger(__name__)
 
@@ -49,8 +49,7 @@ def _get_omni_vector() -> Any | None:
     return _cached_omni_vector
 
 
-@dataclass
-class SearchResult:
+class SearchResult(BaseModel):
     """Result from a vector store search operation."""
 
     content: str

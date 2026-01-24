@@ -27,10 +27,9 @@ Usage:
 """
 
 import asyncio
+import io
 import json
 import sys
-import io
-from typing import Optional
 
 # Use absolute import for uv run compatibility
 try:
@@ -45,11 +44,12 @@ except ImportError:
     description="""
     Crawl a web page and extract its content as markdown using Playwright.
 
-    **Parameters**:
-    - `url` (required): Target URL to crawl
-    - `fit_markdown` (optional, default: true): Whether to clean and simplify the markdown
+    Args:
+        - url: str - Target URL to crawl (required)
+        - fit_markdown: bool = true - Whether to clean and simplify the markdown
 
-    **Returns**: Dictionary with success, url, content, error, and metadata (title, description).
+    Returns:
+        Dictionary with success, url, content, error, and metadata (title, description).
     """,
 )
 async def crawl_url(
@@ -113,9 +113,11 @@ async def crawl_url(
     description="""
     Check if the crawler skill is properly configured and Playwright browsers are installed.
 
-    **Parameters**: None
+    Args:
+        - None
 
-    **Returns**: Dictionary with ready status and browsers info or error message.
+    Returns:
+        Dictionary with ready status and browsers info or error message.
     """,
 )
 async def check_crawler_ready() -> dict:

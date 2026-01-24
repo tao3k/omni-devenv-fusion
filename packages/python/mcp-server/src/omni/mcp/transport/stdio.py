@@ -14,20 +14,21 @@ Performance Optimizations:
 Logging: Uses Foundation layer (omni.foundation.config.logging)
 """
 
-import sys
 import asyncio
-import orjson
-from typing import Optional, AsyncGenerator, Tuple
+import sys
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+
+import orjson
 
 from omni.foundation.config.logging import get_logger
 
+from ..interfaces import MCPRequestHandler, MCPTransport
 from ..types import (
+    ErrorCode,
     JSONRPCResponse,
     make_error_response,
-    ErrorCode,
 )
-from ..interfaces import MCPRequestHandler, MCPTransport
 
 logger = get_logger("omni.mcp.stdio")
 
@@ -48,8 +49,8 @@ class StdioTransport(MCPTransport):
     """
 
     def __init__(self):
-        self._handler: Optional[MCPRequestHandler] = None
-        self._reader: Optional[asyncio.StreamReader] = None
+        self._handler: MCPRequestHandler | None = None
+        self._reader: asyncio.StreamReader | None = None
         self._running = False
         self._transport = None
 
@@ -204,7 +205,7 @@ class _WriteStream:
 
 
 @asynccontextmanager
-async def stdio_server() -> AsyncGenerator[Tuple[_StdioStreams, _WriteStream], None]:
+async def stdio_server() -> AsyncGenerator[tuple[_StdioStreams, _WriteStream]]:
     """
     Async context manager for stdio transport.
 

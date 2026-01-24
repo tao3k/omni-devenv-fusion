@@ -7,9 +7,9 @@ Uses vector search to match natural language to skill commands.
 
 from __future__ import annotations
 
-from typing import Optional, Literal
+from typing import Literal
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from omni.foundation.config.logging import get_logger
 
@@ -58,7 +58,7 @@ class SemanticRouter:
 
     async def route(
         self, query: str, threshold: float = 0.5, limit: int = 3
-    ) -> Optional[RouteResult]:
+    ) -> RouteResult | None:
         """
         Route a natural language query to a skill command.
 
@@ -105,7 +105,7 @@ class SemanticRouter:
 
     async def route_batch(
         self, queries: list[str], threshold: float = 0.5
-    ) -> list[Tuple[str, Optional[RouteResult]]]:
+    ) -> list[Tuple[str, RouteResult | None]]:
         """Route multiple queries.
 
         Args:
@@ -143,7 +143,7 @@ class FallbackRouter:
     # Command name patterns
     COMMAND_PATTERN = r"^(\w+)\.(\w+)$"
 
-    async def route(self, query: str) -> Optional[RouteResult]:
+    async def route(self, query: str) -> RouteResult | None:
         """
         Try to match explicit command pattern.
 
@@ -206,7 +206,7 @@ class UnifiedRouter:
             logger.debug(f"Failed to load skill index: {e}")
             return {}
 
-    async def route(self, query: str, threshold: float = 0.5) -> Optional[RouteResult]:
+    async def route(self, query: str, threshold: float = 0.5) -> RouteResult | None:
         """
         Hybrid route: combine semantic search + keyword matching.
 
@@ -347,4 +347,4 @@ class UnifiedRouter:
         return "low"
 
 
-__all__ = ["SemanticRouter", "FallbackRouter", "UnifiedRouter", "RouteResult"]
+__all__ = ["FallbackRouter", "RouteResult", "SemanticRouter", "UnifiedRouter"]

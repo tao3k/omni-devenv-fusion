@@ -6,12 +6,12 @@ State containers for skill workflows and graph execution.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Any
 
+from pydantic import BaseModel
 
-@dataclass
-class GraphState:
+
+class GraphState(BaseModel):
     """Graph state container for LangGraph workflows.
 
     Used by smart_commit and other workflow skills.
@@ -19,12 +19,12 @@ class GraphState:
 
     project_root: str = "."
     workflow_id: str = ""
-    staged_files: list[str] = field(default_factory=list)
+    staged_files: list[str] = []
     diff_content: str = ""
     status: str = "pending"
     error: str = ""
     lefthook_error: str = ""
-    security_issues: list[str] = field(default_factory=list)
+    security_issues: list[str] = []
     scope_warning: str = ""
     lefthook_report: str = ""
     commit_message: str = ""
@@ -48,32 +48,31 @@ class GraphState:
 
     def __iter__(self):
         """Iterate over keys."""
-        return iter(self.__dict__)
+        return iter(self.model_fields_set)
 
     def keys(self):
         """Return state keys."""
-        return self.__dict__.keys()
+        return iter(self.model_fields_set)
 
     def values(self):
         """Return state values."""
-        return self.__dict__.values()
+        return (getattr(self, k) for k in self.model_fields_set)
 
     def items(self):
         """Return state items."""
-        return self.__dict__.items()
+        return ((k, getattr(self, k)) for k in self.model_fields_set)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to regular dict."""
-        return dict(self.__dict__)
+        return self.model_dump()
 
 
-@dataclass
-class WorkflowState:
+class WorkflowState(BaseModel):
     """Simple workflow state for non-graph workflows."""
 
     workflow_id: str = ""
     status: str = "pending"
-    data: dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any] = {}
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get value from state."""

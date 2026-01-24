@@ -7,8 +7,8 @@ Configuration-driven API key loading from settings.yaml.
 Supports reading from .claude/settings.json via get_anthropic_api_key().
 """
 
-from omni.foundation.config.settings import get_setting
 from omni.foundation.api.api_key import get_anthropic_api_key
+from omni.foundation.config.settings import get_setting
 
 
 def get_inference_config() -> dict:
@@ -61,4 +61,4 @@ def load_api_key() -> str | None:
     return None
 
 
-__all__ = ["load_api_key", "get_inference_config"]
+__all__ = ["get_inference_config", "load_api_key"]

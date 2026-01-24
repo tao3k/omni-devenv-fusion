@@ -19,16 +19,23 @@ ODF-EP Protocol: skill_command Description Standards
 CRITICAL: The LLM only sees the explicit `description=` parameter.
 Multi-line docstrings are NOT visible to LLMs - only line 1!
 
-Description Structure (NEW STANDARD):
+Description Structure (V2.0 STANDARD):
     description="""
     One-line summary starting with an action verb.
 
-    **Parameters**:
-    - `param_name` (required): Description
-    - `optional_param` (optional, default: `value`): Description
+    Args:
+        - param_name: Type = default - Description (required/optional)
+        - optional_param: Type = value - Description
 
-    **Returns**: Description of return value.
+    Returns:
+        Description of return value.
     """
+
+Format Rules:
+    - Each param starts with "- "
+    - Format: "- name: Type = default - Description"
+    - Optional params have "= default"
+    - Use Python type syntax: str, int, bool, list[str], Optional[str]
 
 Action Verbs (First Line):
     Create, Get, Search, Update, Delete, Execute, Run, Load, Save,
@@ -55,13 +62,14 @@ from omni.foundation.api.decorators import skill_command
     description="""
     Execute an example command with a single parameter.
 
-    **Parameters**:
-    - `param` (required): The parameter value to process
+    Args:
+        - param: str - The parameter value to process (required)
 
-    **Returns**: A formatted string result with the parameter value.
+    Returns:
+        A formatted string result with the parameter value.
     """,
 )
-def example(param: str = "default") -> str:
+def example(param: str) -> str:
     return f"Example: {param}"
 
 
@@ -71,11 +79,12 @@ def example(param: str = "default") -> str:
     description="""
     Execute an example command with optional boolean and integer parameters.
 
-    **Parameters**:
-    - `enabled` (optional, default: `true`): Whether the feature is enabled
-    - `value` (optional, default: `42`): The numeric value to use
+    Args:
+        - enabled: bool = true - Whether the feature is enabled
+        - value: int = 42 - The numeric value to use
 
-    **Returns**: A dictionary containing the `enabled` and `value` results.
+    Returns:
+        A dictionary containing the enabled and value results.
     """,
 )
 def example_with_options(enabled: bool = True, value: int = 42) -> dict:
@@ -91,11 +100,12 @@ def example_with_options(enabled: bool = True, value: int = 42) -> dict:
     description="""
     Process a list of data strings by optionally filtering out empty entries.
 
-    **Parameters**:
-    - `data` (required): The list of input data strings to process
-    - `filter_empty` (optional, default: `true`): Whether to remove empty strings
+    Args:
+        - data: list[str] - The list of input data strings to process (required)
+        - filter_empty: bool = true - Whether to remove empty strings
 
-    **Returns**: The processed list of data strings.
+    Returns:
+        The processed list of data strings.
     """,
 )
 def process_data(data: list[str], filter_empty: bool = True) -> list[str]:

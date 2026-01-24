@@ -1,6 +1,5 @@
 """Unit tests for omni.mcp.types."""
 
-import pytest
 
 from omni.mcp.types import (
     ErrorCode,

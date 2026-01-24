@@ -25,6 +25,7 @@ pub struct SecurityViolation {
     pub snippet: String,
 }
 
+#[allow(clippy::expect_used)]
 static SECRET_PATTERNS: Lazy<RegexSet> = Lazy::new(|| {
     RegexSet::new([
         r"AKIA[0-9A-Z]{16}",                    // AWS Access Key ID
@@ -33,7 +34,7 @@ static SECRET_PATTERNS: Lazy<RegexSet> = Lazy::new(|| {
         r"-----BEGIN [A-Z ]+ PRIVATE KEY-----", // PEM Private Key
         r#"(?i)(api_key|access_token|secret)\s*[:=]\s*["'][A-Za-z0-9_=-]{16,}["']"#, // Generic API Key
     ])
-    .expect("Failed to compile security patterns")
+    .expect("invalid regex pattern in security scanner")
 });
 
 static PATTERN_NAMES: &[&str] = &[

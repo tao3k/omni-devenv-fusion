@@ -179,10 +179,10 @@ class TestSkillCommandDecorator:
         assert list_directory._is_skill_command is True
 
     def test_list_directory_category_read(self):
-        """Test list_directory has category 'read'."""
+        """Test list_directory has category 'view'."""
         from filesystem.scripts.io import list_directory
 
-        assert self._get_category(list_directory) == "read"
+        assert self._get_category(list_directory) == "view"
 
     def test_write_file_has_skill_command_attr(self):
         """Test write_file has _is_skill_command and _skill_config attributes."""
@@ -199,10 +199,10 @@ class TestSkillCommandDecorator:
         assert get_file_info._is_skill_command is True
 
     def test_get_file_info_category_read(self):
-        """Test get_file_info has category 'read'."""
+        """Test get_file_info has category 'view'."""
         from filesystem.scripts.io import get_file_info
 
-        assert self._get_category(get_file_info) == "read"
+        assert self._get_category(get_file_info) == "view"
 
     def test_apply_file_changes_has_skill_command_attr(self):
         """Test apply_file_changes has _is_skill_command and _skill_config attributes."""

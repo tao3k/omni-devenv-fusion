@@ -19,13 +19,12 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import sys
 
-from omni.mcp.server import MCPServer
-from omni.mcp.transport.stdio import StdioTransport
-from omni.mcp.transport.sse import SSEServer
 from omni.agent.server import create_agent_handler
 from omni.foundation.config.logging import configure_logging, get_logger
+from omni.mcp.server import MCPServer
+from omni.mcp.transport.sse import SSEServer
+from omni.mcp.transport.stdio import StdioTransport
 
 
 def _setup_logging(verbose: bool = False) -> None:

@@ -23,7 +23,6 @@ import pytest
 
 def _setup_skill_package_context(skill_name: str, skills_root: Path):
     """Set up package context for skill module loading."""
-    from importlib import util
 
     from omni.foundation.runtime.gitops import get_project_root
 
@@ -157,10 +156,11 @@ class TestSkillScriptDecorators:
     @pytest.fixture
     def terminal_module(self):
         """Load terminal skill module (commands.py specifically)."""
-        from omni.foundation.config.skills import SKILLS_DIR
-        from importlib import util
-        import types
         import sys
+        import types
+        from importlib import util
+
+        from omni.foundation.config.skills import SKILLS_DIR
 
         skills_dir = SKILLS_DIR()
         scripts_dir = skills_dir / "terminal" / "scripts"
@@ -177,7 +177,7 @@ class TestSkillScriptDecorators:
             sys.modules["terminal_commands"] = spec.loader.exec_module(module)
             return module
 
-        raise RuntimeError(f"Failed to load terminal commands.py")
+        raise RuntimeError("Failed to load terminal commands.py")
 
     @pytest.fixture
     def filesystem_module(self):
@@ -236,7 +236,7 @@ class TestSkillScriptDecorators:
     def test_list_directory_has_category(self, filesystem_module):
         """list_directory should have _skill_config with category."""
         assert hasattr(filesystem_module.list_directory, "_skill_config")
-        assert filesystem_module.list_directory._skill_config["category"] == "read"
+        assert filesystem_module.list_directory._skill_config["category"] == "view"
 
     def test_get_file_info_has_command_name(self, filesystem_module):
         """get_file_info should have _skill_config with name."""
@@ -246,4 +246,4 @@ class TestSkillScriptDecorators:
     def test_get_file_info_has_category(self, filesystem_module):
         """get_file_info should have _skill_config with category."""
         assert hasattr(filesystem_module.get_file_info, "_skill_config")
-        assert filesystem_module.get_file_info._skill_config["category"] == "read"
+        assert filesystem_module.get_file_info._skill_config["category"] == "view"

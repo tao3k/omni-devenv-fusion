@@ -15,23 +15,23 @@ from __future__ import annotations
 # Import from local modules (v2.0 pattern)
 from skill.scripts.discovery import (
     discover,
-    suggest,
     jit_install,
     list_index,
+    suggest,
 )
+from skill.scripts.list_tools import format_tools_list, list_tools
+from skill.scripts.reload import reload_skill
+from skill.scripts.search_tools import format_search_result, search_tools
 from skill.scripts.templates import (
-    list_templates,
-    get_template_info,
-    get_template_source,
     eject_template,
-    format_template_list,
     format_eject_result,
     format_info_result,
+    format_template_list,
+    get_template_info,
+    get_template_source,
+    list_templates,
 )
-from skill.scripts.list_tools import list_tools, format_tools_list
-from skill.scripts.search_tools import search_tools, format_search_result
 from skill.scripts.unload import unload_skill
-from skill.scripts.reload import reload_skill
 
 __all__ = [
     # Discovery commands

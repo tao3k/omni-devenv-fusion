@@ -12,11 +12,12 @@ import logging
 
 import structlog
 import uvicorn
-from omni.mcp.transport.sse import SseServerTransport
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.routing import Route
+
+from omni.mcp.transport.sse import SseServerTransport
 
 from .lifespan import server_lifespan
 from .server import get_init_options, get_server

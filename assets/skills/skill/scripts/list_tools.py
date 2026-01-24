@@ -9,14 +9,15 @@ from omni.foundation.api.decorators import skill_command
 
 @skill_command(
     name="list_tools",
-    category="read",
+    category="view",
     description="""
     List all registered MCP tools with names, descriptions, and usage information.
 
-    **Parameters**:
-    - `compact` (optional, default: false): If true, shows minimal output with tool names only
+    Args:
+        - compact: bool = false - If true, shows minimal output with tool names only
 
-    **Returns**: Markdown-formatted list of all tools grouped by skill.
+    Returns:
+        Markdown-formatted list of all tools grouped by skill.
     """,
 )
 def list_tools(compact: bool = False) -> str:

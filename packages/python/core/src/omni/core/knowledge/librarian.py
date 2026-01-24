@@ -15,28 +15,26 @@ Uses Rust-powered vector store (omni.foundation.bridge) for performance.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from omni.foundation.config.logging import get_logger
+from pydantic import BaseModel
 
 logger = get_logger("omni.core.knowledge.librarian")
 
 
-@dataclass
-class KnowledgeEntry:
+class KnowledgeEntry(BaseModel):
     """Represents a single knowledge entry."""
 
     id: str
     content: str
     source: str
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
     score: float = 0.0
 
 
-@dataclass
-class SearchResult:
+class SearchResult(BaseModel):
     """Represents a search result."""
 
     entry: KnowledgeEntry
@@ -99,7 +97,7 @@ class Librarian:
         """Check if the librarian is ready."""
         return self._initialized and self._store is not None
 
-    def ingest_file(self, file_path: str, metadata: Optional[Dict[str, Any]] = None) -> bool:
+    def ingest_file(self, file_path: str, metadata: dict[str, Any] | None = None) -> bool:
         """Ingest a single file into the knowledge base.
 
         Args:
@@ -114,7 +112,7 @@ class Librarian:
             return False
 
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 content = f.read()
 
             # Simple chunking for large files
@@ -144,7 +142,7 @@ class Librarian:
             logger.error(f"Failed to ingest {file_path}: {e}")
             return False
 
-    def ingest_directory(self, directory: str, extensions: Optional[List[str]] = None) -> int:
+    def ingest_directory(self, directory: str, extensions: list[str] | None = None) -> int:
         """Ingest all files in a directory.
 
         Args:
@@ -154,18 +152,20 @@ class Librarian:
         Returns:
             Number of files ingested
         """
-        if not os.path.isdir(directory):
+        dir_path = Path(directory)
+        if not dir_path.is_dir():
             logger.error(f"Directory not found: {directory}")
             return 0
 
         extensions = extensions or [".md", ".txt", ".py", ".rst", ".json"]
         count = 0
 
-        for root, _, files in os.walk(directory):
+        # Use Python 3.12+ pathlib.Path.walk()
+        for root, _, files in dir_path.walk():
             for file in files:
                 if any(file.endswith(ext) for ext in extensions):
-                    file_path = os.path.join(root, file)
-                    if self.ingest_file(file_path):
+                    file_path = root / file
+                    if self.ingest_file(str(file_path)):
                         count += 1
 
         logger.info(f"📚 Librarian ingested {count} files from {directory}")
@@ -173,7 +173,7 @@ class Librarian:
 
     async def search(
         self, query: str, limit: int = 5, threshold: float = 0.0
-    ) -> List[SearchResult]:
+    ) -> list[SearchResult]:
         """Search the knowledge base.
 
         Args:
@@ -213,7 +213,7 @@ class Librarian:
             logger.error(f"Search failed: {e}")
             return []
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get knowledge base statistics."""
         if not self.is_ready:
             return {"ready": False}
@@ -224,7 +224,7 @@ class Librarian:
             "collection": self._collection,
         }
 
-    def _chunk_text(self, text: str, max_chunk_size: int = 2000) -> List[str]:
+    def _chunk_text(self, text: str, max_chunk_size: int = 2000) -> list[str]:
         """Split text into chunks.
 
         Args:
@@ -272,7 +272,7 @@ class HyperSearch:
         """Initialize with a librarian instance."""
         self._librarian = librarian
 
-    async def search_with_highlighting(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+    async def search_with_highlighting(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
         """Search with highlighted matches.
 
         Returns results with context around matching terms.
@@ -298,11 +298,11 @@ class HyperSearch:
 
         return highlighted
 
-    async def find_related(self, entry_id: str, limit: int = 3) -> List[SearchResult]:
+    async def find_related(self, entry_id: str, limit: int = 3) -> list[SearchResult]:
         """Find related entries to a given entry."""
         # In a full implementation, this would use the entry's content
         # For now, just search for the source
         return await self._librarian.search(entry_id, limit=limit + 1)
 
 
-__all__ = ["Librarian", "KnowledgeEntry", "SearchResult", "HyperSearch"]
+__all__ = ["HyperSearch", "KnowledgeEntry", "Librarian", "SearchResult"]

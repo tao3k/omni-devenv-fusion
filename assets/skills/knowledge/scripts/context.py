@@ -5,7 +5,7 @@ knowledge/scripts/context.py - Knowledge Skill Commands
 import json
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 try:
     import tomllib
@@ -13,9 +13,8 @@ except ImportError:
     import tomli as tomllib
 
 from omni.foundation.api.decorators import skill_command
-from omni.foundation.runtime.gitops import get_project_root
 from omni.foundation.config.skills import SKILLS_DIR
-
+from omni.foundation.runtime.gitops import get_project_root
 
 EXT_TO_LANG = {
     ".nix": "nix",
@@ -42,7 +41,7 @@ class StandardsCache:
 
     _instance: Optional["StandardsCache"] = None
     _loaded: bool = False
-    _standards: Dict[str, str] = {}
+    _standards: dict[str, str] = {}
 
     def __new__(cls) -> "StandardsCache":
         if cls._instance is None:
@@ -73,7 +72,7 @@ class StandardsCache:
         """Get standards for a language."""
         return self._standards.get(lang, "")
 
-    def get_all_standards(self) -> Dict[str, str]:
+    def get_all_standards(self) -> dict[str, str]:
         """Get all loaded standards."""
         return self._standards.copy()
 
@@ -81,14 +80,14 @@ class StandardsCache:
 _standards_cache = StandardsCache()
 
 
-def _get_language_from_path(file_path: str) -> Optional[str]:
+def _get_language_from_path(file_path: str) -> str | None:
     """Detect language from file extension."""
     path = Path(file_path)
     ext = path.suffix.lower()
     return EXT_TO_LANG.get(ext)
 
 
-def _extract_relevant_standards(standard: str, task: str) -> Optional[str]:
+def _extract_relevant_standards(standard: str, task: str) -> str | None:
     """Extract standards sections relevant to the task."""
     task_words = set(re.findall(r"\w+", task.lower()))
     common_words = {"the", "a", "an", "to", "for", "in", "add", "file", "use", "code"}
@@ -101,9 +100,7 @@ def _extract_relevant_standards(standard: str, task: str) -> Optional[str]:
             if relevant_lines and len(relevant_lines) > 2:
                 section_text = " ".join(relevant_lines).lower()
                 overlap = task_words & set(re.findall(r"\w+", section_text)) - common_words
-                if overlap:
-                    relevant_lines.append(line)
-                elif any(
+                if overlap or any(
                     kw in section_text for kw in ["forbidden", "anti-pattern", "correct", "wrong"]
                 ):
                     relevant_lines.append(line)
@@ -137,7 +134,7 @@ def _get_project_name() -> str:
     return "omni-dev-fusion"
 
 
-def _load_scopes() -> List[str]:
+def _load_scopes() -> list[str]:
     """Load valid git scopes from cog.toml."""
     from omni.foundation.config.settings import get_setting
 
@@ -153,7 +150,7 @@ def _load_scopes() -> List[str]:
     return ["core"]
 
 
-def _analyze_lefthook() -> List[Dict[str, str]]:
+def _analyze_lefthook() -> list[dict[str, str]]:
     """Analyze lefthook configuration to determine active guardrails."""
     from omni.foundation.config.settings import get_setting
 
@@ -179,7 +176,7 @@ def _analyze_lefthook() -> List[Dict[str, str]]:
     return hooks
 
 
-def _get_writing_style() -> Dict[str, Any]:
+def _get_writing_style() -> dict[str, Any]:
     """Get writing style configuration."""
     return {
         "language": "english_only",
@@ -189,7 +186,7 @@ def _get_writing_style() -> Dict[str, Any]:
     }
 
 
-def _get_architecture_summary() -> Dict[str, str]:
+def _get_architecture_summary() -> dict[str, str]:
     """Get high-level architecture description."""
     return {
         "pattern": "Skill-Centric Architecture",
@@ -235,7 +232,7 @@ def _search_docs(topic: str) -> str:
                     )
 
     if matches:
-        return f"\n\n---\n\n".join(matches[:3])
+        return "\n\n---\n\n".join(matches[:3])
 
     return f"No documentation found for '{topic}'. Try: 'git', 'nix', 'writing', 'architecture'"
 
@@ -268,15 +265,11 @@ def _read_file_content(path: str) -> str:
     - Making commits
     - Creating documentation
 
-    Returns:
-        - Valid Git Scopes (from cog.toml)
-        - Project Standards (from docs)
-        - Active Guardrails (Lefthook checks)
-        - Writing Style Rules
-        - Architecture Summary
+    Args:
+        - None
 
-    Example:
-        @omni("knowledge.get_development_context")
+    Returns:
+        JSON with valid Git Scopes, Project Standards, Active Guardrails, Writing Style Rules, and Architecture Summary.
     """,
     inject_root=True,
 )
@@ -311,9 +304,7 @@ async def get_development_context() -> str:
     name="consult_architecture_doc",
     category="read",
     description="""
-    [RAG] Semantic search for documentation.
-
-    Searches docs/ and agent/ directories for relevant documentation.
+    [RAG] Semantic search for documentation in docs/ and agent/ directories.
 
     Usage:
     - consult_architecture_doc("writing style") -> Writing standards
@@ -321,7 +312,7 @@ async def get_development_context() -> str:
     - consult_architecture_doc("nix") -> Nix configuration
 
     Args:
-        topic: The documentation topic to search for.
+        - topic: str - The documentation topic to search for (required)
 
     Returns:
         Relevant documentation sections without token waste.
@@ -342,14 +333,11 @@ async def consult_architecture_doc(topic: str) -> str:
     2. Queries L2: Case law (tool-router/data/examples/*.jsonl)
 
     Args:
-        file_path: Path to the file being edited.
-        task_description: Description of the coding task.
+        - file_path: str - Path to the file being edited (required)
+        - task_description: str - Description of the coding task (required)
 
     Returns:
         JSON with language standards and matching examples.
-
-    Example:
-        @omni("knowledge.consult_language_expert", {"file_path": "units/modules/python.nix", "task_description": "extend generator"})
     """,
 )
 async def consult_language_expert(file_path: str, task_description: str) -> str:
@@ -394,7 +382,7 @@ async def consult_language_expert(file_path: str, task_description: str) -> str:
     - get_language_standards("python") -> Python style guide
 
     Args:
-        lang: Programming language (e.g., `nix`, `python`, `rust`).
+        - lang: str - Programming language (e.g., nix, python, rust) (required)
 
     Returns:
         JSON with full standards document from skills/knowledge/standards/lang-{lang}.md
@@ -433,9 +421,11 @@ async def get_language_standards(lang: str) -> str:
     description="""
     Lists all supported languages with their standards.
 
+    Args:
+        - None
+
     Returns:
-        JSON list of supported languages with their IDs, names,
-        standards existence status, and file extensions.
+        JSON list of supported languages with their IDs, names, standards existence status, and file extensions.
     """,
 )
 async def list_supported_languages() -> str:

@@ -37,12 +37,12 @@ def _load_templates_module():
 
 
 __all__ = [
-    "skill_app",
-    "err_console",
-    "print_result",
-    "cli_log_handler",
-    "run_skills",
     "SKILLS_DIR",
     "Panel",
     "_load_templates_module",
+    "cli_log_handler",
+    "err_console",
+    "print_result",
+    "run_skills",
+    "skill_app",
 ]

@@ -4,7 +4,6 @@ Skills Utilities Tests - Simplified
 Tests for omni.foundation.utils.skills module.
 """
 
-import pytest
 from pathlib import Path
 
 

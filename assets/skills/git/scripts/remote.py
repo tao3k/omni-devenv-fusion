@@ -3,11 +3,10 @@ git/scripts/remote.py - Git remote operations
 """
 
 import subprocess
-from typing import Optional
 from pathlib import Path
 
 
-def _run(cmd: list[str], cwd: Optional[Path] = None) -> str:
+def _run(cmd: list[str], cwd: Path | None = None) -> str:
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
     return result.stdout.strip()
 

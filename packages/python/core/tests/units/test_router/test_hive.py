@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock
 
 from omni.core.router.hive import HiveRouter, MultiHiveRouter
 from omni.core.router.router import RouteResult

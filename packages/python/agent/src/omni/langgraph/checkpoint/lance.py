@@ -22,8 +22,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from omni.foundation.config.logging import get_logger
 from omni.foundation.config.dirs import PRJ_CACHE
+from omni.foundation.config.logging import get_logger
 
 # Try to import Rust bindings
 try:

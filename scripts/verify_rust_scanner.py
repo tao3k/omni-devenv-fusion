@@ -12,10 +12,10 @@ Updated for ODF-EP v6.0:
 - Uses _generate_tool_schema for verification
 """
 
-import sys
 import json
-from pathlib import Path
+import sys
 from collections import defaultdict
+from pathlib import Path
 
 # Add foundation source to path for new API imports
 foundation_src = Path(__file__).parent.parent / "packages/python/foundation/src"
@@ -28,7 +28,7 @@ sys.path.insert(0, str(agent_src))
 try:
     from omni_core_rs import scan_skill_tools
 except ImportError as e:
-    print(f"[!] Error: Could not import omni_core_rs. Did you run 'maturin develop'?")
+    print("[!] Error: Could not import omni_core_rs. Did you run 'maturin develop'?")
     print(f"    Detail: {e}")
     sys.exit(1)
 
@@ -217,9 +217,9 @@ def main():
                         req_count = len(schema_dict.get("required", []))
                         print(f"    │   schema: {prop_count} props, {req_count} required")
                     except json.JSONDecodeError:
-                        print(f"    │   schema: (invalid JSON)")
+                        print("    │   schema: (invalid JSON)")
                 else:
-                    print(f"    │   schema: (empty)")
+                    print("    │   schema: (empty)")
 
                 if tool.docstring:
                     doc_preview = tool.docstring[:50].replace("\n", " ")
@@ -243,7 +243,7 @@ def main():
             all_dirs[dir_name] += len(skill_data[dir_name])
 
     if all_dirs:
-        print(f"\n[i] Tools by Directory:")
+        print("\n[i] Tools by Directory:")
         for dir_name in sorted(all_dirs.keys()):
             count = all_dirs[dir_name]
             dir_display = f"{dir_name}/" if dir_name != "root" else "root"
@@ -327,7 +327,7 @@ def main():
                     rust_props = set(rust_schema.get("properties", {}).keys())
 
                     print(f"    Rust schema properties: {sorted(rust_props)}")
-                    print(f"    [PASS] Schema format is valid JSON")
+                    print("    [PASS] Schema format is valid JSON")
 
                     schema_comparisons += 1
                 except json.JSONDecodeError as e:
@@ -360,9 +360,9 @@ def main():
     # Test serialization includes computed fields
     serialized = dict_result.model_dump()
     if "is_retryable" in serialized:
-        print(f"  [PASS] computed_field included in model_dump()")
+        print("  [PASS] computed_field included in model_dump()")
     else:
-        print(f"  [FAIL] computed_field NOT in model_dump()")
+        print("  [FAIL] computed_field NOT in model_dump()")
 
     print("\n" + "=" * 70)
     print("[*] Rust skills-scanner verification complete!")

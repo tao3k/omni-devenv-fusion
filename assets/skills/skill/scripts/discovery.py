@@ -14,16 +14,17 @@ def _get_discovery():
 
 @skill_command(
     name="discover",
-    category="workflow",
+    category="search",
     description="""
     Search for skills using semantic vector matching.
 
-    **Parameters**:
-    - `query` (optional): Search query (e.g., "process pdf files"). Empty = browse all skills
-    - `limit` (optional, default: 5): Maximum number of results
-    - `local_only` (optional, default: false): If true, only search installed skills
+    Args:
+        - query: str = "" - Search query (e.g., process pdf files). Empty = browse all skills
+        - limit: int = 5 - Maximum number of results
+        - local_only: bool = false - If true, only search installed skills
 
-    **Returns**: Formatted skill list with names, match percentages, and keywords.
+    Returns:
+        Formatted skill list with names, match percentages, and keywords.
     """,
 )
 async def discover(query: str = "", limit: int = 5, local_only: bool = False) -> str:
@@ -63,14 +64,15 @@ async def discover(query: str = "", limit: int = 5, local_only: bool = False) ->
 
 @skill_command(
     name="suggest",
-    category="workflow",
+    category="search",
     description="""
     Analyze a task description and suggest the best skill using semantic matching.
 
-    **Parameters**:
-    - `task` (required): Description of what you want to do (e.g., "commit code", "search files")
+    Args:
+        - task: str - Description of what you want to do (e.g., commit code, search files) (required)
 
-    **Returns**: Recommendation with best matching skill name, confidence score, and description.
+    Returns:
+        Recommendation with best matching skill name, confidence score, and description.
     """,
 )
 async def suggest(task: str) -> str:
@@ -99,11 +101,12 @@ async def suggest(task: str) -> str:
     description="""
     Install and load a skill from the skill index on-demand.
 
-    **Parameters**:
-    - `skill_id` (required): The unique identifier of the skill to install
-    - `auto_load` (optional, default: true): If true, automatically load after installation
+    Args:
+        - skill_id: str - The unique identifier of the skill to install (required)
+        - auto_load: bool = true - If true, automatically load after installation
 
-    **Returns**: Status message confirming the installation request.
+    Returns:
+        Status message confirming the installation request.
     """,
 )
 def jit_install(skill_id: str, auto_load: bool = True) -> str:
@@ -112,13 +115,15 @@ def jit_install(skill_id: str, auto_load: bool = True) -> str:
 
 @skill_command(
     name="list_index",
-    category="workflow",
+    category="view",
     description="""
     List all skills in the known skills index (installed and available).
 
-    **Parameters**: None
+    Args:
+        - None
 
-    **Returns**: Formatted list with total skill count and collection info.
+    Returns:
+        Formatted list with total skill count and collection info.
     """,
 )
 async def list_index() -> str:

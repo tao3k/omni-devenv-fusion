@@ -20,15 +20,15 @@ import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from omni.foundation.config.logging import get_logger, configure_logging
+from omni.foundation.config.logging import configure_logging, get_logger
 
 from .lifecycle import LifecycleManager, LifecycleState
 from .watcher import KernelWatcher
 
 if TYPE_CHECKING:
-    from omni.core.skills.runtime import SkillContext
     from omni.core.router.sniffer import IntentSniffer
     from omni.core.security import SecurityValidator
+    from omni.core.skills.runtime import SkillContext
 
 # Ensure logging is configured before getting logger
 configure_logging(level="INFO")
@@ -60,17 +60,17 @@ class Kernel:
     """
 
     __slots__ = (
-        "_lifecycle",
         "_components",
-        "_skill_context",
-        "_discovery_service",
         "_discovered_skills",
+        "_discovery_service",
+        "_lifecycle",
         "_project_root",
-        "_skills_dir",
-        "_watcher",
         "_router",
-        "_sniffer",  # Intent Sniffer for context detection
         "_security",  # Security Validator (Permission Gatekeeper)
+        "_skill_context",
+        "_skills_dir",
+        "_sniffer",  # Intent Sniffer for context detection
+        "_watcher",
     )
 
     def __init__(
@@ -96,7 +96,7 @@ class Kernel:
         self._discovered_skills: list[Any] = []
         self._watcher: KernelWatcher | None = None
         self._router = None
-        self._sniffer: "IntentSniffer | None" = None  # Lazy init in sniffer property
+        self._sniffer: IntentSniffer | None = None  # Lazy init in sniffer property
         self._security = None  # Security Validator (Permission Gatekeeper) - lazy init
 
         # Resolve paths
@@ -177,7 +177,7 @@ class Kernel:
     # =========================================================================
 
     @property
-    def security(self) -> "SecurityValidator":
+    def security(self) -> SecurityValidator:
         """Get the Security Validator (Permission Gatekeeper).
 
         Uses Rust-powered PermissionGatekeeper for high-performance checks.
@@ -341,11 +341,53 @@ class Kernel:
 
     @property
     def skill_context(self) -> SkillContext:
-        """Get the skill context (lazy initialization)."""
-        if self._skill_context is None:
-            from omni.core.skills.runtime import get_skill_context
+        """Get the skill context with all skills loaded (lazy initialization).
 
-            self._skill_context = get_skill_context(self._skills_dir)
+        This property automatically discovers, loads, and registers all skills
+        on first access, ensuring tools are available for the ReAct loop.
+        """
+        if self._skill_context is None:
+            import asyncio
+            from concurrent.futures import ThreadPoolExecutor
+
+            from omni.core.skills.runtime import SkillContext
+
+            self._skill_context = SkillContext(self._skills_dir)
+
+            # Auto-discover, load, and register all skills
+            try:
+                # Discover skills
+                discovered_skills = self.discover_skills()
+
+                def load_skills_sync():
+                    """Load all skills synchronously in a thread."""
+                    async def load_all_skills_async():
+                        for ds in discovered_skills:
+                            try:
+                                from omni.core.skills.universal import UniversalSkillFactory
+                                factory = UniversalSkillFactory(self._project_root)
+                                skill = factory.create_from_discovered(ds)
+                                await skill.load()
+                                self._skill_context.register_skill(skill)
+                            except Exception as e:
+                                logger.warning(f"Failed to load skill {ds.name}: {e}")
+
+                    # Create a NEW event loop for this thread (avoids conflicts with main loop)
+                    loop = asyncio.new_event_loop()
+                    try:
+                        loop.run_until_complete(load_all_skills_async())
+                    finally:
+                        loop.close()
+
+                # Run in a thread pool to avoid event loop conflicts
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(load_skills_sync)
+                    future.result()  # Wait for completion
+
+                logger.debug(f"Skill context initialized with {len(discovered_skills)} skills")
+            except Exception as e:
+                logger.warning(f"Failed to auto-load skills: {e}")
+
         return self._skill_context
 
     # =========================================================================
@@ -359,7 +401,7 @@ class Kernel:
         The Cortex provides intent-to-action mapping using vector search.
         """
         if self._router is None:
-            from omni.core.router import SkillIndexer, SemanticRouter, UnifiedRouter, FallbackRouter
+            from omni.core.router import FallbackRouter, SemanticRouter, SkillIndexer, UnifiedRouter
 
             indexer = SkillIndexer()
             semantic_router = SemanticRouter(indexer)
@@ -371,7 +413,7 @@ class Kernel:
     # =========================================================================
 
     @property
-    def sniffer(self) -> "IntentSniffer":
+    def sniffer(self) -> IntentSniffer:
         """Get the intent sniffer (lazy initialization).
 
         The Sniffer detects context from the file system to activate skills.
@@ -570,10 +612,10 @@ class Kernel:
         logger.info("━" * 60)
         logger.info("🚀 Kernel Services Active:")
         logger.info(f"   • Skills:    {skills_loaded} loaded, {total_commands} commands")
-        logger.info(f"   • Cortex:    Semantic routing index ready")
-        logger.info(f"   • Sniffer:   Context detection active")
-        logger.info(f"   • Security:  Permission Gatekeeper active (Zero Trust)")
-        logger.info(f"   • Watcher:   File monitoring enabled (hot reload)")
+        logger.info("   • Cortex:    Semantic routing index ready")
+        logger.info("   • Sniffer:   Context detection active")
+        logger.info("   • Security:  Permission Gatekeeper active (Zero Trust)")
+        logger.info("   • Watcher:   File monitoring enabled (hot reload)")
         logger.info("━" * 60)
 
     async def _on_running(self) -> None:

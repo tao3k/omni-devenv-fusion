@@ -22,16 +22,15 @@ Usage:
 
 from __future__ import annotations
 
-import uuid
-from typing import Dict, Any, TypedDict, Literal, Optional
+from typing import Any, Literal, TypedDict
 
-from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, StateGraph
 from structlog import get_logger
 
-from omni.langgraph.state import GraphState, get_checkpointer, StateCheckpointer
+from omni.langgraph.nodes.recall import recall_node
 from omni.langgraph.orchestrator.compiled import CompiledGraph
-from omni.langgraph.nodes.recall import recall_node, should_recall
+from omni.langgraph.state import GraphState, StateCheckpointer, get_checkpointer
 
 logger = get_logger()
 
@@ -45,7 +44,7 @@ class GraphInput(TypedDict):
     """Input to the graph."""
 
     user_query: str
-    context: Dict[str, Any] | None = None
+    context: dict[str, Any] | None = None
 
 
 class GraphOutput(TypedDict):
@@ -67,7 +66,7 @@ async def plan_node(
     state: GraphState,
     router: Any = None,
     inference: Any = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Planning node: Route user query to appropriate agent/workflow.
 
@@ -162,7 +161,7 @@ async def execute_node(
     state: GraphState,
     skill_runner: Any = None,
     inference: Any = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Execution node: Execute task using appropriate method.
 
@@ -207,7 +206,7 @@ async def execute_node(
         except Exception as e:
             log.error("skill_execution_failed", error=str(e))
             return {
-                "messages": [{"role": "assistant", "content": f"Error: {str(e)}"}],
+                "messages": [{"role": "assistant", "content": f"Error: {e!s}"}],
                 "error_count": state.get("error_count", 0) + 1,
             }
 
@@ -238,13 +237,13 @@ async def execute_node(
         except Exception as e:
             log.error("inference_execution_failed", error=str(e))
             return {
-                "messages": [{"role": "assistant", "content": f"Error: {str(e)}"}],
+                "messages": [{"role": "assistant", "content": f"Error: {e!s}"}],
                 "error_count": state.get("error_count", 0) + 1,
             }
 
     # No execution method available
     return {
-        "messages": [{"role": "assistant", "content": f"Cannot execute: no runner available"}],
+        "messages": [{"role": "assistant", "content": "Cannot execute: no runner available"}],
         "error_count": state.get("error_count", 0) + 1,
     }
 
@@ -252,7 +251,7 @@ async def execute_node(
 async def reflect_node(
     state: GraphState,
     inference: Any = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Reflection node: Evaluate execution result.
 
@@ -424,7 +423,7 @@ class OmniGraph:
         inference_client: Any = None,
         skill_runner: Any = None,
         router: Any = None,
-        checkpointer: Optional[StateCheckpointer] = None,
+        checkpointer: StateCheckpointer | None = None,
         use_memory_checkpointer: bool = True,
         lance_checkpointer: Any = None,  # LanceCheckpointer for recall
     ):
@@ -489,11 +488,11 @@ class OmniGraph:
 
         return workflow
 
-    async def _plan_node(self, state: GraphState) -> Dict[str, Any]:
+    async def _plan_node(self, state: GraphState) -> dict[str, Any]:
         """Planning node wrapper."""
         return await plan_node(state, router=self.router, inference=self.inference)
 
-    async def _execute_node(self, state: GraphState) -> Dict[str, Any]:
+    async def _execute_node(self, state: GraphState) -> dict[str, Any]:
         """Execution node wrapper."""
         return await execute_node(
             state,
@@ -501,11 +500,11 @@ class OmniGraph:
             inference=self.inference,
         )
 
-    async def _reflect_node(self, state: GraphState) -> Dict[str, Any]:
+    async def _reflect_node(self, state: GraphState) -> dict[str, Any]:
         """Reflection node wrapper."""
         return await reflect_node(state, inference=self.inference)
 
-    async def _recall_node(self, state: GraphState) -> Dict[str, Any]:
+    async def _recall_node(self, state: GraphState) -> dict[str, Any]:
         """Recall node wrapper - retrieves similar past experiences."""
         log = logger.bind(node="recall")
 
@@ -536,7 +535,7 @@ class OmniGraph:
         self,
         user_query: str,
         thread_id: str,
-        context: Dict[str, Any] | None = None,
+        context: dict[str, Any] | None = None,
     ) -> GraphOutput:
         """
         Run the graph with a user query.
@@ -605,7 +604,7 @@ class OmniGraph:
 
         except Exception as e:
             log.error("graph_error", error=str(e))
-            result_content = f"Error: {str(e)}"
+            result_content = f"Error: {e!s}"
 
         return GraphOutput(
             success=success,
@@ -659,14 +658,14 @@ def reset_graph() -> None:
 
 
 __all__ = [
-    "OmniGraph",
-    "get_graph",
-    "reset_graph",
-    "plan_node",
-    "execute_node",
-    "reflect_node",
-    "should_continue",
-    "audit_decision",
     "GraphInput",
     "GraphOutput",
+    "OmniGraph",
+    "audit_decision",
+    "execute_node",
+    "get_graph",
+    "plan_node",
+    "reflect_node",
+    "reset_graph",
+    "should_continue",
 ]

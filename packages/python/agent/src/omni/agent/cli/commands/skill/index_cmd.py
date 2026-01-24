@@ -47,8 +47,8 @@ def skill_reindex(
     import os
 
     from omni.core.skills.discovery import SkillDiscoveryService
-    from omni.foundation.config.logging import get_logger
     from omni.foundation.config.dirs import PRJ_CACHE
+    from omni.foundation.config.logging import get_logger
 
     logger = get_logger("omni.core.reindex")
 
@@ -174,10 +174,10 @@ def skill_sync(
         old_skills = set()
         if Path(index_path).exists():
             try:
-                with open(index_path, "r", encoding="utf-8") as f:
+                with open(index_path, encoding="utf-8") as f:
                     old_data = json.load(f)
                 old_skills = {item.get("name") for item in old_data if item.get("name")}
-            except (json.JSONDecodeError, IOError):
+            except (OSError, json.JSONDecodeError):
                 old_skills = set()
 
         # Calculate deltas

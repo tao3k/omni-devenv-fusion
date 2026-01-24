@@ -10,14 +10,14 @@ Responsibilities:
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 import typer
 
+from omni.foundation.config.dirs import PRJ_DIRS, PRJ_RUNTIME
+from omni.foundation.config.logging import configure_logging
+
 # Foundation Imports (Layer 0-2)
 from omni.foundation.config.settings import get_settings, set_configuration_directory
-from omni.foundation.config.logging import configure_logging
-from omni.foundation.config.dirs import PRJ_RUNTIME, PRJ_DIRS
 
 # Command Imports
 from .commands import (
@@ -89,7 +89,7 @@ def _bootstrap_configuration(
 
 @app.callback()
 def main(
-    conf: Optional[str] = typer.Option(
+    conf: str | None = typer.Option(
         None,
         "--conf",
         "-c",
@@ -116,8 +116,6 @@ register_ingest_command(app)
 def entry_point():
     """Entry point for CLI (used by pyproject.toml entry_points)."""
     # Run bootstrap before parsing
-    from omni.foundation.config.settings import Settings
-    from omni.foundation.config.dirs import PRJ_DIRS
 
     # Parse arguments manually to get --conf and --verbose before Typer takes over
     conf = None

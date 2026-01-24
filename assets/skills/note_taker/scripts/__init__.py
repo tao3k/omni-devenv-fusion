@@ -5,7 +5,6 @@ Note Taker scripts package.
 This package contains isolated implementations for note-taking and knowledge management.
 """
 
-from . import session_summarizer
-from . import knowledge_base
+from . import knowledge_base, session_summarizer
 
-__all__ = ["session_summarizer", "knowledge_base"]
+__all__ = ["knowledge_base", "session_summarizer"]

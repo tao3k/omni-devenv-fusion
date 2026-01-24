@@ -105,10 +105,10 @@ def parse_skill_response(response: str) -> dict[str, Any]:
     except (ValueError, SyntaxError):
         pass
 
-    raise ValueError(f"Failed to parse JSON from response")
+    raise ValueError("Failed to parse JSON from response")
 
 
 __all__ = [
-    "skill_generation_prompt",
     "parse_skill_response",
+    "skill_generation_prompt",
 ]

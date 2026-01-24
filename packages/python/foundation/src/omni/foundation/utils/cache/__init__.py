@@ -38,9 +38,9 @@ from .markdown_cache import MarkdownCache
 from .repomix_cache import RepomixCache
 
 __all__ = [
-    "LazyCacheBase",
-    "FileCache",
-    "MarkdownCache",
     "ConfigCache",
+    "FileCache",
+    "LazyCacheBase",
+    "MarkdownCache",
     "RepomixCache",
 ]

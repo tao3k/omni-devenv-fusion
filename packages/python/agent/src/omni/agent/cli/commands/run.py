@@ -16,7 +16,7 @@ Examples:
 from __future__ import annotations
 
 import asyncio
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from rich.box import ROUNDED
@@ -100,12 +100,12 @@ def _print_session_report(task: str, result: dict, step_count: int, tool_counts:
 
 
 async def _execute_task_via_kernel(
-    task: str, max_steps: Optional[int], verbose: bool = False
+    task: str, max_steps: int | None, verbose: bool = False
 ) -> dict:
     """Execute task using the Omni Loop with Kernel context."""
+    from omni.agent.core.omni import OmniLoop, OmniLoopConfig
     from omni.core.kernel.engine import get_kernel
     from omni.core.skills.runtime import run_command
-    from omni.agent.core.omni import OmniLoop, OmniLoopConfig
 
     kernel = get_kernel()
     await kernel.initialize()
@@ -161,7 +161,7 @@ async def _execute_task_via_kernel(
             try:
                 # Create OmniLoop with kernel context for tool execution
                 # quiet 模式隐藏工具调用日志，verbose 显示 DEBUG 日志
-                show_logs = not (verbose is False)  # 默认和 verbose 都显示
+                show_logs = verbose is not False  # 默认和 verbose 都显示
                 loop_config = OmniLoopConfig(
                     max_tokens=128000,
                     retained_turns=10,
@@ -217,9 +217,9 @@ def register_run_command(parent_app: typer.Typer):
 
     @parent_app.command()
     def run(
-        task: Annotated[Optional[str], typer.Argument(help="Task description or query")] = None,
+        task: Annotated[str | None, typer.Argument(help="Task description or query")] = None,
         steps: Annotated[
-            Optional[int], typer.Option("-s", "--steps", help="Max steps (default: 10)")
+            int | None, typer.Option("-s", "--steps", help="Max steps (default: 10)")
         ] = None,
         json_output: Annotated[bool, typer.Option("--json", "-j", help="Output as JSON")] = False,
         repl: Annotated[bool, typer.Option("--repl", help="Enter interactive REPL mode")] = False,

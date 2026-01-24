@@ -7,7 +7,8 @@ Based on ODF-EP v7.0 skill architecture.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def get_skill_structure() -> dict[str, list[str] | dict[str, Any]]:
@@ -127,7 +128,7 @@ def generate_structure_tests(skill_name: str) -> dict[str, Callable]:
 
 
 __all__ = [
+    "generate_structure_tests",
     "get_skill_structure",
     "validate_structure",
-    "generate_structure_tests",
 ]

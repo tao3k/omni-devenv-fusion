@@ -13,16 +13,13 @@ Usage:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
-
 from omni.foundation.config.logging import get_logger
+from pydantic import BaseModel
 
 logger = get_logger("omni.core.config")
 
 
-@dataclass
-class SkillLimitsConfig:
+class SkillLimitsConfig(BaseModel):
     """Configuration for dynamic tool loading limits.
 
     Attributes:
@@ -40,11 +37,10 @@ class SkillLimitsConfig:
     auto_optimize: bool = True
 
 
-@dataclass
-class FilterCommandsConfig:
+class FilterCommandsConfig(BaseModel):
     """Configuration for commands to filter from core tools."""
 
-    commands: list[str] = field(default_factory=list)
+    commands: list[str] = []
 
 
 # Global config singletons
@@ -140,10 +136,10 @@ def is_filtered(command: str) -> bool:
 
 
 __all__ = [
-    "SkillLimitsConfig",
     "FilterCommandsConfig",
-    "load_skill_limits",
-    "load_filter_commands",
-    "reset_config",
+    "SkillLimitsConfig",
     "is_filtered",
+    "load_filter_commands",
+    "load_skill_limits",
+    "reset_config",
 ]

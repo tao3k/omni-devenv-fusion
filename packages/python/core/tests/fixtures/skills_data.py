@@ -50,7 +50,7 @@ def parse_skill_md(skill_path: Path) -> dict[str, Any] | None:
 @pytest.fixture
 def fixtures_skills_data_skill_factory(
     tmp_path: Path,
-) -> Generator[Callable[..., Path], None, None]:
+) -> Generator[Callable[..., Path]]:
     """Factory Fixture: Create test skills dynamically.
 
     Usage:
@@ -106,7 +106,7 @@ def fixtures_skills_data_skill_factory(
 @pytest.fixture
 def fixtures_skills_data_toxic_skill_factory(
     tmp_path: Path,
-) -> Generator[Callable[..., Path], None, None]:
+) -> Generator[Callable[..., Path]]:
     """Factory Fixture: Create intentionally broken skills for error handling tests.
 
     Usage:

@@ -6,9 +6,9 @@ Defines the structured context for Git workflows using Pydantic models.
 This is the "Memory" layer of the Omni Skill Standard (OSS).
 """
 
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, Dict, Any
 from enum import Enum
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class WorkflowStep(str, Enum):
@@ -78,24 +78,24 @@ class GitWorkflowState(BaseModel):
     is_dirty: bool = Field(
         default=False, description="Whether the working tree has uncommitted changes"
     )
-    stashed_hash: Optional[str] = Field(
+    stashed_hash: str | None = Field(
         default=None, description="Stash reference if changes were stashed"
     )
-    files_changed: List[str] = Field(
+    files_changed: list[str] = Field(
         default_factory=list, description="List of files modified in this operation"
     )
     current_branch: str = Field(default="", description="Current branch before operation")
-    commit_hash: Optional[str] = Field(default=None, description="Commit hash if a commit was made")
+    commit_hash: str | None = Field(default=None, description="Commit hash if a commit was made")
 
     # Result fields (populated by workflow)
-    error_message: Optional[str] = Field(
+    error_message: str | None = Field(
         default=None, description="Error message if the workflow failed"
     )
     success: bool = Field(default=False, description="Whether the workflow completed successfully")
     result_message: str = Field(default="", description="Human-readable result of the operation")
 
     # Metadata for checkpoint/resume (renamed from checkpoint_id to avoid LangGraph conflict)
-    resume_id: Optional[str] = Field(default=None, description="Resume ID for state persistence")
+    resume_id: str | None = Field(default=None, description="Resume ID for state persistence")
     retry_count: int = Field(default=0, description="Number of retry attempts for the current step")
 
     model_config = ConfigDict(
@@ -139,7 +139,7 @@ def format_state_for_output(state: GitWorkflowState) -> str:
         Formatted string representation
     """
     lines = [
-        f"=== Git Workflow State ===",
+        "=== Git Workflow State ===",
         f"Intent: {state.intent}",
         f"Current Step: {state.current_step}",
         f"Target Branch: {state.target_branch or '(not specified)'}",

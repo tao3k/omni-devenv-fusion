@@ -25,16 +25,16 @@ Usage:
     suggestions = sniffer.sniff("/path/to/project")
 """
 
-from .indexer import SkillIndexer, IndexedSkill
-from .router import (
-    SemanticRouter,
-    FallbackRouter,
-    UnifiedRouter,
-    RouteResult,
-)
 from .hive import HiveRouter, MultiHiveRouter
-from .sniffer import IntentSniffer, ContextualSniffer, ActivationRule
+from .indexer import IndexedSkill, SkillIndexer
 from .main import OmniRouter, RouterRegistry, get_router
+from .router import (
+    FallbackRouter,
+    RouteResult,
+    SemanticRouter,
+    UnifiedRouter,
+)
+from .sniffer import ActivationRule, ContextualSniffer, IntentSniffer
 
 __all__ = [
     # Indexer

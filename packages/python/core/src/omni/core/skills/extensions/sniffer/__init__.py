@@ -19,7 +19,7 @@ Usage:
         return 1.0 if os.path.exists(os.path.join(cwd, "venv")) else 0.0
 """
 
-from .decorators import sniffer, SnifferFunc, SnifferResult
+from .decorators import SnifferFunc, SnifferResult, sniffer
 from .loader import SnifferLoader, load_sniffers_from_path
 
 __all__ = [

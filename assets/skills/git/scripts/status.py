@@ -17,9 +17,9 @@ from typing import Any
 
 # Modern Foundation API
 from omni.foundation.api.decorators import skill_command
-from omni.foundation.config.settings import Settings
-from omni.foundation.config.paths import ConfigPaths
 from omni.foundation.config.logging import get_logger
+from omni.foundation.config.paths import ConfigPaths
+from omni.foundation.config.settings import Settings
 
 logger = get_logger("skill.git")
 
@@ -36,10 +36,11 @@ def _run_git(cmd: list[str], cwd: Path) -> tuple[str, int]:
     description="""
     Get detailed status of the git repository including branch, clean/dirty state, and change counts.
 
-    **Parameters**:
-    - `repo_path` (optional): Path to the repository. Defaults to project root.
+    Args:
+        - repo_path: Optional[str] - Path to the repository (defaults to project root)
 
-    **Returns**: Dictionary with success, repo_path, branch, is_clean, staged, unstaged, untracked counts.
+    Returns:
+        Dictionary with success, repo_path, branch, is_clean, staged, unstaged, untracked counts.
     """,
     autowire=True,
 )
@@ -103,14 +104,15 @@ def git_status(
 
 @skill_command(
     name="status_short",
-    category="read",
+    category="view",
     description="""
     Get a short one-line summary of git status with branch and change counts.
 
-    **Parameters**:
-    - `repo_path` (optional): Path to the repository. Defaults to project root.
+    Args:
+        - repo_path: Optional[str] - Path to the repository (defaults to project root)
 
-    **Returns**: String summary like "Branch: main | Clean" or "Branch: main | Staged: 2 | Unstaged: 3".
+    Returns:
+        String summary like "Branch: main | Clean" or "Branch: main | Staged: 2 | Unstaged: 3".
     """,
     autowire=True,
 )
@@ -176,10 +178,10 @@ def has_unstaged_files(
 
 
 __all__ = [
-    "git_status",
-    "git_status_short",
-    "git_status_detailed",
     "current_branch",
+    "git_status",
+    "git_status_detailed",
+    "git_status_short",
     "has_staged_files",
     "has_unstaged_files",
     "status",  # Alias for backwards compatibility

@@ -45,16 +45,18 @@ class TestKnowledgeCommands:
 
     def test_consult_architecture_doc_signature(self):
         """Test that consult_architecture_doc accepts a topic parameter."""
-        from knowledge.scripts import context
         import inspect
+
+        from knowledge.scripts import context
 
         sig = inspect.signature(context.consult_architecture_doc)
         assert "topic" in sig.parameters
 
     def test_consult_language_expert_signature(self):
         """Test that consult_language_expert accepts correct parameters."""
-        from knowledge.scripts import context
         import inspect
+
+        from knowledge.scripts import context
 
         sig = inspect.signature(context.consult_language_expert)
         params = list(sig.parameters.keys())

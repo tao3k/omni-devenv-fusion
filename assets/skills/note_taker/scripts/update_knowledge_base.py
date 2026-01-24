@@ -7,8 +7,7 @@ Saves extracted knowledge to the knowledge base for future retrieval.
 
 import json
 import re
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from typing import Any
 
 from omni.foundation.api.decorators import skill_command
@@ -23,13 +22,14 @@ from omni.foundation.config.dirs import PRJ_DATA
 
     Stores knowledge in PRJ_DATA/knowledge/harvested/ for runtime persistence.
 
-    **Parameters**:
-    - `category` (required): Knowledge category (patterns, solutions, errors, techniques, notes)
-    - `title` (required): Title of the knowledge entry
-    - `content` (required): Markdown content of the knowledge
-    - `tags` (optional): List of tags for categorization
+    Args:
+        - category: str - Knowledge category (patterns, solutions, errors, techniques, notes) (required)
+        - title: str - Title of the knowledge entry (required)
+        - content: str - Markdown content of the knowledge (required)
+        - tags: Optional[list[str]] - List of tags for categorization
 
-    **Returns**: Dictionary with success, path, category, and title.
+    Returns:
+        Dictionary with success, path, category, and title.
     """,
 )
 def update_knowledge_base(
@@ -47,10 +47,10 @@ def update_knowledge_base(
     knowledge_dir.mkdir(parents=True, exist_ok=True)
 
     filename = re.sub(r"[^\w\-]", "_", title.lower())[:50]
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     filename = f"{timestamp}_{filename}.md"
 
-    timestamp_full = datetime.now(timezone.utc).isoformat()
+    timestamp_full = datetime.now(UTC).isoformat()
 
     markdown = f"""---
 title: {title}
@@ -79,16 +79,17 @@ created: {timestamp_full}
 
 @skill_command(
     name="search_notes",
-    category="read",
+    category="search",
     description="""
     Search existing notes and knowledge entries.
 
-    **Parameters**:
-    - `query` (required): Search query string
-    - `category` (optional): Category filter (patterns, solutions, errors, techniques, notes)
-    - `limit` (optional, default: 10): Maximum number of results
+    Args:
+        - query: str - Search query string (required)
+        - category: Optional[str] - Category filter (patterns, solutions, errors, techniques, notes)
+        - limit: int = 10 - Maximum number of results
 
-    **Returns**: Dictionary with success, query, count, and list of results with category, title, path, tags, snippet.
+    Returns:
+        Dictionary with success, query, count, and list of results with category, title, path, tags, snippet.
     """,
 )
 def search_notes(
@@ -153,7 +154,7 @@ def _update_index(category: str, title: str, tags: list[str], path: str) -> None
         "title": title,
         "tags": tags,
         "path": path,
-        "added": datetime.now(timezone.utc).isoformat(),
+        "added": datetime.now(UTC).isoformat(),
     }
     index["entries"].append(entry)
 

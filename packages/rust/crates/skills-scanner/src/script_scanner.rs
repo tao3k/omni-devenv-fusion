@@ -223,7 +223,7 @@ impl ScriptScanner {
         let file_hash = hex::encode(hasher.finalize());
 
         // Use ast-grep to find ONLY function definitions decorated with @skill_command
-        let lang: SupportLang = "py".parse().expect("Python language should be supported");
+        let lang: SupportLang = "py".parse().map_err(|e| anyhow::anyhow!("Python language should be supported: {e}"))?;
         let root = lang.ast_grep(&content);
         let root_node = root.root();
 

@@ -24,9 +24,10 @@ for p in [core_path, foundation_path, mcp_path, agent_path]:
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
+from omni.mcp.types import JSONRPCRequest
+
 from omni.agent.server import create_agent_handler
 from omni.core.kernel import get_kernel, reset_kernel
-from omni.mcp.types import JSONRPCRequest
 
 
 async def run_smoke_test():
@@ -52,7 +53,7 @@ async def run_smoke_test():
     if resp.error:
         print(f"  ✗ Initialize failed: {resp.error.message}")
         return False
-    print(f"  ✓ Initialize successful")
+    print("  ✓ Initialize successful")
     print(f"    Server: {resp.result.get('serverInfo', {})}")
     print(f"    Capabilities: {list(resp.result.get('capabilities', {}).keys())}")
 
@@ -77,7 +78,7 @@ async def run_smoke_test():
     if missing:
         print(f"\n  ⚠ Warning: Missing critical skills: {missing}")
     else:
-        print(f"  ✓ All critical skills present")
+        print("  ✓ All critical skills present")
 
     # 4. Execute a simple tool (git.git_commit)
     print("\n[4/5] Executing 'git.git_commit'...")
@@ -96,10 +97,10 @@ async def run_smoke_test():
             else getattr(resp.error, "message", str(resp.error))
         )
         print(f"  ⚠ Execution returned error: {error_msg}")
-        print(f"     (This is OK if we're not in a git repo)")
+        print("     (This is OK if we're not in a git repo)")
     else:
         content = resp.result.get("content", [{"text": ""}])[0]["text"]
-        print(f"  ✓ Execution successful!")
+        print("  ✓ Execution successful!")
         print(f"    Output preview: {content[:150]}...")
 
     # 5. Shutdown
@@ -116,7 +117,7 @@ async def run_smoke_test():
     print("  SMOKE TEST COMPLETE")
     print("=" * 60)
     print(f"  Tools Discovered: {len(tools)}")
-    print(f"  Kernel State: READY")
+    print("  Kernel State: READY")
     print("  ✓ All critical paths verified!")
     print("=" * 60)
 

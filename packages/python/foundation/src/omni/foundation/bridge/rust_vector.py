@@ -145,7 +145,7 @@ def get_vector_store(index_path: str = "data/vector.db", dimension: int = 1536) 
 
 
 __all__ = [
+    "RUST_AVAILABLE",
     "RustVectorStore",
     "get_vector_store",
-    "RUST_AVAILABLE",
 ]

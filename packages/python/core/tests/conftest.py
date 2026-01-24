@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
 import asyncio
+from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any
+
+import pytest
 
 
 # Compute skills root using PRJ_DIRS (or fallback to path calculation)
@@ -156,8 +158,8 @@ def skills():
 
 
 # Import shared fixtures and plugins from the new locations
+from .fixtures.core_fixtures import *  # noqa: F403
 from .plugins.seed_manager import pytest_configure  # noqa: F401 - Register seed plugin
-from .fixtures.core_fixtures import *  # noqa: F401, F403
 
 
 @pytest.fixture(scope="session")
@@ -169,7 +171,7 @@ def event_loop():
 
 
 @pytest.fixture
-def skills_path(tmp_path: Path) -> Generator[Path, None, None]:
+def skills_path(tmp_path: Path) -> Generator[Path]:
     """Create a temporary skills directory structure."""
     skills_dir = tmp_path / "skills"
     skills_dir.mkdir()
@@ -190,7 +192,7 @@ description: A sample skill for testing
 
 
 @pytest.fixture
-def git_skill_path(tmp_path: Path) -> Generator[Path, None, None]:
+def git_skill_path(tmp_path: Path) -> Generator[Path]:
     """Create a git skill directory for testing."""
     skills_dir = tmp_path / "skills"
     git_dir = skills_dir / "git"

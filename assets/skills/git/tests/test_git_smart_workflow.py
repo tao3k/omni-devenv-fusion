@@ -5,7 +5,6 @@ Tests for smart commit workflow functionality.
 Uses direct imports from actual modules in scripts directory.
 """
 
-import pytest
 import sys
 from pathlib import Path
 

@@ -5,8 +5,7 @@ Session Summarization Command.
 Summarizes session trajectory into structured markdown notes.
 """
 
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from typing import Any
 
 from omni.foundation.api.decorators import skill_command
@@ -20,12 +19,13 @@ from omni.foundation.api.decorators import skill_command
 
     Extracts key decisions, failures, solutions, and file modifications.
 
-    **Parameters**:
-    - `session_id` (required): Unique identifier for this session
-    - `trajectory` (required): List of execution steps with decisions and outcomes
-    - `include_failures` (optional, default: true): Whether to include failed approaches
+    Args:
+        - session_id: str - Unique identifier for this session (required)
+        - trajectory: list[dict[str, Any]] - List of execution steps with decisions and outcomes (required)
+        - include_failures: bool = true - Whether to include failed approaches
 
-    **Returns**: Dictionary with success, path, session_id, counts of decisions/failures/files.
+    Returns:
+        Dictionary with success, path, session_id, counts of decisions/failures/files.
     """,
 )
 def summarize_session(
@@ -44,7 +44,7 @@ def summarize_session(
     files_modified = _extract_files(trajectory)
     insights = _extract_insights(trajectory)
 
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = datetime.now(UTC).isoformat()
 
     markdown = f"""# Session: {session_id}
 
@@ -65,7 +65,7 @@ This session executed {len(trajectory)} steps to achieve the stated goal.
         markdown += f"**Choice**: {decision['choice']}\n\n"
         markdown += f"**Rationale**: {decision['rationale']}\n\n"
         if decision.get("alternatives"):
-            markdown += f"**Alternatives Considered**:\n"
+            markdown += "**Alternatives Considered**:\n"
             for alt in decision["alternatives"]:
                 markdown += f"  - {alt}\n"
             markdown += "\n"

@@ -31,6 +31,90 @@ def print_banner():
     console.print(Panel(banner, expand=False, border_style="green"))
 
 
+def _format_result_for_display(result: str) -> str:
+    """Format result for display, handling common tool output patterns."""
+    if not result:
+        return "(no output)"
+
+    # Try to parse as JSON (common for tool outputs)
+    import json
+    try:
+        if result.strip().startswith("{") and result.strip().endswith("}"):
+            # First try standard JSON (double quotes)
+            try:
+                data = json.loads(result)
+                return _format_json_result(data)
+            except json.JSONDecodeError:
+                # Try replacing single quotes with double quotes for Python dict strings
+                # Handle single-quoted keys and values
+                fixed = result.replace("'", '"')
+                # Handle Python None, True, False
+                fixed = fixed.replace("True", "true").replace("False", "false").replace("None", "null")
+                data = json.loads(fixed)
+                return _format_json_result(data)
+    except (json.JSONDecodeError, AttributeError, SyntaxError):
+        pass
+
+    return result
+
+
+def _format_json_result(data: dict) -> str:
+    """Format a JSON dict as a human-readable summary."""
+    if not isinstance(data, dict):
+        return str(data)
+
+    # Handle researcher results
+    if "success" in data and "harvest_dir" in data:
+        return _format_research_result(data)
+
+    # Handle other common patterns
+    lines = []
+    for key, value in data.items():
+        if key in ("success", "error", "message"):
+            continue  # Skip generic keys, handle separately
+        if isinstance(value, str) and len(value) > 100:
+            value = value[:100] + "..."
+        lines.append(f"• {key}: {value}")
+
+    # Add status line
+    if data.get("success") is True:
+        status = "[✓] Completed successfully"
+    elif data.get("success") is False:
+        status = f"[✗] Failed: {data.get('error', 'unknown error')}"
+    else:
+        status = ""
+
+    if lines:
+        return f"{status}\n" + "\n".join(lines)
+    return status or str(data)[:200]
+
+
+def _format_research_result(data: dict) -> str:
+    """Format researcher tool result for display."""
+    if not data.get("success"):
+        return f"[✗] Research failed: {data.get('error', 'unknown error')}"
+
+    lines = ["[✓] Research completed"]
+
+    if "harvest_dir" in data:
+        lines.append(f"📁 Results: {data['harvest_dir']}")
+
+    if "shards_analyzed" in data:
+        lines.append(f"📊 Shards analyzed: {data['shards_analyzed']}")
+
+    if "shard_summaries" in data:
+        lines.append("\nModules analyzed:")
+        for summary in data["shard_summaries"]:
+            # Clean up markdown link format
+            clean = summary.strip().lstrip("- ").replace("[", "").replace("](", " - ").rstrip(")")
+            lines.append(f"  • {clean}")
+
+    if "summary" in data:
+        lines.append(f"\n📝 Summary: {data['summary'][:200]}...")
+
+    return "\n".join(lines)
+
+
 def _print_enrich_result(task: str, result: str, agent):
     """Print enriched session report with stats from ContextManager."""
     # Get stats directly from ContextManager
@@ -69,9 +153,10 @@ def _print_enrich_result(task: str, result: str, agent):
     grid.add_row(config_info)
     grid.add_row("")
 
-    # Reflection
+    # Reflection - use formatted result
     grid.add_row("[bold green]Reflection & Outcome:[/bold green]")
-    grid.add_row(str(result))
+    formatted_result = _format_result_for_display(result)
+    grid.add_row(formatted_result)
 
     console.print(Panel(grid, title="✨ CCA Session Report ✨", border_style="green", expand=False))
 

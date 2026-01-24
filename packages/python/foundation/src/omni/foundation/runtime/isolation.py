@@ -35,10 +35,12 @@ except ImportError:
 
 def _json_loads(data: str | bytes) -> Any:
     """Fast JSON parsing using orjson if available."""
-    if _HAS_ORJSON:
-        return orjson.loads(data)
     import json
 
+    if _HAS_ORJSON:
+        import orjson as _orjson
+
+        return _orjson.loads(data)
     return json.loads(data)
 
 
@@ -82,15 +84,16 @@ def run_skill_command(
             "error": f"Script not found: {script_path}",
         }
 
-    # Build command: uv run --directory <skill_dir> python <script> --arg val
+    # Build command: uv run --project <skill_dir>/pyproject.toml python <script> --arg val
+    # We use --project instead of --directory to avoid path resolution issues
     cmd = [
         "uv",
         "run",
         "--quiet",  # Reduce noise in output
-        "--directory",
-        str(skill_dir),
+        "--project",
+        str((skill_dir / "pyproject.toml").resolve()),
         "python",
-        str(script_path),
+        str(script_path.resolve()),
     ]
 
     # Convert args to CLI flags (e.g., {"url": "..."} -> "--url", "...")
@@ -105,6 +108,8 @@ def run_skill_command(
     env = os.environ.copy()
     # Optional: Add isolation-specific env vars
     env["UV_NO_SYNC"] = "1"  # Skip unnecessary sync for repeated calls
+
+    stdout = ""  # Initialize for exception handlers
 
     try:
         result = subprocess.run(
@@ -147,13 +152,13 @@ def run_skill_command(
     except (ValueError, TypeError) as e:
         return {
             "success": False,
-            "error": f"Failed to parse JSON output: {str(e)}",
+            "error": f"Failed to parse JSON output: {e!s}",
             "stdout": stdout[:500] if stdout else None,
         }
     except Exception as e:
         return {
             "success": False,
-            "error": f"Unexpected error: {str(e)}",
+            "error": f"Unexpected error: {e!s}",
         }
 
 
@@ -179,28 +184,6 @@ def run_skill_command_async(
         Dictionary with 'success' key and either 'result' or 'error'
     """
     return run_skill_command(skill_dir, script_name, args, timeout)
-
-
-def _extract_json(text: str) -> dict[str, Any] | None:
-    """
-    Extract JSON object from text.
-
-    Looks for the first '{' and last '}' to extract the JSON object.
-    This handles cases where scripts print logs before/after the JSON result.
-    """
-    start = text.find("{")
-    end = text.rfind("}")
-
-    if start == -1 or end == -1 or start > end:
-        return None
-
-    json_str = text[start : end + 1]
-    try:
-        return _json_loads(json_str)
-    except (ValueError, TypeError):
-        # Try to be more lenient - maybe there's nested JSON
-        # Return None to trigger fallback handling
-        return None
 
 
 def check_skill_dependencies(skill_dir: Path) -> dict[str, Any]:
@@ -243,7 +226,7 @@ def check_skill_dependencies(skill_dir: Path) -> dict[str, Any]:
 
 
 __all__ = [
+    "check_skill_dependencies",
     "run_skill_command",
     "run_skill_command_async",
-    "check_skill_dependencies",
 ]

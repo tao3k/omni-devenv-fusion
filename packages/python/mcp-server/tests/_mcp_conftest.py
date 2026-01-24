@@ -4,7 +4,6 @@ import socket
 from typing import Any
 
 import pytest
-
 from omni.mcp.types import make_success_response
 
 

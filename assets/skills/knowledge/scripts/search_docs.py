@@ -7,28 +7,30 @@ Responsibilities:
 - Uses 'rg' under the hood for speed.
 """
 
-import subprocess
-import shutil
 import json
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
+
 from omni.foundation.api.decorators import skill_command
-from omni.foundation.config.paths import ConfigPaths
 from omni.foundation.config.logging import get_logger
+from omni.foundation.config.paths import ConfigPaths
 
 logger = get_logger("skill.knowledge.search_docs")
 
 
 @skill_command(
     name="search_documentation",
-    category="read",
+    category="search",
     description="""
     Search markdown documentation and references for specific topics.
 
-    **Parameters**:
-    - `query` (required): The search term or topic to find in docs
+    Args:
+        - query: str - The search term or topic to find in docs (required)
 
-    **Returns**: Dictionary with success, query, count, and results (file, snippets, header).
+    Returns:
+        Dictionary with success, query, count, and results (file, snippets, header).
     """,
     autowire=True,
 )
@@ -120,14 +122,15 @@ def search_documentation(
 
 @skill_command(
     name="search_standards",
-    category="read",
+    category="search",
     description="""
     Search for coding standards and engineering guidelines in docs/reference/.
 
-    **Parameters**:
-    - `topic` (required): The engineering topic to search standards for
+    Args:
+        - topic: str - The engineering topic to search standards for (required)
 
-    **Returns**: Dictionary with success, topic, count, and results (file, snippets).
+    Returns:
+        Dictionary with success, topic, count, and results (file, snippets).
     """,
     autowire=True,
 )

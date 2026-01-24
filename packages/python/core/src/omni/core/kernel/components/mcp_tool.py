@@ -228,11 +228,7 @@ class MCPToolAdapter:
         """
         if isinstance(result, str):
             return result
-        elif isinstance(result, dict):
-            import json
-
-            return json.dumps(result, indent=2, ensure_ascii=False)
-        elif isinstance(result, list):
+        elif isinstance(result, dict) or isinstance(result, list):
             import json
 
             return json.dumps(result, indent=2, ensure_ascii=False)

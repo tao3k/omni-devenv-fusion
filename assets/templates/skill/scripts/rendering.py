@@ -17,12 +17,11 @@ Usage:
     )
 """
 
-import jinja2
-from pathlib import Path
-from functools import lru_cache
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from functools import lru_cache
+from pathlib import Path
 
+import jinja2
 
 _TEMPLATES_BASE = Path(__file__).parent.parent.parent.parent / "assets" / "templates"
 
@@ -45,7 +44,7 @@ def render_result(
     subject: str,
     body: str = "",
     verified: bool = True,
-    checks: Optional[List[str]] = None,
+    checks: list[str] | None = None,
 ) -> str:
     """Render result using Jinja2 template."""
     env = _get_jinja_env()
@@ -66,7 +65,7 @@ def render_result(
 def render_error(
     error_type: str,
     message: str,
-    suggestion: Optional[str] = None,
+    suggestion: str | None = None,
 ) -> str:
     """Render error message."""
     env = _get_jinja_env()
@@ -82,7 +81,7 @@ def render_error(
         return f"Error [{error_type}]: {message}"
 
 
-def list_templates() -> List[str]:
+def list_templates() -> list[str]:
     """List available templates."""
     try:
         env = _get_jinja_env()

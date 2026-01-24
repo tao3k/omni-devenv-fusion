@@ -11,7 +11,6 @@ Best practices:
 4. Import from . (same package) for shared utilities
 """
 
-from typing import Optional
 
 
 def example_command(param: str) -> str:

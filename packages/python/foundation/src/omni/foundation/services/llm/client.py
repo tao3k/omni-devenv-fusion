@@ -13,8 +13,8 @@ from typing import Any
 import structlog
 from anthropic import AsyncAnthropic
 
-from omni.foundation.config.settings import get_setting
 from omni.foundation.api.api_key import get_anthropic_api_key
+from omni.foundation.config.settings import get_setting
 
 log = structlog.get_logger("mcp-core.inference")
 
@@ -150,7 +150,7 @@ class InferenceClient:
                         }
                     )
                     # Also try to extract parameters from XML-like tags
-                    param_pattern = rf"<parameter\s+name=\"(\w+)\">([^<]+)</parameter>"
+                    param_pattern = r"<parameter\s+name=\"(\w+)\">([^<]+)</parameter>"
                     params = re.findall(param_pattern, content)
                     if params:
                         last_call = tool_calls[-1]
@@ -199,93 +199,121 @@ class InferenceClient:
             }
 
     def get_tool_schema(self, skill_names: list[str] = None) -> list[dict]:
-        """Get tool definitions in JSON Schema format for ReAct loop."""
-        tool_schemas = []
+        """Get tool definitions from skill_index.json.
 
-        if not skill_names or "filesystem" in skill_names:
-            tool_schemas.extend(
-                [
-                    {
-                        "name": "read_file",
-                        "description": "Read the full content of a file (UTF-8)",
-                        "input_schema": {
-                            "type": "object",
-                            "properties": {
-                                "path": {"type": "string", "description": "Path to file to read"}
-                            },
-                            "required": ["path"],
-                        },
-                    },
-                    {
-                        "name": "write_file",
-                        "description": "Create or overwrite a file with new content",
-                        "input_schema": {
-                            "type": "object",
-                            "properties": {
-                                "path": {"type": "string", "description": "Path to write"},
-                                "content": {"type": "string", "description": "Content to write"},
-                            },
-                            "required": ["path", "content"],
-                        },
-                    },
-                    {
-                        "name": "list_directory",
-                        "description": "List files and directories in a given path",
-                        "input_schema": {
-                            "type": "object",
-                            "properties": {
-                                "path": {
-                                    "type": "string",
-                                    "description": "Directory path to list (default: '.')",
-                                },
-                            },
-                            "required": [],
-                        },
-                    },
-                    {
-                        "name": "search",
-                        "description": "Search for files matching a glob pattern",
-                        "input_schema": {
-                            "type": "object",
-                            "properties": {
-                                "pattern": {
-                                    "type": "string",
-                                    "description": "Glob pattern (e.g., '**/*.py')",
-                                },
-                                "path": {
-                                    "type": "string",
-                                    "description": "Search directory (default: '.')",
-                                },
-                            },
-                            "required": ["pattern"],
-                        },
-                    },
-                    {
-                        "name": "get_file_info",
-                        "description": "Get metadata about a file (size, modified time, etc.)",
-                        "input_schema": {
-                            "type": "object",
-                            "properties": {
-                                "path": {"type": "string", "description": "Path to file"},
-                            },
-                            "required": ["path"],
-                        },
-                    },
-                    {
-                        "name": "run_command",
-                        "description": "Run a shell command and return output",
-                        "input_schema": {
-                            "type": "object",
-                            "properties": {
-                                "command": {"type": "string", "description": "Command to run"},
-                            },
-                            "required": ["command"],
-                        },
-                    },
-                ]
+        Reads from .cache/skill_index.json which is populated by the Rust scanner.
+        This provides dynamic tool discovery without hardcoded schemas.
+
+        Args:
+            skill_names: Optional list of skill names to filter (e.g., ["filesystem", "git"])
+
+        Returns:
+            List of tool schemas in Anthropic format with 'skill.command' naming convention.
+
+        Raises:
+            FileNotFoundError: If skill_index.json is not found
+            json.JSONDecodeError: If skill_index.json is invalid JSON
+        """
+        import json
+
+        from omni.foundation.config.dirs import get_skill_index_path
+
+        skill_index_path = get_skill_index_path()
+
+        if not skill_index_path.exists():
+            raise FileNotFoundError(
+                f"Skill index not found at {skill_index_path}. "
+                "Run 'just build-rust' to generate the skill index."
             )
 
+        tool_schemas = []
+        skill_index = json.loads(skill_index_path.read_text())
+
+        for skill_entry in skill_index:
+            skill_name = skill_entry.get("name", "")
+            if skill_names and skill_name not in skill_names:
+                continue
+
+            tools = skill_entry.get("tools", [])
+            for tool in tools:
+                tool_name = tool.get("name", "")
+                tool_desc = tool.get("description", "")
+
+                # Generate input schema from description (basic approach)
+                input_schema = self._generate_input_schema_from_description(tool_name, tool_desc)
+
+                tool_schemas.append({
+                    "name": tool_name,
+                    "description": tool_desc,
+                    "input_schema": input_schema,
+                })
+
         return tool_schemas
+
+    def _generate_input_schema_from_description(self, tool_name: str, description: str) -> dict:
+        """Generate basic input schema from tool name and description.
+
+        This is a best-effort schema generation. For full accuracy, use the
+        skill context which extracts schemas from actual function signatures.
+        """
+        # Extract common parameters based on tool naming patterns
+        properties = {}
+        required = []
+
+        # Common patterns
+        if "path" in tool_name or "file" in tool_name:
+            properties["path"] = {
+                "type": "string",
+                "description": "Path to file or directory"
+            }
+            required.append("path")
+
+        if "content" in tool_name:
+            properties["content"] = {
+                "type": "string",
+                "description": "Content to write or process"
+            }
+            required.append("content")
+
+        if "query" in tool_name or "search" in tool_name:
+            properties["query"] = {
+                "type": "string",
+                "description": "Search query or question"
+            }
+            required.append("query")
+
+        if "message" in tool_name:
+            properties["message"] = {
+                "type": "string",
+                "description": "Message content"
+            }
+            required.append("message")
+
+        if "cmd" in tool_name or "command" in tool_name:
+            properties["cmd"] = {
+                "type": "string",
+                "description": "Command to execute"
+            }
+            required.append("cmd")
+
+        if "args" in tool_name:
+            properties["args"] = {
+                "type": "array",
+                "description": "Command arguments"
+            }
+
+        # Fallback: single "input" parameter for unknown tools
+        if not properties:
+            properties["input"] = {
+                "type": "string",
+                "description": "Input for the tool"
+            }
+
+        return {
+            "type": "object",
+            "properties": properties,
+            "required": required if required else [],
+        }
 
     async def stream_complete(
         self,

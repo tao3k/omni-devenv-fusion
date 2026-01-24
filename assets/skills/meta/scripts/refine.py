@@ -10,18 +10,19 @@ from omni.foundation.api.decorators import skill_command
 
 @skill_command(
     name="refine_code",
-    category="evolution",
+    category="write",
     description="""
     Analyze test failure and generate fixed code using AI.
 
-    Uses the `refiner.md` prompt from skills/meta/prompts/ to guide the LLM.
+    Uses the refiner.md prompt from skills/meta/prompts/ to guide the LLM.
 
-    **Parameters**:
-    - `requirement` (required): The original requirement for the code
-    - `code` (required): The current implementation that failed
-    - `error` (required): The error message from test execution
+    Args:
+        - requirement: str - The original requirement for the code (required)
+        - code: str - The current implementation that failed (required)
+        - error: str - The error message from test execution (required)
 
-    **Returns**: Fixed Python code with markdown fences stripped.
+    Returns:
+        Fixed Python code with markdown fences stripped.
     """,
     inject_root=True,
 )

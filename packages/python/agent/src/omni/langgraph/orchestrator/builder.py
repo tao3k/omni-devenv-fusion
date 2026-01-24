@@ -39,35 +39,31 @@ Usage:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Literal, Optional, TypeVar, Union
-from typing_extensions import TypedDict
+from collections.abc import Callable
+from typing import Any, Literal
 
-from langgraph.graph import END, StateGraph
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, StateGraph
 from langgraph.types import (
-    interrupt,
-    Command,
     Send,
     StreamMode,
+    interrupt,
 )
 
-from omni.langgraph.state import GraphState
 from omni.langgraph.orchestrator.compiled import CompiledGraph
+from omni.langgraph.state import GraphState
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
 
-
-@dataclass
-class NodeMetadata:
+class NodeMetadata(BaseModel):
     """Metadata for a dynamically created node."""
 
     name: str
     type: Literal["skill", "function", "router", "interrupt", "command"]
     target: str  # skill_name.command or function_name
-    args: Dict[str, Any] = field(default_factory=dict)
+    args: dict[str, Any] = {}
 
 
 class DynamicGraphBuilder:
@@ -135,10 +131,10 @@ class DynamicGraphBuilder:
 
         # Create the StateGraph
         self.workflow = StateGraph(self.state_schema)
-        self.nodes: Dict[str, NodeMetadata] = {}
+        self.nodes: dict[str, NodeMetadata] = {}
         self._entry_point: str | None = None
         self._compiled = False
-        self._stream_modes: List[StreamMode] | None = None
+        self._stream_modes: list[StreamMode] | None = None
 
     # =========================================================================
     # Node Creation Methods
@@ -149,10 +145,10 @@ class DynamicGraphBuilder:
         node_name: str,
         skill_name: str,
         command_name: str,
-        fixed_args: Optional[Dict[str, Any]] = None,
-        state_input: Optional[Dict[str, str]] = None,
-        state_output: Optional[Dict[str, str]] = None,
-    ) -> "DynamicGraphBuilder":
+        fixed_args: dict[str, Any] | None = None,
+        state_input: dict[str, str] | None = None,
+        state_output: dict[str, str] | None = None,
+    ) -> DynamicGraphBuilder:
         """
         Register a skill command as a graph node.
 
@@ -180,13 +176,13 @@ class DynamicGraphBuilder:
         state_input = state_input or {}
         state_output = state_output or {}
 
-        async def _skill_node_impl(state: GraphState) -> Dict[str, Any]:
+        async def _skill_node_impl(state: GraphState) -> dict[str, Any]:
             # Merge fixed args with dynamic args from state
             cmd_args = dict(fixed_args)
 
             # Extract dynamic args from state
             for state_key, arg_name in state_input.items():
-                if state_key in state and state[state_key]:
+                if state.get(state_key):
                     cmd_args[arg_name] = state[state_key]
 
             # Execute via skill runner if available
@@ -230,7 +226,7 @@ class DynamicGraphBuilder:
                         parsed_output = output
 
             # Prepare state updates
-            updates: Dict[str, Any] = {}
+            updates: dict[str, Any] = {}
 
             # Store result in scratchpad by default
             updates.setdefault("scratchpad", []).append(
@@ -263,7 +259,7 @@ class DynamicGraphBuilder:
         self,
         node_name: str,
         func: Callable[..., Any],
-    ) -> "DynamicGraphBuilder":
+    ) -> DynamicGraphBuilder:
         """
         Add a raw Python function as a node.
 
@@ -289,7 +285,7 @@ class DynamicGraphBuilder:
         node_name: str,
         prompt: str,
         resume_key: str = "human_input",
-    ) -> "DynamicGraphBuilder":
+    ) -> DynamicGraphBuilder:
         """
         Add a Human-in-the-Loop interrupt node.
 
@@ -313,7 +309,7 @@ class DynamicGraphBuilder:
             graph.stream(Command(resume="approved"), config)
         """
 
-        async def _interrupt_impl(state: GraphState) -> Dict[str, Any]:
+        async def _interrupt_impl(state: GraphState) -> dict[str, Any]:
             # Call interrupt() - this pauses execution
             user_input = interrupt(prompt)
             # Return the user's input to be stored in state
@@ -331,7 +327,7 @@ class DynamicGraphBuilder:
         self,
         node_name: str,
         func: Callable[..., Any],
-    ) -> "DynamicGraphBuilder":
+    ) -> DynamicGraphBuilder:
         """
         Add a node that returns Command for complex graph control.
 
@@ -370,7 +366,7 @@ class DynamicGraphBuilder:
         model: str = "default",
         state_output: str = "llm_result",
         inference_client: Any = None,
-    ) -> "DynamicGraphBuilder":
+    ) -> DynamicGraphBuilder:
         """
         Add an LLM processing node.
 
@@ -385,7 +381,7 @@ class DynamicGraphBuilder:
             Self for fluent chaining
         """
 
-        async def _llm_node(state: GraphState) -> Dict[str, Any]:
+        async def _llm_node(state: GraphState) -> dict[str, Any]:
             # Render prompt template
             try:
                 prompt = prompt_template.format(**state)
@@ -415,7 +411,7 @@ class DynamicGraphBuilder:
     # Edge Definition Methods
     # =========================================================================
 
-    def set_entry_point(self, node_name: str) -> "DynamicGraphBuilder":
+    def set_entry_point(self, node_name: str) -> DynamicGraphBuilder:
         """
         Set the starting node of the graph.
 
@@ -435,7 +431,7 @@ class DynamicGraphBuilder:
         self,
         start_node: str,
         end_node: str | type[END],
-    ) -> "DynamicGraphBuilder":
+    ) -> DynamicGraphBuilder:
         """
         Add a direct edge between two nodes.
 
@@ -452,7 +448,7 @@ class DynamicGraphBuilder:
     def add_sequence(
         self,
         *node_names: str,
-    ) -> "DynamicGraphBuilder":
+    ) -> DynamicGraphBuilder:
         """
         Add a linear sequence of edges between nodes.
 
@@ -474,8 +470,8 @@ class DynamicGraphBuilder:
         self,
         source_node: str,
         condition_func: Callable[[GraphState], str],
-        path_map: Dict[str, str],
-    ) -> "DynamicGraphBuilder":
+        path_map: dict[str, str],
+    ) -> DynamicGraphBuilder:
         """
         Add conditional branching logic.
 
@@ -497,9 +493,9 @@ class DynamicGraphBuilder:
     def add_send_branch(
         self,
         source_node: str,
-        target_nodes: List[str],
-        send_input: Callable[[GraphState], List[Send]] | None = None,
-    ) -> "DynamicGraphBuilder":
+        target_nodes: list[str],
+        send_input: Callable[[GraphState], list[Send]] | None = None,
+    ) -> DynamicGraphBuilder:
         """
         Add parallel execution using Send pattern (fan-out/fan-in).
 
@@ -539,8 +535,8 @@ class DynamicGraphBuilder:
 
     def with_stream_modes(
         self,
-        modes: List[StreamMode],
-    ) -> "DynamicGraphBuilder":
+        modes: list[StreamMode],
+    ) -> DynamicGraphBuilder:
         """
         Set stream modes for the compiled graph.
 
@@ -559,8 +555,8 @@ class DynamicGraphBuilder:
 
     def compile(
         self,
-        interrupt_before: List[str] | None = None,
-        interrupt_after: List[str] | None = None,
+        interrupt_before: list[str] | None = None,
+        interrupt_after: list[str] | None = None,
         thread_id: str | None = None,
         checkpointer: Any | None = None,
     ) -> CompiledGraph:
@@ -592,7 +588,6 @@ class DynamicGraphBuilder:
                 # Graph is waiting for human input
                 print("Waiting for approval...")
         """
-        import json
 
         if self._compiled:
             raise RuntimeError("Graph already compiled. Create a new builder.")

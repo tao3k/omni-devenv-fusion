@@ -10,7 +10,6 @@ import re
 import subprocess
 from typing import Any
 
-
 # Whitelist of allowed commands (empty = allow all for development)
 ALLOWED_COMMANDS: list[str] = []
 
@@ -51,7 +50,12 @@ def check_dangerous_patterns(command: str, args: list[str]) -> tuple[bool, str]:
     return True, ""
 
 
-def run_command(command: str, args: list[str], timeout: int = 60) -> dict[str, Any]:
+def run_command(
+    command: str,
+    args: list[str],
+    timeout: int = 60,
+    working_dir: str | None = None,
+) -> dict[str, Any]:
     """
     Execute a command with safety checks.
 
@@ -59,20 +63,26 @@ def run_command(command: str, args: list[str], timeout: int = 60) -> dict[str, A
         command: Command to execute
         args: Command arguments
         timeout: Timeout in seconds
+        working_dir: Working directory (default: current)
 
     Returns:
         Dict with exit_code, stdout, stderr, duration_ms
     """
-    # Check whitelist if not empty
-    if ALLOWED_COMMANDS and command not in ALLOWED_COMMANDS:
-        return {
-            "exit_code": 1,
-            "stdout": "",
-            "stderr": f"Command '{command}' not in whitelist",
-            "duration_ms": 0,
-            "command": command,
-            "args": args,
-        }
+    from pathlib import Path
+
+    # Determine working directory
+    cwd = None
+    if working_dir:
+        cwd = Path(working_dir).resolve()
+        if not cwd.exists():
+            return {
+                "exit_code": 1,
+                "stdout": "",
+                "stderr": f"Working directory does not exist: {working_dir}",
+                "duration_ms": 0,
+                "command": command,
+                "args": args,
+            }
 
     try:
         result = subprocess.run(
@@ -80,6 +90,7 @@ def run_command(command: str, args: list[str], timeout: int = 60) -> dict[str, A
             capture_output=True,
             text=True,
             timeout=timeout,
+            cwd=str(cwd) if cwd else None,
         )
 
         return {
@@ -209,8 +220,16 @@ def format_result(
     """
     output = []
 
-    stdout = result.get("stdout", "")
-    stderr = result.get("stderr", "")
+    # Ensure stdout and stderr are strings
+    stdout = str(result.get("stdout", ""))
+    stderr = str(result.get("stderr", ""))
+
+    # Ensure tail_lines is an int
+    if tail_lines is not None:
+        try:
+            tail_lines = int(tail_lines)
+        except (ValueError, TypeError):
+            tail_lines = None
 
     # Show tail if requested (UNIX-style tail for large output)
     if tail_lines is not None and tail_lines > 0:

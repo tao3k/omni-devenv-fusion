@@ -1,19 +1,32 @@
 """
 types.py - Common API Types (Pillar A: Pydantic Shield)
 
-Updated for ODF-EP v6.0:
+Updated for ODF-EP v6.0 with Python 3.12 PEP 695:
+- Modern type alias syntax using `type` keyword
+- Simplified generics without TypeVar boilerplate
+
+Features:
 - Integrated orjson for high-performance serialization.
 - Base CommandResult with Generics.
 """
 
 from __future__ import annotations
 
+from typing import Any, Generic, TypeVar
+
 import orjson
-from typing import Generic, TypeVar, Any
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
-# T represents the type of 'data' payload
+# Type variable for CommandResult generic (required for Pydantic Generic[T])
 T = TypeVar("T")
+
+# Common type aliases using modern PEP 695 syntax (Python 3.12+)
+type JsonBytes = bytes
+type JsonStr = str
+type ErrorMsg = str | None
+type Metadata = dict[str, Any]
+type DurationMs = float
+type RetryCount = int
 
 
 class OrjsonModel(BaseModel):
@@ -48,8 +61,8 @@ class CommandResult(OrjsonModel, Generic[T]):
 
     success: bool = Field(..., description="Execution success status")
     data: T = Field(..., description="Result payload (typed)")
-    error: str | None = Field(None, description="Error message if failed")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Execution context metadata")
+    error: ErrorMsg = Field(None, description="Error message if failed")
+    metadata: Metadata = Field(default_factory=dict, description="Execution context metadata")
 
     @computed_field
     @property
@@ -84,4 +97,17 @@ class CommandResult(OrjsonModel, Generic[T]):
         return self.metadata.get("duration_ms", 0.0)
 
 
-__all__ = ["CommandResult", "OrjsonModel", "T"]
+__all__ = [
+    # Classes
+    "CommandResult",
+    "OrjsonModel",
+    # Type variable
+    "T",
+    # PEP 695 type aliases
+    "JsonBytes",
+    "JsonStr",
+    "ErrorMsg",
+    "Metadata",
+    "DurationMs",
+    "RetryCount",
+]

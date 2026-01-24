@@ -38,3 +38,7 @@ packages = ["src/omni"]
 [tool.pyright]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
+
+[tool.pytest]
+markers = ["slow"]
+asyncio_mode = "auto"

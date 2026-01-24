@@ -4,12 +4,13 @@ Advanced Filesystem Tools (Context Awareness)
 Wraps visual structure tools to provide spatial awareness to the Agent.
 """
 
-import subprocess
 import shutil
+import subprocess
 from typing import Any
+
 from omni.foundation.api.decorators import skill_command
-from omni.foundation.config.paths import ConfigPaths
 from omni.foundation.config.logging import get_logger
+from omni.foundation.config.paths import ConfigPaths
 
 logger = get_logger("skill.advanced_tools.fs")
 
@@ -17,15 +18,17 @@ logger = get_logger("skill.advanced_tools.fs")
 @skill_command(
     name="tree_view",
     description="""
-    Generate a visual directory tree structure.
+    Generate a visual directory tree.
 
-    **Parameters**:
-    - `directory` (required): Root directory to start tree from (default: `.`)
-    - `depth` (optional, default: 2): How many directory levels to show
-    - `show_hidden` (optional, default: false): Include hidden files starting with `.`
-    - `only_directories` (optional, default: false): Show only directories, no files
+    Args:
+        - directory: str = "." - Root directory
+        - depth: int = 2 - How many levels to show
+        - show_hidden: bool = false - Include hidden files
+        - only_directories: bool = false - Show only directories
+        - cmd: Optional[str] - Ignored (for compatibility)
 
-    **Returns**: Visual tree representation or error if `tree` command not found.
+    Returns:
+        Tree structure or error if 'tree' not installed.
     """,
     autowire=True,
 )
@@ -35,6 +38,8 @@ def tree_view(
     show_hidden: bool = False,
     only_directories: bool = False,
     paths: ConfigPaths | None = None,
+    # Ignored - for compatibility
+    cmd: str | None = None,
 ) -> dict[str, Any]:
     """
     Wraps 'tree' command for visual directory structure.

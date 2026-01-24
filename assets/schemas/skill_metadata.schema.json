@@ -5,6 +5,7 @@
   "type": "object",
   "properties": {
     "authors": {
+      "description": "Authors who created or maintain this skill.",
       "type": "array",
       "default": [],
       "items": {
@@ -12,10 +13,12 @@
       }
     },
     "description": {
+      "description": "Human-readable description of the skill's purpose.",
       "type": "string",
       "default": ""
     },
     "intents": {
+      "description": "Intents this skill can handle (for intent-based routing).",
       "type": "array",
       "default": [],
       "items": {
@@ -31,10 +34,12 @@
       }
     },
     "repository": {
+      "description": "Repository URL for the skill source code.",
       "type": "string",
       "default": ""
     },
     "require_refs": {
+      "description": "Paths to required reference files or skills.",
       "type": "array",
       "default": [],
       "items": {
@@ -42,6 +47,7 @@
       }
     },
     "routing_keywords": {
+      "description": "Keywords used for semantic routing and skill selection.",
       "type": "array",
       "default": [],
       "items": {
@@ -49,16 +55,19 @@
       }
     },
     "skill_name": {
+      "description": "Unique name identifying this skill.",
       "type": "string",
       "default": ""
     },
     "version": {
+      "description": "Semantic version string (e.g., \"1.0.0\").",
       "type": "string",
       "default": ""
     }
   },
   "$defs": {
     "ReferencePath": {
+      "description": "A validated relative path to a reference document (md, pdf, txt, html, json, yaml, yml).",
       "type": "string"
     }
   }

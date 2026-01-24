@@ -79,4 +79,4 @@ def get_env(key: str, env_vars: dict[str, str] | None = None, default: str | Non
     return env_vars.get(key) or os.environ.get(key) or default  # type: ignore[return-value]
 
 
-__all__ = ["load_env_from_file", "get_env"]
+__all__ = ["get_env", "load_env_from_file"]

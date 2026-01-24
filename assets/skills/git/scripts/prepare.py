@@ -9,21 +9,19 @@ Implements the prepare_commit command for /commit workflow:
 Uses cascading template pattern with configuration via settings.yaml.
 """
 
-import subprocess
-import shutil
 import re
-from datetime import datetime
-from typing import Optional, Dict, Any, List, Tuple
+import shutil
+import subprocess
 from pathlib import Path
 
 
-def _run(cmd: list[str], cwd: Optional[Path] = None) -> tuple[str, str, int]:
+def _run(cmd: list[str], cwd: Path | None = None) -> tuple[str, str, int]:
     """Run command and return stdout, stderr, returncode."""
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
     return result.stdout.strip(), result.stderr.strip(), result.returncode
 
 
-def _check_sensitive_files(staged_files: List[str]) -> List[str]:
+def _check_sensitive_files(staged_files: list[str]) -> list[str]:
     """Check for potentially sensitive files in staged changes."""
     sensitive_patterns = [
         "*.env*",
@@ -54,7 +52,7 @@ def _check_sensitive_files(staged_files: List[str]) -> List[str]:
     return sensitive
 
 
-def _get_cog_scopes(project_root: Optional[Path] = None) -> List[str]:
+def _get_cog_scopes(project_root: Path | None = None) -> list[str]:
     """Read allowed scopes from cog.toml."""
     try:
         from omni.foundation.config.settings import get_setting
@@ -76,8 +74,8 @@ def _get_cog_scopes(project_root: Optional[Path] = None) -> List[str]:
 
 
 def _validate_and_fix_scope(
-    commit_type: str, scope: str, project_root: Optional[Path] = None
-) -> tuple[bool, str, List[str]]:
+    commit_type: str, scope: str, project_root: Path | None = None
+) -> tuple[bool, str, list[str]]:
     """Validate scope against cog.toml and auto-fix if close match."""
     valid_scopes = _get_cog_scopes(project_root)
 
@@ -103,7 +101,7 @@ def _validate_and_fix_scope(
     return False, scope, [warning]
 
 
-def _check_lefthook(cwd: Optional[Path] = None) -> tuple[bool, str, str]:
+def _check_lefthook(cwd: Path | None = None) -> tuple[bool, str, str]:
     """Run lefthook pre-commit checks.
 
     Returns:
@@ -226,10 +224,10 @@ def stage_and_scan(root_dir: str = ".") -> dict:
 
 
 __all__ = [
-    "stage_and_scan",
-    "_run",
+    "_check_lefthook",
     "_check_sensitive_files",
     "_get_cog_scopes",
+    "_run",
     "_validate_and_fix_scope",
-    "_check_lefthook",
+    "stage_and_scan",
 ]

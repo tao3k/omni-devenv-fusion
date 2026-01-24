@@ -5,8 +5,6 @@ testing_protocol/scripts/protocol.py - Testing Protocol Skill Commands
 import json
 import os
 import subprocess
-from pathlib import Path
-from typing import Dict, Any, Optional
 
 import structlog
 
@@ -15,7 +13,7 @@ from omni.foundation.api.decorators import skill_command
 logger = structlog.get_logger(__name__)
 
 
-def get_git_status() -> Dict[str, list]:
+def get_git_status() -> dict[str, list]:
     """Get git status for changed files."""
     try:
         result = subprocess.run(
@@ -40,7 +38,7 @@ def get_git_status() -> Dict[str, list]:
         return {"error": str(e)}
 
 
-def categorize_changes(files: list) -> Dict[str, bool]:
+def categorize_changes(files: list) -> dict[str, bool]:
     """Categorize changes by type."""
     categories = {
         "docs_only": True,
@@ -105,7 +103,7 @@ def categorize_changes(files: list) -> Dict[str, bool]:
         @omni("testing_protocol.smart_test_runner", {"focus_file": "tests/test_core.py"})
     """,
 )
-async def smart_test_runner(focus_file: Optional[str] = None) -> str:
+async def smart_test_runner(focus_file: str | None = None) -> str:
     if focus_file:
         return json.dumps(
             {

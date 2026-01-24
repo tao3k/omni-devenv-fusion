@@ -10,9 +10,8 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import signal
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -28,10 +27,10 @@ class TestSignalHandlerSetup:
 
     def test_setup_signal_handler_accepts_parameters(self):
         """Verify signal handler accepts expected parameters."""
-        from omni.agent.cli.commands.mcp import _setup_signal_handler
-
         # Should accept handler_ref, transport_ref, and stdio_mode parameters
         import inspect
+
+        from omni.agent.cli.commands.mcp import _setup_signal_handler
 
         sig = inspect.signature(_setup_signal_handler)
         params = list(sig.parameters.keys())
@@ -77,7 +76,6 @@ class TestGlobalShutdownState:
 
     def test_shutdown_requested_flag(self):
         """Test _shutdown_requested flag can be toggled."""
-        from omni.agent.cli.commands.mcp import _shutdown_requested
 
         # Import the module to check the value
         import omni.agent.cli.commands.mcp as mcp_module
@@ -118,7 +116,7 @@ class TestGracefulShutdownFunction:
     @pytest.mark.asyncio
     async def test_graceful_shutdown_with_kernel_not_ready(self):
         """Test graceful shutdown when kernel is not ready."""
-        from unittest.mock import MagicMock, PropertyMock
+        from unittest.mock import MagicMock
 
         from omni.agent.cli.commands.mcp import _graceful_shutdown
 
@@ -188,10 +186,10 @@ class TestStdioModeExit:
 
     def test_stdio_mode_sets_sys_exit_behavior(self):
         """Verify stdio mode signal handler is configured for sys.exit."""
-        from omni.agent.cli.commands.mcp import _setup_signal_handler
-
         # Verify the function exists and accepts stdio_mode parameter
         import inspect
+
+        from omni.agent.cli.commands.mcp import _setup_signal_handler
 
         sig = inspect.signature(_setup_signal_handler)
         params = sig.parameters
@@ -208,6 +206,7 @@ class TestStdioModeExit:
         doesn't include the call for stdio mode.
         """
         import inspect
+
         from omni.agent.cli.commands.mcp import _setup_signal_handler
 
         source = inspect.getsource(_setup_signal_handler)
@@ -224,6 +223,7 @@ class TestSSEModeShutdown:
     def test_sse_mode_calls_transport_stop(self):
         """Verify SSE mode signal handler code includes transport stop."""
         import inspect
+
         from omni.agent.cli.commands.mcp import _setup_signal_handler
 
         source = inspect.getsource(_setup_signal_handler)
@@ -233,6 +233,7 @@ class TestSSEModeShutdown:
     def test_sse_mode_calls_graceful_shutdown(self):
         """Verify SSE mode code calls _sync_graceful_shutdown."""
         import inspect
+
         from omni.agent.cli.commands.mcp import _setup_signal_handler
 
         source = inspect.getsource(_setup_signal_handler)
@@ -335,8 +336,8 @@ class TestStdioTransportRunLoopExit:
 
     def test_transport_set_handler(self):
         """Test transport set_handler method."""
-        from omni.mcp.transport.stdio import StdioTransport
         from omni.mcp.interfaces import MCPRequestHandler
+        from omni.mcp.transport.stdio import StdioTransport
 
         transport = StdioTransport()
         assert transport._handler is None

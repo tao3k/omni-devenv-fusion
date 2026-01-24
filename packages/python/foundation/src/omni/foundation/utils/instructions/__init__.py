@@ -25,9 +25,9 @@ from .loader import (
 )
 
 __all__ = [
-    "get_instructions",
-    "get_instruction",
     "get_all_instructions_merged",
+    "get_instruction",
+    "get_instructions",
     "list_instruction_names",
     "reload_instructions",
 ]

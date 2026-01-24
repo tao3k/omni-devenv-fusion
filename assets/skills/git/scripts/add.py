@@ -3,16 +3,16 @@ git/scripts/add.py - Git add/stage operations
 """
 
 import subprocess
-from typing import Optional, List, Dict, Any
 from pathlib import Path
+from typing import Any
 
 
-def _run(cmd: list[str], cwd: Optional[Path] = None) -> str:
+def _run(cmd: list[str], cwd: Path | None = None) -> str:
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
     return result.stdout.strip()
 
 
-def add(files: List[str]) -> str:
+def add(files: list[str]) -> str:
     """Stage files for commit."""
     return _run(["git", "add"] + files)
 
@@ -22,7 +22,7 @@ def add_all() -> str:
     return _run(["git", "add", "."])
 
 
-def add_all_with_info() -> Dict[str, Any]:
+def add_all_with_info() -> dict[str, Any]:
     """Stage all changes and return file list and diff.
 
     Returns:
@@ -49,7 +49,7 @@ def add_pattern(pattern: str) -> str:
     return _run(["git", "add", pattern])
 
 
-def reset(files: List[str]) -> str:
+def reset(files: list[str]) -> str:
     """Unstage files."""
     return _run(["git", "reset"] + files)
 

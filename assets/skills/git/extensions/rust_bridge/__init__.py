@@ -18,8 +18,8 @@ from .bindings import RustBindings, get_bindings, is_rust_available
 
 __all__ = [
     "RustAccelerator",
-    "create_accelerator",
     "RustBindings",
+    "create_accelerator",
     "get_bindings",
     "is_rust_available",
 ]

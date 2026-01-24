@@ -5,9 +5,8 @@ High-performance memory grid for storing and retrieving episodic/semantic memory
 Uses Rust-powered vector store for embeddings and similarity search.
 """
 
-import os
-from typing import Dict, List, Any, Optional
 from pathlib import Path
+from typing import Any
 
 from .bindings import RustBindings
 
@@ -53,7 +52,7 @@ class NeuralMatrix:
         """Return the backend type."""
         return "omni-vector (Rust/LanceDB)" if self._store else "unavailable"
 
-    def remember(self, content: str, metadata: Optional[Dict[str, Any]] = None) -> str:
+    def remember(self, content: str, metadata: dict[str, Any] | None = None) -> str:
         """Store a memory.
 
         Args:
@@ -97,7 +96,7 @@ class NeuralMatrix:
         except Exception as e:
             return f"error: {e}"
 
-    def recall(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+    def recall(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
         """Recall memories similar to the query.
 
         Args:
@@ -127,7 +126,7 @@ class NeuralMatrix:
             print(f"Recall error: {e}")
             return []
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Get memory statistics."""
         if not self._store:
             return {"active": False, "backend": "unavailable"}

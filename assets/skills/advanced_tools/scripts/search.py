@@ -8,14 +8,14 @@ Responsibilities:
 - Output: Structured JSON for LLM consumption
 """
 
-import subprocess
-import shutil
 import json
-import os
+import shutil
+import subprocess
 from typing import Any
+
 from omni.foundation.api.decorators import skill_command
-from omni.foundation.config.paths import ConfigPaths
 from omni.foundation.config.logging import get_logger
+from omni.foundation.config.paths import ConfigPaths
 
 logger = get_logger("skill.advanced_tools.search")
 
@@ -184,4 +184,4 @@ def smart_find(
         return {"success": False, "error": str(e)}
 
 
-__all__ = ["smart_search", "smart_find"]
+__all__ = ["smart_find", "smart_search"]

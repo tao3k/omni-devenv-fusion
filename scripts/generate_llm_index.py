@@ -200,7 +200,7 @@ def generate_system_prompt_snippet(index: list[dict[str, Any]]) -> str:
             lines.append(
                 f"    Commands: {', '.join(tool_names)}{'...' if len(skill['tools']) > 5 else ''}"
             )
-        lines.append(f"  </skill>")
+        lines.append("  </skill>")
     lines.append("</available_skills>")
     return "\n".join(lines)
 

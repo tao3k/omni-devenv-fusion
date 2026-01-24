@@ -84,10 +84,10 @@ async def run(
 
 
 __all__ = [
-    "run",
-    "run_stdio",
-    "run_sse",
-    "server_lifespan",
-    "handle_list_tools",
     "_notify_tools_changed",
+    "handle_list_tools",
+    "run",
+    "run_sse",
+    "run_stdio",
+    "server_lifespan",
 ]

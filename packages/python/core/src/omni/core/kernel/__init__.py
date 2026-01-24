@@ -15,8 +15,8 @@ from .lifecycle import LifecycleManager, LifecycleState
 
 __all__ = [
     "Kernel",
+    "LifecycleManager",
+    "LifecycleState",
     "get_kernel",
     "reset_kernel",
-    "LifecycleState",
-    "LifecycleManager",
 ]

@@ -8,10 +8,12 @@ Verifies:
 """
 
 import sys
-import pytest
-from unittest.mock import MagicMock, patch, mock_open
 from pathlib import Path
-from omni.core.router.sniffer import IntentSniffer, DeclarativeRule
+from unittest.mock import patch
+
+import pytest
+
+from omni.core.router.sniffer import IntentSniffer
 
 # Mock Foundation objects to avoid dependency on actual JSON file
 from omni.foundation.bridge.scanner import DiscoveredSkillRules, SnifferRule

@@ -4,8 +4,6 @@ Config Directory Tests
 Tests for omni.foundation.config.directory module.
 """
 
-import pytest
-from pathlib import Path
 
 
 class TestConfDirFunctions:
@@ -13,7 +11,7 @@ class TestConfDirFunctions:
 
     def test_set_conf_dir(self):
         """Test set_conf_dir() function."""
-        from omni.foundation.config.directory import set_conf_dir, get_conf_dir
+        from omni.foundation.config.directory import get_conf_dir, set_conf_dir
 
         original = get_conf_dir()
         try:

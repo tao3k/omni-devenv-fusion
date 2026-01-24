@@ -16,8 +16,9 @@ Usage:
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from threading import Lock
-from typing import Any, Callable
+from typing import Any
 
 from omni.foundation.config.logging import get_logger
 
@@ -194,7 +195,7 @@ def get_cached_schema(
 
 __all__ = [
     "ToolSchemaCache",
+    "get_cached_schema",
     "get_schema_cache",
     "reset_cache",
-    "get_cached_schema",
 ]

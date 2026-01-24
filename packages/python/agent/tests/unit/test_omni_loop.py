@@ -5,12 +5,13 @@ Tests the CCA Loop implementation with smart context management.
 Ensures proper LLM integration and context handling.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from omni.agent.core.omni.loop import OmniLoop
-from omni.agent.core.omni.config import OmniLoopConfig
+import pytest
+
 from omni.agent.core.context.manager import ContextManager
+from omni.agent.core.omni.config import OmniLoopConfig
+from omni.agent.core.omni.loop import OmniLoop
 
 
 class TestOmniLoopConfig:

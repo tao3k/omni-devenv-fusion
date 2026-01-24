@@ -19,9 +19,9 @@ Usage:
 from .base import MEMORY_DIR, ProjectMemory, format_decision, init_memory_dir, parse_decision
 
 __all__ = [
-    "ProjectMemory",
     "MEMORY_DIR",
-    "init_memory_dir",
+    "ProjectMemory",
     "format_decision",
+    "init_memory_dir",
     "parse_decision",
 ]

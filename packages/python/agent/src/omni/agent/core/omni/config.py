@@ -1,14 +1,13 @@
 """
 config.py - OmniLoop Configuration
 
- dataclass for configuring OmniLoop behavior.
+Pydantic model for configuring OmniLoop behavior.
 """
 
-from dataclasses import dataclass
+from pydantic import BaseModel
 
 
-@dataclass
-class OmniLoopConfig:
+class OmniLoopConfig(BaseModel):
     """Configuration for the OmniLoop.
 
     Attributes:

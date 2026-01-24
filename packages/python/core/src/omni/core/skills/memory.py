@@ -5,7 +5,6 @@ Stub implementation for compatibility.
 The skill memory feature is pending migration to the new architecture.
 """
 
-from typing import Any
 
 
 # Stub classes to prevent import errors

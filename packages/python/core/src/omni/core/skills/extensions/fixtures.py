@@ -23,8 +23,9 @@ Usage:
 from __future__ import annotations
 
 import importlib
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from omni.foundation.config.logging import get_logger
 
@@ -172,8 +173,8 @@ def apply_fixtures(skill_path: Path, module: Any) -> None:
 
 
 __all__ = [
-    "FixtureRegistry",
     "FixtureManager",
-    "fixture",
+    "FixtureRegistry",
     "apply_fixtures",
+    "fixture",
 ]

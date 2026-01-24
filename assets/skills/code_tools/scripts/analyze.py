@@ -11,16 +11,15 @@ Commands:
 - list_project_structure: Directory tree view
 """
 
-from pathlib import Path
-from typing import Any
-import subprocess
-import shutil
 import os
+import shutil
+import subprocess
+from typing import Any
 
 # Modern Foundation API
 from omni.foundation.api.decorators import skill_command
-from omni.foundation.config.paths import ConfigPaths
 from omni.foundation.config.logging import get_logger
+from omni.foundation.config.paths import ConfigPaths
 
 logger = get_logger("skill.code_tools.analyze")
 
@@ -42,7 +41,20 @@ except ImportError:
 
 @skill_command(
     name="search_code",
-    description="Search for code patterns using system grep (recursive).",
+    category="search",
+    description="""
+    Search for code patterns using system grep (recursive).
+
+    Args:
+        - pattern: str - The search pattern to find (required)
+        - include: Optional[str] - File pattern to include (e.g., *.py)
+        - exclude: Optional[str] - File pattern to exclude
+        - case_sensitive: bool = true - Whether to match case
+        - max_results: int = 100 - Maximum number of results to return
+
+    Returns:
+        Dictionary with success status, match count, and list of matches with file, line, and content.
+    """,
     autowire=True,
 )
 def search_code(
@@ -156,7 +168,17 @@ def search_code(
 
 @skill_command(
     name="list_project_structure",
-    description="Get a high-level view of the project structure.",
+    category="view",
+    description="""
+    Get a high-level view of the project structure using pure Python.
+
+    Args:
+        - depth: int = 2 - How many levels deep to show
+        - paths: Optional[ConfigPaths] - Injected ConfigPaths instance
+
+    Returns:
+        Dictionary with success status, root path, and structure with directories and files.
+    """,
     autowire=True,
 )
 def list_project_structure(
@@ -210,7 +232,19 @@ def list_project_structure(
 
 @skill_command(
     name="ast_search",
-    description="Structural code search using Rust-powered AST (ast-grep).",
+    category="search",
+    description="""
+    Structural code search using Rust-powered AST (ast-grep).
+
+    Args:
+        - file_path: str - Path to the file to search (required)
+        - pattern: str - AST pattern to search for (required)
+        - language: Optional[str] - Programming language (auto-detected if not specified)
+        - paths: Optional[ConfigPaths] - Injected ConfigPaths instance
+
+    Returns:
+        Search results or error message if Rust AST engine is not available.
+    """,
     autowire=True,
 )
 async def ast_search(
@@ -244,7 +278,19 @@ async def ast_search(
 
 @skill_command(
     name="ast_search_dir",
-    description="Recursive structural search in a directory using Rust AST engine.",
+    category="search",
+    description="""
+    Recursive structural search in a directory using Rust AST engine.
+
+    Args:
+        - path: str - Directory path to search (required)
+        - pattern: str - AST pattern to search for (required)
+        - file_pattern: Optional[str] - File pattern to filter (e.g., *.py)
+        - paths: Optional[ConfigPaths] - Injected ConfigPaths instance
+
+    Returns:
+        Search results or error message if Rust AST engine is not available.
+    """,
     autowire=True,
 )
 async def ast_search_dir(
@@ -276,4 +322,4 @@ async def ast_search_dir(
         return f"Search error: {e}"
 
 
-__all__ = ["search_code", "list_project_structure", "ast_search", "ast_search_dir"]
+__all__ = ["ast_search", "ast_search_dir", "list_project_structure", "search_code"]

@@ -7,8 +7,8 @@ Updated for ODF-EP v6.0:
 - Unified with Trinity Architecture
 """
 
-from typing import Any, Optional, Union
 from enum import Enum
+from typing import Any
 
 import orjson
 
@@ -28,8 +28,8 @@ class JSONRPCRequest(OrjsonModel):
 
     jsonrpc: str = "2.0"
     method: str = ""
-    params: Optional[Union[dict[str, Any], list[Any]]] = None
-    id: Optional[Union[str, int]] = None
+    params: dict[str, Any] | list[Any] | None = None
+    id: str | int | None = None
 
     @property
     def is_notification(self) -> bool:
@@ -52,9 +52,9 @@ class JSONRPCResponse(OrjsonModel):
     """JSON-RPC 2.0 Response message."""
 
     jsonrpc: str = "2.0"
-    result: Optional[Any] = None
-    error: Optional[dict[str, Any]] = None
-    id: Optional[Union[str, int]] = None
+    result: Any | None = None
+    error: dict[str, Any] | None = None
+    id: str | int | None = None
 
     @property
     def is_error(self) -> bool:
@@ -71,7 +71,7 @@ class JSONRPCError(OrjsonModel):
 
     code: int
     message: str
-    data: Optional[Any] = None
+    data: Any | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -130,20 +130,20 @@ class MCPErrorCode:
 
 
 def make_mcp_error_response(
-    id: Optional[Union[str, int]],
+    id: str | int | None,
     code: int,
     message: str,
-    data: Optional[Any] = None,
+    data: Any | None = None,
 ) -> JSONRPCResponse:
     """Factory for MCP error responses."""
     return make_error_response(id=id, code=code, message=message, data=data)
 
 
 def make_error_response(
-    id: Optional[Union[str, int]],
+    id: str | int | None,
     code: int,
     message: str,
-    data: Optional[Any] = None,
+    data: Any | None = None,
 ) -> JSONRPCResponse:
     """Factory for error responses."""
     return JSONRPCResponse(
@@ -154,7 +154,7 @@ def make_error_response(
 
 
 def make_success_response(
-    id: Optional[Union[str, int]],
+    id: str | int | None,
     result: Any,
 ) -> JSONRPCResponse:
     """Factory for success responses."""

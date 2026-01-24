@@ -82,7 +82,7 @@ class GraphSkill(ABC):
         self._skill_runner = skill_runner
 
     @abstractmethod
-    def build_graph(self, builder: "DynamicGraphBuilder") -> None:
+    def build_graph(self, builder: DynamicGraphBuilder) -> None:
         """Build the execution graph for this skill.
 
         Override this method to define the workflow structure.
@@ -221,7 +221,6 @@ def create_graph_skill_from_blueprint(
     Returns:
         GraphSkill instance that can execute the blueprint
     """
-    from omni.langgraph.orchestrator.builder import DynamicGraphBuilder
 
     class DynamicGraphSkill(GraphSkill):
         name = blueprint.name

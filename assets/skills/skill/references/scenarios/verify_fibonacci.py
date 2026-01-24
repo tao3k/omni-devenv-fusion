@@ -11,12 +11,12 @@ Usage:
     python verify_fibonacci.py
 """
 
+import shutil
 import subprocess
 import sys
 import time
-import shutil
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 # Configuration
 # Adjust this path if your project root is different

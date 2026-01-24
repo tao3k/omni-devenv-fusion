@@ -25,7 +25,6 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-
 # =============================================================================
 # Test Result Classes
 # =============================================================================
@@ -555,10 +554,9 @@ def test_entry_point_configures_logging():
 
     import structlog
 
-    from omni.agent.cli.app import _bootstrap_configuration, entry_point
-
     # Reset logging state
     import omni.foundation.config.logging as logging_module
+    from omni.agent.cli.app import _bootstrap_configuration
 
     logging_module._configured = False
 
@@ -583,10 +581,9 @@ def test_pyproject_entry_point_configured():
     """
     print("\n[Pyproject Entry Point]")
 
-    from pathlib import Path
-
     # Use built-in tomllib (Python 3.11+)
     import tomllib
+    from pathlib import Path
 
     # Find pyproject.toml - test_cli.py is at:
     # packages/python/agent/tests/unit/cli/test_cli.py

@@ -28,4 +28,4 @@ from omni.agent.cli.commands.skill import (
     skill_app,
 )
 
-__all__ = ["skill_app", "register_skill_command"]
+__all__ = ["register_skill_command", "skill_app"]

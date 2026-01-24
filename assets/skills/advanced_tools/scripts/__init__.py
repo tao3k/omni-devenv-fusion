@@ -13,13 +13,13 @@ Philosophy:
 """
 
 # Re-export all commands for skill loader
-from .search import smart_search, smart_find
 from .fs import tree_view
 from .mutation import regex_replace
+from .search import smart_find, smart_search
 
 __all__ = [
-    "smart_search",
-    "smart_find",
-    "tree_view",
     "regex_replace",
+    "smart_find",
+    "smart_search",
+    "tree_view",
 ]

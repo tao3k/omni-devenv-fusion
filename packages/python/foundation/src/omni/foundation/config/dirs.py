@@ -32,11 +32,7 @@ Environment Variables (from direnv .envrc):
 """
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
-
-if TYPE_CHECKING:
-    pass
-
+from typing import Literal
 
 # =============================================================================
 # PRJ_SPEC Environment Variables
@@ -221,6 +217,7 @@ PRJ_CACHE: _PrjDirSingleton = _PrjDirSingleton("cache")
 PRJ_CONFIG: _PrjDirSingleton = _PrjDirSingleton("config")
 PRJ_RUNTIME: _PrjDirSingleton = _PrjDirSingleton("runtime")
 PRJ_PATH: _PrjDirSingleton = _PrjDirSingleton("path")
+PRJ_CHECKPOINT: _PrjDirSingleton = _PrjDirSingleton("cache")  # Checkpoint uses cache dir
 
 
 # =============================================================================
@@ -301,20 +298,91 @@ def get_runtime_dir(subdir: str = "") -> Path:
     return get_prj_dir("runtime", subdir)
 
 
+def get_skills_dir() -> Path:
+    """Get the skills directory path.
+
+    Uses SKILLS_DIR from omni.foundation.config.skills which reads from settings.yaml.
+
+    Returns:
+        Path to skills directory (default: assets/skills)
+    """
+    from omni.foundation.config.skills import SKILLS_DIR
+
+    return SKILLS_DIR()
+
+
+def get_skill_index_path() -> Path:
+    """Get the skill index file path (.cache/skill_index.json).
+
+    Returns:
+        Path to .cache/skill_index.json
+    """
+    return get_cache_dir("skill_index.json")
+
+
+def get_checkpoint_db_path() -> Path:
+    """Get the checkpoint database path from settings.
+
+    Reads from settings.yaml -> checkpoint.db_path
+    Supports both relative (to project root) and absolute paths.
+
+    Returns:
+        Path to the LanceDB checkpoint database
+
+    Usage:
+        >>> from omni.foundation import get_checkpoint_db_path
+        >>> checkpoint_path = get_checkpoint_db_path()
+        >>> # Returns: /project/.cache/checkpoints.lance
+    """
+    from omni.foundation.config.settings import get_setting
+
+    db_path = get_setting("checkpoint.db_path", ".cache/checkpoints.lance")
+
+    # Check if absolute path
+    if Path(db_path).is_absolute():
+        return Path(db_path)
+
+    # Relative path - resolve from project root
+    from omni.foundation.runtime.gitops import get_project_root
+
+    project_root = get_project_root()
+    return project_root / db_path
+
+
+def get_checkpoint_table_name(workflow_type: str) -> str:
+    """Get the full table name for a workflow type.
+
+    Args:
+        workflow_type: Type of workflow (e.g., "smart_commit", "research")
+
+    Returns:
+        Full table name with prefix (e.g., "checkpoint_smart_commit")
+    """
+    from omni.foundation.config.settings import get_setting
+
+    prefix = get_setting("checkpoint.table_prefix", "checkpoint_")
+    return f"{prefix}{workflow_type}"
+
+
 # =============================================================================
 # Exports
 # =============================================================================
 
 __all__ = [
-    "PRJ_DIRS",
-    "PRJ_DATA",
     "PRJ_CACHE",
+    "PRJ_CHECKPOINT",
     "PRJ_CONFIG",
-    "PRJ_RUNTIME",
+    "PRJ_DATA",
+    "PRJ_DIRS",
     "PRJ_PATH",
-    "get_prj_dir",
-    "get_data_dir",
+    "PRJ_RUNTIME",
     "get_cache_dir",
+    "get_checkpoint_db_path",
+    "get_checkpoint_table_name",
     "get_config_dir",
+    "get_data_dir",
+    "get_prj_dir",
     "get_runtime_dir",
+    "get_skill_index_path",
+    "get_skills_dir",
 ]

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 from omni.core.skills.state import GraphState, WorkflowState
 
 

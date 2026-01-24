@@ -7,12 +7,11 @@ Read commands (get_last_commit, get_last_commit_msg) are simple wrappers.
 
 import subprocess
 from pathlib import Path
-from typing import Optional
 
 from omni.foundation.api.decorators import skill_command
 
 
-def _run(cmd: list[str], cwd: Optional[Path] = None) -> tuple[str, str, int]:
+def _run(cmd: list[str], cwd: Path | None = None) -> tuple[str, str, int]:
     """Run command and return stdout, stderr, returncode."""
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
     return result.stdout.strip(), result.stderr.strip(), result.returncode
@@ -26,13 +25,14 @@ def _run(cmd: list[str], cwd: Optional[Path] = None) -> tuple[str, str, int]:
 
     Skips pre-commit hooks - use git.commit for hook execution.
 
-    **Parameters**:
-    - `message` (required): The commit message for the changes.
+    Args:
+        - message: str - The commit message for the changes (required)
 
-    **Returns**: Success or failure message with commit hash.
+    Returns:
+        Success or failure message with commit hash.
     """,
 )
-def commit(message: str, project_root: Optional[Path] = None) -> str:
+def commit(message: str, project_root: Path | None = None) -> str:
     _run(["git", "add", "-u"], cwd=project_root)
 
     stdout, stderr, rc = _run(["git", "commit", "-m", message], cwd=project_root)
@@ -49,13 +49,14 @@ def commit(message: str, project_root: Optional[Path] = None) -> str:
 
     Does not run pre-commit hooks.
 
-    **Parameters**:
-    - `message` (required): The new commit message to replace the previous one.
+    Args:
+        - message: str - The new commit message to replace the previous one (required)
 
-    **Returns**: Success or failure message.
+    Returns:
+        Success or failure message.
     """,
 )
-def commit_with_amend(message: str, project_root: Optional[Path] = None) -> str:
+def commit_with_amend(message: str, project_root: Path | None = None) -> str:
     stdout, stderr, rc = _run(["git", "commit", "--amend", "-m", message], cwd=project_root)
     if rc == 0:
         return "Commit amended successfully"
@@ -70,26 +71,27 @@ def commit_with_amend(message: str, project_root: Optional[Path] = None) -> str:
 
     Bypasses git hooks for faster commits. Use with caution.
 
-    **Parameters**:
-    - `message` (required): The commit message for the changes.
+    Args:
+        - message: str - The commit message for the changes (required)
 
-    **Returns**: Success or failure message.
+    Returns:
+        Success or failure message.
     """,
 )
-def commit_no_verify(message: str, project_root: Optional[Path] = None) -> str:
+def commit_no_verify(message: str, project_root: Path | None = None) -> str:
     stdout, stderr, rc = _run(["git", "commit", "--no-verify", "-m", message], cwd=project_root)
     if rc == 0:
         return "Commit created (no-verify)"
     return f"Commit failed: {stdout} {stderr}"
 
 
-def get_last_commit(project_root: Optional[Path] = None) -> str:
+def get_last_commit(project_root: Path | None = None) -> str:
     """Retrieves the hash of the most recent commit."""
     stdout, _, rc = _run(["git", "rev-parse", "HEAD"], cwd=project_root)
     return stdout if rc == 0 else ""
 
 
-def get_last_commit_msg(project_root: Optional[Path] = None) -> str:
+def get_last_commit_msg(project_root: Path | None = None) -> str:
     """Retrieves the message of the most recent commit."""
     stdout, _, _ = _run(["git", "log", "-1", "--pretty=%B"], cwd=project_root)
     return stdout
@@ -101,14 +103,15 @@ def get_last_commit_msg(project_root: Optional[Path] = None) -> str:
     description="""
     Revert a specific commit by creating a new reverse commit.
 
-    **Parameters**:
-    - `commit` (required): The commit hash or reference to revert (e.g., `HEAD~1`, `abc1234`).
-    - `no_commit` (optional, default: `false`): If true, stages the revert but does not commit.
+    Args:
+        - commit: str - The commit hash or reference to revert (e.g., HEAD~1, abc1234) (required)
+        - no_commit: bool = false - If true, stages the revert but does not commit
 
-    **Returns**: Success or failure message.
+    Returns:
+        Success or failure message.
     """,
 )
-def revert(commit: str, no_commit: bool = False, project_root: Optional[Path] = None) -> str:
+def revert(commit: str, no_commit: bool = False, project_root: Path | None = None) -> str:
     cmd = ["git", "revert"]
     if no_commit:
         cmd.append("--no-commit")
