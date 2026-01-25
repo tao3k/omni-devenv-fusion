@@ -1,87 +1,73 @@
-# Hot Reload
+# Hot Reload Mechanism
 
-Simplified for JIT/Meta-Agent Era. Removed syntax validation - Python import catches errors, Meta-Agent handles recovery.
+> One Tool + Trinity Architecture - Hot Reload for Skills
 
-## Changes
-
-| Feature              | Before (Legacy)        | Current    |
-| -------------------- | ---------------------- | ---------- |
-| Syntax validation    | `py_compile.compile()` | ❌ Removed |
-| Transaction rollback | ✅ Yes                 | ❌ Removed |
-| Lines of code        | 216                    | 145        |
-| Error handling       | Fail-safe              | Fail-fast  |
+Hot reload enables real-time code updates without restarting the MCP server. Changes to skill scripts are automatically detected and applied on the next command invocation.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      SkillContext                           │
-│  ┌─────────────────┐                                        │
-│  │  _ensure_fresh  │───▶ Direct reload (no validation)     │
-│  │  (mtime check)  │                                        │
-│  └─────────────────┘                                        │
-│           │                                                 │
-│           ▼                                                 │
-│     Load skill or                                           │
-│     reload existing                                         │
-│     (Python import catches errors)                          │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         SkillContext.get_skill()                         │
+│                                                                          │
+│  1. Get cached skill from _skills dict                                   │
+│  2. Check mtime of scripts/*.py files                                    │
+│  3. If modified:                                                         │
+│     - Clear sys.modules cache for this skill                            │
+│     - Clear old command cache (_commands, _native)                       │
+│     - Reload ScriptLoader.load_all()                                     │
+│     - Re-register commands                                               │
+│     - Update _mtime                                                      │
+│  4. Return updated skill                                                 │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## How It Works
 
-### 1. Modification Detection
+### 1. Modification Detection (mtime-based)
 
 ```python
-# In HotReloadMixin._ensure_fresh()
-tools_mtime = tools_path.stat().st_mtime
-scripts_mtime = max(f.stat().st_mtime for f in scripts_path.glob("*.py"))
+# In SkillContext.get_skill()
+current_mtime = max(f.stat().st_mtime for f in scripts_path.glob("*.py"))
+cached_mtime = getattr(skill, "_mtime", 0)
 
-should_reload = tools_mtime >= skill.mtime or scripts_mtime >= skill.mtime
+if current_mtime > cached_mtime:
+    # Trigger hot reload
+    ...
 ```
 
-- **tools.py**: Checked via `mtime`
-- **scripts/\*.py**: All Python files in `scripts/` directory checked
-- Uses `>=` comparison (not `>`) to catch simultaneous edits
+**What is checked:**
 
-### 2. Modification Detection (Unchanged)
+- All `*.py` files in `scripts/` directory
+- Comparison: `current_mtime > cached_mtime` (strictly greater)
+
+### 2. Cache Clearing
 
 ```python
-# In HotReloadMixin._ensure_fresh()
-scripts_mtime = max(f.stat().st_mtime for f in scripts_path.glob("*.py"))
+# Clear sys.modules for this skill
+skill_module_prefix = f"{skill_name}."
+modules_to_remove = [k for k in sys.modules if k.startswith(skill_module_prefix)]
+for mod in modules_to_remove:
+    del sys.modules[mod]
+
+# Clear command cache
+old_commands = [k for k in self._commands if k.startswith(f"{skill_name}.")]
+for cmd in old_commands:
+    del self._commands[cmd]
 ```
 
-- **scripts/\*.py**: All Python files in `scripts/` directory checked
-- Uses `>` comparison (cached_mtime vs current_mtime)
-
-### 3. Simplified Reload Cycle
-
-```
-1. Unload old skill:
-   - Remove from _skills dict
-   - Clear command cache entries
-   - Clear sys.modules for this skill
-2. Load fresh version:
-   - Import new modules
-   - Parse @skill_command decorators
-3. If import fails: Error propagates, Meta-Agent handles recovery
-```
-
-**Philosophy**: Fail fast. Python's import mechanism catches syntax errors naturally. The Meta-Agent can then self-repair the code.
-
-### 4. Lazy Logger
-
-To avoid ~100ms import overhead at startup, the logger is initialized lazily:
+### 3. Script Reloading
 
 ```python
-_cached_logger: Any = None
+# Clear and reload script loader
+if skill._script_loader:
+    skill._script_loader.commands.clear()
+    skill._script_loader.native_functions.clear()
+    skill._script_loader.load_all()
 
-def _get_logger() -> Any:
-    global _cached_logger
-    if _cached_logger is None:
-        import structlog
-        _cached_logger = structlog.get_logger(__name__)
-    return _cached_logger
+# Re-register commands
+for cmd_name, handler in skill._script_loader.commands.items():
+    self._commands[cmd_name] = handler
 ```
 
 ## What Can Be Reloaded
@@ -91,140 +77,193 @@ def _get_logger() -> Any:
 | Function implementation | ✅ Yes     | Changes in `scripts/*.py` take effect immediately |
 | Business logic          | ✅ Yes     | Core algorithm changes apply on reload            |
 | Bug fixes               | ✅ Yes     | Runtime fixes without restart                     |
-| tools.py implementation | ✅ Yes     | Function body changes reload                      |
+| New commands            | ✅ Yes     | Added commands are registered                     |
+| Removed commands        | ✅ Yes     | Removed commands are unregistered                 |
 
 ## What CANNOT Be Reloaded
 
-| Component                 | Reloadable | Notes                                                 |
-| ------------------------- | ---------- | ----------------------------------------------------- |
-| `@skill_command` metadata | ❌ No      | `name`, `description`, `category` cached at MCP level |
-| Decorator parameters      | ❌ No      | Parameters frozen at registration                     |
-| Function signature        | ❌ No      | Type hints cached in command schema                   |
-| MCP tool registration     | ❌ No      | Requires server restart to update                     |
+| Component                 | Reloadable | Notes                                                    |
+| ------------------------- | ---------- | -------------------------------------------------------- |
+| `@skill_command` metadata | ⚠️ Partial | `description` cached at MCP level; function code reloads |
+| Decorator parameters      | ❌ No      | Requires `skill.reload` to update MCP notification       |
+| MCP tool registration     | ❌ No      | Requires MCP tool list change notification               |
 
-### Why MCP Metadata Cannot Be Reloaded
+### Why Some Things Cannot Be Reloaded
 
-MCP tools are registered once during server initialization:
+MCP tool metadata (name, description, parameters) is registered once during server initialization. While function code changes are picked up, decorator metadata requires:
 
-```python
-# In mcp_server.py
-def _register_skills():
-    for skill in skill_manager.list_skills():
-        for cmd in skill.commands.values():
-            mcp_server.register_tool(
-                name=f"{skill.name}.{cmd.name}",
-                description=cmd.description,  # ← Frozen at registration
-                parameters=cmd.schema,        # ← Frozen at registration
-            )
-```
-
-The MCP specification doesn't support dynamic tool updates. To change metadata:
-
-```bash
-# Option 1: Restart MCP server
-/mcp restart
-
-# Option 2: Restart the application
-# (depends on your deployment)
-```
+1. `skill.reload` - Sends `notifications/tools/list_changed` to MCP clients
+2. Client refresh - MCP clients may cache tool descriptions
 
 ## Cache Invalidation
 
-When a skill reloads, the following caches are cleared:
+When a skill reloads, these caches are cleared:
 
 ```python
-# Command cache
-keys_to_remove = [k for k in self._command_cache if k.startswith(f"{skill_name}.")]
-for key in keys_to_remove:
-    del self._command_cache[key]
+# 1. sys.modules - Python's module cache
+modules_to_remove = [k for k in sys.modules if k.startswith(skill_name)]
+for mod in modules_to_remove:
+    del sys.modules[mod]
 
-# Module cache (sys.modules)
-prefix = f"agent.skills.{skill_name}."
-modules_to_remove = [m for m in sys.modules if m.startswith(prefix)]
-for module in modules_to_remove:
-    del sys.modules[module]
+# 2. Command cache - SkillContext._commands
+old_commands = [k for k in self._commands if k.startswith(f"{skill_name}.")]
+for cmd in old_commands:
+    del self._commands[cmd]
+
+# 3. Native functions cache - SkillContext._native
+old_native = [k for k in self._native if k.startswith(f"{skill_name}.")]
+for key in old_native:
+    del self._native[key]
+
+# 4. ScriptLoader's internal caches
+skill._script_loader.commands.clear()
+skill._script_loader.native_functions.clear()
 ```
 
 ## Usage
 
 ### Automatic Detection
 
-Skills are checked on every command invocation:
+Skills are checked on every `get_skill()` call:
 
 ```python
-@skill_command(name="status", ...)
-def status(...):
-    # Before executing, _ensure_fresh() is called
-    # If modified, skill reloads automatically
+# In server.py _handle_call_tool()
+skill = self._kernel.skill_context.get_skill(skill_name)
+# If scripts were modified, skill is automatically reloaded
+result = await skill.execute(command_name, **arguments)
 ```
 
-### Manual Reload
+### Manual Reload (MCP Notification)
 
-```python
-skill_manager.reload("git")  # Force reload a skill
+```bash
+@omni("skill.reload", {"name": "git"})
 ```
 
-### Debug Logging
+This triggers:
 
-Enable debug logging to trace reload behavior:
+1. Skill reload
+2. `notifications/tools/list_changed` sent to MCP clients
+3. Clients refresh their tool list
 
-```python
-import logging
-logging.basicConfig(level=logging.DEBUG)
+## Code Flow
 
-# You'll see:
-# DEBUG: Hot-reload check skill=git tools_mtime=1234567890.0 scripts_mtime=...
-# INFO: Hot-reloading skill=git modified=['scripts/prepare.py']
+```
+User edits file
+        │
+        ▼
+File mtime changes
+        │
+        ▼
+@omni git.status  (or any command)
+        │
+        ▼
+kernel.skill_context.get_skill("git")
+        │
+        ▼
+Check: current_mtime > cached_mtime?
+        │
+        ├─ No ──▶ Return cached skill
+        │
+        └─ Yes ──▶
+            1. Clear sys.modules[git.*]
+            2. Clear _commands[git.*]
+            3. Clear _native[git.*]
+            4. script_loader.load_all()
+            5. Re-register commands
+            6. Update skill._mtime
+            │
+            ▼
+        Return reloaded skill
+        │
+        ▼
+skill.execute() uses new code
 ```
 
-## Testing Hot Reload
+## Related Files
 
-```python
-# pytest assets/skills/git/tests/test_git_smart_workflow.py -v
-# pytest packages/python/agent/src/agent/core/skill_manager/tests/test_hot_reload.py -v
+| File                                                            | Purpose                          |
+| --------------------------------------------------------------- | -------------------------------- |
+| `packages/python/core/src/omni/core/skills/runtime/__init__.py` | SkillContext with hot reload     |
+| `packages/python/core/src/omni/core/skills/script_loader.py`    | ScriptLoader with cache clearing |
+| `packages/python/core/src/omni/core/kernel/watcher.py`          | File watcher for auto-reload     |
+| `packages/python/agent/src/omni/agent/mcp_server/lifespan.py`   | MCP notifications                |
+| `packages/python/core/tests/universal/test_hot_reload.py`       | Comprehensive tests              |
+
+## Testing
+
+Run the hot reload tests:
+
+```bash
+uv run pytest packages/python/core/tests/universal/test_hot_reload.py -v
 ```
 
-### Test Coverage
+### Test Categories
 
-- **mtime detection**: Verify `scripts/*.py` changes trigger reload
-- **cache clearing**: Ensure old code doesn't persist
-- **error propagation**: Syntax errors propagate to caller (Meta-Agent)
+- **TestMtimeDetection**: mtime caching and change detection
+- **TestSysModulesClearing**: Python module cache clearing
+- **TestCommandRegistration**: Command add/remove detection
+- **TestEdgeCases**: Error handling and boundary conditions
+- **TestScriptLoaderHotReload**: ScriptLoader reload behavior
+- **TestIntegrationWithKernel**: Kernel integration
+
+### Manual Testing
+
+```bash
+# 1. Start MCP server
+uv run omni mcp --transport stdio
+
+# 2. In another terminal, modify a skill
+echo "modified" >> assets/skills/git/scripts/status.py
+
+# 3. Invoke command - changes should be reflected
+@omni git.status
+```
 
 ## Troubleshooting
 
 ### Changes Not Taking Effect
 
-1. **Check file path**: Ensure modifying `<skill>/scripts/*.py` or `<skill>/tools.py`
-2. **Enable logging**: Watch for reload messages
-3. **Restart MCP**: If metadata changed, restart is required
-
-### "Skill not found" After Reload
+1. **Check file path**: Ensure modifying `<skill>/scripts/*.py`
+2. **Enable logging**: Watch for "Hot reloading skill" messages
+3. **Verify mtime**: Check file modification time is newer
 
 ```python
-# Debug: Check if skill is in _skills
-print(skill_manager._skills.keys())
-
-# Debug: Check discovery path
-print(skill_manager._discover_single("git"))
+# Debug: Check mtimes
+from pathlib import Path
+skill_path = Path("assets/skills/git")
+scripts_path = skill_path / "scripts"
+current = max(f.stat().st_mtime for f in scripts_path.glob("*.py"))
+print(f"Current mtime: {current}")
 ```
 
 ### Stale Cache Issues
 
 ```python
 # Force clear all caches
-skill_manager._command_cache.clear()
-skill_manager._mtime_cache.clear()
+from omni.core.skills.runtime import get_skill_context
+ctx = get_skill_context()
+ctx._commands.clear()
+ctx._native.clear()
+
+# Clear sys.modules
+import sys
+for k in list(sys.modules.keys()):
+    if k.startswith("git."):
+        del sys.modules[k]
 ```
 
-## Related Files
+### MCP Tool Metadata Not Updated
 
-| File                                                              | Purpose                                  |
-| ----------------------------------------------------------------- | ---------------------------------------- |
-| `packages/python/agent/src/agent/core/skill_runtime/lifecycle.py` | HotReloadMixin implementation            |
-| `packages/python/agent/src/agent/core/skill_runtime/context.py`   | SkillContext with hot-reload integration |
-| `packages/python/agent/src/agent/core/skill_runtime/discovery.py` | Skill discovery and loading              |
+If decorator attributes (description, etc.) changed:
 
-## See Also
+```bash
+@omni("skill.reload", {"name": "git"})
+# Then restart Claude Code session to refresh MCP cache
+```
 
-- [Skill Architecture](../skills.md) - Skill structure and conventions
-- [MCP Core Architecture](mcp-core-architecture.md) - MCP tool registration
+## Best Practices
+
+1. **Edit function code, not metadata** - Code changes reload automatically
+2. **Use `skill.reload` for metadata changes** - Triggers MCP notification
+3. **Test with simple changes first** - Verify hot reload works before complex edits
+4. **Restart if stuck** - Claude Code session restart clears all caches

@@ -4,18 +4,50 @@ Adaptive Context - Intent-Driven Tool Loading
 
 Provides semantic + keyword search over registered tools.
 Allows Agent to dynamically discover tools based on intent.
+
+Queries loaded skills directly to get accurate input schemas.
 """
 
 import json
+import re
+from typing import Any
 
 from omni.foundation.api.decorators import skill_command
+
+
+def _tokenize(text: str) -> set[str]:
+    """Convert text to lowercase words."""
+    return set(re.findall(r"\w+", text.lower()))
+
+
+def _calculate_score(query: str, tool_name: str, description: str, skill_name: str) -> float:
+    """Calculate relevance score based on keyword matching."""
+    query_tokens = _tokenize(query)
+    name_tokens = _tokenize(tool_name)
+    desc_tokens = _tokenize(description)
+    skill_tokens = _tokenize(skill_name)
+
+    # Calculate token overlap
+    query_set = set(query_tokens)
+    name_overlap = len(query_set & name_tokens)
+    desc_overlap = len(query_set & desc_tokens)
+    skill_overlap = len(query_set & skill_tokens)
+
+    # Weighted scoring: name matches are most important
+    score = name_overlap * 3.0 + desc_overlap * 1.0 + skill_overlap * 2.0
+
+    # Boost for exact prefix match
+    if tool_name.lower().startswith(query.lower()):
+        score += 5.0
+
+    return score
 
 
 @skill_command(
     name="search_tools",
     category="read",
     description="""
-    [CRITICAL] Searches for available tools using semantic + keyword matching.
+    [CRITICAL] Searches for available tools using keyword matching.
 
     MUST call this tool if you cannot find a suitable tool in your current context.
     Enables dynamic discovery of relevant tools when the default toolset doesn't
@@ -57,43 +89,79 @@ async def search_tools(
     limit: int = 10,
     keywords: list[str] | None = None,
 ) -> str:
+    """Search for tools matching the query."""
     limit = min(max(1, limit), 50)
     keywords = keywords or []
 
-    from omni.foundation import get_vector_store
-
-    vm = get_vector_store()
-
     try:
-        results = await vm.search_tools_hybrid(query, keywords=keywords, limit=limit)
+        # Get tools from loaded skills (includes schemas)
+        from omni.core.kernel import get_kernel
 
-        tools = []
-        for r in results:
-            try:
-                metadata = r.get("metadata", {}) or {}
-                input_schema = metadata.get("input_schema", "{}")
-                if isinstance(input_schema, str):
-                    schema = json.loads(input_schema)
-                else:
-                    schema = input_schema
+        kernel = get_kernel()
+        ctx = kernel.skill_context
 
-                tools.append(
-                    {
-                        "name": r.get("id", ""),
-                        "description": r.get("content", ""),
-                        "schema": schema,
-                        "score": 1.0 - r.get("distance", 1.0),
-                        "skill": metadata.get("skill_name", ""),
-                        "file_path": metadata.get("file_path", ""),
-                        "docstring": metadata.get("docstring", ""),
-                    }
-                )
-            except (json.JSONDecodeError, TypeError):
+        # Collect tools from all loaded skills with their schemas
+        all_tools = []
+        for skill_name in ctx.list_skills():
+            skill_obj = ctx.get_skill(skill_name)
+            if skill_obj is None:
                 continue
 
+            # Get commands with their configs
+            if hasattr(skill_obj, "_script_loader") and skill_obj._script_loader:
+                loader = skill_obj._script_loader
+                for cmd_name, cmd_func in loader.commands.items():
+                    # Get skill config (includes input_schema)
+                    config = getattr(cmd_func, "_skill_config", {})
+                    description = config.get("description", "") or f"Execute {cmd_name}"
+                    input_schema = config.get("input_schema", {})
+
+                    all_tools.append(
+                        {
+                            "name": cmd_name,
+                            "description": description,
+                            "schema": input_schema,
+                            "skill": skill_name,
+                        }
+                    )
+
+        if not all_tools:
+            return json.dumps(
+                {
+                    "error": "No tools loaded",
+                    "tools": [],
+                    "total": 0,
+                    "query": query,
+                },
+                ensure_ascii=False,
+            )
+
+        # Combine query with keywords for scoring
+        full_query = query
+        if keywords:
+            full_query = f"{query} {' '.join(keywords)}"
+
+        # Calculate scores
+        scored_tools = []
+        for tool in all_tools:
+            score = _calculate_score(full_query, tool["name"], tool["description"], tool["skill"])
+            if score > 0:
+                scored_tools.append(
+                    {
+                        **tool,
+                        "score": min(score / 10.0, 1.0),
+                    }
+                )
+
+        # Sort by score descending
+        scored_tools.sort(key=lambda t: t["score"], reverse=True)
+
+        # Apply limit
+        scored_tools = scored_tools[:limit]
+
         response = {
-            "tools": tools,
-            "total": len(tools),
+            "tools": scored_tools,
+            "total": len(scored_tools),
             "query": query,
         }
 

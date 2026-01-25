@@ -204,6 +204,10 @@ class OmniLoop:
         """
         await self._ensure_initialized()
 
+        # Apply max_steps override if provided
+        if max_steps is not None:
+            self.config.max_tool_calls = max_steps
+
         # Add user task
         self.context.add_user_message(task)
 

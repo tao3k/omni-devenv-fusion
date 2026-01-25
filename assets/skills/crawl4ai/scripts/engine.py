@@ -10,20 +10,15 @@ Output Format:
 
 Architecture:
     - Heavy imports are lazy-loaded inside functions
-    - Uses local skill_command decorator (Shim Pattern) for Rust Scanner
-    - Called via JIT Loader's _execute_isolated() method
+    - Called via run_skill_command from crawl_url.py
 
 Usage:
-    # Via JIT Loader (automatic uv run):
-    loader.execute_tool(record, {"url": "https://example.com"})
+    # Via run_skill_command (automatic uv run):
+    from omni.foundation.runtime.isolation import run_skill_command
+    result = run_skill_command(skill_dir, "engine.py", {"url": "..."})
 
     # Direct CLI (for testing):
-    uv run --directory . python -c "
-    from scripts.engine import crawl_url
-    import asyncio
-    result = asyncio.run(crawl_url('https://example.com'))
-    print(result)
-    "
+    cd assets/skills/crawl4ai && VIRTUAL_ENV=.venv UV_PROJECT_ENVIRONMENT=.venv uv run python scripts/engine.py --url https://example.com
 """
 
 import asyncio
@@ -31,33 +26,13 @@ import io
 import json
 import sys
 
-# Use absolute import for uv run compatibility
-try:
-    from .utils import skill_command
-except ImportError:
-    from utils import skill_command
 
-
-@skill_command(
-    name="crawl_url",
-    category="read",
-    description="""
-    Crawl a web page and extract its content as markdown using Playwright.
-
-    Args:
-        - url: str - Target URL to crawl (required)
-        - fit_markdown: bool = true - Whether to clean and simplify the markdown
-
-    Returns:
-        Dictionary with success, url, content, error, and metadata (title, description).
-    """,
-)
-async def crawl_url(
+async def _crawl_url_impl(
     url: str,
     fit_markdown: bool = True,
 ) -> dict:
     """
-    Crawl a webpage and extract content.
+    Internal implementation - runs in isolated uv environment.
 
     Args:
         url: Target URL to crawl
@@ -71,7 +46,6 @@ async def crawl_url(
         - error: str (if success is False)
         - metadata: dict (title, description)
     """
-    # Lazy import - only happens in isolated environment
     from crawl4ai import AsyncWebCrawler
 
     # Capture stdout during crawl to prevent progress bars from polluting JSON output
@@ -105,36 +79,6 @@ async def crawl_url(
             "error": str(e),
             "metadata": None,
         }
-
-
-@skill_command(
-    name="check_crawler_ready",
-    category="read",
-    description="""
-    Check if the crawler skill is properly configured and Playwright browsers are installed.
-
-    Args:
-        - None
-
-    Returns:
-        Dictionary with ready status and browsers info or error message.
-    """,
-)
-async def check_crawler_ready() -> dict:
-    """
-    Check if Playwright browsers are installed.
-
-    Returns:
-        dict with 'ready' status and any error messages
-    """
-    try:
-        from playwright.sync_api import sync_playwright
-
-        with sync_playwright() as p:
-            browsers = p.chromium.executable_path
-            return {"ready": True, "browsers": str(browsers)}
-    except Exception as e:
-        return {"ready": False, "error": str(e)}
 
 
 def main():
@@ -174,7 +118,7 @@ def main():
         return
 
     try:
-        result = asyncio.run(crawl_url(url, fit_markdown))
+        result = asyncio.run(_crawl_url_impl(url, fit_markdown))
         print(json.dumps(result, default=str))
     except Exception as e:
         print(json.dumps({"success": False, "error": str(e)}, default=str))

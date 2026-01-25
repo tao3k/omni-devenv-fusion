@@ -16,9 +16,6 @@ from .server import server
 # Get structlog logger
 log = structlog.get_logger(__name__)
 
-# Hot reload state
-_last_notification: tuple[str, str] | None = None
-
 
 @asynccontextmanager
 async def server_lifespan(enable_watcher: bool = True):
@@ -56,17 +53,10 @@ async def _notify_tools_changed(skill_changes: dict[str, str]):
 
     Receives a batch of skill changes and sends one tool list update.
     """
-    global _last_notification
-
-    # Deduplicate: only send update if we haven't just sent one
-    if _last_notification is not None:
-        return
-
     try:
         request_ctx = server.request_context
         if request_ctx and request_ctx.session:
             await request_ctx.session.send_tool_list_changed()
-            _last_notification = ("batch", "update") if skill_changes else None
             log.info("🔔 [Tools] Sent tool list update", skills=list(skill_changes.keys()))
     except Exception as e:
         log.debug(f"⚠️ [Hot Reload] Notification skipped (no session): {e}")

@@ -331,3 +331,13 @@ Each shard represents a subsystem of the codebase, analyzed in depth:
     index_path = base_dir / "index.md"
     index_path.write_text(index_content, encoding="utf-8")
     return index_path
+
+
+__all__ = [
+    "clone_repo",
+    "init_harvest_structure",
+    "repomix_compress_shard",
+    "repomix_map",
+    "save_index",
+    "save_shard_result",
+]

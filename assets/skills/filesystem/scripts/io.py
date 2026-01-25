@@ -15,7 +15,7 @@ import json
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -46,6 +46,13 @@ class FileOperation(BaseModel):
     path: str = Field(..., description="Relative path to file")
     content: str = Field(..., description="Content to write, append, or new content for replace")
     search_for: str = Field("", description="Text to search for (only for replace action)")
+
+
+def _json_result(success: bool, **kwargs) -> str:
+    """Create JSON result with success flag and additional fields."""
+    result = {"success": success}
+    result.update(kwargs)
+    return json.dumps(result, indent=2, ensure_ascii=False)
 
 
 def _validate_syntax(content: str, filepath: str) -> tuple[bool, str]:
@@ -110,28 +117,26 @@ def read_files(
     encoding: str = "utf-8",
     config_paths: ConfigPaths | None = None,
 ) -> str:
-    """Read multiple files and combine results."""
+    """Read multiple files and return JSON."""
     if config_paths is None:
         config_paths = ConfigPaths()
     project_root: Path = config_paths.project_root  # type: ignore[assignment]
 
     if not paths:
-        return "No files specified."
+        return _json_result(
+            False, files=[], errors=[{"path": "", "message": "No files specified."}]
+        )
 
-    results = []
-    success_count = 0
-    error_count = 0
+    result: dict[str, Any] = {"files": [], "errors": []}
 
     for path in paths:
-        # Validate path
         if path.startswith("/"):
             is_safe, error_msg = is_safe_path(path, allow_absolute=True)
         else:
             is_safe, error_msg = is_safe_path(path, project_root=project_root)
 
         if not is_safe:
-            results.append(f"--- File: {path} ---\nError: {error_msg}")
-            error_count += 1
+            result["errors"].append({"path": path, "message": error_msg})
             continue
 
         if path.startswith("/"):
@@ -140,35 +145,26 @@ def read_files(
             full_path = project_root / path
 
         if not full_path.exists():
-            results.append(f"--- File: {path} ---\nError: File does not exist.")
-            error_count += 1
+            result["errors"].append({"path": path, "message": "File does not exist."})
             continue
         if not full_path.is_file():
-            results.append(f"--- File: {path} ---\nError: Not a file.")
-            error_count += 1
+            result["errors"].append({"path": path, "message": "Not a file."})
             continue
         if full_path.stat().st_size > 100 * 1024:
-            results.append(f"--- File: {path} ---\nError: File is too large (> 100KB).")
-            error_count += 1
+            result["errors"].append({"path": path, "message": "File is too large (> 100KB)."})
             continue
 
         try:
             with open(full_path, encoding=encoding) as f:
-                lines = f.readlines()
-            numbered_lines = [f"{i + 1:4d} | {line}" for i, line in enumerate(lines)]
-            content = "".join(numbered_lines)
-            results.append(f"--- File: {path} ({len(lines)} lines) ---\n{content}")
-            success_count += 1
+                content = f.read()
+            lines = content.splitlines()
+            result["files"].append({"path": path, "lines": len(lines), "content": content})
         except UnicodeDecodeError:
-            results.append(f"--- File: {path} ---\nError: Cannot read - not a text file.")
-            error_count += 1
+            result["errors"].append({"path": path, "message": "Cannot read - not a text file."})
         except Exception as e:
-            results.append(f"--- File: {path} ---\nError: {e}")
-            error_count += 1
+            result["errors"].append({"path": path, "message": str(e)})
 
-    # Add summary
-    summary = f"\n--- Summary: {success_count} files read, {error_count} errors ---\n"
-    return "\n".join(results) + summary
+    return _json_result(len(result["errors"]) == 0, **result)
 
 
 @skill_command(
@@ -215,33 +211,33 @@ async def save_file(
         allowed_hidden_files=_ALLOWED_HIDDEN_FILES,
     )
     if not is_safe:
-        return f"Error: {error_msg}"
+        return _json_result(False, path=path, error=error_msg)
 
     full_path = project_root / path
 
     try:
         full_path = full_path.resolve()
         if not str(full_path).startswith(str(project_root.resolve())):
-            return "Error: Path is outside the project directory."
+            return _json_result(False, path=path, error="Path is outside the project directory.")
     except Exception as e:
-        return f"Error resolving path: {e}"
+        return _json_result(False, path=path, error=f"Error resolving path: {e}")
 
     try:
         full_path.parent.mkdir(parents=True, exist_ok=True)
     except Exception as e:
-        return f"Error creating directory: {e}"
+        return _json_result(False, path=path, error=f"Error creating directory: {e}")
 
-    backup_info = ""
+    backup_created = False
     if full_path.exists() and create_backup:
-        if _create_backup(full_path):
-            backup_info = " (backup: .bak file created)"
+        backup_created = _create_backup(full_path)
 
+    validation_error = None
     if validate_syntax:
         is_valid, error_msg = _validate_syntax(content, path)
         if not is_valid:
-            return f"Error: Syntax validation failed\n{error_msg}"
+            validation_error = error_msg
 
-    writing_warnings = []
+    writing_warnings: list[dict[str, Any]] = []
     if auto_check_writing and path.endswith(".md"):
         try:
             from ..writer.scripts.text import polish_text
@@ -254,25 +250,18 @@ async def save_file(
         except Exception:
             pass
 
+    if validation_error:
+        return _json_result(False, path=path, error=validation_error)
+
     try:
         with open(full_path, "w", encoding="utf-8") as f:
             f.write(content)
 
-        response_parts = [f"Successfully wrote {len(content)} bytes to '{path}'{backup_info}"]
-
-        if writing_warnings:
-            response_parts.append("\nWriting Style Warnings (auto-checked):")
-            type_counts = {}
-            for v in writing_warnings:
-                t = v.get("type", "unknown")
-                type_counts[t] = type_counts.get(t, 0) + 1
-            for vtype, count in type_counts.items():
-                response_parts.append(f"  - {vtype}: {count} issue(s)")
-            response_parts.append("  Run writer.polish_text for details.")
-
-        return "\n".join(response_parts)
+        return _json_result(
+            True, path=path, bytes=len(content), backup=backup_created, warnings=writing_warnings
+        )
     except Exception as e:
-        return f"Error writing file: {e}"
+        return _json_result(False, path=path, error=str(e))
 
 
 @skill_command(
@@ -300,9 +289,8 @@ async def apply_file_changes(
         paths = ConfigPaths()
     project_root: Path = paths.project_root  # type: ignore[assignment]
 
-    report = []
-    success_count = 0
-    error_count = 0
+    operations: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
 
     for change in changes:
         if isinstance(change, dict):
@@ -318,19 +306,22 @@ async def apply_file_changes(
                 allowed_hidden_files=_ALLOWED_HIDDEN_FILES,
             )
             if not is_safe:
-                report.append(f"- `{change.path}`: {error_msg}")
-                error_count += 1
+                errors.append({"path": change.path, "message": error_msg})
                 continue
 
             full_path.parent.mkdir(parents=True, exist_ok=True)
 
             if change.action == "write":
                 full_path.write_text(change.content, encoding="utf-8")
-                report.append(f"- **Wrote**: `{change.path}` ({len(change.content)} bytes)")
+                operations.append(
+                    {"path": change.path, "action": "write", "bytes": len(change.content)}
+                )
             elif change.action == "append":
                 with open(full_path, "a", encoding="utf-8") as f:
                     f.write(change.content)
-                report.append(f"- **Appended**: `{change.path}` ({len(change.content)} bytes)")
+                operations.append(
+                    {"path": change.path, "action": "append", "bytes": len(change.content)}
+                )
             elif change.action == "replace":
                 if not full_path.exists():
                     raise FileNotFoundError(f"File not found: {change.path}")
@@ -340,22 +331,19 @@ async def apply_file_changes(
                 else:
                     new_content = change.content
                 full_path.write_text(new_content, encoding="utf-8")
-                report.append(
-                    f"- **Replaced**: `{change.path}` ({len(change.search_for)} chars -> {len(change.content)} chars)"
+                operations.append(
+                    {
+                        "path": change.path,
+                        "action": "replace",
+                        "search_bytes": len(change.search_for),
+                        "bytes": len(change.content),
+                    }
                 )
 
-            success_count += 1
-
         except Exception as e:
-            report.append(f"- **Failed**: `{change.path}` - {e!s}")
-            error_count += 1
+            errors.append({"path": change.path, "message": str(e)})
 
-    summary = "**File Operations Summary**\n\n"
-    summary += f"- Success: {success_count}\n"
-    summary += f"- Errors: {error_count}\n\n"
-    summary += "**Details:**\n" + "\n".join(report)
-
-    return summary
+    return _json_result(len(errors) == 0, operations=operations, errors=errors)
 
 
 @skill_command(
@@ -384,21 +372,25 @@ async def list_directory(
     try:
         target = (project_root / path).resolve()
         if not target.exists():
-            return f"Path does not exist: {path}"
+            return _json_result(False, path=path, error="Path does not exist.")
         if not target.is_dir():
-            return f"Path is not a directory: {path}"
+            return _json_result(False, path=path, error="Path is not a directory.")
 
-        items = []
+        items: list[dict[str, Any]] = []
         for item in target.iterdir():
             if item.name.startswith(".") and item.name != ".":
                 continue
-            kind = "DIR " if item.is_dir() else "FILE"
-            size = "-" if item.is_dir() else f"{item.stat().st_size}b"
-            items.append(f"{kind:<5} {size:<10} {item.name}")
+            item_info = {
+                "name": item.name,
+                "type": "directory" if item.is_dir() else "file",
+            }
+            if item.is_file():
+                item_info["size"] = item.stat().st_size
+            items.append(item_info)
 
-        return f"Directory Listing for '{path}':\n" + "\n".join(sorted(items))
+        return _json_result(True, path=path, items=items)
     except Exception as e:
-        return f"Error listing directory: {e}"
+        return _json_result(False, path=path, error=str(e))
 
 
 @skill_command(
@@ -432,9 +424,9 @@ async def write_file(
         target = (project_root / path).resolve()
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
-        return f"Successfully wrote {len(content)} bytes to {path}"
+        return _json_result(True, path=path, bytes=len(content))
     except Exception as e:
-        return f"Error writing file: {e}"
+        return _json_result(False, path=path, error=str(e))
 
 
 @skill_command(
@@ -463,16 +455,18 @@ async def get_file_info(
     try:
         target = (project_root / path).resolve()
         if not target.exists():
-            return "File not found."
+            return _json_result(False, path=path, error="File not found.")
+
         stat = target.stat()
-        return (
-            f"Path: {path}\n"
-            f"Size: {stat.st_size} bytes\n"
-            f"Type: {'Directory' if target.is_dir() else 'File'}\n"
-            f"Absolute: {target}"
+        return _json_result(
+            True,
+            path=path,
+            size=stat.st_size,
+            type="directory" if target.is_dir() else "file",
+            absolute=str(target),
         )
     except Exception as e:
-        return f"Error: {e}"
+        return _json_result(False, path=path, error=str(e))
 
 
 __all__ = [

@@ -79,6 +79,8 @@ in
     pkgs.just
     nixpkgs-latest.glow
     nixpkgs-latest.google-cloud-sdk
+
+    nixpkgs-latest.nickel
     packages.secretspec
   ];
 

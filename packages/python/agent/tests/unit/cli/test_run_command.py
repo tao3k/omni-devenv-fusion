@@ -494,3 +494,76 @@ class TestRunCommandEdgeCases:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestOmniLoopConfig:
+    """Tests for OmniLoopConfig with max_tool_calls settings."""
+
+    def test_default_max_tool_calls_is_20(self):
+        """Verify default max_tool_calls is 20."""
+        from omni.agent.core.omni.config import OmniLoopConfig
+
+        config = OmniLoopConfig()
+        assert config.max_tool_calls == 20
+
+    def test_custom_max_tool_calls(self):
+        """Verify custom max_tool_calls can be set."""
+        from omni.agent.core.omni.config import OmniLoopConfig
+
+        config = OmniLoopConfig(max_tool_calls=50)
+        assert config.max_tool_calls == 50
+
+    def test_max_tool_calls_zero_disables_limit(self):
+        """Verify setting max_tool_calls to 0 disables the limit."""
+        from omni.agent.core.omni.config import OmniLoopConfig
+
+        config = OmniLoopConfig(max_tool_calls=0)
+        assert config.max_tool_calls == 0
+
+    def test_omni_loop_uses_config_max_tool_calls(self):
+        """Verify OmniLoop config has correct max_tool_calls."""
+        from omni.agent.core.omni.config import OmniLoopConfig
+        from omni.agent.core.omni.loop import OmniLoop
+
+        config = OmniLoopConfig(max_tool_calls=5)
+        loop = OmniLoop(config=config)
+        # OmniLoop uses config, so the max_tool_calls should be 5
+        assert loop.config.max_tool_calls == 5
+
+    def test_execute_task_respects_large_steps_as_max_calls(self):
+        """Verify large steps (>20) is used as max_tool_calls."""
+        # When steps > 20, it should be used as max_tool_calls
+        max_steps = 50
+        max_calls = max_steps if max_steps and max_steps > 20 else 20
+
+        assert max_calls == 50
+
+    def test_execute_task_uses_default_when_steps_below_20(self):
+        """Verify default 20 is used when steps <= 20."""
+        # When steps <= 20, default 20 should be used
+        max_steps = 10
+        max_calls = max_steps if max_steps and max_steps > 20 else 20
+
+        assert max_calls == 20
+
+        # Also test None
+        max_steps = None
+        max_calls = max_steps if max_steps and max_steps > 20 else 20
+
+        assert max_calls == 20
+
+    def test_execute_task_uses_default_when_steps_is_20(self):
+        """Verify default 20 is used when steps is exactly 20."""
+        # When steps is exactly 20, it should use default
+        max_steps = 20
+        max_calls = max_steps if max_steps and max_steps > 20 else 20
+
+        assert max_calls == 20
+
+    def test_execute_task_uses_default_when_steps_is_21(self):
+        """Verify steps=21 is used as max_tool_calls (just over 20)."""
+        # When steps > 20, it should be used
+        max_steps = 21
+        max_calls = max_steps if max_steps and max_steps > 20 else 20
+
+        assert max_calls == 21

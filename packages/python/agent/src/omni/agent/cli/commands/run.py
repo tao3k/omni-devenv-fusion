@@ -89,11 +89,25 @@ def _print_session_report(task: str, result: dict, step_count: int, tool_counts:
         # Remove tool call artifacts that break markdown rendering
         import re
 
+        # Remove thinking blocks
+        output_str = re.sub(r"<thinking>.*?</thinking>", "", output_str, flags=re.DOTALL)
+
+        # Remove tool call patterns
         output_str = re.sub(r"\[TOOL_CALL:[^\]]*\]", "", output_str)
         output_str = re.sub(r"\[/TOOL_CALL\]", "", output_str)
+        # Remove incomplete tool calls (like [TOOL_CALL: filesystem.list_directory">)
+        output_str = re.sub(r"\[TOOL_CALL:[^\]]*>", "", output_str)
+        output_str = re.sub(r"\[TOOL_CALL:[^\]]*\)", "", output_str)
         # Clean up orphaned brackets and angle brackets
         output_str = re.sub(r">\s*<TOOL_CALL", " <TOOL_CALL", output_str)
         output_str = re.sub(r"\]<TOOL_CALL:", "][TOOL_CALL:", output_str)
+        # Remove any remaining malformed brackets
+        output_str = re.sub(r"\[\s*\]", "", output_str)
+        output_str = re.sub(r">\s*<", " <", output_str)
+
+        # Strip extra whitespace
+        output_str = re.sub(r"\n{3,}", "\n\n", output_str)
+        output_str = output_str.strip()
 
         note_panel = Panel(
             Markdown(output_str),
@@ -129,11 +143,18 @@ async def _execute_task_via_kernel(task: str, max_steps: int | None, verbose: bo
         step_count = 0
         tool_calls_count = 0
 
-        # Check confidence (can be float or string like "medium"/"high")
-        conf_value = result.score if hasattr(result, "score") else 0.5
-        if result and conf_value > 0.5:
+        # Check if router found a match
+        if result and hasattr(result, "skill_name"):
             skill_name = result.skill_name
             command_name = result.command_name
+
+            # If router found a skill with a command, try to execute it
+            # (even with low confidence, we attempt execution before fallback)
+            if command_name:
+                conf_value = result.score if hasattr(result, "score") else 0.5
+                if conf_value <= 0.5:
+                    # Low confidence but we have a specific command - still try it
+                    pass  # Fall through to execution below
 
             # Handle skill-level match (no exact command found)
             if not command_name:
@@ -190,15 +211,21 @@ async def _execute_task_via_kernel(task: str, max_steps: int | None, verbose: bo
                         commands_executed = 0
                 except Exception as e:
                     output = f"Command failed: {e}"
-        else:
+                    # Fallback to OmniLoop for complex tasks
+                    result = None  # Force OmniLoop fallback
+        # No route found or fallback from command failure - use OmniLoop
+        if result is None:
             # No explicit route found - use OmniLoop to process via LLM with ReAct
             try:
                 # Create OmniLoop with kernel context for tool execution
                 # quiet 模式隐藏工具调用日志，verbose 显示 DEBUG 日志
                 show_logs = verbose is not False  # 默认和 verbose 都显示
+                # Use steps if provided, otherwise use default 20
+                max_calls = max_steps if max_steps else 20
                 loop_config = OmniLoopConfig(
                     max_tokens=128000,
                     retained_turns=10,
+                    max_tool_calls=max_calls,
                     verbose=show_logs,
                 )
                 loop = OmniLoop(config=loop_config, kernel=kernel)
@@ -246,6 +273,10 @@ def _run_repl():
     # - Loop until Ctrl+C
 
 
+# Use common default from OmniLoopConfig.max_tool_calls
+DEFAULT_MAX_CALLS: int = 20
+
+
 def register_run_command(parent_app: typer.Typer):
     """Register the run command with the parent app."""
 
@@ -253,7 +284,8 @@ def register_run_command(parent_app: typer.Typer):
     def run(
         task: Annotated[str | None, typer.Argument(help="Task description or query")] = None,
         steps: Annotated[
-            int | None, typer.Option("-s", "--steps", help="Max steps (default: 10)")
+            int | None,
+            typer.Option("-s", "--steps", help=f"Max steps (default: {DEFAULT_MAX_CALLS})"),
         ] = None,
         json_output: Annotated[bool, typer.Option("--json", "-j", help="Output as JSON")] = False,
         repl: Annotated[bool, typer.Option("--repl", help="Enter interactive REPL mode")] = False,
@@ -283,7 +315,7 @@ def register_run_command(parent_app: typer.Typer):
         if steps:
             console.print(f"[dim]Max steps: {steps}[/dim]\n")
         else:
-            console.print("[dim]Max steps: 10 (ReAct Loop)[/dim]\n")
+            console.print(f"[dim]Max steps: {DEFAULT_MAX_CALLS} (ReAct Loop)[/dim]\n")
 
         # Execute task with ReAct loop
         result = asyncio.run(_execute_task_via_kernel(task, steps, verbose))

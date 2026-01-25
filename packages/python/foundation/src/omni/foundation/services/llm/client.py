@@ -157,8 +157,7 @@ class InferenceClient:
                     tool_name = tool_call_match.strip()
                     tool_input = {}
 
-                    # Method 1: Try to extract full (args) JSON immediately after tool call
-                    # Pattern: [TOOL_CALL: name]({"paths": [...], "encoding": "..."})
+                    # Method 1: Full JSON format: [TOOL_CALL: name]({"paths": [...], ...})
                     json_parens_pattern = (
                         rf"\[TOOL_CALL:\s*{re.escape(tool_name)}\]\s*\(\s*(\{{[^}}]*\}})\s*\)"
                     )
@@ -166,14 +165,31 @@ class InferenceClient:
                     if json_match:
                         args_json = json_match.group(1)
                         try:
-                            # Parse the JSON args directly (already includes braces)
                             parsed_args = json.loads(args_json)
                             tool_input = parsed_args
                         except json.JSONDecodeError:
                             pass
 
-                    # Method 2: Try simple (key=value) format for non-complex args
-                    # Pattern: [TOOL_CALL: name](key=value, key2=value2)
+                    # Method 1b: Shorthand array format: [TOOL_CALL: name](paths=["a", "b"])
+                    # Handles LLM output like: paths=["file1.md", "file2.md"]
+                    if not tool_input:
+                        shorthand_match = re.search(
+                            rf"\[TOOL_CALL:\s*{re.escape(tool_name)}\]\s*\(([^)]+)\)",
+                            content_for_parsing,
+                        )
+                        if shorthand_match:
+                            args_str = shorthand_match.group(1)
+                            # Check if it looks like key=[...] format
+                            array_match = re.match(r"(\w+)=\[([^\]]*)\]", args_str)
+                            if array_match:
+                                key = array_match.group(1)
+                                values_str = array_match.group(2)
+                                # Extract quoted strings from array
+                                values = re.findall(r'"([^"]*)"', values_str)
+                                if values:
+                                    tool_input = {key: values}
+
+                    # Method 2: Simple key=value format (non-array)
                     if not tool_input:
                         simple_parens_pattern = (
                             rf"\[TOOL_CALL:\s*{re.escape(tool_name)}\]\s*\(([^)]+)\)"
@@ -181,20 +197,19 @@ class InferenceClient:
                         simple_match = re.search(simple_parens_pattern, content_for_parsing)
                         if simple_match:
                             args_str = simple_match.group(1)
-                            # Parse key=value pairs where value can be quoted string or simple value
-                            for match in re.finditer(
-                                r'(\w+)=("(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\'|[^,]+)', args_str
-                            ):
-                                key = match.group(1)
-                                value = match.group(2)
-                                # Strip quotes
-                                if value.startswith('"') and value.endswith('"'):
-                                    value = value[1:-1]
-                                elif value.startswith("'") and value.endswith("'"):
-                                    value = value[1:-1]
-                                value = value.strip()
-                                # Handle JSON array-like values as-is (they'll be passed to tool)
-                                tool_input[key] = value
+                            # Skip if it looks like an array (contains [)
+                            if "[" not in args_str:
+                                for match in re.finditer(
+                                    r'(\w+)=("(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\'|[^,]+)',
+                                    args_str,
+                                ):
+                                    key = match.group(1)
+                                    value = match.group(2)
+                                    if value.startswith('"') and value.endswith('"'):
+                                        value = value[1:-1]
+                                    elif value.startswith("'") and value.endswith("'"):
+                                        value = value[1:-1]
+                                    tool_input[key] = value.strip()
 
                     # Method 3: Extract parameters from XML-like tags
                     param_pattern = r"<parameter\s+name=\"(\w+)\">([^<]+)</parameter>"
@@ -226,6 +241,40 @@ class InferenceClient:
                         ]
                         if dir_paths:
                             tool_input["path"] = dir_paths[0]
+
+                    # Method 6: Handle malformed output like [TOOL_CALL: name]({"key">content...)
+                    # This catches cases where LLM outputs HTML-like malformed JSON
+                    if not tool_input and tool_name.startswith("filesystem."):
+                        # Simpler approach: match content after >
+                        escaped_tool_name = re.escape(tool_name)
+                        pattern = rf"\[TOOL_CALL:\s*{escaped_tool_name}\]\s*\(\s*[^)]*>\s*(.*)"
+                        match = re.search(pattern, content_for_parsing, re.DOTALL)
+                        if match:
+                            full_content = match.group(1).strip()
+                            if full_content:
+                                # Try to extract the key name from the malformed JSON
+                                key_match = re.search(
+                                    r'["\']?(\w+)["\']?\s*[:=]\s*>', content_for_parsing
+                                )
+                                if key_match:
+                                    key = key_match.group(1)
+                                    tool_input[key] = full_content
+
+                                # For save_file/write_file, also try to find path from thinking or context
+                                if tool_name in ("filesystem.save_file", "filesystem.write_file"):
+                                    # Look for path in thinking block or common patterns
+                                    # Pattern: path="..." or path: "..." or `path`
+                                    path_patterns = [
+                                        r'path\s*[:=]\s*"([^"]+)"',
+                                        r"path\s*[:=]\s*\'([^\']+)\'",
+                                        r"`([^`]+\.md)`",
+                                        r"`([^`]+\.txt)`",
+                                    ]
+                                    for p in path_patterns:
+                                        path_match = re.search(p, thinking_content)
+                                        if path_match:
+                                            tool_input["path"] = path_match.group(1)
+                                            break
 
                     # Always add tool call (let the tool itself handle missing required args)
                     tool_calls.append(

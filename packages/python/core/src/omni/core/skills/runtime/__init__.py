@@ -53,6 +53,22 @@ class SkillContext:
             skill: A UniversalScriptSkill instance
         """
         if hasattr(skill, "name"):
+            skill_name = skill.name
+
+            # Save mtime for hot reload detection
+            skill_path = getattr(skill, "_path", None)
+            if skill_path and skill_path.exists():
+                scripts_path = skill_path / "scripts"
+                if scripts_path.exists():
+                    try:
+                        skill._mtime = max(f.stat().st_mtime for f in scripts_path.glob("*.py"))
+                    except (ValueError, OSError):
+                        skill._mtime = 0
+                else:
+                    skill._mtime = 0
+            else:
+                skill._mtime = 0
+
             self._skills[skill.name] = skill
 
             # Register decorated commands from the skill
@@ -78,7 +94,7 @@ class SkillContext:
             logger.warning(f"Attempted to register nameless skill: {skill}")
 
     def get_skill(self, name: str) -> Any | None:
-        """Get a registered skill by name.
+        """Get a registered skill by name, with hot reload support.
 
         Args:
             name: Skill name (e.g., "git", "filesystem")
@@ -86,7 +102,63 @@ class SkillContext:
         Returns:
             Skill instance or None
         """
-        return self._skills.get(name)
+        skill = self._skills.get(name)
+        if skill is None:
+            return None
+
+        # Hot reload check: verify mtime and reload if modified
+        skill_path = getattr(skill, "_path", None)
+        if skill_path and skill_path.exists():
+            scripts_path = skill_path / "scripts"
+            if scripts_path.exists():
+                try:
+                    current_mtime = max(f.stat().st_mtime for f in scripts_path.glob("*.py"))
+                    cached_mtime = getattr(skill, "_mtime", 0)
+                    if current_mtime > cached_mtime:
+                        logger.info(f"Hot reloading skill: {name}")
+
+                        # Clear sys.modules cache for this skill (hot reload support)
+                        import sys
+
+                        skill_module_prefix = f"{name}."
+                        modules_to_remove = [
+                            k for k in sys.modules if k.startswith(skill_module_prefix)
+                        ]
+                        for mod in modules_to_remove:
+                            del sys.modules[mod]
+
+                        # Clear old command cache
+                        old_commands = [k for k in self._commands if k.startswith(f"{name}.")]
+                        for cmd in old_commands:
+                            del self._commands[cmd]
+
+                        old_native = [k for k in self._native if k.startswith(f"{name}.")]
+                        for key in old_native:
+                            del self._native[key]
+
+                        # Re-import and reload scripts into skill's script_loader
+                        if skill._script_loader:
+                            # Clear script_loader's internal caches
+                            skill._script_loader.commands.clear()
+                            skill._script_loader.native_functions.clear()
+
+                            # Reload scripts
+                            skill._script_loader.load_all()
+
+                            # Register new commands
+                            for cmd_name, handler in skill._script_loader.commands.items():
+                                self._commands[cmd_name] = handler
+                            for func_name, func in skill._script_loader.native_functions.items():
+                                full_name = f"{name}.{func_name}"
+                                self._native[full_name] = func
+                                self._native[func_name] = func
+
+                        # Update mtime
+                        skill._mtime = current_mtime
+                except (ValueError, OSError):
+                    pass  # No scripts or other error
+
+        return skill
 
     def get_command(self, full_name: str) -> Any | None:
         """Get a command handler (decorated commands).

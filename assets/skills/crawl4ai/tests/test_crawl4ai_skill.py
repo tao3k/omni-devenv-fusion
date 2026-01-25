@@ -135,6 +135,49 @@ class TestCrawl4aiScriptLoader:
         assert crawl_cmd is not None
         assert callable(crawl_cmd)
 
+    def test_engine_py_no_skill_command_decorator(self):
+        """Test that engine.py does NOT register its own commands.
+
+        This is critical - engine.py should only contain implementation details
+        for CLI usage. Commands must come from crawl_url.py to ensure proper
+        isolation via run_skill_command.
+        """
+        from omni.core.skills.script_loader import ScriptLoader
+
+        skill_path = Path(__file__).parent.parent
+
+        # Import engine module directly
+        sys.path.insert(0, str(skill_path))
+        import scripts.engine as engine_module
+
+        # engine.py should NOT have @skill_command decorated functions
+        # that would override crawl_url.py commands
+        for attr_name in dir(engine_module):
+            if attr_name.startswith("_"):
+                continue
+            attr = getattr(engine_module, attr_name)
+            if callable(attr) and not attr_name.startswith("_"):
+                # Functions in engine.py should NOT be skill commands
+                assert not getattr(attr, "_is_skill_command", False), (
+                    f"engine.{attr_name} should NOT have @skill_command decorator. "
+                    f"Commands must be in crawl_url.py for proper isolation."
+                )
+
+    def test_crawl_url_uses_isolation(self):
+        """Test that crawl_url command uses run_skill_command (isolation pattern)."""
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from scripts.crawl_url import crawl_url
+
+        # The crawl_url function should call run_skill_command
+        # We verify this by checking that crawl_url itself doesn't import crawl4ai
+        import scripts.crawl_url as crawl_url_module
+        import inspect
+
+        source = inspect.getsource(crawl_url)
+        assert "run_skill_command" in source, (
+            "crawl_url should call run_skill_command for isolation"
+        )
+
 
 class TestCrawl4aiIsolation:
     """Tests for isolation pattern."""

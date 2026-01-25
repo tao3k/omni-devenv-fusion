@@ -5,6 +5,7 @@ devenv.local.nix
 *.so
 !.cargo
 target
+.coverage
 # direnv
 .direnv
 *.bak

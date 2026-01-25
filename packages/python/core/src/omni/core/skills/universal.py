@@ -315,12 +315,15 @@ class UniversalScriptSkill:
         """Load extensions and scripts.
 
         Auto-wiring flow:
-        1. Load extensions from extensions/ directory
-        2. Load sniffer extensions from extensions/sniffer/ (modular)
-        3. Create ScriptLoader for scripts/ directory
-        4. Inject Rust accelerator if available
-        5. Load scripts (they get injected dependencies)
+        1. Clear sys.modules cache for this skill
+        2. Load extensions from extensions/ directory
+        3. Load sniffer extensions from extensions/sniffer/ (modular)
+        4. Create ScriptLoader for scripts/ directory
+        5. Inject Rust accelerator if available
+        6. Load scripts (they get injected dependencies)
         """
+        import sys
+
         from .extensions import SkillExtensionLoader
         from .extensions.sniffer import SnifferLoader
 
@@ -328,6 +331,23 @@ class UniversalScriptSkill:
         cwd = context.get("cwd", os.getcwd())
 
         logger.debug(f"[{self._name}] Loading from {self._path}")
+
+        # 0. Clear sys.modules cache for this skill (hot reload support)
+        skill_module_prefix = f"{self._name}."
+        modules_to_remove = [k for k in sys.modules if k.startswith(skill_module_prefix)]
+        for mod in modules_to_remove:
+            del sys.modules[mod]
+        logger.debug(f"[{self._name}] Cleared {len(modules_to_remove)} cached modules")
+
+        # Also clear workflow visualizations for this skill (they cache at module level)
+        try:
+            from omni.langgraph.visualize import clear_workflows
+
+            cleared = clear_workflows(self._name)
+            if cleared:
+                logger.debug(f"[{self._name}] Cleared {cleared} workflow diagrams")
+        except ImportError:
+            pass
 
         # 1. Load Extensions
         ext_path = self._path / "extensions"

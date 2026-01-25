@@ -515,9 +515,15 @@ _sync-versions:
     # Update agent pyproject.toml
     sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" packages/python/agent/pyproject.toml && rm -f packages/python/agent/pyproject.toml.bak
     echo "  ✓ Agent: packages/python/agent/pyproject.toml"
-    # Update common pyproject.toml
-    sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" packages/python/common/pyproject.toml && rm -f packages/python/common/pyproject.toml.bak
-    echo "  ✓ Common: packages/python/common/pyproject.toml"
+    # Update core pyproject.toml
+    sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" packages/python/core/pyproject.toml && rm -f packages/python/core/pyproject.toml.bak
+    echo "  ✓ Core: packages/python/core/pyproject.toml"
+    # Update foundation pyproject.toml
+    sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" packages/python/foundation/pyproject.toml && rm -f packages/python/foundation/pyproject.toml.bak
+    echo "  ✓ Foundation: packages/python/foundation/pyproject.toml"
+    # Update mcp-server pyproject.toml
+    sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" packages/python/mcp-server/pyproject.toml && rm -f packages/python/mcp-server/pyproject.toml.bak
+    echo "  ✓ MCP Server: packages/python/mcp-server/pyproject.toml"
     # Note: Root pyproject.toml uses dynamic version (hatch-vcs), no sync needed
     echo ""
     echo "All packages updated to version $NEW_VERSION!"

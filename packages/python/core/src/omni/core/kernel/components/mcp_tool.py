@@ -199,6 +199,28 @@ class MCPToolAdapter:
 
         skill_name, command_name, func = tool_data
 
+        # Validate required arguments before execution
+        config = getattr(func, "_skill_config", {})
+        input_schema = config.get("input_schema", {})
+        required_fields = input_schema.get("required", [])
+
+        missing_fields = [f for f in required_fields if f not in args or args.get(f) is None]
+        if missing_fields:
+            # Provide helpful error with expected format
+            properties = input_schema.get("properties", {})
+            format_hint = ""
+            for field in required_fields:
+                field_type = properties.get(field, {}).get("type", "any")
+                format_hint += f'  "{field}": <{field_type}>, '
+
+            error_msg = (
+                f"Missing required arguments: {', '.join(missing_fields)}\n"
+                f"Expected format:\n"
+                f"[TOOL_CALL: {name}]({{{format_hint.rstrip(', ')}}})"
+            )
+            logger.warning(f"Tool call validation failed for {name}: {missing_fields}")
+            return [{"type": "text", "text": f"Error: {error_msg}"}]
+
         try:
             # Check if function is async
             import asyncio

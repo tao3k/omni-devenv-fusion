@@ -21,5 +21,5 @@ class OmniLoopConfig(BaseModel):
     max_tokens: int = 128000
     retained_turns: int = 10
     auto_summarize: bool = False
-    max_tool_calls: int = 10
+    max_tool_calls: int = 20
     verbose: bool = False

@@ -14,9 +14,11 @@ dev = [
     "omni-core",
     "polyfactory>=3.2.0",
     "pytest>=9.0.2",
-    "pytest-asyncio>=1.3.0",
+    "pytest-asyncio>=1.3.0,<2.0",
     "pytest-randomly>=4.0.1",
     "pytest-xdist>=3.6.1",
+    "pytest-timeout>=2.3.0",
+    "pytest-cov>=6.0.0",
     "dirty-equals>=0.11",
     "ruff>=0.14.10",
     "vulture>=2.14",
@@ -89,10 +91,19 @@ namespace_packages = true
 explicit_package_bases = true
 mypy_path = ["packages/python/agent/src", "packages/python/core/src", "packages/python/foundation/src"]
 
-
-[tool.pytest.ini_options]
+# Native TOML config for pytest 9.0+ (supports list, bool, dict types)
+[tool.pytest]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+strict = true  # Enable strict_config, strict_markers, strict_parametrization_ids, strict_xfail
+timeout = 300  # Default timeout in seconds (5 minutes)
+# Run tests in parallel with max 4 workers to avoid resource exhaustion
+addopts = [
+    "--timeout=300",
+    "-n", "auto",  # Parallel execution with auto-detected workers
+    "--maxprocesses=4",  # Limit to 4 processes
+    "-p", "no:randomly",  # Disable random order for consistent output
+]
 testpaths = [
     "packages/python/agent/tests",
     "packages/python/core/tests",
@@ -110,6 +121,36 @@ filterwarnings = [
     "ignore::DeprecationWarning:starlette",
 ]
 norecursedirs = ["stress_tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+
+# Coverage configuration for package sources
+[tool.coverage.run]
+source = ["omni"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/.venv/*",
+    "*/venv/*",
+    "*/site-packages/*",
+]
+branch = true
+parallel = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
+precision = 1
+show_missing = true
+
+[tool.coverage.html]
+title = "Omni Dev Fusion - Test Coverage Report"
 
 
 [tool.vulture]

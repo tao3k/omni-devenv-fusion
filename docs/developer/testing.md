@@ -1,7 +1,7 @@
 # Omni-Dev-Fusion Testing Guide
 
 > Trinity Architecture Test System - Foundation, Core, MCP-Server
-> Last Updated: 2026-01-20
+> Last Updated: 2026-01-25
 
 ---
 
@@ -12,8 +12,10 @@
 ```
 packages/python/
 ├── foundation/tests/              # 46 tests - Settings, Config, GitOps, Skills Path
-├── core/tests/                    # 7 passed, 5 skipped - Router, Script Loader, Indexer
-└── mcp-server/tests/              # 42 tests - Transport, Types, Server
+├── core/tests/                    # 49 tests - Router, Script Loader, Indexer, Skills
+├── mcp-server/tests/              # 42 tests - Transport, Types, Server
+└── agent/tests/                   # CLI tests, skill management
+assets/skills/*/tests/             # 263 skill tests (11 skills)
 ```
 
 ### Test Status Summary
@@ -21,34 +23,76 @@ packages/python/
 | Package    | Passing | Skipped | Failing | Status      |
 | ---------- | ------- | ------- | ------- | ----------- |
 | Foundation | 46      | 0       | 0       | DONE        |
-| Core       | 7       | 5       | 0       | MOSTLY DONE |
+| Core       | 49      | 0       | 0       | DONE        |
 | MCP-Server | 42      | 0       | 0       | DONE        |
-| **Total**  | **95**  | **5**   | **0**   | **HEALTHY** |
+| Agent      | 19      | 0       | 0       | DONE        |
+| Skills     | 263     | 2       | 0       | DONE        |
+| **Total**  | **419** | **2**   | **0**   | **HEALTHY** |
 
 ---
 
 ## Running Tests
 
-### Recommended: Run Per Package
+### Package Tests (Parallel Execution Enabled)
 
-Due to a pytest limitation with multiple `conftest.py` files, run tests separately:
+Tests run in parallel with timeout protection (300s default):
 
 ```bash
 # Foundation tests (settings, config, gitops)
 uv run pytest packages/python/foundation/tests/ -q
 
-# Core tests (router, script loader, indexer)
-uv run pytest packages/python/core/tests/units/ -q
+# Core tests (router, script loader, indexer, skills)
+uv run pytest packages/python/core/tests/ -q
 
 # MCP-Server tests (transport, server, types)
 uv run pytest packages/python/mcp-server/tests/ -q
+
+# Agent CLI tests
+uv run pytest packages/python/agent/tests/ -q
 ```
 
-### All Tests Combined
+### All Package Tests Combined
 
 ```bash
 # Using just command
 just test
+```
+
+### Skill Tests (via omni CLI)
+
+```bash
+# Test single skill
+uv run omni skill test git
+
+# Test all skills with tests/
+uv run omni skill test --all
+```
+
+### With Coverage Report
+
+```bash
+# Terminal coverage summary
+uv run pytest --cov=omni --cov-report=term-missing
+
+# Generate HTML report
+uv run pytest --cov=omni --cov-report=html
+# Open .htmlcov/index.html in browser
+
+# Per-module coverage
+uv run pytest --cov=omni.foundation --cov-report=term
+```
+
+### Custom Timeout
+
+```bash
+# Quick test (60s timeout)
+uv run pytest --timeout=60
+
+# No timeout
+uv run pytest --timeout=0
+
+# Per-test timeout marker
+pytest -v --timeout=30 test_slow_operation.py
 ```
 
 ---
@@ -206,21 +250,66 @@ class TestSkillIndexerIndexing:
 
 ---
 
+## Pytest Configuration
+
+The project uses pytest 9.0+ with the following configuration in `pyproject.toml`:
+
+```toml
+[tool.pytest]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+strict = true  # Enable strict mode
+timeout = 300  # Default timeout (5 minutes)
+
+# Parallel execution with resource limits
+addopts = [
+    "--timeout=300",
+    "-n", "auto",           # Auto-detect CPU cores
+    "--maxprocesses=4",     # Limit to 4 processes
+    "-p", "no:randomly",    # Deterministic order
+]
+```
+
+### Key Features
+
+| Feature                | Description                                            |
+| ---------------------- | ------------------------------------------------------ |
+| **Parallel Execution** | Tests run in parallel (`-n auto`) for faster execution |
+| **Timeout Protection** | 300s default prevents hung tests                       |
+| **Strict Mode**        | Catches misconfigured markers and xfail                |
+| **Coverage**           | Integrated with `pytest-cov`                           |
+| **Import Mode**        | Uses `importlib` for implicit namespace packages       |
+
+### Coverage Configuration
+
+```toml
+[tool.coverage.run]
+source = ["omni"]
+branch = true
+parallel = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
+show_missing = true
+```
+
+---
+
 ## Known Issues
 
-### 1. Pytest ImportPathMismatchError with Multiple conftest.py
+### 1. Pytest ImportPathMismatchError (RESOLVED)
 
-**Symptom**:
+**Symptom**: Previously showed `ImportPathMismatchError` with multiple `conftest.py` files
 
-```
-ImportPathMismatchError: ('tests.conftest', '/path/core/tests/conftest.py', PosixPath('/path/mcp-server/tests/conftest.py'))
-```
+**Solution**: Use `--import-mode=importlib` in pytest configuration
 
-**Cause**: Pytest has a known limitation where same-named `conftest.py` files in different directories cause import path mismatch when running tests together.
-
-**Solution**: Run tests separately per package.
-
-**Status**: Documented, no fix planned (workaround is simple)
+**Status**: ✅ RESOLVED - Tests can now run together without conflicts
 
 ### 2. Indexer Tests Skipped Without RustVectorStore
 
@@ -230,17 +319,17 @@ ImportPathMismatchError: ('tests.conftest', '/path/core/tests/conftest.py', Posi
 
 **Solution**: Tests use `@indexing_available` marker to skip gracefully
 
-**Status**: Expected behavior - 5 tests skipped when dependencies unavailable
+**Status**: Expected behavior - tests skipped when dependencies unavailable
 
-### 3. MCP-Server Tests Not Discoverable When Run Together
+### 3. Skill Tests with Implicit Namespace Packages
 
-**Symptom**: MCP-Server tests fail to load when combined with Core/Foundation tests
+**Symptom**: Tests in `assets/skills/*/tests/` fail to import without `__init__.py`
 
-**Cause**: Same as issue #1 - conftest.py naming conflict
+**Cause**: Python 3.13 implicit namespace packages require special pytest handling
 
-**Solution**: Run `uv run pytest packages/python/mcp-server/tests/ -q` separately
+**Solution**: Use `--import-mode=importlib` flag
 
-**Status**: Documented in troubleshooting
+**Status**: ✅ RESOLVED - Configuration added to `omni skill test --all`
 
 ---
 
@@ -314,7 +403,7 @@ cargo test -p omni-tags
 
 ### GitHub Actions Workflow
 
-Tests run on every push to `main` branch:
+Tests run on every push to `main` branch with parallel execution and coverage:
 
 ```yaml
 jobs:
@@ -324,9 +413,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv run pytest packages/python/foundation/tests/ -q
-      - run: uv run pytest packages/python/core/tests/units/ -q
+      - run: uv run pytest packages/python/core/tests/ -q
       - run: uv run pytest packages/python/mcp-server/tests/ -q
+      - run: uv run pytest packages/python/agent/tests/ -q
+      - run: uv run omni skill test --all
       - run: cargo test --workspace
+      # Optional: Coverage report
+      - run: uv run pytest --cov=omni --cov-report=term-missing
 ```
 
 ---

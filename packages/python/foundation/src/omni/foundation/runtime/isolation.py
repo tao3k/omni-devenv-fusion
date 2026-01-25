@@ -50,8 +50,7 @@ def run_skill_command(
     args: dict[str, Any],
     timeout: int = 60,
 ) -> dict[str, Any]:
-    """
-    Run a skill script in an isolated uv environment.
+    """Run a skill script in an isolated uv environment.
 
     This function:
     1. Uses the skill's local pyproject.toml for dependency resolution
@@ -76,6 +75,7 @@ def run_skill_command(
         if result["success"]:
             print(result["result"]["markdown"])
     """
+
     script_path = skill_dir / "scripts" / script_name
 
     if not script_path.exists():
@@ -84,19 +84,40 @@ def run_skill_command(
             "error": f"Script not found: {script_path}",
         }
 
-    # Build command: uv run --directory <skill_dir> --project <skill_dir>/pyproject.toml python scripts/<script> --arg val
-    # Using --directory ensures Python runs in skill dir, avoiding local package shadowing
+    # Get project root using gitops (SSOT - Single Source of Truth)
+    from omni.foundation.runtime.gitops import get_project_root
+
+    project_root = get_project_root()
+
+    # Ensure skill_dir is absolute for relative_to
+    if not skill_dir.is_absolute():
+        skill_dir = project_root / skill_dir
+
+    # Check if skill_dir is under project_root
+    try:
+        skill_relative = skill_dir.relative_to(project_root)
+        use_directory_flag = True
+    except ValueError:
+        # skill_dir is outside project root (e.g., temp directory)
+        # Use absolute path directly without --directory flag
+        skill_relative = skill_dir
+        use_directory_flag = False
+
+    # Build command: VIRTUAL_ENV=.venv UV_PROJECT_ENVIRONMENT=.venv uv run [--directory <path>] python scripts/<script> --arg val
+    # Setting env vars before command ensures they override devenv's values
     cmd = [
+        "VIRTUAL_ENV=.venv",
+        "UV_PROJECT_ENVIRONMENT=.venv",
         "uv",
         "run",
         "--quiet",
-        "--directory",
-        str(skill_dir.resolve()),
-        "--project",
-        str((skill_dir / "pyproject.toml").resolve()),
-        "python",
-        f"scripts/{script_name}",  # Relative path from skill_dir
     ]
+
+    # Add --directory only if skill_dir is under project_root
+    if use_directory_flag:
+        cmd.extend(["--directory", str(skill_relative)])
+
+    cmd.extend(["python", f"scripts/{script_name}"])
 
     # Convert args to CLI flags (e.g., {"url": "..."} -> "--url", "...")
     for key, value in args.items():
@@ -106,20 +127,18 @@ def run_skill_command(
         else:
             cmd.append(str(value))
 
-    # Execute in isolated environment
-    env = os.environ.copy()
-    # Optional: Add isolation-specific env vars
-    env["UV_NO_SYNC"] = "1"  # Skip unnecessary sync for repeated calls
+    # Join command into a shell string for proper env var expansion
+    cmd_str = " ".join(cmd)
 
     stdout = ""  # Initialize for exception handlers
 
     try:
         result = subprocess.run(
-            cmd,
+            cmd_str,
             capture_output=True,
             text=True,
             timeout=timeout,
-            env=env,
+            shell=True,
         )
 
         # Parse stdout - engine.py outputs clean JSON

@@ -244,7 +244,6 @@ skills:
     - "terminal.run_command" # Use Claude's native bash runner
     - "terminal.run_task" # Value not proven, use direct commands
     - "terminal.inspect_environment" # Use pwd/uname directly
-    - "filesystem.read_files"
 
   # =============================================================================
   # Dynamic Tool Loading Limits

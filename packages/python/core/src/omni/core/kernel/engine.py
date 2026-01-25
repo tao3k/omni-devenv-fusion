@@ -561,8 +561,21 @@ class Kernel:
             # Update in skill context
             self.skill_context.register_skill(skill)
             logger.info(f"✅ Hot Reload Complete: {skill_name}")
+
+            # Notify MCP clients to refresh their tool list (descriptions may have changed)
+            await self._notify_clients_tool_list_changed()
         except Exception as e:
             logger.error(f"❌ Hot Reload Failed for {skill_name}: {e}")
+
+    async def _notify_clients_tool_list_changed(self) -> None:
+        """Send tool list changed notification to MCP clients."""
+        try:
+            # Import from agent's lifespan module
+            from omni.agent.mcp_server.lifespan import _notify_tools_changed
+
+            await _notify_tools_changed({})
+        except Exception as e:
+            logger.debug(f"⚠️ Failed to notify clients of tool list change: {e}")
 
     # =========================================================================
     # Lifecycle Callbacks
@@ -613,7 +626,8 @@ class Kernel:
         # Summary of active services
         logger.info("━" * 60)
         logger.info("🚀 Kernel Services Active:")
-        logger.info(f"   • Skills:    {skills_loaded} loaded, {total_commands} commands")
+        core_commands = len(self.skill_context.get_core_commands())
+        logger.info(f"   • Skills:    {skills_loaded} loaded, {core_commands} core commands")
         logger.info("   • Cortex:    Semantic routing index ready")
         logger.info("   • Sniffer:   Context detection active")
         logger.info("   • Security:  Permission Gatekeeper active (Zero Trust)")

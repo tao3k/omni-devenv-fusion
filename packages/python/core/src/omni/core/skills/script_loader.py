@@ -96,6 +96,10 @@ class ScriptLoader:
         module_name = path.stem
         full_module_name = f"{scripts_pkg}.{module_name}"  # e.g., "git.scripts.commit_state"
 
+        # Clear cached module to ensure fresh load (hot reload support)
+        if full_module_name in sys.modules:
+            del sys.modules[full_module_name]
+
         try:
             # Try import_module first for PEP 420 namespace packages
             try:

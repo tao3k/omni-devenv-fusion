@@ -43,6 +43,7 @@ from omni.foundation.checkpoint import (
 )
 from omni.foundation.config.logging import get_logger
 from omni.foundation.services.llm.client import InferenceClient
+from omni.langgraph.visualize import register_workflow, visualize_workflow
 from omni.core.context import create_planner_orchestrator
 
 logger = get_logger("researcher.graph")
@@ -632,6 +633,7 @@ async def run_research_workflow(
     repo_url: str,
     request: str = "Analyze the architecture",
     thread_id: str | None = None,
+    visualize: bool = False,
 ) -> dict[str, Any]:
     """
     Run the sharded research workflow.
@@ -645,10 +647,14 @@ async def run_research_workflow(
         request: Research goal/question.
         thread_id: Optional thread ID for checkpointing.
             If not provided, generates one from repo_url hash.
+        visualize: If True, return the workflow diagram instead of running.
 
     Returns:
-        Final state dictionary with results.
+        Final state dictionary with results, or workflow diagram if visualize=True.
     """
+    # Handle visualize mode
+    if visualize:
+        return {"diagram": visualize_workflow()}
     # Generate workflow_id if not provided
     workflow_id = thread_id or f"research-{hash(repo_url) % 10000}"
     logger.info(
@@ -722,6 +728,40 @@ async def run_research_workflow(
     except Exception as e:
         logger.error("Workflow failed", error=str(e), exc_info=True)
         return {"error": str(e), "steps": initial_state.get("steps", 1)}
+
+
+# =============================================================================
+# Visualization
+# =============================================================================
+
+
+def _research_diagram() -> str:
+    """Generate a Mermaid diagram of the research workflow."""
+    return r"""graph TD
+    A[Start: researcher.run_research repo_url=...] --> B[node_setup: Clone & Map]
+    B --> C[node_architect: Plan Shards]
+    C --> D[node_process_shard: Process First Shard]
+    D --> E{Router: More Shards?}
+    E -->|Yes| D
+    E -->|No| F[node_synthesize: Generate index.md]
+    F --> G[Done]
+
+    subgraph Loop [Shard Processing Loop]
+        D
+        E
+    end
+
+    style A fill:#e1f5fe
+    style B fill:#f3e5f5
+    style C fill:#e8f5e8
+    style D fill:#fff3e0
+    style F fill:#e0f7fa
+    style G fill:#fce4ec"""
+
+
+# Register workflow for visualization
+_RESEARCH_DIAGRAM = _research_diagram()
+register_workflow("research", _RESEARCH_DIAGRAM)
 
 
 # =============================================================================

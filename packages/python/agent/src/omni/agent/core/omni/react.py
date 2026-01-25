@@ -13,8 +13,11 @@ This module can be replaced with LangGraph for more complex workflows.
 from typing import Any
 
 from omni.foundation.services.llm import InferenceClient
+from omni.foundation.config.logging import get_logger
 
 from .logging import log_completion, log_result, log_step, log_llm_response
+
+logger = get_logger("omni.agent.react")
 
 
 class ReActWorkflow:
@@ -71,11 +74,20 @@ class ReActWorkflow:
         """
         tools = await self.get_tool_schemas()
 
+        # DEBUG: Log tools count
+        if self.verbose:
+            logger.debug(f"ReAct: tools count = {len(tools)}")
+
         # ReAct loop: continue until no more tool calls
         response: dict[str, Any] = {"content": "", "tool_calls": []}
 
         while True:
             self.step_count += 1
+
+            if self.verbose:
+                logger.debug(
+                    f"ReAct: step={self.step_count}, tool_calls={self.tool_calls_count}, max={self.max_tool_calls}"
+                )
 
             # Check safety limit
             if self.tool_calls_count >= self.max_tool_calls:
@@ -94,13 +106,48 @@ class ReActWorkflow:
             # Log LLM response (thinking process)
             log_llm_response(response["content"])
 
-            # Update conversation
-            messages.append({"role": "assistant", "content": response["content"]})
+            # Clean thinking and tool call artifacts from response for user output
+            import re
+
+            clean_content = response["content"]
+            # Remove thinking blocks (both for log and user)
+            clean_content = re.sub(r"<thinking>.*?</thinking>", "", clean_content, flags=re.DOTALL)
+            # Remove tool call artifacts from content
+            clean_content = re.sub(r"\[TOOL_CALL:[^\]]*\]", "", clean_content)
+            clean_content = re.sub(r"\[/TOOL_CALL\]", "", clean_content)
+            clean_content = re.sub(r"\[TOOL_CALL:[^\]]*>\s*", "", clean_content)
+            clean_content = re.sub(r"\s*\[/TOOL_CALL\]\s*", "", clean_content)
+            clean_content = re.sub(r"\n{3,}", "\n\n", clean_content)
+            clean_content = clean_content.strip()
+
+            # Update conversation with cleaned content
+            messages.append({"role": "assistant", "content": clean_content})
+
+            # Use cleaned content for final response
+            response["content"] = clean_content
 
             # Check for tool calls
             tool_calls = response.get("tool_calls", [])
-            if not tool_calls:
-                # No more tools needed
+
+            if self.verbose:
+                logger.debug(f"ReAct: tool_calls in response = {len(tool_calls)}")
+                if tool_calls:
+                    logger.debug(f"ReAct: tool_names = {[tc.get('name') for tc in tool_calls]}")
+
+            # Check if LLM declared task complete (allows LLM to self-determine completion)
+            content = response.get("content", "")
+            completion_patterns = [
+                r"✅\s*Completed",
+                r"##\s*Summary",
+                r"##\s*Reflection",
+                r"Task completed",
+            ]
+            llm_declared_complete = any(
+                re.search(p, content, re.IGNORECASE) for p in completion_patterns
+            )
+
+            if not tool_calls or llm_declared_complete:
+                # No more tools needed OR LLM declared completion - exit loop
                 log_completion(self.step_count, self.tool_calls_count)
                 break
 
@@ -131,6 +178,21 @@ class ReActWorkflow:
                 # Format result for LLM
                 result_content = self._format_tool_result(tool_name, result, is_error)
                 messages.append({"role": "user", "content": result_content})
+
+        # Final cleanup of response content before returning
+        final_content = response.get("content", "").strip()
+        if final_content:
+            import re
+
+            # Remove any remaining thinking blocks
+            final_content = re.sub(r"<thinking>.*?</thinking>", "", final_content, flags=re.DOTALL)
+            # Remove any remaining tool call artifacts
+            final_content = re.sub(r"\[TOOL_CALL:[^\]]*\]", "", final_content)
+            final_content = re.sub(r"\[/TOOL_CALL\]", "", final_content)
+            # Clean up extra whitespace
+            final_content = re.sub(r"\n{3,}", "\n\n", final_content)
+            final_content = final_content.strip()
+            response["content"] = final_content
 
         return response["content"]
 

@@ -7,6 +7,18 @@ Uses unified Rust LanceDB CheckpointStore for persistent state:
 - Centralized at path from settings (default: .cache/checkpoints.lance)
 
 Workflow Type: smart_commit
+
+Architecture: Map -> Check -> Route -> Execute
+
+This implements a cognitive workflow that:
+1. Maps repository state (staged files, diff)
+2. Checks for errors (lefthook, security)
+3. Routes based on state (empty/error/prepared)
+4. Executes commit on approval
+
+Uses Rust-Powered Cognitive Pipeline for state persistence:
+- LanceDB checkpoint store via Rust bindings
+- Parallel file I/O for state management
 """
 
 import uuid
@@ -23,8 +35,23 @@ from omni.foundation.checkpoint import (
     load_workflow_state,
     save_workflow_state,
 )
+from omni.foundation.config.logging import get_logger
+from omni.langgraph.visualize import register_workflow, visualize_workflow as _get_diagram
 
 from ._enums import SmartCommitAction, SmartCommitStatus, WorkflowRouting
+
+logger = get_logger("git.smart_commit")
+
+# Import Rust checkpoint saver for LangGraph
+try:
+    from omni.langgraph.checkpoint.saver import RustCheckpointSaver as _RustCheckpointSaver
+
+    _CHECKPOINT_AVAILABLE = True
+    logger.info("RustCheckpointSaver imported successfully")
+except ImportError as e:
+    _CHECKPOINT_AVAILABLE = False
+    _RustCheckpointSaver = None  # type: ignore
+    logger.warning(f"RustCheckpointSaver import failed: {e}")
 
 # Workflow type identifier for checkpoint table
 _WORKFLOW_TYPE = "smart_commit"
@@ -237,7 +264,7 @@ async def smart_commit(
                 return f"Workflow Status (`{workflow_id}`)\n\nStatus: {status.get('status', 'unknown')}\nFiles: {len(status.get('staged_files', []))}"
 
             case SmartCommitAction.VISUALIZE:
-                diagram = visualize_workflow()
+                diagram = _get_diagram("smart_commit")
                 return f"Smart Commit Workflow\n\n{diagram}"
 
             case _:
@@ -379,7 +406,7 @@ async def _get_workflow_status_async(workflow_id: str) -> dict[str, Any] | None:
     return load_workflow_state(_WORKFLOW_TYPE, workflow_id)
 
 
-def visualize_workflow() -> str:
+def _smart_commit_diagram() -> str:
     """Generate a Mermaid diagram of the workflow."""
     return """graph TD
     A[Start: git.smart_commit action=start] --> B[Stage & Scan Files]
@@ -390,7 +417,35 @@ def visualize_workflow() -> str:
     C -->|Prepared| G[prepared: User approves]
     G --> H[git.smart_commit action=approve]
     H --> I[git.git_commit executes]
-    I --> J[Done]"""
+    I --> J[Done]
+    J --> K[TEST: Hot Reload Works!]"""
+
+
+# Register with common visualization lib
+_SMART_COMMIT_DIAGRAM = _smart_commit_diagram()
+register_workflow("smart_commit", _SMART_COMMIT_DIAGRAM)
+
+
+# =============================================================================
+# LangGraph Compilation with Rust Checkpoint
+# =============================================================================
+
+# Compile with Rust checkpoint for state persistence (LanceDB)
+if _CHECKPOINT_AVAILABLE and _RustCheckpointSaver:
+    try:
+        _memory = _RustCheckpointSaver()
+        logger.info(f"RustCheckpointSaver initialized: {_memory}")
+    except Exception as e:
+        logger.error(f"RustCheckpointSaver init failed: {e}")
+        _memory = None
+else:
+    _memory = None
+    logger.warning("Checkpointer not available, using None")
+
+# Build and compile the workflow graph
+_smart_commit_graph = _build_workflow()
+_app = _smart_commit_graph.compile(checkpointer=_memory)
+logger.info(f"Compiled SmartCommit checkpointer: {_app.checkpointer}")
 
 
 __all__ = [
@@ -398,5 +453,4 @@ __all__ = [
     "SmartCommitStatus",
     "WorkflowRouting",
     "smart_commit",
-    "visualize_workflow",
 ]

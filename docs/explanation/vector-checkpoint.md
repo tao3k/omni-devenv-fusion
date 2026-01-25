@@ -280,20 +280,35 @@ result = app.invoke(
 ### With Skills
 
 ```python
-# assets/skills/git/scripts/workflow.py
+# assets/skills/git/scripts/smart_commit_workflow.py
+from omni.foundation.config.logging import get_logger
+from omni.langgraph.checkpoint.saver import RustCheckpointSaver
+
+logger = get_logger("git.smart_commit")
+
+# Import Rust checkpoint saver
 try:
-    from omni.langgraph.checkpoint.saver import RustCheckpointSaver
+    from omni.langgraph.checkpoint.saver import RustCheckpointSaver as _RustCheckpointSaver
     _CHECKPOINT_AVAILABLE = True
-except ImportError:
+    logger.info("RustCheckpointSaver imported successfully")
+except ImportError as e:
     _CHECKPOINT_AVAILABLE = False
-    RustCheckpointSaver = None
+    _RustCheckpointSaver = None  # type: ignore
+    logger.warning(f"RustCheckpointSaver import failed: {e}")
 
-if _CHECKPOINT_AVAILABLE and RustCheckpointSaver:
-    _memory = RustCheckpointSaver()
+# Compile with checkpointer at module level
+if _CHECKPOINT_AVAILABLE and _RustCheckpointSaver:
+    try:
+        _memory = _RustCheckpointSaver()
+        logger.info(f"RustCheckpointSaver initialized: {_memory}")
+    except Exception as e:
+        logger.error(f"RustCheckpointSaver init failed: {e}")
+        _memory = None
 else:
-    _memory = None  # Graceful fallback
+    _memory = None
 
-app = create_workflow().compile(checkpointer=_memory)
+_app = create_sharded_research_graph().compile(checkpointer=_memory)
+logger.info(f"Compiled app checkpointer: {_app.checkpointer}")
 ```
 
 ## Performance

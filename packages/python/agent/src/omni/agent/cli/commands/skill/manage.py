@@ -119,8 +119,7 @@ def skill_test(
                     "--tb=short",
                     "--json-report",
                     f"--json-report-file={json_output_path}",
-                    "-o",
-                    "addopts=-p no:randomly",  # Disable random order for consistent output
+                    "--import-mode=importlib",  # Support implicit namespace packages (no __init__.py)
                 ]
                 + test_dirs,
                 cwd=str(skills_dir),

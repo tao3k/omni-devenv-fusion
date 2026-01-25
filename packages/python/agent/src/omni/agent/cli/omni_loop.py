@@ -172,6 +172,7 @@ async def run_task(task: str, max_steps: int | None):
     """
     # Import the NEW Core OmniLoop
     from omni.agent.core.omni import OmniLoop
+    from omni.core.kernel import get_kernel
 
     print_banner()
     console.print(f"\n[bold]🚀 Starting:[/bold] {task}")
@@ -180,8 +181,14 @@ async def run_task(task: str, max_steps: int | None):
     else:
         console.print(f"[dim]Max steps: {max_steps}[/dim]\n")
 
-    # Initialize the Smart Loop with ContextManager
-    agent = OmniLoop()
+    # Initialize kernel first (loads skills)
+    kernel = get_kernel()
+    console.print(
+        f"[dim]Loaded {len(kernel.skill_context._skills)} skills, {len(kernel.skill_context.get_core_commands())} core commands[/dim]\n"
+    )
+
+    # Initialize the Smart Loop with ContextManager and kernel
+    agent = OmniLoop(kernel=kernel)
 
     # Execute
     result = await agent.run(task, max_steps=max_steps)

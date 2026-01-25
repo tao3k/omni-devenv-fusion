@@ -44,6 +44,7 @@ def _get_workflow_id(repo_url: str) -> str:
     Args:
         - repo_url: str - Git repository URL to analyze (required)
         - request: str = "Analyze the architecture" - Specific analysis goal
+        - visualize: bool = false - If true, return the workflow diagram instead of running
 
     Returns:
         dict with success status, harvest directory path, and shard summaries
@@ -58,6 +59,7 @@ def _get_workflow_id(repo_url: str) -> str:
 async def run_research_graph(
     repo_url: str,
     request: str = "Analyze the architecture",
+    visualize: bool = False,
 ) -> dict[str, Any]:
     """
     Execute the Sharded Deep Research workflow.
@@ -86,7 +88,17 @@ async def run_research_graph(
         result = await run_research_workflow(
             repo_url=repo_url,
             request=request,
+            visualize=visualize,
         )
+
+        # Handle visualize mode - return diagram directly
+        if visualize and "diagram" in result:
+            return {
+                "success": True,
+                "diagram": result["diagram"],
+                "workflow_id": workflow_id,
+                "workflow_type": _WORKFLOW_TYPE,
+            }
 
         print("🔓 [MCP] Workflow complete. Releasing lock.")
 

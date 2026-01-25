@@ -123,20 +123,26 @@ class TestSmartCommitWorkflow:
         assert callable(_build_workflow)
 
     def test_visualize_workflow_exists(self):
-        """Verify visualize_workflow function exists."""
-        from git.scripts.smart_commit_workflow import visualize_workflow
+        """Verify visualize_workflow function exists in the registry."""
+        from omni.langgraph.visualize import visualize_workflow
+        from git.scripts.smart_commit_workflow import _smart_commit_diagram
 
         assert callable(visualize_workflow)
+        # Verify smart_commit is registered
+        result = visualize_workflow("smart_commit")
+        assert "graph TD" in result
 
     def test_visualize_workflow_returns_string(self, tmp_path, monkeypatch):
         """Verify visualize_workflow returns a string."""
-        from git.scripts.smart_commit_workflow import visualize_workflow
+        from omni.langgraph.visualize import visualize_workflow
+        from git.scripts.smart_commit_workflow import _smart_commit_diagram
 
         monkeypatch.chdir(tmp_path)
 
-        result = visualize_workflow()
+        result = visualize_workflow("smart_commit")
 
         assert isinstance(result, str)
+        assert "graph TD" in result
 
 
 class TestSmartCommitApproveRestage:
