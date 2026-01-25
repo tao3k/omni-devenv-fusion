@@ -2,6 +2,55 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.4.0](https://github.com/tao3k/omni-dev-fusion/compare/d733fd3bf66f357c1f32f3d88143ff2ab090157d..v0.4.0) - 2026-01-25
+#### Features
+- (**agent**) Add modern engineering workflows SOP and cleanup Phase terminology - ([0995f7e](https://github.com/tao3k/omni-dev-fusion/commit/0995f7e58355a50a93f882b3ff78b2f7644be463)) - guangtao
+- (**agent**) Migrate Meta-Agent to Factory Extension with microkernel architecture - ([4cb1571](https://github.com/tao3k/omni-dev-fusion/commit/4cb1571c98a6733f67a6f0b795a423eed23813e8)) - guangtao
+- (**agent**) fix MCP stdio transport and skill discovery - ([0d3d48a](https://github.com/tao3k/omni-dev-fusion/commit/0d3d48a66122005bd6c7f4895a42ec24df980dca)) - guangtao
+- (**agent**) modularize testing framework and add GitHub Actions CI - ([64cc443](https://github.com/tao3k/omni-dev-fusion/commit/64cc4435b0ee63ad7ab76c793736634dd96ce24a)) - guangtao
+- (**agent**) implement Phase 43 Holographic Agent with Continuous State Injection - ([65e5564](https://github.com/tao3k/omni-dev-fusion/commit/65e5564b14458a65558ac8af75043fadb02619e7)) - guangtao
+- (**core**) fix list_tools regression and improve tool metadata - ([65e2073](https://github.com/tao3k/omni-dev-fusion/commit/65e207337bd23d3ec17fdf6d5d6c391e35dd603f)) - guangtao
+- (**core**) optimize skill sync performance with path normalization - ([b982be9](https://github.com/tao3k/omni-dev-fusion/commit/b982be9362fbab18deccb0adc029ca199d528fa8)) - guangtao
+- (**core**) add vulture for dead code detection and cleanup - ([437fc7e](https://github.com/tao3k/omni-dev-fusion/commit/437fc7ebf4ce3a0b5526491e8884954f2b554964)) - guangtao
+- (**core**) implement Phase 44-45 Rust core integration and Python 3.13 support - ([2af0db6](https://github.com/tao3k/omni-dev-fusion/commit/2af0db60fe276014a306237b9de2da6be662e136)) - guangtao
+- (**core**) implement Auto-Route Skill Discovery (Phase 36.8) - ([ab44d06](https://github.com/tao3k/omni-dev-fusion/commit/ab44d06a38815feb5c2d1f957a1e2c847e5b76a3)) - guangtao
+- (**core**) implement Phase 36.5 Index Sync + Phase 36.6 Production Stability - ([6b0150c](https://github.com/tao3k/omni-dev-fusion/commit/6b0150ce812241aa5a0f6b109639e8783b346a1a)) - guangtao
+- (**git-workflow**) implement Phase 60 Grand Bazaar with hybrid semantic routing - ([812135f](https://github.com/tao3k/omni-dev-fusion/commit/812135ff672659e3f5116c198ff010c0fe54d3d9)) - guangtao
+- (**router**) implement Phase 41 Wisdom-Aware and Phase 42 State-Aware Routing - ([8e62b2b](https://github.com/tao3k/omni-dev-fusion/commit/8e62b2b77a6043c18c13bb2f5523194d496337d9)) - guangtao
+- (**rust-core**) Implement Phase 52 The Surgeon with AST-based editing - ([ef4ae0a](https://github.com/tao3k/omni-dev-fusion/commit/ef4ae0a987e3fb85b7b9e355e0e6beec22fe1b3d)) - guangtao
+- (**rust-core**) implement Phase 46-47 Rust core with type unification and Iron Lung - ([07e11bd](https://github.com/tao3k/omni-dev-fusion/commit/07e11bdeaa526235609f59b76a76ae9219062fe8)) - guangtao
+- Phase 46 Neural Bridge - Type Unification and Benchmark - ([15f849d](https://github.com/tao3k/omni-dev-fusion/commit/15f849d47e7ffe69a7f7bfd450298dbc2ff25300)) - guangtao
+- establish ODF-REP Rust Engineering Protocol - ([7f669ef](https://github.com/tao3k/omni-dev-fusion/commit/7f669efc03ef07dd9f591d347c093ead3d9e0871)) - guangtao
+#### Bug Fixes
+- (**agent**) Fix test imports to use new skill_runtime API - ([eeba2a3](https://github.com/tao3k/omni-dev-fusion/commit/eeba2a3d74167cec5eebd874d3e08e83e13b26d3)) - guangtao
+- (**core**) use test keys in tests to avoid GitHub secret scanning false positives - ([e455e5d](https://github.com/tao3k/omni-dev-fusion/commit/e455e5d4f98bb9f86fc19165ae87df8e15cd2625)) - guangtao
+- (**git-workflow**) stage all modified files before commit to capture lefthook reformatting - ([7390df8](https://github.com/tao3k/omni-dev-fusion/commit/7390df892a79202998cd8c2a575f1e5fd4e6b8f6)) - guangtao
+- (**scanner**) fix @skill_script ast-grep pattern using $$$ Sequence Wildcard - ([90b9362](https://github.com/tao3k/omni-dev-fusion/commit/90b936209d47ab3c4bc58ecc8947f9b19295e15e)) - guangtao
+#### Documentation
+- add Phase 64-65 documentation for sync, reindex, and reactive indexing - ([5bd9ddf](https://github.com/tao3k/omni-dev-fusion/commit/5bd9ddfb7fff03f68e501f7ae151fa6dcec8d43d)) - guangtao
+#### Tests
+- dynamic loading works - ([b18921e](https://github.com/tao3k/omni-dev-fusion/commit/b18921e7b37c1e3a47c4f6ef6675e39349a7e425)) - guangtao
+#### Refactoring
+- (**agent**) add intent-driven tool discovery and VectorStore tests - ([38ae322](https://github.com/tao3k/omni-dev-fusion/commit/38ae3229cf59c082b3298c25b8581c96507a738d)) - guangtao
+- (**agent**) Python 3.12+ Modernization - 10 units completed - ([4d319a5](https://github.com/tao3k/omni-dev-fusion/commit/4d319a5843b615e66e08f2c9f36b7d203d9416f5)) - guangtao
+- (**agent**) fix GitPython import shadowing and hot reload API - ([a06c865](https://github.com/tao3k/omni-dev-fusion/commit/a06c8650a2e39674bd548f02ff51934cd9939471)) - guangtao
+- (**core**) fix Rust checkpoint store caching and update skill descriptions - ([3a4bbdf](https://github.com/tao3k/omni-dev-fusion/commit/3a4bbdf88a6dab47d80027d432f53dc63f0dfe40)) - guangtao
+- (**core**) Trinity Architecture consolidation and MCP tool registration fixes - ([8dfe360](https://github.com/tao3k/omni-dev-fusion/commit/8dfe36025b2b49f7b2ab71f00dc1a355cb58f6bd)) - guangtao
+- (**core**) atomic refactoring of skill_manager and skill_discovery - ([fa61af9](https://github.com/tao3k/omni-dev-fusion/commit/fa61af9ea257e3aad1b4dd75e6fc297fa89515dd)) - guangtao
+- (**core**) Consolidate file_ops into filesystem skill - ([3bad83d](https://github.com/tao3k/omni-dev-fusion/commit/3bad83daf07e6cdb3904b35c06518867abb455fa)) - guangtao
+- (**core**) Trinity v2.0 - Executor is now a Skill - ([043129d](https://github.com/tao3k/omni-dev-fusion/commit/043129d1bf3fe636e631652121900b5fd9079d99)) - guangtao
+- (**git-workflow**) Simplify smart-commit command documentation - ([d3fbd88](https://github.com/tao3k/omni-dev-fusion/commit/d3fbd88fcd910539fe804609cfce76804991435f)) - guangtao
+- (**git-workflow**) replace /commit with /smart-commit command - ([4aff940](https://github.com/tao3k/omni-dev-fusion/commit/4aff940677297ac198eeb7d2146748ff1e34527e)) - guangtao
+- remove all ChromaDB references, migrate to LanceDB - ([2c0a945](https://github.com/tao3k/omni-dev-fusion/commit/2c0a94515ac63d79fb3d58b027913bf7dbe23e37)) - guangtao
+- Skills architecture consolidation and Agent core modularization - ([98aad4e](https://github.com/tao3k/omni-dev-fusion/commit/98aad4eeb57e24459fbc8c89fcb967e2e2f2afd5)) - guangtao
+- Cleanup and consolidation of design history files - ([eb9091f](https://github.com/tao3k/omni-dev-fusion/commit/eb9091fed0232c30da674e0f82095701fd6661c4)) - guangtao
+- Implement PRJ_SPEC directory standard and fix hardcoded paths - ([1a3ded8](https://github.com/tao3k/omni-dev-fusion/commit/1a3ded8263059b9a82acde7cbfde327437ff833f)) - guangtao
+#### Miscellaneous Chores
+- (**ci**) add secretspec, fix omni-core-rs build, and reorganize project - ([bd1f258](https://github.com/tao3k/omni-dev-fusion/commit/bd1f2583379161f82fe460fc8150858c301a6d15)) - guangtao
+- sync with release - ([d733fd3](https://github.com/tao3k/omni-dev-fusion/commit/d733fd3bf66f357c1f32f3d88143ff2ab090157d)) - guangtao
+
+- - -
+
 ## [v0.3.0](https://github.com/tao3k/omni-dev-fusion/compare/2156b92cfb35018cf690bf3d40bc1512de70a30a..v0.3.0) - 2026-01-10
 #### Features
 - (**agent**) Implement Phase 28.1 Subprocess/Shim Architecture - ([deb3fa3](https://github.com/tao3k/omni-dev-fusion/commit/deb3fa39835952b00f88faf82b8528cd54dd7b43)) - guangtao
