@@ -10,13 +10,17 @@ workspace = true
 name = "omni_core_rs"
 crate-type = ["cdylib"]
 
+[features]
+default = ["assembler"]
+assembler = ["omni-io/assembler"]
+
 [dependencies]
 # Python 3.13 support via PyO3 0.23
 pyo3 = { workspace = true, features = ["extension-module"] }
 # Note: tokio removed - not needed for synchronous bindings
 omni-sniffer = { path = "../../crates/omni-sniffer" }
 omni-types = { path = "../../crates/omni-types" }
-omni-io = { path = "../../crates/omni-io" }
+omni-io = { path = "../../crates/omni-io", default-features = false, features = ["assembler"] }
 omni-tokenizer = { path = "../../crates/omni-tokenizer" }
 # Hyper-Immune System
 omni-security = { path = "../../crates/omni-security" }
@@ -32,6 +36,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "fs"] }
+uuid = { workspace = true }
 
 [dev-dependencies]
 pyo3 = { workspace = true }

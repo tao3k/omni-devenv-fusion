@@ -53,7 +53,9 @@ def trace_execution(
                 return result
             except Exception as e:
                 elapsed = (time.perf_counter() - start) * 1000
-                log_method(f"[TRACE] {func.__name__} raised {type(e).__name__}: {e} ({elapsed:.2f}ms)")
+                log_method(
+                    f"[TRACE] {func.__name__} raised {type(e).__name__}: {e} ({elapsed:.2f}ms)"
+                )
                 raise
 
         @functools.wraps(func)
@@ -69,7 +71,9 @@ def trace_execution(
                 return result
             except Exception as e:
                 elapsed = (time.perf_counter() - start) * 1000
-                log_method(f"[TRACE] {func.__name__} raised {type(e).__name__}: {e} ({elapsed:.2f}ms)")
+                log_method(
+                    f"[TRACE] {func.__name__} raised {type(e).__name__}: {e} ({elapsed:.2f}ms)"
+                )
                 raise
 
         return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper  # type: ignore[return-value]

@@ -81,7 +81,7 @@ The writing style guide has been auto-loaded above. Key rules:
 
 When editing files (MOST COMMON):
 
-1. **ONE-TIME READ**: Read the file ONCE using `filesystem.read_file`. DO NOT call `cat`, `head`, or `read_file` again. The content stays in your context.
+1. **ONE-TIME READ**: Read the file ONCE using `filesystem.read_files`. DO NOT call `cat`, `head`, or `read_file` again. The content stays in your context.
 2. **ANALYSIS**: Plan your edits based on the content in context.
 3. **EXECUTION**: Use `writer.replace` or `writer.rewrite` with the exact strings from step 1.
 4. **VERIFY**: Done. No need to re-read.

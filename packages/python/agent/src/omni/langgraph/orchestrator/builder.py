@@ -42,7 +42,6 @@ import logging
 from collections.abc import Callable
 from typing import Any, Literal
 
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.types import (
     Send,
@@ -50,6 +49,7 @@ from langgraph.types import (
     interrupt,
 )
 
+from omni.langgraph.checkpoint.saver import RustCheckpointSaver
 from omni.langgraph.orchestrator.compiled import CompiledGraph
 from omni.langgraph.state import GraphState
 from pydantic import BaseModel
@@ -601,7 +601,7 @@ class DynamicGraphBuilder:
         # Configure checkpointer
         resolved_checkpointer = checkpointer
         if resolved_checkpointer is None and self.checkpoint:
-            resolved_checkpointer = MemorySaver()
+            resolved_checkpointer = RustCheckpointSaver()
 
         # Compile with all options
         compiled = self.workflow.compile(

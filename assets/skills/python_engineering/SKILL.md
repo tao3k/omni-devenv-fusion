@@ -19,7 +19,7 @@ routing_keywords:
     "upgrade",
     "refactor 3.12",
     "match case",
-    "override"
+    "override",
   ]
 authors: ["omni-dev-fusion"]
 intents:

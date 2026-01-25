@@ -14,6 +14,11 @@ This implements a cognitive graph that:
 3. Iteratively processes each shard (compress + analyze)
 4. Synthesizes final index
 
+Uses Rust-Powered Cognitive Pipeline for system prompt assembly:
+- Parallel I/O via rayon
+- Template rendering via minijinja
+- Token counting via omni-tokenizer
+
 Usage:
     from research_graph import run_research_workflow
     result = await run_research_workflow(
@@ -24,12 +29,12 @@ Usage:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import operator
 from pathlib import Path
 from typing import Annotated, Any, TypedDict
 
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
 from omni.foundation.checkpoint import (
@@ -38,11 +43,100 @@ from omni.foundation.checkpoint import (
 )
 from omni.foundation.config.logging import get_logger
 from omni.foundation.services.llm.client import InferenceClient
+from omni.core.context import create_planner_orchestrator
 
 logger = get_logger("researcher.graph")
 
+# Import Rust checkpoint saver for LangGraph
+try:
+    from omni.langgraph.checkpoint.saver import RustCheckpointSaver as _RustCheckpointSaver
+
+    _CHECKPOINT_AVAILABLE = True
+    logger.info("RustCheckpointSaver imported successfully")
+except ImportError as e:
+    _CHECKPOINT_AVAILABLE = False
+    _RustCheckpointSaver = None
+    logger.warning(f"RustCheckpointSaver import failed: {e}")
+
+# Cache the orchestrator instance for reuse
+_orchestrator = None
+
 # Workflow type identifier for checkpoint table
 _WORKFLOW_TYPE = "research"
+
+
+def _get_orchestrator():
+    """Get cached ContextOrchestrator instance."""
+    global _orchestrator
+    if _orchestrator is None:
+        _orchestrator = create_planner_orchestrator()
+        logger.info("ResearchContextOrchestrator initialized (Rust-powered)")
+    return _orchestrator
+
+
+async def _build_system_prompt(skill_name: str, state: dict) -> str:
+    """
+    Build system prompt using Rust-Powered Cognitive Pipeline.
+
+    This triggers:
+    - Parallel file I/O via rayon
+    - Template rendering via minijinja
+    - Token counting via omni-tokenizer
+
+    Args:
+        skill_name: Name of the skill (e.g., "researcher")
+        state: Current workflow state
+
+    Returns:
+        Assembled system prompt string
+    """
+    orchestrator = _get_orchestrator()
+    if orchestrator is None:
+        logger.error("Failed to get ContextOrchestrator")
+        return f"[Error: Failed to initialize ContextOrchestrator for {skill_name}]"
+
+    # Build state for context building
+    context_state = {
+        **state,
+        "active_skill": skill_name,
+        "request": state.get("request", "Analyze the architecture"),
+    }
+
+    start_time = asyncio.get_running_loop().time()
+    logger.info(f"[Graph] Building context for {skill_name}")
+    try:
+        system_prompt = await orchestrator.build_context(context_state)
+        duration_ms = (asyncio.get_running_loop().time() - start_time) * 1000
+        logger.info(
+            f"[Graph] Context built for {skill_name}",
+            tokens=len(system_prompt) // 4,
+            duration_ms=round(duration_ms, 2),
+        )
+    except Exception as e:
+        logger.error(f"Error building context: {e}", exc_info=True)
+        return f"[Error: Failed to build context for {skill_name}: {e}]"
+
+    return system_prompt
+
+
+def _get_cached_system_prompt(state: ResearchState) -> str:
+    """
+    Get system prompt from state cache, building if not present.
+
+    Args:
+        state: Current workflow state
+
+    Returns:
+        Cached system prompt string
+    """
+    cached = state.get("system_prompt")
+    if cached:
+        logger.debug("[Graph] Using cached system prompt")
+        return cached
+
+    logger.warning("[Graph] System prompt not in state cache!")
+    return ""
+
 
 # Import research module functions using absolute import (PEP 420 namespace package)
 from researcher.scripts.research import (
@@ -61,6 +155,7 @@ from researcher.scripts.research import (
 
 class ShardDef(TypedDict):
     """Definition of an analysis shard."""
+
     name: str
     targets: list[str]
     description: str
@@ -89,6 +184,9 @@ class ResearchState(TypedDict):
     # Final Phase
     harvest_dir: str  # Path to .data/harvested/...
     final_report: str  # Complete analysis
+
+    # Cached Context (built once in architect phase)
+    system_prompt: str  # Cached system prompt (persona + skill context)
 
     # Control
     messages: Annotated[list[dict], operator.add]
@@ -138,6 +236,8 @@ async def node_architect(state: ResearchState) -> dict:
 
     The LLM breaks down the repository into logical subsystems,
     each becoming a separate shard for analysis.
+
+    Uses Rust-Powered Cognitive Pipeline for system prompt assembly.
     """
     logger.info("[Graph] Architecting shards...")
 
@@ -148,6 +248,9 @@ async def node_architect(state: ResearchState) -> dict:
 
         if not file_tree:
             raise ValueError("No file tree available for planning")
+
+        # Build system prompt using Rust-Powered Cognitive Pipeline
+        system_prompt = await _build_system_prompt("researcher", state)
 
         prompt = f"""You are a Software Architect. Break down this repository for deep analysis.
 
@@ -188,7 +291,7 @@ Guidelines:
 - Order from core to peripheral"""
 
         response = await client.complete(
-            system_prompt="You are a software architect.",
+            system_prompt=system_prompt,
             user_query=prompt,
             max_tokens=4096,
         )
@@ -198,34 +301,42 @@ Guidelines:
 
         if not shards:
             # Fallback: single shard with whole src
-            shards = [{
-                "name": "Full Analysis",
-                "targets": ["src", "lib", "packages"],
-                "description": "Complete codebase analysis"
-            }]
+            shards = [
+                {
+                    "name": "Full Analysis",
+                    "targets": ["src", "lib", "packages"],
+                    "description": "Complete codebase analysis",
+                }
+            ]
 
         # Convert to ShardDef objects
         shard_defs: list[ShardDef] = []
         for s in shards:
             if isinstance(s, dict):
-                shard_defs.append({
-                    "name": s.get("name", "Unknown"),
-                    "targets": s.get("targets", ["src"]),
-                    "description": s.get("description", ""),
-                })
+                shard_defs.append(
+                    {
+                        "name": s.get("name", "Unknown"),
+                        "targets": s.get("targets", ["src"]),
+                        "description": s.get("description", ""),
+                    }
+                )
             else:
-                shard_defs.append({
-                    "name": str(s),
-                    "targets": ["src"],
-                    "description": str(s),
-                })
+                shard_defs.append(
+                    {
+                        "name": str(s),
+                        "targets": ["src"],
+                        "description": str(s),
+                    }
+                )
 
         logger.info("[Graph] Architecting complete", shard_count=len(shard_defs))
 
+        # Cache system prompt for subsequent shard processing
         return {
             "shards_queue": shard_defs,
             "shard_counter": 0,
             "shard_analyses": [],
+            "system_prompt": system_prompt,  # Cache for shard processing
             "steps": state["steps"] + 1,
         }
 
@@ -243,6 +354,8 @@ async def node_process_shard(state: ResearchState) -> dict:
     2. Analyze with LLM
     3. Save shard result
     4. Accumulate summary for final index
+
+    Uses Rust-Powered Cognitive Pipeline for system prompt assembly.
     """
     logger.info("[Graph] Processing shard...")
 
@@ -272,7 +385,10 @@ async def node_process_shard(state: ResearchState) -> dict:
         xml_content = compress_result["xml_content"]
         token_count = compress_result.get("token_count", len(xml_content) // 4)
 
-        # Step 2: Analyze with LLM
+        # Step 2: Get cached system prompt (built once in architect phase)
+        system_prompt = _get_cached_system_prompt(state)
+
+        # Step 3: Analyze with LLM
         client = InferenceClient()
 
         # Truncate to stay within limits (use first 60K chars for analysis)
@@ -311,7 +427,7 @@ Produce a detailed Markdown section covering:
 Format as a standalone Markdown section that can be combined with other shard analyses."""
 
         response = await client.complete(
-            system_prompt="You are a tech writer.",
+            system_prompt=system_prompt,
             user_query=prompt,
             max_tokens=4096,
         )
@@ -412,6 +528,9 @@ View full report at: index.md"""
             "final_report": f"Research on {repo_name} complete. {len(shard_summaries)} shards analyzed.",
             "messages": [{"role": "assistant", "content": summary_msg}],
             "steps": state["steps"] + 1,
+            # Preserve these fields for result extraction
+            "harvest_dir": harvest_dir,
+            "shard_analyses": shard_summaries,
         }
 
     except Exception as e:
@@ -492,9 +611,21 @@ def create_sharded_research_graph() -> StateGraph:
     return workflow
 
 
-# Compile with memory checkpoint
-_memory = MemorySaver()
+# Compile with Rust checkpoint for state persistence (LanceDB)
+if _CHECKPOINT_AVAILABLE and _RustCheckpointSaver:
+    try:
+        _memory = _RustCheckpointSaver()
+        logger.info(f"RustCheckpointSaver initialized: {_memory}")
+    except Exception as e:
+        logger.error(f"RustCheckpointSaver init failed: {e}")
+        _memory = None
+else:
+    _memory = None
+    logger.warning("Checkpointer not available, using None")
+
+logger.info(f"Final checkpointer: {_memory}")
 _app = create_sharded_research_graph().compile(checkpointer=_memory)
+logger.info(f"Compiled app checkpointer: {_app.checkpointer}")
 
 
 async def run_research_workflow(
@@ -520,13 +651,22 @@ async def run_research_workflow(
     """
     # Generate workflow_id if not provided
     workflow_id = thread_id or f"research-{hash(repo_url) % 10000}"
-    logger.info("Running sharded research workflow", repo_url=repo_url, request=request, workflow_id=workflow_id)
+    logger.info(
+        "Running sharded research workflow",
+        repo_url=repo_url,
+        request=request,
+        workflow_id=workflow_id,
+    )
 
     # Try to load existing state from checkpoint store
     saved_state = load_workflow_state(_WORKFLOW_TYPE, workflow_id)
 
     if saved_state:
-        logger.info("Resuming workflow from checkpoint", workflow_id=workflow_id, steps=saved_state.get("steps", 0))
+        logger.info(
+            "Resuming workflow from checkpoint",
+            workflow_id=workflow_id,
+            steps=saved_state.get("steps", 0),
+        )
         initial_state = ResearchState(
             request=saved_state.get("request", request),
             repo_url=saved_state.get("repo_url", repo_url),
@@ -562,9 +702,13 @@ async def run_research_workflow(
             error=None,
         )
 
+    logger.info(f"[Graph] Initial state prepared, steps={initial_state['steps']}")
+
     try:
         config: dict = {"configurable": {"thread_id": workflow_id}}
+        logger.info(f"[Graph] Invoking LangGraph with workflow_id={workflow_id}")
         result = await _app.ainvoke(initial_state, config=config)
+        logger.info(f"[Graph] LangGraph returned, result keys={list(result.keys())}")
 
         # Save final state to checkpoint store
         save_workflow_state(
@@ -576,7 +720,7 @@ async def run_research_workflow(
 
         return result
     except Exception as e:
-        logger.error("Workflow failed", error=str(e))
+        logger.error("Workflow failed", error=str(e), exc_info=True)
         return {"error": str(e), "steps": initial_state.get("steps", 1)}
 
 

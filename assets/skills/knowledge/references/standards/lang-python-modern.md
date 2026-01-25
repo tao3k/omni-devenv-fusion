@@ -8,6 +8,7 @@
 Do not use "magic strings" or `const` variables for discrete states or options. Use `StrEnum` (Python 3.11+).
 
 **Why?**
+
 - Provides runtime string compatibility (JSON serialization works out-of-the-box).
 - Enforces type safety in function signatures.
 - Enables IDE autocompletion.
@@ -35,15 +36,15 @@ def set_status(status: UserStatus): ...
 
 Prefer `match/case` (Python 3.10+) over chains of `if/elif/else`, especially for:
 
-* State machines
-* Parsing commands/actions
-* Destructuring data
+- State machines
+- Parsing commands/actions
+- Destructuring data
 
 **Why?**
 
-* Faster execution (jump tables optimization).
-* Cannot "fall through" accidentally.
-* Powerful destructuring capabilities.
+- Faster execution (jump tables optimization).
+- Cannot "fall through" accidentally.
+- Powerful destructuring capabilities.
 
 ```python
 # ❌ Old Pattern
@@ -71,9 +72,9 @@ Use the `@override` decorator (Python 3.12+) whenever redefining a method from a
 
 **Why?**
 
-* Prevents bugs where a parent method is renamed but the child is not.
-* Acts as documentation for intent.
-* Static type checkers (Pyright/Mypy) will flag errors immediately.
+- Prevents bugs where a parent method is renamed but the child is not.
+- Acts as documentation for intent.
+- Static type checkers (Pyright/Mypy) will flag errors immediately.
 
 ```python
 from typing import override
@@ -96,8 +97,8 @@ Use the Python 3.12+ generic syntax (`class Class[T]`) instead of `TypeVar`.
 
 **Why?**
 
-* Cleaner, more readable syntax.
-* Eliminates boilerplate `TypeVar` declarations.
+- Cleaner, more readable syntax.
+- Eliminates boilerplate `TypeVar` declarations.
 
 ```python
 # ❌ Old Pattern
@@ -119,8 +120,8 @@ Prefer `asyncio.TaskGroup` (Python 3.11+) over `asyncio.gather()`.
 
 **Why?**
 
-* Safer error handling (propagates `ExceptionGroup`).
-* Prevents "dangling tasks" (if one fails, others are cancelled automatically).
+- Safer error handling (propagates `ExceptionGroup`).
+- Prevents "dangling tasks" (if one fails, others are cancelled automatically).
 
 ```python
 # ✅ Modern Standard
@@ -155,9 +156,9 @@ Use the `type` keyword (Python 3.12) for defining type aliases.
 
 **Why?**
 
-* Explicit syntax distinguishes aliases from variables.
-* Native support for generic aliases without `TypeVar`.
-* Lazy evaluation (supports recursive types naturally).
+- Explicit syntax distinguishes aliases from variables.
+- Native support for generic aliases without `TypeVar`.
+- Lazy evaluation (supports recursive types naturally).
 
 ```python
 # ❌ Old Pattern
@@ -183,9 +184,9 @@ Use `Path.walk()` (Python 3.12) instead of `os.walk`.
 
 **Why?**
 
-* Yields `Path` objects directly (no more `os.path.join`).
-* Object-oriented API consistent with the rest of `pathlib`.
-* Often faster than manual `os.walk` + instantiation.
+- Yields `Path` objects directly (no more `os.path.join`).
+- Object-oriented API consistent with the rest of `pathlib`.
+- Often faster than manual `os.walk` + instantiation.
 
 ```python
 from pathlib import Path
@@ -208,8 +209,8 @@ Use `itertools.batched()` (Python 3.12) for chunking data.
 
 **Why?**
 
-* Zero-dependency (no need for `more_itertools` or custom helpers).
-* Optimized C implementation.
+- Zero-dependency (no need for `more_itertools` or custom helpers).
+- Optimized C implementation.
 
 ```python
 from itertools import batched
@@ -239,23 +240,22 @@ match response:
 
 When refactoring legacy code, check off these items:
 
-* [ ] **Enums**: Convert string constants to `StrEnum`.
-* [ ] **Flow**: Replace complex `if/elif` chains with `match/case`.
-* [ ] **Typing**:
-* [ ] Add `@override` to overridden methods.
-* [ ] Convert `TypeVar` to new generic syntax `class Foo[T]`.
-* [ ] Convert `TypeAlias` to `type Alias = ...`.
-* [ ] Replace `Union[A, B]` with `A | B`.
+- [ ] **Enums**: Convert string constants to `StrEnum`.
+- [ ] **Flow**: Replace complex `if/elif` chains with `match/case`.
+- [ ] **Typing**:
+- [ ] Add `@override` to overridden methods.
+- [ ] Convert `TypeVar` to new generic syntax `class Foo[T]`.
+- [ ] Convert `TypeAlias` to `type Alias = ...`.
+- [ ] Replace `Union[A, B]` with `A | B`.
 
-
-* [ ] **Files**: Replace `os.walk` with `Path.walk()`.
-* [ ] **Loops**: Replace custom chunking logic with `itertools.batched()`.
-* [ ] **Async**: Replace `asyncio.gather` with `TaskGroup` where strict error handling is needed.
+- [ ] **Files**: Replace `os.walk` with `Path.walk()`.
+- [ ] **Loops**: Replace custom chunking logic with `itertools.batched()`.
+- [ ] **Async**: Replace `asyncio.gather` with `TaskGroup` where strict error handling is needed.
 
 ## 10. Related Documentation
 
-| Document | Purpose |
-|----------|---------|
-| `assets/skills/knowledge/references/standards/lang-python.md` | Core Python Standards (Style, Docstrings) |
+| Document                                                      | Purpose                                     |
+| ------------------------------------------------------------- | ------------------------------------------- |
+| `assets/skills/knowledge/references/standards/lang-python.md` | Core Python Standards (Style, Docstrings)   |
 | `packages/python/foundation/src/omni/foundation/api/types.py` | Centralized Type Definitions (ODF Standard) |
-| `pyproject.toml` | Toolchain Configuration (Ruff, Pyright) |
+| `pyproject.toml`                                              | Toolchain Configuration (Ruff, Pyright)     |

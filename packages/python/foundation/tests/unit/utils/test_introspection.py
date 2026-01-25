@@ -6,7 +6,6 @@ using _generate_tool_schema (Pydantic V2 create_model).
 """
 
 
-
 class TestInputSchemaExtractionFramework:
     """Tests for the Pydantic V2 input schema extraction framework."""
 

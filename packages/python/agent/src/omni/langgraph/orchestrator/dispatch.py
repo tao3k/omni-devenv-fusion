@@ -76,28 +76,34 @@ async def dispatch_graph_mode(
             context=context,
         )
 
+        # GraphOutput is a TypedDict, access via dict syntax
+        result_content = result.get("content", "")
+        result_success = result.get("success", False)
+        result_confidence = result.get("confidence", 0.0)
+        result_iterations = result.get("iterations", 0)
+
         # Show result
         if hasattr(orchestrator, "ux") and orchestrator.ux:
-            orchestrator.ux.print_agent_response(result.content, "Graph Output")
+            orchestrator.ux.print_agent_response(result_content, "Graph Output")
 
         # Log to session
         if hasattr(orchestrator, "session") and orchestrator.session:
-            orchestrator.session.log("graph_action", "omni_graph", result.content)
+            orchestrator.session.log("graph_action", "omni_graph", result_content)
 
         logger.bind(
             session_id=thread_id,
-            success=result.success,
-            confidence=result.confidence,
-            iterations=result.iterations,
+            success=result_success,
+            confidence=result_confidence,
+            iterations=result_iterations,
         ).info("graph_dispatch_complete")
 
         if hasattr(orchestrator, "ux") and orchestrator.ux:
-            orchestrator.ux.end_task(success=result.success)
+            orchestrator.ux.end_task(success=result_success)
 
-        if not result.success:
-            return f"Graph execution failed: {result.content}"
+        if not result_success:
+            return f"Graph execution failed: {result_content}"
 
-        return result.content
+        return result_content
 
     except Exception as e:
         logger.bind(

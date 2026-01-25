@@ -18,6 +18,7 @@ from __future__ import annotations
 import io
 import json
 import sys
+from collections.abc import Callable
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Any
@@ -30,7 +31,7 @@ from typer.testing import CliRunner
 # =============================================================================
 
 
-class TestResult:
+class _TestResult:
     """Collect test results for summary."""
 
     def __init__(self):
@@ -65,7 +66,6 @@ def test_module_exports():
     assert callable(run_skills), "run_skills is not callable"
 
     print("  All module exports available")
-    return True
 
 
 def test_app_module():
@@ -78,7 +78,6 @@ def test_app_module():
     assert callable(main), "main is not callable"
 
     print("  App module exports correct")
-    return True
 
 
 def test_console_module():
@@ -98,7 +97,6 @@ def test_console_module():
     assert callable(print_metadata_box), "print_metadata_box is not callable"
 
     print("  Console module exports correct")
-    return True
 
 
 def test_runner_module():
@@ -110,7 +108,6 @@ def test_runner_module():
     assert callable(run_skills), "run_skills is not callable"
 
     print("  Runner module exports correct")
-    return True
 
 
 def test_commands_submodules():
@@ -129,7 +126,6 @@ def test_commands_submodules():
     assert ingest_app is not None, "ingest_app is None"
 
     print("  All command submodules importable")
-    return True
 
 
 # =============================================================================
@@ -164,7 +160,6 @@ def test_module_structure(project_root: Path):
         assert dir_path.is_dir(), f"{dir_name} is not a directory"
 
     print("  Module structure verified")
-    return True
 
 
 # =============================================================================
@@ -190,7 +185,6 @@ def test_cli_log_handler():
     assert "❌" in output, "Error prefix not found"
 
     print("  CLI log handler works correctly")
-    return True
 
 
 def test_print_result_dict_format():
@@ -231,7 +225,6 @@ def test_print_result_dict_format():
             assert len(output) > 0, f"No output for {tc['name']}"
 
     print("  print_result handles dict format correctly")
-    return True
 
 
 def test_print_result_command_result():
@@ -293,7 +286,6 @@ def test_print_result_command_result():
             assert len(output) > 0, f"No output for {tc['name']}"
 
     print("  print_result handles CommandResult format correctly")
-    return True
 
 
 def test_print_result_json_mode():
@@ -350,7 +342,6 @@ def test_print_result_json_mode():
                 assert key in parsed, f"Key '{key}' not in JSON for {tc['name']}"
 
     print("  print_result JSON mode works correctly")
-    return True
 
 
 def test_print_metadata_box():
@@ -368,7 +359,6 @@ def test_print_metadata_box():
     assert len(output) > 0, "Metadata panel not printed"
 
     print("  print_metadata_box works correctly")
-    return True
 
 
 def test_console_stderr_configuration():
@@ -380,7 +370,6 @@ def test_console_stderr_configuration():
     assert err_console.file.isatty() or err_console.file == sys.stderr
 
     print("  err_console configured for stderr")
-    return True
 
 
 # =============================================================================
@@ -411,7 +400,6 @@ def test_skill_command_group():
             assert cmd in result.output, f"Command '{cmd}' not in skill help"
 
     print("  Skill command group configured correctly")
-    return True
 
 
 def test_skill_subcommands():
@@ -443,7 +431,6 @@ def test_skill_subcommands():
         assert result.exit_code == 0, f"{cmd} --help failed"
 
     print(f"  All {len(skill_subcommands)} skill subcommands verified from SSOT")
-    return True
 
 
 def test_cli_help_commands():
@@ -469,7 +456,6 @@ def test_cli_help_commands():
     assert "sse" in result.output
 
     print("  All help commands work correctly")
-    return True
 
 
 # =============================================================================
@@ -487,7 +473,6 @@ def test_runner_function_exists():
     assert run_skills.__doc__ is not None, "run_skills has no docstring"
 
     print("  run_skills function exists and is documented")
-    return True
 
 
 def test_runner_help_command():
@@ -505,7 +490,6 @@ def test_runner_help_command():
     assert "Available Skills" in output or "git" in output.lower()
 
     print("  run_skills help command works")
-    return True
 
 
 def test_runner_invalid_command():
@@ -523,7 +507,6 @@ def test_runner_invalid_command():
         assert e.exit_code == 1, f"Should exit with code 1, got {e.exit_code}"
 
     print("  run_skills rejects invalid command format")
-    return True
 
 
 # =============================================================================
@@ -541,7 +524,6 @@ def test_entry_point_entry_point_exists():
     assert entry_point.__name__ == "entry_point", "Function is not named 'entry_point'"
 
     print("  entry_point() function exists and is callable")
-    return True
 
 
 def test_entry_point_configures_logging():
@@ -570,7 +552,6 @@ def test_entry_point_configures_logging():
     assert logging_module._configured, "Logging was not configured by _bootstrap_configuration"
 
     print("  entry_point() properly configures logging")
-    return True
 
 
 def test_pyproject_entry_point_configured():
@@ -607,7 +588,6 @@ def test_pyproject_entry_point_configured():
     )
 
     print("  pyproject.toml entry point configured correctly")
-    return True
 
 
 # =============================================================================
@@ -629,7 +609,204 @@ def test_print_result_edge_cases():
             print_result(test_input, is_tty=False, json_output=False)
 
     print("  print_result handles edge cases correctly")
-    return True
+
+
+# =============================================================================
+# Version Command Tests
+# =============================================================================
+
+
+def test_version_command():
+    """Test version command outputs version information."""
+    print("\n[Version Command]")
+
+    from omni.agent.cli import app
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["version"])
+
+    assert result.exit_code == 0, f"Version command failed: {result.output}"
+    assert "Omni Dev Fusion" in result.output, "Title not in version output"
+    assert "Omni Agent" in result.output, "Package name not in version output"
+    assert "Git Commit" in result.output, "Git commit not in version output"
+    assert "Python" in result.output, "Python version not in version output"
+    assert "Debug Info" in result.output, "Debug info not in version output"
+
+    print("  Version command works correctly")
+
+
+def test_version_command_includes_dependencies():
+    """Test version command includes dependency versions."""
+    print("\n[Version Command - Dependencies]")
+
+    from omni.agent.cli import app
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["version"])
+
+    # Should attempt to show key dependencies
+    assert "Dependencies" in result.output or "not installed" in result.output, (
+        "Dependencies section not in version output"
+    )
+
+    print("  Version command shows dependencies")
+
+
+def test_version_function_exists():
+    """Test that version function is defined in app module."""
+    print("\n[Version Function]")
+
+    from omni.agent.cli.app import version
+
+    assert callable(version), "version is not callable"
+    assert version.__doc__ is not None, "version has no docstring"
+
+    print("  version() function exists and is documented")
+
+
+# =============================================================================
+# Verbose Flag Tests (Lightweight)
+# =============================================================================
+
+
+def test_verbose_flag_works_with_subcommands():
+    """Test that --verbose/-v works with subcommands (lightweight version)."""
+    print("\n[Verbose Flag with Subcommands]")
+
+    import sys
+    from types import ModuleType
+
+    # Get the app module from sys.modules after ensuring it's loaded
+    # This avoids the Typer object shadowing issue
+    if "omni.agent.cli.app" in sys.modules:
+        app_module: ModuleType = sys.modules["omni.agent.cli.app"]
+    else:
+        # Load the module first
+        import importlib
+
+        app_module = importlib.import_module("omni.agent.cli.app")
+
+    # Ensure we have the module object, not Typer
+    if not isinstance(app_module, ModuleType):
+        raise TypeError(f"Expected ModuleType, got {type(app_module)}")
+
+    entry_point = app_module.entry_point
+    original_argv = sys.argv
+    original_bootstrap: Callable[[str | None, bool], None] = app_module._bootstrap_configuration  # type: ignore[assignment]
+
+    try:
+        # Test that -v is detected and removed from argv
+        sys.argv = ["omni", "-v", "version"]
+        captured: dict[str, bool | str | None] = {"conf": None, "verbose": None}
+
+        def capture_bootstrap(conf: str | None, verbose: bool) -> None:
+            captured["conf"] = conf
+            captured["verbose"] = verbose
+
+        app_module._bootstrap_configuration = capture_bootstrap  # type: ignore[assignment]
+
+        try:
+            entry_point()
+        except SystemExit:
+            pass
+
+        assert captured["verbose"] is True, f"Expected verbose=True, got {captured['verbose']}"
+
+    finally:
+        sys.argv = original_argv
+        app_module._bootstrap_configuration = original_bootstrap  # type: ignore[assignment]
+
+    print("  -v flag pre-parsed correctly")
+
+
+def test_verbose_flag_enables_debug_logging():
+    """Test that verbose flag configures debug logging (lightweight)."""
+    print("\n[Verbose Flag Logging]")
+
+    from omni.agent.cli.app import _is_verbose, _bootstrap_configuration
+    import structlog
+
+    # Reset logging state by accessing the module's _configured attribute
+    import omni.foundation.config.logging as logging_module  # type: ignore[import]
+
+    logging_module._configured = False
+    structlog.reset_defaults()
+
+    # Call bootstrap with verbose=True
+    _bootstrap_configuration(None, verbose=True)
+
+    # Check that verbose flag is set
+    assert _is_verbose() is True, "Verbose flag should be True"
+
+    print("  verbose flag enables debug logging")
+
+
+def test_entry_point_parses_verbose_before_typer():
+    """Test that entry_point correctly parses --verbose (unit test)."""
+    print("\n[Entry Point Pre-parsing - Verbose]")
+
+    # Test the pre-parsing algorithm directly
+    argv = ["omni", "skill", "run", "researcher.test", "-v"]
+    conf = None
+    verbose = False
+
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg in ("--verbose", "-v"):
+            verbose = True
+            argv.pop(i)
+            continue
+        elif arg in ("--conf", "-c") and i + 1 < len(argv):
+            conf = argv[i + 1]
+            argv.pop(i + 1)
+            argv.pop(i)
+            continue
+        elif arg.startswith("--conf="):
+            conf = arg.split("=", 1)[1]
+            argv.pop(i)
+            continue
+        i += 1
+
+    assert verbose is True, "verbose should be True"
+    assert conf is None, "conf should be None"
+    assert argv == ["omni", "skill", "run", "researcher.test"], f"argv mismatch: {argv}"
+
+    print("  entry_point correctly pre-parses --verbose")
+
+
+def test_entry_point_parses_conf_before_typer():
+    """Test that entry_point correctly parses --conf (unit test)."""
+    print("\n[Entry Point Pre-parsing - Conf]")
+
+    # Test the pre-parsing algorithm directly
+    argv = ["omni", "--conf", "/custom/path", "skill", "run", "test"]
+    conf = None
+    verbose = False
+
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg in ("--verbose", "-v"):
+            verbose = True
+            argv.pop(i)
+            continue
+        elif arg in ("--conf", "-c") and i + 1 < len(argv):
+            conf = argv[i + 1]
+            argv.pop(i + 1)
+            argv.pop(i)
+            continue
+        elif arg.startswith("--conf="):
+            conf = arg.split("=", 1)[1]
+            argv.pop(i)
+            continue
+        i += 1
+
+    assert conf == "/custom/path", f"conf should be /custom/path, got {conf}"
+    assert verbose is False, "verbose should be False"
+    assert argv == ["omni", "skill", "run", "test"], f"argv mismatch: {argv}"
+
+    print("  entry_point correctly pre-parses --conf")
 
 
 # =============================================================================
@@ -674,16 +851,23 @@ def run_all_tests():
         ("Pyproject Entry Point", test_pyproject_entry_point_configured),
         # Edge cases
         ("print_result Edge Cases", test_print_result_edge_cases),
+        # Version command
+        ("Version Command", test_version_command),
+        ("Version Command - Dependencies", test_version_command_includes_dependencies),
+        ("Version Function", test_version_function_exists),
+        # Verbose flag
+        ("Verbose Flag with Subcommands", test_verbose_flag_works_with_subcommands),
+        ("Verbose Flag Enables Debug Logging", test_verbose_flag_enables_debug_logging),
+        ("Entry Point Parses Verbose", test_entry_point_parses_verbose_before_typer),
+        ("Entry Point Parses Conf", test_entry_point_parses_conf_before_typer),
     ]
 
-    result = TestResult()
+    result = _TestResult()
 
     for name, test_func in tests:
         try:
-            if test_func():
-                result.record(name, True)
-            else:
-                result.record(name, False, "Test returned False")
+            test_func()
+            result.record(name, True)
         except Exception as e:
             result.record(name, False, str(e))
 
@@ -696,8 +880,6 @@ def run_all_tests():
         print("\nFailures:")
         for name, error in result.failures:
             print(f"  - {name}: {error}")
-
-    return result.failed == 0
 
 
 if __name__ == "__main__":

@@ -60,21 +60,23 @@ Rust Implementation → Add Rust Test → cargo test PASSED
                  ↓
 Python Integration → Add Python Test → pytest PASSED
                  ↓
-Build & Verify → uv sync --reinstall-package omni-core-rs → Full integration test
+Build & Verify → Full integration test
 ```
 
 **Key points**:
 
 - Rust tests are ~0.3s, Python `uv run omni ...` is ~30s
 - Always add Rust tests before modifying Rust code
-- Use `uv sync --reinstall-package omni-core-rs` for fast iteration
+- **For pure Rust packages**: `cargo build` in the crate directory is sufficient
+- **For Rust + Python bindings**: Use `uv sync --reinstall-package omni-core-rs`
+- Pure Python changes: No rebuild needed, just run pytest
 
 ---
 
 ## Essential Commands
 
 - `just validate` - fmt, lint, test
-- `uv sync --reinstall-package omni-core-rs` - Build Rust debug bindings (fast iteration)
+- `uv run pytest` - Run Python tests
 - `/mcp enable orchestrator` - Reconnect omni mcp
 
 ---

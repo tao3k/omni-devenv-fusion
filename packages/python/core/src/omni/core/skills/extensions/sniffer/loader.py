@@ -13,6 +13,7 @@ Supports multi-file structure:
 
 Python 3.12+ Features:
 - pathlib.Path.walk() for recursive directory traversal (Section 7.1)
+- Context manager for safe sys.path manipulation (Section 7.4)
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from __future__ import annotations
 import importlib.util
 import inspect
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
@@ -28,6 +30,25 @@ from omni.foundation.config.logging import get_logger
 from .decorators import SnifferFunc
 
 logger = get_logger("omni.core.ext.sniffer")
+
+
+@contextmanager
+def temporary_sys_path(path: str):
+    """Safely append path to sys.path and restore it afterwards.
+
+    Usage:
+        >>> with temporary_sys_path("/some/path"):
+        ...     import mymodule
+    """
+    added = False
+    if path not in sys.path:
+        sys.path.insert(0, path)
+        added = True
+    try:
+        yield
+    finally:
+        if added and path in sys.path:
+            sys.path.remove(path)
 
 
 class SnifferLoader:
@@ -76,27 +97,18 @@ class SnifferLoader:
             logger.warning(f"Sniffer path is not a directory: {self.path}")
             return self._sniffers
 
-        # Add path to sys.path for imports (temporarily)
-        path_str = str(self.path)
-        if path_str not in sys.path:
-            sys.path.insert(0, path_str)
-
-        try:
+        # ✅ Use context manager for safe sys.path manipulation
+        with temporary_sys_path(str(self.path)):
             # Method 1: Use Path.walk() (Python 3.12+)
             py_files = list(self.find_py_files(self.path))
             for py_file in sorted(py_files):
                 self._load_module(py_file)
 
-            # Sort by priority (highest first)
-            self._sniffers.sort(key=lambda f: getattr(f, "_sniffer_priority", 100), reverse=True)
+        # Sort by priority (highest first)
+        self._sniffers.sort(key=lambda f: getattr(f, "_sniffer_priority", 100), reverse=True)
 
-            if self._sniffers:
-                logger.debug(f"Loaded {len(self._sniffers)} sniffers from {self.path}")
-
-        finally:
-            # Clean up sys.path
-            if path_str in sys.path:
-                sys.path.remove(path_str)
+        if self._sniffers:
+            logger.debug(f"Loaded {len(self._sniffers)} sniffers from {self.path}")
 
         return self._sniffers
 
@@ -112,7 +124,9 @@ class SnifferLoader:
         """
         for root, dirs, files in root_path.walk():
             # Prune unwanted directories in-place
-            dirs[:] = [d for d in dirs if d not in ("__pycache__", ".git", "node_modules", ".venv", "venv")]
+            dirs[:] = [
+                d for d in dirs if d not in ("__pycache__", ".git", "node_modules", ".venv", "venv")
+            ]
             for file in files:
                 if file.endswith(".py") and not file.startswith("_"):
                     yield root / file
@@ -192,4 +206,4 @@ def load_sniffers_from_path(sniffer_path: str | Path) -> list[SnifferFunc]:
     return loader.load_all()
 
 
-__all__ = ["SnifferLoader", "load_sniffers_from_path"]
+__all__ = ["SnifferLoader", "load_sniffers_from_path", "temporary_sys_path"]

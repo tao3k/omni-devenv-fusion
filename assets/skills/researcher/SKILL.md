@@ -47,6 +47,7 @@ Sharded Deep Research for analyzing large codebases. Uses LangGraph with Map-Pla
 **[CORE]** Execute the Sharded Deep Research Workflow.
 
 This autonomously:
+
 1. **Clones** the repository to a temporary workspace
 2. **Maps** the file structure (god view)
 3. **Plans** 3-5 logical analysis shards (subsystems) via LLM

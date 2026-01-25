@@ -84,16 +84,18 @@ def run_skill_command(
             "error": f"Script not found: {script_path}",
         }
 
-    # Build command: uv run --project <skill_dir>/pyproject.toml python <script> --arg val
-    # We use --project instead of --directory to avoid path resolution issues
+    # Build command: uv run --directory <skill_dir> --project <skill_dir>/pyproject.toml python scripts/<script> --arg val
+    # Using --directory ensures Python runs in skill dir, avoiding local package shadowing
     cmd = [
         "uv",
         "run",
-        "--quiet",  # Reduce noise in output
+        "--quiet",
+        "--directory",
+        str(skill_dir.resolve()),
         "--project",
         str((skill_dir / "pyproject.toml").resolve()),
         "python",
-        str(script_path.resolve()),
+        f"scripts/{script_name}",  # Relative path from skill_dir
     ]
 
     # Convert args to CLI flags (e.g., {"url": "..."} -> "--url", "...")

@@ -78,7 +78,6 @@ def _print_session_report(task: str, result: dict, step_count: int, tool_counts:
     # Render output as markdown panel note
     if output:
         from rich.markdown import Markdown
-        from rich.panel import Panel
 
         # Wrap output in a Panel for note-like appearance
         output_str = str(output) if not isinstance(output, str) else output
@@ -86,6 +85,15 @@ def _print_session_report(task: str, result: dict, step_count: int, tool_counts:
             import json
 
             output_str = f"```json\n{json.dumps(output, indent=2)}\n```"
+
+        # Remove tool call artifacts that break markdown rendering
+        import re
+
+        output_str = re.sub(r"\[TOOL_CALL:[^\]]*\]", "", output_str)
+        output_str = re.sub(r"\[/TOOL_CALL\]", "", output_str)
+        # Clean up orphaned brackets and angle brackets
+        output_str = re.sub(r">\s*<TOOL_CALL", " <TOOL_CALL", output_str)
+        output_str = re.sub(r"\]<TOOL_CALL:", "][TOOL_CALL:", output_str)
 
         note_panel = Panel(
             Markdown(output_str),
@@ -99,9 +107,7 @@ def _print_session_report(task: str, result: dict, step_count: int, tool_counts:
     console.print(Panel(grid, title="✨ CCA Session Report ✨", border_style="green", expand=False))
 
 
-async def _execute_task_via_kernel(
-    task: str, max_steps: int | None, verbose: bool = False
-) -> dict:
+async def _execute_task_via_kernel(task: str, max_steps: int | None, verbose: bool = False) -> dict:
     """Execute task using the Omni Loop with Kernel context."""
     from omni.agent.core.omni import OmniLoop, OmniLoopConfig
     from omni.core.kernel.engine import get_kernel
@@ -147,13 +153,41 @@ async def _execute_task_via_kernel(
             else:
                 full_command = f"{skill_name}.{command_name}"
 
-                # Execute the command
+                # Execute the command via Kernel (which properly loads skills)
                 try:
-                    cmd_result = await run_command(full_command)
-                    output = cmd_result if cmd_result else f"Command {full_command} executed"
-                    commands_executed = 1
-                    step_count = 1
-                    tool_calls_count = 1
+                    from omni.core.kernel.engine import get_kernel
+
+                    kernel = get_kernel()
+                    await kernel.initialize()
+
+                    # Split command: "terminal.run_command" -> skill="terminal", cmd="run_command"
+                    skill_name, command_name = command_name, None
+                    if "." in full_command:
+                        parts = full_command.split(".", 1)
+                        skill_name = parts[0]
+                        command_name = parts[1]
+
+                    # Execute via kernel's skill context
+                    skill = kernel.skill_context.get_skill(skill_name)
+                    if skill and hasattr(skill, "_script_loader"):
+                        loader = skill._script_loader
+                        # Use full_command (e.g., "terminal.run_command") - commands are stored with qualified names
+                        cmd_handler = loader.commands.get(full_command)
+                        if cmd_handler:
+                            cmd_result = await cmd_handler()
+                            output = (
+                                cmd_result if cmd_result else f"Command {full_command} executed"
+                            )
+                            commands_executed = 1
+                            step_count = 1
+                            tool_calls_count = 1
+                        else:
+                            available = list(loader.commands.keys())
+                            output = f"Command '{full_command}' not found. Available: {available}"
+                            commands_executed = 0
+                    else:
+                        output = f"Skill '{skill_name}' not found or has no commands"
+                        commands_executed = 0
                 except Exception as e:
                     output = f"Command failed: {e}"
         else:

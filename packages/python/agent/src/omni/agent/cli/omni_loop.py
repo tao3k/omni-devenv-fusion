@@ -38,6 +38,7 @@ def _format_result_for_display(result: str) -> str:
 
     # Try to parse as JSON (common for tool outputs)
     import json
+
     try:
         if result.strip().startswith("{") and result.strip().endswith("}"):
             # First try standard JSON (double quotes)
@@ -49,7 +50,9 @@ def _format_result_for_display(result: str) -> str:
                 # Handle single-quoted keys and values
                 fixed = result.replace("'", '"')
                 # Handle Python None, True, False
-                fixed = fixed.replace("True", "true").replace("False", "false").replace("None", "null")
+                fixed = (
+                    fixed.replace("True", "true").replace("False", "false").replace("None", "null")
+                )
                 data = json.loads(fixed)
                 return _format_json_result(data)
     except (json.JSONDecodeError, AttributeError, SyntaxError):
@@ -90,27 +93,26 @@ def _format_json_result(data: dict) -> str:
 
 
 def _format_research_result(data: dict) -> str:
-    """Format researcher tool result for display."""
+    """Format researcher tool result for display - directly output index.md content."""
+    from pathlib import Path
+
     if not data.get("success"):
         return f"[✗] Research failed: {data.get('error', 'unknown error')}"
 
-    lines = ["[✓] Research completed"]
+    harvest_dir = data.get("harvest_dir", "")
+    if not harvest_dir:
+        return "[✗] No harvest directory found"
 
-    if "harvest_dir" in data:
-        lines.append(f"📁 Results: {data['harvest_dir']}")
+    # Read and return index.md content directly
+    index_path = Path(harvest_dir) / "index.md"
+    if index_path.exists():
+        return index_path.read_text()
+
+    # Fallback to structured output if index.md not found
+    lines = ["[✓] Research completed", f"📁 Results: {harvest_dir}"]
 
     if "shards_analyzed" in data:
         lines.append(f"📊 Shards analyzed: {data['shards_analyzed']}")
-
-    if "shard_summaries" in data:
-        lines.append("\nModules analyzed:")
-        for summary in data["shard_summaries"]:
-            # Clean up markdown link format
-            clean = summary.strip().lstrip("- ").replace("[", "").replace("](", " - ").rstrip(")")
-            lines.append(f"  • {clean}")
-
-    if "summary" in data:
-        lines.append(f"\n📝 Summary: {data['summary'][:200]}...")
 
     return "\n".join(lines)
 

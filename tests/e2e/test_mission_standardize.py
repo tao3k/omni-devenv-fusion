@@ -77,7 +77,6 @@ class TestMissionLogStandardization:
         # Import the skills directly for testing
         from assets.skills.advanced_tools.scripts.mutation import batch_replace
 
-
         # Create a proper mock paths object
         class MockPaths:
             project_root = tmp_path
@@ -232,7 +231,6 @@ class TestBatchReplaceIntegration:
     def test_batch_replace_dry_run_no_modification(self, tmp_path):
         """Verify dry_run does not modify files."""
         from assets.skills.advanced_tools.scripts.mutation import batch_replace
-
 
         # Setup
         test_file = tmp_path / "test.txt"

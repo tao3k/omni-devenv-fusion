@@ -14,11 +14,19 @@ Architecture:
 
 from typing import Any
 
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from rendering import render_error, render_workflow_result
 from state import GitWorkflowState, WorkflowStep
 from status import status as git_status
+
+# Import Rust checkpoint saver
+try:
+    from omni.langgraph.checkpoint.saver import RustCheckpointSaver
+
+    _CHECKPOINT_AVAILABLE = True
+except ImportError:
+    _CHECKPOINT_AVAILABLE = False
+    RustCheckpointSaver = None  # type: ignore
 
 # ==============================================================================
 # Node Functions (Pure Functions)
@@ -374,8 +382,11 @@ def create_workflow() -> StateGraph:
     return workflow
 
 
-# Compile with memory checkpoint for state persistence
-_memory = MemorySaver()
+# Compile with Rust checkpoint for state persistence (LanceDB)
+if _CHECKPOINT_AVAILABLE and RustCheckpointSaver:
+    _memory = RustCheckpointSaver()
+else:
+    _memory = None
 app = create_workflow().compile(checkpointer=_memory)
 
 

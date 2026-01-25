@@ -55,7 +55,7 @@ class Kernel:
         await kernel.initialize()
         await kernel.start()
         # Secure execution:
-        await kernel.execute_tool("filesystem.read_file", {"path": "..."}, caller="calculator")
+        await kernel.execute_tool("filesystem.read_files", {"path": "..."}, caller="calculator")
         await kernel.shutdown()
     """
 
@@ -202,7 +202,7 @@ class Kernel:
         All tool invocations must pass through this method for proper permission enforcement.
 
         Args:
-            tool_name: Full tool name in format "skill.command" (e.g., "filesystem.read_file")
+            tool_name: Full tool name in format "skill.command" (e.g., "filesystem.read_files")
             args: Tool arguments as a dictionary
             caller: Name of the calling skill (e.g., "calculator"). None = Root/User (full access)
 
@@ -361,10 +361,12 @@ class Kernel:
 
                 def load_skills_sync():
                     """Load all skills synchronously in a thread."""
+
                     async def load_all_skills_async():
                         for ds in discovered_skills:
                             try:
                                 from omni.core.skills.universal import UniversalSkillFactory
+
                                 factory = UniversalSkillFactory(self._project_root)
                                 skill = factory.create_from_discovered(ds)
                                 await skill.load()

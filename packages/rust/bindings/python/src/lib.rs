@@ -9,6 +9,7 @@
 //! - Structural refactoring (structural_replace, structural_preview)
 //! - Vector Store (PyVectorStore for LanceDB)
 //! - Skill Tool Scanner (scan_skill_tools)
+//! - Context Assembly (ContextAssembler)
 
 use pyo3::prelude::*;
 
@@ -16,7 +17,16 @@ use pyo3::prelude::*;
 // Module Declarations
 // ============================================================================
 
+#[cfg(feature = "assembler")]
 pub mod checkpoint;
+#[cfg(not(feature = "assembler"))]
+pub mod checkpoint;
+
+#[cfg(feature = "assembler")]
+mod context;
+#[cfg(not(feature = "assembler"))]
+mod context;
+
 mod editor;
 mod io;
 mod navigation;
@@ -31,6 +41,7 @@ mod vector;
 // ============================================================================
 
 pub use checkpoint::PyCheckpointStore;
+pub use context::{PyAssemblyResult, PyContextAssembler};
 pub use editor::{
     PyBatchRefactorStats, batch_structural_replace, structural_apply, structural_preview,
     structural_replace,
@@ -96,6 +107,10 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m
     )?)?;
     m.add_class::<PyCheckpointStore>()?;
+
+    // Context Assembler (Parallel I/O + Templating + Token Counting)
+    m.add_class::<PyContextAssembler>()?;
+    m.add_class::<PyAssemblyResult>()?;
 
     // Script Scanner
     m.add_function(pyo3::wrap_pyfunction!(scan_skill_tools, m)?)?;

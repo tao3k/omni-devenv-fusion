@@ -90,60 +90,85 @@ def _create_backup(filepath: Path) -> bool:
 
 
 @skill_command(
-    name="read_file",
+    name="read_files",
     category="read",
     description="""
-    Read a single file with line numbers.
+    Read file(s) with line numbers.
 
     Args:
-        - file_path: str - Path to the file to read. Supports project-relative paths (e.g., src/main.py) or trusted absolute paths (e.g., /nix/store/*) (required)
-        - encoding: str = utf-8 - File encoding
+        - paths: list[str] - List of file paths to read. Supports project-relative paths (e.g., src/main.py) or trusted absolute paths (required)
+        - encoding: str = utf-8 - File encoding for all files
 
     Returns:
-        File content with line numbers, or error if not found/not a file/exceeds 100KB.
+        Combined content from all files with file headers and line numbers.
+        Errors are reported inline for each file.
     """,
     autowire=True,
 )
-def read_file(
-    path: str,
+def read_files(
+    paths: list[str],
     encoding: str = "utf-8",
-    paths: ConfigPaths | None = None,
+    config_paths: ConfigPaths | None = None,
 ) -> str:
-    """Read content from a file within the project."""
-    if paths is None:
-        paths = ConfigPaths()
-    project_root: Path = paths.project_root  # type: ignore[assignment]
+    """Read multiple files and combine results."""
+    if config_paths is None:
+        config_paths = ConfigPaths()
+    project_root: Path = config_paths.project_root  # type: ignore[assignment]
 
-    if path.startswith("/"):
-        is_safe, error_msg = is_safe_path(path, allow_absolute=True)
-    else:
-        is_safe, error_msg = is_safe_path(path, project_root=project_root)
+    if not paths:
+        return "No files specified."
 
-    if not is_safe:
-        return f"Error: {error_msg}"
+    results = []
+    success_count = 0
+    error_count = 0
 
-    if path.startswith("/"):
-        full_path = Path(path)
-    else:
-        full_path = project_root / path
+    for path in paths:
+        # Validate path
+        if path.startswith("/"):
+            is_safe, error_msg = is_safe_path(path, allow_absolute=True)
+        else:
+            is_safe, error_msg = is_safe_path(path, project_root=project_root)
 
-    if not full_path.exists():
-        return f"Error: File '{path}' does not exist."
-    if not full_path.is_file():
-        return f"Error: '{path}' is not a file."
-    if full_path.stat().st_size > 100 * 1024:
-        return f"Error: File '{path}' is too large (> 100KB)."
+        if not is_safe:
+            results.append(f"--- File: {path} ---\nError: {error_msg}")
+            error_count += 1
+            continue
 
-    try:
-        with open(full_path, encoding=encoding) as f:
-            lines = f.readlines()
-        numbered_lines = [f"{i + 1:4d} | {line}" for i, line in enumerate(lines)]
-        content = "".join(numbered_lines)
-        return f"--- File: {path} ({len(lines)} lines) ---\n{content}"
-    except UnicodeDecodeError:
-        return f"Error: Cannot read '{path}' - not a text file."
-    except Exception as e:
-        return f"Error reading file: {e}"
+        if path.startswith("/"):
+            full_path = Path(path)
+        else:
+            full_path = project_root / path
+
+        if not full_path.exists():
+            results.append(f"--- File: {path} ---\nError: File does not exist.")
+            error_count += 1
+            continue
+        if not full_path.is_file():
+            results.append(f"--- File: {path} ---\nError: Not a file.")
+            error_count += 1
+            continue
+        if full_path.stat().st_size > 100 * 1024:
+            results.append(f"--- File: {path} ---\nError: File is too large (> 100KB).")
+            error_count += 1
+            continue
+
+        try:
+            with open(full_path, encoding=encoding) as f:
+                lines = f.readlines()
+            numbered_lines = [f"{i + 1:4d} | {line}" for i, line in enumerate(lines)]
+            content = "".join(numbered_lines)
+            results.append(f"--- File: {path} ({len(lines)} lines) ---\n{content}")
+            success_count += 1
+        except UnicodeDecodeError:
+            results.append(f"--- File: {path} ---\nError: Cannot read - not a text file.")
+            error_count += 1
+        except Exception as e:
+            results.append(f"--- File: {path} ---\nError: {e}")
+            error_count += 1
+
+    # Add summary
+    summary = f"\n--- Summary: {success_count} files read, {error_count} errors ---\n"
+    return "\n".join(results) + summary
 
 
 @skill_command(
@@ -455,7 +480,7 @@ __all__ = [
     "apply_file_changes",
     "get_file_info",
     "list_directory",
-    "read_file",
+    "read_files",
     "save_file",
     "write_file",
 ]

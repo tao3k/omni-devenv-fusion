@@ -2,7 +2,7 @@
 skill/scripts/ - Skill Management Scripts
 
 Contains atomic implementations for skill-related commands:
-- discovery.py: Skill discovery and suggestion
+- discovery.py: Tool discovery (unified discover tool)
 - templates.py: Cascading template management
 - list_tools.py: List registered MCP tools
 - search_tools.py: Intent-driven tool search
@@ -17,7 +17,6 @@ from skill.scripts.discovery import (
     discover,
     jit_install,
     list_index,
-    suggest,
 )
 from skill.scripts.list_tools import format_tools_list, list_tools
 from skill.scripts.reload import reload_skill
@@ -36,7 +35,6 @@ from skill.scripts.unload import unload_skill
 __all__ = [
     # Discovery commands
     "discover",
-    "suggest",
     "jit_install",
     "list_index",
     # Template commands

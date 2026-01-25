@@ -361,9 +361,9 @@ lint:
 
 [group('validate')]
 test:
-    @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    @echo "                              TEST PIPELINE"
-    @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    @echo "TEST PIPELINE"
+    @echo "========================================"
+    @python scripts/generate_skill_index.py
     @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ \
         -v --tb=short
     @echo ""
@@ -379,9 +379,9 @@ test:
 
 [group('validate')]
 test-quick:
-    @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    @echo "                              TEST PIPELINE (QUICK)"
-    @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    @echo "TEST PIPELINE (QUICK)"
+    @echo "========================================"
+    @python scripts/generate_skill_index.py
     @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ -q --tb=short
     @cd packages/python/mcp-server && uv run pytest tests/ -q --tb=short --ignore=tests/integration/test_sse.py \
         --ignore=tests/unit/test_interfaces.py \

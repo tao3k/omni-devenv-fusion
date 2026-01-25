@@ -97,9 +97,19 @@ class ScriptLoader:
         full_module_name = f"{scripts_pkg}.{module_name}"  # e.g., "git.scripts.commit_state"
 
         try:
-            # Use importlib.import_module for proper namespace package support
-            # This handles PEP 420 implicit namespace packages correctly
-            module = importlib.import_module(full_module_name)
+            # Try import_module first for PEP 420 namespace packages
+            try:
+                module = importlib.import_module(full_module_name)
+            except ModuleNotFoundError:
+                # Fall back to direct file import when skill name conflicts with pip package
+                # (e.g., crawl4ai skill vs crawl4ai pip package)
+                spec = importlib.util.spec_from_file_location(full_module_name, path)
+                if spec is None or spec.loader is None:
+                    logger.debug(f"[{self.skill_name}] Cannot load spec for {path}")
+                    return
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[full_module_name] = module
+                spec.loader.exec_module(module)
 
             # Inject context into module globals
             # Scripts can use 'rust' directly without importing

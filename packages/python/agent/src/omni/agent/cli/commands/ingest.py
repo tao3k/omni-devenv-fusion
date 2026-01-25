@@ -135,7 +135,7 @@ def ingest_skills(
         omni ingest skills --clear        # Full rebuild
         omni ingest skills --json         # JSON output
     """
-    from omni.core.skills.discovery import SkillDiscovery
+    from omni.core.skills.discovery import SkillDiscoveryService
     from omni.foundation.config.skills import SKILLS_DIR
 
     try:
@@ -145,12 +145,10 @@ def ingest_skills(
             console.print(f"[yellow]Skills directory not found: {skills_path}[/yellow]")
             return
 
-        discovery = SkillDiscovery()
+        discovery = SkillDiscoveryService()
 
-        if clear:
-            discovery.clear_skill_cache()
-
-        skills = discovery.discover_skills(skills_path)
+        # discover_all uses the Rust-First Indexing from the scanner
+        skills = discovery.discover_all()
 
         stats = {"skills_found": len(skills)}
         _print_ingest_result("skills", stats, json_output)

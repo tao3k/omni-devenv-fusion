@@ -89,7 +89,9 @@ def _generate_tool_schema(func: Callable, exclude_params: set[str] | None = None
                 literal_args = annotation.__args__
                 if all(isinstance(a, (str, int, float)) for a in literal_args):
                     # Create a dynamic enum-like annotation
-                    annotation = type(f"Literal_{param_name}", (), {"__args__": literal_args, "_name": "Literal"})
+                    annotation = type(
+                        f"Literal_{param_name}", (), {"__args__": literal_args, "_name": "Literal"}
+                    )
 
         # 4. Handle list[...] and dict[...] generics
         if origin is not None:
@@ -163,8 +165,9 @@ def _generate_tool_schema(func: Callable, exclude_params: set[str] | None = None
         if param.default is inspect.Parameter.empty:
             required.append(param_name)
 
-    if required:
-        schema["required"] = required
+    # Always include required field to explicitly declare which params are needed
+    # This helps LLM understand the function signature correctly
+    schema["required"] = required
 
     return schema
 

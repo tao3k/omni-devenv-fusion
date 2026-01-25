@@ -91,6 +91,43 @@ Improvements that make development easier but aren't blocking core functionality
 
 ---
 
+### Agent TUI / Visual Thinking Pipeline
+
+Interactive TUI to visualize the Trinity Architecture thinking process (Sniffing → Recall → Plan → Act).
+
+| Task                      | Status | Description                                                  |
+| ------------------------- | ------ | ------------------------------------------------------------ |
+| **Event Bus System**      | `Todo` | Create EventBus for publishing Trinity phase events          |
+| **Textual TUI App**       | `Todo` | Build Textual-based TUI with thinking pipeline visualization |
+| **LangGraph Integration** | `Todo` | Connect LangGraph node transitions to event stream           |
+| **CLI Integration**       | `Todo` | Add `--tui` mode to `omni run` command                       |
+| **Interactive Features**  | `Todo` | F1 Help, F2 History, F3 Stats, pause/resume, Ctrl+C to abort |
+
+**Architecture:**
+
+- **Event System**: Lightweight pub/sub for SNIFFING → RECALL → PLAN → ACT → REFLECT events
+- **UI Framework**: Textual (interactive TUI companion to Rich)
+- **Layout**: Left stats panel + Right thinking pipeline + Bottom command input
+
+**Related Files (to be created):**
+
+- `packages/python/agent/src/omni/agent/events.py`
+- `packages/python/agent/src/omni/agent/core/events.py`
+- `packages/python/agent/src/omni/agent/tui/`
+- `packages/python/agent/src/omni/langgraph/tui_integration.py`
+
+**Usage:**
+
+```bash
+uv run omni run "git commit" --tui    # Start TUI mode
+```
+
+**Plan File:**
+
+- `.claude/plans/partitioned-cooking-leaf.md`
+
+---
+
 ## Completed
 
 | Feature                             | Date       | Notes                                                    |

@@ -244,6 +244,7 @@ skills:
     - "terminal.run_command" # Use Claude's native bash runner
     - "terminal.run_task" # Value not proven, use direct commands
     - "terminal.inspect_environment" # Use pwd/uname directly
+    - "filesystem.read_files"
 
   # =============================================================================
   # Dynamic Tool Loading Limits
@@ -408,7 +409,7 @@ skills:
         - **OUTPUT**: Returns structured Markdown, optimized for reading.
 
     # File Operations - Consolidated from file_ops
-    filesystem.read_file:
+    filesystem.read_files:
       alias: "read_file"
       append_doc: "\n\nUse this instead of `cat` for safe file reading with line numbering."
     filesystem.write_file:

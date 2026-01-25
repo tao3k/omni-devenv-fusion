@@ -260,13 +260,13 @@ def _read_file_content(path: str) -> str:
     description="""
     [Cognition] Loads the Rules of Engagement for this project.
 
+    This function takes NO PARAMETERS. Do NOT pass any arguments to this tool.
+    The project context is automatically determined from the current working directory.
+
     Call this BEFORE:
     - Writing code
     - Making commits
     - Creating documentation
-
-    Args:
-        - None
 
     Returns:
         JSON with valid Git Scopes, Project Standards, Active Guardrails, Writing Style Rules, and Architecture Summary.

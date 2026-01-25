@@ -65,7 +65,7 @@ await terminal_run()
 ```python
 # Single entry point with skill.command convention
 @omni("git.status")
-@omni("filesystem.read_file", {"path": "README.md"})
+@omni("filesystem.read_files", {"path": "README.md"})
 @omni("terminal.run", {"command": "ls"})
 ```
 

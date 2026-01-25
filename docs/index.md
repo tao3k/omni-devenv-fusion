@@ -81,6 +81,7 @@ Skills, Knowledge, and Memory integration:
 | **Memory**    | Episodic Memory                | [Memory Mesh](./human/architecture/memory-mesh.md)                     | Active |
 | **Cognition** | CCA Runtime                    | [Cognitive Scaffolding](./human/architecture/cognitive-scaffolding.md) | Active |
 | **Omni Loop** | CCA Runtime                    | [Omni Loop](./human/architecture/omni-loop.md)                         | ACTIVE |
+| **Pipeline**  | System Prompt Assembly         | [Cognitive Pipeline](./explanation/cognitive-pipeline.md)              | NEW    |
 
 ---
 

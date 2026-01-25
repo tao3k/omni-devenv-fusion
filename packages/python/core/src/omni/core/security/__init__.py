@@ -55,11 +55,11 @@ class SecurityValidator:
         validator = SecurityValidator()
 
         # Check before executing a tool
-        if not validator.validate("my_skill", "filesystem.read_file", ["filesystem:read"]):
+        if not validator.validate("my_skill", "filesystem.read_files", ["filesystem:read"]):
             raise SecurityError(...)
 
         # Or raise directly
-        validator.validate_or_raise("my_skill", "filesystem.read_file", ["filesystem:read"])
+        validator.validate_or_raise("my_skill", "filesystem.read_files", ["filesystem:read"])
     """
 
     def __init__(self):

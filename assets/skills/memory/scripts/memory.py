@@ -36,7 +36,7 @@ def _get_memory_path() -> Path:
 
 
 MEMORY_ROOT = _get_memory_path()
-DEFAULT_TABLE = "knowledge_base"
+DEFAULT_TABLE = "knowledge"
 
 
 def _get_embedding(text: str) -> list[float]:
@@ -126,7 +126,7 @@ def _load_skill_manifest(skill_name: str) -> tuple[dict[str, Any] | None, str | 
 )
 async def save_memory(
     content: str,
-    metadata: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | str | None = None,
     paths: ConfigPaths | None = None,
 ) -> str:
     """
@@ -164,6 +164,9 @@ async def save_memory(
         elif not isinstance(metadata, dict):
             # Handle other unexpected types
             metadata = {"raw_metadata": str(metadata)}
+
+        # Type narrowing: ensure metadata is dict before modification
+        assert isinstance(metadata, dict), "metadata should be dict after handling"
 
         # Add timestamp to metadata (after ensuring it's a dict)
         metadata["timestamp"] = time.time()
@@ -232,6 +235,9 @@ async def search_memory(
 
         return "\n".join(output)
     except Exception as e:
+        error_msg = str(e).lower()
+        if "table" in error_msg and "not found" in error_msg:
+            return "No memories stored yet. Use save_memory() to store insights first."
         logger.error("search_memory failed", error=str(e))
         return f"Error searching memory: {e!s}"
 

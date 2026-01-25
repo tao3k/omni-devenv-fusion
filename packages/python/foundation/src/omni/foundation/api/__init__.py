@@ -22,6 +22,7 @@ def __getattr__(name: str):
 
     if _lazy_exports is None:
         from . import decorators
+
         _lazy_exports = decorators
 
     return getattr(_lazy_exports, name)

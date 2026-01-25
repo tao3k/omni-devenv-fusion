@@ -5,6 +5,7 @@ Provides clean, human-readable logging for tool execution:
 - Step indicators: [1/10] 🔧 tool_name(args)
 - Result previews: → Result preview...
 - Completion summaries: ✅ Completed in N steps, M tool calls
+- LLM responses: 💭 Thinking process from LLM
 """
 
 from typing import Any
@@ -21,11 +22,48 @@ def _truncate(text: Any, max_len: int = 50) -> str:
     return s[:max_len] + "..." if len(s) > max_len else s
 
 
+def log_llm_response(response: str) -> None:
+    """Log LLM response (thinking process).
+
+    Extracts and displays the <thinking> block if present.
+    Example output:
+        💭 <thinking>
+           Current Goal: ...
+           Intent: ...
+           Tool: ...
+           </thinking>
+    """
+    if not response:
+        return
+
+    # Check for thinking block
+    if "<thinking>" in response:
+        # Extract thinking block
+        start = response.find("<thinking>")
+        end = response.find("</thinking>")
+        if end > start:
+            thinking = response[start + len("<thinking>") : end].strip()
+            _console.print()
+            _console.print(Text("💭 ", style="bold magenta") + Text("<thinking>", style="dim"))
+            # Print each line with indentation
+            for line in thinking.split("\n"):
+                _console.print(f"   {line}")
+            _console.print(Text("   </thinking>", style="dim"))
+            _console.print()
+            return
+
+    # No thinking block, just show first line of response
+    first_line = response.strip().split("\n")[0]
+    if len(first_line) > 100:
+        first_line = first_line[:100] + "..."
+    _console.print(f"   💭 {first_line}")
+
+
 def log_step(step: int, total: int, tool_name: str, args: dict[str, Any]) -> None:
     """Log a tool call step with clean format.
 
     Example output:
-        [1/10] 🔧 filesystem.read_file(path=test.txt)
+        [1/10] 🔧 filesystem.read_files(path=test.txt)
     """
     # Format args for display (show first 3 args)
     if args:

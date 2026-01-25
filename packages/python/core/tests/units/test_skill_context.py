@@ -51,12 +51,7 @@ __all__ = ["test_cmd"]
             {
                 "name": "test_skill",
                 "path": str(test_skill),
-                "tools": [
-                    {
-                        "name": "test_skill.test_cmd",
-                        "description": "A test command"
-                    }
-                ]
+                "tools": [{"name": "test_skill.test_cmd", "description": "A test command"}],
             }
         ]
         cache_dir = tmp_path / ".cache"
@@ -99,7 +94,7 @@ __all__ = ["my_command"]
         skill = UniversalScriptSkill(skill_name="my_skill", skill_path=test_skill)
 
         # Load the skill (required to initialize _script_loader)
-        asyncio.get_event_loop().run_until_complete(skill.load())
+        asyncio.run(skill.load())
 
         # Create context and register skill
         ctx = SkillContext(skills_dir)
@@ -134,7 +129,7 @@ __all__ = ["echo"]
 """)
 
         skill = UniversalScriptSkill(skill_name="cmd_skill", skill_path=test_skill)
-        asyncio.get_event_loop().run_until_complete(skill.load())
+        asyncio.run(skill.load())
 
         ctx = SkillContext(skills_dir)
         ctx.register_skill(skill)
@@ -201,158 +196,12 @@ class TestKernelSkillContext:
             return ctx
 
         # This should NOT raise "asyncio.run() cannot be called from a running event loop"
-        # The key fix is using asyncio.new_event_loop() in a thread
-        ctx = asyncio.get_event_loop().run_until_complete(access_skill_context())
+        # The key fix is using asyncio.run() which creates its own event loop
+        ctx = asyncio.run(access_skill_context())
 
         # Verify context was created successfully
         assert ctx is not None
         assert len(ctx.list_skills()) > 0
-
-
-class TestGetToolSchema:
-    """Tests for get_tool_schema from skill_index.json."""
-
-    def _write_skill_index(self, cache_dir: Path, skill_index: list):
-        """Helper to write skill_index.json."""
-        (cache_dir / "skill_index.json").write_text(json.dumps(skill_index))
-
-    def test_get_tool_schema_from_index(self, tmp_path: Path):
-        """Test that get_tool_schema reads from skill_index.json."""
-        from omni.foundation.services.llm.client import InferenceClient
-
-        cache_dir = tmp_path / ".cache"
-        cache_dir.mkdir()
-
-        skill_index = [
-            {
-                "name": "filesystem",
-                "path": str(tmp_path / "assets" / "skills" / "filesystem"),
-                "tools": [
-                    {"name": "filesystem.read_file", "description": "Read file content"},
-                    {"name": "filesystem.write_file", "description": "Write file content"}
-                ]
-            },
-            {
-                "name": "git",
-                "path": str(tmp_path / "assets" / "skills" / "git"),
-                "tools": [
-                    {"name": "git.status", "description": "Show git status"}
-                ]
-            }
-        ]
-        self._write_skill_index(cache_dir, skill_index)
-
-        # Patch the function at the module level where it's imported
-        with patch("omni.foundation.config.dirs.get_skill_index_path", return_value=cache_dir / "skill_index.json"):
-            client = InferenceClient()
-            schemas = client.get_tool_schema()
-
-            assert len(schemas) == 3
-            names = [s["name"] for s in schemas]
-            assert "filesystem.read_file" in names
-            assert "filesystem.write_file" in names
-            assert "git.status" in names
-
-    def test_get_tool_schema_filters_by_skill(self, tmp_path: Path):
-        """Test that get_tool_schema can filter by skill names."""
-        from omni.foundation.services.llm.client import InferenceClient
-
-        cache_dir = tmp_path / ".cache"
-        cache_dir.mkdir()
-
-        skill_index = [
-            {
-                "name": "filesystem",
-                "path": str(tmp_path / "fs"),
-                "tools": [
-                    {"name": "filesystem.read_file", "description": "Read file"},
-                    {"name": "filesystem.write_file", "description": "Write file"}
-                ]
-            },
-            {
-                "name": "git",
-                "path": str(tmp_path / "git"),
-                "tools": [
-                    {"name": "git.status", "description": "Show status"}
-                ]
-            }
-        ]
-        self._write_skill_index(cache_dir, skill_index)
-
-        with patch("omni.foundation.config.dirs.get_skill_index_path", return_value=cache_dir / "skill_index.json"):
-            client = InferenceClient()
-
-            # Filter to only filesystem tools
-            schemas = client.get_tool_schema(skill_names=["filesystem"])
-
-            assert len(schemas) == 2
-            names = [s["name"] for s in schemas]
-            assert "filesystem.read_file" in names
-            assert "filesystem.write_file" in names
-            assert "git.status" not in names
-
-    def test_get_tool_schema_missing_index_raises(self, tmp_path: Path):
-        """Test that missing skill_index.json raises FileNotFoundError."""
-        from omni.foundation.services.llm.client import InferenceClient
-
-        cache_dir = tmp_path / ".cache"
-        cache_dir.mkdir()
-        # Don't create skill_index.json
-
-        with patch("omni.foundation.config.dirs.get_skill_index_path", return_value=cache_dir / "skill_index.json"):
-            client = InferenceClient()
-
-            with pytest.raises(FileNotFoundError) as exc_info:
-                client.get_tool_schema()
-
-            assert "skill_index.json" in str(exc_info.value)
-            assert "just build-rust" in str(exc_info.value)
-
-    def test_get_tool_schema_invalid_json_raises(self, tmp_path: Path):
-        """Test that invalid JSON in skill_index.json raises JSONDecodeError."""
-        from omni.foundation.services.llm.client import InferenceClient
-
-        cache_dir = tmp_path / ".cache"
-        cache_dir.mkdir()
-        (cache_dir / "skill_index.json").write_text("not valid json {")
-
-        with patch("omni.foundation.config.dirs.get_skill_index_path", return_value=cache_dir / "skill_index.json"):
-            client = InferenceClient()
-
-            with pytest.raises(json.JSONDecodeError):
-                client.get_tool_schema()
-
-    def test_get_tool_schema_generates_input_schema(self, tmp_path: Path):
-        """Test that get_tool_schema generates basic input_schema from tool name."""
-        from omni.foundation.services.llm.client import InferenceClient
-
-        cache_dir = tmp_path / ".cache"
-        cache_dir.mkdir()
-
-        skill_index = [
-            {
-                "name": "test_skill",
-                "path": str(tmp_path / "test"),
-                "tools": [
-                    {"name": "test_skill.read_file", "description": "Read a file"},
-                    {"name": "test_skill.write_content", "description": "Write content"}
-                ]
-            }
-        ]
-        self._write_skill_index(cache_dir, skill_index)
-
-        with patch("omni.foundation.config.dirs.get_skill_index_path", return_value=cache_dir / "skill_index.json"):
-            client = InferenceClient()
-            schemas = client.get_tool_schema()
-
-            # Check read_file has path property
-            read_schema = next(s for s in schemas if s["name"] == "test_skill.read_file")
-            assert "input_schema" in read_schema
-            assert "path" in read_schema["input_schema"]["properties"]
-
-            # Check write_content has content property
-            write_schema = next(s for s in schemas if s["name"] == "test_skill.write_content")
-            assert "content" in write_schema["input_schema"]["properties"]
 
 
 class TestToolSchemaExtraction:
@@ -384,7 +233,7 @@ __all__ = ["process"]
 """)
 
         skill = UniversalScriptSkill(skill_name="extract_test", skill_path=test_skill)
-        asyncio.get_event_loop().run_until_complete(skill.load())
+        asyncio.run(skill.load())
 
         ctx = SkillContext(skills_dir)
         ctx.register_skill(skill)
@@ -502,10 +351,9 @@ class TestSkillContextIntegration:
         (scripts_dir / "io.py").write_text("""
 from omni.foundation.api.decorators import skill_command
 
-@skill_command(name="read_file", description="Read file content")
-def read_file(path: str, encoding: str = "utf-8") -> str:
-    with open(path, "r", encoding=encoding) as f:
-        return f.read()
+@skill_command(name="read_files", description="Read file content")
+def read_files(paths: list[str], encoding: str = "utf-8") -> str:
+    return "content"
 
 @skill_command(name="write_file", description="Write file content")
 def write_file(path: str, content: str) -> dict:
@@ -513,7 +361,7 @@ def write_file(path: str, content: str) -> dict:
         f.write(content)
     return {"success": True, "path": path}
 
-__all__ = ["read_file", "write_file"]
+__all__ = ["read_files", "write_file"]
 """)
 
         # Create skill_index.json
@@ -522,9 +370,9 @@ __all__ = ["read_file", "write_file"]
                 "name": "filesystem",
                 "path": str(fs_skill),
                 "tools": [
-                    {"name": "filesystem.read_file", "description": "Read file content"},
-                    {"name": "filesystem.write_file", "description": "Write file content"}
-                ]
+                    {"name": "filesystem.read_files", "description": "Read file content"},
+                    {"name": "filesystem.write_file", "description": "Write file content"},
+                ],
             }
         ]
         cache_dir = tmp_path / ".cache"
@@ -542,17 +390,16 @@ __all__ = ["read_file", "write_file"]
         def get_handler(cmd):
             return ctx.get_command(cmd)
 
-        schemas = extract_tool_schemas([
-            "filesystem.read_file",
-            "filesystem.write_file"
-        ], get_handler)
+        schemas = extract_tool_schemas(
+            ["filesystem.read_files", "filesystem.write_file"], get_handler
+        )
 
         # Verify schemas
         assert len(schemas) == 2
 
         read_schema = next(s for s in schemas if "read_file" in s["name"])
-        assert read_schema["name"] == "filesystem.read_file"
-        assert "path" in read_schema["input_schema"]["properties"]
+        assert read_schema["name"] == "filesystem.read_files"
+        assert "paths" in read_schema["input_schema"]["properties"]
 
         write_schema = next(s for s in schemas if "write_file" in s["name"])
         assert write_schema["name"] == "filesystem.write_file"
@@ -562,4 +409,5 @@ __all__ = ["read_file", "write_file"]
 
 if __name__ == "__main__":
     import pytest
+
     pytest.main([__file__, "-v"])

@@ -9,6 +9,7 @@
 //! - **Dual API**: Sync (std::fs) for Python bindings, Async (tokio::fs) for Rust core
 //! - **Safety**: Binary detection & Size limits
 //! - **Lightweight**: Zero-dependency UTF-8 fallback
+//! - **Context Assembly**: Parallel I/O + Templating + Token Counting (optional)
 //!
 //! # Architecture (ODF-REP Compliant)
 //!
@@ -18,7 +19,8 @@
 //! ├── error.rs    # IoError enum
 //! ├── detect.rs   # Binary detection & decoding
 //! ├── sync.rs     # Synchronous API
-//! └── async_io.rs # Asynchronous API (Tokio)
+//! ├── async_io.rs # Asynchronous API (Tokio)
+//! └── assembler.rs # Context Assembly (optional, requires "assembler" feature)
 //! ```
 //!
 //! # Example
@@ -43,6 +45,10 @@ mod dirs;
 mod error;
 mod sync;
 
+// Conditionally compiled assembler module
+#[cfg(feature = "assembler")]
+mod assembler;
+
 // ============================================================================
 // Public Re-exports
 // ============================================================================
@@ -54,3 +60,7 @@ pub use sync::read_text_safe;
 
 // Re-export detection utilities for advanced use
 pub use detect::{decode_buffer, is_binary};
+
+// Conditionally export assembler
+#[cfg(feature = "assembler")]
+pub use assembler::{AssemblyResult, ContextAssembler};

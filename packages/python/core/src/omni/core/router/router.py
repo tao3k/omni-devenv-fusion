@@ -3,10 +3,14 @@ router.py - The Decision Maker
 
 High-performance semantic router for intent-to-action mapping.
 Uses vector search to match natural language to skill commands.
+
+Python 3.12+ Features:
+- asyncio.TaskGroup for batch routing parallelism (Section 7.3)
 """
 
 from __future__ import annotations
 
+import asyncio
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -56,9 +60,7 @@ class SemanticRouter:
         """
         self._indexer = indexer
 
-    async def route(
-        self, query: str, threshold: float = 0.5, limit: int = 3
-    ) -> RouteResult | None:
+    async def route(self, query: str, threshold: float = 0.5, limit: int = 3) -> RouteResult | None:
         """
         Route a natural language query to a skill command.
 
@@ -105,20 +107,35 @@ class SemanticRouter:
 
     async def route_batch(
         self, queries: list[str], threshold: float = 0.5
-    ) -> list[Tuple[str, RouteResult | None]]:
-        """Route multiple queries.
+    ) -> list[tuple[str, RouteResult | None]]:
+        """Route multiple queries in parallel using TaskGroup.
+
+        All queries in the batch are processed concurrently, providing
+        significant speedup for high-throughput scenarios.
 
         Args:
             queries: List of queries to route
             threshold: Minimum score threshold
 
         Returns:
-            List of (query, RouteResult) tuples
+            List of (query, RouteResult) tuples in original order
         """
-        results = []
-        for query in queries:
+        # Pre-allocate results list in original order
+        results: list[tuple[str, RouteResult | None]] = [("", None)] * len(queries)
+
+        async def _route_single(idx: int, query: str) -> None:
+            """Route a single query and store result at original index."""
             route = await self.route(query, threshold)
-            results.append((query, route))
+            results[idx] = (query, route)
+
+        # ✅ CRITICAL: Process all queries concurrently with TaskGroup
+        try:
+            async with asyncio.TaskGroup() as tg:
+                for idx, query in enumerate(queries):
+                    tg.create_task(_route_single(idx, query))
+        except ExceptionGroup as e:
+            logger.error(f"Batch routing failed with partial errors: {e.exceptions}")
+
         return results
 
     def _get_confidence(self, score: float) -> str:

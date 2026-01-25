@@ -110,8 +110,8 @@ def skill_command(
         "title": title,
         "readOnlyHint": read_only,  # MCP: True = read-only
         "destructiveHint": destructive,  # MCP: True = destructive
-        "idempotentHint": idempotent,    # MCP: True = idempotent
-        "openWorldHint": open_world,     # MCP: True = external network
+        "idempotentHint": idempotent,  # MCP: True = idempotent
+        "openWorldHint": open_world,  # MCP: True = external network
     }
 
     def decorator(func: Callable) -> Callable:

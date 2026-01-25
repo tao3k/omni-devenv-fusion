@@ -41,7 +41,7 @@ The router considers:
 
 ```python
 # GOOD - Specific action
-@omni("filesystem.read_file", {"path": "src/main.py"})
+@omni("filesystem.read_files", {"path": "src/main.py"})
 
 # GOOD - Specific intent
 @omni("git.commit", {"message": "feat: add new feature"})
@@ -51,7 +51,7 @@ The router considers:
 
 | Action                      | Recommended Skill                    |
 | --------------------------- | ------------------------------------ |
-| `read`, `view`, `open`      | `filesystem.read_file`               |
+| `read`, `view`, `open`      | `filesystem.read_files`              |
 | `write`, `create`, `edit`   | `filesystem.write_file`              |
 | `run`, `execute`, `command` | `terminal.run_task`                  |
 | `search`, `find`, `grep`    | `advanced_tools.search_project_code` |
@@ -62,7 +62,7 @@ The router considers:
 
 ```python
 # GOOD - Includes context
-@omni("filesystem.read_file", {"path": "src/main.py"})
+@omni("filesystem.read_files", {"path": "src/main.py"})
 # Later: @omni("filesystem.search_files", {"pattern": "def main"})
 ```
 
@@ -92,7 +92,7 @@ For code manipulation:
 # - File operations
 # - Code analysis
 # - AST operations
-@omni("filesystem.read_file", {"path": "src/main.py"})
+@omni("filesystem.read_files", {"path": "src/main.py"})
 @omni("code_tools.refactor_repository", {
     "search_pattern": "print($MSG)",
     "rewrite_pattern": "logger.info($MSG)"
@@ -169,8 +169,8 @@ Ghost tools provide hints about available capabilities:
 
 ```
 User: "Read README.md"
-→ Router: filesystem.read_file (confidence: 0.95)
-→ Action: @omni("filesystem.read_file", {"path": "README.md"})
+→ Router: filesystem.read_files (confidence: 0.95)
+→ Action: @omni("filesystem.read_files", {"path": "README.md"})
 ```
 
 ### Pattern 2: Multi-step Task

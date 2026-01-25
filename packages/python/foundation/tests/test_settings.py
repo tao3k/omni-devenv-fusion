@@ -5,7 +5,6 @@ Tests for omni.foundation.config.settings module (basic functionality only).
 """
 
 
-
 class TestSettingsClass:
     """Test the Settings singleton class."""
 

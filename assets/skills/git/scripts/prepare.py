@@ -53,21 +53,46 @@ def _check_sensitive_files(staged_files: list[str]) -> list[str]:
 
 
 def _get_cog_scopes(project_root: Path | None = None) -> list[str]:
-    """Read allowed scopes from cog.toml."""
+    """Read allowed scopes from cog.toml or .conform.yaml (legacy support).
+
+    Supports both formats:
+    - cog.toml: scopes = ["scope1", "scope2"]
+    - .conform.yaml: YAML list format
+
+    Legacy support: Falls back to .conform.yaml if cog.toml doesn't exist.
+    """
     try:
         from omni.foundation.config.settings import get_setting
         from omni.foundation.runtime.gitops import get_project_root
 
         root = project_root or get_project_root()
-        cog_path = root / get_setting("config.cog_toml", "cog.toml")
 
+        # First try cog.toml (primary)
+        cog_path = root / get_setting("config.cog_toml", "cog.toml")
         if cog_path.exists():
             content = cog_path.read_text()
             match = re.search(r"scopes\s*=\s*\[([^\]]+)\]", content, re.DOTALL)
             if match:
                 scopes_str = match.group(1)
                 scopes = re.findall(r'"([^"]+)"', scopes_str)
-                return scopes
+                if scopes:
+                    return scopes
+
+        # Fall back to .conform.yaml (legacy support)
+        conform_path = root / get_setting("config.conform_yaml", ".conform.yaml")
+        if conform_path.exists():
+            import yaml
+
+            content = conform_path.read_text()
+            data = yaml.safe_load(content)
+            if data and "policies" in data:
+                for policy in data["policies"]:
+                    spec = policy.get("spec", {})
+                    conventional = spec.get("conventional", {})
+                    scopes = conventional.get("scopes", [])
+                    if scopes:
+                        return scopes
+
     except Exception:
         pass
     return []

@@ -374,6 +374,70 @@ class TestOmniLoopMultiTurn:
             assert loop.context.turn_count == 2
 
 
+class TestOmniLoopToolSchemas:
+    """Tests for tool schema extraction with filter_commands."""
+
+    @pytest.fixture
+    def mock_kernel(self):
+        """Create a mock kernel with skill_context."""
+        mock = MagicMock()
+        mock.skill_context.list_commands.return_value = [
+            "skill.discover",
+            "filesystem.read_files",
+            "terminal.run_command",
+            "filesystem.save_file",
+        ]
+        mock.skill_context.get_core_commands.return_value = [
+            "skill.discover",
+            "filesystem.save_file",
+        ]
+        mock.skill_context.get_dynamic_commands.return_value = [
+            "filesystem.read_files",
+            "terminal.run_command",
+        ]
+        return mock
+
+    @pytest.mark.asyncio
+    async def test_get_tool_schemas_returns_only_core_commands(self, mock_kernel):
+        """Should return only core commands, excluding filtered (dynamic) commands.
+
+        This test prevents regression of the bug where filter_commands were not
+        applied because dynamic commands were incorrectly added back to the list.
+        See: https://github.com/tao3k/omni-dev-fusion/issues/1234
+        """
+        loop = OmniLoop(kernel=mock_kernel)
+        schemas = await loop._get_tool_schemas()
+
+        # Should only have 2 core commands
+        assert len(schemas) == 2
+
+        # Should NOT have filtered commands
+        tool_names = [s["name"] for s in schemas]
+        assert "filesystem.read_files" not in tool_names
+        assert "terminal.run_command" not in tool_names
+
+        # SHOULD have core commands
+        assert "skill.discover" in tool_names
+        assert "filesystem.save_file" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_get_tool_schemas_skill_discover_first(self, mock_kernel):
+        """Should ensure skill.discover is first in the list."""
+        loop = OmniLoop(kernel=mock_kernel)
+        schemas = await loop._get_tool_schemas()
+
+        assert len(schemas) >= 1
+        assert schemas[0]["name"] == "skill.discover"
+
+    @pytest.mark.asyncio
+    async def test_get_tool_schemas_empty_when_no_kernel(self):
+        """Should return empty list when no kernel is available."""
+        loop = OmniLoop(kernel=None)
+        schemas = await loop._get_tool_schemas()
+
+        assert schemas == []
+
+
 class TestOmniLoopSession:
     """Tests for OmniLoop session management."""
 

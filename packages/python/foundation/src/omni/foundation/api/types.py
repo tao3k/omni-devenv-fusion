@@ -3,22 +3,19 @@ types.py - Common API Types (Pillar A: Pydantic Shield)
 
 Updated for ODF-EP v6.0 with Python 3.12 PEP 695:
 - Modern type alias syntax using `type` keyword
-- Simplified generics without TypeVar boilerplate
+- Native generic class syntax: class CommandResult[T](...)
 
 Features:
 - Integrated orjson for high-performance serialization.
-- Base CommandResult with Generics.
+- Base CommandResult with native Generics (no TypeVar needed).
 """
 
 from __future__ import annotations
 
-from typing import Any, Generic, TypeVar
+from typing import Any
 
 import orjson
 from pydantic import BaseModel, ConfigDict, Field, computed_field
-
-# Type variable for CommandResult generic (required for Pydantic Generic[T])
-T = TypeVar("T")
 
 # Common type aliases using modern PEP 695 syntax (Python 3.12+)
 type JsonBytes = bytes
@@ -48,9 +45,13 @@ class OrjsonModel(BaseModel):
         return orjson.dumps(self.model_dump(mode="json", **kwargs)).decode()
 
 
-class CommandResult(OrjsonModel, Generic[T]):
+class CommandResult[T](OrjsonModel):
     """
-    Structured output for all skill commands using Pydantic V2 Generics.
+    Structured output for all skill commands using Python 3.12 Native Generics.
+
+    Usage:
+        >>> result = CommandResult[str](success=True, data="output")
+        >>> result = CommandResult[dict](success=True, data={"key": "value"})
     """
 
     model_config = ConfigDict(
@@ -98,16 +99,14 @@ class CommandResult(OrjsonModel, Generic[T]):
 
 
 __all__ = [
+    # PEP 695 type aliases
+    "DurationMs",
+    "ErrorMsg",
+    "JsonBytes",
+    "JsonStr",
+    "Metadata",
+    "RetryCount",
     # Classes
     "CommandResult",
     "OrjsonModel",
-    # Type variable
-    "T",
-    # PEP 695 type aliases
-    "JsonBytes",
-    "JsonStr",
-    "ErrorMsg",
-    "Metadata",
-    "DurationMs",
-    "RetryCount",
 ]

@@ -12,7 +12,6 @@ Best practices:
 """
 
 
-
 def example_command(param: str) -> str:
     """Example command implementation."""
     return f"Example: {param}"

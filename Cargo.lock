@@ -4098,6 +4098,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "minijinja"
+version = "1.0.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3287d827e6da221ea11aa173c66b82ab69db27a1b177e8439f730b478bf33a7b"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4429,6 +4438,7 @@ dependencies = [
  "skills-scanner",
  "tempfile",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -4453,6 +4463,11 @@ name = "omni-io"
 version = "0.1.0"
 dependencies = [
  "memchr",
+ "minijinja",
+ "omni-tokenizer",
+ "rayon",
+ "serde",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.17",
  "tokio",

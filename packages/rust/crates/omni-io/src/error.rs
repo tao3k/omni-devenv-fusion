@@ -29,3 +29,6 @@ pub enum IoError {
     #[error("UTF-8 decoding error")]
     Encoding,
 }
+
+/// Result type for I/O operations.
+pub type Result<T> = std::result::Result<T, IoError>;

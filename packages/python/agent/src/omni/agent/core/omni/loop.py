@@ -4,6 +4,11 @@ loop.py - Main OmniLoop Orchestrator
 CCA Loop implementation with smart context management.
 Integrates ReAct workflow with ContextManager for conversation handling.
 
+Features:
+- CognitiveOrchestrator for dynamic system prompt building
+- Meta-Cognition Protocol via RoutingGuidanceProvider
+- Smart context pruning and management
+
 Usage:
     from omni.agent.core.omni import OmniLoop, OmniLoopConfig
 
@@ -17,6 +22,8 @@ from typing import Any
 
 from omni.agent.core.context.manager import ContextManager
 from omni.agent.core.context.pruner import ContextPruner, PruningConfig
+from omni.core.context.orchestrator import create_omni_loop_context
+from omni.foundation.config.logging import get_logger
 from omni.foundation.config.settings import get_setting
 from omni.foundation.services.llm import InferenceClient
 
@@ -24,7 +31,7 @@ from .config import OmniLoopConfig
 from .react import ReActWorkflow
 from .schemas import extract_tool_schemas
 
-logger = None  # Set in __init__ after import
+logger = get_logger("omni.agent.loop")
 
 
 class OmniLoop:
@@ -34,6 +41,7 @@ class OmniLoop:
     Features:
     - ContextManager for smart pruning
     - ReAct workflow for tool execution
+    - CognitiveOrchestrator for dynamic system prompt (Meta-Cognition Protocol)
     - Turn tracking and statistics
     - Session isolation
 
@@ -68,6 +76,9 @@ class OmniLoop:
         # Initialize inference engine
         self.engine = InferenceClient()
 
+        # Initialize CognitiveOrchestrator for dynamic context building
+        self.orchestrator = create_omni_loop_context()
+
         # Session history
         self.history: list[dict[str, Any]] = []
 
@@ -75,9 +86,24 @@ class OmniLoop:
         self._initialized: bool = False
 
     async def _ensure_initialized(self):
-        """Initialize system prompts once."""
+        """Initialize system prompts using CognitiveOrchestrator."""
         if not self._initialized:
-            system_prompt = get_setting("omni.system_prompt", default="You are Omni-Dev Fusion.")
+            # Build dynamic context using CognitiveOrchestrator
+            # This includes: Persona + Routing Protocol + Tools + Active Skill
+            state = {"messages": [], "session_id": self.session_id}
+            try:
+                system_prompt = await self.orchestrator.build_context(state)
+                logger.info(
+                    "Context built for Omni-Loop",
+                    tokens=len(system_prompt.split()),
+                )
+            except Exception as e:
+                logger.error(f"Context build failed: {e}, using fallback")
+                system_prompt = get_setting(
+                    "omni.system_prompt",
+                    default="You are Omni-Dev Fusion. Think before you act.",
+                )
+
             self.context.add_system_message(system_prompt)
             self._initialized = True
 
@@ -85,39 +111,26 @@ class OmniLoop:
         """Get tool schemas from kernel skill context with optimization.
 
         Applies:
-        - filter_commands: Exclude commands from core tools
+        - filter_commands: Exclude filtered commands (only core tools)
         - dynamic_tools limit: Cap number of tools
-        - rerank_threshold: Re-rank by frequency if exceeded
-        - schema_cache_ttl: Use cached schemas
+        - DISCOVERY_FIRST: Ensure skill.discover is first in the list
+
+        Note: Dynamic commands (filtered) are NOT included in omni run.
+        They can only be loaded on demand via dynamic loading.
         """
-        from omni.core.cache.tool_schema import get_cached_schema, get_schema_cache
+        from omni.core.cache.tool_schema import get_cached_schema
         from omni.core.config.loader import load_skill_limits
 
         if self.kernel and hasattr(self.kernel, "skill_context"):
             skill_context = self.kernel.skill_context
             limits = load_skill_limits()
 
-            # Get core commands (filter_commands already applied)
-            if limits.auto_optimize:
-                # Use optimized core commands
-                commands = skill_context.get_core_commands()
+            # Get core commands only (filter_commands applied, dynamic excluded)
+            commands = skill_context.get_core_commands()
 
-                # Apply dynamic_tools limit
-                if len(commands) > limits.dynamic_tools:
-                    # For now, just limit to dynamic_tools count
-                    # In future, could use frequency-based ranking
-                    commands = commands[: limits.dynamic_tools]
-
-                # Apply rerank_threshold if exceeded (re-rank by frequency)
-                all_commands = skill_context.list_commands()
-                if len(all_commands) > limits.rerank_threshold:
-                    # Use core commands first, then add from dynamic if needed
-                    commands = skill_context.get_core_commands()
-                    dynamic = skill_context.get_dynamic_commands()
-                    # Combine: core + dynamic up to limit
-                    commands = (commands + dynamic)[: limits.dynamic_tools]
-            else:
-                commands = skill_context.list_commands()
+            # Apply dynamic_tools limit
+            if len(commands) > limits.dynamic_tools:
+                commands = commands[: limits.dynamic_tools]
 
             # Use cached schema extraction
             def extract_schema(cmd: str) -> dict[str, Any]:
@@ -128,16 +141,22 @@ class OmniLoop:
 
             # Get schemas with caching
             schemas = []
-            cache = get_schema_cache()
             for cmd in commands:
                 schema = get_cached_schema(cmd, lambda c=cmd: extract_schema(c))
                 if schema:
                     schemas.append(schema)
 
+            # DISCOVERY FIRST: Ensure skill.discover is first
+            discover_schema = next((s for s in schemas if s.get("name") == "skill.discover"), None)
+            if discover_schema:
+                schemas = [discover_schema] + [
+                    s for s in schemas if s.get("name") != "skill.discover"
+                ]
+
             return schemas
 
-        # Fallback: basic filesystem tools
-        return self.engine.get_tool_schema(skill_names=["filesystem"])
+        # Fallback: no kernel available, return empty list
+        return []
 
     async def _execute_tool_call(self, tool_name: str, args: dict[str, Any]) -> str:
         """Execute a single tool call via kernel."""
@@ -148,8 +167,12 @@ class OmniLoop:
                 caller=None,  # OmniLoop has root privileges
             )
 
-        # Direct execution via run_command
-        from omni.core.skills.runtime import run_command
+        # Direct execution via run_command - requires SkillContext initialization
+        from omni.core.skills.runtime import run_command, get_skill_context
+        from omni.foundation.config.skills import SKILLS_DIR
+
+        # Ensure SkillContext is initialized
+        get_skill_context(SKILLS_DIR())
 
         return await run_command(tool_name, **args)
 

@@ -28,7 +28,7 @@ def skill_command(**kwargs):
     This decorator:
     1. Preserves the original function signature and docstring
     2. Marks the function for Rust Scanner detection
-    3. Stores metadata for potential runtime use
+    3. Stores metadata for potential runtime use (uses _skill_config for compatibility)
 
     Note: This runs in crawl4ai's isolated environment where 'agent' is not installed.
     The real decorator is only used when running in the main agent process.
@@ -42,7 +42,8 @@ def skill_command(**kwargs):
 
         # Mark for scanner detection
         wrapper._is_skill_command = True
-        wrapper._skill_metadata = kwargs
+        # Use _skill_config for compatibility with script_loader.py
+        wrapper._skill_config = kwargs
 
         return wrapper
 

@@ -89,12 +89,7 @@ async def run_task(cmd: str, args: list[str] | None = None, **kwargs) -> str:
         # Ensure all elements are strings
         args = [str(a) for a in args]
 
-    if (
-        args
-        and len(args) == 1
-        and isinstance(args[0], str)
-        and " " in args[0]
-    ):
+    if args and len(args) == 1 and isinstance(args[0], str) and " " in args[0]:
         parts = args[0].split()
         cmd = parts[0]
         args = parts[1:]

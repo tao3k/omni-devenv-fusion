@@ -95,6 +95,17 @@ class DiscoveredSkill(BaseModel):
         )
 
 
+class ToolMatch(BaseModel):
+    """Represents a tool matching a search query."""
+
+    name: str
+    skill_name: str
+    description: str
+    score: float
+    matched_intent: str
+    usage_template: str = ""
+
+
 class SkillDiscoveryService:
     """
     Level 2: Skill Discovery Service.
@@ -107,11 +118,163 @@ class SkillDiscoveryService:
         skills = service.discover_all()  # Reads skill_index.json
         for skill in skills:
             print(f"Found: {skill.name}")
+
+        # Search for tools
+        matches = service.search_tools(query="read file", limit=3)
     """
 
     def __init__(self):
         """Initialize the discovery service with Index Reader."""
         self._scanner = PythonSkillScanner()
+        self._index: list[dict] | None = None
+
+    def _load_index(self) -> list[dict]:
+        """Load the skill index (cached)."""
+        if self._index is not None:
+            return self._index
+
+        index_entries = self._scanner.scan_directory()
+        self._index = []
+        for entry in index_entries:
+            metadata = entry.metadata or {}
+            self._index.append(
+                {
+                    "skill_name": entry.skill_name,
+                    "skill_path": entry.skill_path,
+                    "description": metadata.get("description", ""),
+                    "routing_keywords": metadata.get("routingKeywords", [])
+                    or metadata.get("routing_keywords", []),
+                    "intents": metadata.get("intents", []) or [],
+                    "tools": metadata.get("tools", []) or [],
+                }
+            )
+        return self._index
+
+    def search_tools(self, query: str, limit: int = 3, threshold: float = 0.3) -> list[ToolMatch]:
+        """
+        Search for tools matching the given intent/query.
+
+        Uses hybrid matching (keywords + intents) to find the best tools.
+
+        Args:
+            query: Natural language intent (e.g., "read markdown files")
+            limit: Maximum number of results to return
+            threshold: Minimum score threshold (0.0-1.0)
+
+        Returns:
+            List of ToolMatch objects sorted by score
+        """
+        index = self._load_index()
+        query_lower = query.lower()
+        query_words = set(query_lower.split())
+
+        matches: list[tuple[ToolMatch, float]] = []
+
+        for skill in index:
+            skill_name = skill["skill_name"]
+            description = skill.get("description", "")
+
+            # Check skill-level matches (keywords and intents)
+            skill_score = 0.0
+
+            # Keyword matching
+            keywords = skill.get("routing_keywords", [])
+            for kw in keywords:
+                kw_lower = kw.lower()
+                if kw_lower in query_lower:
+                    skill_score = max(skill_score, 0.5)
+                elif any(word in kw_lower for word in query_words if len(word) > 3):
+                    skill_score = max(skill_score, 0.3)
+
+            # Intent matching
+            intents = skill.get("intents", [])
+            for intent in intents:
+                intent_lower = intent.lower()
+                if intent_lower in query_lower or query_lower in intent_lower:
+                    skill_score = max(skill_score, 0.7)
+
+            # Check tool-level matches
+            tools = skill.get("tools", [])
+            for tool in tools:
+                tool_name = tool.get("name", "")
+                tool_desc = tool.get("description", "")
+
+                tool_score = skill_score
+
+                # Direct name match (highest priority)
+                if query_lower.replace(" ", "_") in tool_name.lower():
+                    tool_score = max(tool_score, 0.95)
+                elif query_lower.replace(" ", "") in tool_name.lower().replace("_", "").replace(
+                    ".", ""
+                ):
+                    tool_score = max(tool_score, 0.85)
+
+                # Keyword-based scoring for install/jit scenarios
+                if "install" in query_lower and "jit_install" in tool_name:
+                    tool_score = max(tool_score, 0.9)
+                elif "install" in query_lower and "install" in tool_name.lower():
+                    tool_score = max(tool_score, 0.85)
+
+                # SPECIAL: skill.discover should be boosted for uncertainty queries
+                # This implements the "Discovery First" rule from intent_protocol.md
+                if tool_name == "skill.discover":
+                    # Boost for queries about capabilities, tools, learning, analyzing
+                    uncertainty_keywords = [
+                        "analyze",
+                        "learn",
+                        "what can",
+                        "available",
+                        "capability",
+                        "tools",
+                        "commands",
+                        "find",
+                        "search",
+                        "discover",
+                        "look up",
+                        "look up",
+                        "how to",
+                        "which tool",
+                        "what tool",
+                    ]
+                    for keyword in uncertainty_keywords:
+                        if keyword in query_lower:
+                            tool_score = max(tool_score, 0.85)
+                            break
+                    else:
+                        # Default boost for discover - it's the fallback for uncertainty
+                        tool_score = max(tool_score, 0.6)
+
+                # Check if query words appear in tool name
+                for word in query_words:
+                    if word in tool_name.lower() and len(word) > 3:
+                        tool_score = max(tool_score, 0.7)
+
+                # Description match (lower priority)
+                if query_lower in tool_desc.lower():
+                    tool_score = max(tool_score, 0.6)
+
+                if tool_score >= threshold:
+                    # Build usage template with @omni format
+                    # For jit_install: use @omni("skill.jit_install", {"skill_id": "..."})
+                    # For regular tools: use @omni("tool.name", {"param": "..."})
+                    if tool_name == "skill.jit_install":
+                        usage = '@omni("skill.jit_install", {"skill_id": "<skill-name>"})'
+                    else:
+                        usage = f'@omni("{tool_name}", {{"..."}})'
+
+                    match = ToolMatch(
+                        name=tool_name,
+                        skill_name=skill_name,
+                        description=tool_desc,
+                        score=tool_score,
+                        matched_intent=query,
+                        usage_template=usage,
+                    )
+                    matches.append((match, tool_score))
+
+        # Sort by score and limit
+        matches.sort(key=lambda x: x[1], reverse=True)
+        return [m[0] for m in matches[:limit]]
 
     def discover_all(self, locations: list[str] | None = None) -> list[DiscoveredSkill]:
         """Discover all skills from the Index.
@@ -173,5 +336,6 @@ def is_rust_available() -> bool:
 __all__ = [
     "DiscoveredSkill",
     "SkillDiscoveryService",
+    "ToolMatch",
     "is_rust_available",
 ]

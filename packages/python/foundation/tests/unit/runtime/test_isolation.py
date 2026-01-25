@@ -51,7 +51,9 @@ class TestRunSkillCommand:
 
                 # Check that command line args were converted correctly
                 mock_run.assert_called_once()
-                cmd = mock_run.call_args[1].get("cmd", mock_run.call_args[0][0] if mock_run.call_args[0] else [])
+                cmd = mock_run.call_args[1].get(
+                    "cmd", mock_run.call_args[0][0] if mock_run.call_args[0] else []
+                )
                 assert "true" in cmd
                 assert "false" in cmd
 
@@ -79,7 +81,9 @@ class TestRunSkillCommand:
                 )
 
                 mock_run.assert_called_once()
-                cmd = mock_run.call_args[1].get("cmd", mock_run.call_args[0][0] if mock_run.call_args[0] else [])
+                cmd = mock_run.call_args[1].get(
+                    "cmd", mock_run.call_args[0][0] if mock_run.call_args[0] else []
+                )
                 assert "https://example.com" in cmd
 
 
@@ -90,9 +94,7 @@ class TestRunSkillCommandAsync:
         """Test that async wrapper calls the sync function."""
         from omni.foundation.runtime.isolation import run_skill_command_async
 
-        with patch(
-            "omni.foundation.runtime.isolation.run_skill_command"
-        ) as mock_sync:
+        with patch("omni.foundation.runtime.isolation.run_skill_command") as mock_sync:
             mock_sync.return_value = {"success": True}
 
             result = run_skill_command_async(

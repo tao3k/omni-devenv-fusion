@@ -130,8 +130,8 @@ Total:           707 passed
 
 ### Reading
 
-- `@omni("filesystem.read_file_context")` - Surgical read
-- `@omni("filesystem.read_file")` - Full file read
+- `@omni("filesystem.read_files_context")` - Surgical read
+- `@omni("filesystem.read_files")` - Full file read
 
 ### Testing
 

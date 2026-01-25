@@ -11,14 +11,13 @@ import gc
 import os
 import time
 from contextlib import contextmanager
-from dataclasses import dataclass, field
 from typing import Any
 
 import psutil
+from pydantic import BaseModel
 
 
-@dataclass
-class MemorySnapshot:
+class MemorySnapshot(BaseModel):
     """Memory state at a point in time."""
 
     rss_mb: float
@@ -27,15 +26,14 @@ class MemorySnapshot:
     turn: int
 
 
-@dataclass
-class TestMetrics:
+class TestMetrics(BaseModel):
     """Metrics collected during a stress test."""
 
     test_name: str = "unknown"
     start_time: float = 0.0
     end_time: float | None = None
-    memory_snapshots: list[MemorySnapshot] = field(default_factory=list)
-    custom_metrics: dict[str, Any] = field(default_factory=dict)
+    memory_snapshots: list[MemorySnapshot] = []
+    custom_metrics: dict[str, Any] = {}
 
     @property
     def duration_seconds(self) -> float:

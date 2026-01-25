@@ -98,9 +98,7 @@ class OmniRouter:
         stats = self._indexer.get_stats()
         logger.info(f"🧠 OmniRouter initialized with {stats['entries_indexed']} indexed entries")
 
-    async def route(
-        self, query: str, context: dict[str, Any] | None = None
-    ) -> RouteResult | None:
+    async def route(self, query: str, context: dict[str, Any] | None = None) -> RouteResult | None:
         """Route a query using the unified routing strategy.
 
         Args:

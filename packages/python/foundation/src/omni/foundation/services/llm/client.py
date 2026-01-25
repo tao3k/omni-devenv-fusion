@@ -7,6 +7,7 @@ Configuration-driven from settings.yaml (inference section).
 """
 
 import asyncio
+import json
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -138,23 +139,102 @@ class InferenceClient:
             if not tool_calls and content:
                 import re
 
-                # Match [TOOL_CALL: filesystem.read_file]
+                # Extract thinking block content for fallback parameter extraction
+                # The thinking block contains the LLM's reasoning and often file paths
+                thinking_match = re.search(r"<thinking>(.*?)</thinking>", content, flags=re.DOTALL)
+                thinking_content = thinking_match.group(1) if thinking_match else ""
+
+                # Remove thinking block content to avoid false positives from [TOOL_CALL: ...] in thinking
+                content_for_parsing = re.sub(
+                    r"<thinking>.*?</thinking>", "", content, flags=re.DOTALL
+                )
+
+                # Match [TOOL_CALL: filesystem.read_files]
                 pattern = r"\[TOOL_CALL:\s*([^\]]+)\]"
-                matches = re.findall(pattern, content)
-                for i, tool_name in enumerate(matches):
+                matches = re.findall(pattern, content_for_parsing)
+
+                for i, tool_call_match in enumerate(matches):
+                    tool_name = tool_call_match.strip()
+                    tool_input = {}
+
+                    # Method 1: Try to extract full (args) JSON immediately after tool call
+                    # Pattern: [TOOL_CALL: name]({"paths": [...], "encoding": "..."})
+                    json_parens_pattern = (
+                        rf"\[TOOL_CALL:\s*{re.escape(tool_name)}\]\s*\(\s*(\{{[^}}]*\}})\s*\)"
+                    )
+                    json_match = re.search(json_parens_pattern, content_for_parsing)
+                    if json_match:
+                        args_json = json_match.group(1)
+                        try:
+                            # Parse the JSON args directly (already includes braces)
+                            parsed_args = json.loads(args_json)
+                            tool_input = parsed_args
+                        except json.JSONDecodeError:
+                            pass
+
+                    # Method 2: Try simple (key=value) format for non-complex args
+                    # Pattern: [TOOL_CALL: name](key=value, key2=value2)
+                    if not tool_input:
+                        simple_parens_pattern = (
+                            rf"\[TOOL_CALL:\s*{re.escape(tool_name)}\]\s*\(([^)]+)\)"
+                        )
+                        simple_match = re.search(simple_parens_pattern, content_for_parsing)
+                        if simple_match:
+                            args_str = simple_match.group(1)
+                            # Parse key=value pairs where value can be quoted string or simple value
+                            for match in re.finditer(
+                                r'(\w+)=("(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\'|[^,]+)', args_str
+                            ):
+                                key = match.group(1)
+                                value = match.group(2)
+                                # Strip quotes
+                                if value.startswith('"') and value.endswith('"'):
+                                    value = value[1:-1]
+                                elif value.startswith("'") and value.endswith("'"):
+                                    value = value[1:-1]
+                                value = value.strip()
+                                # Handle JSON array-like values as-is (they'll be passed to tool)
+                                tool_input[key] = value
+
+                    # Method 3: Extract parameters from XML-like tags
+                    param_pattern = r"<parameter\s+name=\"(\w+)\">([^<]+)</parameter>"
+                    params = re.findall(param_pattern, content_for_parsing)
+                    if params:
+                        for k, v in params:
+                            tool_input[k] = v.strip()
+
+                    # Method 4: Fallback - extract file paths from thinking block for read_files
+                    # This handles cases where LLM says "让我读取 `file.md`" but doesn't include args
+                    if not tool_input and tool_name == "filesystem.read_files":
+                        # Look for file paths in backticks: `file.md` or `path/to/file.md`
+                        file_paths = re.findall(r"`([^`\n]+\.md)`", thinking_content)
+                        if not file_paths:
+                            # Look for any quoted strings that look like paths
+                            file_paths = re.findall(r'["\']([^"\']+\.md)["\']', thinking_content)
+                        if file_paths:
+                            tool_input["paths"] = file_paths
+
+                    # Method 5: Fallback for list_directory - extract directory from thinking
+                    if not tool_input and tool_name == "filesystem.list_directory":
+                        # Look for directory paths in backticks or quotes
+                        dir_paths = re.findall(r"`([^`\n]+)`", thinking_content)
+                        if not dir_paths:
+                            dir_paths = re.findall(r'["\']([^"\']+)["\']', thinking_content)
+                        # Filter for likely directory paths (not ending with .md, etc.)
+                        dir_paths = [
+                            p for p in dir_paths if not p.endswith((".md", ".txt", ".py", ".json"))
+                        ]
+                        if dir_paths:
+                            tool_input["path"] = dir_paths[0]
+
+                    # Always add tool call (let the tool itself handle missing required args)
                     tool_calls.append(
                         {
                             "id": f"call_{i}",
-                            "name": tool_name.strip(),
-                            "input": {},
+                            "name": tool_name,
+                            "input": tool_input,
                         }
                     )
-                    # Also try to extract parameters from XML-like tags
-                    param_pattern = r"<parameter\s+name=\"(\w+)\">([^<]+)</parameter>"
-                    params = re.findall(param_pattern, content)
-                    if params:
-                        last_call = tool_calls[-1]
-                        last_call["input"] = {k: v for k, v in params}
 
             result = {
                 "success": True,
@@ -197,123 +277,6 @@ class InferenceClient:
                 "model": actual_model,
                 "usage": {},
             }
-
-    def get_tool_schema(self, skill_names: list[str] = None) -> list[dict]:
-        """Get tool definitions from skill_index.json.
-
-        Reads from .cache/skill_index.json which is populated by the Rust scanner.
-        This provides dynamic tool discovery without hardcoded schemas.
-
-        Args:
-            skill_names: Optional list of skill names to filter (e.g., ["filesystem", "git"])
-
-        Returns:
-            List of tool schemas in Anthropic format with 'skill.command' naming convention.
-
-        Raises:
-            FileNotFoundError: If skill_index.json is not found
-            json.JSONDecodeError: If skill_index.json is invalid JSON
-        """
-        import json
-
-        from omni.foundation.config.dirs import get_skill_index_path
-
-        skill_index_path = get_skill_index_path()
-
-        if not skill_index_path.exists():
-            raise FileNotFoundError(
-                f"Skill index not found at {skill_index_path}. "
-                "Run 'just build-rust' to generate the skill index."
-            )
-
-        tool_schemas = []
-        skill_index = json.loads(skill_index_path.read_text())
-
-        for skill_entry in skill_index:
-            skill_name = skill_entry.get("name", "")
-            if skill_names and skill_name not in skill_names:
-                continue
-
-            tools = skill_entry.get("tools", [])
-            for tool in tools:
-                tool_name = tool.get("name", "")
-                tool_desc = tool.get("description", "")
-
-                # Generate input schema from description (basic approach)
-                input_schema = self._generate_input_schema_from_description(tool_name, tool_desc)
-
-                tool_schemas.append({
-                    "name": tool_name,
-                    "description": tool_desc,
-                    "input_schema": input_schema,
-                })
-
-        return tool_schemas
-
-    def _generate_input_schema_from_description(self, tool_name: str, description: str) -> dict:
-        """Generate basic input schema from tool name and description.
-
-        This is a best-effort schema generation. For full accuracy, use the
-        skill context which extracts schemas from actual function signatures.
-        """
-        # Extract common parameters based on tool naming patterns
-        properties = {}
-        required = []
-
-        # Common patterns
-        if "path" in tool_name or "file" in tool_name:
-            properties["path"] = {
-                "type": "string",
-                "description": "Path to file or directory"
-            }
-            required.append("path")
-
-        if "content" in tool_name:
-            properties["content"] = {
-                "type": "string",
-                "description": "Content to write or process"
-            }
-            required.append("content")
-
-        if "query" in tool_name or "search" in tool_name:
-            properties["query"] = {
-                "type": "string",
-                "description": "Search query or question"
-            }
-            required.append("query")
-
-        if "message" in tool_name:
-            properties["message"] = {
-                "type": "string",
-                "description": "Message content"
-            }
-            required.append("message")
-
-        if "cmd" in tool_name or "command" in tool_name:
-            properties["cmd"] = {
-                "type": "string",
-                "description": "Command to execute"
-            }
-            required.append("cmd")
-
-        if "args" in tool_name:
-            properties["args"] = {
-                "type": "array",
-                "description": "Command arguments"
-            }
-
-        # Fallback: single "input" parameter for unknown tools
-        if not properties:
-            properties["input"] = {
-                "type": "string",
-                "description": "Input for the tool"
-            }
-
-        return {
-            "type": "object",
-            "properties": properties,
-            "required": required if required else [],
-        }
 
     async def stream_complete(
         self,

@@ -108,10 +108,13 @@ Intercepts tool calls before execution:
 class ActionGuard:
     def check(self, tool_name: str, tool_input: dict) -> Optional[str]:
         """Return warning message if action is redundant."""
-        if "read_file" in tool_name:
-            path = self._extract_path(tool_name, tool_input)
-            if path and self._state.is_redundant_read(path):
-                return self._block_message(path)  # Block and warn
+        # Tool schema from @skill_command tells LLM which params to use
+        # LLM generates correct input, we just validate
+        if "read" in tool_name:
+            paths = self._extract_paths(tool_input)
+            for path in paths:
+                if path and self._state.is_redundant_read(path):
+                    return self._block_message(path)
         return None
 ```
 
@@ -337,10 +340,10 @@ Together, they form **F4: Self-Evolving Agent**:
 **Problem**: Agent keeps re-reading the same file without acting.
 
 ```
-Step 1: read_file("README.md")      → Allowed, tracked in visited_files
-Step 2: read_file("README.md")      → BLOCKED by ActionGuard
-         → Returns: "You already read README.md. Use write_file to modify."
-Step 3: write_file("README.md", ...) → Allowed, tracked in modified_files
+Step 1: read_files(paths=["README.md"]) → Allowed, tracked
+Step 2: read_files(paths=["README.md"]) → BLOCKED by ActionGuard
+         → Returns: "Already read. Consider writing changes."
+Step 3: write_file(path="README.md", ...) → Allowed, tracked
 ```
 
 **Outcome**: Agent takes action instead of looping.

@@ -39,15 +39,15 @@ This document describes the MCP Tool schema system, including `inputSchema`, `an
 
 ## 2. Type System Mapping
 
-| JSON Schema Type | Python Type | Example |
-|-----------------|-------------|---------|
-| `string` | `str` | `"hello"` |
-| `integer` | `int` | `42` |
-| `number` | `float` | `3.14` |
-| `boolean` | `bool` | `true` / `false` |
-| `array` | `list` | `["a", "b"]` |
-| `object` | `dict` | `{"key": "value"}` |
-| `enum` | `Literal` | `["a", "b", "c"]` |
+| JSON Schema Type | Python Type | Example            |
+| ---------------- | ----------- | ------------------ |
+| `string`         | `str`       | `"hello"`          |
+| `integer`        | `int`       | `42`               |
+| `number`         | `float`     | `3.14`             |
+| `boolean`        | `bool`      | `true` / `false`   |
+| `array`          | `list`      | `["a", "b"]`       |
+| `object`         | `dict`      | `{"key": "value"}` |
+| `enum`           | `Literal`   | `["a", "b", "c"]`  |
 
 ### Python Type Hints to JSON Schema
 
@@ -128,7 +128,7 @@ def search_code(
     },
     "exclude_patterns": {
       "type": "array",
-      "items": {"type": "string"},
+      "items": { "type": "string" },
       "description": "排除模式列表"
     }
   },
@@ -170,22 +170,22 @@ This is how the tool appears in the MCP protocol:
 
 ## 5. @skill_command Parameters Reference
 
-| Parameter | Type | Default | Purpose |
-|-----------|------|---------|---------|
-| `name` | `str \| None` | Function name | Tool name |
-| `description` | `str \| None` | Docstring first line | Tool description |
-| `category` | `str` | `"general"` | Tool category |
-| `title` | `str \| None` | `None` | MCP title annotation |
-| `read_only` | `bool` | `False` | MCP readOnlyHint (true = safe) |
-| `destructive` | `bool` | `False` | MCP destructiveHint (may modify data) |
-| `idempotent` | `bool` | `False` | MCP idempotentHint (safe to retry) |
-| `open_world` | `bool` | `False` | MCP openWorldHint (accesses external) |
-| `inject_root` | `bool` | `False` | Auto-inject project root |
-| `inject_settings` | `list[str] \| None` | `None` | Settings to inject |
-| `autowire` | `bool` | `True` | Enable DI auto-wiring |
-| `retry_on` | `tuple[type[Exception], ...] \| None` | `None` | Exceptions to retry |
-| `max_attempts` | `int` | `1` | Max retry attempts |
-| `cache_ttl` | `float` | `0.0` | Result cache TTL (seconds) |
+| Parameter         | Type                                  | Default              | Purpose                               |
+| ----------------- | ------------------------------------- | -------------------- | ------------------------------------- |
+| `name`            | `str \| None`                         | Function name        | Tool name                             |
+| `description`     | `str \| None`                         | Docstring first line | Tool description                      |
+| `category`        | `str`                                 | `"general"`          | Tool category                         |
+| `title`           | `str \| None`                         | `None`               | MCP title annotation                  |
+| `read_only`       | `bool`                                | `False`              | MCP readOnlyHint (true = safe)        |
+| `destructive`     | `bool`                                | `False`              | MCP destructiveHint (may modify data) |
+| `idempotent`      | `bool`                                | `False`              | MCP idempotentHint (safe to retry)    |
+| `open_world`      | `bool`                                | `False`              | MCP openWorldHint (accesses external) |
+| `inject_root`     | `bool`                                | `False`              | Auto-inject project root              |
+| `inject_settings` | `list[str] \| None`                   | `None`               | Settings to inject                    |
+| `autowire`        | `bool`                                | `True`               | Enable DI auto-wiring                 |
+| `retry_on`        | `tuple[type[Exception], ...] \| None` | `None`               | Exceptions to retry                   |
+| `max_attempts`    | `int`                                 | `1`                  | Max retry attempts                    |
+| `cache_ttl`       | `float`                               | `0.0`                | Result cache TTL (seconds)            |
 
 ---
 
@@ -193,13 +193,13 @@ This is how the tool appears in the MCP protocol:
 
 MCP annotations help the LLM understand tool characteristics:
 
-| Annotation | Values | Meaning |
-|------------|--------|---------|
-| `title` | `str \| None` | Human-readable tool title |
-| `readOnlyHint` | `bool` | `true` = read-only, safe to call |
-| `destructiveHint` | `bool` | `true` = modifies data, confirm first |
-| `idempotentHint` | `bool` | `true` = safe to retry |
-| `openWorldHint` | `bool` | `true` = accesses external network |
+| Annotation        | Values        | Meaning                               |
+| ----------------- | ------------- | ------------------------------------- |
+| `title`           | `str \| None` | Human-readable tool title             |
+| `readOnlyHint`    | `bool`        | `true` = read-only, safe to call      |
+| `destructiveHint` | `bool`        | `true` = modifies data, confirm first |
+| `idempotentHint`  | `bool`        | `true` = safe to retry                |
+| `openWorldHint`   | `bool`        | `true` = accesses external network    |
 
 ### How LLM Uses Annotations
 
@@ -292,13 +292,14 @@ def example(
 ```
 
 Generated schema:
+
 ```json
 {
   "type": "object",
   "properties": {
-    "required_param": {"type": "string"},
-    "optional_param": {"type": "string", "default": "default"},
-    "optional_list": {"type": "array", "items": {"type": "string"}}
+    "required_param": { "type": "string" },
+    "optional_param": { "type": "string", "default": "default" },
+    "optional_list": { "type": "array", "items": { "type": "string" } }
   },
   "required": ["required_param"]
 }

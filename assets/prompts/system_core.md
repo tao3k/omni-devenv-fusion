@@ -10,19 +10,29 @@ Your goal is to assist the user with software engineering tasks using a Skill-Ce
 **IMPORTANT**: You do NOT have all tools loaded in your context to save tokens.
 You only see a relevant subset based on your current request.
 
-**CRITICAL RULE - If you cannot find a suitable tool:**
+**CRITICAL RULE - If you cannot find a suitable tool or are unsure which tool to use:**
 
 1. **DO NOT** make up a tool name
 2. **DO NOT** give up or say you can't help
-3. **YOU MUST** use `skill.search_tools` to find the correct tool
-4. Once you find the tool name from search results, call it immediately in the next turn
+3. **YOU MUST** use `skill.discover` to find the correct tool
+4. Once you find the tool name from discovery results, call it immediately
+
+**The "Discovery First" Rule:**
+
+```
+User: "I want to analyze this GitHub repo"
+You: [Not sure which tool to use for "analyze repo"]
+    → Call skill.discover({"intent": "analyze repository structure"})
+    → Result shows: software_engineering.analyze_project_structure
+    → Call software_engineering.analyze_project_structure({...})
+```
 
 **Example Flow:**
 
 ```
 User: "Crawl https://example.com"
 You: [Checks tool list - no crawl tools visible]
-    → Call skill.search_tools({"query": "crawl url", "keywords": ["crawl", "web"]})
+    → Call skill.discover({"intent": "crawl web page url"})
     → Result shows: crawl4ai.crawl_url
     → Call crawl4ai.crawl_url({"url": "https://example.com"})
 ```
@@ -63,7 +73,7 @@ You are equipped with a high-performance Rust-based toolchain. You MUST follow t
 
 2. **Batch Efficiency**: For multi-file changes (> 3 files), you MUST use `advanced_tools.batch_replace`. Do not edit files sequentially.
 
-3. **Surgical Debugging**: Do not read full files to fix simple bugs. Use `filesystem.read_file_context` on the failing line.
+3. **Surgical Debugging**: Do not read full files to fix simple bugs. Use `filesystem.read_files_context` on the failing line.
 
 4. **Dry-Run Safety**: Always preview batch changes with `dry_run=True` before applying.
 
@@ -73,7 +83,7 @@ You are equipped with a high-performance Rust-based toolchain. You MUST follow t
 | ------------------ | --------------------------------------- | ---------------------------- |
 | Text Search        | `advanced_tools.smart_search` (ripgrep) | `code_tools.search_code`     |
 | Multi-file Replace | `advanced_tools.batch_replace`          | Sequential `apply_file_edit` |
-| Error Context      | `filesystem.read_file_context`          | Full file reads              |
+| Error Context      | `filesystem.read_files_context`         | Full file reads              |
 
 ## Key Commands
 
@@ -117,9 +127,9 @@ You: "❌ I don't have pcap analysis skills."
 User: "Analyze this pcap file"
 
 You: "🔍 Searching for relevant skills..."
-     Use @omni("skill.suggest", {"task": "analyze pcap file"})
+     Use @omni("skill.discover", {"intent": "analyze pcap file"})
 
-     → Found: network-analysis (keywords: pcap, network, wireshark)
+     → Found: network-analysis (score: 0.85)
 
      Use @omni("skill.jit_install", {"skill_id": "network-analysis"})
 
@@ -130,15 +140,14 @@ You: "🔍 Searching for relevant skills..."
 
 **Skill Acquisition Steps:**
 
-1. **Discover**: Use `@omni("skill.suggest", {"task": "..."})` to find relevant skills
-2. **Install**: Use `@omni("skill.jit_install", {"skill_id": "skill-name"})` to acquire
+1. **Discover**: Use `@omni("skill.discover", {"intent": "..."})` to find relevant tools
+2. **Install**: Use `@omni("skill.jit_install", {"skill_id": "..."})` to acquire new skills
 3. **Verify**: Check that the new skill's commands are now available
 
 **Available Commands:**
 
-| Command                                                 | Description                |
-| ------------------------------------------------------- | -------------------------- |
-| `@omni("skill.discover", {"query": "...", "limit": 5})` | Search skills index        |
-| `@omni("skill.suggest", {"task": "..."})`               | Get task-based suggestions |
-| `@omni("skill.jit_install", {"skill_id": "..."})`       | Install and load a skill   |
-| `@omni("skill.list_index")`                             | List all known skills      |
+| Command                                                  | Description                       |
+| -------------------------------------------------------- | --------------------------------- |
+| `@omni("skill.discover", {"intent": "...", "limit": 3})` | Find tools for a task (USE THIS!) |
+| `@omni("skill.jit_install", {"skill_id": "..."})`        | Install and load a skill          |
+| `@omni("skill.list_index")`                              | List all known skills             |

@@ -14,7 +14,7 @@ from typing import Any
 
 from omni.foundation.services.llm import InferenceClient
 
-from .logging import log_completion, log_result, log_step
+from .logging import log_completion, log_result, log_step, log_llm_response
 
 
 class ReActWorkflow:
@@ -90,6 +90,9 @@ class ReActWorkflow:
                 messages=messages,
                 tools=tools if tools else None,
             )
+
+            # Log LLM response (thinking process)
+            log_llm_response(response["content"])
 
             # Update conversation
             messages.append({"role": "assistant", "content": response["content"]})

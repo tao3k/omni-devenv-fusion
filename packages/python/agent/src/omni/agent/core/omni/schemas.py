@@ -18,7 +18,7 @@ def extract_tool_schemas(commands: list[str], get_command) -> list[dict[str, Any
     """Extract tool schemas from skill command handlers.
 
     Args:
-        commands: List of command names (e.g., "filesystem.read_file")
+        commands: List of command names (e.g., "filesystem.read_files")
         get_command: Function to get handler for a command name
 
     Returns:

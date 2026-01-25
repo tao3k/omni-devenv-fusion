@@ -452,7 +452,7 @@ memories = await interceptor.before_execution(
 # After execution: Record experience
 await interceptor.after_execution(
     user_input="How do I fix git lock error?",
-    tool_calls=["git.commit", "filesystem.read_file"],
+    tool_calls=["git.commit", "filesystem.read_files"],
     success=True,
     reflection="Removed .git/index.lock file to resolve lock error"
 )

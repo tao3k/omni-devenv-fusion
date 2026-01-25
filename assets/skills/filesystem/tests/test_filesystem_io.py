@@ -30,11 +30,11 @@ class TestFilesystemImports:
 
         assert io_module is not None
 
-    def test_read_file_function_exists(self):
-        """Test read_file function is exported."""
-        from filesystem.scripts.io import read_file
+    def test_read_files_function_exists(self):
+        """Test read_files function is exported."""
+        from filesystem.scripts.io import read_files
 
-        assert callable(read_file)
+        assert callable(read_files)
 
     def test_save_file_function_exists(self):
         """Test save_file function is exported."""
@@ -81,7 +81,7 @@ class TestFilesystemExports:
         from filesystem.scripts import io
 
         expected = [
-            "read_file",
+            "read_files",
             "save_file",
             "apply_file_changes",
             "list_directory",
@@ -136,27 +136,39 @@ class TestSkillCommandDecorator:
         """Check if function has skill command attributes."""
         return hasattr(func, "_is_skill_command") and hasattr(func, "_skill_config")
 
-    def test_read_file_has_skill_command_attr(self):
-        """Test read_file has _is_skill_command and _skill_config attributes."""
-        from filesystem.scripts.io import read_file
+    def test_read_files_has_skill_command_attr(self):
+        """Test read_files has _is_skill_command and _skill_config attributes."""
+        from filesystem.scripts.io import read_files
 
-        assert self._has_skill_command_attr(read_file)
-        assert read_file._is_skill_command is True
+        assert self._has_skill_command_attr(read_files)
+        assert read_files._is_skill_command is True
 
-    def test_read_file_autowire_enabled(self):
-        """Test read_file has autowire configuration in _skill_config."""
-        from filesystem.scripts.io import read_file
+    def test_read_files_autowire_enabled(self):
+        """Test read_files has autowire configuration in _skill_config."""
+        from filesystem.scripts.io import read_files
 
-        config = getattr(read_file, "_skill_config", None)
+        config = getattr(read_files, "_skill_config", None)
         assert config is not None
         execution = config.get("execution", {})
         assert execution.get("autowire") is True
 
-    def test_read_file_category_read(self):
-        """Test read_file has category 'read'."""
-        from filesystem.scripts.io import read_file
+    def test_read_files_category_read(self):
+        """Test read_files has category 'read'."""
+        from filesystem.scripts.io import read_files
 
-        assert self._get_category(read_file) == "read"
+        assert self._get_category(read_files) == "read"
+
+    def test_read_files_accepts_list_parameter(self):
+        """Test read_files schema accepts list of paths."""
+        from filesystem.scripts.io import read_files
+
+        config = getattr(read_files, "_skill_config", None)
+        assert config is not None
+        schema = config.get("input_schema", {})
+        props = schema.get("properties", {})
+        assert "paths" in props
+        assert props["paths"].get("type") == "array"
+        assert props["paths"].get("items", {}).get("type") == "string"
 
     def test_save_file_has_skill_command_attr(self):
         """Test save_file has _is_skill_command and _skill_config attributes."""

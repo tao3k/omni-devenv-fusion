@@ -18,8 +18,8 @@ class TestSecurityValidator:
         assert (
             self.validator.validate(
                 skill_name="my_skill",
-                tool_name="filesystem.read_file",
-                skill_permissions=["filesystem:read_file"],
+                tool_name="filesystem.read_files",
+                skill_permissions=["filesystem:read_files"],
             )
             is True
         )
@@ -29,7 +29,7 @@ class TestSecurityValidator:
         assert (
             self.validator.validate(
                 skill_name="my_skill",
-                tool_name="filesystem.read_file",
+                tool_name="filesystem.read_files",
                 skill_permissions=["filesystem:*"],
             )
             is True
@@ -40,7 +40,7 @@ class TestSecurityValidator:
         assert (
             self.validator.validate(
                 skill_name="my_skill",
-                tool_name="filesystem.read_file",
+                tool_name="filesystem.read_files",
                 skill_permissions=[],
             )
             is False
@@ -51,7 +51,7 @@ class TestSecurityValidator:
         assert (
             self.validator.validate(
                 skill_name="my_skill",
-                tool_name="filesystem.read_file",
+                tool_name="filesystem.read_files",
                 skill_permissions=None,
             )
             is False
@@ -62,7 +62,7 @@ class TestSecurityValidator:
         assert (
             self.validator.validate(
                 skill_name="my_skill",
-                tool_name="filesystem.read_file",
+                tool_name="filesystem.read_files",
                 skill_permissions=["filesystem:write_file"],
             )
             is False
@@ -106,8 +106,8 @@ class TestSecurityValidator:
         # Should not raise
         self.validator.validate_or_raise(
             skill_name="my_skill",
-            tool_name="filesystem.read_file",
-            skill_permissions=["filesystem:read_file"],
+            tool_name="filesystem.read_files",
+            skill_permissions=["filesystem:read_files"],
         )
 
     def test_validate_or_raise_denied(self):
@@ -115,12 +115,12 @@ class TestSecurityValidator:
         with pytest.raises(SecurityError) as exc_info:
             self.validator.validate_or_raise(
                 skill_name="my_skill",
-                tool_name="filesystem.read_file",
+                tool_name="filesystem.read_files",
                 skill_permissions=[],
             )
 
         assert "my_skill" in str(exc_info.value)
-        assert "filesystem.read_file" in str(exc_info.value)
+        assert "filesystem.read_files" in str(exc_info.value)
 
 
 class TestSecurityError:
@@ -130,12 +130,12 @@ class TestSecurityError:
         """Test that error message is properly formatted."""
         error = SecurityError(
             skill_name="calculator",
-            tool_name="filesystem.read_file",
+            tool_name="filesystem.read_files",
             required_permission="filesystem:read",
         )
 
         assert "calculator" in str(error)
-        assert "filesystem.read_file" in str(error)
+        assert "filesystem.read_files" in str(error)
         assert "filesystem:read" in str(error)
         assert "not authorized" in str(error)
 

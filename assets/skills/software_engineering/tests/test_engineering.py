@@ -107,7 +107,11 @@ class TestRunTests:
         result = run_tests()
 
         # Should detect justfile in this project
-        if "just test" in result["command"] or "make test" in result["command"] or "pytest" in result["command"]:
+        if (
+            "just test" in result["command"]
+            or "make test" in result["command"]
+            or "pytest" in result["command"]
+        ):
             assert True
 
 

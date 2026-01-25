@@ -235,6 +235,51 @@ impl PyVectorStore {
         })
     }
 
+    /// Add a single document to the vector store.
+    ///
+    /// This is a convenience wrapper around add_documents for single-item additions.
+    /// Matches the Python interface: add(collection, content, vector, metadata_json)
+    ///
+    /// Args:
+    ///   table_name: Name of the table (called "collection" in Python)
+    ///   content: Text content to store
+    ///   vector: Pre-computed embedding vector
+    ///   metadata: JSON string of metadata
+    ///
+    /// Returns:
+    ///   Ok(()) on success
+    fn add(
+        &self,
+        table_name: String,
+        content: String,
+        vector: Vec<f32>,
+        metadata: String,
+    ) -> PyResult<()> {
+        let path = self.path.clone();
+        let dimension = self.dimension;
+        // Generate a UUID for the document
+        let id = uuid::Uuid::new_v4().to_string();
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        rt.block_on(async {
+            let store = VectorStore::new(&path, Some(dimension))
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            store
+                .add_documents(
+                    &table_name,
+                    vec![id],
+                    vec![vector],
+                    vec![content],
+                    vec![metadata],
+                )
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        })
+    }
+
     fn delete(&self, table_name: String, ids: Vec<String>) -> PyResult<()> {
         let path = self.path.clone();
         let dimension = self.dimension;

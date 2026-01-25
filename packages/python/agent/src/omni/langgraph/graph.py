@@ -24,10 +24,10 @@ from __future__ import annotations
 
 from typing import Any, Literal, TypedDict
 
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from structlog import get_logger
 
+from omni.langgraph.checkpoint.saver import RustCheckpointSaver
 from omni.langgraph.nodes.recall import recall_node
 from omni.langgraph.orchestrator.compiled import CompiledGraph
 from omni.langgraph.state import GraphState, StateCheckpointer, get_checkpointer
@@ -408,7 +408,7 @@ class OmniGraph:
     Cognitive Graph for Omni Agent.
 
     Implements ReAct (Reasoning + Acting) pattern with LangGraph.
-    Uses MemorySaver for LangGraph checkpointer, StateCheckpointer for persistence.
+    Uses RustCheckpointSaver (LanceDB) for LangGraph checkpointer, StateCheckpointer for persistence.
 
     Self-Healing Flow:
         plan → execute → reflect
@@ -424,7 +424,7 @@ class OmniGraph:
         skill_runner: Any = None,
         router: Any = None,
         checkpointer: StateCheckpointer | None = None,
-        use_memory_checkpointer: bool = True,
+        use_rust_checkpointer: bool = True,
         lance_checkpointer: Any = None,  # LanceCheckpointer for recall
     ):
         """
@@ -435,7 +435,7 @@ class OmniGraph:
             skill_runner: Optional skill runner for executing skills
             router: Optional router for task routing
             checkpointer: Optional StateCheckpointer for persistence (not used by LangGraph)
-            use_memory_checkpointer: Use MemorySaver for LangGraph (default: True)
+            use_rust_checkpointer: Use RustCheckpointSaver for LangGraph (default: True)
             lance_checkpointer: Optional LanceCheckpointer for semantic recall
         """
         self.inference = inference_client
@@ -444,7 +444,7 @@ class OmniGraph:
         self.checkpointer = checkpointer or get_checkpointer()
         self.lance_checkpointer = lance_checkpointer
         self._app: CompiledGraph | None = None
-        self._memory_checkpointer = MemorySaver() if use_memory_checkpointer else None
+        self._rust_checkpointer = RustCheckpointSaver() if use_rust_checkpointer else None
 
     def _create_workflow(self) -> StateGraph:
         """Create the state workflow with nodes and edges."""
@@ -527,7 +527,7 @@ class OmniGraph:
         if self._app is None:
             workflow = self._create_workflow()
             self._app = CompiledGraph(
-                graph=workflow.compile(checkpointer=self._memory_checkpointer),
+                graph=workflow.compile(checkpointer=self._rust_checkpointer),
             )
         return self._app
 

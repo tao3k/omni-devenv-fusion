@@ -20,6 +20,13 @@ Usage:
 
     # Load latest state
     state = load_workflow_state("smart_commit", "workflow-123")
+
+LangGraph Integration:
+    from omni.foundation.checkpoint import RustCheckpointSaver
+
+    # Use as LangGraph checkpointer
+    saver = RustCheckpointSaver(workflow_type="research")
+    graph.compile(checkpointer=saver)
 """
 
 from __future__ import annotations
@@ -27,7 +34,7 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncGenerator
 
 from omni.foundation.config.logging import get_logger
 from omni.foundation.config.settings import get_setting
@@ -40,7 +47,12 @@ _store_lock_cache: dict[str, Any] = {}
 
 
 def _get_store() -> Any:
-    """Get or create the global PyCheckpointStore instance."""
+    """Get or create the global PyCheckpointStore instance.
+
+    Note: The Rust CheckpointStore reuses existing LanceDB files.
+    This cache is per-process, so each new CLI invocation creates a new
+    Python-side wrapper, but the underlying LanceDB data is persistent.
+    """
     from omni.foundation.config.dirs import get_checkpoint_db_path
 
     db_path = str(get_checkpoint_db_path())
@@ -48,13 +60,14 @@ def _get_store() -> Any:
     if db_path not in _checkpoint_store_cache:
         try:
             # Import Rust bindings
-            from bindings.python.checkpoint import create_checkpoint_store
+            from omni_core_rs import PyCheckpointStore, create_checkpoint_store
 
             dimension = get_setting("checkpoint.embedding_dimension", 1536)
             _checkpoint_store_cache[db_path] = create_checkpoint_store(db_path, dimension)
-            logger.info("Created checkpoint store", db_path=db_path)
-        except ImportError:
-            logger.warning("Rust bindings not available, using fallback SQLite")
+            # Note: LanceDB reuses existing files; this just creates the Python wrapper
+            logger.debug("Initialized checkpoint store wrapper", db_path=db_path)
+        except ImportError as e:
+            logger.warning(f"Rust bindings not available: {e}, using fallback SQLite")
             _checkpoint_store_cache[db_path] = None
 
     return _checkpoint_store_cache[db_path]
@@ -216,7 +229,12 @@ def delete_workflow_state(workflow_type: str, workflow_id: str) -> bool:
     try:
         table_name = _get_table_name(workflow_type)
         count = store.delete_thread(table_name, workflow_id)
-        logger.info("Deleted workflow checkpoints", workflow_type=workflow_type, workflow_id=workflow_id, count=count)
+        logger.info(
+            "Deleted workflow checkpoints",
+            workflow_type=workflow_type,
+            workflow_id=workflow_id,
+            count=count,
+        )
         return True
 
     except Exception as e:

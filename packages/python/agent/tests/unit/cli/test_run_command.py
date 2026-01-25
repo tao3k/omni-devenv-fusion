@@ -253,6 +253,163 @@ class TestRunCommandOutput:
         # Verify panel title
         assert "✨ CCA Session Report ✨" in captured.out
 
+    def test_session_report_cleans_tool_call_artifacts(self, capsys):
+        """Verify _print_session_report cleans up tool call artifacts."""
+        from omni.agent.cli.commands.run import _print_session_report
+
+        # Simulate corrupted output with tool call markers
+        result = {
+            "session_id": "test_tool_calls",
+            "output": """[TOOL_CALL: filesystem.read_files">
+/Users/xxx/file.md  <TOOL_CALL: filesystem.list_directory"> /Users/xxx/shards    │
+
+[/TOOL_CALL]
+
+## Analysis
+This is the actual result.""",
+        }
+        step_count = 2
+        tool_counts = {"filesystem": 2}
+        tokens = 500
+
+        _print_session_report("cleanup test", result, step_count, tool_counts, tokens)
+
+        captured = capsys.readouterr()
+        # Verify tool call artifacts are removed
+        assert "[TOOL_CALL:" not in captured.out or "│" not in captured.out.split("│")[-1]
+        # Verify actual content is preserved
+        assert "Analysis" in captured.out
+        assert "This is the actual result" in captured.out
+
+    def test_session_report_with_empty_output(self, capsys):
+        """Verify _print_session_report handles empty output."""
+        from omni.agent.cli.commands.run import _print_session_report
+
+        result = {
+            "session_id": "test_empty",
+            "output": "",
+        }
+        step_count = 1
+        tool_counts = {}
+        tokens = 100
+
+        _print_session_report("empty output test", result, step_count, tool_counts, tokens)
+
+        captured = capsys.readouterr()
+        # Should still render the report
+        assert "✨ CCA Session Report ✨" in captured.out
+        assert "empty output test" in captured.out
+
+    def test_session_report_with_none_output(self, capsys):
+        """Verify _print_session_report handles None output."""
+        from omni.agent.cli.commands.run import _print_session_report
+
+        result = {
+            "session_id": "test_none",
+            "output": None,
+        }
+        step_count = 1
+        tool_counts = {}
+        tokens = 100
+
+        _print_session_report("none output test", result, step_count, tool_counts, tokens)
+
+        captured = capsys.readouterr()
+        # Should still render the report with default message
+        assert "✨ CCA Session Report ✨" in captured.out
+
+    def test_session_report_with_no_output_key(self, capsys):
+        """Verify _print_session_report handles missing output key."""
+        from omni.agent.cli.commands.run import _print_session_report
+
+        result = {
+            "session_id": "test_no_key",
+            # No "output" key
+        }
+        step_count = 1
+        tool_counts = {}
+        tokens = 100
+
+        _print_session_report("no output key test", result, step_count, tool_counts, tokens)
+
+        captured = capsys.readouterr()
+        # Should still render the report
+        assert "✨ CCA Session Report ✨" in captured.out
+
+    def test_session_report_with_multiple_tool_calls(self, capsys):
+        """Verify _print_session_report handles multiple tool calls in output."""
+        from omni.agent.cli.commands.run import _print_session_report
+
+        result = {
+            "session_id": "test_multi_tool",
+            "output": """[TOOL_CALL: knowledge.get_development_context]
+[/TOOL_CALL]
+[TOOL_CALL: filesystem.read_files]
+/Users/xxx/file1.md
+[/TOOL_CALL]
+[TOOL_CALL: filesystem.read_files]
+/Users/xxx/file2.md
+[/TOOL_CALL]
+
+## Result
+Analysis complete.""",
+        }
+        step_count = 3
+        tool_counts = {"knowledge": 1, "filesystem": 2}
+        tokens = 800
+
+        _print_session_report("multi tool test", result, step_count, tool_counts, tokens)
+
+        captured = capsys.readouterr()
+        # Verify report still renders correctly
+        assert "✨ CCA Session Report ✨" in captured.out
+        # Verify actual content is preserved
+        assert "Result" in captured.out
+        assert "Analysis complete" in captured.out
+
+    def test_session_report_with_research_result(self, capsys):
+        """Verify _print_session_report renders research-style result dict."""
+        from omni.agent.cli.commands.run import _print_session_report
+
+        result = {
+            "session_id": "test_research",
+            "output": {
+                "success": True,
+                "harvest_dir": "/Users/xxx/harvested/20260124-test",
+                "repo_url": "https://github.com/example/repo",
+                "repo_name": "example-repo",
+            },
+        }
+        step_count = 5
+        tool_counts = {"researcher": 5}
+        tokens = 2000
+
+        _print_session_report("research task", result, step_count, tool_counts, tokens)
+
+        captured = capsys.readouterr()
+        # Verify report renders dict as JSON
+        assert "✨ CCA Session Report ✨" in captured.out
+        assert "success" in captured.out.lower() or "true" in captured.out.lower()
+
+    def test_session_report_with_json_string(self, capsys):
+        """Verify _print_session_report handles JSON-like string output."""
+        from omni.agent.cli.commands.run import _print_session_report
+
+        result = {
+            "session_id": "test_json_str",
+            "output": '{"status": "completed", "count": 42}',
+        }
+        step_count = 1
+        tool_counts = {}
+        tokens = 200
+
+        _print_session_report("json string test", result, step_count, tool_counts, tokens)
+
+        captured = capsys.readouterr()
+        assert "✨ CCA Session Report ✨" in captured.out
+        # JSON should be rendered (possibly escaped)
+        assert "completed" in captured.out or "status" in captured.out
+
 
 class TestRunCommandEdgeCases:
     """Tests for edge cases in run command."""

@@ -9,19 +9,16 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 from typing import Any
 
+from pydantic import BaseModel
 from rich.console import Console
 from rich.table import Table
 
 from .metrics import MemoryThresholdChecker, MetricsCollector, TestMetrics
 
-console = Console()
 
-
-@dataclass
-class StressConfig:
+class StressConfig(BaseModel):
     """Configuration for stress test runner."""
 
     turns: int = 50

@@ -1,7 +1,7 @@
 # Omni Loop (CCA Runtime)
 
 > **Status**: Active (Current)
-> **Version**: v1.0 | 2026-01-15
+> **Version**: v2.0 | 2026-01-24
 
 ## Overview
 
@@ -9,12 +9,13 @@ Omni Loop is the **CCA (Cognitive Code Agent) Runtime** that integrates all syst
 
 ### Core Components
 
-| Component      | Module                        | Purpose                                  |
-| -------------- | ----------------------------- | ---------------------------------------- |
-| **Conductor**  | `context_orchestrator.py`     | Layered context assembly                 |
-| **Librarian**  | `vector_store.py`             | Semantic memory & knowledge              |
-| **Note-Taker** | `note_taker.py`               | Session reflection & wisdom distillation |
-| **JIT Loader** | `skill_manager/jit_loader.py` | Just-in-time skill loading               |
+| Component      | Purpose                                               |
+| -------------- | ----------------------------------------------------- |
+| **ReAct Loop** | Execute tasks via Observe-Decide-Act-Reflect cycle    |
+| **Router**     | Semantic routing to select appropriate skills         |
+| **Librarian**  | RAG-powered knowledge retrieval                       |
+| **Note-Taker** | Session reflection & wisdom distillation              |
+| **Kernel**     | Tool execution via @skill_command decorated functions |
 
 ## CCA Cycle
 
@@ -60,22 +61,25 @@ Omni Loop implements the **Trinity Architecture** with three logical roles:
 ### Interactive REPL
 
 ```bash
-uv run omni run repl
+uv run omni run --repl
 # Enter interactive mode for continuous task execution
 ```
 
 ### Single Task Execution
 
 ```bash
-uv run omni run exec "fix the bug" --steps 3
-# Execute a single task with max 3 steps
+uv run omni run "fix the bug" --steps 3
+# Execute a single task with max 3 steps (ReAct Mode)
 ```
 
 ### Available Options
 
-| Option        | Description                         |
-| ------------- | ----------------------------------- |
-| `-s, --steps` | Maximum steps (default: 1, max: 20) |
+| Option              | Description                          |
+| ------------------- | ------------------------------------ |
+| `-s, --steps`       | Maximum steps (default: 10, max: 20) |
+| `--json, -j`        | Output as JSON                       |
+| `--repl`            | Enter interactive REPL mode          |
+| `--verbose/--quiet` | Show/hide tool execution details     |
 
 ## Ingest Command
 
@@ -131,8 +135,8 @@ Omni Loop produces a **CCA Session Report** with detailed metrics:
 │  │ Tool           │ Count          │                           │
 │  ├────────────────┼────────────────┤                           │
 │  │ git_status     │ 1              │                           │
-│  │ read_file      │ 2              │                           │
-│  │ edit_file      │ 2              │                           │
+│  │ read_files     │ 2              │                           │
+│  │ write_file     │ 2              │                           │
 │  └────────────────┴────────────────┘                           │
 │                                                                 │
 │  Reflection & Outcome:                                          │

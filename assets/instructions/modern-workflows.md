@@ -81,7 +81,7 @@ test = testing.run_pytest(target="**/*.py")
 **Protocol**:
 
 1. **Diagnose**: Run `testing.run_pytest`. Look at the structured failures.
-2. **Surgical Read**: Use `filesystem.read_file_context(file="...", line=42, context_lines=10)`.
+2. **Surgical Read**: Use `filesystem.read_files_context(file="...", line=42, context_lines=10)`.
    - _Why_: Focus only on the error location. Save tokens.
 3. **Fix**: Use `code_tools.apply_file_edit` to fix the specific logic.
 4. **Verify**: Rerun `testing.run_pytest` to confirm the fix (Green state).
@@ -96,7 +96,7 @@ result = testing.run_pytest(target="tests/test_calculator.py")
 # result["failures"][0] = {"file": "tests/test_calculator.py", "line": 42, "error": "..."}
 
 # Step 2: Surgical Read
-context = filesystem.read_file_context(
+context = filesystem.read_files_context(
     file_path="tests/test_calculator.py",
     line_number=42,
     context_lines=5
@@ -127,7 +127,7 @@ Always prefer the most specialized tool for the job:
 | **Project Structure** | `advanced_tools.tree_view`              | Manual directory traversal      |
 | **Single File Edit**  | `code_tools.apply_file_edit`            | -                               |
 | **Multi-File Edit**   | `advanced_tools.batch_replace`          | Sequential `apply_file_edit`    |
-| **Surgical Read**     | `filesystem.read_file_context`          | `filesystem.read_file`          |
+| **Surgical Read**     | `filesystem.read_files_context`         | `filesystem.read_files`         |
 | **Test Execution**    | `testing.run_pytest`                    | Manual pytest command           |
 
 ---

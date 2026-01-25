@@ -25,9 +25,7 @@ logger = get_logger("omni.core.router.hive")
 class FallbackRouter:
     """Fallback router when no explicit route is found."""
 
-    async def route(
-        self, query: str, context: dict[str, Any] | None = None
-    ) -> RouteResult | None:
+    async def route(self, query: str, context: dict[str, Any] | None = None) -> RouteResult | None:
         """Return None to indicate no route found."""
         return None
 
@@ -62,9 +60,7 @@ class HiveRouter:
         self._semantic = semantic_router
         self._fallback = FallbackRouter()
 
-    async def route(
-        self, query: str, context: dict[str, Any] | None = None
-    ) -> RouteResult | None:
+    async def route(self, query: str, context: dict[str, Any] | None = None) -> RouteResult | None:
         """Route a query using the Hive Mind strategy.
 
         Args:

@@ -23,8 +23,9 @@ import json
 import sys
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
+
+from pydantic import BaseModel
 
 # Setup import paths
 _PRJ_ROOT = Path(__file__).parent.parent
@@ -37,8 +38,7 @@ from rich.table import Table
 console = Console()
 
 
-@dataclass
-class BenchmarkResult:
+class BenchmarkResult(BaseModel):
     """Result of a single benchmark run."""
 
     name: str
@@ -49,8 +49,7 @@ class BenchmarkResult:
     iterations: int
 
 
-@dataclass
-class BenchmarkCategory:
+class BenchmarkCategory(BaseModel):
     """A category of benchmarks."""
 
     name: str

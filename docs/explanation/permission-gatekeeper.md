@@ -80,11 +80,11 @@ Examples:
 
 Tool names use dots, permissions use colons:
 
-| Tool Name              | Permission Format      |
-| ---------------------- | ---------------------- |
-| `filesystem.read_file` | `filesystem:read_file` |
-| `git.status`           | `git:status`           |
-| `network.http_post`    | `network:http_post`    |
+| Tool Name               | Permission Format      |
+| ----------------------- | ---------------------- |
+| `filesystem.read_files` | `filesystem:read_file` |
+| `git.status`            | `git:status`           |
+| `network.http_post`     | `network:http_post`    |
 
 ## Usage
 
@@ -112,12 +112,12 @@ validator = SecurityValidator()
 # Check permission
 if not validator.validate(
     skill_name="my_skill",
-    tool_name="filesystem.read_file",
+    tool_name="filesystem.read_files",
     skill_permissions=["filesystem:read_file", "filesystem:write_file"],
 ):
     raise SecurityError(
         skill_name="my_skill",
-        tool_name="filesystem.read_file",
+        tool_name="filesystem.read_files",
         required_permission="filesystem:read_file",
     )
 ```
@@ -127,7 +127,7 @@ if not validator.validate(
 ```python
 validator.validate_or_raise(
     skill_name="my_skill",
-    tool_name="filesystem.read_file",
+    tool_name="filesystem.read_files",
     skill_permissions=["filesystem:read_file"],
 )
 # Raises SecurityError if not authorized
@@ -139,7 +139,7 @@ validator.validate_or_raise(
 from omni_core_rs import check_permission
 
 # Direct Rust call (faster for high-frequency checks)
-allowed = check_permission("filesystem.read_file", ["filesystem:*"])
+allowed = check_permission("filesystem.read_files", ["filesystem:*"])
 ```
 
 ## Error Handling
@@ -152,19 +152,19 @@ from omni.core.security import SecurityError
 try:
     validator.validate_or_raise(
         skill_name="calculator",
-        tool_name="filesystem.read_file",
+        tool_name="filesystem.read_files",
         skill_permissions=[],  # Zero Trust: no permissions!
     )
 except SecurityError as e:
     print(e.skill_name)      # "calculator"
-    print(e.tool_name)       # "filesystem.read_file"
+    print(e.tool_name)       # "filesystem.read_files"
     print(e.required_permission)  # "filesystem:read_file"
 ```
 
 Error message format:
 
 ```
-SecurityError: Skill 'calculator' is not authorized to use 'filesystem.read_file'.
+SecurityError: Skill 'calculator' is not authorized to use 'filesystem.read_files'.
 Required permission: 'filesystem:read_file'.
 Add this permission to SKILL.md frontmatter to enable.
 ```
@@ -189,7 +189,7 @@ Attempted filesystem access will be blocked:
 # This will raise SecurityError
 validator.validate_or_raise(
     skill_name="calculator",
-    tool_name="filesystem.read_file",
+    tool_name="filesystem.read_files",
     skill_permissions=[],
 )
 ```

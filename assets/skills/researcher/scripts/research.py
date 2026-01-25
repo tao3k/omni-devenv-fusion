@@ -194,11 +194,18 @@ def repomix_compress_shard(
         "include": targets,
         "ignore": {
             "patterns": [
-                "**/*.lock", "**/node_modules/**", "**/.git/**",
-                "**/*.png", "**/*.svg", "**/*.jpg", "**/*.ico",
-                "**/dist/**", "**/build/**", "**/target/**"
+                "**/*.lock",
+                "**/node_modules/**",
+                "**/.git/**",
+                "**/*.png",
+                "**/*.svg",
+                "**/*.jpg",
+                "**/*.ico",
+                "**/dist/**",
+                "**/build/**",
+                "**/target/**",
             ]
-        }
+        },
     }
 
     config_file.write_text(json.dumps(config, indent=2))
@@ -261,7 +268,9 @@ def save_shard_result(base_dir: Path, shard_id: int, title: str, content: str) -
     return file_path
 
 
-def save_index(base_dir: Path, title: str, repo_url: str, request: str, shard_summaries: list[str]) -> Path:
+def save_index(
+    base_dir: Path, title: str, repo_url: str, request: str, shard_summaries: list[str]
+) -> Path:
     """
     Generate and save index.md for the harvested research.
     """
@@ -299,7 +308,7 @@ Each shard represents a subsystem of the codebase, analyzed in depth:
 
     # Add table with descriptions
     for i, summary in enumerate(shard_summaries, 1):
-        desc_match = re.search(r'\]\([^)]+\)\s*:\s*(.+?)(?:\s*~)', summary)
+        desc_match = re.search(r"\]\([^)]+\)\s*:\s*(.+?)(?:\s*~)", summary)
         desc = desc_match.group(1).strip() if desc_match else ""
         if len(desc) > 50:
             desc = desc[:50] + "..."

@@ -5,7 +5,6 @@ Tests for omni.foundation.config.directory module.
 """
 
 
-
 class TestConfDirFunctions:
     """Test configuration directory functions."""
 

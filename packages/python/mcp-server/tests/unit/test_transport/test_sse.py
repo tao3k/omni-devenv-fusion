@@ -1,6 +1,5 @@
 """Unit tests for SSE transport."""
 
-
 import pytest
 from omni.mcp.transport.sse import SSESession, SSESessionManager
 

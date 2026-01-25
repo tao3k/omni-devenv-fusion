@@ -182,7 +182,7 @@ def get_all_skill_paths(skills_path: Path | None = None, skip: set | None = None
     if skills_path is None:
         skills_path = SKILLS_DIR()
 
-    skip = skip or {"crawl4ai", "stress_test_skill", "skill", "test-skill", "_template"}
+    skip = skip or {"stress_test_skill", "skill", "test-skill", "_template"}
     return [
         p
         for p in skills_path.iterdir()

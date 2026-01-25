@@ -36,16 +36,16 @@ class TestDynamicGraphBuilder:
         builder = DynamicGraphBuilder(skill_runner=mock_skill_runner)
 
         builder.add_skill_node(
-            node_name="read_file",
+            node_name="read_files",
             skill_name="filesystem",
-            command_name="read_file",
+            command_name="read_files",
             fixed_args={"encoding": "utf-8"},
         )
 
-        assert "read_file" in builder.nodes
-        node = builder.nodes["read_file"]
+        assert "read_files" in builder.nodes
+        node = builder.nodes["read_files"]
         assert node.type == "skill"
-        assert node.target == "filesystem.read_file"
+        assert node.target == "filesystem.read_files"
 
     def test_add_skill_node_with_state_mappings(self, mock_skill_runner):
         """Should add a skill node with state input/output mappings."""
@@ -145,19 +145,19 @@ class TestNodeMetadata:
         metadata = NodeMetadata(
             name="test_node",
             type="skill",
-            target="filesystem.read_file",
+            target="filesystem.read_files",
         )
 
         assert metadata.name == "test_node"
         assert metadata.type == "skill"
-        assert metadata.target == "filesystem.read_file"
+        assert metadata.target == "filesystem.read_files"
 
     def test_node_metadata_with_args(self):
         """Should handle arguments."""
         metadata = NodeMetadata(
             name="test_node",
             type="skill",
-            target="filesystem.read_file",
+            target="filesystem.read_files",
             args={"encoding": "utf-8", "max_lines": 100},
         )
 

@@ -6,16 +6,19 @@ Uses RustVectorStore for high-performance vector operations.
 
 Python 3.12+ Features:
 - itertools.batched() for batch processing (Section 7.2)
+- asyncio.TaskGroup for batch-internal parallelism (Section 7.3)
 """
 
 from __future__ import annotations
 
+import asyncio
 from itertools import batched
 from typing import Any
 
+from pydantic import BaseModel
+
 from omni.foundation.bridge import RustVectorStore, SearchResult
 from omni.foundation.config.logging import get_logger
-from pydantic import BaseModel
 
 logger = get_logger("omni.core.router.indexer")
 
@@ -118,10 +121,12 @@ class SkillIndexer:
         logger.info(f"Cortex indexing complete. Total entries: {self._indexed_count}")
         return self._indexed_count
 
-    async def index_skills_batched(
-        self, skills: list[dict[str, Any]], batch_size: int = 50
-    ) -> int:
+    async def index_skills_batched(self, skills: list[dict[str, Any]], batch_size: int = 50) -> int:
         """Index skills in batches using itertools.batched (Python 3.12+).
+
+        Uses TaskGroup for batch-internal parallelism - all embedding requests
+        within a batch run concurrently, providing significant speedup for
+        embedding-heavy workloads.
 
         Args:
             skills: List of skill metadata dicts
@@ -140,44 +145,58 @@ class SkillIndexer:
             return 0
 
         total_skills = len(skills)
-        logger.info(f"Building Semantic Cortex for {total_skills} skills (batch_size={batch_size})...")
+        logger.info(
+            f"Building Semantic Cortex for {total_skills} skills (batch_size={batch_size})..."
+        )
 
         # Process in batches using itertools.batched (Python 3.12+)
-        for batch_num, skill_batch in enumerate(batched(skills, batch_size), 1):
+        for batch_num, skill_batch in enumerate(batched(skills, batch_size, strict=False), 1):
             batch_skills = list(skill_batch)
             logger.debug(f"Processing batch {batch_num} ({len(batch_skills)} skills)")
 
-            for skill in batch_skills:
-                skill_name = skill.get("name", "unknown")
-                skill_desc = skill.get("description", "")
+            # ✅ CRITICAL: Use TaskGroup for batch-internal parallelism
+            # All embedding requests within this batch run concurrently
+            try:
+                async with asyncio.TaskGroup() as tg:
+                    for skill in batch_skills:
+                        skill_name = skill.get("name", "unknown")
+                        skill_desc = skill.get("description", "")
 
-                # Index skill description
-                if skill_desc:
-                    await self._add_entry(
-                        content=f"Skill {skill_name}: {skill_desc}",
-                        metadata={
-                            "type": "skill",
-                            "skill_name": skill_name,
-                            "weight": 1.0,
-                        },
-                    )
+                        # Index skill description (parallel task)
+                        if skill_desc:
+                            tg.create_task(
+                                self._add_entry(
+                                    content=f"Skill {skill_name}: {skill_desc}",
+                                    metadata={
+                                        "type": "skill",
+                                        "skill_name": skill_name,
+                                        "weight": 1.0,
+                                    },
+                                )
+                            )
 
-                # Index commands
-                commands = skill.get("commands", [])
-                for cmd in commands:
-                    cmd_name = cmd.get("name", "")
-                    cmd_desc = cmd.get("description", "") or cmd_name
-                    doc = f"Command {cmd_name}: {cmd_desc}"
+                        # Index commands (parallel tasks)
+                        commands = skill.get("commands", [])
+                        for cmd in commands:
+                            cmd_name = cmd.get("name", "")
+                            cmd_desc = cmd.get("description", "") or cmd_name
+                            doc = f"Command {cmd_name}: {cmd_desc}"
 
-                    await self._add_entry(
-                        content=doc,
-                        metadata={
-                            "type": "command",
-                            "skill_name": skill_name,
-                            "command": cmd_name,
-                            "weight": 2.0,
-                        },
-                    )
+                            tg.create_task(
+                                self._add_entry(
+                                    content=doc,
+                                    metadata={
+                                        "type": "command",
+                                        "skill_name": skill_name,
+                                        "command": cmd_name,
+                                        "weight": 2.0,
+                                    },
+                                )
+                            )
+
+            except ExceptionGroup as e:
+                # Python 3.11+ ExceptionGroup handling
+                logger.error(f"Batch {batch_num} failed with partial errors: {e.exceptions}")
 
         logger.info(f"Cortex indexing complete. Total entries: {self._indexed_count}")
         return self._indexed_count
@@ -193,7 +212,7 @@ class SkillIndexer:
             from omni.foundation.services.embedding import get_embedding_service
 
             service = get_embedding_service()
-            embedding = service.embed(content)[0]
+            _ = service.embed(content)[0]
 
             # Store with embedding (simplified - actual impl may vary)
             self._indexed_count += 1

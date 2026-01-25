@@ -32,6 +32,7 @@ _WORKFLOW_TYPE = "smart_commit"
 
 def _build_workflow() -> Any:
     """Build the Smart Commit workflow graph (for visualization/future use)."""
+
     def _check_state_node(state: GraphState) -> dict[str, Any]:
         """Check state and determine next step."""
         staged_files = state.get("staged_files", [])
@@ -115,10 +116,10 @@ from omni.foundation.api.decorators import skill_command
         @omni("git.smart_commit", {"action": "approve", "workflow_id": "abc123", "message": "feat(git): add commit workflow"})
     """,
     # MCP Annotations for LLM context
-    read_only=False,     # Creates commits, modifies repository
-    destructive=True,    # approve action creates a commit
-    idempotent=False,    # Each commit is unique
-    open_world=False,    # No external network access
+    read_only=False,  # Creates commits, modifies repository
+    destructive=True,  # approve action creates a commit
+    idempotent=False,  # Each commit is unique
+    open_world=False,  # No external network access
 )
 async def smart_commit(
     action: SmartCommitAction = SmartCommitAction.START,
@@ -303,8 +304,24 @@ async def _approve_smart_commit_async(
 ) -> dict[str, Any]:
     """Approve and execute commit with the given message."""
     import subprocess
+    from pathlib import Path
 
-    # Get staged files count
+    root = Path(project_root)
+
+    # Load workflow state to get original staged files from start phase
+    workflow_state = load_workflow_state(_WORKFLOW_TYPE, workflow_id) or {}
+    original_staged = workflow_state.get("staged_files", [])
+
+    # Re-stage all files that were staged in start phase
+    # This ensures changes from lefthook (formatting, etc.) are included
+    for f in original_staged:
+        subprocess.run(
+            ["git", "add", f],
+            cwd=project_root,
+            capture_output=True,
+        )
+
+    # Get final staged files count
     try:
         proc = subprocess.run(
             ["git", "diff", "--cached", "--name-only"],

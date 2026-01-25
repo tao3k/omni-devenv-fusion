@@ -7,6 +7,16 @@ edition.workspace = true
 thiserror = { workspace = true }
 memchr = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util"] }
+# Context Assembly dependencies
+rayon = "1.8"
+minijinja = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+omni-tokenizer = { path = "../omni-tokenizer" }
+
+[features]
+default = []
+assembler = []  # Enable context assembly functionality
 
 [dev-dependencies]
 tempfile = "3.12"

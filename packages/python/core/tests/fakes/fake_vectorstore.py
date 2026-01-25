@@ -5,12 +5,12 @@ A lightweight in-memory implementation of VectorStoreProtocol for fast testing.
 Supports filtering and search results compatible with omni-vector (LanceDB).
 """
 
-from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
+from pydantic import BaseModel
 
-@dataclass
-class SearchResult:
+
+class SearchResult(BaseModel):
     """Fake search result compatible with omni-vector (LanceDB) SearchResult."""
 
     id: str

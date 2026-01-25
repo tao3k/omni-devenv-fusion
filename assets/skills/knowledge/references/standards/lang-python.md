@@ -220,9 +220,9 @@ For Python >= 3.12 specific standards including `StrEnum`, `match/case`, `@overr
 
 ## 6. Related Documentation
 
-| Document                         | Purpose                    |
-| -------------------------------- | -------------------------- |
+| Document                         | Purpose                       |
+| -------------------------------- | ----------------------------- |
 | `lang-python-modern.md`          | Modern Python 3.12+ standards |
-| `design/writing-style/`          | Writing standards          |
-| `mcp-server/tests/test_basic.py` | Test patterns              |
-| `pyproject.toml`                 | Project configuration      |
+| `design/writing-style/`          | Writing standards             |
+| `mcp-server/tests/test_basic.py` | Test patterns                 |
+| `pyproject.toml`                 | Project configuration         |

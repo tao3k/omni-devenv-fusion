@@ -5,10 +5,14 @@ Provides skill management:
 - registry: Skill discovery and metadata
 - runtime: Skill execution context
 - discovery: Skill finder
-- memory: Skill memory management
+- memory: Skill memory management (Rust-Native Context Hydration)
 - extensions: Extension loading system
 - script_loader: Script loading with auto-wiring
 - universal: Zero-Code Skill container
+- index_loader: Rust-generated skill index loader
+- file_cache: Thread-safe file content cache
+- ref_parser: required_refs parser
+- hydrator: Context assembly for LLM
 
 Usage:
     from omni.core.skills.runtime import get_skill_context
@@ -16,6 +20,11 @@ Usage:
     from omni.core.skills.discovery import SkillDiscovery
     from omni.core.skills.memory import SkillMemory
     from omni.core.skills.universal import UniversalScriptSkill
+
+    # Context Hydration (Rust-Native)
+    from omni.core.skills import get_skill_memory
+    memory = get_skill_memory()
+    context = memory.hydrate_skill_context("researcher")
 """
 
 # Registry module (thin client - simplified)
@@ -35,6 +44,13 @@ from .extensions import (
 
 # Memory module
 from .memory import SkillMemory, get_skill_memory
+
+# Context Hydration modules (Rust-Native)
+from .index_loader import SkillIndexLoader
+from .file_cache import FileCache
+from .ref_parser import RefParser
+from .hydrator import ContextHydrator
+
 from .registry import (
     SkillRegistry,
     discover_skills,
@@ -100,6 +116,11 @@ __all__ = [
     # Memory
     "SkillMemory",
     "get_skill_memory",
+    # Context Hydration (Rust-Native)
+    "SkillIndexLoader",
+    "FileCache",
+    "RefParser",
+    "ContextHydrator",
     # Extensions
     "SkillExtensionLoader",
     "ExtensionWrapper",

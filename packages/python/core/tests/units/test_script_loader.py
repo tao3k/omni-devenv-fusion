@@ -157,6 +157,7 @@ class TestScriptLoaderWithNamespacePackages:
         """Test that git.scripts modules can import each other."""
         # Add skills root to path for imports
         import sys
+
         skills_root_str = str(SKILLS_DIR())
         if skills_root_str not in sys.path:
             sys.path.insert(0, skills_root_str)
@@ -166,8 +167,8 @@ class TestScriptLoaderWithNamespacePackages:
             from git.scripts import commit_state, prepare, rendering
 
             # Verify modules loaded successfully
-            assert hasattr(commit_state, 'create_initial_state')
-            assert hasattr(rendering, 'render_commit_message')
-            assert hasattr(prepare, 'stage_and_scan')
+            assert hasattr(commit_state, "create_initial_state")
+            assert hasattr(rendering, "render_commit_message")
+            assert hasattr(prepare, "stage_and_scan")
         except ImportError as e:
             pytest.skip(f"Namespace package import failed: {e}")

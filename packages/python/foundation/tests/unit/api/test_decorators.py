@@ -203,20 +203,20 @@ class TestSkillScriptDecorators:
         assert hasattr(terminal_module.run_task, "_skill_config")
         assert terminal_module.run_task._skill_config["category"] == "workflow"
 
-    def test_read_file_has_marker(self, filesystem_module):
-        """read_file should have _is_skill_command marker."""
-        assert hasattr(filesystem_module.read_file, "_is_skill_command")
-        assert filesystem_module.read_file._is_skill_command is True
+    def test_read_files_has_marker(self, filesystem_module):
+        """read_files should have _is_skill_command marker."""
+        assert hasattr(filesystem_module.read_files, "_is_skill_command")
+        assert filesystem_module.read_files._is_skill_command is True
 
-    def test_read_file_has_command_name(self, filesystem_module):
-        """read_file should have _skill_config with name."""
-        assert hasattr(filesystem_module.read_file, "_skill_config")
-        assert filesystem_module.read_file._skill_config["name"] == "read_file"
+    def test_read_files_has_command_name(self, filesystem_module):
+        """read_files should have _skill_config with name."""
+        assert hasattr(filesystem_module.read_files, "_skill_config")
+        assert filesystem_module.read_files._skill_config["name"] == "read_files"
 
-    def test_read_file_has_category(self, filesystem_module):
-        """read_file should have _skill_config with category."""
-        assert hasattr(filesystem_module.read_file, "_skill_config")
-        assert filesystem_module.read_file._skill_config["category"] == "read"
+    def test_read_files_has_category(self, filesystem_module):
+        """read_files should have _skill_config with category."""
+        assert hasattr(filesystem_module.read_files, "_skill_config")
+        assert filesystem_module.read_files._skill_config["category"] == "read"
 
     def test_write_file_has_command_name(self, filesystem_module):
         """write_file should have _skill_config with name."""

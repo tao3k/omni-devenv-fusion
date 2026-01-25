@@ -22,6 +22,7 @@ logger = get_logger("skill.advanced_tools.mutation")
 
 class FileChange(BaseModel):
     """Represents a single file change."""
+
     path: str
     search_for: str
     content: str
@@ -104,7 +105,9 @@ def batch_replace(
                 # Generate diff for preview
                 replacement_text = re.sub(pattern, replacement, content)
                 diff_lines = []
-                for i, (old_line, new_line) in enumerate(zip(content.splitlines(), replacement_text.splitlines()), 1):
+                for i, (old_line, new_line) in enumerate(
+                    zip(content.splitlines(), replacement_text.splitlines()), 1
+                ):
                     if old_line != new_line:
                         diff_lines.append(f"{i}c{i}")
                         diff_lines.append(f"< {old_line}")
