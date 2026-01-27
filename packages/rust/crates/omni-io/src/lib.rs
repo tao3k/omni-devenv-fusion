@@ -49,13 +49,17 @@ mod sync;
 #[cfg(feature = "assembler")]
 mod assembler;
 
+// Conditionally compiled watcher module (file watching with event publishing)
+#[cfg(feature = "notify")]
+mod watcher;
+
 // ============================================================================
 // Public Re-exports
 // ============================================================================
 
 pub use async_io::read_text_safe_async;
 pub use dirs::{PrjDirs, get_cache_home, get_config_home, get_data_home};
-pub use error::IoError;
+pub use error::{IoError, Result};
 pub use sync::read_text_safe;
 
 // Re-export detection utilities for advanced use
@@ -64,3 +68,7 @@ pub use detect::{decode_buffer, is_binary};
 // Conditionally export assembler
 #[cfg(feature = "assembler")]
 pub use assembler::{AssemblyResult, ContextAssembler};
+
+// Conditionally export watcher (file watching with event publishing)
+#[cfg(feature = "notify")]
+pub use watcher::{FileEvent, FileWatcherHandle, WatcherConfig, start_file_watcher, watch_path};

@@ -6,36 +6,28 @@ Trinity Architecture - MCP Transport Layer
 Pure stdin/stdout transport for JSON-RPC messages.
 No business logic - only message transport.
 
-Performance Optimizations:
-1. Zero-copy Reading: Direct bytes from stdin.buffer (no UTF-8 decode overhead)
-2. Fast Serialization: orjson for Rust-powered JSON processing
-3. Binary Writing: Direct to stdout.buffer (bypass TextIOWrapper)
-
-Logging: Uses Foundation layer (omni.foundation.config.logging)
+Uses MCP SDK for JSON-RPC protocol handling.
 """
+
+from __future__ import annotations
 
 import asyncio
 import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any, cast
 
 import orjson
 
-from omni.foundation.config.logging import get_logger
+from mcp.server.stdio import stdio_server as mcp_stdio_server
+from mcp.types import JSONRPCMessage
 
 from ..interfaces import MCPRequestHandler, MCPTransport
-from ..types import (
-    ErrorCode,
-    JSONRPCResponse,
-    make_error_response,
-)
-
-logger = get_logger("omni.mcp.stdio")
 
 
 class StdioTransport(MCPTransport):
     """
-    High-Performance Stdio Transport (Powered by orjson)
+    High-Performance Stdio Transport.
 
     Key optimizations:
     - Reads raw bytes from stdin.buffer (zero UTF-8 decode)
@@ -64,7 +56,6 @@ class StdioTransport(MCPTransport):
 
     async def start(self) -> None:
         """Start the stdio transport."""
-        logger.info("Starting stdio transport (orjson high-performance mode)...")
         self._running = True
         self._reader = asyncio.StreamReader()
         loop = asyncio.get_event_loop()
@@ -72,15 +63,12 @@ class StdioTransport(MCPTransport):
             lambda: asyncio.StreamReaderProtocol(self._reader),
             sys.stdin,
         )
-        logger.info("Stdio transport started")
 
     async def stop(self) -> None:
         """Stop the stdio transport."""
-        logger.info("Stopping stdio transport...")
         self._running = False
         if self._reader:
             self._reader.feed_eof()
-        logger.info("Stdio transport stopped")
 
     async def run_loop(self, server) -> None:
         """
@@ -89,8 +77,6 @@ class StdioTransport(MCPTransport):
         Args:
             server: MCPServer instance to route messages through
         """
-        logger.info("Stdio message loop started (orjson mode)")
-
         while self._running and self._reader:
             try:
                 # Read raw bytes (no UTF-8 decode!)
@@ -99,62 +85,89 @@ class StdioTransport(MCPTransport):
                     break
 
                 await self._process_message(line_bytes, server)
-
-            except orjson.JSONDecodeError as e:
-                logger.error(f"JSON decode error: {e}")
-                error_resp = make_error_response(
-                    id=None,
-                    code=ErrorCode.PARSE_ERROR,
-                    message=f"Invalid JSON: {e}",
-                )
-                self._write_response(error_resp)
-
-            except Exception as e:
-                logger.error(f"Transport error: {e}")
-                break
-
-        logger.info("Stdio message loop ended")
+            except Exception:
+                pass
 
     async def _process_message(self, line_bytes: bytes, server) -> None:
         """Process a single message (bytes -> orjson -> route)."""
         try:
             # orjson.loads directly accepts bytes (no decode overhead!)
             data = orjson.loads(line_bytes)
-            response, is_notification = await server._route_message(data)
 
-            if not is_notification and response:
+            # Validate it's a proper JSON-RPC message
+            if not isinstance(data, dict):
+                await self._send_invalid_request("Message must be a JSON object")
+                return
+
+            response = await server.process_message(cast(JSONRPCMessage, data))
+
+            if response:
                 self._write_response(response)
 
-        except orjson.JSONDecodeError as e:
-            logger.error(f"JSON decode error: {e}")
-            error_resp = make_error_response(
-                id=None,
-                code=ErrorCode.PARSE_ERROR,
-                message=f"Invalid JSON: {e}",
-            )
-            self._write_response(error_resp)
-        except Exception as e:
-            logger.error(f"Message processing error: {e}")
+        except orjson.JSONDecodeError:
+            await self._send_parse_error("Invalid JSON")
+        except Exception:
+            pass
 
-    def _write_response(self, response: JSONRPCResponse) -> None:
+    async def _send_parse_error(self, error_message: str) -> None:
+        """Send a JSON-RPC parse error response."""
+        error_resp = {
+            "jsonrpc": "2.0",
+            "id": None,
+            "error": {
+                "code": -32700,
+                "message": f"Parse error: {error_message}",
+            },
+        }
+        self._write_response(error_resp)
+
+    async def _send_invalid_request(self, message: str) -> None:
+        """Send a JSON-RPC invalid request error response."""
+        error_resp = {
+            "jsonrpc": "2.0",
+            "id": None,
+            "error": {
+                "code": -32600,
+                "message": message,
+            },
+        }
+        self._write_response(error_resp)
+
+    def _write_response(self, response: Any) -> None:
         """Write binary response to stdout.buffer."""
         try:
-            payload: dict = {"jsonrpc": response.jsonrpc, "id": response.id}
-            if response.error:
-                payload["error"] = response.error
+            # Handle both dict and Pydantic model responses
+            if hasattr(response, "model_dump"):
+                response_dict: dict[str, Any] = response.model_dump()
             else:
-                payload["result"] = response.result
+                response_dict = cast(dict[str, Any], response)
+
+            # JSON-RPC 2.0: Response MUST have a non-null id
+            msg_id = response_dict.get("id")
+            if msg_id is None:
+                return
+
+            # Build JSON-RPC 2.0 compliant response
+            payload: dict[str, Any] = {
+                "jsonrpc": response_dict.get("jsonrpc", "2.0"),
+                "id": msg_id,
+            }
+
+            # JSON-RPC 2.0: response MUST contain either "result" OR "error", never both
+            if response_dict.get("error") is not None:
+                payload["error"] = response_dict.get("error")
+            elif "result" in response_dict:
+                payload["result"] = response_dict.get("result")
 
             # orjson.dumps returns bytes
-            # OPT_APPEND_NEWLINE: Let Rust add the newline (faster than Python concat)
             json_bytes = orjson.dumps(payload, option=orjson.OPT_APPEND_NEWLINE)
 
             # Write directly to stdout.buffer (bypass TextIOWrapper)
             sys.stdout.buffer.write(json_bytes)
             sys.stdout.buffer.flush()
 
-        except Exception as e:
-            logger.error(f"Write error: {e}")
+        except Exception:
+            pass
 
 
 # =============================================================================
@@ -162,50 +175,8 @@ class StdioTransport(MCPTransport):
 # =============================================================================
 
 
-class _StdioStreams:
-    """Stdio streams compatible with MCP SDK server.run()."""
-
-    def __init__(self):
-        self._reader = asyncio.StreamReader()
-        self._running = False
-        self._transport = None
-
-    async def __aenter__(self):
-        """Enter context manager."""
-        loop = asyncio.get_event_loop()
-        self._running = True
-        self._reader = asyncio.StreamReader()
-        self._transport, _ = await loop.connect_read_pipe(
-            lambda: asyncio.StreamReaderProtocol(self._reader),
-            sys.stdin,
-        )
-        return self, _WriteStream()
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Exit context manager."""
-        self._running = False
-        if self._reader:
-            self._reader.feed_eof()
-
-    def read(self) -> asyncio.StreamReader:
-        """Get the read stream."""
-        return self._reader
-
-
-class _WriteStream:
-    """Write stream that writes directly to stdout.buffer."""
-
-    def __init__(self):
-        self._buffer = sys.stdout.buffer
-
-    def write(self, data: bytes) -> None:
-        """Write data to stdout.buffer."""
-        self._buffer.write(data)
-        self._buffer.flush()
-
-
 @asynccontextmanager
-async def stdio_server() -> AsyncGenerator[tuple[_StdioStreams, _WriteStream]]:
+async def stdio_server() -> AsyncGenerator[tuple[asyncio.StreamReader, asyncio.StreamWriter]]:
     """
     Async context manager for stdio transport.
 
@@ -213,11 +184,23 @@ async def stdio_server() -> AsyncGenerator[tuple[_StdioStreams, _WriteStream]]:
 
     Yields:
         Tuple of (read_stream, write_stream) for use with server.run()
-
-    Usage:
-        async with stdio_server() as (read_stream, write_stream):
-            await server.run(read_stream, write_stream, init_options)
     """
-    streams = _StdioStreams()
-    async with streams:
-        yield streams, _WriteStream()
+    reader = asyncio.StreamReader()
+
+    async def write_stream():
+        return sys.stdout.buffer
+
+    loop = asyncio.get_event_loop()
+    transport, _ = await loop.connect_read_pipe(
+        lambda: asyncio.StreamReaderProtocol(reader),
+        sys.stdin,
+    )
+
+    try:
+        yield reader, write_stream()
+    finally:
+        transport.close()
+        reader.feed_eof()
+
+
+__all__ = ["StdioTransport", "stdio_server"]

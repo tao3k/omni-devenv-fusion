@@ -1,8 +1,8 @@
-# Memory Mesh (记忆网络)
+# Memory Mesh
 
 > Episodic Memory for Self-Learning Agents
 > **Status**: Active
-> **Version**: v1.0 | 2026-01-14
+> **Version**: v1.1 | 2026-01-25 (Self-Evolution Integration)
 
 ## Overview
 
@@ -50,7 +50,7 @@ The Memory Mesh completes the **Cognitive Trinity** by adding episodic memory - 
 
 ## 1. Type Definitions
 
-**File**: `packages/python/agent/src/agent/core/memory/types.py`
+**File**: `packages/python/agent/src/omni/agent/core/memory/types.py`
 
 ```python
 from pydantic import BaseModel, Field
@@ -408,7 +408,7 @@ async def get_context_tools(self, user_query: str, ...) -> list[dict[str, Any]]:
 ### Direct Python API
 
 ```python
-from agent.core.memory.manager import get_memory_manager
+from omni.agent.core.memory.manager import get_memory_manager
 
 mm = get_memory_manager()
 
@@ -438,7 +438,7 @@ for m in memories:
 ### Memory Interceptor Integration
 
 ```python
-from agent.core.memory.interceptor import get_memory_interceptor
+from omni.agent.core.memory.interceptor import get_memory_interceptor
 
 interceptor = get_memory_interceptor()
 
@@ -463,7 +463,7 @@ await interceptor.after_execution(
 ## 7. File Structure
 
 ```
-packages/python/agent/src/agent/core/
+packages/python/agent/src/omni/agent/core/
 ├── types.py                    # VectorTable enum (MEMORY = "memory")
 ├── vector_store.py             # add_memory(), search_memory()
 ├── adaptive_loader.py          # get_relevant_memories(), record_experience()
@@ -473,7 +473,7 @@ packages/python/agent/src/agent/core/
     ├── manager.py              # MemoryManager class
     └── interceptor.py          # MemoryInterceptor class
 
-packages/python/agent/src/agent/tests/unit/
+packages/python/agent/src/omni/agent/tests/unit/
 └── test_memory_mesh.py         # Unit tests for Memory Mesh
 ```
 
@@ -537,8 +537,44 @@ uv run pytest packages/python/agent/src/agent/tests/unit/test_memory_mesh.py -v
 
 ---
 
+## 11. Self-Evolution Integration
+
+The Memory Mesh integrates with the Self-Evolution system for continuous improvement.
+
+### Fast Path: Rule Extraction
+
+User corrections and preferences are automatically extracted and stored:
+
+```python
+# From omni.agent.core.evolution.harvester
+class Harvester:
+    async def extract_lessons(self, history: List[Dict]) -> Optional[ExtractedLesson]:
+        """Extract rules/preferences from user feedback."""
+        correction_patterns = ["no,", "not", "wrong", "don't", "instead", "use"]
+        relevant = [m for m in history if any(p in m.content for p in correction_patterns)]
+        # LLM extracts the underlying rule...
+        return ExtractedLesson(rule="Always use async for I/O", domain="python_style")
+```
+
+### Memory Recall in Omni Loop
+
+```python
+async def _inject_memory_context(self, task: str) -> None:
+    """Associative Recall before task execution."""
+    memories = await vector_store.search(query=task, n_results=3)
+    if memories:
+        self.context.add_system_message(f"\n[RECALLED MEMORIES]\n{memories}\n[/RECALLED MEMORIES]\n")
+```
+
+### Storage Locations
+
+| Data Type            | Location                              |
+| -------------------- | ------------------------------------- |
+| **Learned Rules**    | `memory` collection in VectorStore    |
+| **Harvested Skills** | `assets/skills/harvested/quarantine/` |
+
 ## Related Documentation
 
 - [Knowledge Matrix](knowledge-matrix.md) (Documentation RAG)
 - [Omni Loop](omni-loop.md) (CCA Runtime with Knowledge + Memory)
-- [Note-Taker](note_taker.md) (Session reflection and wisdom distillation)
+- [Self-Evolution](omni-loop.md#self-evolution) (Skill harvesting and rule extraction)

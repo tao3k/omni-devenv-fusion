@@ -237,6 +237,6 @@ def create_planner_orchestrator():
 ## 9. Related Documentation
 
 - [Skill Standard](docs/human/architecture/skill-standard.md)
-- [LangGraph Workflow](docs/architecture/langgraph.md)
-- [Rust-Python Bridge](docs/explanation/rust-python-bridge.md)
-- [Context Optimization](docs/explanation/context-optimization.md)
+- [LangGraph Workflow](../architecture/langgraph.md)
+- [Rust-Python Bridge](rust-python-bridge.md)
+- [Context Optimization](context-optimization.md)

@@ -4,7 +4,12 @@ import socket
 from typing import Any
 
 import pytest
-from omni.mcp.types import make_success_response
+from mcp.types import JSONRPCResponse
+
+
+def make_success_response(id_val: Any, result: Any) -> JSONRPCResponse:
+    """Create a success response."""
+    return JSONRPCResponse(jsonrpc="2.0", id=id_val, result=result)
 
 
 @pytest.fixture
@@ -32,7 +37,8 @@ class MockRequestHandler:
     async def handle_request(self, request: Any) -> Any:
         """Handle a JSON-RPC request."""
         self.requests.append(request)
-        return make_success_response(id=request.id, result={"success": True})
+        req_id = request.get("id")
+        return make_success_response(req_id, {"success": True})
 
     async def handle_notification(self, method: str, params: Any) -> None:
         """Handle a JSON-RPC notification."""

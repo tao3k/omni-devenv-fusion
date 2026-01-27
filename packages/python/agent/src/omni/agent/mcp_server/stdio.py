@@ -18,12 +18,80 @@ import sys
 
 import structlog
 
-from omni.mcp.transport.stdio import stdio_server
+from omni.agent.server import create_agent_handler
+from omni.foundation.config.logging import configure_logging
+from omni.mcp.server import MCPServer
+from omni.mcp.transport.stdio import StdioTransport
 
 from .lifespan import server_lifespan
-from .server import get_init_options, get_server
 
 log = structlog.get_logger(__name__)
+
+
+def get_init_options() -> dict:
+    """Get MCP server initialization options."""
+    return {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {
+            "tools": {},
+        },
+        "serverInfo": {
+            "name": "omni-agent",
+            "version": "2.0.0",
+        },
+    }
+
+
+def get_server() -> MCPServer:
+    """Create and return the MCP server instance with handlers registered."""
+    configure_logging(level="INFO")
+    handler = create_agent_handler()
+    transport = StdioTransport()
+    server = MCPServer(handler, transport)
+
+    # MCP init options
+    init_options = {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {
+            "tools": {"listChanged": True},
+        },
+        "serverInfo": {
+            "name": "omni-agent",
+            "version": "2.0.0",
+        },
+    }
+
+    # Register MCP protocol handlers
+    @server.request("initialize")
+    async def handle_initialize(**params) -> dict:
+        """Handle MCP initialize request."""
+        log.info("[MCP] Responding to initialize request")
+        return init_options
+
+    @server.request("tools/list")
+    async def handle_list_tools(**params) -> dict:
+        """Handle MCP tools/list request."""
+        result = await handler.handle_request(
+            {"method": "tools/list", "params": params, "id": None}
+        )
+        log.info(
+            f"[MCP] tools/list returned {len(result.get('result', {}).get('tools', []))} tools"
+        )
+        return result.get("result", {})
+
+    @server.request("tools/call")
+    async def handle_call_tool(name: str = "", arguments: dict | None = None, **params) -> dict:
+        """Handle MCP tools/call request."""
+        request = {
+            "method": "tools/call",
+            "params": {"name": name, "arguments": arguments or {}},
+            "id": None,
+        }
+        result = await handler.handle_request(request)
+        return result.get("result", {})
+
+    return server
+
 
 _shutdown_count = 0
 
@@ -68,30 +136,14 @@ async def run_stdio() -> None:
     # Lifespan: Run once at startup (load skills)
     # Enable watcher for hot-reload support
     async with server_lifespan(enable_watcher=True):
-        # Server run loop: wait for client connection, reconnect on EOF
-        while True:
-            try:
-                # omni.mcp.transport.stdio.stdio_server uses orjson internally
-                async with stdio_server() as (read_stream, write_stream):
-                    await server.run(
-                        read_stream,
-                        write_stream,
-                        get_init_options(),
-                    )
-            except asyncio.CancelledError:
-                raise
-            except BrokenPipeError:
-                log.warning("Client disconnected, waiting for new connection...")
-                await asyncio.sleep(0.5)
-            except ValueError as e:
-                if "I/O operation on closed file" in str(e):
-                    log.debug("Stdin closed, waiting for client connection...")
-                    await asyncio.sleep(0.5)
-                else:
-                    raise
-            except Exception as e:
-                log.warning(f"Server run error: {e}, reconnecting...")
-                await asyncio.sleep(0.5)
+        try:
+            await server.start()
+            await server.run_forever()
+        except asyncio.CancelledError:
+            log.info("Server cancelled")
+        except Exception as e:
+            log.error(f"Server error: {e}")
+            raise
 
 
 def request_shutdown() -> None:

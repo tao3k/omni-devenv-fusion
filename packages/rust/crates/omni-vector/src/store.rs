@@ -33,13 +33,22 @@ impl crate::VectorStore {
     ///
     /// Returns an error if the directory cannot be created.
     pub async fn new(path: &str, dimension: Option<usize>) -> Result<Self, VectorStoreError> {
+        // Special case for in-memory mode - don't create any directories
+        if path == ":memory:" {
+            return Ok(Self {
+                base_path: PathBuf::from(":memory:"),
+                datasets: Arc::new(Mutex::new(dashmap::DashMap::new())),
+                dimension: dimension.unwrap_or(DEFAULT_DIMENSION),
+            });
+        }
+
         let base_path = PathBuf::from(path);
 
         // Ensure parent directory exists
-        if let Some(parent) = base_path.parent()
-            && !parent.exists()
-        {
-            std::fs::create_dir_all(parent)?;
+        if let Some(parent) = base_path.parent() {
+            if !parent.exists() {
+                std::fs::create_dir_all(parent)?;
+            }
         }
 
         // Create base directory if it doesn't exist
@@ -56,7 +65,12 @@ impl crate::VectorStore {
 
     /// Get the table path for a given table name.
     pub fn table_path(&self, table_name: &str) -> PathBuf {
-        self.base_path.join(format!("{table_name}.lance"))
+        // For in-memory mode, return a special marker instead of file path
+        if self.base_path.as_os_str() == ":memory:" {
+            PathBuf::from(format!(":memory:_{}", table_name))
+        } else {
+            self.base_path.join(format!("{table_name}.lance"))
+        }
     }
 
     /// Create the schema for vector storage.
@@ -104,13 +118,16 @@ impl crate::VectorStore {
         // Check cache first
         {
             let datasets = self.datasets.lock().await;
-            if !force_create && let Some(cached) = datasets.get(table_name) {
-                return Ok(cached.clone());
+            if !force_create {
+                if let Some(cached) = datasets.get(table_name) {
+                    return Ok(cached.clone());
+                }
             }
         }
 
         // Open or create dataset
-        let dataset = if table_path.exists() && !force_create {
+        let is_memory_mode = self.base_path.as_os_str() == ":memory:";
+        let dataset = if !is_memory_mode && table_path.exists() && !force_create {
             Dataset::open(table_uri.as_str()).await?
         } else {
             // Create new dataset with schema using Dataset::write
@@ -118,9 +135,22 @@ impl crate::VectorStore {
             let empty_batch = self.create_empty_batch(&schema)?;
             let batches: Vec<Result<_, ArrowError>> = vec![Ok(empty_batch)];
             let iter = RecordBatchIterator::new(batches, schema);
+
+            // For in-memory mode, use a temporary file that gets cleaned up
+            // (LanceDB doesn't have true in-memory mode for persistence)
+            let write_uri = if is_memory_mode {
+                // Use a temp file for in-memory operations
+                use std::env;
+                let temp_dir = env::temp_dir();
+                let temp_path = temp_dir.join(format!("omni_lance_{}", table_name));
+                temp_path.to_string_lossy().into_owned()
+            } else {
+                table_uri
+            };
+
             Dataset::write(
                 Box::new(iter),
-                table_uri.as_str(),
+                write_uri.as_str(),
                 Some(WriteParams::default()),
             )
             .await
@@ -504,8 +534,7 @@ impl crate::VectorStore {
             }
         }
 
-        serde_json::to_string(&hash_map)
-            .map_err(|e| VectorStoreError::from(anyhow::anyhow!("{}", e)))
+        serde_json::to_string(&hash_map).map_err(|e| VectorStoreError::General(format!("{}", e)))
     }
 
     /// Count documents in a table.

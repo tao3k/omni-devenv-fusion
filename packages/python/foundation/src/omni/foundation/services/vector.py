@@ -14,6 +14,7 @@ import structlog
 
 from omni.foundation.config.dirs import PRJ_CACHE
 from omni.foundation.services.embedding import get_embedding_service
+from omni.core.router.cache import SearchCache
 from pydantic import BaseModel
 
 logger = structlog.get_logger(__name__)
@@ -63,9 +64,17 @@ class VectorStoreClient:
 
     Provides a unified interface to the LanceDB-based vector store
     for the entire omni system.
+
+    Features:
+    - LRU search result caching with TTL
+    - Async operations for embedding and storage
+    - Collection-based organization
     """
 
     _instance: VectorStoreClient | None = None
+    _store: Any | None
+    _cache_path: Path
+    _search_cache: SearchCache
 
     def __new__(cls) -> VectorStoreClient:
         if cls._instance is None:
@@ -73,6 +82,7 @@ class VectorStoreClient:
             cls._instance._store = None
             cls._instance._cache_path = PRJ_CACHE("omni-vector")
             cls._instance._cache_path.mkdir(parents=True, exist_ok=True)
+            cls._instance._search_cache = SearchCache(max_size=500, ttl=300)
         return cls._instance
 
     @property
@@ -96,7 +106,7 @@ class VectorStoreClient:
         return self._cache_path
 
     async def search(
-        self, query: str, n_results: int = 5, collection: str = "knowledge"
+        self, query: str, n_results: int = 5, collection: str = "knowledge", use_cache: bool = True
     ) -> list[SearchResult]:
         """Search the vector store for similar content.
 
@@ -104,6 +114,7 @@ class VectorStoreClient:
             query: Search query text.
             n_results: Maximum number of results to return.
             collection: Collection name to search in.
+            use_cache: Whether to use search result caching (default: True).
 
         Returns:
             List of SearchResult objects ranked by similarity.
@@ -112,6 +123,16 @@ class VectorStoreClient:
         if not store:
             logger.warning("VectorStore not available, returning empty results")
             return []
+
+        # Build cache key from query parameters
+        cache_key = f"{collection}:{query}:{n_results}"
+
+        # Check cache first
+        if use_cache:
+            cached = self._search_cache.get(cache_key)
+            if cached is not None:
+                logger.debug(f"Cache hit for query: {query[:50]}...")
+                return cached
 
         try:
             # Get embedding from Foundation service
@@ -122,7 +143,7 @@ class VectorStoreClient:
             results_json = store.search(collection, vector, n_results)
 
             # Parse Results
-            return [
+            results = [
                 SearchResult(
                     content=r.get("content", ""),
                     metadata=r.get("metadata", {}),
@@ -131,6 +152,12 @@ class VectorStoreClient:
                 )
                 for r in (json.loads(s) for s in results_json)
             ]
+
+            # Cache the results
+            if use_cache:
+                self._search_cache.set(cache_key, results)
+
+            return results
         except Exception as e:
             logger.error("Search failed", error=str(e))
             return []
@@ -162,6 +189,10 @@ class VectorStoreClient:
 
             # Add to store
             store.add(collection, content, vector, json.dumps(metadata or {}))
+
+            # Invalidate cache for this collection since results changed
+            self.invalidate_cache(collection)
+
             return True
         except Exception as e:
             logger.error("Add failed", error=str(e))
@@ -183,6 +214,10 @@ class VectorStoreClient:
 
         try:
             store.delete(collection, id)
+
+            # Invalidate cache for this collection since results changed
+            self.invalidate_cache(collection)
+
             return True
         except Exception as e:
             logger.error("Delete failed", error=str(e))
@@ -226,6 +261,35 @@ class VectorStoreClient:
         except Exception as e:
             logger.error("Create index failed", error=str(e))
             return False
+
+    def invalidate_cache(self, collection: str | None = None) -> int:
+        """Invalidate search cache entries.
+
+        Args:
+            collection: Optional collection name to invalidate.
+                       If None, clears all cache entries.
+
+        Returns:
+            Number of cache entries cleared.
+        """
+        if collection is None:
+            return self._search_cache.clear()
+        else:
+            # Clear entries matching the collection prefix
+            keys_to_remove = [
+                key for key in self._search_cache._cache.keys() if key.startswith(f"{collection}:")
+            ]
+            for key in keys_to_remove:
+                del self._search_cache._cache[key]
+            return len(keys_to_remove)
+
+    def cache_stats(self) -> dict[str, Any]:
+        """Get cache statistics.
+
+        Returns:
+            Dictionary with cache statistics.
+        """
+        return self._search_cache.stats()
 
 
 def get_vector_store() -> VectorStoreClient:

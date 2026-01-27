@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import shutil
+import tempfile
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
@@ -24,6 +27,99 @@ def _compute_skills_root() -> Path:
 
 
 SKILLS_ROOT = _compute_skills_root()
+
+
+# =============================================================================
+# Rust Environment Fixtures (Session-scoped for lazy_static singletons)
+# =============================================================================
+
+
+@pytest.fixture(scope="session")
+def event_loop():
+    """
+    Create an event loop for the test session.
+
+    Critical: Rust's global singletons (lazy_static) persist for the entire
+    process. We need the Python event loop to also persist at session level
+    to avoid "Event loop is closed" errors when Rust callbacks fire.
+    """
+    loop = asyncio.new_event_loop()
+    yield loop
+    loop.close()
+
+
+@pytest.fixture(scope="session")
+def test_root():
+    """
+    Create a temporary root directory for all tests in this session.
+    This ensures Rust singletons (EventBus, VectorStore) use consistent paths.
+    """
+    tmp_dir = tempfile.mkdtemp(prefix="omni_test_root_")
+    yield Path(tmp_dir)
+    shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+@pytest.fixture(scope="function")
+def temp_lancedb(test_root, request):
+    """
+    Provide a clean, isolated LanceDB path for each test function.
+
+    This fixture:
+    1. Creates a unique database directory per test
+    2. Sets OMNI_VECTOR_DB_PATH environment variable
+    3. Yields the path for Rust bindings to use
+    """
+    db_name = f"db_{request.node.name}"
+    db_path = test_root / "vectors" / db_name
+    db_path.mkdir(parents=True, exist_ok=True)
+
+    # Set environment variable for Rust bindings
+    original_path = os.environ.get("OMNI_VECTOR_DB_PATH")
+    os.environ["OMNI_VECTOR_DB_PATH"] = str(db_path)
+
+    yield db_path
+
+    # Restore original environment
+    if original_path is not None:
+        os.environ["OMNI_VECTOR_DB_PATH"] = original_path
+    else:
+        os.environ.pop("OMNI_VECTOR_DB_PATH", None)
+
+
+@pytest.fixture(scope="function")
+async def clean_reactor(test_root):
+    """
+    Ensure the Kernel Reactor is reset between tests.
+
+    This fixture:
+    1. Gets the reactor singleton
+    2. Stops any running tasks
+    3. Clears all handlers
+    4. Yields the clean reactor
+    5. Cleans up after the test
+    """
+    # Import here to avoid circular dependencies
+    from omni.core.kernel.reactor import get_reactor
+
+    reactor = get_reactor()
+
+    # Stop any running reactor tasks
+    try:
+        await reactor.stop()
+    except Exception:
+        pass
+
+    # Clear all handlers
+    reactor._handlers.clear()
+
+    yield reactor
+
+    # Cleanup after test
+    try:
+        await reactor.stop()
+    except Exception:
+        pass
+    reactor._handlers.clear()
 
 
 # =============================================================================
@@ -160,14 +256,6 @@ def skills():
 # Import shared fixtures and plugins from the new locations
 from .fixtures.core_fixtures import *  # noqa: F403
 from .plugins.seed_manager import pytest_configure  # noqa: F401 - Register seed plugin
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create an event loop for the test session."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
 
 
 @pytest.fixture

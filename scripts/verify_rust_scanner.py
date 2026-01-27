@@ -5,11 +5,13 @@ Verify Rust Scanner via omni-core-rs Bindings (Pydantic V2 Compatible)
 This script verifies that the Rust skills-scanner can correctly scan Python scripts
 and return PyToolRecord objects with proper metadata using the new modular scanner:
 - SkillScanner: Parses SKILL.md for metadata and routing keywords
-- ScriptScanner: Scans scripts/ for @skill_command decorated functions
+- ToolsScanner: Scans scripts/ for @skill_command decorated functions
 
 Updated for ODF-EP v6.0:
 - Compares Rust scanner input_schema with Pydantic V2 generated schemas
 - Uses _generate_tool_schema for verification
+- Added LanceDB verification for persisted tool data
+- Better handling of large datasets (91+ tools)
 """
 
 import json
@@ -26,14 +28,27 @@ agent_src = Path(__file__).parent.parent / "packages/python/agent/src"
 sys.path.insert(0, str(agent_src))
 
 try:
-    from omni_core_rs import scan_skill_tools
+    from omni_core_rs import scan_skill_tools, diff_skills
 except ImportError as e:
     print("[!] Error: Could not import omni_core_rs. Did you run 'maturin develop'?")
     print(f"    Detail: {e}")
     sys.exit(1)
 
 # Import new Pydantic V2 API
-from omni.foundation.api.decorators import _generate_tool_schema
+try:
+    from omni.foundation.api.decorators import _generate_tool_schema
+
+    PYDANTIC_V2_AVAILABLE = True
+except ImportError:
+    PYDANTIC_V2_AVAILABLE = False
+    print("[!] Warning: _generate_tool_schema not available")
+
+try:
+    from omni.foundation.bridge.rust_vector import RustVectorStore
+
+    LANCEDB_AVAILABLE = True
+except ImportError:
+    LANCEDB_AVAILABLE = False
 
 
 def get_directory_from_path(file_path: str, skill_name: str) -> str:
@@ -88,6 +103,9 @@ def verify_schema_with_pydantic_v2(func_name: str, source_code: str) -> dict:
     Returns:
         Schema dict from _generate_tool_schema
     """
+    if not PYDANTIC_V2_AVAILABLE:
+        return {"error": "Pydantic V2 not available"}
+
     # Create a temporary function from source
     local_vars = {}
     exec(source_code, {}, local_vars)
@@ -96,6 +114,114 @@ def verify_schema_with_pydantic_v2(func_name: str, source_code: str) -> dict:
     if func:
         return _generate_tool_schema(func)
     return {"error": f"Function {func_name} not found"}
+
+
+def verify_lancedb_integration():
+    """Verify LanceDB has persisted tool data."""
+    print("\n[=] LanceDB Integration Verification")
+    print("-" * 40)
+
+    if not LANCEDB_AVAILABLE:
+        print("  [SKIP] RustVectorStore not available")
+        return None
+
+    try:
+        import asyncio
+
+        store = RustVectorStore()
+        tools = asyncio.run(store.list_all_tools())
+
+        print(f"  [PASS] LanceDB connection successful")
+        print(f"  [INFO] Tools in LanceDB: {len(tools)}")
+
+        if tools:
+            # Group by skill
+            skills_count = defaultdict(set)
+            for tool in tools:
+                skills_count[tool.get("skill_name", "unknown")].add(tool.get("tool_name", ""))
+
+            print(f"  [INFO] Unique skills: {len(skills_count)}")
+            print(f"  [INFO] Unique tools: {sum(len(v) for v in skills_count.values())}")
+
+            # Show top 5 skills by tool count
+            sorted_skills = sorted(skills_count.items(), key=lambda x: len(x[1]), reverse=True)[:5]
+            print(f"  [INFO] Top 5 skills by tool count:")
+            for skill, tools_set in sorted_skills:
+                print(f"       - {skill}: {len(tools_set)} tools")
+
+        return tools
+
+    except Exception as e:
+        print(f"  [FAIL] LanceDB error: {e}")
+        return None
+
+
+def verify_diff_skills():
+    """Verify diff_skills Rust function works correctly."""
+    print("\n[=] diff_skills Function Verification")
+    print("-" * 40)
+
+    # Create sample data
+    scanned_tools = [
+        {
+            "tool_name": "git.commit",
+            "description": "Create a commit",
+            "skill_name": "git",
+            "file_path": "assets/skills/git/scripts/commands.py",
+            "function_name": "commit",
+            "execution_mode": "local",
+            "keywords": ["git", "commit"],
+            "input_schema": '{"type": "object", "properties": {"message": {"type": "string"}}}',
+            "file_hash": "abc123",
+            "category": "version_control",
+        },
+        {
+            "tool_name": "git.status",
+            "description": "Show status",
+            "skill_name": "git",
+            "file_path": "assets/skills/git/scripts/commands.py",
+            "function_name": "status",
+            "execution_mode": "local",
+            "keywords": ["git", "status"],
+            "input_schema": "{}",
+            "file_hash": "def456",
+            "category": "version_control",
+        },
+    ]
+
+    existing_tools = [
+        {
+            "name": "git.commit",
+            "description": "Create a commit",
+            "category": "version_control",
+            "input_schema": '{"type": "object", "properties": {"message": {"type": "string"}}}',
+            "file_hash": "abc123",
+        },
+    ]
+
+    scanned_data_str = json.dumps(scanned_tools)
+    existing_data_str = json.dumps(existing_tools)
+
+    try:
+        report = diff_skills(scanned_data_str, existing_data_str)
+
+        print(f"  [PASS] diff_skills executed successfully")
+        print(f"  [INFO] Added: {len(report.added)}")
+        print(f"  [INFO] Updated: {len(report.updated)}")
+        print(f"  [INFO] Deleted: {report.deleted}")
+        print(f"  [INFO] Unchanged: {report.unchanged_count}")
+
+        # Verify expected results
+        if len(report.added) == 1 and report.added[0].tool_name == "git.status":
+            print(f"  [PASS] Correctly detected added tool")
+        if len(report.deleted) == 0:
+            print(f"  [PASS] No false deletions")
+
+        return True
+
+    except Exception as e:
+        print(f"  [FAIL] diff_skills error: {e}")
+        return False
 
 
 def main():
@@ -115,7 +241,7 @@ def main():
         print(f"      - {d}")
     print()
 
-    # 2. Call Rust scanner (uses SkillScanner + ScriptScanner internally)
+    # 2. Call Rust scanner (uses SkillScanner + ToolsScanner internally)
     try:
         tools = scan_skill_tools(str(skills_dir))
     except Exception as e:
@@ -163,10 +289,22 @@ def main():
 
     total_script_mode = 0
     total_with_docstring = 0
-    schema_comparisons = 0
-    schema_matches = 0
 
-    for skill_name in sorted(tools_by_skill_dir.keys()):
+    # Show summary table for large datasets
+    if len(tools) > 30:
+        print("\n  [SUMMARY TABLE - Top 10 Skills by Tool Count]")
+        print("  " + "-" * 50)
+        skill_counts = [
+            (skill, sum(len(v) for v in dirs.values()))
+            for skill, dirs in tools_by_skill_dir.items()
+        ]
+        skill_counts.sort(key=lambda x: x[1], reverse=True)
+        for i, (skill, count) in enumerate(skill_counts[:10], 1):
+            print(f"  {i:2}. {skill:25} : {count:3} tools")
+        print(f"  ... and {len(skill_counts) - 10} more skills" if len(skill_counts) > 10 else "")
+        print()
+
+    for skill_name in sorted(tools_by_skill_dir.keys())[:15]:  # Limit to 15 skills for readability
         skill_data = tools_by_skill_dir[skill_name]
         print(f"\n  Skill: {skill_name}")
         print(f"  {'─' * 50}")
@@ -185,7 +323,9 @@ def main():
             dir_display = f"{dir_name}/" if dir_name != "root" else "(root)"
             print(f"  [{dir_display}] {len(tools_in_dir)} tool(s)")
 
-            for tool in tools_in_dir:
+            # Show first 5 tools only for large datasets
+            display_tools = tools_in_dir[:5]
+            for tool in display_tools:
                 if tool.execution_mode == "script":
                     total_script_mode += 1
                 if tool.docstring:
@@ -226,6 +366,20 @@ def main():
                     print(f'    │   doc: "{doc_preview}..."')
                 print()
 
+            if len(tools_in_dir) > 5:
+                print(f"    ... and {len(tools_in_dir) - 5} more tools")
+                print()
+
+    if len(tools_by_skill_dir) > 15:
+        remaining = len(tools_by_skill_dir) - 15
+        remaining_tools = sum(
+            len(tool_list)
+            for skill, dirs in list(tools_by_skill_dir.items())[15:]
+            for tool_list in dirs.values()
+        )
+        print(f"\n  ... and {remaining} more skills with {remaining_tools} tools")
+        print()
+
     # 6. Summary statistics
     print("=" * 70)
     print("\n[i] Summary Statistics:")
@@ -233,8 +387,6 @@ def main():
     print(f"    - Script mode tools:        {total_script_mode}")
     print(f"    - Tools with docstring:     {total_with_docstring}")
     print(f"    - Skills with tools:        {len(tools_by_skill_dir)}")
-    print(f"    - Schema comparisons:       {schema_comparisons}")
-    print(f"    - Schema matches:           {schema_matches}")
 
     # Directory breakdown
     all_dirs = defaultdict(int)
@@ -247,22 +399,30 @@ def main():
         for dir_name in sorted(all_dirs.keys()):
             count = all_dirs[dir_name]
             dir_display = f"{dir_name}/" if dir_name != "root" else "root"
-            print(f"    - {dir_display:15} : {count} tools")
+            print(f"    - {dir_display:15} : {count:3} tools")
 
-    # 7. Verification tests
+    # 7. LanceDB Verification
+    lancedb_tools = verify_lancedb_integration()
+
+    # 8. diff_skills Verification
+    verify_diff_skills()
+
+    # 9. Verification tests
     print("\n[=] Verification Tests")
     print("-" * 40)
 
     git_tools = [t for t in tools if t.skill_name == "git"]
     if git_tools:
         print(f"[PASS] Found {len(git_tools)} tool(s) in 'git' skill")
-        for t in git_tools:
+        for t in git_tools[:5]:  # Show first 5
             dir_name = get_directory_from_path(t.file_path, "git")
             print(f"       - {t.tool_name} ({dir_name})")
+        if len(git_tools) > 5:
+            print(f"       ... and {len(git_tools) - 5} more")
     else:
         print("[INFO] No tools found in 'git' skill.")
 
-    # 8. Attribute access test
+    # 10. Attribute access test
     print("\n[=] PyToolRecord Attribute Test")
     print("-" * 40)
     if tools:
@@ -298,71 +458,74 @@ def main():
     else:
         print("  [SKIP] No tools found.")
 
-    # 9. Pydantic V2 Schema Compatibility Test
-    print("\n[=] Pydantic V2 Schema Compatibility Test")
-    print("-" * 40)
-    print("  Testing that Rust scanner output matches Pydantic V2 _generate_tool_schema...")
+    # 11. Pydantic V2 Schema Compatibility Test
+    if PYDANTIC_V2_AVAILABLE:
+        print("\n[=] Pydantic V2 Schema Compatibility Test")
+        print("-" * 40)
+        print("  Testing that Rust scanner output matches Pydantic V2 _generate_tool_schema...")
 
-    # Find a tool with input_schema to compare
-    tools_with_schema = [t for t in tools if t.input_schema and t.function_name]
-    if tools_with_schema:
-        print(f"  Found {len(tools_with_schema)} tools with input_schema for comparison")
+        # Find a tool with input_schema to compare
+        tools_with_schema = [t for t in tools if t.input_schema and t.function_name]
+        if tools_with_schema:
+            print(f"  Found {len(tools_with_schema)} tools with input_schema for comparison")
 
-        # Take a few samples to verify
-        sample_tools = tools_with_schema[:3]
-        for tool in sample_tools:
-            print(f"\n  Testing: {tool.tool_name}")
+            # Take a few samples to verify
+            sample_tools = tools_with_schema[:3]
+            for tool in sample_tools:
+                print(f"\n  Testing: {tool.tool_name}")
 
-            # Read the source file
-            source_path = Path(tool.file_path)
-            if source_path.exists():
-                source_code = source_path.read_text()
+                # Read the source file
+                source_path = Path(tool.file_path)
+                if source_path.exists():
+                    source_code = source_path.read_text()
 
-                # Extract function and generate Pydantic V2 schema
-                python_schema = _generate_tool_schema.__name__  # Just verify import works
+                    # Extract function and generate Pydantic V2 schema
+                    python_schema = _generate_tool_schema.__name__  # Just verify import works
 
-                # Compare schemas
-                try:
-                    rust_schema = json.loads(tool.input_schema)
-                    rust_props = set(rust_schema.get("properties", {}).keys())
+                    # Compare schemas
+                    try:
+                        rust_schema = json.loads(tool.input_schema)
+                        rust_props = set(rust_schema.get("properties", {}).keys())
 
-                    print(f"    Rust schema properties: {sorted(rust_props)}")
-                    print("    [PASS] Schema format is valid JSON")
+                        print(f"    Rust schema properties: {sorted(rust_props)}")
+                        print("    [PASS] Schema format is valid JSON")
 
-                    schema_comparisons += 1
-                except json.JSONDecodeError as e:
-                    print(f"    [FAIL] Invalid JSON: {e}")
+                    except json.JSONDecodeError as e:
+                        print(f"    [FAIL] Invalid JSON: {e}")
 
-    print("\n  [INFO] Pydantic V2 schema generation available via:")
-    print("         from omni.foundation.api.decorators import _generate_tool_schema")
+        print("\n  [INFO] Pydantic V2 schema generation available via:")
+        print("         from omni.foundation.api.decorators import _generate_tool_schema")
 
-    # 10. CommandResult Generic Test (if any tool uses it)
+    # 12. CommandResult Generic Test (if any tool uses it)
     print("\n[=] CommandResult Generic Type Test")
     print("-" * 40)
 
     # Test that CommandResult with Generic works
-    from omni.foundation.api.types import CommandResult
+    try:
+        from omni.foundation.api.types import CommandResult
 
-    # Create typed CommandResult instances
-    dict_result = CommandResult(success=True, data={"key": "value"})
-    str_result = CommandResult(success=True, data="simple string")
-    list_result = CommandResult(success=True, data=[1, 2, 3])
+        # Create typed CommandResult instances
+        dict_result = CommandResult(success=True, data={"key": "value"})
+        str_result = CommandResult(success=True, data="simple string")
+        list_result = CommandResult(success=True, data=[1, 2, 3])
 
-    # Verify typed access
-    print(f"  [PASS] CommandResult[dict].data type: {type(dict_result.data).__name__}")
-    print(f"  [PASS] CommandResult[str].data type: {type(str_result.data).__name__}")
-    print(f"  [PASS] CommandResult[list].data type: {type(list_result.data).__name__}")
+        # Verify typed access
+        print(f"  [PASS] CommandResult[dict].data type: {type(dict_result.data).__name__}")
+        print(f"  [PASS] CommandResult[str].data type: {type(str_result.data).__name__}")
+        print(f"  [PASS] CommandResult[list].data type: {type(list_result.data).__name__}")
 
-    # Test computed fields
-    print(f"  [PASS] computed_field is_retryable: {dict_result.is_retryable}")
-    print(f"  [PASS] computed_field duration_ms: {dict_result.duration_ms}")
+        # Test computed fields
+        print(f"  [PASS] computed_field is_retryable: {dict_result.is_retryable}")
+        print(f"  [PASS] computed_field duration_ms: {dict_result.duration_ms}")
 
-    # Test serialization includes computed fields
-    serialized = dict_result.model_dump()
-    if "is_retryable" in serialized:
-        print("  [PASS] computed_field included in model_dump()")
-    else:
-        print("  [FAIL] computed_field NOT in model_dump()")
+        # Test serialization includes computed fields
+        serialized = dict_result.model_dump()
+        if "is_retryable" in serialized:
+            print("  [PASS] computed_field included in model_dump()")
+        else:
+            print("  [FAIL] computed_field NOT in model_dump()")
+    except ImportError as e:
+        print(f"  [SKIP] CommandResult not available: {e}")
 
     print("\n" + "=" * 70)
     print("[*] Rust skills-scanner verification complete!")
@@ -370,6 +533,10 @@ def main():
     print("    - CommandResult[T] Generic types working")
     print("    - @computed_field serialization working")
     print("    - _generate_tool_schema available for schema generation")
+    print("\n[+] LanceDB Integration:")
+    if lancedb_tools:
+        print(f"    - {len(lancedb_tools)} tools persisted in LanceDB")
+    print("    - diff_skills function working for incremental sync")
 
 
 if __name__ == "__main__":

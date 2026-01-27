@@ -42,15 +42,15 @@ from ._enums import SmartCommitAction, SmartCommitStatus, WorkflowRouting
 
 logger = get_logger("git.smart_commit")
 
-# Import Rust checkpoint saver for LangGraph
+# Import Rust checkpoint saver for LangGraph (use shared singleton)
 try:
-    from omni.langgraph.checkpoint.saver import RustCheckpointSaver as _RustCheckpointSaver
+    from omni.langgraph.checkpoint.saver import get_default_checkpointer as _get_checkpointer
 
     _CHECKPOINT_AVAILABLE = True
-    logger.info("RustCheckpointSaver imported successfully")
+    _memory = _get_checkpointer()  # Get shared singleton (logs once)
 except ImportError as e:
     _CHECKPOINT_AVAILABLE = False
-    _RustCheckpointSaver = None  # type: ignore
+    _memory = None
     logger.warning(f"RustCheckpointSaver import failed: {e}")
 
 # Workflow type identifier for checkpoint table
@@ -335,11 +335,11 @@ async def _approve_smart_commit_async(
 
     root = Path(project_root)
 
-    # Load workflow state to get original staged files from start phase
+    # Load workflow state to get original staged files from start step
     workflow_state = load_workflow_state(_WORKFLOW_TYPE, workflow_id) or {}
     original_staged = workflow_state.get("staged_files", [])
 
-    # Re-stage all files that were staged in start phase
+    # Re-stage all files that were staged in start step
     # This ensures changes from lefthook (formatting, etc.) are included
     for f in original_staged:
         subprocess.run(
@@ -427,22 +427,10 @@ register_workflow("smart_commit", _SMART_COMMIT_DIAGRAM)
 
 
 # =============================================================================
-# LangGraph Compilation with Rust Checkpoint
+# LangGraph Compilation with Rust Checkpoint (shared singleton)
 # =============================================================================
 
-# Compile with Rust checkpoint for state persistence (LanceDB)
-if _CHECKPOINT_AVAILABLE and _RustCheckpointSaver:
-    try:
-        _memory = _RustCheckpointSaver()
-        logger.info(f"RustCheckpointSaver initialized: {_memory}")
-    except Exception as e:
-        logger.error(f"RustCheckpointSaver init failed: {e}")
-        _memory = None
-else:
-    _memory = None
-    logger.warning("Checkpointer not available, using None")
-
-# Build and compile the workflow graph
+# Build and compile the workflow graph with shared checkpointer
 _smart_commit_graph = _build_workflow()
 _app = _smart_commit_graph.compile(checkpointer=_memory)
 logger.info(f"Compiled SmartCommit checkpointer: {_app.checkpointer}")

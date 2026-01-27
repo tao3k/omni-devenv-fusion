@@ -185,8 +185,9 @@ memory:
 
 checkpoint:
   # LanceDB database path (relative to project root or absolute)
-  # Default: .cache/checkpoints.lance (LanceDB format)
-  db_path: ".cache/checkpoints.lance"
+  # All LanceDB data is consolidated under .cache/omni-vector/
+  # Default: .cache/omni-vector/checkpoints.lance
+  db_path: ".cache/omni-vector/checkpoints.lance"
 
   # Table prefix for different workflow types
   # smart_commit -> table: checkpoint_smart_commit
@@ -474,6 +475,30 @@ context_compression:
 
   # Compression method: "llm" (use LLM to summarize) or "truncate" (simple cut)
   method: "llm"
+
+# =============================================================================
+# Router Configuration
+# =============================================================================
+# The Grand Unified Router - Hybrid semantic + keyword search
+router:
+  # Cache settings
+  cache:
+    max_size: 1000 # Maximum cache entries
+    ttl: 300 # Cache TTL in seconds
+
+  # Search weights (semantic + keyword fusion)
+  search:
+    semantic_weight: 0.7 # Weight for semantic search
+    keyword_weight: 0.3 # Weight for keyword search
+
+  # Result filtering
+  default_limit: 10 # Default number of results
+  default_threshold: 0.2 # Minimum score threshold (low to show more results)
+
+  # Confidence thresholds
+  confidence:
+    high: 0.75 # Score >= this = high confidence
+    medium: 0.5 # Score >= this = medium confidence
 
 # =============================================================================
 # Claude Code Symbiosis - Post-Mortem Audit

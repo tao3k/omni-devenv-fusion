@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "omni-mcp"
-version = "0.1.0"
-description = "High-performance, pure MCP transport layer powered by Rust (orjson)"
-requires-python = ">=3.10"
+version = "0.4.0"
+description = "High-performance MCP transport layer using MCP SDK types"
+requires-python = ">=3.12"
 dependencies = [
     "omni-foundation",
+    "mcp>=1.1.0",  # MCP SDK for JSON-RPC types
     "orjson>=3.9.0",
-    "pydantic>=2.0.0",
     "starlette>=0.30.0",
     "uvicorn>=0.23.0",
 ]

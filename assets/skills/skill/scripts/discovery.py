@@ -26,32 +26,30 @@ def _get_discovery_service():
     name="discover",
     category="system",
     description="""
-    [CRITICAL] Tool Registry Lookup - The ONLY Way to Call @omni Commands
+    [CRITICAL] Capability Discovery & Intent Resolver - The Agent's PRIMARY Entry Point.
 
-    MANDATORY RULE: Before calling ANY @omni(...) command, you MUST call skill.discover first
-    to get the exact tool name and correct usage template. Direct @omni calls are FORBIDDEN
-    without先用 skill.discover 确定工具.
+    MANDATORY WORKFLOW: This tool is the EXCLUSIVE gateway for solving any task. It maps high-level natural language goals to specific, executable @omni commands.
 
-    WHEN TO USE (ALWAYS call this first):
-    1. ANY time you want to call a tool via @omni(...)
-    2. You are unsure which tool to use
-    3. You need the exact tool name and arguments schema
-    4. You need to verify a tool exists before calling it
-    5. You are starting any new task that requires a tool
+    CORE RESPONSIBILITIES:
+    1. INTENT MAPPING: Converts vague requests (e.g., "debug network", "optimize rust") into concrete tool sequences.
+    2. GLOBAL REGISTRY ACCESS: Searches the entire Skill Registry (Active + Inactive). If a tool is found but not loaded, it provides `jit_install` instructions.
+    3. SYNTAX ENFORCEMENT: Resolves the EXACT @omni(...) invocation template. Direct @omni calls are FORBIDDEN without first retrieving the template from discovery.
+    4. ARCHITECTURAL ORIENTATION: Use this at the START of every session or new sub-task to identify available "superpowers" before planning.
 
-    WORKFLOW:
-    1. User: "I need to analyze a GitHub repository"
-    2. You call: skill.discover(intent="analyze github repository structure")
-    3. Returns: @omni("software_engineering.analyze_project_structure", {"depth": 3})
-    4. NOW you can call the tool with confidence
+    WHEN TO USE:
+    - To find out *how* to perform a task (e.g., "how to analyze a pcap").
+    - To check if a specific capability (e.g., "image processing") exists.
+    - To get the correct parameter schema for a tool.
+    - Whenever you encounter a new domain you haven't worked with in the current session.
 
     Args:
-        - intent: str - Your goal/action in natural language (required)
-        - limit: int = 3 - Max results to return
+        - intent: str - The natural language goal or action (required).
+        - limit: int = 5 - Max results to return (increase for complex/ambiguous tasks).
 
     Returns:
-        List of matching tools with exact @omni() usage templates.
-        Copy the template EXACTLY as shown - no modifications allowed.
+        A structured map containing:
+        - 'quick_guide': Direct usage templates to copy and paste.
+        - 'details': Full metadata, descriptions, and scores for each tool.
     """,
 )
 async def discover(intent: str, limit: int = 3) -> dict[str, Any]:

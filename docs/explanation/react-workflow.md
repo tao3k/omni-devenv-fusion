@@ -145,7 +145,7 @@ completion_patterns = [
 ### Potential Improvements
 
 1. **Structured Thinking** - Use JSON schema for thinking output
-2. **Planning Phase** - Separate planning from execution
+2. **Planning Stage** - Separate planning from execution
 3. **Self-Correction** - Allow LLM to revise previous tool calls
 4. **Checkpointing** - Save progress for long-running tasks
 5. **Parallel Execution** - Execute independent tools concurrently

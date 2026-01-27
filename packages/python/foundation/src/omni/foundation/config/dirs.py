@@ -311,15 +311,6 @@ def get_skills_dir() -> Path:
     return SKILLS_DIR()
 
 
-def get_skill_index_path() -> Path:
-    """Get the skill index file path (.cache/skill_index.json).
-
-    Returns:
-        Path to .cache/skill_index.json
-    """
-    return get_cache_dir("skill_index.json")
-
-
 def get_checkpoint_db_path() -> Path:
     """Get the checkpoint database path from settings.
 
@@ -336,7 +327,7 @@ def get_checkpoint_db_path() -> Path:
     """
     from omni.foundation.config.settings import get_setting
 
-    db_path = get_setting("checkpoint.db_path", ".cache/checkpoints.lance")
+    db_path = get_setting("checkpoint.db_path")
 
     # Check if absolute path
     if Path(db_path).is_absolute():
@@ -360,8 +351,56 @@ def get_checkpoint_table_name(workflow_type: str) -> str:
     """
     from omni.foundation.config.settings import get_setting
 
-    prefix = get_setting("checkpoint.table_prefix", "checkpoint_")
+    prefix = get_setting("checkpoint.table_prefix")
     return f"{prefix}{workflow_type}"
+
+
+def get_vector_db_path() -> Path:
+    """Get the vector store base directory path.
+
+    This is the unified directory for all LanceDB databases in the project.
+    Individual stores append their own filenames:
+    - Router: get_vector_db_path() / "router.lance"
+    - Librarian: get_vector_db_path() / "knowledge.lance"
+
+    Returns:
+        Path to .cache/omni-vector/
+
+    Usage:
+        >>> from omni.foundation.config.dirs import get_vector_db_path
+        >>> db_dir = get_vector_db_path()
+        >>> # Returns: /project/.cache/omni-vector/
+        >>> # Use with: db_dir / "router.lance"
+    """
+    return get_cache_dir("omni-vector")
+
+
+def get_checkpoints_db_path() -> Path:
+    """Get the checkpoints LanceDB database path.
+
+    Reads from settings.yaml -> checkpoint.db_path
+
+    Returns:
+        Path to the LanceDB checkpoint database
+
+    Usage:
+        >>> from omni.foundation.config.dirs import get_checkpoints_db_path
+        >>> db_path = get_checkpoints_db_path()
+        >>> # Returns: /project/.cache/omni-vector/checkpoints.lance
+    """
+    from omni.foundation.config.settings import get_setting
+
+    db_path = get_setting("checkpoint.db_path")
+
+    # Check if absolute path
+    if Path(db_path).is_absolute():
+        return Path(db_path)
+
+    # Relative path - resolve from project root
+    from omni.foundation.runtime.gitops import get_project_root
+
+    project_root = get_project_root()
+    return project_root / db_path
 
 
 # =============================================================================
@@ -377,12 +416,12 @@ __all__ = [
     "PRJ_PATH",
     "PRJ_RUNTIME",
     "get_cache_dir",
-    "get_checkpoint_db_path",
+    "get_checkpoints_db_path",
+    "get_vector_db_path",
     "get_checkpoint_table_name",
     "get_config_dir",
     "get_data_dir",
     "get_prj_dir",
     "get_runtime_dir",
-    "get_skill_index_path",
     "get_skills_dir",
 ]

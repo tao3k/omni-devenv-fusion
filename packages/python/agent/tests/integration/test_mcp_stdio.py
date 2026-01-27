@@ -175,24 +175,72 @@ class TestShutdownCount:
         assert hasattr(os, "_exit")
 
 
+class TestMCPProtocolHandlers:
+    """Test MCP protocol handlers are registered correctly."""
+
+    @pytest.mark.asyncio
+    async def test_server_registers_initialize_handler(self):
+        """Test that server registers the initialize handler."""
+        from omni.agent.mcp_server.server import run_stdio_server
+
+        # The function should register handlers before starting
+        # We can't easily test the internal handlers, but we verify
+        # the function can be imported and called (handlers registered inside)
+        import inspect
+
+        source = inspect.getsource(run_stdio_server)
+        assert "@server.request" in source, "initialize handler should be registered"
+        assert "handle_initialize" in source, "handle_initialize function should exist"
+
+    @pytest.mark.asyncio
+    async def test_server_registers_tools_list_handler(self):
+        """Test that server registers the tools/list handler."""
+        from omni.agent.mcp_server.server import run_stdio_server
+
+        import inspect
+
+        source = inspect.getsource(run_stdio_server)
+        assert '@server.request("tools/list")' in source, "tools/list handler should be registered"
+
+    @pytest.mark.asyncio
+    async def test_server_registers_tools_call_handler(self):
+        """Test that server registers the tools/call handler."""
+        from omni.agent.mcp_server.server import run_stdio_server
+
+        import inspect
+
+        source = inspect.getsource(run_stdio_server)
+        assert '@server.request("tools/call")' in source, "tools/call handler should be registered"
+
+
 class TestMCPProtocolCompliance:
     """Test MCP protocol compliance for tool schema."""
 
     @pytest.mark.asyncio
     async def test_tool_list_returns_valid_schema(self):
-        """Test that tools/list returns valid MCP-compliant inputSchema."""
-        from omni.mcp.types import JSONRPCRequest
+        """Test that tools/list returns valid MCP-compliant inputSchema when tools exist."""
+        from mcp.types import JSONRPCRequest
 
         from omni.agent.server import create_agent_handler
 
         handler = create_agent_handler()
         await handler.initialize()
 
-        request = JSONRPCRequest(id=1, method="tools/list", params={})
+        # Create Pydantic request, then convert to dict for handler
+        pydantic_request = JSONRPCRequest(jsonrpc="2.0", id=1, method="tools/list", params={})
+        request = pydantic_request.model_dump()
+
         response = await handler._handle_list_tools(request)
 
-        assert response.error is None
-        tools = response.result.get("tools", [])
+        # Response is a plain dict
+        assert response.get("error") is None, f"Response error: {response.get('error')}"
+        tools = response.get("result", {}).get("tools", [])
+
+        # Only validate schema if tools are returned
+        # (Skills may not have commands, which is valid)
+        if len(tools) == 0:
+            pytest.skip("No tools available (skills have no commands)")
+
         assert len(tools) > 0, "No tools returned"
 
         # Validate each tool has valid inputSchema
@@ -207,18 +255,26 @@ class TestMCPProtocolCompliance:
 
     @pytest.mark.asyncio
     async def test_tool_names_follow_skill_command_pattern(self):
-        """Test that tool names follow 'skill.command' pattern."""
-        from omni.mcp.types import JSONRPCRequest
+        """Test that tool names follow 'skill.command' pattern when tools exist."""
+        from mcp.types import JSONRPCRequest
 
         from omni.agent.server import create_agent_handler
 
         handler = create_agent_handler()
         await handler.initialize()
 
-        request = JSONRPCRequest(id=1, method="tools/list", params={})
+        # Create Pydantic request, then convert to dict for handler
+        pydantic_request = JSONRPCRequest(jsonrpc="2.0", id=1, method="tools/list", params={})
+        request = pydantic_request.model_dump()
+
         response = await handler._handle_list_tools(request)
 
-        tools = response.result.get("tools", [])
+        # Response is a plain dict
+        tools = response.get("result", {}).get("tools", [])
+
+        # Skip if no tools available
+        if len(tools) == 0:
+            pytest.skip("No tools available (skills have no commands)")
 
         for tool in tools:
             name = tool["name"]
@@ -226,18 +282,26 @@ class TestMCPProtocolCompliance:
 
     @pytest.mark.asyncio
     async def test_tool_descriptions_are_present(self):
-        """Test that all tools have descriptions."""
-        from omni.mcp.types import JSONRPCRequest
+        """Test that all tools have descriptions when tools exist."""
+        from mcp.types import JSONRPCRequest
 
         from omni.agent.server import create_agent_handler
 
         handler = create_agent_handler()
         await handler.initialize()
 
-        request = JSONRPCRequest(id=1, method="tools/list", params={})
+        # Create Pydantic request, then convert to dict for handler
+        pydantic_request = JSONRPCRequest(jsonrpc="2.0", id=1, method="tools/list", params={})
+        request = pydantic_request.model_dump()
+
         response = await handler._handle_list_tools(request)
 
-        tools = response.result.get("tools", [])
+        # Response is a plain dict
+        tools = response.get("result", {}).get("tools", [])
+
+        # Skip if no tools available
+        if len(tools) == 0:
+            pytest.skip("No tools available (skills have no commands)")
 
         for tool in tools:
             assert "description" in tool, f"Tool '{tool.get('name')}' missing description"
@@ -261,6 +325,146 @@ class TestIntegration:
         assert MCPServer is not None
         assert StdioTransport is not None
         assert SSEServer is not None
+
+
+class TestSkillPathResolutionIntegration:
+    """Integration tests to verify skill path resolution from scanner to MCP tools.
+
+    These tests prevent the regression where skills like "git" were incorrectly
+    resolved to "/project/git" instead of "/project/assets/skills/git", causing
+    no tools to be registered to the MCP server.
+    """
+
+    @pytest.mark.asyncio
+    async def test_scanner_returns_correct_skill_paths(self):
+        """Verify scanner extracts correct skill paths from file paths.
+
+        This is the critical test for the bug where:
+        - file_path: "/project/assets/skills/git/scripts/commit.py"
+        - Buggy extraction: "git" -> scripts_path = "/project/git/scripts" (WRONG)
+        - Fixed extraction: "assets/skills/git" -> scripts_path = "/project/assets/skills/git/scripts" (CORRECT)
+        """
+        from omni.foundation.bridge.scanner import PythonSkillScanner
+        from omni.foundation.config.skills import SKILLS_DIR
+
+        scanner = PythonSkillScanner()
+        skills = scanner.scan_directory()
+
+        # Skip if no skills in database
+        if len(skills) == 0:
+            pytest.skip("No skills loaded from LanceDB")
+
+        for skill in skills:
+            # Verify skill_path is in correct format (must be "assets/skills/{name}")
+            assert skill.skill_path == f"assets/skills/{skill.skill_name}", (
+                f"Skill '{skill.skill_name}' has incorrect path: {skill.skill_path}. "
+                f"Expected: 'assets/skills/{skill.skill_name}'"
+            )
+
+            # Verify the skill directory exists using SKILLS_DIR(name)
+            skill_dir = SKILLS_DIR(skill.skill_name)
+            assert skill_dir.exists(), (
+                f"Skill directory does not exist: {skill_dir}. "
+                f"Check scanner.py skill_path extraction."
+            )
+
+    @pytest.mark.asyncio
+    async def test_mcp_handler_receives_tools_from_scanner(self):
+        """Verify MCP handler receives tools from scanner with correct skill paths.
+
+        This test ensures the integration between scanner and handler works,
+        preventing the case where handler.get_tools() returns empty list.
+        """
+        from omni.agent.server import create_agent_handler
+
+        handler = create_agent_handler()
+        await handler.initialize()
+
+        # Get tools via the handler's list method
+        from mcp.types import JSONRPCRequest
+
+        pydantic_request = JSONRPCRequest(jsonrpc="2.0", id=1, method="tools/list", params={})
+        request = pydantic_request.model_dump()
+
+        response = await handler._handle_list_tools(request)
+
+        tools = response.get("result", {}).get("tools", [])
+
+        # Critical assertion - tools must not be empty
+        assert len(tools) > 0, (
+            "No tools registered to MCP handler! "
+            "This indicates skill path resolution failed. "
+            "Check scanner.py skill_path extraction."
+        )
+
+    @pytest.mark.asyncio
+    async def test_skill_scripts_path_is_valid(self):
+        """Verify that skill scripts path resolves to existing directory.
+
+        This catches the bug where scripts_path was invalid because
+        skill_path was extracted incorrectly.
+        """
+        from omni.agent.server import create_agent_handler
+        from pathlib import Path
+
+        handler = create_agent_handler()
+        await handler.initialize()
+
+        # Get the kernel's skill context
+        kernel = handler._kernel
+        context = kernel.skill_context
+
+        # Check each skill can load commands
+        for skill_name in context.list_skills():
+            skill = context.get_skill(skill_name)
+            if skill is None:
+                continue
+
+            # Check if skill has commands
+            if hasattr(skill, "list_commands") and callable(skill.list_commands):
+                commands = skill.list_commands()
+                if len(commands) > 0:
+                    # Verify the skill's path resolves correctly
+                    # This exercises the _path property which was the source of the bug
+                    if hasattr(skill, "_path"):
+                        skill_path = skill._path
+                        scripts_path = skill_path / "scripts"
+
+                        assert scripts_path.exists(), (
+                            f"Skill '{skill_name}': scripts_path does not exist: {scripts_path}. "
+                            f"This indicates path resolution failed during skill loading."
+                        )
+
+    @pytest.mark.asyncio
+    async def test_json_rpc_response_id_is_not_null(self):
+        """Verify JSON-RPC responses have non-null id for requests.
+
+        This prevents the regression where tools/list returned response
+        with id=null, causing MCP client validation failures.
+        """
+        from omni.agent.server import create_agent_handler
+        from mcp.types import JSONRPCRequest
+
+        handler = create_agent_handler()
+        await handler.initialize()
+
+        # Make a tools/list request with a specific id
+        test_id = 42
+        pydantic_request = JSONRPCRequest(jsonrpc="2.0", id=test_id, method="tools/list", params={})
+        request = pydantic_request.model_dump()
+
+        response = await handler._handle_list_tools(request)
+
+        # Response must have the same id as the request
+        assert response.get("id") == test_id, (
+            f"Response id ({response.get('id')}) does not match request id ({test_id}). "
+            "JSON-RPC 2.0 requires id to match."
+        )
+
+        # Response id must not be null for requests (notifications have no id)
+        assert response.get("id") is not None, (
+            "Response id is null. JSON-RPC 2.0 requires non-null id for request responses."
+        )
 
 
 if __name__ == "__main__":

@@ -9,11 +9,9 @@ import socket
 
 import httpx
 import pytest
+from mcp.types import JSONRPCRequest, JSONRPCResponse
+
 from omni.mcp.transport.sse import SSEServer
-from omni.mcp.types import (
-    JSONRPCRequest,
-    make_success_response,
-)
 
 
 def get_unused_port() -> int:
@@ -30,19 +28,23 @@ class MockRequestHandler:
         self.notifications: list[tuple[str, dict]] = []
         self.request_count = 0
 
-    async def handle_request(self, request: JSONRPCRequest):
+    async def handle_request(self, request: JSONRPCRequest) -> JSONRPCResponse:
         """Handle incoming requests."""
         self.request_count += 1
 
-        if request.method == "tools/list":
-            return make_success_response(
-                id=request.id,
+        method = request.get("method", "")
+        req_id = request.get("id")
+
+        if method == "tools/list":
+            return JSONRPCResponse(
+                jsonrpc="2.0",
+                id=req_id,
                 result={"tools": [{"name": "test_tool"}]},
             )
-        elif request.method == "ping":
-            return make_success_response(id=request.id, result={"pong": True})
+        elif method == "ping":
+            return JSONRPCResponse(jsonrpc="2.0", id=req_id, result={"pong": True})
         else:
-            return make_success_response(id=request.id, result={"method": request.method})
+            return JSONRPCResponse(jsonrpc="2.0", id=req_id, result={"method": method})
 
     async def handle_notification(self, method: str, params):
         """Handle incoming notifications."""
@@ -160,7 +162,7 @@ class TestSSEHTTPEndpoint:
 
             assert response.status_code == 400
             data = response.json()
-            assert data["error"]["code"] == -32700  # PARSE_ERROR
+            assert data["error"]["code"] == -32700  # PARSE_ERROR (integer per JSON-RPC spec)
 
     @pytest.mark.asyncio
     async def test_message_endpoint_with_tools_list(self, sse_server):

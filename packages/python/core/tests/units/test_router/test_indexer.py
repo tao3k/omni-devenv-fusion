@@ -1,10 +1,13 @@
-"""Tests for omni.core.router.indexer module."""
+"""Tests for omni.core.router.indexer module.
+
+Tests the optimized batch indexing functionality and singleton patterns.
+"""
 
 from __future__ import annotations
 
 import pytest
 
-from omni.core.router.indexer import IndexedSkill, SkillIndexer
+from omni.core.router.indexer import IndexedEntry, InMemoryIndex, IndexedSkill, SkillIndexer
 
 
 def _is_indexing_available() -> bool:
@@ -38,11 +41,22 @@ class TestSkillIndexer:
     """Test SkillIndexer class."""
 
     def test_default_initialization(self):
-        """Test default initialization."""
+        """Test default initialization uses unified path."""
         indexer = SkillIndexer()
 
+        # Default should use unified path
+        assert "omni-vector" in indexer._storage_path
+        assert "router.lance" in indexer._storage_path
+        assert indexer._dimension == 384  # BAAI/bge-small-en-v1.5 default
+        assert indexer._store is None
+        assert indexer._indexed_count == 0
+
+    def test_in_memory_initialization(self):
+        """Test in-memory mode initialization."""
+        indexer = SkillIndexer(storage_path=":memory:")
+
         assert indexer._storage_path == ":memory:"
-        assert indexer._dimension == 1536
+        assert indexer._dimension == 384
         assert indexer._store is None
         assert indexer._indexed_count == 0
 
@@ -70,7 +84,112 @@ class TestSkillIndexer:
         assert "storage_path" in stats
         assert stats["entries_indexed"] == 0
         assert stats["is_ready"] is False
-        assert stats["storage_path"] == ":memory:"
+        # Default uses unified path
+        assert "omni-vector" in stats["storage_path"]
+
+
+class TestInMemoryIndex:
+    """Test InMemoryIndex class (fallback when RustVectorStore unavailable)."""
+
+    def test_initialization(self):
+        """Test InMemoryIndex initialization."""
+        index = InMemoryIndex(dimension=384)
+
+        assert index._dimension == 384
+        assert len(index._entries) == 0
+
+    def test_add_single_entry(self):
+        """Test adding a single entry."""
+        index = InMemoryIndex()
+        index.add("test content", {"type": "skill", "skill_name": "test"})
+
+        assert len(index._entries) == 1
+        entry = index._entries[0]
+        assert entry.content == "test content"
+        assert entry.metadata["type"] == "skill"
+
+    def test_add_batch(self):
+        """Test adding entries in batch."""
+        index = InMemoryIndex()
+
+        entries = [
+            ("content 1", {"id": "1"}),
+            ("content 2", {"id": "2"}),
+            ("content 3", {"id": "3"}),
+        ]
+        index.add_batch(entries)
+
+        assert len(index._entries) == 3
+        assert index._entries[0].content == "content 1"
+        assert index._entries[1].content == "content 2"
+        assert index._entries[2].content == "content 3"
+
+    def test_clear(self):
+        """Test clearing the index."""
+        index = InMemoryIndex()
+        index.add("content 1", {"id": "1"})
+        index.add("content 2", {"id": "2"})
+
+        assert len(index._entries) == 2
+
+        index.clear()
+
+        assert len(index._entries) == 0
+
+    def test_search_empty(self):
+        """Test search on empty index."""
+        index = InMemoryIndex()
+
+        results = index.search("test", None, limit=5)
+
+        assert results == []
+
+    def test_search_with_keyword_match(self):
+        """Test keyword-based search (fallback when embeddings unavailable)."""
+        index = InMemoryIndex()
+        index.add("Git commit changes", {"skill_name": "git"})
+        index.add("File system read", {"skill_name": "filesystem"})
+        index.add("Memory save", {"skill_name": "memory"})
+
+        results = index.search("git commit", None, limit=5)
+
+        assert len(results) >= 1
+        # First result should be git-related
+        assert results[0].payload["skill_name"] == "git"
+
+    def test_len(self):
+        """Test __len__ method."""
+        index = InMemoryIndex()
+        assert len(index) == 0
+
+        index.add("content", {})
+        assert len(index) == 1
+
+        index.add_batch([("a", {}), ("b", {})])
+        assert len(index) == 3
+
+
+class TestIndexedEntry:
+    """Test IndexedEntry dataclass."""
+
+    def test_create_indexed_entry(self):
+        """Test creating an IndexedEntry."""
+        entry = IndexedEntry(
+            content="Test content",
+            metadata={"skill_name": "test", "weight": 1.0},
+            embedding=[0.1, 0.2, 0.3],
+        )
+
+        assert entry.content == "Test content"
+        assert entry.metadata["skill_name"] == "test"
+        assert entry.embedding == [0.1, 0.2, 0.3]
+
+    def test_indexed_entry_without_embedding(self):
+        """Test creating an IndexedEntry without embedding."""
+        entry = IndexedEntry(content="No embedding", metadata={})
+
+        assert entry.content == "No embedding"
+        assert entry.embedding is None
 
 
 class TestIndexedSkill:
@@ -110,10 +229,93 @@ class TestSkillIndexerIndexing:
     @pytest.mark.asyncio
     async def test_index_skills_empty_list(self):
         """Test indexing with empty skill list."""
-        indexer = SkillIndexer()
+        indexer = SkillIndexer(storage_path=":memory:")
         count = await indexer.index_skills([])
 
         assert count == 0
+
+    @pytest.mark.asyncio
+    async def test_index_skills_in_memory_mode(self):
+        """Test in-memory indexing (no RustVectorStore required)."""
+        indexer = SkillIndexer(storage_path=":memory:")
+
+        skills = [
+            {
+                "name": "git",
+                "description": "Git operations skill",
+                "commands": [
+                    {"name": "status", "description": "Show working tree status"},
+                    {"name": "commit", "description": "Commit changes"},
+                ],
+            }
+        ]
+
+        count = await indexer.index_skills(skills)
+
+        # Should have 1 skill entry + 2 command entries = 3 total
+        assert count == 3
+
+    @pytest.mark.asyncio
+    async def test_index_skills_in_memory_clear_and_reindex(self):
+        """Test that in-memory index clears before re-indexing."""
+        indexer = SkillIndexer(storage_path=":memory:")
+
+        skills1 = [
+            {"name": "git", "description": "Git skill", "commands": []},
+        ]
+        await indexer.index_skills(skills1)
+        assert indexer._indexed_count == 1
+
+        # Re-index with different skills
+        skills2 = [
+            {"name": "memory", "description": "Memory skill", "commands": []},
+            {"name": "filesystem", "description": "FS skill", "commands": []},
+        ]
+        await indexer.index_skills(skills2)
+        # Should replace, not append
+        assert indexer._indexed_count == 2
+
+    @pytest.mark.asyncio
+    async def test_index_skills_multiple_skills_batch(self):
+        """Test batch indexing of multiple skills."""
+        indexer = SkillIndexer(storage_path=":memory:")
+
+        skills = [
+            {
+                "name": "git",
+                "description": "Git operations",
+                "commands": [
+                    {"name": "status", "description": "Show status"},
+                    {"name": "commit", "description": "Commit"},
+                    {"name": "push", "description": "Push changes"},
+                ],
+            },
+            {
+                "name": "memory",
+                "description": "Memory storage",
+                "commands": [
+                    {"name": "save", "description": "Save memory"},
+                ],
+            },
+        ]
+
+        count = await indexer.index_skills(skills)
+
+        # 1 skill entry + 3 git commands + 1 memory skill + 1 memory command = 6
+        assert count == 6
+
+    @pytest.mark.asyncio
+    async def test_index_skills_skills_without_commands(self):
+        """Test indexing skills without commands."""
+        indexer = SkillIndexer(storage_path=":memory:")
+
+        skills = [
+            {"name": "solo", "description": "Solo skill", "commands": []},
+        ]
+
+        count = await indexer.index_skills(skills)
+
+        assert count == 1
 
     @pytest.mark.asyncio
     @indexing_available

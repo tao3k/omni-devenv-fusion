@@ -29,6 +29,10 @@ pub struct PyToolRecord {
     input_schema: String,
     #[pyo3(get)]
     docstring: String,
+    #[pyo3(get)]
+    file_hash: String,
+    #[pyo3(get)]
+    category: String,
 }
 
 impl From<&ToolRecord> for PyToolRecord {
@@ -43,6 +47,8 @@ impl From<&ToolRecord> for PyToolRecord {
             keywords: record.keywords.clone(),
             input_schema: record.input_schema.clone(),
             docstring: record.docstring.clone(),
+            file_hash: record.file_hash.clone(),
+            category: record.category.clone(),
         }
     }
 }
@@ -382,9 +388,9 @@ impl PyVectorStore {
     /// Returns:
     ///   List of JSON strings representing tool records
     fn scan_skill_tools_raw(&self, base_path: String) -> PyResult<Vec<String>> {
-        // Use SkillScanner for metadata and ScriptScanner for tools
+        // Use SkillScanner for metadata and ToolsScanner for tools
         let skill_scanner = omni_vector::SkillScanner::new();
-        let script_scanner = omni_vector::ScriptScanner::new();
+        let script_scanner = omni_vector::ToolsScanner::new();
         let skills_path = Path::new(&base_path);
 
         if !skills_path.exists() {
@@ -509,6 +515,261 @@ impl PyVectorStore {
                 .delete_by_file_path(&table_name, file_paths)
                 .await
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        })
+    }
+
+    /// List all tools from LanceDB as JSON.
+    ///
+    /// Enables using LanceDB as the Single Source of Truth instead of skill_index.json.
+    /// Returns tools with: name, description, skill_name, category, input_schema, file_path, keywords.
+    ///
+    /// Args:
+    ///   table_name: Name of the table (default: "skills")
+    ///
+    /// Returns:
+    ///   JSON string of tool array
+    fn list_all_tools(&self, table_name: Option<String>) -> PyResult<String> {
+        let path = self.path.clone();
+        let dimension = self.dimension;
+        let table_name = table_name.unwrap_or_else(|| "skills".to_string());
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        rt.block_on(async {
+            let store = VectorStore::new(&path, Some(dimension))
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            store
+                .list_all_tools(&table_name)
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        })
+    }
+
+    /// Get all tools as a PyArrow Table for analytics.
+    ///
+    /// This is optimized for high-performance operations using Arrow's columnar format.
+    /// The metadata JSON column is parsed into separate columns for easier querying.
+    ///
+    /// Args:
+    ///   table_name: Name of the table (default: "skills")
+    ///
+    /// Returns:
+    ///   PyArrow Table with columns: id, content, skill_name, tool_name, file_path, keywords, etc.
+    fn get_analytics_table(&self, table_name: Option<String>) -> PyResult<Py<PyAny>> {
+        let path = self.path.clone();
+        let dimension = self.dimension;
+        let table_name = table_name.unwrap_or_else(|| "skills".to_string());
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+        let json_tools = rt.block_on(async {
+            let store = VectorStore::new(&path, Some(dimension))
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            store
+                .list_all_tools(&table_name)
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        })?;
+
+        // Convert JSON to PyArrow Table in Python
+        pyo3::Python::attach(|py| -> PyResult<Py<PyAny>> {
+            // Parse JSON
+            let json_mod = py.import("json")?;
+            let loads_fn = json_mod.getattr("loads")?;
+            let tools_py: pyo3::Bound<'_, pyo3::types::PyList> =
+                loads_fn.call1((json_tools,))?.extract()?;
+
+            // Create empty Python lists using PyList::empty
+            let ids = pyo3::types::PyList::empty(py);
+            let contents = pyo3::types::PyList::empty(py);
+            let skill_names = pyo3::types::PyList::empty(py);
+            let tool_names = pyo3::types::PyList::empty(py);
+            let file_paths = pyo3::types::PyList::empty(py);
+            let keywords = pyo3::types::PyList::empty(py);
+
+            for item in tools_py.iter() {
+                let tool_dict = item.cast::<pyo3::types::PyDict>()?;
+
+                // get_item returns Result<Option<Bound<PyAny>>, PyErr>
+                if let Ok(Some(id_any)) = tool_dict.get_item("id") {
+                    let id_: String = id_any.extract()?;
+                    ids.append(id_)?;
+                }
+                if let Ok(Some(content_any)) = tool_dict.get_item("content") {
+                    let content: String = content_any.extract()?;
+                    contents.append(content)?;
+                }
+                if let Ok(Some(skill_any)) = tool_dict.get_item("skill_name") {
+                    let skill: String = skill_any.extract()?;
+                    skill_names.append(skill)?;
+                }
+                if let Ok(Some(tool_any)) = tool_dict.get_item("tool_name") {
+                    let tool_: String = tool_any.extract()?;
+                    tool_names.append(tool_)?;
+                }
+                if let Ok(Some(fp_any)) = tool_dict.get_item("file_path") {
+                    let fp: String = fp_any.extract()?;
+                    file_paths.append(fp)?;
+                }
+                if let Ok(Some(kw_any)) = tool_dict.get_item("keywords") {
+                    let kw_list: pyo3::Bound<'_, pyo3::types::PyList> = kw_any.extract()?;
+                    let mut kw_strings: Vec<String> = Vec::new();
+                    for kw in kw_list.iter() {
+                        if let Ok(kw_str) = kw.extract() {
+                            kw_strings.push(kw_str);
+                        }
+                    }
+                    keywords.append(kw_strings)?;
+                }
+            }
+
+            // Create PyArrow table from dict of columns
+            let pyarrow = py.import("pyarrow")?;
+            let table_fn = pyarrow.getattr("table")?;
+
+            let columns_dict = pyo3::types::PyDict::new(py);
+
+            columns_dict.set_item("id", ids.as_any())?;
+            columns_dict.set_item("content", contents.as_any())?;
+            columns_dict.set_item("skill_name", skill_names.as_any())?;
+            columns_dict.set_item("tool_name", tool_names.as_any())?;
+            columns_dict.set_item("file_path", file_paths.as_any())?;
+            columns_dict.set_item("keywords", keywords.as_any())?;
+
+            let table = table_fn.call1((columns_dict,))?;
+
+            Ok(table.unbind())
+        })
+    }
+
+    /// High-performance tool search with integrated filtering and scoring.
+    ///
+    /// Performs the entire search pipeline in Rust:
+    /// - Vector similarity computation (L2 distance)
+    /// - Score threshold filtering
+    /// - Metadata parsing and validation
+    /// - Returns pre-formatted dicts
+    ///
+    /// Args:
+    ///   table_name: Table containing tool records (default: "skills")
+    ///   query_vector: Query embedding vector
+    ///   limit: Maximum number of results to return
+    ///   threshold: Minimum score threshold (0.0 to 1.0, default: 0.0)
+    ///
+    /// Returns:
+    ///   List of dicts with: name, description, input_schema (JSON), score, skill_name, tool_name, file_path, keywords
+    #[allow(deprecated)]
+    fn search_tools(
+        &self,
+        table_name: Option<String>,
+        query_vector: Vec<f32>,
+        limit: usize,
+        threshold: Option<f32>,
+    ) -> PyResult<Vec<PyObject>> {
+        let path = self.path.clone();
+        let dimension = self.dimension;
+        let table_name = table_name.unwrap_or_else(|| "skills".to_string());
+        let threshold = threshold.unwrap_or(0.0);
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+        rt.block_on(async {
+            let store = VectorStore::new(&path, Some(dimension))
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+            let results = store
+                .search_tools(&table_name, &query_vector, limit, threshold)
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+            // Convert to Python dicts
+            let py_results = pyo3::Python::with_gil(|py| -> PyResult<Vec<PyObject>> {
+                let mut dicts = Vec::with_capacity(results.len());
+                for r in results {
+                    let dict = pyo3::types::PyDict::new(py);
+                    dict.set_item("name", r.name)?;
+                    dict.set_item("description", r.description)?;
+                    // Convert input_schema Value to JSON string for Python to parse
+                    dict.set_item("input_schema", r.input_schema.to_string())?;
+                    dict.set_item("score", r.score)?;
+                    dict.set_item("skill_name", r.skill_name)?;
+                    dict.set_item("tool_name", r.tool_name)?;
+                    dict.set_item("file_path", r.file_path)?;
+                    dict.set_item("keywords", r.keywords)?;
+                    // Convert Bound<PyDict> to PyObject using into_pyobject and into()
+                    dicts.push(dict.into_pyobject(py)?.into());
+                }
+                Ok(dicts)
+            });
+            py_results
+        })
+    }
+
+    /// Fast registry loading for MCP initialization.
+    ///
+    /// Loads all tools from the database with minimal IO:
+    /// - Only reads METADATA and CONTENT columns
+    /// - Returns pre-formatted dicts
+    /// - No vector computation needed (score = 1.0 for all)
+    ///
+    /// This is used during MCP server startup to build the tool registry.
+    ///
+    /// Args:
+    ///   table_name: Table containing tool records (default: "skills")
+    ///
+    /// Returns:
+    ///   List of dicts with: name, description, input_schema (JSON), score=1.0, skill_name, tool_name, file_path, keywords
+    #[allow(deprecated)]
+    fn load_tool_registry(&self, table_name: Option<String>) -> PyResult<Vec<PyObject>> {
+        let path = self.path.clone();
+        let dimension = self.dimension;
+        let table_name = table_name.unwrap_or_else(|| "skills".to_string());
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+        rt.block_on(async {
+            let store = VectorStore::new(&path, Some(dimension))
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+            let results = store
+                .load_tool_registry(&table_name)
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+            // Convert to Python dicts
+            let py_results = pyo3::Python::with_gil(|py| -> PyResult<Vec<PyObject>> {
+                let mut dicts = Vec::with_capacity(results.len());
+                for r in results {
+                    let dict = pyo3::types::PyDict::new(py);
+                    dict.set_item("name", r.name)?;
+                    dict.set_item("description", r.description)?;
+                    // Convert input_schema Value to JSON string for Python to parse
+                    dict.set_item("input_schema", r.input_schema.to_string())?;
+                    dict.set_item("score", r.score)?;
+                    dict.set_item("skill_name", r.skill_name)?;
+                    dict.set_item("tool_name", r.tool_name)?;
+                    dict.set_item("file_path", r.file_path)?;
+                    dict.set_item("keywords", r.keywords)?;
+                    // Convert Bound<PyDict> to PyObject using into_pyobject and into()
+                    dicts.push(dict.into_pyobject(py)?.into());
+                }
+                Ok(dicts)
+            });
+            py_results
         })
     }
 }

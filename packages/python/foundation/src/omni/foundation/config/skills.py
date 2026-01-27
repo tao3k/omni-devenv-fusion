@@ -328,7 +328,7 @@ class SkillPathBuilder:
 
     def manifest(self, skill_name: str) -> Path:
         """Get the SKILL.md for a skill (legacy alias for definition())."""
-        return self._skills_base / skill_name / "SKILL.md"
+        return self._skills_base / skill_name / SKILLS_DIR.definition_file()
 
     def tools(self, skill_name: str) -> Path:
         """Get the tools.py for a skill."""

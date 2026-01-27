@@ -44,13 +44,19 @@ nsjail-configs/
 
 ```bash
 # Generate Apache configuration
-nickel main.ncl --file examples/apache.ncl > apache.cfg
+nickel export -f yaml examples/apache.ncl > apache.cfg
 
 # Generate Firefox configuration
-nickel main.ncl --file examples/firefox.ncl > firefox.cfg
+nickel export -f yaml examples/firefox.ncl > firefox.cfg
 
 # Generate nginx configuration
-nickel main.ncl --file examples/nginx.ncl > nginx.cfg
+nickel export -f yaml examples/nginx.ncl > nginx.cfg
+```
+
+To validate a configuration without generating output, use the `check` subcommand:
+
+```bash
+nickel check examples/apache.ncl
 ```
 
 ### Run nsjail
@@ -241,7 +247,7 @@ let bad_config = {
 
 1. **Use Presets**: Start with a preset and customize
 2. **Least Privilege**: Start with restrictive settings, relax as needed
-3. **Test Configurations**: Use `nickel main.ncl --file config.ncl` to validate before running
+3. **Test Configurations**: Use `nickel check config.ncl` to validate before running
 4. **Log Appropriately**: Enable logging for troubleshooting
 5. **UID Mapping**: Always map to a non-root user for production
 

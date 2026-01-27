@@ -5,7 +5,7 @@ use std::io::Write;
 use std::path::Path;
 use tempfile::TempDir;
 
-use omni_edit::{BatchConfig, BatchRefactorStats, StructuralEditor};
+use omni_edit::{BatchConfig, StructuralEditor};
 
 #[test]
 fn test_batch_replace_apply() {

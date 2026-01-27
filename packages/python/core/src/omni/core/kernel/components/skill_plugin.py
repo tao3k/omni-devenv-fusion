@@ -71,7 +71,7 @@ class ISkillPlugin(ABC):
     # =============================================================================
 
     async def initialize(self) -> None:
-        """Initialization phase - called after Skill is loaded, before ready.
+        """Initialization stage - called after Skill is loaded, before ready.
 
         Used for:
         - Loading configuration
@@ -81,7 +81,7 @@ class ISkillPlugin(ABC):
         pass
 
     async def ready(self) -> None:
-        """Ready phase - called before Skill is ready to accept requests.
+        """Ready stage - called before Skill is ready to accept requests.
 
         Used for:
         - Validating dependencies
@@ -90,7 +90,7 @@ class ISkillPlugin(ABC):
         pass
 
     async def shutdown(self) -> None:
-        """Shutdown phase - called before Skill is unloaded.
+        """Shutdown stage - called before Skill is unloaded.
 
         Used for:
         - Saving state

@@ -12,11 +12,14 @@ Features:
 - Session management for notification delivery
 - Request context for handlers to send notifications
 
-Logging: Uses Foundation layer (omni.foundation.config.logging)
+Uses MCP SDK for JSON-RPC types.
 """
+
+from __future__ import annotations
 
 import asyncio
 import uuid
+from typing import Any, cast
 
 import orjson
 import uvicorn
@@ -28,14 +31,11 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
+from mcp.types import JSONRPCRequest, JSONRPCResponse
+
 from omni.foundation.config.logging import get_logger
 
 from ..interfaces import MCPRequestHandler
-from ..types import (
-    ErrorCode,
-    JSONRPCRequest,
-    make_error_response,
-)
 
 logger = get_logger("omni.mcp.sse")
 
@@ -171,41 +171,66 @@ class SSEServer:
                     data = orjson.loads(body)
                 except orjson.JSONDecodeError:
                     return JSONResponse(
-                        make_error_response(
-                            id=None,
-                            code=ErrorCode.PARSE_ERROR,
-                            message="Invalid JSON",
-                        ).__dict__,
+                        {
+                            "jsonrpc": "2.0",
+                            "id": None,
+                            "error": {
+                                "code": -32700,
+                                "message": "Invalid JSON",
+                            },
+                        },
                         status_code=400,
                     )
 
-                request_obj = JSONRPCRequest(**data)
+                # Cast to JSONRPCRequest (TypedDict doesn't support **kwargs)
+                request_obj = cast(JSONRPCRequest, data)
+
+                # Check if it's a notification (no id)
+                msg_id = request_obj.get("id")
+                is_notification = msg_id is None
 
                 # Handle notification
-                if request_obj.is_notification:
-                    await self.handler.handle_notification(request_obj.method, request_obj.params)
+                if is_notification:
+                    await self.handler.handle_notification(
+                        request_obj.get("method", ""),
+                        request_obj.get("params"),
+                    )
                     return JSONResponse({"jsonrpc": "2.0", "result": True})
 
                 # Handle request
                 response = await self.handler.handle_request(request_obj)
 
-                return JSONResponse(
-                    {
-                        "jsonrpc": response.jsonrpc,
-                        "id": response.id,
-                        "result": response.result if not response.is_error else None,
-                        "error": response.error,
-                    }
-                )
+                # Handle both dict and Pydantic model responses
+                if hasattr(response, "model_dump"):
+                    response_dict: dict[str, Any] = response.model_dump()
+                else:
+                    response_dict = cast(dict[str, Any], response)
+
+                # Build response
+                resp_data: dict[str, Any] = {
+                    "jsonrpc": response_dict.get("jsonrpc", "2.0"),
+                    "id": response_dict.get("id"),
+                }
+
+                # Only include result or error, not both
+                if response_dict.get("error") is not None:
+                    resp_data["error"] = response_dict.get("error")
+                elif "result" in response_dict:
+                    resp_data["result"] = response_dict.get("result")
+
+                return JSONResponse(resp_data)
 
             except Exception as e:
                 logger.error(f"Error handling message: {e}")
                 return JSONResponse(
-                    make_error_response(
-                        id=None,
-                        code=ErrorCode.INTERNAL_ERROR,
-                        message=str(e),
-                    ).__dict__,
+                    {
+                        "jsonrpc": "2.0",
+                        "id": None,
+                        "error": {
+                            "code": -32603,
+                            "message": str(e),
+                        },
+                    },
                     status_code=500,
                 )
 
@@ -295,7 +320,6 @@ class SSEServer:
             ),
         ]
 
-        # Note: Lifespan cleanup handled in stop() method
         return Starlette(routes=routes, middleware=middleware)
 
     @property

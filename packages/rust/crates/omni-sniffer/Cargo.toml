@@ -9,9 +9,20 @@ workspace = true
 [dependencies]
 tokio = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 git2 = { workspace = true }
 omni-types = { path = "../omni-types" }
+anyhow = "1.0"
+
+# High-performance glob matching (ripgrep's core)
+globset = "0.4"
+# Parallel directory walking
+walkdir = "2"
+# Parallel iteration
+rayon = "1.8"
+# Crossbeam for atomic reference counting
+crossbeam = "0.8"
 
 [dev-dependencies]
 tempfile = { workspace = true }

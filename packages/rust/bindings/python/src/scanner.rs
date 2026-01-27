@@ -7,7 +7,7 @@
 //! SKILL.md frontmatter (replaces python-frontmatter dependency).
 
 use crate::vector::PyToolRecord;
-use omni_vector::{ScriptScanner, SkillScanner, SkillStructure};
+use omni_vector::{SkillScanner, ToolsScanner};
 use pyo3::prelude::*;
 use skills_scanner::SkillMetadata;
 use std::path::Path;
@@ -60,8 +60,7 @@ impl From<SkillMetadata> for PySkillMetadata {
 /// Scan a skills directory and return discovered tools.
 ///
 /// This function uses the Rust ast-grep scanner to find all Python functions
-/// decorated with @skill_command in all skill directories defined by
-/// settings.yaml's skills.architecture (scripts/, templates/, references/, etc.).
+/// decorated with @skill_command in the scripts/ directory of each skill.
 ///
 /// Args:
 ///   base_path: Base directory containing skills (e.g., "assets/skills")
@@ -72,38 +71,43 @@ impl From<SkillMetadata> for PySkillMetadata {
 #[pyo3(signature = (base_path))]
 pub fn scan_skill_tools(base_path: String) -> Vec<PyToolRecord> {
     let skill_scanner = SkillScanner::new();
-    let script_scanner = ScriptScanner::new();
+    let script_scanner = ToolsScanner::new();
     let skills_path = Path::new(&base_path);
 
     if !skills_path.exists() {
         return Vec::new();
     }
 
-    // Get the canonical skill structure from settings.yaml
-    let structure = SkillStructure::default();
-
     // Step 1: Scan SKILL.md files to get routing_keywords
     match skill_scanner.scan_all(skills_path, None) {
         Ok(metadatas) => {
-            // Step 2: For each skill, scan ALL directories defined in structure
-            // (scripts/, templates/, references/, assets/, data/, tests/)
-            let mut all_tools: Vec<omni_vector::ToolRecord> = Vec::new();
+            // Step 2: For each skill, scan ONLY the scripts/ directory
+            // (consistent with export behavior in scan_all_full_to_index)
+            let mut tools_map: std::collections::HashMap<String, omni_vector::ToolRecord> =
+                std::collections::HashMap::new();
 
             for metadata in &metadatas {
                 let skill_path = skills_path.join(&metadata.skill_name);
+                let scripts_path = skill_path.join("scripts");
 
-                // Use scan_with_structure to scan all relevant directories
-                if let Ok(tools) = script_scanner.scan_with_structure(
-                    &skill_path,
-                    &metadata.skill_name,
-                    &metadata.routing_keywords,
-                    &structure,
-                ) {
-                    all_tools.extend(tools);
+                if scripts_path.exists() {
+                    if let Ok(tools) = script_scanner.scan_scripts(
+                        &scripts_path,
+                        &metadata.skill_name,
+                        &metadata.routing_keywords,
+                    ) {
+                        // Deduplicate by tool_name (keep first occurrence)
+                        for tool in tools {
+                            let tool_key = format!("{}.{}", tool.skill_name, tool.tool_name);
+                            if !tools_map.contains_key(&tool_key) {
+                                tools_map.insert(tool_key, tool);
+                            }
+                        }
+                    }
                 }
             }
 
-            all_tools.into_iter().map(|t| t.into()).collect()
+            tools_map.into_iter().map(|(_, t)| t.into()).collect()
         }
         Err(_) => Vec::new(),
     }
@@ -124,7 +128,7 @@ pub fn scan_skill_tools(base_path: String) -> Vec<PyToolRecord> {
 #[pyo3(signature = (base_path, output_path))]
 pub fn export_skill_index(base_path: String, output_path: String) -> PyResult<String> {
     let skill_scanner = SkillScanner::new();
-    let script_scanner = ScriptScanner::new();
+    let script_scanner = ToolsScanner::new();
     let skills_path = Path::new(&base_path);
     let output = Path::new(&output_path);
 
@@ -216,4 +220,68 @@ pub fn scan_skill_from_content(content: &str, skill_name: String) -> PySkillMeta
             repository: String::new(),
         },
     }
+}
+
+/// Python wrapper for SyncReport
+#[pyclass]
+#[derive(Debug, Clone)]
+pub struct PySyncReport {
+    /// Tools that are new and need to be added
+    #[pyo3(get)]
+    pub added: Vec<PyToolRecord>,
+    /// Tools that have changed and need to be updated
+    #[pyo3(get)]
+    pub updated: Vec<PyToolRecord>,
+    /// Tool names that were deleted
+    #[pyo3(get)]
+    pub deleted: Vec<String>,
+    /// Count of unchanged tools (fast path hit)
+    #[pyo3(get)]
+    pub unchanged_count: usize,
+}
+
+impl From<skills_scanner::SyncReport> for PySyncReport {
+    fn from(report: skills_scanner::SyncReport) -> Self {
+        Self {
+            added: report.added.into_iter().map(|t| t.into()).collect(),
+            updated: report.updated.into_iter().map(|t| t.into()).collect(),
+            deleted: report.deleted,
+            unchanged_count: report.unchanged_count,
+        }
+    }
+}
+
+/// Calculate sync operations between scanned tools and existing index.
+///
+/// Uses file_hash for fast-path comparison to skip unchanged tools.
+/// Returns a report with lists of added, updated, deleted, and unchanged tools.
+///
+/// Args:
+///   scanned_tools_json: JSON array of scanned ToolRecord objects
+///   existing_tools_json: JSON array of existing IndexToolEntry objects
+///
+/// Returns:
+///   PySyncReport with sync operation details
+#[pyfunction]
+#[pyo3(signature = (scanned_tools_json, existing_tools_json))]
+pub fn diff_skills(scanned_tools_json: &str, existing_tools_json: &str) -> PyResult<PySyncReport> {
+    let scanned: Vec<omni_vector::ToolRecord> =
+        serde_json::from_str(scanned_tools_json).map_err(|e| {
+            pyo3::exceptions::PyValueError::new_err(format!(
+                "Failed to parse scanned tools JSON: {}",
+                e
+            ))
+        })?;
+
+    let existing: Vec<skills_scanner::IndexToolEntry> = serde_json::from_str(existing_tools_json)
+        .map_err(|e| {
+        pyo3::exceptions::PyValueError::new_err(format!(
+            "Failed to parse existing tools JSON: {}",
+            e
+        ))
+    })?;
+
+    let report = skills_scanner::calculate_sync_ops(scanned, existing);
+
+    Ok(report.into())
 }

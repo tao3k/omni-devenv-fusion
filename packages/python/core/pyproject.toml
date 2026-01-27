@@ -7,9 +7,16 @@ requires-python = ">=3.12"
 
 dependencies = [
     "omni-foundation",
-    "watchdog>=4.0.0",  # Hot Reload: File system watching
     "pydantic>=2.7.0",
     "structlog>=24.0.0",
+    "pyarrow>=14.0.0",  # Arrow analytics for skill tools
+]
+
+[dependency-groups]
+test = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-benchmark>=4.0",
 ]
 
 [build-system]

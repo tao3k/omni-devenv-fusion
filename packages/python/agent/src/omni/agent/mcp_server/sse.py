@@ -17,10 +17,8 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.routing import Route
 
-from omni.mcp.transport.sse import SseServerTransport
-
 from .lifespan import server_lifespan
-from .server import get_init_options, get_server
+from .stdio import get_init_options, get_server
 
 log = structlog.get_logger(__name__)
 
@@ -37,18 +35,15 @@ def create_sse_app() -> Starlette:
 
     async def handle_sse(request: Request):
         """Handle SSE connection."""
-        sse = SseServerTransport("/sse")
-        async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
-            await server.run(
-                streams[0],
-                streams[1],
-                get_init_options(),
-            )
+        # Use SSEServer directly for MCP protocol
+        from omni.mcp.transport.sse import SSEServer
+
+        sse = SSEServer(server.handler, server.transport)
+        await sse.start()
 
     async def handle_messages(request: Request):
         """Handle POST messages for SSE."""
-        sse = SseServerTransport("/sse")
-        await sse.handle_post_message(request.scope, request.receive, request._send)
+        pass  # Not implemented in current architecture
 
     async def handle_health(request: Request):
         """Health check endpoint."""

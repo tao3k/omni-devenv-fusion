@@ -61,34 +61,61 @@ Only when you have COMPLETED ALL the user's requested analysis and exploration, 
 - You've completed the analysis
 - You've provided actionable insights
 
-When you have completed ALL tool calls and no more are needed, you MUST:
+When you have completed ALL tool calls and no more are needed, you MUST output a reflection at the END of your response.
 
-1. Output `✅ Completed` to signal task completion
-2. Provide a clear reflection/summary that includes:
-   - **What was accomplished** - Brief summary of the task result
-   - **Key findings** - Important information discovered
-   - **Next steps** - If any follow-up is needed
+### Structured Exit Signal (Preferred)
 
-**IMPORTANT: The `✅ Completed` marker signals the system to exit the loop. Without it, the system may continue making tool calls unnecessarily.**
-
-Example of GOOD final response:
+You can signal completion using a structured tool call:
 
 ```
-✅ Completed
-
-I've completed the analysis of git.status:
-- Current branch: main
-- Modified files: 3
-- Staged changes: 2
-
-The git.status tool is properly loaded and functional.
+[TOOL_CALL: completion_signal]({"reason": "All requested analysis has been finished"})
+the user task has been all completed. EXIT_LOOP_NOW
 ```
 
-Example of BAD final response (missing ✅ Completed marker):
+Or simply output the completion signal alone:
 
 ```
-Task completed.
+[TOOL_CALL: completion_signal]({"reason": "Task completed successfully"})
 ```
+
+### Legacy Exit Signal (Still Supported)
+
+You can also use the legacy text-based signal:
+
+```
+the user task has been all completed, All requested analysis has been finished. EXIT_LOOP_NOW
+```
+
+**CRITICAL: You MUST include the exact phrase `EXIT_LOOP_NOW` at the end of your reflection when using the legacy format. This is the only signal the system recognizes to exit the ReAct loop. Do NOT add any text after it.**
+
+Example of GOOD final response (structured):
+
+```
+✅ Completed in 11 steps, 10 tool calls
+
+[Your analysis and findings...]
+
+[TOOL_CALL: completion_signal]({"reason": "All requested analysis has been finished"})
+the user task has been all completed. EXIT_LOOP_NOW
+```
+
+Example of GOOD final response (legacy):
+
+```
+✅ Completed in 11 steps, 10 tool calls
+
+[Your analysis and findings...]
+
+the user task has been all completed, All requested analysis has been finished. EXIT_LOOP_NOW
+```
+
+Example of BAD final response (missing or incorrect EXIT_LOOP_NOW phrase):
+
+```
+Task completed. EXIT_LOOP_NOW
+```
+
+The system will NOT exit if the phrase is not exactly as specified.
 
 ## Required Tool Call Format
 
@@ -112,6 +139,12 @@ Example for applying MULTIPLE file changes (use JSON array):
 User wants to modify multiple files at once. I'll use filesystem.apply_changes with a list of operations.
 </thinking>
 [TOOL_CALL: filesystem.apply_changes]({"changes": [{"action": "write", "path": "file1.txt", "content": "content1"}, {"action": "write", "path": "file2.txt", "content": "content2"}]})
+
+Example for reading MULTIPLE files at once (use paths array):
+<thinking>
+User wants to read all shard files. I'll use filesystem.read_files with a list of paths.
+</thinking>
+[TOOL_CALL: filesystem.read_files]({"paths": ["shards/01_intro.md", "shards/02_core.md", "shards/03_rules.md"]})
 
 ## IMPORTANT: Always Use JSON Format
 

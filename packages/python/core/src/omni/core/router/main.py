@@ -7,6 +7,7 @@ Migrated from: src/agent/core/router/main.py
 Provides:
 - Indexer: Memory building
 - Semantic: Vector search
+- Hybrid: Semantic + Keyword search with LRU caching
 - Hive: Decision logic
 - Sniffer: Context awareness
 
@@ -22,7 +23,9 @@ from typing import Any
 
 from omni.foundation.config.logging import get_logger
 
+from .cache import SearchCache
 from .hive import HiveRouter
+from .hybrid_search import HybridSearch
 from .indexer import SkillIndexer
 from .router import RouteResult, SemanticRouter
 from .sniffer import IntentSniffer
@@ -36,6 +39,7 @@ class OmniRouter:
 
     Main entry point for all routing operations.
     Integrates Cortex (semantic), Hive (decision), and Sniffer (context).
+    Uses HybridSearch (semantic + keyword) with LRU caching.
 
     Architecture:
         User Query
@@ -45,19 +49,53 @@ class OmniRouter:
         └─────────────────────────────────────┘
             ↓           ↓           ↓
         ┌─────────┐ ┌─────────┐ ┌─────────┐
-        │  Hive   │ │ Semantic │ │ Sniffer │
-        │ (Logic) │ │ (Match)  │ │(Context)│
+        │  Hive   │ │ Hybrid  │ │ Sniffer │
+        │ (Logic) │ │+ Cache  │ │(Context)│
         └─────────┘ └─────────┘ └─────────┘
     """
 
-    def __init__(self, storage_path: str = ":memory:"):
+    def __init__(
+        self,
+        storage_path: str | None = None,
+        cache_size: int | None = None,
+        cache_ttl: int | None = None,
+        semantic_weight: float | None = None,
+        keyword_weight: float | None = None,
+    ):
         """Initialize the unified router.
 
         Args:
-            storage_path: Path for vector index storage (":memory:" for in-memory)
+            storage_path: Path for vector index storage (None = use unified path, ":memory:" for in-memory)
+            cache_size: Maximum cache entries (default: from settings or 1000)
+            cache_ttl: Cache TTL in seconds (default: from settings or 300)
+            semantic_weight: Weight for semantic search (default: from settings or 0.7)
+            keyword_weight: Weight for keyword search (default: from settings or 0.3)
         """
+        # Load settings from config
+        from omni.foundation.config.settings import get_setting
+
+        if cache_size is None:
+            cache_size = int(get_setting("router.cache.max_size", 1000))
+        if cache_ttl is None:
+            cache_ttl = int(get_setting("router.cache.ttl", 300))
+        if semantic_weight is None:
+            semantic_weight = float(get_setting("router.search.semantic_weight", 0.7))
+        if keyword_weight is None:
+            keyword_weight = float(get_setting("router.search.keyword_weight", 0.3))
+
         self._indexer = SkillIndexer(storage_path)
         self._semantic = SemanticRouter(self._indexer)
+
+        # Keyword search disabled - semantic-only mode for Rust
+        self._keyword_indexer = None
+
+        self._hybrid = HybridSearch(
+            self._indexer,
+            keyword_indexer=None,
+            semantic_weight=semantic_weight,
+            keyword_weight=0.0,  # Disabled
+        )
+        self._cache = SearchCache(max_size=cache_size, ttl=cache_ttl)
         self._hive = HiveRouter(self._semantic)
         self._sniffer = IntentSniffer()
         self._initialized = False
@@ -71,6 +109,16 @@ class OmniRouter:
     def semantic(self) -> SemanticRouter:
         """Get the semantic router."""
         return self._semantic
+
+    @property
+    def hybrid(self) -> HybridSearch:
+        """Get the hybrid search engine."""
+        return self._hybrid
+
+    @property
+    def cache(self) -> SearchCache:
+        """Get the search cache."""
+        return self._cache
 
     @property
     def hive(self) -> HiveRouter:
@@ -93,6 +141,7 @@ class OmniRouter:
             return
 
         await self._indexer.index_skills(skills)
+
         self._initialized = True
 
         stats = self._indexer.get_stats()
@@ -114,6 +163,92 @@ class OmniRouter:
 
         return await self._hive.route(query, context)
 
+    async def route_hybrid(
+        self,
+        query: str,
+        limit: int = 5,
+        threshold: float = 0.4,
+        use_cache: bool = True,
+    ) -> list[RouteResult]:
+        """Route using Hybrid Search with caching.
+
+        Uses semantic + keyword search with LRU caching for improved
+        performance on repeated queries.
+
+        Flow:
+            1. Check Cache -> Return if hit
+            2. Hybrid Search (Vector + Keyword)
+            3. Update Cache
+            4. Return Results
+
+        Args:
+            query: User query
+            limit: Maximum number of results
+            threshold: Minimum score threshold
+            use_cache: Whether to use cache
+
+        Returns:
+            List of RouteResults sorted by score
+        """
+        # 1. Cache Lookup
+        if use_cache:
+            cached = self._cache.get(query)
+            if cached:
+                logger.debug(f"Cache hit for: {query[:50]}...")
+                return cached
+
+        # 2. Hybrid Search
+        matches = await self._hybrid.search(query, limit=limit * 2)
+
+        # 3. Convert to RouteResults and filter by threshold
+        results: list[RouteResult] = []
+        for match in matches:
+            if match.combined_score >= threshold:
+                # Extract skill and command from id (format: "skill.command" or "skill")
+                id_parts = match.id.split(".", 1) if "." in match.id else [match.id, ""]
+                skill_name = id_parts[0] if id_parts[0] else "unknown"
+
+                # For command_name, try metadata first, then fall back to id
+                if len(id_parts) > 1:
+                    command_name = id_parts[1]
+                elif match.metadata.get("command"):
+                    command_name = match.metadata.get("command")
+                elif match.metadata.get("tool_name"):
+                    # Handle cases where tool_name is the full id
+                    tool_parts = match.metadata.get("tool_name", "").split(".")
+                    command_name = tool_parts[-1] if len(tool_parts) > 1 else ""
+                else:
+                    command_name = ""
+
+                # Skip skill-level entries (not actual tools)
+                # Skill entries have empty command_name and type="skill"
+                if not command_name:
+                    continue
+
+                # Determine confidence (lowercase for RouteConfidence enum)
+                if match.combined_score >= 0.75:
+                    confidence = "high"
+                elif match.combined_score >= 0.5:
+                    confidence = "medium"
+                else:
+                    confidence = "low"
+
+                results.append(
+                    RouteResult(
+                        skill_name=skill_name,
+                        command_name=command_name,
+                        score=match.combined_score,
+                        confidence=confidence,  # type: ignore
+                    )
+                )
+
+        # 4. Update Cache
+        if use_cache:
+            self._cache.set(query, results)
+
+        logger.info(f"Hybrid route: '{query}' -> {len(results)} results")
+        return results
+
     async def suggest_skills(self, cwd: str) -> list[str]:
         """Suggest skills based on current context.
 
@@ -134,6 +269,8 @@ class OmniRouter:
         return {
             "initialized": self._initialized,
             "indexer_stats": self._indexer.get_stats(),
+            "hybrid_stats": self._hybrid.stats(),
+            "cache_stats": self._cache.stats(),
             "is_ready": self.is_ready(),
         }
 

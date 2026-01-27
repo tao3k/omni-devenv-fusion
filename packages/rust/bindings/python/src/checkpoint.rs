@@ -4,14 +4,31 @@
 
 use omni_vector::CheckpointStore;
 use pyo3::prelude::*;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock};
+use tokio::sync::Mutex as AsyncMutex;
+
+/// Global connection pool: path -> Arc<Mutex<CheckpointStore>>
+/// Ensures same path reuses the same store instance (connection复用)
+static STORE_CACHE: OnceLock<Mutex<HashMap<String, Arc<AsyncMutex<CheckpointStore>>>>> =
+    OnceLock::new();
+
+/// Get or create the global runtime for Python bindings
+fn get_runtime() -> &'static tokio::runtime::Runtime {
+    static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+    RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create Tokio runtime for Python bindings")
+    })
+}
 
 /// Python wrapper for CheckpointStore (LanceDB-based state persistence)
 #[pyclass]
 pub struct PyCheckpointStore {
     // Cached store instance - reused across calls (path/dimension stored in Rust store)
-    store: Arc<Mutex<CheckpointStore>>,
+    store: Arc<AsyncMutex<CheckpointStore>>,
 }
 
 #[pymethods]
@@ -20,21 +37,31 @@ impl PyCheckpointStore {
     fn new(path: String, dimension: Option<usize>) -> PyResult<Self> {
         let dimension = dimension.unwrap_or(1536);
 
-        // Create the store once and cache it
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        // Get or create the global cache
+        let cache_mutex = STORE_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+        let mut cache = cache_mutex.lock().map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!("Poisoned cache lock: {}", e))
+        })?;
 
+        // Check if store already exists for this path
+        if let Some(store) = cache.get(&path) {
+            return Ok(PyCheckpointStore {
+                store: store.clone(),
+            });
+        }
+
+        // Create new store
+        let rt = get_runtime();
         let store = rt.block_on(async {
             CheckpointStore::new(&path, Some(dimension))
                 .await
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
         })?;
 
-        Ok(PyCheckpointStore {
-            store: Arc::new(Mutex::new(store)),
-        })
+        let arc_store = Arc::new(AsyncMutex::new(store));
+        cache.insert(path.clone(), arc_store.clone());
+
+        Ok(PyCheckpointStore { store: arc_store })
     }
 
     /// Save a checkpoint
@@ -61,10 +88,7 @@ impl PyCheckpointStore {
         };
 
         let store = self.store.clone();
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let rt = get_runtime();
 
         rt.block_on(async {
             let guard = store.lock().await;
@@ -78,10 +102,7 @@ impl PyCheckpointStore {
     /// Get the latest checkpoint for a thread
     fn get_latest(&self, table_name: String, thread_id: String) -> PyResult<Option<String>> {
         let store = self.store.clone();
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let rt = get_runtime();
 
         rt.block_on(async {
             let guard = store.lock().await;
@@ -95,10 +116,7 @@ impl PyCheckpointStore {
     /// Get checkpoint by ID
     fn get_by_id(&self, table_name: String, checkpoint_id: String) -> PyResult<Option<String>> {
         let store = self.store.clone();
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let rt = get_runtime();
 
         rt.block_on(async {
             let guard = store.lock().await;
@@ -117,10 +135,7 @@ impl PyCheckpointStore {
         limit: usize,
     ) -> PyResult<Vec<String>> {
         let store = self.store.clone();
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let rt = get_runtime();
 
         rt.block_on(async {
             let guard = store.lock().await;
@@ -134,10 +149,7 @@ impl PyCheckpointStore {
     /// Delete all checkpoints for a thread
     fn delete_thread(&self, table_name: String, thread_id: String) -> PyResult<u32> {
         let store = self.store.clone();
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let rt = get_runtime();
 
         rt.block_on(async {
             let guard = store.lock().await;
@@ -151,10 +163,7 @@ impl PyCheckpointStore {
     /// Count checkpoints for a thread
     fn count(&self, table_name: String, thread_id: String) -> PyResult<u32> {
         let store = self.store.clone();
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let rt = get_runtime();
 
         rt.block_on(async {
             let guard = store.lock().await;
@@ -177,10 +186,7 @@ impl PyCheckpointStore {
         filter_metadata: Option<String>,
     ) -> PyResult<Vec<String>> {
         let store = self.store.clone();
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let rt = get_runtime();
 
         let filter = filter_metadata
             .as_ref()

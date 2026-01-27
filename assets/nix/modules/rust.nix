@@ -13,6 +13,7 @@ in
     nixpkgs-latest.maturin
     pkgs.openssl
     pkgs.pkg-config
+    pkgs.libiconv
   ];
   # https://devenv.sh/languages/
   languages.rust = {

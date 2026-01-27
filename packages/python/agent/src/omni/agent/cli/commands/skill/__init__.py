@@ -5,10 +5,10 @@ Skill Command Group Package.
 Modular CLI Architecture for skill management.
 
 Commands are organized into modules:
+- analyze.py: Analytics using Arrow-native operations
 - query.py: list, discover, info, search commands
 - manage.py: run, install, update, test, check commands
 - index_cmd.py: reindex, sync, index-stats, watch commands
-- create.py: templates, create commands
 - generate.py: AI-powered skill generation (Meta-Agent)
 """
 
@@ -18,7 +18,7 @@ import typer
 
 # Import all command modules to register commands with skill_app
 from . import (
-    create,  # noqa: F401
+    analyze,  # noqa: F401 - Arrow-native analytics
     generate,  # noqa: F401 - Meta-Agent skill generation
     index_cmd,  # noqa: F401
     manage,  # noqa: F401

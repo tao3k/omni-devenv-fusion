@@ -19,6 +19,7 @@ dev = [
     "pytest-xdist>=3.6.1",
     "pytest-timeout>=2.3.0",
     "pytest-cov>=6.0.0",
+    "pytest-benchmark>=4.0.0",
     "dirty-equals>=0.11",
     "ruff>=0.14.10",
     "vulture>=2.14",
@@ -123,6 +124,7 @@ filterwarnings = [
 norecursedirs = ["stress_tests"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "benchmark: marks tests as performance benchmarks (requires pytest-benchmark)",
 ]
 
 # Coverage configuration for package sources

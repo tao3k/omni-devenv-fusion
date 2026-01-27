@@ -9,6 +9,7 @@
 //! ├── store.rs            # CRUD operations (add/delete/count)
 //! ├── search.rs           # Search operations
 //! ├── index.rs            # Index creation operations
+//! ├── filter/             # Filter expression utilities (JSON to WHERE clause)
 //! ├── skill.rs            # Skill tool indexing (uses skills-scanner crate)
 //! ├── batch.rs            # RecordBatch utilities
 //! ```
@@ -27,7 +28,7 @@ use tokio::sync::Mutex;
 // ============================================================================
 
 pub use omni_lance::{
-    CONTENT_COLUMN, DEFAULT_DIMENSION, ID_COLUMN, METADATA_COLUMN, VECTOR_COLUMN,
+    CONTENT_COLUMN, DEFAULT_DIMENSION, ID_COLUMN, METADATA_COLUMN, THREAD_ID_COLUMN, VECTOR_COLUMN,
     VectorRecordBatchReader, extract_optional_string, extract_string,
 };
 
@@ -35,7 +36,12 @@ pub use omni_lance::{
 // Re-exports from skills-scanner
 // ============================================================================
 
-pub use skills_scanner::{ScriptScanner, SkillMetadata, SkillScanner, SkillStructure, ToolRecord};
+pub use skills_scanner::{
+    DocumentScanner, SkillMetadata, SkillScanner, SkillStructure, ToolRecord, ToolsScanner,
+};
+
+// Re-export ToolSearchResult from skill module for Python bindings
+pub use skill::ToolSearchResult;
 
 // ============================================================================
 // Re-exports from checkpoint module
@@ -80,7 +86,11 @@ pub use error::VectorStoreError;
 pub mod batch;
 pub mod checkpoint;
 pub mod error;
+pub mod filter;
 pub mod index;
 pub mod search;
 pub mod skill;
 pub mod store;
+
+// Re-export filter utilities
+pub use filter::json_to_lance_where;

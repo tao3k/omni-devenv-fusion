@@ -2,9 +2,12 @@
 test_vector_store.py - Vector Store Tests
 
 Tests for the Foundation VectorStoreClient and embedding services.
+
+Note: Tests use mocking to avoid depending on actual embedding backends
+(FastEmbed, OpenAI) which may have different dimensions.
 """
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -16,38 +19,61 @@ class TestEmbeddingService:
         """EmbeddingService should be a singleton."""
         from omni.foundation.services.embedding import EmbeddingService
 
+        # Reset singleton for test
+        EmbeddingService._instance = None
         instance1 = EmbeddingService()
         instance2 = EmbeddingService()
         assert instance1 is instance2
 
-    def test_dimension_default(self):
-        """Should have default dimension of 1536."""
+    def test_dimension_reflects_backend(self):
+        """Dimension should match the initialized backend."""
         from omni.foundation.services.embedding import EmbeddingService
 
+        # Reset singleton
+        EmbeddingService._instance = None
         service = EmbeddingService()
-        assert service.dimension == 1536
+        # Dimension should be one of the known values
+        valid_dimensions = [384, 1536, 3072]  # BGE small, OpenAI small, OpenAI large
+        assert service.dimension in valid_dimensions
 
     def test_embed_returns_list(self):
         """embed() should return a list of vectors."""
         from omni.foundation.services.embedding import EmbeddingService
 
-        service = EmbeddingService()
-        result = service.embed("test text")
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert len(result[0]) == 1536
+        # Mock to avoid backend dependencies
+        EmbeddingService._instance = None
+        with patch.object(EmbeddingService, "_initialize", lambda self: None):
+            service = EmbeddingService()
+            service._backend = "mock"
+            service._dimension = 1536
+            service._model = None
+
+            # Patch _simple_embed to return known output
+            with patch.object(service, "_simple_embed", return_value=[0.1] * 1536):
+                result = service.embed("test text")
+                assert isinstance(result, list)
+                assert len(result) == 1
+                assert len(result[0]) == 1536
 
     def test_embed_batch(self):
         """embed_batch() should return list of vectors."""
         from omni.foundation.services.embedding import EmbeddingService
 
-        service = EmbeddingService()
-        texts = ["text1", "text2", "text3"]
-        result = service.embed_batch(texts)
-        assert isinstance(result, list)
-        assert len(result) == 3
-        for vec in result:
-            assert len(vec) == 1536
+        # Mock to avoid backend dependencies
+        EmbeddingService._instance = None
+        with patch.object(EmbeddingService, "_initialize", lambda self: None):
+            service = EmbeddingService()
+            service._backend = "mock"
+            service._dimension = 1536
+            service._model = None
+
+            with patch.object(service, "_simple_embed", return_value=[0.1] * 1536):
+                texts = ["text1", "text2", "text3"]
+                result = service.embed_batch(texts)
+                assert isinstance(result, list)
+                assert len(result) == 3
+                for vec in result:
+                    assert len(vec) == 1536
 
     def test_deterministic_embedding(self):
         """Same text should produce same embedding."""

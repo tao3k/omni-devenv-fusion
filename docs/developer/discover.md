@@ -13,7 +13,7 @@
 | ------------------- | ------------------------------------------------ |
 | Skills System       | [Skills System](../architecture/skills.md)       |
 | Router Architecture | [Router Architecture](../architecture/router.md) |
-| Kernel Architecture | [Kernel Architecture](../kernel.md)              |
+| Kernel Architecture | [Kernel Architecture](../architecture/kernel.md) |
 
 ### Old → New Mappings
 

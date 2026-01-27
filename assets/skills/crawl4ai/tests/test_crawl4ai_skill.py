@@ -228,24 +228,6 @@ class TestCrawl4aiSkillDiscovery:
 
         assert "crawl4ai" in skill_names
 
-    def test_crawl4ai_in_skill_index(self):
-        """Test that crawl4ai appears in skill_index.json."""
-        import json
-        from omni.foundation.config.dirs import get_skill_index_path
-
-        skill_index_path = get_skill_index_path()
-        if skill_index_path.exists():
-            skill_index = json.loads(skill_index_path.read_text())
-            crawl4ai_skills = [s for s in skill_index if s.get("name") == "crawl4ai"]
-            assert len(crawl4ai_skills) >= 1
-
-            # Check tools are registered
-            tools = crawl4ai_skills[0].get("tools", [])
-            tool_names = [t.get("name") for t in tools]
-            assert "crawl4ai.crawl_url" in tool_names
-        else:
-            pytest.skip("skill_index.json not found")
-
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

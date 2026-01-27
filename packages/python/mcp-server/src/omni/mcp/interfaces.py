@@ -1,13 +1,18 @@
 """
-Protocol Interfaces
+interfaces.py - MCP Server Interfaces
+
+Updated to use MCP SDK types.
 
 Dependency inversion: MCP server only talks to these interfaces.
 Business layer (Agent) implements them.
 """
 
+from __future__ import annotations
+
 from typing import Any, Protocol, runtime_checkable
 
-from .types import JSONRPCRequest, JSONRPCResponse
+# Use MCP SDK types for compatibility
+from mcp.types import JSONRPCMessage, JSONRPCRequest, JSONRPCResponse
 
 
 @runtime_checkable
@@ -101,9 +106,27 @@ class MCPRequestContext(Protocol):
         ...
 
 
+# Generic Server Protocol for typed context handling
+class MCPServerProtocol[ContextT](Protocol):
+    """
+    Protocol for the MCP Server implementation with generic context.
+
+    Type parameter ContextT specifies the type of context passed to handlers.
+    """
+
+    async def run(self, transport: MCPTransport) -> None: ...
+
+    async def handle_message(
+        self,
+        message: JSONRPCMessage,
+        context: ContextT,
+    ) -> JSONRPCResponse | None: ...
+
+
 __all__ = [
     "MCPRequestContext",
     "MCPRequestHandler",
     "MCPSession",
     "MCPTransport",
+    "MCPServerProtocol",
 ]

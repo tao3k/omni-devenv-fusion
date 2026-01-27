@@ -10,8 +10,8 @@
 
 use serde_json;
 use skills_scanner::{
-    IndexToolEntry, ScriptScanner, SkillIndexEntry, SkillMetadata, SkillScanner, SkillStructure,
-    ToolRecord,
+    IndexToolEntry, SkillIndexEntry, SkillMetadata, SkillScanner, SkillStructure, ToolAnnotations,
+    ToolRecord, ToolsScanner,
 };
 use std::fs;
 use tempfile::TempDir;
@@ -40,7 +40,7 @@ def smart_commit(action: str = "start") -> str:
     )
     .unwrap();
 
-    let scanner = ScriptScanner::new();
+    let scanner = ToolsScanner::new();
     let tools = scanner
         .scan_scripts(&scripts_dir, "git", &["commit".to_string()])
         .unwrap();
@@ -95,6 +95,9 @@ fn test_tool_record_json_serialization_schema() {
         file_hash: "abc123".to_string(),
         input_schema: "{}".to_string(),
         docstring: "Smart commit workflow".to_string(),
+        category: "commit".to_string(),
+        annotations: ToolAnnotations::default(),
+        parameters: vec!["action".to_string()],
     };
 
     // Serialize to JSON
@@ -127,6 +130,9 @@ fn test_skill_index_entry_tool_format() {
         file_hash: "hash".to_string(),
         input_schema: "{}".to_string(),
         docstring: "".to_string(),
+        category: "commit".to_string(),
+        annotations: ToolAnnotations::default(),
+        parameters: vec![],
     };
 
     // Build index entry
@@ -192,7 +198,7 @@ def status() -> str:
     )
     .unwrap();
 
-    let scanner = ScriptScanner::new();
+    let scanner = ToolsScanner::new();
     let tools = scanner.scan_scripts(&scripts_dir, "git", &[]).unwrap();
 
     assert_eq!(tools.len(), 2);
@@ -239,7 +245,7 @@ def run_test() -> str:
     )
     .unwrap();
 
-    let scanner = ScriptScanner::new();
+    let scanner = ToolsScanner::new();
     let tools = scanner.scan_scripts(&scripts_dir, "my_skill", &[]).unwrap();
 
     assert_eq!(tools.len(), 1);
@@ -272,7 +278,7 @@ def my_function():
     )
     .unwrap();
 
-    let scanner = ScriptScanner::new();
+    let scanner = ToolsScanner::new();
     let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
 
     assert_eq!(tools.len(), 1);
@@ -303,11 +309,17 @@ fn test_skill_index_json_schema() {
     entry.add_tool(IndexToolEntry {
         name: "git.commit".to_string(),
         description: "Create commit".to_string(),
+        category: String::new(),
+        input_schema: String::new(),
+        file_hash: String::new(),
     });
 
     entry.add_tool(IndexToolEntry {
         name: "git.smart_commit".to_string(),
         description: "Smart commit workflow".to_string(),
+        category: String::new(),
+        input_schema: String::new(),
+        file_hash: String::new(),
     });
 
     // Serialize
@@ -364,6 +376,9 @@ fn test_build_index_entry_no_double_prefix_regression() {
         file_hash: "hash".to_string(),
         input_schema: "{}".to_string(),
         docstring: "".to_string(),
+        category: "status".to_string(),
+        annotations: ToolAnnotations::default(),
+        parameters: vec![],
     }];
 
     let skill_path = TempDir::new().unwrap().path().join("git");
@@ -420,7 +435,7 @@ def list_items() -> str:
     )
     .unwrap();
 
-    let scanner = ScriptScanner::new();
+    let scanner = ToolsScanner::new();
     let tools = scanner.scan_scripts(&scripts_dir, "my_skill", &[]).unwrap();
 
     assert_eq!(tools.len(), 1);
@@ -468,7 +483,7 @@ def test_cmd() -> str:
     )
     .unwrap();
 
-    let scanner = ScriptScanner::new();
+    let scanner = ToolsScanner::new();
     let structure = SkillStructure::default();
 
     // Scan with structure
@@ -520,4 +535,99 @@ version: "1.0.0"
     );
 
     assert!(entry.tools.is_empty());
+}
+
+/// Validates the test_skill_index.json reference file for data integrity.
+///
+/// This test ensures the reference test data file doesn't contain:
+/// - Tool names with repeated skill prefix (e.g., "git.git.commit")
+/// - Paths with extra quotes (e.g., "\"assets/skills/git\"")
+/// - Malformed JSON structure
+///
+/// Run: cargo test -p skills-scanner test_skill_index_json_data_integrity
+#[test]
+fn test_skill_index_json_data_integrity() {
+    use std::path::Path;
+
+    // Path to the test reference file
+    let test_file_path = Path::new("../../bindings/python/test_skill_index.json");
+
+    // Read and parse the JSON file
+    let content = fs::read_to_string(test_file_path)
+        .expect(&format!("Failed to read test file: {:?}", test_file_path));
+
+    let skills: Vec<serde_json::Value> = serde_json::from_str(&content)
+        .expect("Failed to parse test_skill_index.json as valid JSON");
+
+    // Track validation errors
+    let mut errors: Vec<String> = Vec::new();
+
+    for (i, skill) in skills.iter().enumerate() {
+        let skill_name = skill["name"].as_str().unwrap_or("UNKNOWN");
+        let skill_path = skill["path"].as_str().unwrap_or("");
+
+        // Validate 1: Path should not have extra quotes
+        if skill_path.starts_with('"') && skill_path.ends_with('"') {
+            errors.push(format!(
+                "[{}] Skill '{}': path has extra quotes: {}",
+                i, skill_name, skill_path
+            ));
+        }
+
+        // Validate 2: Path should start with assets/skills/
+        if !skill_path.starts_with("assets/skills/") {
+            errors.push(format!(
+                "[{}] Skill '{}': path doesn't start with 'assets/skills/': {}",
+                i, skill_name, skill_path
+            ));
+        }
+
+        // Validate 3: Tool names
+        if let Some(tools) = skill["tools"].as_array() {
+            for (j, tool) in tools.iter().enumerate() {
+                let tool_name = tool["name"].as_str().unwrap_or("UNKNOWN");
+                // _expected_prefix: format!("{}.", skill_name),
+
+                // Check for repeated skill prefix
+                let repeated_prefix = format!("{}.{}", skill_name, skill_name);
+                if tool_name.starts_with(&repeated_prefix) {
+                    let expected =
+                        format!("{}.{}", skill_name, &tool_name[repeated_prefix.len()..]);
+                    errors.push(format!(
+                        "[{}.{}] Tool '{}': repeated skill prefix (got '{}', expected '{}')",
+                        i, j, tool_name, tool_name, expected
+                    ));
+                }
+
+                // Check tool name format: should be exactly "skill.command"
+                let parts: Vec<&str> = tool_name.split('.').collect();
+                if parts.len() != 2 {
+                    errors.push(format!(
+                        "[{}.{}] Tool '{}': wrong format (expected 'skill.command', got {} parts)",
+                        i,
+                        j,
+                        tool_name,
+                        parts.len()
+                    ));
+                }
+
+                // Check that first part matches skill name
+                if parts.first().map(|s| s.to_string()) != Some(skill_name.to_string()) {
+                    errors.push(format!(
+                        "[{}.{}] Tool '{}': first part doesn't match skill name '{}'",
+                        i, j, tool_name, skill_name
+                    ));
+                }
+            }
+        }
+    }
+
+    // Report all errors
+    if !errors.is_empty() {
+        panic!(
+            "test_skill_index.json has {} data integrity issues:\n{}",
+            errors.len(),
+            errors.join("\n")
+        );
+    }
 }

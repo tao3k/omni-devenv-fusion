@@ -2,7 +2,7 @@
 Unit tests for skill/scripts/search_tools.py
 
 Tests the keyword-based tool search functionality that uses
-skill_index.json instead of vector store.
+LanceDB for tool lookup.
 
 Run from project root:
     cd packages/python/core

@@ -11,21 +11,59 @@ Logging: Uses Foundation layer (omni.foundation.config.logging)
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypedDict
 
 from omni.core.kernel import get_kernel
 from omni.foundation.config.logging import get_logger
 from omni.mcp.interfaces import MCPRequestHandler
-from omni.mcp.types import (
-    ErrorCode,
-    JSONRPCRequest,
-    JSONRPCResponse,
-    make_error_response,
-    make_success_response,
-)
 
 # Logger will be configured on first use via get_logger's lazy initialization
 logger = get_logger("omni.agent.server")
+
+
+# JSON-RPC Response types (plain dicts for outgoing responses)
+class JSONRPCError(TypedDict):
+    """Error object for JSON-RPC error responses."""
+
+    code: int
+    message: str
+
+
+class JSONRPCResponse(TypedDict):
+    """JSON-RPC response (success or error)."""
+
+    jsonrpc: str
+    id: str | int | None
+    result: dict[str, Any] | None
+    error: JSONRPCError | None
+
+
+# Error codes (matching MCP SDK constants)
+PARSE_ERROR = -32700
+INVALID_REQUEST = -32600
+METHOD_NOT_FOUND = -32601
+INVALID_PARAMS = -32602
+INTERNAL_ERROR = -32603
+
+
+def _make_success_response(id_val: str | int | None, result: Any) -> JSONRPCResponse:
+    """Create a success response."""
+    return {
+        "jsonrpc": "2.0",
+        "id": id_val,
+        "result": result,
+        "error": None,
+    }
+
+
+def _make_error_response(id_val: str | int | None, code: int, message: str) -> JSONRPCResponse:
+    """Create an error response."""
+    return {
+        "jsonrpc": "2.0",
+        "id": id_val,
+        "result": None,
+        "error": {"code": code, "message": message},
+    }
 
 
 class AgentMCPHandler(MCPRequestHandler):
@@ -66,13 +104,15 @@ class AgentMCPHandler(MCPRequestHandler):
             f"✅ [Agent] Ready. Active skills: {len(self._kernel.skill_context.list_skills())}"
         )
 
-    async def handle_request(self, request: JSONRPCRequest) -> JSONRPCResponse:
+    async def handle_request(self, request: dict) -> JSONRPCResponse:
         """Handle a JSON-RPC request."""
         if not self._initialized:
             await self.initialize()
 
-        method = request.method
-        params = request.params or {}
+        # TypedDict access using .get() for safety
+        method = request.get("method", "")
+        params = request.get("params") or {}
+        req_id = request.get("id")
 
         try:
             if method == "initialize":
@@ -84,17 +124,17 @@ class AgentMCPHandler(MCPRequestHandler):
             # Forward other methods or handle specifically
             elif method.startswith("resources/") or method.startswith("prompts/"):
                 # Placeholder for future Kernel capabilities
-                return make_success_response(request.id, {method.split("/")[0]: []})
+                return _make_success_response(req_id, {method.split("/")[0]: []})
             else:
-                return make_error_response(
-                    id=request.id,
-                    code=ErrorCode.METHOD_NOT_FOUND,
-                    message=f"Method not found: {method}",
+                return _make_error_response(
+                    req_id,
+                    METHOD_NOT_FOUND,
+                    f"Method not found: {method}",
                 )
 
         except Exception as e:
-            logger.error("❌ [MCP] Request error", error=str(e))
-            return make_error_response(id=request.id, code=ErrorCode.INTERNAL_ERROR, message=str(e))
+            logger.error("Request error", error=str(e))
+            return _make_error_response(req_id, INTERNAL_ERROR, str(e))
 
     async def handle_notification(self, method: str, params: Any) -> None:
         """Handle notifications from MCP client."""
@@ -105,12 +145,12 @@ class AgentMCPHandler(MCPRequestHandler):
             logger.info("Client state notification received")
         # Add other notification handlers as needed
 
-    async def _handle_initialize(self, request: JSONRPCRequest) -> JSONRPCResponse:
+    async def _handle_initialize(self, request: dict) -> JSONRPCResponse:
         await self.initialize()
-        return JSONRPCResponse(
-            jsonrpc="2.0",
-            id=request.id,
-            result={
+        req_id = request.get("id")
+        return _make_success_response(
+            req_id,
+            {
                 "protocolVersion": "2024-11-05",
                 "serverInfo": {"name": "omni-agent", "version": "2.0.0"},
                 "capabilities": {
@@ -119,7 +159,7 @@ class AgentMCPHandler(MCPRequestHandler):
             },
         )
 
-    async def _handle_list_tools(self, request: JSONRPCRequest) -> JSONRPCResponse:
+    async def _handle_list_tools(self, request: dict) -> JSONRPCResponse:
         """List skills directly from Kernel Context.
 
         Applies dynamic loading configuration:
@@ -213,38 +253,36 @@ class AgentMCPHandler(MCPRequestHandler):
         if filtered_commands and self._verbose:
             logger.debug(f"🔇 Filtered commands: {sorted(filtered_commands)}")
 
-        return make_success_response(request.id, {"tools": tools})
+        req_id = request.get("id")
+        return _make_success_response(req_id, {"tools": tools})
 
-    async def _handle_call_tool(self, request: JSONRPCRequest) -> JSONRPCResponse:
+    async def _handle_call_tool(self, request: dict) -> JSONRPCResponse:
         """Execute skill via Kernel Context."""
-        params = request.params or {}
+        params = request.get("params") or {}
+        req_id = request.get("id")
         name = params.get("name", "")
         arguments = params.get("arguments", {})
 
         if "." not in name:
-            return make_error_response(
-                request.id, ErrorCode.INVALID_PARAMS, "Tool name must be 'skill.command'"
-            )
+            return _make_error_response(req_id, INVALID_PARAMS, "Tool name must be 'skill.command'")
 
         skill_name, command_name = name.split(".", 1)
 
         skill = self._kernel.skill_context.get_skill(skill_name)
         if not skill:
-            return make_error_response(
-                request.id, ErrorCode.INVALID_PARAMS, f"Skill not found: {skill_name}"
-            )
+            return _make_error_response(req_id, INVALID_PARAMS, f"Skill not found: {skill_name}")
 
         try:
             result = await skill.execute(command_name, **arguments)
-            return make_success_response(
-                request.id, {"content": [{"type": "text", "text": str(result)}]}
+            return _make_success_response(
+                req_id, {"content": [{"type": "text", "text": str(result)}]}
             )
         except Exception as e:
-            return make_error_response(request.id, ErrorCode.INTERNAL_ERROR, str(e))
+            return _make_error_response(req_id, INTERNAL_ERROR, str(e))
 
 
 def create_agent_handler() -> AgentMCPHandler:
     return AgentMCPHandler()
 
 
-__all__ = ["AgentMCPHandler", "create_agent_handler"]
+__all__ = ["AgentMCPHandler", "create_agent_handler", "JSONRPCResponse", "JSONRPCError"]

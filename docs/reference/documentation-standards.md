@@ -196,7 +196,7 @@ When user says "commit":
 **Contents**:
 
 - Major design decisions
-- Phase evolution plans
+- Evolution plans
 - Architecture review results
 
 **Style**: Formal, authoritative

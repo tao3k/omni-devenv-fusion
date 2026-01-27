@@ -21,9 +21,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from omni.foundation.config.logging import configure_logging, get_logger
+from omni.foundation.config.skills import SKILLS_DIR
 
 from .lifecycle import LifecycleManager, LifecycleState
-from .watcher import KernelWatcher
+from .watcher import RustKernelWatcher
+from .reactor import get_reactor, EventTopic
 
 if TYPE_CHECKING:
     from omni.core.router.sniffer import IntentSniffer
@@ -65,6 +67,7 @@ class Kernel:
         "_discovery_service",
         "_lifecycle",
         "_project_root",
+        "_reactor",  # Event-driven reactor for reactive architecture
         "_router",
         "_security",  # Security Validator (Permission Gatekeeper)
         "_skill_context",
@@ -94,16 +97,17 @@ class Kernel:
         self._skill_context: SkillContext | None = None
         self._discovery_service = None
         self._discovered_skills: list[Any] = []
-        self._watcher: KernelWatcher | None = None
+        self._watcher: RustKernelWatcher | None = None
         self._router = None
         self._sniffer: IntentSniffer | None = None  # Lazy init in sniffer property
         self._security = None  # Security Validator (Permission Gatekeeper) - lazy init
+        self._reactor = None  # Event-driven reactor - initialized in _on_ready
 
         # Resolve paths
         from omni.foundation.runtime.gitops import get_project_root
 
         self._project_root = project_root or get_project_root()
-        self._skills_dir = skills_dir or self._project_root / "assets" / "skills"
+        self._skills_dir = skills_dir or SKILLS_DIR()
 
     # =========================================================================
     # Lifecycle
@@ -419,7 +423,7 @@ class Kernel:
         """Get the intent sniffer (lazy initialization).
 
         The Sniffer detects context from the file system to activate skills.
-        Powered by Rust-generated skill_index.json.
+        Powered by Rust-generated LanceDB index.
         """
         if self._sniffer is None:
             from omni.core.router.sniffer import IntentSniffer
@@ -427,14 +431,14 @@ class Kernel:
             self._sniffer = IntentSniffer()
         return self._sniffer
 
-    def load_sniffer_rules(self) -> int:
-        """Load declarative sniffing rules from skill_index.json.
+    async def load_sniffer_rules(self) -> int:
+        """Load declarative sniffing rules from LanceDB.
 
         This bridges the Rust Scanner (Producer) and Python Sniffer (Consumer).
         Returns the number of rules loaded.
         """
-        count = self.sniffer.load_from_index(index_path=None)
-        logger.info(f"👃 Sniffer loaded with {count} declarative rules from Index")
+        count = await self.sniffer.load_rules_from_lancedb()
+        logger.info(f"👃 Sniffer loaded with {count} declarative rules from LanceDB")
         return count
 
     async def build_cortex(self) -> None:
@@ -471,6 +475,52 @@ class Kernel:
         logger.info(f"Cortex built with {indexer.get_stats()['entries_indexed']} entries")
 
     # =========================================================================
+    # Event-Driven Reactor (Reactive Architecture)
+    # =========================================================================
+
+    @property
+    def reactor(self):
+        """Get the event-driven reactor (lazy initialization).
+
+        The Reactor consumes events from the Rust Event Bus and dispatches
+        to registered Python handlers. This enables reactive architecture:
+        - Cortex auto-indexing on file changes
+        - Async checkpoint saving
+        - Sniffer context updates
+        """
+        if self._reactor is None:
+            self._reactor = get_reactor()
+        return self._reactor
+
+    async def _on_file_changed_cortex(self, event: dict) -> None:
+        """Reactive Handler: Updates Cortex index when files change.
+
+        Triggered by file/changed and file/created events from the Rust watcher.
+        Performs incremental indexing without blocking the main thread.
+        """
+        try:
+            payload = event.get("payload", {})
+            path = payload.get("path")
+
+            if not path:
+                return
+
+            logger.debug(f"⚡ Cortex reacting to file change: {path}")
+
+            # Delegate to the indexer for incremental indexing
+            # The indexer handles debouncing and batching internally
+            if hasattr(self, "_router") and self._router is not None:
+                if hasattr(self._router, "_semantic") and hasattr(
+                    self._router._semantic, "_indexer"
+                ):
+                    indexer = self._router._semantic._indexer
+                    if hasattr(indexer, "index_file"):
+                        await indexer.index_file(path)
+
+        except Exception as e:
+            logger.error(f"Failed to update Cortex for file change: {e}")
+
+    # =========================================================================
     # Paths
     # =========================================================================
 
@@ -493,9 +543,9 @@ class Kernel:
 
         Watches:
         - assets/skills/ directory for skill script changes
-        - skill_index.json for sniffer rule changes
+        - .cache/omni-vector/ for LanceDB changes
 
-        Handles both skill reload and sniffer index reload.
+        Handles both skill reload and LanceDB index reload.
         """
         import os
         from pathlib import Path
@@ -504,17 +554,16 @@ class Kernel:
             return  # Already running
 
         def callback_bridge(event_path: str) -> None:
-            """Bridge watchdog callback to async reload.
+            """Bridge Rust watcher callback to async reload.
 
-            Handles both skill directories and skill_index.json changes.
+            Handles skill changes - LanceDB will be updated on next sync.
             """
             filename = os.path.basename(event_path)
+            logger.debug(f"File changed: {filename}")
 
-            # Handle Index Change
-            if filename == "skill_index.json":
-                logger.info("📜 Skill Index changed, reloading sniffer rules...")
-                self._reload_sniffer_sync_wrapper()
-                return
+            # Reload sniffer rules from LanceDB
+            self._reload_sniffer_sync_wrapper()
+            return
 
             # Handle Skill Script Change
             try:
@@ -527,15 +576,15 @@ class Kernel:
             except ValueError:
                 pass  # Path not relative to skills_dir
 
-        self._watcher = KernelWatcher(self._skills_dir, callback_bridge)
+        self._watcher = RustKernelWatcher(self._skills_dir, callback_bridge)
         if self._watcher is not None:
             self._watcher.start()
-            logger.info("🔁 Hot reload enabled (watches skills/ and skill_index.json)")
+            logger.info("🔁 Hot reload enabled (watches skills/ and LanceDB)")
 
     def _reload_sniffer_sync_wrapper(self) -> None:
-        """Sync wrapper for sniffer reload (triggered by index change)."""
+        """Sync wrapper for sniffer reload (triggered by LanceDB change)."""
         try:
-            count = self.sniffer.load_from_index()
+            count = self.sniffer.load_rules_from_lancedb()
             logger.info(f"✅ Sniffer rules reloaded ({count} rules active)")
         except Exception as e:
             logger.error(f"❌ Failed to reload sniffer rules: {e}")
@@ -614,11 +663,31 @@ class Kernel:
         await self.build_cortex()
 
         # Step 5: Initialize Intent Sniffer (The Nose)
-        # Loads declarative rules from skill_index.json (generated by Rust scanner)
+        # Loads declarative rules from LanceDB (populated by Rust scanner)
         logger.info("👃 Initializing Context Sniffer...")
-        self.load_sniffer_rules()
+        await self.load_sniffer_rules()
 
-        # Step 6: Log extension summary (if any extensions were loaded)
+        # Step 6: Initialize Event Reactor (Reactive Architecture)
+        # Wire Cortex, Checkpoint, and Sniffer to the Rust Event Bus
+        logger.info("🔗 Initializing Event Reactor...")
+        self._reactor = get_reactor()
+
+        # Wire Cortex to File Events (auto-increment indexing)
+        self._reactor.register_handler(
+            EventTopic.FILE_CHANGED, self._on_file_changed_cortex, priority=10
+        )
+        self._reactor.register_handler(
+            EventTopic.FILE_CREATED, self._on_file_changed_cortex, priority=10
+        )
+
+        # Wire Sniffer to File Events (reactive context detection)
+        self.sniffer.register_to_reactor()
+
+        # Start the reactor consumer loop
+        await self._reactor.start()
+        logger.info("🧠 Cortex hooked into Reactive Bus")
+
+        # Step 7: Log extension summary (if any extensions were loaded)
         from omni.core.skills.extensions.loader import log_extension_summary
 
         log_extension_summary()
@@ -628,10 +697,11 @@ class Kernel:
         logger.info("🚀 Kernel Services Active:")
         core_commands = len(self.skill_context.get_core_commands())
         logger.info(f"   • Skills:    {skills_loaded} loaded, {core_commands} core commands")
-        logger.info("   • Cortex:    Semantic routing index ready")
+        logger.info("   • Cortex:    Semantic routing index ready (Reactive)")
         logger.info("   • Sniffer:   Context detection active")
         logger.info("   • Security:  Permission Gatekeeper active (Zero Trust)")
         logger.info("   • Watcher:   File monitoring enabled (hot reload)")
+        logger.info("   • Reactor:   Event-driven architecture active")
         logger.info("━" * 60)
 
     async def _on_running(self) -> None:
@@ -642,13 +712,24 @@ class Kernel:
         """Called when kernel starts shutting down - graceful cleanup."""
         logger.info("🛑 Kernel shutting down...")
 
-        # Step 1: Stop file watcher first (no more file events)
+        # Step 0: Unregister sniffer from reactor (cleanup handlers)
+        if self._sniffer is not None:
+            self._sniffer.unregister_from_reactor()
+            logger.debug("Sniffer unregistered from reactor")
+
+        # Step 1: Stop reactor first (no more event processing)
+        if self._reactor is not None and self._reactor.is_running:
+            await self._reactor.stop()
+            self._reactor = None
+            logger.debug("Event reactor stopped")
+
+        # Step 2: Stop file watcher (no more file events)
         if self._watcher is not None:
             self._watcher.stop()
             self._watcher = None
             logger.debug("File watcher stopped")
 
-        # Step 2: Save any persistent state (vector index, caches)
+        # Step 3: Save any persistent state (vector index, caches)
         # Note: In-memory stores can't be persisted, but we log the intent
         if hasattr(self, "_router") and self._router is not None:
             if hasattr(self._router, "_semantic") and hasattr(self._router._semantic, "_indexer"):
@@ -657,7 +738,7 @@ class Kernel:
                 if stats.get("entries_indexed", 0) > 0:
                     logger.info(f"💾 Index contains {stats['entries_indexed']} entries (in-memory)")
 
-        # Step 3: Unregister all skills gracefully
+        # Step 4: Unregister all skills gracefully
         if self._skill_context is not None:
             skills_count = self._skill_context.skills_count
             from omni.core.skills.runtime import reset_context
@@ -665,7 +746,7 @@ class Kernel:
             reset_context()
             logger.debug(f"Unregistered {skills_count} skills")
 
-        # Step 4: Cleanup components
+        # Step 5: Cleanup components
         self._components.clear()
 
         logger.info("👋 Kernel shutdown complete")

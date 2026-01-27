@@ -12,9 +12,9 @@
 //! # Example
 //!
 //! ```ignore
-//! use skills_scanner::ScriptScanner;
+//! use skills_scanner::ToolsScanner;
 //!
-//! let scanner = ScriptScanner::new();
+//! let scanner = ToolsScanner::new();
 //! let tools = scanner.scan_scripts(
 //!     PathBuf::from("assets/skills/writer/scripts"),
 //!     "writer",
@@ -30,13 +30,17 @@ use std::fs;
 use std::path::Path;
 
 use hex;
-use omni_ast::{LanguageExt, MatcherExt, Pattern, SupportLang};
+use omni_ast::{Lang, Match, scan};
 use sha2::{Digest, Sha256};
 use walkdir::WalkDir;
 
+use crate::skill_command::annotations::build_annotations;
+use crate::skill_command::category::infer_category_from_skill;
+use crate::skill_command::parser::{
+    extract_docstring_from_text, extract_parameters_from_text, find_skill_command_decorators,
+    parse_decorator_args,
+};
 use crate::skill_metadata::{SkillStructure, ToolRecord};
-
-/// Script Scanner - Discovers tools in script files using ast-grep.
 ///
 /// This scanner parses Python files in the `scripts/` directory to find
 /// functions decorated with `@skill_command`. The discovered tools are
@@ -45,9 +49,9 @@ use crate::skill_metadata::{SkillStructure, ToolRecord};
 /// # Usage
 ///
 /// ```ignore
-/// use skills_scanner::ScriptScanner;
+/// use skills_scanner::ToolsScanner;
 ///
-/// let scanner = ScriptScanner::new();
+/// let scanner = ToolsScanner::new();
 /// let tools = scanner.scan_scripts(
 ///     Path::new("assets/skills/git/scripts"),
 ///     "git",
@@ -55,9 +59,9 @@ use crate::skill_metadata::{SkillStructure, ToolRecord};
 /// ).unwrap();
 /// ```
 #[derive(Debug)]
-pub struct ScriptScanner;
+pub struct ToolsScanner;
 
-impl ScriptScanner {
+impl ToolsScanner {
     /// Create a new script scanner.
     #[must_use]
     pub fn new() -> Self {
@@ -79,7 +83,7 @@ impl ScriptScanner {
     /// # Examples
     ///
     /// ```ignore
-    /// let scanner = ScriptScanner::new();
+    /// let scanner = ToolsScanner::new();
     /// let tools = scanner.scan_scripts(
     ///     PathBuf::from("assets/skills/writer/scripts"),
     ///     "writer",
@@ -196,7 +200,8 @@ impl ScriptScanner {
 
     /// Parse a single script file for tool definitions.
     ///
-    /// Uses ast-grep to find function definitions decorated with `@skill_command`.
+    /// Uses AST traversal to find @skill_command decorated functions and
+    /// extract all decorator kwargs (name, description, category, etc.).
     ///
     /// # Arguments
     ///
@@ -206,7 +211,7 @@ impl ScriptScanner {
     ///
     /// # Returns
     ///
-    /// A vector of `ToolRecord` objects.
+    /// A vector of `ToolRecord` objects with enriched metadata.
     fn parse_script(
         &self,
         path: &Path,
@@ -222,165 +227,159 @@ impl ScriptScanner {
         hasher.update(content.as_bytes());
         let file_hash = hex::encode(hasher.finalize());
 
-        // Use ast-grep to find ONLY function definitions decorated with @skill_command
-        let lang: SupportLang = "py"
-            .parse()
-            .map_err(|e| anyhow::anyhow!("Python language should be supported: {e}"))?;
-        let root = lang.ast_grep(&content);
-        let root_node = root.root();
+        // Find all @skill_command decorated functions using AST
+        // Note: omni-ast has issues with decorator patterns, so we use a hybrid approach:
+        // 1. Find all decorators using simple string matching (not regex)
+        // 2. Find all functions using AST
+        // 3. Associate decorators with functions by position
 
-        // Pattern to match @skill_command decorator with name parameter
-        let decorator_with_name = r#"skill_command(name=$NAME, $$$)"#;
-        let search_decorator_with_name = Pattern::try_new(decorator_with_name, lang)
-            .map_err(|e| anyhow::anyhow!("Failed to parse decorator pattern: {}", e))?;
+        // Find all decorators with their positions
+        let decorators = find_skill_command_decorators(&content);
 
-        // Pattern to match @skill_command decorator without name parameter
-        let decorator_pattern = r#"skill_command($$$)"#;
-        let search_decorator = Pattern::try_new(decorator_pattern, lang)
-            .map_err(|e| anyhow::anyhow!("Failed to parse decorator pattern: {}", e))?;
+        // Find all function definitions using AST pattern matching
+        let all_funcs = scan(&content, "def $NAME", Lang::Python)?;
 
-        // Pattern to get function name
-        let func_pattern = r#"def $NAME"#;
-        let search_func = Pattern::try_new(func_pattern, lang)
-            .map_err(|e| anyhow::anyhow!("Failed to parse function pattern: {}", e))?;
+        // Associate decorators with functions by position (decorator should be right before function)
+        // decorated_funcs contains tuples of (decorator_text, Match)
+        let mut decorated_funcs: Vec<(String, Match)> = Vec::new();
 
-        // Track which functions are decorated by @skill_command
-        let mut decorator_info: std::collections::HashMap<String, (usize, Option<String>)> =
+        for func in &all_funcs {
+            let func_start = func.start;
+            let _func_name = match func.get_capture("NAME") {
+                Some(n) => n,
+                None => continue,
+            };
+
+            // Find decorator closest before this function
+            // decorators is Vec<(start, end, text)>
+            let mut best_decorator: Option<&(usize, usize, String)> = None;
+            for dec in &decorators {
+                let dec_end = dec.1;
+                if dec_end < func_start {
+                    // Check if decorator is within reasonable distance (500 chars)
+                    let distance = func_start - dec_end;
+                    if distance < 500 {
+                        if best_decorator.is_none() || dec_end > best_decorator.unwrap().1 {
+                            best_decorator = Some(dec);
+                        }
+                    }
+                }
+            }
+
+            if let Some(dec) = best_decorator {
+                decorated_funcs.push((dec.2.clone(), func.clone()));
+            }
+        }
+
+        // Build a map of function name to docstring
+        // The pattern "def $NAME" matches the full function including docstring
+        let mut func_docstrings: std::collections::HashMap<String, String> =
             std::collections::HashMap::new();
-
-        // Find decorators with name parameter and extract the name
-        for node in root_node.dfs() {
-            if let Some(m) = search_decorator_with_name.match_node(node.clone()) {
-                let range = node.range();
-                let env = m.get_env();
-
-                let raw_name = env
-                    .get_match("NAME")
-                    .map(|n| n.text().to_string())
-                    .unwrap_or_default();
-
-                let tool_name = raw_name.trim_matches('"').trim_matches('\'').to_string();
-
-                // Find the function this decorator applies to
-                let func_range_start = range.end;
-                for func_node in root_node.dfs() {
-                    if let Some(func_match) = search_func.match_node(func_node.clone()) {
-                        let func_env = func_match.get_env();
-                        let func_name = func_env
-                            .get_match("NAME")
-                            .map(|n| n.text().to_string())
-                            .unwrap_or_else(|| "unknown".to_string());
-                        let func_range = func_match.range();
-
-                        if func_range.start > func_range_start
-                            && func_range.start - func_range_start < 500
-                        {
-                            if !tool_name.is_empty() {
-                                decorator_info
-                                    .insert(func_name.clone(), (range.end, Some(tool_name)));
-                            }
-                            break;
-                        }
-                    }
-                }
+        for func in &all_funcs {
+            let func_name = func.get_capture("NAME").map(|s| s.to_string());
+            if let Some(name) = &func_name {
+                // Extract docstring from the matched text
+                let docstring = extract_docstring_from_text(&func.text);
+                func_docstrings.insert(name.clone(), docstring);
             }
         }
 
-        // Find decorators without explicit name parameter
-        for node in root_node.dfs() {
-            if search_decorator.match_node(node.clone()).is_some()
-                && search_decorator_with_name
-                    .match_node(node.clone())
-                    .is_none()
-            {
-                let range = node.range();
+        // Process each decorated function (decorator, function pair)
+        for (decorator_text, func) in &decorated_funcs {
+            // Get the function name from captures
+            let func_name = match func.get_capture("NAME").map(|s| s.to_string()) {
+                Some(name) => name,
+                None => continue,
+            };
 
-                for func_node in root_node.dfs() {
-                    if let Some(func_match) = search_func.match_node(func_node.clone()) {
-                        let func_env = func_match.get_env();
-                        let func_name = func_env
-                            .get_match("NAME")
-                            .map(|n| n.text().to_string())
-                            .unwrap_or_else(|| "unknown".to_string());
-                        let func_range = func_match.range();
+            // Get decorator arguments
+            let args = parse_decorator_args(decorator_text);
 
-                        if func_range.start > range.end && func_range.start - range.end < 500 {
-                            if !decorator_info.contains_key(&func_name) {
-                                decorator_info.insert(func_name.clone(), (range.end, None));
-                            }
-                            break;
-                        }
+            // Get docstring from pre-built map
+            let docstring = func_docstrings.get(&func_name).cloned().unwrap_or_default();
+
+            // Extract tool name
+            let tool_name = match &args.name {
+                Some(name) => name.clone(),
+                None => func_name.clone(),
+            };
+
+            // Extract function parameters from the matched text
+            let parameters = extract_parameters_from_text(&func.text);
+
+            // Build description
+            let description = match &args.description {
+                Some(desc) => desc.clone(),
+                None => {
+                    if !docstring.is_empty() {
+                        docstring.clone()
+                    } else {
+                        format!("Execute {}.{}", skill_name, tool_name)
                     }
                 }
-            }
-        }
+            };
 
-        // Now find functions and create ToolRecords
-        for node in root_node.dfs() {
-            if let Some(m) = search_func.match_node(node.clone()) {
-                let env = m.get_env();
+            // Build category
+            // Priority: 1) @skill_command(category="...")  2) Inferred from skill name  3) empty
+            let category = args
+                .category
+                .clone()
+                .unwrap_or_else(|| infer_category_from_skill(skill_name));
 
-                let func_name = env
-                    .get_match("NAME")
-                    .map(|n| n.text().to_string())
-                    .unwrap_or_else(|| "unknown".to_string());
+            // Build annotations
+            let annotations = build_annotations(&args, &func_name, &parameters);
 
-                // Check if this function has a @skill_command decorator
-                if let Some((_, tool_name_opt)) = decorator_info.get(&func_name) {
-                    let tool_name = match tool_name_opt {
-                        Some(name) => name.clone(),
-                        None => func_name.clone(),
-                    };
+            // Generate input_schema from parameters
+            let input_schema = self.generate_input_schema(&parameters);
 
-                    // Generate description
-                    let description = format!("Execute {}.{}", skill_name, tool_name);
+            // Combine keywords
+            let mut combined_keywords = vec![skill_name.to_string(), tool_name.clone()];
+            combined_keywords.extend(skill_keywords.iter().cloned());
 
-                    // Extract docstring from function body
-                    let matched_text = m.text().to_string();
-                    let docstring = self.extract_docstring_from_text(&matched_text);
-
-                    // Combine skill-level keywords (from SKILL.md) with tool-level keywords
-                    let mut combined_keywords = vec![skill_name.to_string(), tool_name.clone()];
-                    combined_keywords.extend(skill_keywords.iter().cloned());
-
-                    tools.push(ToolRecord {
-                        tool_name: format!("{}.{}", skill_name, tool_name),
-                        description,
-                        skill_name: skill_name.to_string(),
-                        file_path: file_path.clone(),
-                        function_name: func_name,
-                        execution_mode: "script".to_string(),
-                        keywords: combined_keywords,
-                        file_hash: file_hash.clone(),
-                        input_schema: "{}".to_string(),
-                        docstring,
-                    });
-                }
-            }
+            tools.push(ToolRecord::with_enrichment(
+                format!("{}.{}", skill_name, tool_name),
+                description,
+                skill_name.to_string(),
+                file_path.clone(),
+                func_name.clone(),
+                "script".to_string(),
+                combined_keywords,
+                file_hash.clone(),
+                docstring,
+                category,
+                annotations,
+                parameters,
+                input_schema,
+            ));
         }
 
         Ok(tools)
     }
 
-    /// Extract docstring from matched function text.
-    fn extract_docstring_from_text(&self, text: &str) -> String {
-        if let Some(start) = text.find("\"\"\"") {
-            if let Some(end) = text[start + 3..].find("\"\"\"") {
-                let doc = &text[start + 3..start + 3 + end];
-                return doc.trim().to_string();
-            }
+    /// Generate MCP-style inputSchema JSON from parameter names.
+    fn generate_input_schema(&self, parameters: &[String]) -> String {
+        let mut props = serde_json::Map::new();
+        for param in parameters {
+            props.insert(
+                param.clone(),
+                serde_json::json!({
+                    "type": "string",
+                    "description": format!("Parameter: {}", param)
+                }),
+            );
         }
-        if let Some(start) = text.find("'''") {
-            if let Some(end) = text[start + 3..].find("'''") {
-                let doc = &text[start + 3..start + 3 + end];
-                return doc.trim().to_string();
-            }
-        }
-        String::new()
+
+        let schema = serde_json::json!({
+            "type": "object",
+            "properties": props,
+            "required": parameters
+        });
+
+        schema.to_string()
     }
 }
 
-impl Default for ScriptScanner {
+impl Default for ToolsScanner {
     fn default() -> Self {
         Self::new()
     }
@@ -412,7 +411,7 @@ def write_text(content: str) -> str:
         let mut file = File::create(&script_file).unwrap();
         file.write_all(script_content.as_bytes()).unwrap();
 
-        let scanner = ScriptScanner::new();
+        let scanner = ToolsScanner::new();
         let tools = scanner
             .scan_scripts(&scripts_dir, "writer", &["write".to_string()])
             .unwrap();
@@ -448,7 +447,7 @@ def status() -> str:
         let mut file = File::create(&script_file).unwrap();
         file.write_all(script_content.as_bytes()).unwrap();
 
-        let scanner = ScriptScanner::new();
+        let scanner = ToolsScanner::new();
         let tools = scanner
             .scan_scripts(&scripts_dir, "git", &["git".to_string()])
             .unwrap();
@@ -463,7 +462,7 @@ def status() -> str:
         let temp_dir = TempDir::new().unwrap();
         let scripts_dir = temp_dir.path().join("empty/scripts");
 
-        let scanner = ScriptScanner::new();
+        let scanner = ToolsScanner::new();
         let tools = scanner.scan_scripts(&scripts_dir, "empty", &[]).unwrap();
 
         assert!(tools.is_empty());
@@ -475,7 +474,7 @@ def status() -> str:
         let scripts_dir = temp_dir.path().join("empty/scripts");
         std::fs::create_dir_all(&scripts_dir).unwrap();
 
-        let scanner = ScriptScanner::new();
+        let scanner = ToolsScanner::new();
         let tools = scanner.scan_scripts(&scripts_dir, "empty", &[]).unwrap();
 
         assert!(tools.is_empty());
@@ -498,7 +497,7 @@ def test_tool():
         let script_file = scripts_dir.join("test.py");
         std::fs::write(&script_file, script_content).unwrap();
 
-        let scanner = ScriptScanner::new();
+        let scanner = ToolsScanner::new();
         let tools = scanner
             .scan_skill_scripts(&skill_path, "test_skill", &[])
             .unwrap();
@@ -528,7 +527,7 @@ def init_tool():
         let init_file = scripts_dir.join("__init__.py");
         std::fs::write(&init_file, init_content).unwrap();
 
-        let scanner = ScriptScanner::new();
+        let scanner = ToolsScanner::new();
         let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
 
         assert!(tools.is_empty());
@@ -550,7 +549,7 @@ def polish_text(text: str) -> str:
         let script_file = scripts_dir.join("text.py");
         std::fs::write(&script_file, script_content).unwrap();
 
-        let scanner = ScriptScanner::new();
+        let scanner = ToolsScanner::new();
         let routing_keywords = vec![
             "write".to_string(),
             "edit".to_string(),
@@ -568,12 +567,13 @@ def polish_text(text: str) -> str:
     }
 
     #[test]
-    fn test_script_scanner_new() {
-        let _scanner = ScriptScanner::new();
+    fn test_tools_scanner_new() {
+        let _scanner = ToolsScanner::new();
         // Just verify it can be created
         assert!(true);
     }
 
-    // Note: Comprehensive integration tests are in tests/script_scanner.rs
+    // Note: Comprehensive integration tests are in tests/tools_scanner.rs
+    // Category inference tests are in skill_command/category.rs
     // These basic tests verify core functionality without complex setup.
 }

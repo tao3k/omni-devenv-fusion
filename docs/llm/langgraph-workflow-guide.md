@@ -296,7 +296,7 @@ workflow.add_conditional_edges(
 )
 ```
 
-## Pattern 4: Multi-Phase Workflow
+## Pattern 4: Multi-Stage Workflow
 
 ```python
 async def node_setup(state: ResearchState) -> dict:

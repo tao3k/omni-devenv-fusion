@@ -1,10 +1,13 @@
 """
 omni.mcp - High-Performance MCP Transport Layer
 
+Trinity Architecture - Transport Layer
+
 Pure transport implementation. No business logic.
 
+Uses MCP SDK types for JSON-RPC compliance (type hints only).
+
 Modules:
-    types: JSON-RPC message definitions and MCP error codes
     interfaces: Protocol definitions for dependency inversion
     server: Generic MCP server orchestration
     transport: Transport implementations (stdio, sse)
@@ -12,34 +15,22 @@ Modules:
 
 from .interfaces import MCPRequestContext, MCPRequestHandler, MCPSession, MCPTransport
 from .server import MCPServer
-from .types import (
-    ErrorCode,
-    JSONRPCError,
-    JSONRPCRequest,
-    JSONRPCResponse,
-    MCPErrorCode,
-    make_error_response,
-    make_mcp_error_response,
-    make_success_response,
-)
+from .transport.sse import SSEServer, SSESession, SSESessionManager
+from .transport.stdio import StdioTransport
 
 __all__ = [
-    # Types
-    "JSONRPCRequest",
-    "JSONRPCResponse",
-    "JSONRPCError",
-    "make_error_response",
-    "make_success_response",
-    "make_mcp_error_response",
-    "ErrorCode",
-    "MCPErrorCode",
     # Interfaces
-    "MCPRequestHandler",
-    "MCPTransport",
-    "MCPSession",
     "MCPRequestContext",
+    "MCPRequestHandler",
+    "MCPSession",
+    "MCPTransport",
     # Server
     "MCPServer",
+    # Transport
+    "StdioTransport",
+    "SSEServer",
+    "SSESession",
+    "SSESessionManager",
 ]
 
-__version__ = "0.2.0"
+__version__ = "0.4.0"

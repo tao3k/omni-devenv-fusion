@@ -33,6 +33,7 @@ mod lang;
 mod python;
 mod re_exports;
 mod scan;
+mod security;
 
 // ============================================================================
 // Re-exports (for backwards compatibility)
@@ -56,3 +57,6 @@ pub use python::{
     find_python_classes, find_python_decorated_by_any, find_python_decorated_functions,
     find_python_functions,
 };
+
+// Security scanner for harvested skills
+pub use security::{SecurityConfig, SecurityScanner, SecurityViolation};

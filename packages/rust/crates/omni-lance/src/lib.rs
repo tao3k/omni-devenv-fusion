@@ -17,6 +17,8 @@ pub const ID_COLUMN: &str = "id";
 pub const CONTENT_COLUMN: &str = "content";
 /// Metadata column name
 pub const METADATA_COLUMN: &str = "metadata";
+/// Thread ID column name (for checkpoint filtering)
+pub const THREAD_ID_COLUMN: &str = "thread_id";
 
 /// Default embedding dimension (OpenAI Ada-002)
 pub const DEFAULT_DIMENSION: usize = 1536;

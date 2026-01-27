@@ -178,14 +178,19 @@ class TestRustCheckpointSaverCheckpointStructure:
         )
 
     def test_put_handles_dict_checkpoint(self):
-        """Test put method handles checkpoint as dict with channel_values (LangGraph 1.0+ format)."""
+        """Test put method handles checkpoint as dict with channel_values (LangGraph 1.0+ format).
+
+        Note: RustCheckpointSaver now only has async methods. Use aput() instead.
+        """
+        import asyncio
         from omni.langgraph.checkpoint.saver import RustCheckpointSaver
 
         mock_inner = MagicMock()
 
-        with patch.object(RustCheckpointSaver, "__init__", lambda self: None):
+        async def test_put():
             saver = RustCheckpointSaver.__new__(RustCheckpointSaver)
             saver._checkpointer = mock_inner
+            saver._table_name = "test"
 
             # Test with dict checkpoint (LangGraph 1.0 format with channel_values)
             dict_checkpoint = {
@@ -201,28 +206,31 @@ class TestRustCheckpointSaverCheckpointStructure:
             config = {"configurable": {"thread_id": "test-thread"}}
             new_versions = {}
 
-            # Should not raise KeyError
-            result = saver.put(config, dict_checkpoint, dict_metadata, new_versions)
-
-            # Verify inner put was called
+            # Use async aput instead
+            result = await saver.aput(config, dict_checkpoint, dict_metadata, new_versions)
             mock_inner.put.assert_called_once()
             call_args = mock_inner.put.call_args
             assert call_args.kwargs["checkpoint_id"] == "test-checkpoint-1"
-            # Verify channel_values was extracted
             assert call_args.kwargs["state"] == {"key": "value"}
 
+        asyncio.run(test_put())
+
     def test_put_handles_checkpoint_dataclass(self):
-        """Test put method handles Checkpoint dataclass-like objects with channel_values."""
+        """Test aput method handles Checkpoint dataclass-like objects with channel_values.
+
+        Note: RustCheckpointSaver now only has async methods. Use aput() instead.
+        """
+        import asyncio
         from omni.langgraph.checkpoint.saver import RustCheckpointSaver
 
         mock_inner = MagicMock()
 
-        with patch.object(RustCheckpointSaver, "__init__", lambda self: None):
+        async def test_aput():
             saver = RustCheckpointSaver.__new__(RustCheckpointSaver)
             saver._checkpointer = mock_inner
+            saver._table_name = "test"
 
             # Test with object having channel_values attribute (LangGraph 1.0+)
-            # Use a proper mock that mimics the dict-like interface
             mock_checkpoint = MagicMock(spec=["id", "channel_values"])
             mock_checkpoint.id = "test-checkpoint-2"
             mock_checkpoint.channel_values = {"state_key": "state_value"}
@@ -235,10 +243,11 @@ class TestRustCheckpointSaverCheckpointStructure:
             config = {"configurable": {"thread_id": "test-thread"}}
             new_versions = {}
 
-            # Should work with object having channel_values attribute
-            result = saver.put(config, mock_checkpoint, mock_metadata, new_versions)
-
+            # Use async aput instead
+            result = await saver.aput(config, mock_checkpoint, mock_metadata, new_versions)
             mock_inner.put.assert_called_once()
+
+        asyncio.run(test_aput())
 
 
 class TestGraphOutputTypedDict:

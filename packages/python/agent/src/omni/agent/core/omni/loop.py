@@ -1,13 +1,14 @@
 """
-loop.py - Main OmniLoop Orchestrator
+loop.py - OmniLoop Orchestrator
+Feature: Adaptive Skill Projection & Cognitive Constraints
 
-CCA Loop implementation with smart context management.
-Integrates ReAct workflow with ContextManager for conversation handling.
+MatureReAct Loop implementation with smart context management.
+Integrates ResilientReAct workflow with ContextManager for conversation handling.
 
-Features:
-- CognitiveOrchestrator for dynamic system prompt building
-- Meta-Cognition Protocol via RoutingGuidanceProvider
-- Smart context pruning and management
+Key Features:
+- Adaptive Skill Projection: Hides atomic tools when high-level skills exist.
+- Resilient Execution: Uses ResilientReAct for robust tool handling.
+- Harvester Integration: Background learning from successful sessions.
 
 Usage:
     from omni.agent.core.omni import OmniLoop, OmniLoopConfig
@@ -17,8 +18,11 @@ Usage:
 """
 
 import asyncio
+import json
+import re
+import time
 import uuid
-from typing import Any
+from typing import Any, List, Dict, Optional
 
 from omni.agent.core.context.manager import ContextManager
 from omni.agent.core.context.pruner import ContextPruner, PruningConfig
@@ -27,333 +31,422 @@ from omni.foundation.config.logging import get_logger
 from omni.foundation.config.settings import get_setting
 from omni.foundation.services.llm import InferenceClient
 
+logger = get_logger("omni.agent.loop")
+
+# Event-driven checkpoint saving (Step 4)
+try:
+    from omni_core_rs import PyGlobalEventBus
+
+    EVENT_BUS_AVAILABLE = True
+except ImportError:
+    EVENT_BUS_AVAILABLE = False
+    logger.warning("Rust Event Bus not available, checkpoint events disabled")
+
 from .config import OmniLoopConfig
-from .react import ReActWorkflow
+from .react import ResilientReAct
 from .schemas import extract_tool_schemas
 
 logger = get_logger("omni.agent.loop")
 
+# Tier 1: Atomic Tools (Low-level, Noise prone)
+TIER_1_ATOMIC = {
+    "filesystem.read_file",
+    "filesystem.write_file",
+    "filesystem.list_dir",
+    "filesystem.delete_file",
+    "terminal.run_command",
+    "terminal.analyze_last_error",  # Often hallucinated
+}
+
+# High-level skill indicators
+HIGH_LEVEL_KEYWORDS = ["researcher", "code_tools", "git_smart", "software_engineering"]
+
+# Epistemic Gating - Ambiguity detection patterns
+VAGUE_TASK_PATTERNS = [
+    r"^do\s+(something|anything|stuff)$",
+    r"^fix\s+(it|this|that|things?)$",
+    r"^improve\s+(it|this|that|things?)$",
+    r"^help\s+(me|us)$",
+    r"^make\s+(it|this|that)\s+(work|better|goto)$",
+    r"^goto\s*$",
+    r"^go\s+there\s*$",
+    r"^\w+\s+\w+\s*$",  # Very short two-word tasks
+]
+
+# Information seeking patterns
+INFO_SEEKING_PATTERNS = [
+    r"(what|which|who|where|when|why|how).*\?$",
+    r"tell\s+me\s+about",
+    r"explain\s+(me|how|what|why)",
+    r"describe\s+",
+]
+
+
+class EpistemicGater:
+    """Cognitive Gate - Verifies task intent before execution."""
+
+    def __init__(self, min_task_length: int = 5):
+        self.min_task_length = min_task_length
+        self._compiled_patterns = [
+            (re.compile(p, re.IGNORECASE), "vague") for p in VAGUE_TASK_PATTERNS
+        ]
+        self._compiled_info_patterns = [
+            (re.compile(p, re.IGNORECASE), "info_seeking") for p in INFO_SEEKING_PATTERNS
+        ]
+
+    def evaluate(self, task: str) -> tuple[bool, str, dict[str, Any]]:
+        """Evaluate if the task should proceed or needs clarification."""
+        task = task.strip()
+        metadata: dict[str, Any] = {}
+
+        if not task or len(task) < self.min_task_length:
+            return (
+                False,
+                "Task is too short or empty. Please provide more details.",
+                {"suggestion": "Describe what you want to accomplish in more detail."},
+            )
+
+        for pattern, ptype in self._compiled_patterns:
+            if pattern.match(task):
+                return (
+                    False,
+                    f"Task '{task}' is too vague. Please be more specific.",
+                    {"ambiguity_type": ptype},
+                )
+
+        for pattern, ptype in self._compiled_info_patterns:
+            if pattern.search(task):
+                return (True, "Information seeking task", {"task_type": "info_seeking"})
+
+        if "file" in task.lower() and "path" not in task.lower():
+            metadata["context_warning"] = "Task mentions 'file' but no path specified"
+
+        return (True, "Task appears valid", metadata)
+
 
 class OmniLoop:
     """
-    Core conversation loop with smart context management.
+    Cognitive Loop Manager with Epistemic Gating.
 
-    Features:
-    - ContextManager for smart pruning
-    - ReAct workflow for tool execution
-    - CognitiveOrchestrator for dynamic system prompt (Meta-Cognition Protocol)
-    - Turn tracking and statistics
-    - Session isolation
-
-    Usage:
-        agent = OmniLoop(kernel=kernel)
-        result = await agent.run("Your task here")
+    Key Features:
+    - Adaptive Skill Projection: Hides atomic tools when high-level skills exist.
+    - Resilient Execution: Uses ResilientReAct for robust tool handling.
+    - Harvester Integration: Background learning from successful sessions.
     """
 
-    def __init__(
-        self,
-        config: OmniLoopConfig | None = None,
-        kernel: Any = None,
-    ):
-        """Initialize the OmniLoop.
-
-        Args:
-            config: Optional configuration. Uses defaults if None.
-            kernel: Optional Kernel instance for tool execution.
-        """
+    def __init__(self, config: Optional[OmniLoopConfig] = None, kernel: Any = None):
         self.config = config or OmniLoopConfig()
-        self.session_id: str = str(uuid.uuid4())[:8]
+        self.session_id = str(uuid.uuid4())[:8]
         self.kernel = kernel
+        self.current_step = 0  # Track step for event publishing
 
-        # Initialize context manager with pruning config
+        # Epistemic Gating
+        self._epistemic_gater = EpistemicGater()
+
+        # Initialize Context
         pruning_config = PruningConfig(
             max_tokens=self.config.max_tokens,
             retained_turns=self.config.retained_turns,
         )
-        pruner = ContextPruner(config=pruning_config)
-        self.context = ContextManager(pruner=pruner)
+        self.context = ContextManager(pruner=ContextPruner(config=pruning_config))
 
-        # Initialize inference engine
         self.engine = InferenceClient()
-
-        # Initialize CognitiveOrchestrator for dynamic context building
         self.orchestrator = create_omni_loop_context()
-
-        # Session history
-        self.history: list[dict[str, Any]] = []
-
-        # Internal state
-        self._initialized: bool = False
+        self.history: List[Dict[str, Any]] = []
+        self._initialized = False
 
     async def _ensure_initialized(self):
-        """Initialize system prompts using CognitiveOrchestrator."""
-        if not self._initialized:
-            # Build dynamic context using CognitiveOrchestrator
-            # This includes: Persona + Routing Protocol + Tools + Active Skill
-            state = {"messages": [], "session_id": self.session_id}
-            try:
-                system_prompt = await self.orchestrator.build_context(state)
-                logger.info(
-                    "Context built for Omni-Loop",
-                    tokens=len(system_prompt.split()),
-                )
-            except Exception as e:
-                logger.error(f"Context build failed: {e}, using fallback")
-                system_prompt = get_setting(
-                    "omni.system_prompt",
-                    default="You are Omni-Dev Fusion. Think before you act.",
-                )
+        if self._initialized:
+            return
 
-            self.context.add_system_message(system_prompt)
-            self._initialized = True
+        # Build System Context with Protocol Constraints
+        state = {"session_id": self.session_id}
+        try:
+            base_prompt = await self.orchestrator.build_context(state)
 
-    async def _get_tool_schemas(self) -> list[dict[str, Any]]:
-        """Get tool schemas from kernel skill context with optimization.
+            # Cognitive Constraint Injection
+            constraint_prompt = (
+                "\n\n[COGNITIVE PROTOCOL]\n"
+                "1. DO NOT act as a text editor. Use High-Level Skills (`researcher`, `code_tools`) first.\n"
+                "2. `skill.discover` is MANDATORY for unknown capabilities.\n"
+                "3. Stop immediately if you are stuck in a loop.\n"
+                "4. Output 'EXIT_LOOP_NOW' only when the user's intent is fully satisfied."
+            )
+            self.context.add_system_message(base_prompt + constraint_prompt)
+        except Exception as e:
+            logger.error(f"Context build failed: {e}")
+            self.context.add_system_message("You are Omni-Dev Fusion. Use high-level skills.")
 
-        Applies:
-        - filter_commands: Exclude filtered commands (only core tools)
-        - dynamic_tools limit: Cap number of tools
-        - DISCOVERY_FIRST: Ensure skill.discover is first in the list
+        self._initialized = True
 
-        Note: Dynamic commands (filtered) are NOT included in omni run.
-        They can only be loaded on demand via dynamic loading.
+    def _publish_step_complete(self, state: Dict[str, Any]) -> None:
+        """Fire-and-forget checkpoint event to Rust Event Bus (Step 4).
+
+        Replaces blocking checkpoint.save() with async event publishing.
+        The persistence service subscribes to 'agent/step_complete' and saves to LanceDB.
         """
-        from omni.core.cache.tool_schema import get_cached_schema
-        from omni.core.config.loader import load_skill_limits
+        if not EVENT_BUS_AVAILABLE:
+            return
 
-        if self.kernel and hasattr(self.kernel, "skill_context"):
-            skill_context = self.kernel.skill_context
-            limits = load_skill_limits()
+        try:
+            self.current_step += 1
 
-            # Get core commands only (filter_commands applied, dynamic excluded)
-            commands = skill_context.get_core_commands()
-
-            # Apply dynamic_tools limit
-            if len(commands) > limits.dynamic_tools:
-                commands = commands[: limits.dynamic_tools]
-
-            # Use cached schema extraction
-            def extract_schema(cmd: str) -> dict[str, Any]:
-                handler = skill_context.get_command(cmd)
-                if handler:
-                    return extract_tool_schemas([cmd], lambda c: handler)[0]
-                return {}
-
-            # Get schemas with caching
-            schemas = []
-            for cmd in commands:
-                schema = get_cached_schema(cmd, lambda c=cmd: extract_schema(c))
-                if schema:
-                    schemas.append(schema)
-
-            # DISCOVERY FIRST: Ensure skill.discover is first
-            discover_schema = next((s for s in schemas if s.get("name") == "skill.discover"), None)
-            if discover_schema:
-                schemas = [discover_schema] + [
-                    s for s in schemas if s.get("name") != "skill.discover"
-                ]
-
-            return schemas
-
-        # Fallback: no kernel available, return empty list
-        return []
-
-    async def _execute_tool_call(self, tool_name: str, args: dict[str, Any]) -> str:
-        """Execute a single tool call via kernel."""
-        if self.kernel and hasattr(self.kernel, "execute_tool"):
-            return await self.kernel.execute_tool(
-                tool_name=tool_name,
-                args=args,
-                caller=None,  # OmniLoop has root privileges
+            payload = json.dumps(
+                {
+                    "thread_id": self.session_id,
+                    "step": self.current_step,
+                    "state": state,
+                    "timestamp": time.time(),
+                }
             )
 
-        # Direct execution via run_command - requires SkillContext initialization
+            # Non-blocking publish to Rust GLOBAL_BUS
+            # "agent" is source, "agent/step_complete" is topic
+            PyGlobalEventBus.publish("agent", "agent/step_complete", payload)
+            logger.debug(f"📡 Published step_complete event (step {self.current_step})")
+
+        except Exception as e:
+            logger.warning(f"Failed to publish step event: {e}")
+
+    async def _get_adaptive_tool_schemas(self) -> List[Dict[str, Any]]:
+        """
+        Implements Adaptive Skill Projection.
+        Filters out 'Atomic' tools if 'Molecular' skills are available.
+        """
+        if not self.kernel:
+            return []
+
+        from omni.core.cache.tool_schema import get_cached_schema
+
+        # 1. Get All Core Commands
+        commands = self.kernel.skill_context.get_core_commands()
+
+        # 2. Epistemic Gating Logic
+        # Check if we have high-level skills loaded
+        has_high_level = any(
+            kw in cmd
+            for c in commands
+            for kw in HIGH_LEVEL_KEYWORDS
+            for cmd in [c]
+            if isinstance(c, str)
+        )
+
+        filtered_commands = []
+        if self.config.suppress_atomic_tools and has_high_level:
+            # Filter logic: Keep tool if NOT in atomic list OR if explicitly whitelisted
+            filtered_commands = [c for c in commands if c not in TIER_1_ATOMIC]
+            # Always ensure discovery is available
+            if "skill.discover" not in filtered_commands and "skill.discover" in commands:
+                filtered_commands.append("skill.discover")
+        else:
+            filtered_commands = commands
+
+        # 3. Dynamic Limit Enforcement
+        if len(filtered_commands) > self.config.max_tool_schemas:
+            # Sort to prioritize discovery and high-level tools
+            filtered_commands.sort(key=lambda x: (x != "skill.discover", x in TIER_1_ATOMIC))
+            filtered_commands = filtered_commands[: self.config.max_tool_schemas]
+
+        # 4. Extract Schemas using Cache
+        schemas = []
+
+        def extract_cb(c):
+            handler = self.kernel.skill_context.get_command(c)
+            if handler:
+                result = extract_tool_schemas([c], lambda _: handler)
+                return result[0] if result else {}
+            return {}
+
+        for cmd in filtered_commands:
+            s = get_cached_schema(cmd, lambda c=cmd: extract_cb(c))
+            if s:
+                schemas.append(s)
+
+        return schemas
+
+    async def _execute_tool_proxy(self, name: str, args: Dict[str, Any]) -> Any:
+        """Secure Proxy for Tool Execution."""
+        if self.kernel:
+            return await self.kernel.execute_tool(name, args, caller="OmniLoop")
+
+        # Fallback for standalone testing
         from omni.core.skills.runtime import run_command, get_skill_context
         from omni.foundation.config.skills import SKILLS_DIR
 
-        # Ensure SkillContext is initialized
         get_skill_context(SKILLS_DIR())
+        return await run_command(name, **args)
 
-        return await run_command(tool_name, **args)
+    def _has_high_level_skill(self, tool_names: List[str]) -> bool:
+        """Check if any high-level skill is present in tool names."""
+        for tool_name in tool_names:
+            for keyword in HIGH_LEVEL_KEYWORDS:
+                if keyword in tool_name.lower():
+                    return True
+        return False
 
-    def _get_react_workflow(self) -> ReActWorkflow:
-        """Create ReAct workflow instance."""
-        return ReActWorkflow(
+    def _filter_tier_1_atomic(self, tool_names: List[str]) -> List[str]:
+        """Filter out TIER_1_ATOMIC tools from the list."""
+        return [name for name in tool_names if name not in TIER_1_ATOMIC]
+
+    async def run(self, task: str, max_steps: Optional[int] = None) -> str:
+        """Execute a task through the MatureReAct loop."""
+        # Epistemic Gating
+        if self._epistemic_gater is not None:
+            should_proceed, reason, metadata = self._epistemic_gater.evaluate(task)
+            if not should_proceed:
+                self.history.extend(
+                    [
+                        {"role": "user", "content": task},
+                        {"role": "assistant", "content": reason},
+                    ]
+                )
+                return reason
+
+        await self._ensure_initialized()
+
+        # Memory Recall (Fast Path - Associative)
+        await self._inject_memory_context(task)
+
+        # Configure limits
+        steps_limit = max_steps if max_steps else self.config.max_tool_calls
+
+        self.context.add_user_message(task)
+
+        # Initialize Resilient Workflow
+        workflow = ResilientReAct(
             engine=self.engine,
-            get_tool_schemas=self._get_tool_schemas,
-            execute_tool=self._execute_tool_call,
-            max_tool_calls=self.config.max_tool_calls,
+            get_tool_schemas=self._get_adaptive_tool_schemas,
+            execute_tool=self._execute_tool_proxy,
+            max_tool_calls=steps_limit,
+            max_consecutive_errors=self.config.max_consecutive_errors,
             verbose=self.config.verbose,
         )
 
-    async def run(self, task: str, max_steps: int | None = None) -> str:
-        """Execute a task through the ReAct loop.
-
-        ReAct Pattern:
-        1. User asks task
-        2. LLM decides to use tools (if needed)
-        3. Execute tools and collect results
-        4. LLM generates final response
-
-        Args:
-            task: The task description.
-            max_steps: Maximum steps (None = use config max_tool_calls)
-
-        Returns:
-            The final result/response.
-        """
-        await self._ensure_initialized()
-
-        # Apply max_steps override if provided
-        if max_steps is not None:
-            self.config.max_tool_calls = max_steps
-
-        # Add user task
-        self.context.add_user_message(task)
-
-        # Get context
-        system_prompt = self.context.get_system_prompt() or "You are Omni-Dev Fusion."
-        messages = self.context.get_active_context()
-
-        # Run ReAct workflow
-        workflow = self._get_react_workflow()
+        # Execute
         response = await workflow.run(
             task=task,
-            system_prompt=system_prompt,
-            messages=messages,
+            system_prompt=self.context.get_system_prompt(),
+            messages=self.context.get_active_context(),
         )
 
-        # Update context
+        # Post-processing
         self.context.update_last_assistant(response)
-
-        # Track stats
         self.step_count = workflow.step_count
         self.tool_calls_count = workflow.tool_calls_count
 
-        # Track history
         self.history.extend(
-            [
-                {"role": "user", "content": task},
-                {"role": "assistant", "content": response},
-            ]
+            [{"role": "user", "content": task}, {"role": "assistant", "content": response}]
         )
 
-        # Trigger harvester in background (fire-and-forget)
-        # This will detect skill creation requests and auto-generate skills
+        # [Step 4] Fire-and-forget checkpoint to Rust Event Bus
+        # This replaces blocking checkpoint.save() with async event publishing
+        self._publish_step_complete(
+            {
+                "session_id": self.session_id,
+                "task": task,
+                "response": response,
+                "step_count": self.step_count,
+                "tool_calls": self.tool_calls_count,
+            }
+        )
+
+        # Fire-and-forget learning
         asyncio.create_task(self._trigger_harvester())
 
         return response
 
-    async def interactive_mode(self):
-        """Run in interactive REPL mode."""
-        from rich.console import Console
+    async def _inject_memory_context(self, task: str) -> None:
+        """
+        Associative Recall
 
-        from omni.foundation.config.settings import get_setting
+        Before acting, check if we have relevant memories/rules for this task.
+        Fast Path (System 1) - Automatic rule/preference injection.
+        """
+        try:
+            # Import here to avoid circular dependencies
+            from omni.foundation.services.vector import get_vector_store
 
-        await self._ensure_initialized()
+            store = get_vector_store()
 
-        console = Console()
-        console_print = get_setting("omni.console.print", default=print)
+            # Search for relevant memories (Top 3, threshold 0.75)
+            memories = await store.search(query=task, n_results=3)
 
-        while True:
-            try:
-                user_input = input("\n[You] ").strip()
-                if not user_input:
-                    continue
-                if user_input.lower() in ("exit", "quit", "q"):
-                    break
+            if not memories:
+                return
 
-                # Add user message
-                self.context.add_user_message(user_input)
+            # Format memories into context block
+            memory_block = "\n[RECALLED MEMORIES - PREVIOUS LESSONS]\n"
+            for m in memories:
+                source = m.metadata.get("domain", "User")
+                memory_block += f"- {m.content} (Source: {source})\n"
+            memory_block += "[End of Memories]\n\n"
 
-                # Get context
-                messages = self.context.get_active_context()
-                system_prompt = self.context.get_system_prompt() or "You are Omni-Dev Fusion."
+            # Inject into System Context
+            self.context.add_system_message(memory_block)
+            logger.info(f"🧠 Injected {len(memories)} memories into context")
 
-                # Run ReAct
-                workflow = self._get_react_workflow()
-                response = await workflow.run(
-                    task=user_input,
-                    system_prompt=system_prompt,
-                    messages=messages,
-                )
-
-                # Update context
-                self.context.update_last_assistant(response)
-
-                # Track history
-                self.history.extend(
-                    [
-                        {"role": "user", "content": user_input},
-                        {"role": "assistant", "content": response},
-                    ]
-                )
-
-                # Print response
-                console_print(f"\n[AI] {response}")
-
-            except KeyboardInterrupt:
-                break
-            except EOFError:
-                break
-
-        # Trigger harvester for self-evolution
-        await self._trigger_harvester()
+        except ImportError:
+            # VectorStore not available, skip silently
+            logger.debug("VectorStore not available, skipping memory recall")
+        except Exception as e:
+            logger.warn(f"Memory recall failed: {e}")
 
     async def _trigger_harvester(self):
         """
-        Feature: Harvester Activation
-        Detects skill creation requests in session history.
-        Lightweight version - pattern detection only.
-        Full auto-generation available via: omni skill generate "request"
+        Background Protocol: Self-Evolution
+
+        Dual-Path Evolution:
+        - Slow Path: Harvest successful workflows as new skills
+        - Fast Path: Extract rules/preferences to VectorStore
         """
         if not self.history:
             return
 
         try:
-            import importlib.util
-            import sys
-
+            # Lazy import to avoid startup dependencies
+            from omni.agent.core.evolution.harvester import Harvester
+            from omni.agent.core.evolution.factory import SkillFactory
             from omni.foundation.config.skills import SKILLS_DIR
+            from omni.foundation.services.vector import get_vector_store
 
-            factory_dir = SKILLS_DIR() / "skill" / "extensions" / "factory"
-            harvester_path = factory_dir / "harvester.py"
+            harvester = Harvester(self.engine)
 
-            if not harvester_path.exists():
-                return
+            # Slow Path: Harvest Procedural Skills
+            candidate = await harvester.analyze_session(self.history)
 
-            print(f"\n🌾 [Subconscious] Analyzing session {self.session_id}...")
+            if candidate:
+                output_dir = SKILLS_DIR() / "harvested"
+                path = SkillFactory.synthesize(candidate, output_dir)
+                logger.info(f"🧬 Evolved new skill: {path}")
 
-            # Ensure factory_dir is in path for imports
-            if str(factory_dir) not in sys.path:
-                sys.path.insert(0, str(factory_dir))
+            # Fast Path: Harvest Semantic Lessons
+            lesson = await harvester.extract_lessons(self.history)
 
-            # Load harvester.py (lightweight, no MetaAgent dependencies)
-            spec = importlib.util.spec_from_file_location("factory_harvester", harvester_path)
-            if spec and spec.loader:
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
+            if lesson:
+                # Save to VectorStore
+                store = get_vector_store()
+                success = await store.add(
+                    content=lesson.rule,
+                    metadata={"domain": lesson.domain, "confidence": lesson.confidence},
+                )
+                if success:
+                    logger.info(f"🧠 Learned rule: {lesson.rule} (domain: {lesson.domain})")
 
-                if hasattr(module, "SkillHarvester"):
-                    # Lightweight harvester without MetaAgent (detection only)
-                    harvester = module.SkillHarvester(meta_agent=None)
-                    await harvester.process_session(self.session_id, self.history)
+        except ImportError as e:
+            logger.debug(f"Evolution dependencies not available: {e}")
+        except Exception as e:
+            logger.error(f"Evolution cycle failed: {e}")
 
-        except Exception:
-            # Subconscious failure should not affect main process exit
-            pass
-
-    def get_stats(self) -> dict[str, Any]:
+    def get_stats(self) -> Dict[str, Any]:
         """Get session statistics."""
         return {
             "session_id": self.session_id,
             "step_count": getattr(self, "step_count", 0),
-            "turn_count": self.context.turn_count,
             "tool_calls": getattr(self, "tool_calls_count", 0),
             "context_stats": self.context.stats(),
         }
 
-    def snapshot(self) -> dict[str, Any]:
+    def snapshot(self) -> Dict[str, Any]:
         """Create a serializable snapshot of the current session."""
         return {
             "session_id": self.session_id,

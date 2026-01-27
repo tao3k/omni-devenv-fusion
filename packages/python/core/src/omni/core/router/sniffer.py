@@ -6,6 +6,11 @@ Asset-driven context detection with triple-mode support:
 2. Dynamic Logic: Python functions from extensions/sniffer/*
 3. Declarative Rules: TOML-based rules from rules.toml
 
+Reactive Integration (Step 5):
+- Subscribes to file change events via KernelReactor
+- Detects context changes when files are created/modified
+- Broadcasts context updates via Rust Event Bus
+
 Design Philosophy:
 - Kernel provides the mechanism (rule evaluation + function execution)
 - Assets provide the knowledge (file triggers + detection logic)
@@ -16,7 +21,9 @@ Migrated from: src/agent/core/router/sniffer.py
 
 from __future__ import annotations
 
+import asyncio
 import fnmatch
+import json
 import os
 from collections.abc import Callable
 from pathlib import Path
@@ -25,6 +32,17 @@ from typing import Any
 from omni.foundation.config.logging import get_logger
 
 logger = get_logger("omni.core.router.sniffer")
+
+# Event-driven sniffer (Step 5)
+try:
+    from omni_core_rs import PyGlobalEventBus
+
+    EVENT_BUS_AVAILABLE = True
+except ImportError:
+    EVENT_BUS_AVAILABLE = False
+    logger.warning("Rust Event Bus not available, sniffer events disabled")
+
+from omni.core.kernel.reactor import get_reactor, EventTopic
 
 # Threshold for activating a skill based on dynamic sniffer score
 SNIFTER_SCORE_THRESHOLD = 0.5
@@ -164,6 +182,12 @@ class IntentSniffer:
         self._cached_suggestions: dict[str, list[str]] = {}
         self._score_threshold: float = SNIFTER_SCORE_THRESHOLD
 
+        # === Reactor Integration (Step 5) ===
+        self._rust_sniffer: Any = None  # Optional Rust bridge for O(1) file matching
+        self._active_contexts: set[str] = set()  # Track currently detected contexts
+        self._reactor = None  # KernelReactor instance
+        self._registered = False  # Track if registered to reactor
+
     @property
     def score_threshold(self) -> float:
         """Get the score threshold for activation."""
@@ -241,44 +265,188 @@ class IntentSniffer:
         if count > 0:
             logger.debug(f"Cleared {count} declarative rules")
 
-    def load_from_index(self, index_path: str | None = None) -> int:
-        """Load rules from skill_index.json (Single Source of Truth).
-
-        This method clears existing declarative rules before loading
-        to support hot reload scenarios.
-
-        Args:
-            index_path: Optional path to skills-index.json
+    async def load_rules_from_lancedb(self) -> int:
+        """Load sniffer rules from LanceDB.
 
         Returns:
-            Number of rules loaded
+            Number of rules loaded from LanceDB.
         """
         try:
-            from omni.foundation.bridge.scanner import PythonSkillScanner
+            from omni.foundation.bridge import RustVectorStore
 
             # Clear existing rules to prevent duplication on reload
             self.clear_declarative_rules()
 
-            scanner = PythonSkillScanner(index_path)
-            skills = scanner.scan_directory()
+            store = RustVectorStore()
+            tools = await store.list_all_tools()
 
+            # Group tools by skill_name and extract routing keywords
+            skills_rules: dict[str, list[dict]] = {}
+            for tool in tools:
+                skill_name = tool.get("skill_name", "unknown")
+                keywords = tool.get("keywords", [])
+                if keywords:
+                    if skill_name not in skills_rules:
+                        skills_rules[skill_name] = []
+                    for kw in keywords:
+                        # Use file_pattern type with the keyword as a glob pattern
+                        # This allows keyword-based routing to work via file matching
+                        skills_rules[skill_name].append(
+                            {
+                                "type": "file_pattern",
+                                "pattern": f"*{kw}*",
+                            }
+                        )
+
+            # Register rules
             rules_loaded = 0
-            for skill in skills:
-                if skill.rules:
-                    rule_dicts = [r.to_dict() for r in skill.rules]
-                    self.register_rules(skill.skill_name, rule_dicts)
-                    rules_loaded += len(rule_dicts)
+            for skill_name, rules in skills_rules.items():
+                self.register_rules(skill_name, rules)
+                rules_loaded += len(rules)
 
             if rules_loaded > 0:
-                logger.info(f"Loaded {rules_loaded} sniffer rules from index")
+                logger.info(f"Loaded {rules_loaded} sniffer rules from LanceDB")
             else:
-                logger.debug("No sniffing rules found in index")
+                logger.debug("No sniffer rules found in LanceDB")
 
             return rules_loaded
 
-        except ImportError as e:
-            logger.warning(f"Foundation scanner not available: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to load rules from LanceDB: {e}")
             return 0
+
+    # === Reactor Integration (Step 5) ===
+
+    def set_rust_sniffer(self, rust_sniffer: Any) -> None:
+        """Set the Rust sniffer bridge for O(1) file matching.
+
+        Args:
+            rust_sniffer: Rust SnifferBridge instance for high-performance matching.
+        """
+        self._rust_sniffer = rust_sniffer
+        logger.info("Rust sniffer bridge connected for high-performance matching")
+
+    async def _on_file_changed(self, event: dict) -> None:
+        """Reactive Handler: Detect context changes when files change.
+
+        Called by KernelReactor when files are created or modified.
+        Sniffs the parent directory to detect context changes.
+
+        Args:
+            event: OmniEvent dict with 'payload' containing file info.
+        """
+        try:
+            payload = event.get("payload", {})
+            file_path = payload.get("path")
+
+            if not file_path:
+                return
+
+            # Get parent directory for context detection
+            parent_dir = str(Path(file_path).parent)
+
+            # Sniff the parent directory
+            new_contexts = self.sniff(parent_dir)
+
+            # Detect newly activated contexts
+            newly_activated = set(new_contexts) - self._active_contexts
+
+            if newly_activated:
+                old_contexts = list(self._active_contexts)
+                self._active_contexts = set(new_contexts)
+
+                # Broadcast context update via Rust Event Bus
+                self._broadcast_context_update(
+                    old_contexts=old_contexts,
+                    new_contexts=list(self._active_contexts),
+                    triggered_by=file_path,
+                )
+
+                logger.info(
+                    f"👃 Context change detected: {newly_activated} "
+                    f"(triggered by: {Path(file_path).name})"
+                )
+            else:
+                logger.debug(f"👃 File change ignored for context: {file_path}")
+
+        except Exception as e:
+            logger.error(f"Sniffer file change handler failed: {e}")
+
+    def _broadcast_context_update(
+        self, old_contexts: list[str], new_contexts: list[str], triggered_by: str
+    ) -> None:
+        """Broadcast context update to Rust Event Bus (fire-and-forget).
+
+        Args:
+            old_contexts: Previously active contexts
+            new_contexts: Newly detected contexts
+            triggered_by: File that triggered the change
+        """
+        if not EVENT_BUS_AVAILABLE:
+            return
+
+        try:
+            payload = json.dumps(
+                {
+                    "old_contexts": old_contexts,
+                    "new_contexts": new_contexts,
+                    "triggered_by": triggered_by,
+                    "timestamp": asyncio.get_event_loop().time(),
+                }
+            )
+
+            # Fire-and-forget publish to Rust GLOBAL_BUS
+            PyGlobalEventBus.publish("sniffer", "context/updated", payload)
+            logger.debug(f"📡 Broadcast context update: {new_contexts}")
+
+        except Exception as e:
+            logger.warning(f"Failed to broadcast context update: {e}")
+
+    def register_to_reactor(self) -> None:
+        """Register handlers with KernelReactor for file events (Step 5).
+
+        Enables reactive context detection when files change.
+        Should be called during kernel initialization.
+        """
+        if self._registered:
+            logger.debug("Sniffer already registered to reactor")
+            return
+
+        try:
+            self._reactor = get_reactor()
+
+            # Register handlers for file events
+            self._reactor.register_handler(
+                EventTopic.FILE_CREATED, self._on_file_changed, priority=5
+            )
+            self._reactor.register_handler(
+                EventTopic.FILE_CHANGED, self._on_file_changed, priority=5
+            )
+
+            self._registered = True
+            logger.info("👃 Sniffer registered to Reactive Bus (Step 5)")
+
+        except Exception as e:
+            logger.error(f"Failed to register sniffer to reactor: {e}")
+
+    def unregister_from_reactor(self) -> None:
+        """Unregister handlers from KernelReactor."""
+        if not self._registered or self._reactor is None:
+            return
+
+        try:
+            self._reactor.unregister_handler(EventTopic.FILE_CREATED, self._on_file_changed)
+            self._reactor.unregister_handler(EventTopic.FILE_CHANGED, self._on_file_changed)
+            self._registered = False
+            logger.info("Sniffer unregistered from Reactive Bus")
+
+        except Exception as e:
+            logger.warning(f"Failed to unregister sniffer: {e}")
+
+    @property
+    def active_contexts(self) -> set[str]:
+        """Get currently detected active contexts."""
+        return self._active_contexts.copy()
 
     # === Dynamic Sniffer Registration ===
 

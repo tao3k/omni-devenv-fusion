@@ -1,43 +1,85 @@
 # CLI Developer Guide
 
-> **WARNING**: This document is outdated and references deleted modules.
-> For current documentation, see the links below.
+> **NOTE**: Core CLI commands are documented in [CLI Reference](../reference/cli.md)
+> This file covers developer-specific implementation details.
 
 ---
 
-## Migration Guide
+## Skill Analytics Module
 
-### Current Documentation
+The skill analytics commands (`omni skill analyze`, `omni skill stats`, `omni skill context`) use the Arrow-native analytics module.
 
-| Topic               | Documentation                                            |
-| ------------------- | -------------------------------------------------------- |
-| MCP Server          | [MCP-Server Architecture](../architecture/mcp-server.md) |
-| Kernel Architecture | [Kernel Architecture](../architecture/kernel.md)         |
+### Architecture
 
-### Old → New Mappings
+```
+CLI Commands (agent/cli/commands/skill/analyzer.py)
+        │
+        ▼
+omni.core.skills.analyzer    ← Arrow Analytics Functions
+        │
+        ▼
+omni.foundation.bridge.rust_vector.RustVectorStore
+        │
+        ▼
+Rust bindings (LanceDB) → get_analytics_table()
+```
 
-| Deleted Module                 | New Module                           |
-| ------------------------------ | ------------------------------------ |
-| `agent/cli/commands/route.py`  | See `omni.core.router`               |
-| `agent/cli/commands/ingest.py` | See `omni.core.knowledge.librarian`  |
-| `agent/cli/commands/skill.py`  | See `omni.core.skills.discovery`     |
-| `agent/cli/runner.py`          | See `omni.core.skills.runtime`       |
-| `agent/core/module_loader.py`  | See `omni.core.skills.script_loader` |
+### Module: `omni.core.skills.analyzer`
 
-### Key Classes
+| Function                                | Returns          | Description              |
+| --------------------------------------- | ---------------- | ------------------------ |
+| `get_analytics_dataframe()`             | `pyarrow.Table`  | All tools as Arrow Table |
+| `get_category_distribution()`           | `dict[str, int]` | Tool counts by category  |
+| `generate_system_context(limit)`        | `str`            | LLM-ready tool list      |
+| `analyze_tools(category, missing_docs)` | `dict`           | Filtered analysis        |
 
-| Old            | New                  |
-| -------------- | -------------------- |
-| `SkillRunner`  | `SkillContext`       |
-| `ModuleLoader` | `ScriptLoader`       |
-| `print_result` | See `omni.mcp.types` |
+### Implementation Example
+
+```python
+from omni.core.skills.analyzer import (
+    get_analytics_dataframe,
+    get_category_distribution,
+    generate_system_context,
+)
+
+# Get PyArrow Table for analytics
+table = get_analytics_dataframe()
+print(f"Total tools: {table.num_rows}")
+
+# Get category distribution
+categories = get_category_distribution()
+for cat, count in sorted(categories.items(), key=lambda x: -x[1])[:5]:
+    print(f"  {cat}: {count}")
+
+# Generate system context for LLM
+context = generate_system_context(limit=50)
+```
+
+### CLI Integration
+
+The CLI commands delegate to the analyzer module:
+
+```python
+# agent/cli/commands/skill/analyze.py
+from omni.core.skills.analyzer import analyze_tools, get_category_distribution
+
+@skill_app.command("analyze")
+def skill_analyze(category: str = None, missing_docs: bool = False):
+    result = analyze_tools(category=category, missing_docs=missing_docs)
+    # ... display logic
+```
 
 ---
 
-## Historical Note
+## Historical: Old CLI Commands
 
-This document previously described the CLI commands (`omni route`, `omni ingest`, `omni mcp`, etc.). The new Trinity Architecture CLI system uses:
+The original CLI had separate subcommands (`omni route`, `omni ingest`, etc.) that have been migrated to the Trinity Architecture.
 
-- **MCP Server**: Standard MCP protocol via `omni.mcp-server`
-- **Skill Commands**: Via MCP tools
-- **Kernel API**: Programmatic access via `omni.core.kernel`
+| Old Command    | New Implementation                         |
+| -------------- | ------------------------------------------ |
+| `omni route`   | MCP tools via `omni.core.router`           |
+| `omni ingest`  | `omni.core.knowledge.librarian`            |
+| `omni skill`   | MCP tools via `omni.core.skills.discovery` |
+| `omni analyze` | `omni skill analyze` (Arrow-native)        |
+
+See [CLI Reference](../reference/cli.md) for current command documentation.

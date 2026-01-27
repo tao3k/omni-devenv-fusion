@@ -552,7 +552,7 @@ mcp-server/tests/
 │   │   └── fixtures.py        # Pytest fixtures
 │   ├── suites/
 │   │   ├── legacy_suite.py     # Legacy test suite
-│   │   └── template.py        # Phase X template
+│   │   └── template.py        # Test template
 │   └── conftest.py            # Pytest configuration
 ├── conftest.py                # Shared fixtures
 └── test_stress.py             # Test entry point
@@ -576,7 +576,7 @@ just stress-test          # Run all stress tests
 pytest mcp-server/tests/test_stress.py -v  # Verbose
 ```
 
-### Adding New Phase Tests
+### Adding New Test Suites
 
 1. Copy `stress/suites/template.py` → `stress/suites/phase10.py`
 2. Implement `run_benchmarks()`, `run_logic_tests()`, `run_stability_tests()`

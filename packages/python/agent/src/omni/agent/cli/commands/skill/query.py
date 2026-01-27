@@ -2,11 +2,13 @@
 """
 Query commands for skill CLI.
 
-Contains: list, info commands.
+Contains: list, info, query commands.
 (discover/search deprecated in thin client model)
 """
 
 from __future__ import annotations
+
+import json
 
 import typer
 from rich.markdown import Markdown
@@ -14,6 +16,70 @@ from rich.panel import Panel
 from rich.table import Table
 
 from .base import err_console, skill_app
+
+
+@skill_app.command("query")
+def skill_query(
+    query: str = typer.Argument(..., help="Search query (e.g., 'commit changes', 'read file')"),
+    limit: int = typer.Option(5, "--limit", "-n", help="Maximum number of results"),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+):
+    """
+    Search for tools matching the given intent.
+
+    Shows tool name, description, and smart usage template with parameters.
+    """
+    from omni.core.skills.discovery import SkillDiscoveryService
+
+    service = SkillDiscoveryService()
+    matches = service.search_tools(query=query, limit=limit)
+
+    if not matches:
+        err_console.print(
+            Panel(
+                f"No tools found matching '{query}'",
+                title="🔍 Search Results",
+                style="yellow",
+            )
+        )
+        return
+
+    if json_output:
+        output = [
+            {
+                "name": m.name,
+                "skill_name": m.skill_name,
+                "description": m.description,
+                "score": round(m.score, 3),
+                "usage_template": m.usage_template,
+            }
+            for m in matches
+        ]
+        err_console.print(json.dumps(output, indent=2, ensure_ascii=False))
+    else:
+        # Create table with results
+        table = Table(title=f"🔍 Search Results: '{query}'", show_header=True)
+        table.add_column("Tool", style="bold cyan")
+        table.add_column("Usage Template", style="green")
+        table.add_column("Score", justify="right")
+
+        for m in matches:
+            table.add_row(
+                f"[bold]{m.name}[/bold]\n[muted]{m.description[:60]}...[/muted]",
+                f"[green]{m.usage_template}[/green]",
+                f"{m.score:.2f}",
+            )
+
+        err_console.print(table)
+
+        # Show hint
+        err_console.print(
+            Panel(
+                "💡 Copy the usage_template above to call the tool with @omni()",
+                title="Tip",
+                style="blue",
+            )
+        )
 
 
 @skill_app.command("list")

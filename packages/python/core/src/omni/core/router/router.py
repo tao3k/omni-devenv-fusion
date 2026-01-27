@@ -6,18 +6,29 @@ Uses vector search to match natural language to skill commands.
 
 Python 3.12+ Features:
 - asyncio.TaskGroup for batch routing parallelism (Section 7.3)
+- StrEnum for confidence levels
 """
 
 from __future__ import annotations
 
 import asyncio
-from typing import Literal
+from enum import StrEnum
+from typing import Callable
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from omni.foundation.config.logging import get_logger
+from omni.core.skills.runtime import SkillContext
 
 logger = get_logger("omni.core.router")
+
+
+class RouteConfidence(StrEnum):
+    """Confidence levels for routing decisions."""
+
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
 
 
 class RouteResult(BaseModel):
@@ -27,7 +38,7 @@ class RouteResult(BaseModel):
         skill_name: Name of the matched skill
         command_name: Name of the matched command
         score: Similarity score (0.0-1.0)
-        confidence: Confidence level ("high", "medium", "low")
+        confidence: Confidence level (high/medium/low)
     """
 
     model_config = ConfigDict(frozen=True)  # Immutable for safety
@@ -35,7 +46,7 @@ class RouteResult(BaseModel):
     skill_name: str = Field(..., description="Name of the matched skill")
     command_name: str = Field(..., description="Name of the matched command")
     score: float = Field(..., ge=0.0, le=1.0, description="Similarity score (0.0-1.0)")
-    confidence: Literal["high", "medium", "low"] = Field(..., description="Confidence level")
+    confidence: RouteConfidence = Field(..., description="Confidence level")
 
 
 class SemanticRouter:
@@ -138,13 +149,13 @@ class SemanticRouter:
 
         return results
 
-    def _get_confidence(self, score: float) -> str:
+    def _get_confidence(self, score: float) -> RouteConfidence:
         """Convert score to confidence level."""
         if score >= self.HIGH_THRESHOLD:
-            return "high"
+            return RouteConfidence.HIGH
         elif score >= self.MEDIUM_THRESHOLD:
-            return "medium"
-        return "low"
+            return RouteConfidence.MEDIUM
+        return RouteConfidence.LOW
 
     def is_ready(self) -> bool:
         """Check if router is ready."""
@@ -183,7 +194,7 @@ class FallbackRouter:
                 skill_name=skill_name,
                 command_name=command_name,
                 score=1.0,
-                confidence="high",
+                confidence=RouteConfidence.HIGH,
             )
 
         return None
@@ -195,11 +206,28 @@ class UnifiedRouter:
 
     Both methods run in parallel and results are combined using reciprocal rank fusion.
     This provides more robust routing than using either method alone.
+
+    Features:
+    - Uses SkillContext provider injection (no abstraction leak)
+    - RouteConfidence StrEnum for type safety
     """
 
-    def __init__(self, semantic_router: SemanticRouter, fallback_router: FallbackRouter):
+    def __init__(
+        self,
+        semantic_router: SemanticRouter,
+        fallback_router: FallbackRouter,
+        skill_context_provider: Callable[[], SkillContext] | None = None,
+    ):
+        """Initialize the unified router.
+
+        Args:
+            semantic_router: SemanticRouter instance
+            fallback_router: FallbackRouter instance
+            skill_context_provider: Optional callable to get SkillContext
+        """
         self._semantic = semantic_router
         self._fallback = fallback_router
+        self._context_provider = skill_context_provider
         self._skill_index = self._load_skill_index()
 
     def _load_skill_index(self) -> dict:
@@ -223,6 +251,16 @@ class UnifiedRouter:
             logger.debug(f"Failed to load skill index: {e}")
             return {}
 
+    def _get_context(self) -> SkillContext | None:
+        """Get SkillContext from provider."""
+        if self._context_provider is None:
+            return None
+        try:
+            return self._context_provider()
+        except Exception as e:
+            logger.debug(f"Failed to get skill context: {e}")
+            return None
+
     async def route(self, query: str, threshold: float = 0.5) -> RouteResult | None:
         """
         Hybrid route: combine semantic search + keyword matching.
@@ -239,7 +277,10 @@ class UnifiedRouter:
 
         # Only try fallback if semantic failed
         explicit_result = None
-        if semantic_result is None or semantic_result.confidence in ("low", "medium"):
+        if semantic_result is None or semantic_result.confidence in (
+            RouteConfidence.LOW,
+            RouteConfidence.MEDIUM,
+        ):
             explicit_result = await self._fallback.route(query)
 
         # Collect results from all methods
@@ -261,35 +302,32 @@ class UnifiedRouter:
         native_command_matches: dict[str, str] = {}  # skill_name -> command_name (native functions)
 
         # Extract potential command names from query
-        # e.g., "check git status" -> potential commands: ["status"]
         query_words = query_lower.split()
         potential_commands = set()
         for word in query_words:
             # Skip common words
             if word in {"check", "get", "show", "run", "execute", "do", "a", "the", "git"}:
                 continue
-            if len(word) > 2:  # Skip very short words
+            if len(word) > 2:
                 potential_commands.add(word)
+
+        # Use context provider (no abstraction leak)
+        ctx = self._get_context()
 
         for keyword, skill_names in self._skill_index.items():
             if keyword in query_lower:
                 for skill_name in skill_names:
-                    # Get commands and skill from context
-                    if hasattr(self._semantic._indexer, "_kernel"):
-                        ctx = self._semantic._indexer._kernel.skill_context
+                    # Get commands and skill from context (safe access via provider)
+                    if ctx is not None:
                         skill = ctx.get_skill(skill_name)
 
                         # Check if skill has native functions matching potential commands
                         if skill and hasattr(skill, "_script_loader") and skill._script_loader:
                             loader = skill._script_loader
                             for cmd_word in potential_commands:
-                                # Check both registered commands and native functions
                                 registered_cmd = f"{skill_name}.{cmd_word}"
-                                native_func = (
-                                    f"{skill_name}_{cmd_word}"  # Native naming: git_status
-                                )
+                                native_func = f"{skill_name}_{cmd_word}"
 
-                                # Check native functions in the script loader
                                 if hasattr(loader, "native_functions"):
                                     if (
                                         cmd_word in loader.native_functions
@@ -298,7 +336,6 @@ class UnifiedRouter:
                                         native_command_matches[skill_name] = cmd_word
                                         logger.debug(f"Native match: {skill_name}.{cmd_word}")
 
-                                # Also check if it's a registered command
                                 if registered_cmd in ctx.list_commands():
                                     candidates[registered_cmd] = max(
                                         candidates.get(registered_cmd, 0), 0.7
@@ -308,7 +345,6 @@ class UnifiedRouter:
                         commands = ctx.list_commands()
                         skill_commands = [c for c in commands if c.startswith(f"{skill_name}.")]
                         for cmd in skill_commands:
-                            # Only add if not already matched as native
                             cmd_base = cmd.split(".", 1)[1]
                             if (
                                 skill_name not in native_command_matches
@@ -316,7 +352,6 @@ class UnifiedRouter:
                             ):
                                 candidates[cmd] = max(candidates.get(cmd, 0), 0.5)
 
-                        # Track skill-level match
                         if skill_commands or skill_name in native_command_matches:
                             skill_matches[skill_name] = max(skill_matches.get(skill_name, 0), 0.6)
 
@@ -326,19 +361,17 @@ class UnifiedRouter:
                 return RouteResult(
                     skill_name=skill_name,
                     command_name=command_name,
-                    score=0.75,  # Native matches get higher score
-                    confidence="high",
+                    score=0.75,
+                    confidence=RouteConfidence.HIGH,
                 )
 
         if not candidates and skill_matches:
-            # No exact command match, but we found matching skills
-            # Return first matching skill with suggestion
             best_skill = max(skill_matches.items(), key=lambda x: x[1])
             return RouteResult(
                 skill_name=best_skill[0],
-                command_name="",  # No exact command found
+                command_name="",
                 score=best_skill[1],
-                confidence="low",
+                confidence=RouteConfidence.LOW,
             )
 
         if not candidates:
@@ -355,13 +388,13 @@ class UnifiedRouter:
             confidence=self._get_confidence(best_cmd[1]),
         )
 
-    def _get_confidence(self, score: float) -> str:
+    def _get_confidence(self, score: float) -> RouteConfidence:
         """Convert score to confidence label."""
         if score >= 0.8:
-            return "high"
+            return RouteConfidence.HIGH
         elif score >= 0.5:
-            return "medium"
-        return "low"
+            return RouteConfidence.MEDIUM
+        return RouteConfidence.LOW
 
 
-__all__ = ["FallbackRouter", "RouteResult", "SemanticRouter", "UnifiedRouter"]
+__all__ = ["FallbackRouter", "RouteConfidence", "RouteResult", "SemanticRouter", "UnifiedRouter"]

@@ -33,8 +33,7 @@ from __future__ import annotations
 
 import json
 import time
-from pathlib import Path
-from typing import Any, AsyncGenerator
+from typing import Any
 
 from omni.foundation.config.logging import get_logger
 from omni.foundation.config.settings import get_setting
@@ -43,7 +42,6 @@ logger = get_logger("omni.foundation.checkpoint")
 
 # Global store cache to avoid recreating PyCheckpointStore
 _checkpoint_store_cache: dict[str, Any] = {}
-_store_lock_cache: dict[str, Any] = {}
 
 
 def _get_store() -> Any:
@@ -62,7 +60,7 @@ def _get_store() -> Any:
             # Import Rust bindings
             from omni_core_rs import PyCheckpointStore, create_checkpoint_store
 
-            dimension = get_setting("checkpoint.embedding_dimension", 1536)
+            dimension = get_setting("checkpoint.embedding_dimension")
             _checkpoint_store_cache[db_path] = create_checkpoint_store(db_path, dimension)
             # Note: LanceDB reuses existing files; this just creates the Python wrapper
             logger.debug("Initialized checkpoint store wrapper", db_path=db_path)
@@ -242,73 +240,10 @@ def delete_workflow_state(workflow_type: str, workflow_id: str) -> bool:
         return False
 
 
-# =============================================================================
-# Legacy SQLite Compatibility Layer (Fallback)
-# =============================================================================
-
-_SQLITE_CACHE: dict[str, Any] = {}
-_SQLITE_DB_PATH: Path | None = None
-
-
-def _get_sqlite_db() -> Any:
-    """Get SQLite connection for legacy compatibility (fallback)."""
-    global _SQLITE_DB_PATH
-
-    if _SQLITE_DB_PATH is None:
-        from omni.foundation.config.dirs import PRJ_CACHE
-
-        _SQLITE_DB_PATH = PRJ_CACHE("agent", "checkpoints.db")
-
-    if _SQLITE_DB_PATH in _SQLITE_CACHE:
-        return _SQLITE_CACHE[_SQLITE_DB_PATH]
-
-    import sqlite3
-
-    _SQLITE_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(_SQLITE_DB_PATH), check_same_thread=False)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS workflow_states (
-            workflow_id TEXT PRIMARY KEY,
-            state TEXT,
-            updated_at REAL
-        )
-    """)
-    conn.commit()
-    _SQLITE_CACHE[_SQLITE_DB_PATH] = conn
-    return conn
-
-
-def save_workflow_state_sqlite(workflow_id: str, state: dict[str, Any]) -> None:
-    """Save workflow state to SQLite (fallback)."""
-
-    conn = _get_sqlite_db()
-    state_json = json.dumps(state)
-    updated_at = time.time()
-    conn.execute(
-        "REPLACE INTO workflow_states (workflow_id, state, updated_at) VALUES (?, ?, ?)",
-        (workflow_id, state_json, updated_at),
-    )
-    conn.commit()
-
-
-def load_workflow_state_sqlite(workflow_id: str) -> dict[str, Any] | None:
-    """Load workflow state from SQLite (fallback)."""
-
-    conn = _get_sqlite_db()
-    cursor = conn.execute("SELECT state FROM workflow_states WHERE workflow_id = ?", (workflow_id,))
-    row = cursor.fetchone()
-    if row:
-        return json.loads(row[0])
-    return None
-
-
 __all__ = [
     "get_checkpointer",
     "save_workflow_state",
     "load_workflow_state",
     "get_workflow_history",
     "delete_workflow_state",
-    # Legacy fallbacks
-    "save_workflow_state_sqlite",
-    "load_workflow_state_sqlite",
 ]

@@ -3,11 +3,17 @@ omni/langgraph/checkpoint/saver.py - LangGraph Checkpoint Saver
 
 LangGraph-compatible checkpoint saver using Rust LanceDB backend:
 - RustCheckpointSaver: BaseCheckpointSaver implementation for LangGraph
+- get_default_checkpointer(): Global singleton for shared instance
 
 Usage:
-    from omni.langgraph.checkpoint.saver import RustCheckpointSaver
+    from omni.langgraph.checkpoint.saver import RustCheckpointSaver, get_default_checkpointer
 
-    saver = RustCheckpointSaver()
+    # Shared singleton (recommended for most cases)
+    saver = get_default_checkpointer()
+    graph.compile(checkpointer=saver)
+
+    # Custom table (creates new instance if needed)
+    saver = RustCheckpointSaver(table_name="my_workflow")
     graph.compile(checkpointer=saver)
 """
 
@@ -28,6 +34,34 @@ logger = get_logger("omni.langgraph.checkpoint.saver")
 
 # Checkpoint version (matches LangGraph 1.0+)
 LATEST_VERSION = 2
+
+# Module-level cache for LanceCheckpointer instances to avoid repeated initialization
+_CHECKPOINTER_CACHE: dict[tuple[str, int], LanceCheckpointer] = {}
+
+# Global default checkpointer singleton
+_default_checkpointer: "RustCheckpointSaver | None" = None
+
+
+def get_default_checkpointer() -> "RustCheckpointSaver":
+    """Get the global default RustCheckpointSaver singleton.
+
+    This function returns a shared instance to avoid repeated LanceDB initialization.
+    All skill workflows and the kernel should use this function for optimal performance.
+
+    Returns:
+        RustCheckpointSaver instance configured for default table
+
+    Example:
+        from omni.langgraph.checkpoint.saver import get_default_checkpointer
+
+        saver = get_default_checkpointer()
+        graph.compile(checkpointer=saver)
+    """
+    global _default_checkpointer
+    if _default_checkpointer is None:
+        _default_checkpointer = RustCheckpointSaver(table_name="checkpoints", dimension=1536)
+        logger.info(f"RustCheckpointSaver initialized (singleton): {id(_default_checkpointer)}")
+    return _default_checkpointer
 
 
 def _make_checkpoint(
@@ -72,6 +106,10 @@ class RustCheckpointSaver(BaseCheckpointSaver):
         """
         Initialize the Rust checkpoint saver.
 
+        Uses module-level cache to avoid repeated LanceDB initialization.
+        Multiple instances with same (table_name, dimension) share the same checkpointer.
+        URI is determined by the first instance.
+
         Args:
             table_name: Table name for checkpoints (default: "checkpoints")
             uri: Path to LanceDB directory (auto-generated if not provided)
@@ -79,15 +117,27 @@ class RustCheckpointSaver(BaseCheckpointSaver):
         """
         super().__init__()
         self._table_name = table_name
-        self._checkpointer = LanceCheckpointer(uri=uri, dimension=dimension)
+
+        # Use cache to avoid repeated initialization
+        # Cache key: (table_name, dimension) - ignore URI, use first instance's URI
+        cache_key = (table_name, dimension)
+        if cache_key not in _CHECKPOINTER_CACHE:
+            logger.debug(f"Creating new LanceCheckpointer for {table_name} (dim={dimension})")
+            _CHECKPOINTER_CACHE[cache_key] = LanceCheckpointer(
+                base_path=uri, table_name=table_name, notify_on_save=False
+            )
+        else:
+            logger.debug(f"Reusing cached LanceCheckpointer for {table_name}")
+
+        self._checkpointer = _CHECKPOINTER_CACHE[cache_key]
 
     @property
     def config_specs(self):
         """Return configuration specifications for the checkpointer."""
         return []
 
-    def get_tuple(self, config: dict) -> CheckpointTuple | None:
-        """Get checkpoint tuple (config, checkpoint, metadata) for a thread."""
+    async def aget_tuple(self, config: dict) -> CheckpointTuple | None:
+        """Async get checkpoint tuple (config, checkpoint, metadata) for a thread."""
         thread_id = config.get("configurable", {}).get("thread_id")
         if not thread_id:
             return None
@@ -102,14 +152,14 @@ class RustCheckpointSaver(BaseCheckpointSaver):
             )
         return None
 
-    def put(
+    async def aput(
         self,
         config: dict,
         checkpoint: dict,
         metadata: dict,
         new_versions: dict,
     ) -> dict:
-        """Save a checkpoint."""
+        """Async save a checkpoint."""
         thread_id = config.get("configurable", {}).get("thread_id")
         if not thread_id:
             return config
@@ -150,50 +200,6 @@ class RustCheckpointSaver(BaseCheckpointSaver):
 
         return config
 
-    def list(
-        self,
-        config: dict | None = None,
-        *,
-        filter: dict[str, Any] | None = None,
-        before: dict | None = None,
-        limit: int | None = None,
-    ) -> list[CheckpointTuple]:
-        """List checkpoints for a config."""
-        thread_id = config.get("configurable", {}).get("thread_id") if config else None
-        if not thread_id:
-            return []
-
-        limit = limit or 10
-        history = self._checkpointer.get_history(thread_id, limit=limit)
-
-        return [
-            CheckpointTuple(
-                config=config or {"configurable": {"thread_id": thread_id}},
-                checkpoint=_make_checkpoint(state),
-                metadata={"source": None, "step": -1, "writes": {}},
-            )
-            for state in history
-        ]
-
-    def delete_thread(self, thread_id: str) -> None:
-        """Delete all checkpoints for a thread."""
-        self._checkpointer.delete(thread_id)
-
-    # Async methods - delegate to sync versions (BaseCheckpointSaver pattern)
-    async def aget_tuple(self, config: dict) -> CheckpointTuple | None:
-        """Async get checkpoint tuple."""
-        return self.get_tuple(config)
-
-    async def aput(
-        self,
-        config: dict,
-        checkpoint: dict,
-        metadata: dict,
-        new_versions: dict,
-    ) -> dict:
-        """Async save a checkpoint."""
-        return self.put(config, checkpoint, metadata, new_versions)
-
     async def alist(
         self,
         config: dict | None = None,
@@ -202,13 +208,24 @@ class RustCheckpointSaver(BaseCheckpointSaver):
         before: dict | None = None,
         limit: int | None = None,
     ) -> AsyncIterator[CheckpointTuple]:
-        """Async list checkpoints."""
-        for item in self.list(config, filter=filter, before=before, limit=limit):
-            yield item
+        """Async list checkpoints for a config."""
+        thread_id = config.get("configurable", {}).get("thread_id") if config else None
+        if not thread_id:
+            return
+
+        limit = limit or 10
+        history = self._checkpointer.get_history(thread_id, limit=limit)
+
+        for state in history:
+            yield CheckpointTuple(
+                config=config or {"configurable": {"thread_id": thread_id}},
+                checkpoint=_make_checkpoint(state),
+                metadata={"source": None, "step": -1, "writes": {}},
+            )
 
     async def adelete_thread(self, thread_id: str) -> None:
         """Async delete all checkpoints for a thread."""
-        self.delete_thread(thread_id)
+        self._checkpointer.delete(thread_id)
 
     # Optional: put_writes not implemented for LanceDB
     def put_writes(

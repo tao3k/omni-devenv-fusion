@@ -354,17 +354,21 @@ async def apply_file_changes(
 
     Args:
         - path: str = "." - Directory path to list (use . for current directory, or relative path like src/)
+        - type_filter: str = "all" - Filter: "all" (default), "f" (files only), "d" (directories only)
 
     Returns:
-        Formatted listing with file/directory type and size.
+        When type_filter="all": list of items with name, type, size.
+        When type_filter="f": list of all file paths.
+        When type_filter="d": list of all directory paths.
     """,
     autowire=True,
 )
 async def list_directory(
     path: str = ".",
+    type_filter: str = "all",
     paths: ConfigPaths | None = None,
 ) -> str:
-    """List contents of a directory."""
+    """List contents of a directory with optional type filtering."""
     if paths is None:
         paths = ConfigPaths()
     project_root: Path = paths.project_root  # type: ignore[assignment]
@@ -376,19 +380,34 @@ async def list_directory(
         if not target.is_dir():
             return _json_result(False, path=path, error="Path is not a directory.")
 
-        items: list[dict[str, Any]] = []
-        for item in target.iterdir():
-            if item.name.startswith(".") and item.name != ".":
-                continue
-            item_info = {
-                "name": item.name,
-                "type": "directory" if item.is_dir() else "file",
-            }
-            if item.is_file():
-                item_info["size"] = item.stat().st_size
-            items.append(item_info)
-
-        return _json_result(True, path=path, items=items)
+        if type_filter == "f":
+            # Return all file paths
+            files = []
+            for item in target.rglob("*"):
+                if item.is_file() and not item.name.startswith("."):
+                    files.append(str(item.relative_to(project_root)))
+            return _json_result(True, path=path, files=files)
+        elif type_filter == "d":
+            # Return all directory paths
+            dirs = []
+            for item in target.rglob("*"):
+                if item.is_dir() and not item.name.startswith("."):
+                    dirs.append(str(item.relative_to(project_root)))
+            return _json_result(True, path=path, directories=dirs)
+        else:
+            # Return top-level items only
+            items: list[dict[str, Any]] = []
+            for item in target.iterdir():
+                if item.name.startswith(".") and item.name != ".":
+                    continue
+                item_info = {
+                    "name": item.name,
+                    "type": "directory" if item.is_dir() else "file",
+                }
+                if item.is_file():
+                    item_info["size"] = item.stat().st_size
+                items.append(item_info)
+            return _json_result(True, path=path, items=items)
     except Exception as e:
         return _json_result(False, path=path, error=str(e))
 

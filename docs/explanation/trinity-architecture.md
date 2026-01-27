@@ -56,6 +56,7 @@ json_bytes = MyModel(name="test", value=42).model_dump_json_bytes()
 | **ScriptLoader**        | Loads skill commands from `scripts/*.py`            |
 | **get_script_config()** | Reads V2 `_skill_config` from Foundation decorators |
 | **Router & Sniffer**    | Intent-to-action mapping                            |
+| **KernelReactor**       | Event-driven architecture (v5.0)                    |
 
 ### Script Loader Integration
 
@@ -70,6 +71,31 @@ loader.load_all()
 for cmd in loader.commands.values():
     config = get_script_config(cmd)  # Reads V2 config
     print(f"{cmd.__name__}: {config['category']}")
+```
+
+### Event Reactor (v5.0 - The Grand Integration)
+
+The Kernel integrates with the Rust Event Bus for reactive architecture:
+
+```python
+# In Kernel._on_ready()
+from omni.core.kernel.reactor import get_reactor, EventTopic
+
+# Initialize reactor
+self._reactor = get_reactor()
+
+# Wire Cortex to file events (auto-increment indexing)
+self._reactor.register_handler(
+    EventTopic.FILE_CHANGED,
+    self._on_file_changed_cortex,
+    priority=10
+)
+
+# Wire Sniffer to file events (reactive context detection)
+self.sniffer.register_to_reactor()
+
+# Start consumer loop
+await self._reactor.start()
 ```
 
 ---
@@ -247,6 +273,12 @@ Rust Scanner → assets/skills/ → skill_index.json
 │ L2: Core (omni.core)                                            │
 │  ScriptLoader reads _skill_config from @skill_command           │
 │  Kernel orchestrates skill execution                            │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  | KernelReactor (Event-Driven Architecture v5.0)             |  │
+│  |                                                            |  │
+│  |  Rust GLOBAL_BUS ──► KernelReactor ──► Handlers            |  │
+│  |  (tokio broadcast)    (async loop)     Cortex/Sniffer      |  │
+│  └───────────────────────────────────────────────────────────┘  │
 └───────────────────────────┬─────────────────────────────────────┘
                             │
 ┌───────────────────────────▼─────────────────────────────────────┐
@@ -255,6 +287,34 @@ Rust Scanner → assets/skills/ → skill_index.json
 │  CommandResult[T] with @computed_field                          │
 │  OrjsonModel for 10x fast serialization                         │
 └─────────────────────────────────────────────────────────────────┘
+
+### Event Flow (v5.0 - The Grand Integration)
+
+```
+
+File Watcher (Rust) Agent Loop (Python) Sniffer (Python)
+│ │ │
+▼ ▼ │
+GLOBAL_BUS.publish GLOBAL_BUS.publish KernelReactor
+(file/changed) (agent/step_complete) (FILE_CREATED)
+│ │ │
+└───────────────────────────┼─────────────────────────────┘
+│
+▼
+┌────────────────────┐
+│ KernelReactor │
+│ (async consumer) │
+└─────────┬──────────┘
+│
+┌────────────────────────┼────────────────────────┐
+│ │ │
+▼ ▼ ▼
+\_on_file_changed_cortex AsyncPersistenceService \_on_file_changed
+│ │ │
+▼ ▼ ▼
+Indexer.index_file() Queue → Worker → Store sniff(parent_dir)
+
+```
 
 ### MCP Message Flow (STDIO)
 
@@ -518,6 +578,7 @@ messages = ctx.get_active_context(strategy="pruned")
 - [Vector Index Optimization](./vector-index.md)
 - [Rust-Python Bridge](./rust-python-bridge.md)
 - [Permission Gatekeeper (Zero Trust)](./permission-gatekeeper.md)
+- [Immune System](./immune-system.md)
 
 ### Reference
 

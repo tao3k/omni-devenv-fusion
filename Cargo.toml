@@ -32,6 +32,7 @@ git2 = "0.20.3"
 
 # Python bindings - Python 3.13 support via PyO3 0.27+
 pyo3 = { version = "0.27.2", features = ["extension-module"] }
+pyo3-asyncio = { version = "0.27", features = ["tokio"] }
 
 # Safe I/O & Tokenization
 tiktoken-rs = "0.9.1"

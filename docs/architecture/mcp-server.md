@@ -2,7 +2,7 @@
 
 > Model Context Protocol Server Implementation
 > Trinity Architecture - Agent Layer (L3 Transport)
-> Last Updated: 2026-01-21
+> Last Updated: 2026-01-26
 
 ---
 
@@ -10,10 +10,9 @@
 
 The **MCP-Server** (L3 - Transport) provides the Model Context Protocol implementation:
 
-- **JSON-RPC 2.0** message handling
-- **Protocol interfaces** for request/response routing
+- **MCP SDK** integration for JSON-RPC 2.0 protocol handling
 - **Transport implementations** (stdio, SSE)
-- **Pure orchestration** - no business logic
+- **Agent integration** via Kernel
 
 ### MCP Protocol
 
@@ -25,10 +24,10 @@ The **MCP-Server** (L3 - Transport) provides the Model Context Protocol implemen
                       │ JSON-RPC 2.0
                       ▼
 ┌─────────────────────────────────────────────────────────┐
-│                   omni-mcp-server                        │
+│                   omni-agent-mcp-server                  │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │
-│  │  Transport  │──│   Server    │──│   Handler       │  │
-│  │ (stdio/SSE) │  │ (Orchestration)│ (Agent/Kernel) │  │
+│  │   stdio/    │──│  MCP SDK    │──│  AgentMCPHandler│  │
+│  │    SSE      │  │   Server    │  │  (Kernel)       │  │
 │  └─────────────┘  └─────────────┘  └─────────────────┘  │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -37,159 +36,135 @@ The **MCP-Server** (L3 - Transport) provides the Model Context Protocol implemen
 
 ## Architecture
 
-**Location**: `packages/python/mcp-server/src/omni/mcp/`
+**Location**: `packages/python/agent/src/omni/agent/mcp_server/`
 
 ```
-omni/mcp/
+omni/agent/mcp_server/
 ├── __init__.py              # Exports
-├── types.py                 # JSON-RPC 2.0 types (OrjsonModel-based)
-├── interfaces.py            # Protocol interfaces
-├── server.py                # MCPServer orchestration
-└── transport/
-    ├── __init__.py
-    ├── stdio.py             # StdioTransport (zero-copy orjson)
-    └── sse.py               # SSEServer (HTTP/SSE)
+├── server.py                # AgentMCPServer (main server)
+├── lifespan.py              # Lifespan context manager
+├── sse.py                   # SSE transport
+└── stdio.py                 # stdio_server context manager
 ```
 
 ### Layer Responsibilities
 
-| Layer         | Responsibility             | Location                            |
-| ------------- | -------------------------- | ----------------------------------- |
-| **Transport** | Network I/O (stdio, SSE)   | `omni.mcp.transport.stdio/sse`      |
-| **Server**    | Message routing, lifecycle | `omni.mcp.server.MCPServer`         |
-| **Handler**   | Business logic (Kernel)    | `omni.agent.server.AgentMCPHandler` |
+| Layer         | Responsibility                | Location                          |
+| ------------- | ----------------------------- | --------------------------------- |
+| **Transport** | Network I/O (stdio, SSE)      | `omni.agent.mcp_server.stdio/sse` |
+| **Server**    | MCP protocol, handlers        | `omni.agent.mcp_server.server`    |
+| **Kernel**    | Tool execution, skill context | `omni.core.kernel`                |
 
 ---
 
-## MCPServer
+## AgentMCPServer
 
-**Location**: `packages/python/mcp-server/src/omni/mcp/server.py`
+**Location**: `packages/python/agent/src/omni/agent/mcp_server/server.py`
 
-Pure orchestration - routes messages between transport and handler.
+Main MCP server class using MCP SDK for protocol handling.
 
-```python
-from omni.mcp.server import MCPServer
-from omni.mcp.transport.stdio import StdioTransport
-
-# Create server
-server = MCPServer(handler=my_handler, transport=transport)
-
-# Start server
-await server.start()
-
-# Run until stopped
-await server.run_forever()
-
-# Stop server
-await server.stop()
-```
-
-### Properties
-
-| Property     | Type                | Description          |
-| ------------ | ------------------- | -------------------- |
-| `is_running` | `bool`              | Server running state |
-| `handler`    | `MCPRequestHandler` | Request handler      |
-| `transport`  | `MCPTransport`      | Transport layer      |
-
----
-
-## AgentMCPHandler
-
-**Location**: `packages/python/agent/src/omni/agent/server.py`
-
-Thin MCP adapter that delegates to Core Kernel.
+### Quick Start
 
 ```python
-from omni.agent.server import AgentMCPHandler, create_agent_handler
+from omni.agent.mcp_server.server import AgentMCPServer
 
-handler = create_agent_handler()
-await handler.initialize()  # Boots the kernel
+# Run in stdio mode (default)
+server = AgentMCPServer()
+await server.run_stdio(verbose=False)
+
+# Run in SSE mode
+await server.run_sse_server(port=8080, verbose=False)
 ```
 
-### Request Flow
+### Core Handlers
 
-```
-tools/list → _handle_list_tools() → skill_context.list_commands()
-tools/call → _handle_call_tool() → skill.execute()
-```
-
----
-
-## Types
-
-**Location**: `packages/python/mcp-server/src/omni/mcp/types.py`
-
-JSON-RPC 2.0 type definitions. **All types inherit from Foundation's `OrjsonModel`** for 10x faster serialization.
-
-### Core Types
-
-```python
-from omni.mcp.types import JSONRPCRequest, JSONRPCResponse
-
-# Request (inherits OrjsonModel)
-request = JSONRPCRequest(method="tools/list", params={}, id=1)
-
-# Response
-response = JSONRPCResponse(result={"tools": []}, id=1)
-```
-
-### Helper Functions
-
-```python
-from omni.mcp.types import (
-    make_success_response,
-    make_error_response,
-)
-
-# Create success response
-response = make_success_response(id=1, result={"tools": []})
-
-# Create error response
-response = make_error_response(
-    id=1,
-    code=ErrorCode.INVALID_PARAMS,
-    message="Invalid parameter"
-)
-```
+| Handler            | MCP Method       | Description                     |
+| ------------------ | ---------------- | ------------------------------- |
+| `list_tools()`     | `tools/list`     | Returns tools via Rust Registry |
+| `call_tool()`      | `tools/call`     | Executes tool via Kernel        |
+| `list_resources()` | `resources/list` | Returns project context, memory |
+| `read_resource()`  | `resources/read` | Reads resource data             |
+| `list_prompts()`   | `prompts/list`   | Returns available prompts       |
+| `get_prompt()`     | `prompts/get`    | Returns prompt content          |
 
 ---
 
 ## Transport
 
-### StdioTransport
+### STDIO Mode
 
-For command-line integration with **zero-copy** orjson serialization:
-
-```python
-from omni.mcp.transport.stdio import StdioTransport
-
-transport = StdioTransport()
-await transport.start()
-```
-
-**Features**:
-
-- Reads raw bytes from stdin.buffer (no UTF-8 decode overhead)
-- Uses orjson.loads() directly on bytes
-- Writes raw bytes to stdout.buffer (bypass TextIOWrapper)
-
-### SSEServer
-
-For HTTP-based integration with **orjson-powered** streaming:
+Uses MCP SDK's `stdio_server()` context manager for proper stream handling:
 
 ```python
-from omni.mcp.transport.sse import SSEServer
+from omni.agent.mcp_server.server import AgentMCPServer
 
-transport = SSEServer(host="127.0.0.1", port=8080)
-await transport.start()
+async def run_stdio_server():
+    server = AgentMCPServer()
+    await server.run_stdio(verbose=True)
 ```
 
-**Features**:
+**Key features**:
 
-- orjson.dumps() for all SSE events
-- Efficient notification queue per session
-- Automatic ping every 25s to keep connection alive
+- Proper stdin/stdout stream handling via MCP SDK
+- Graceful shutdown on SIGINT
+- Kernel initialization and shutdown
+
+### SSE Mode
+
+HTTP-based transport for remote connections:
+
+```python
+async def run_sse_server(port=8080):
+    server = AgentMCPServer()
+    await server.run_sse_server(port=port)
+```
+
+---
+
+## Signal Handling
+
+In stdio mode, signal handling is managed via `asyncio.add_signal_handler()`:
+
+```python
+async def main_async():
+    loop = asyncio.get_running_loop()
+    shutdown_event = asyncio.Event()
+
+    def signal_handler():
+        shutdown_event.set()
+
+    loop.add_signal_handler(signal.SIGINT, signal_handler)
+```
+
+---
+
+## Resource URIs
+
+| URI                      | Description                           |
+| ------------------------ | ------------------------------------- |
+| `omni://project/context` | Active frameworks/languages (Sniffer) |
+| `omni://memory/latest`   | Agent short-term memory (Checkpoint)  |
+| `omni://system/stats`    | Runtime statistics                    |
+
+---
+
+## Testing
+
+### Stdio Server Tests
+
+**Location**: `packages/python/agent/tests/integration/test_mcp_stdio.py`
+
+```bash
+uv run pytest packages/python/agent/tests/integration/test_mcp_stdio.py -v
+```
+
+### MCP Server Unit Tests
+
+**Location**: `packages/python/mcp-server/tests/`
+
+```bash
+uv run pytest packages/python/mcp-server/tests/ -v
+```
 
 ---
 
@@ -203,11 +178,11 @@ await transport.start()
 
 ### Common Issues
 
-| Issue               | Cause                                 | Solution                              |
-| ------------------- | ------------------------------------- | ------------------------------------- |
-| Empty tools list    | `inputSchema.type` missing `"object"` | Run `TestMCPProtocolCompliance` test  |
-| Connection timeout  | Stderr interfering with stdout        | Ensure logging goes to stderr         |
-| Notification errors | Handling notifications as requests    | Use `handle_notification()` correctly |
+| Issue              | Cause                          | Solution                      |
+| ------------------ | ------------------------------ | ----------------------------- |
+| Empty tools list   | Kernel not ready               | Check kernel initialization   |
+| Connection timeout | Stderr interfering with stdout | Ensure logging goes to stderr |
+| SIGINT not handled | Missing signal handler         | Use `add_signal_handler()`    |
 
 ---
 

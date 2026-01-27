@@ -16,6 +16,7 @@ import sys
 from enum import Enum
 
 import typer
+from mcp import types
 from rich.panel import Panel
 
 from omni.foundation.config.logging import configure_logging, get_logger
@@ -35,33 +36,70 @@ _handler_ref = None
 _transport_ref = None  # For stdio transport stop
 
 
+# =============================================================================
+# Simple signal handler for stdio mode - mimics old stdio.py behavior
+# =============================================================================
+
+_stdio_shutdown_count = 0
+
+
+def _setup_stdio_signal_handler() -> None:
+    """Set up signal handler for stdio mode (simple approach)."""
+    import sys as _sys
+
+    def signal_handler(*_args):
+        global _stdio_shutdown_count
+        _stdio_shutdown_count += 1
+        _sys.stderr.write(f"\n[CLI] Signal received! Count: {_stdio_shutdown_count}\n")
+        _sys.stderr.flush()
+        if _stdio_shutdown_count == 1:
+            _sys.exit(0)  # Normal exit
+        else:
+            import os as _os
+
+            _os._exit(1)  # Force exit on second Ctrl-C
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    _sys.stderr.write("[CLI] Signal handler registered\n")
+    _sys.stderr.flush()
+
+
 def _setup_signal_handler(handler_ref=None, transport_ref=None, stdio_mode=False) -> None:
     """Setup signal handlers for graceful shutdown."""
+    global _shutdown_count
 
     def signal_handler(signum, frame):
-        global _shutdown_requested
+        global _shutdown_requested, _shutdown_count
         _shutdown_requested = True
-        logger = get_logger("omni.mcp.shutdown")
-        logger.warning("⚠️  Received shutdown signal, gracefully stopping...")
+        _shutdown_count += 1
 
         if stdio_mode:
-            # In stdio mode, just exit cleanly - the process communicates via stdin/stdout
-            # with the MCP client, so we should just exit on interrupt
-            logger.info("👋 Exiting stdio mode...")
-            sys.exit(0)
-        else:
-            # SSE mode: stop the transport first (breaks the run_loop)
-            if transport_ref is not None:
-                try:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    loop.run_until_complete(transport_ref.stop())
-                    loop.close()
-                    logger.debug("Transport stopped")
-                except Exception as e:
-                    logger.error(f"Error stopping transport: {e}")
+            # In stdio mode: first Ctrl-C = graceful exit, second = force exit
+            import sys as _sys
+            import os as _os
 
-            _sync_graceful_shutdown()
+            try:
+                if _shutdown_count == 1:
+                    _sys.stderr.write("\n[CLI] Shutdown signal received, exiting...\n")
+                    _sys.stderr.flush()
+                    sys.exit(0)  # Allow graceful shutdown
+                else:
+                    _os._exit(1)  # Force exit on second Ctrl-C
+            except Exception:
+                _os._exit(1)
+
+        # SSE mode: stop the transport first (breaks the run_loop)
+        if transport_ref is not None:
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(transport_ref.stop())
+                loop.close()
+            except Exception:
+                pass
+
+        _sync_graceful_shutdown()
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
@@ -153,18 +191,55 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
                 # Create stdio transport
                 stdio_transport = StdioTransport()
                 _transport_ref = stdio_transport  # Store for signal handler
-                _setup_signal_handler(handler, stdio_transport, stdio_mode=True)
+                # Signal handler is set INSIDE run_stdio() (like old stdio.py)
 
                 server = MCPServer(handler=handler, transport=stdio_transport)
 
+                # MCP init options
+                init_options = {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {
+                        "tools": {"listChanged": True},
+                    },
+                    "serverInfo": {
+                        "name": "omni-agent",
+                        "version": "2.0.0",
+                    },
+                }
+
+                # Register MCP protocol handlers
+                @server.request("initialize")
+                async def handle_initialize(**params) -> dict:
+                    """Handle MCP initialize request."""
+                    logger.info("[MCP] Responding to initialize request")
+                    return init_options
+
+                @server.request("tools/list")
+                async def handle_list_tools(**params) -> dict:
+                    """Handle MCP tools/list request."""
+                    result = await handler.handle_request(
+                        {"method": "tools/list", "params": params, "id": None}
+                    )
+                    return result.get("result", {})
+
+                @server.request("tools/call")
+                async def handle_call_tool(
+                    name: str = "", arguments: dict | None = None, **params
+                ) -> dict:
+                    """Handle MCP tools/call request."""
+                    request = {
+                        "method": "tools/call",
+                        "params": {"name": name, "arguments": arguments or {}},
+                        "id": None,
+                    }
+                    result = await handler.handle_request(request)
+                    return result.get("result", {})
+
                 async def run_stdio():
-                    try:
-                        await handler.initialize()
-                        await server.start()
-                        await stdio_transport.run_loop(server)
-                    except asyncio.CancelledError:
-                        logger.info("STDIO loop cancelled")
-                        await _graceful_shutdown(handler)
+                    """Run stdio mode - delegate to old stdio.py which handles Ctrl-C properly."""
+                    from omni.agent.mcp_server.stdio import run_stdio as old_run_stdio
+
+                    await old_run_stdio()
 
                 logger.info("📡 Starting Omni MCP Server (STDIO mode)")
                 asyncio.run(run_stdio())

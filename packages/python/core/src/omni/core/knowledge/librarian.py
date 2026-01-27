@@ -51,24 +51,30 @@ class Librarian:
     - Semantic search via vector store
 
     Usage:
-        librarian = Librarian("/path/to/knowledge.db")
+        librarian = Librarian()  # Uses PRJ_CACHE/omni-vector/knowledge.lance
         librarian.ingest_file("docs/guide.md")
         results = librarian.search("how to commit")
     """
 
     def __init__(
         self,
-        storage_path: str = ":memory:",
+        storage_path: str | None = None,
         dimension: int = 1536,
         collection: str = "knowledge",
     ):
         """Initialize the librarian.
 
         Args:
-            storage_path: Path to vector store (":memory:" for in-memory)
+            storage_path: Path to vector store (None = use unified path, ":memory:" for in-memory)
             dimension: Embedding dimension (1536 for OpenAI Ada-002)
             collection: Collection/table name for isolation
         """
+        # Use unified path if not specified
+        if storage_path is None:
+            from omni.foundation.config.dirs import get_vector_db_path
+
+            storage_path = str(get_vector_db_path() / "knowledge.lance")
+
         self._storage_path = storage_path
         self._dimension = dimension
         self._collection = collection

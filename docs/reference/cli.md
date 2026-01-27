@@ -6,14 +6,17 @@ The `omni` CLI provides unified access to all Omni-Dev-Fusion Fusion capabilitie
 
 ## Quick Reference
 
-| Command                        | Description                    |
-| ------------------------------ | ------------------------------ |
-| `omni run`                     | Enter interactive REPL mode    |
-| `omni run exec "<task>"`       | Execute single task            |
-| `omni run exec "<task>" -s 10` | Execute with custom step limit |
-| `omni mcp`                     | Start MCP server               |
-| `omni skill run <cmd>`         | Execute skill command          |
-| `omni skill list`              | List installed skills          |
+| Command                        | Description                            |
+| ------------------------------ | -------------------------------------- |
+| `omni run`                     | Enter interactive REPL mode            |
+| `omni run exec "<task>"`       | Execute single task                    |
+| `omni run exec "<task>" -s 10` | Execute with custom step limit         |
+| `omni mcp`                     | Start MCP server                       |
+| `omni skill run <cmd>`         | Execute skill command                  |
+| `omni skill list`              | List installed skills                  |
+| `omni skill analyze`           | Analyze tool statistics (Arrow-native) |
+| `omni skill stats`             | Quick skill database statistics        |
+| `omni skill context`           | Generate LLM system context            |
 
 ---
 
@@ -226,18 +229,101 @@ Show detailed information about a skill.
 omni skill info git
 ```
 
+### `omni skill analyze`
+
+Analyze skill/tool statistics using Arrow-native operations. Uses PyArrow for high-performance analytics on the skill database.
+
+```bash
+# Full analysis
+omni skill analyze
+
+# Filter by category
+omni skill analyze -c git
+
+# Show tools without documentation
+omni skill analyze -m
+
+# Export as JSON
+omni skill analyze -j > stats.json
+```
+
+**Features:**
+
+- Category distribution with percentages
+- Documentation coverage analysis
+- Top categories visualization
+- JSON export for programmatic use
+
+### `omni skill stats`
+
+Quick skill database statistics.
+
+```bash
+omni skill stats
+```
+
+### `omni skill context`
+
+Generate system context for LLM prompts using Arrow vectorized operations.
+
+```bash
+# Default: 50 tools
+omni skill context
+
+# Custom limit
+omni skill context -n 100
+```
+
+**Output format:**
+
+```text
+@omni("tool.name") - Tool description
+@omni("another.tool") - Another description
+...
+```
+
 ---
 
 ## MCP Server
 
 ### `omni mcp`
 
-Start the MCP server for integration with Claude Desktop or other MCP clients.
+Start the Omni MCP server for integration with Claude Desktop, Claude Code CLI, or other MCP clients.
 
 ```bash
-# Start in stdio mode (default)
-omni mcp
+# Start in stdio mode (default, for Claude Desktop)
+omni mcp --transport stdio
+
+# Start in SSE mode (for Claude Code CLI / debugging)
+omni mcp --transport sse --port 3000
+
+# SSE mode with verbose logging
+omni mcp --transport sse --port 8080 --verbose
 ```
+
+### Options
+
+| Option            | Description                                                         |
+| ----------------- | ------------------------------------------------------------------- |
+| `--transport, -t` | Transport mode: `stdio` (Claude Desktop) or `sse` (Claude Code CLI) |
+| `--host, -h`      | Host to bind to (SSE only, default: `127.0.0.1`)                    |
+| `--port, -p`      | Port to listen on (SSE only, default: `3000`)                       |
+| `--verbose, -v`   | Enable verbose mode with hot-reload debugging                       |
+
+### Transport Modes
+
+**stdio mode** (default):
+
+- Uses stdin/stdout for JSON-RPC communication
+- No external port exposure (secure)
+- Best for Claude Desktop integration
+
+**SSE mode**:
+
+- HTTP-based Server-Sent Events transport
+- Allows external MCP client connections
+- Supports verbose logging for debugging
+- Default port: 3000
 
 ---
 

@@ -24,8 +24,11 @@ class TestOmniLoopConfig:
         assert config.max_tokens == 128000
         assert config.retained_turns == 10
         assert config.auto_summarize is False
-        assert config.max_tool_calls == 10
+        assert config.max_tool_calls == 20
         assert config.verbose is False
+        assert config.suppress_atomic_tools is True
+        assert config.max_tool_schemas == 20
+        assert config.max_consecutive_errors == 3
 
     def test_custom_config_values(self):
         """Should respect custom configuration."""
@@ -35,6 +38,9 @@ class TestOmniLoopConfig:
             auto_summarize=True,
             max_tool_calls=15,
             verbose=True,
+            suppress_atomic_tools=False,
+            max_tool_schemas=30,
+            max_consecutive_errors=5,
         )
 
         assert config.max_tokens == 64000
@@ -42,6 +48,9 @@ class TestOmniLoopConfig:
         assert config.auto_summarize is True
         assert config.max_tool_calls == 15
         assert config.verbose is True
+        assert config.suppress_atomic_tools is False
+        assert config.max_tool_schemas == 30
+        assert config.max_consecutive_errors == 5
 
 
 class TestOmniLoopInitialization:
@@ -218,7 +227,7 @@ class TestOmniLoopLLMIntegration:
         """Should call the LLM when running a task."""
         with patch("omni.agent.core.omni.loop.InferenceClient", return_value=mock_inference_client):
             loop = OmniLoop()
-            result = await loop.run("Test task")
+            result = await loop.run("Test task: provide a simple greeting response")
 
             # Verify LLM was called
             mock_inference_client.complete.assert_called_once()
@@ -230,7 +239,7 @@ class TestOmniLoopLLMIntegration:
         """Should add user message to context."""
         with patch("omni.agent.core.omni.loop.InferenceClient", return_value=mock_inference_client):
             loop = OmniLoop()
-            await loop.run("Test task")
+            await loop.run("Test task: provide a simple greeting response")
 
             # Should have system prompt + user message
             context = loop.context.get_active_context()
@@ -241,11 +250,11 @@ class TestOmniLoopLLMIntegration:
         """Should track conversation in history."""
         with patch("omni.agent.core.omni.loop.InferenceClient", return_value=mock_inference_client):
             loop = OmniLoop()
-            await loop.run("Test task")
+            await loop.run("Test task: provide a simple greeting response")
 
             assert len(loop.history) == 2
             assert loop.history[0]["role"] == "user"
-            assert loop.history[0]["content"] == "Test task"
+            assert "Test task" in loop.history[0]["content"]
             assert loop.history[1]["role"] == "assistant"
 
     @pytest.mark.asyncio
@@ -264,7 +273,7 @@ class TestOmniLoopLLMIntegration:
 
         with patch("omni.agent.core.omni.loop.InferenceClient", return_value=mock_inference_client):
             loop = OmniLoop()
-            result = await loop.run("Test task")
+            result = await loop.run("Test task: respond with empty content")
 
             assert result == ""
 
@@ -281,7 +290,7 @@ class TestOmniLoopLLMIntegration:
 
         with patch("omni.agent.core.omni.loop.InferenceClient", return_value=mock_inference_client):
             loop = OmniLoop()
-            result = await loop.run("Test task")
+            result = await loop.run("Test task: handle error gracefully")
 
             # Should return empty string on error
             assert result == ""
@@ -306,7 +315,7 @@ class TestOmniLoopStats:
         stats = loop_with_history.get_stats()
 
         assert "session_id" in stats
-        assert "turn_count" in stats
+        assert "step_count" in stats
         assert "tool_calls" in stats
         assert "context_stats" in stats
 
@@ -347,17 +356,17 @@ class TestOmniLoopMultiTurn:
             loop = OmniLoop()
 
             # First turn
-            await loop.run("First message")
+            await loop.run("First message: please provide a greeting")
 
             # Second turn
-            await loop.run("Second message")
+            await loop.run("Second message: please provide a farewell")
 
             # Should have 4 messages: system + user1 + assistant1 + user2 (+ assistant2)
             context = loop.context.get_active_context()
             user_messages = [m for m in context if m["role"] == "user"]
             assert len(user_messages) == 2
-            assert user_messages[0]["content"] == "First message"
-            assert user_messages[1]["content"] == "Second message"
+            assert "First message" in user_messages[0]["content"]
+            assert "Second message" in user_messages[1]["content"]
 
     @pytest.mark.asyncio
     async def test_turn_count_increments(self, mock_inference_client):
@@ -367,10 +376,10 @@ class TestOmniLoopMultiTurn:
 
             assert loop.context.turn_count == 0
 
-            await loop.run("Message 1")
+            await loop.run("First message for testing turn count")
             assert loop.context.turn_count == 1
 
-            await loop.run("Message 2")
+            await loop.run("Second message for testing turn count")
             assert loop.context.turn_count == 2
 
 
@@ -406,7 +415,7 @@ class TestOmniLoopToolSchemas:
         See: https://github.com/tao3k/omni-dev-fusion/issues/1234
         """
         loop = OmniLoop(kernel=mock_kernel)
-        schemas = await loop._get_tool_schemas()
+        schemas = await loop._get_adaptive_tool_schemas()
 
         # Should only have 2 core commands
         assert len(schemas) == 2
@@ -424,7 +433,7 @@ class TestOmniLoopToolSchemas:
     async def test_get_tool_schemas_skill_discover_first(self, mock_kernel):
         """Should ensure skill.discover is first in the list."""
         loop = OmniLoop(kernel=mock_kernel)
-        schemas = await loop._get_tool_schemas()
+        schemas = await loop._get_adaptive_tool_schemas()
 
         assert len(schemas) >= 1
         assert schemas[0]["name"] == "skill.discover"
@@ -433,7 +442,7 @@ class TestOmniLoopToolSchemas:
     async def test_get_tool_schemas_empty_when_no_kernel(self):
         """Should return empty list when no kernel is available."""
         loop = OmniLoop(kernel=None)
-        schemas = await loop._get_tool_schemas()
+        schemas = await loop._get_adaptive_tool_schemas()
 
         assert schemas == []
 

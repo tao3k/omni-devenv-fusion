@@ -114,10 +114,105 @@ impl SnifferRule {
 }
 
 // =============================================================================
+// Tool Annotations - MCP Protocol Safety Annotations
+// =============================================================================
+
+/// Safety and behavior annotations for tools (MCP Protocol compliant).
+///
+/// These annotations help the agent understand the safety implications
+/// of using a tool, enabling smarter execution decisions.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq, SchemarsJsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolAnnotations {
+    /// Read-only operations that don't modify system state.
+    #[serde(default)]
+    pub read_only: bool,
+    /// Operations that modify or delete data.
+    #[serde(default)]
+    pub destructive: bool,
+    /// Operations that can be safely repeated without side effects.
+    #[serde(default)]
+    pub idempotent: bool,
+    /// Operations that interact with external/open systems.
+    #[serde(default)]
+    pub open_world: bool,
+}
+
+impl ToolAnnotations {
+    /// Creates a new `ToolAnnotations` with all defaults (safe defaults).
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates annotations for a read-only tool.
+    #[must_use]
+    pub fn read_only() -> Self {
+        Self {
+            read_only: true,
+            destructive: false,
+            idempotent: true,
+            open_world: false,
+        }
+    }
+
+    /// Creates annotations for a destructive tool.
+    #[must_use]
+    pub fn destructive() -> Self {
+        Self {
+            read_only: false,
+            destructive: true,
+            idempotent: false,
+            open_world: false,
+        }
+    }
+
+    /// Creates annotations for a network-accessible tool.
+    #[must_use]
+    pub fn open_world() -> Self {
+        Self {
+            read_only: false,
+            destructive: false,
+            idempotent: false,
+            open_world: true,
+        }
+    }
+}
+
+// =============================================================================
+// Decorator Arguments - Extracted from @skill_command decorator
+// =============================================================================
+
+/// Arguments extracted from @skill_command decorator kwargs.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct DecoratorArgs {
+    /// Explicit tool name from decorator (overrides function name).
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Human-readable description of what the tool does.
+    #[serde(default)]
+    pub description: Option<String>,
+    /// Category for organizing tools (e.g., "read", "write", "query").
+    #[serde(default)]
+    pub category: Option<String>,
+    /// Whether this tool modifies external state.
+    #[serde(default)]
+    pub destructive: Option<bool>,
+    /// Whether this tool only reads data.
+    #[serde(default)]
+    pub read_only: Option<bool>,
+}
+
+// =============================================================================
 // Tool Record
 // =============================================================================
 
 /// Represents a discovered tool/function within a skill.
+///
+/// This struct is enriched with metadata extracted from:
+/// - AST parsing of decorator kwargs
+/// - Function signature analysis
+/// - Docstring parsing
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct ToolRecord {
     /// Name of the tool function.
@@ -130,7 +225,7 @@ pub struct ToolRecord {
     pub file_path: String,
     /// Name of the function implementing this tool.
     pub function_name: String,
-    /// Execution mode (e.g., "sync", "async").
+    /// Execution mode (e.g., "sync", "async", "script").
     pub execution_mode: String,
     /// Keywords for tool discovery and routing.
     pub keywords: Vec<String>,
@@ -142,6 +237,15 @@ pub struct ToolRecord {
     /// Documentation string from the function docstring.
     #[serde(default)]
     pub docstring: String,
+    /// Category inferred from decorator or function signature.
+    #[serde(default)]
+    pub category: String,
+    /// MCP protocol safety annotations.
+    #[serde(default)]
+    pub annotations: ToolAnnotations,
+    /// Parameter names inferred from function signature.
+    #[serde(default)]
+    pub parameters: Vec<String>,
 }
 
 impl ToolRecord {
@@ -165,6 +269,43 @@ impl ToolRecord {
             file_hash: String::new(),
             input_schema: String::new(),
             docstring: String::new(),
+            category: String::new(),
+            annotations: ToolAnnotations::default(),
+            parameters: Vec::new(),
+        }
+    }
+
+    /// Creates a fully populated `ToolRecord` with all enrichment data.
+    #[must_use]
+    pub fn with_enrichment(
+        tool_name: String,
+        description: String,
+        skill_name: String,
+        file_path: String,
+        function_name: String,
+        execution_mode: String,
+        keywords: Vec<String>,
+        file_hash: String,
+        docstring: String,
+        category: String,
+        annotations: ToolAnnotations,
+        parameters: Vec<String>,
+        input_schema: String,
+    ) -> Self {
+        Self {
+            tool_name,
+            description,
+            skill_name,
+            file_path,
+            function_name,
+            execution_mode,
+            keywords,
+            file_hash,
+            input_schema,
+            docstring,
+            category,
+            annotations,
+            parameters,
         }
     }
 }
@@ -277,6 +418,15 @@ pub struct IndexToolEntry {
     pub name: String,
     /// Description of what the tool does.
     pub description: String,
+    /// Category for organizing tools (e.g., "read", "write", "query").
+    #[serde(default)]
+    pub category: String,
+    /// JSON schema for tool input validation (MCP protocol format).
+    #[serde(default)]
+    pub input_schema: String,
+    /// Hash of the source file for incremental sync.
+    #[serde(default)]
+    pub file_hash: String,
 }
 
 /// Documentation availability status for a skill.

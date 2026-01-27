@@ -43,7 +43,7 @@ class SimpleSkillMetadata(BaseModel):
         """Create metadata from Index dictionary.
 
         Args:
-            data: Dictionary with skill metadata (from skill_index.json)
+            data: Dictionary with skill metadata (from LanceDB)
             name: Skill name
 
         Returns:

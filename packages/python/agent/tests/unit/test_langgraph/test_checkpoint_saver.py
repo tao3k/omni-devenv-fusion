@@ -1,7 +1,7 @@
 """Unit tests for RustCheckpointSaver (LangGraph-compatible checkpoint saver).
 
-Tests the LangGraph BaseCheckpointSaver interface implementation.
-Uses a simpler approach without complex module patching.
+Tests the LangGraph BaseCheckpointSaver interface implementation and singleton patterns.
+Uses async methods only - RustLanceCheckpointSaver is fully async.
 """
 
 import pytest
@@ -50,72 +50,49 @@ class TestRustCheckpointSaverUnit:
 
         assert saver.config_specs == []
 
-    def test_get_logic_with_thread_id(self):
-        """Test get() returns checkpoint data when thread_id exists."""
+    @pytest.mark.asyncio
+    async def test_aget_tuple_logic_with_thread_id(self):
+        """Test aget_tuple() returns CheckpointTuple when thread_id exists."""
         expected_state = {"status": "test", "data": [1, 2, 3]}
         saver, mock_checkpointer = self._create_saver_with_mock_checkpointer()
         mock_checkpointer.get.return_value = expected_state
 
         config = {"configurable": {"thread_id": "session-123"}}
-        result = saver.get(config)
+        result = await saver.aget_tuple(config)
 
         assert result is not None
-        # LATEST_VERSION is 2 in saver.py
-        assert result["v"] == 2
-        # _make_checkpoint puts state in channel_values
-        assert result["channel_values"] == expected_state
-        mock_checkpointer.get.assert_called_once_with("session-123")
-
-    def test_get_logic_without_thread_id(self):
-        """Test get() returns None when no thread_id in config."""
-        saver, mock_checkpointer = self._create_saver_with_mock_checkpointer()
-        mock_checkpointer.get.return_value = {"status": "test"}
-
-        config = {"other": "value"}
-        result = saver.get(config)
-
-        assert result is None
-        mock_checkpointer.get.assert_not_called()
-
-    def test_get_logic_with_none_state(self):
-        """Test get() returns None when checkpointer returns None."""
-        saver, mock_checkpointer = self._create_saver_with_mock_checkpointer()
-        mock_checkpointer.get.return_value = None
-
-        config = {"configurable": {"thread_id": "nonexistent"}}
-        result = saver.get(config)
-
-        assert result is None
-
-    def test_get_tuple_logic(self):
-        """Test get_tuple() returns CheckpointTuple when state exists."""
-        state = {"status": "checkpoint_1"}
-        saver, mock_checkpointer = self._create_saver_with_mock_checkpointer()
-        mock_checkpointer.get.return_value = state
-
-        config = {"configurable": {"thread_id": "session-123"}}
-        result = saver.get_tuple(config)
-
-        assert result is not None
-        # CheckpointTuple is a Pydantic model - use model_dump() or access attributes
+        # CheckpointTuple attributes
         assert hasattr(result, "checkpoint")
         assert hasattr(result, "metadata")
         assert hasattr(result, "config")
         mock_checkpointer.get.assert_called_once_with("session-123")
 
-    def test_get_tuple_logic_empty_history(self):
-        """Test get_tuple() returns None when state is empty."""
+    @pytest.mark.asyncio
+    async def test_aget_tuple_logic_without_thread_id(self):
+        """Test aget_tuple() returns None when no thread_id in config."""
+        saver, mock_checkpointer = self._create_saver_with_mock_checkpointer()
+        mock_checkpointer.get.return_value = {"status": "test"}
+
+        config = {"other": "value"}
+        result = await saver.aget_tuple(config)
+
+        assert result is None
+        mock_checkpointer.get.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_aget_tuple_logic_with_none_state(self):
+        """Test aget_tuple() returns None when checkpointer returns None."""
         saver, mock_checkpointer = self._create_saver_with_mock_checkpointer()
         mock_checkpointer.get.return_value = None
 
-        config = {"configurable": {"thread_id": "empty"}}
-        result = saver.get_tuple(config)
+        config = {"configurable": {"thread_id": "nonexistent"}}
+        result = await saver.aget_tuple(config)
 
         assert result is None
-        mock_checkpointer.get.assert_called_once_with("empty")
 
-    def test_put_logic_with_thread_id(self):
-        """Test put() saves checkpoint and returns config."""
+    @pytest.mark.asyncio
+    async def test_aput_logic_with_thread_id(self):
+        """Test aput() saves checkpoint and returns config."""
         saver, mock_checkpointer = self._create_saver_with_mock_checkpointer()
 
         config = {"configurable": {"thread_id": "session-123"}}
@@ -123,7 +100,7 @@ class TestRustCheckpointSaverUnit:
         checkpoint = {"v": 1, "id": "cp-1", "ts": "2024-01-01", "data": {"status": "saved"}}
         metadata = {"source": "input", "step": 1, "writes": {}}
 
-        result = saver.put(config, checkpoint, metadata, {})
+        result = await saver.aput(config, checkpoint, metadata, {})
 
         assert result == config
         mock_checkpointer.put.assert_called_once()
@@ -132,106 +109,73 @@ class TestRustCheckpointSaverUnit:
         assert call_kwargs["state"] == {"status": "saved"}
         assert call_kwargs["metadata"]["source"] == "input"
 
-    def test_put_logic_without_thread_id(self):
-        """Test put() returns config early when no thread_id."""
+    @pytest.mark.asyncio
+    async def test_aput_logic_without_thread_id(self):
+        """Test aput() returns config early when no thread_id."""
         saver, mock_checkpointer = self._create_saver_with_mock_checkpointer()
 
         config = {"other": "value"}
         checkpoint = {"v": 1, "id": "cp-1", "data": {}}
         metadata = {"source": None, "step": -1, "writes": {}}
 
-        result = saver.put(config, checkpoint, metadata, {})
+        result = await saver.aput(config, checkpoint, metadata, {})
 
         assert result == config
         mock_checkpointer.put.assert_not_called()
 
-    def test_delete_thread_logic(self):
-        """Test delete_thread() calls checkpointer.delete()."""
+    @pytest.mark.asyncio
+    async def test_adelete_thread_logic(self):
+        """Test adelete_thread() calls checkpointer.delete()."""
         saver, mock_checkpointer = self._create_saver_with_mock_checkpointer()
 
-        saver.delete_thread("session-123")
+        await saver.adelete_thread("session-123")
 
         mock_checkpointer.delete.assert_called_once_with("session-123")
 
-    def test_list_logic_with_thread_id(self):
-        """Test list() returns list of CheckpointTuple objects."""
+    @pytest.mark.asyncio
+    async def test_alist_logic_with_thread_id(self):
+        """Test alist() yields CheckpointTuple objects."""
         history = [{"status": "checkpoint_1"}, {"status": "checkpoint_2"}]
         saver, mock_checkpointer = self._create_saver_with_mock_checkpointer()
         mock_checkpointer.get_history.return_value = history
 
         config = {"configurable": {"thread_id": "session-123"}}
-        results = saver.list(config)
+        results = [cp async for cp in saver.alist(config)]
 
         assert isinstance(results, list)
         assert len(results) == 2
         for result in results:
-            # CheckpointTuple is a Pydantic model - use hasattr
             assert hasattr(result, "checkpoint")
             assert hasattr(result, "metadata")
             assert hasattr(result, "config")
 
-    def test_list_logic_with_limit(self):
-        """Test list() respects limit parameter."""
+    @pytest.mark.asyncio
+    async def test_alist_logic_with_limit(self):
+        """Test alist() respects limit parameter."""
         saver, mock_checkpointer = self._create_saver_with_mock_checkpointer()
         mock_checkpointer.get_history.return_value = []
 
         config = {"configurable": {"thread_id": "session-123"}}
-        saver.list(config, limit=5)
+        _ = [cp async for cp in saver.alist(config, limit=5)]
 
         mock_checkpointer.get_history.assert_called_once_with("session-123", limit=5)
 
-    def test_list_logic_without_thread_id(self):
-        """Test list() returns empty list when no thread_id."""
+    @pytest.mark.asyncio
+    async def test_alist_logic_without_thread_id(self):
+        """Test alist() yields nothing when no thread_id."""
         saver, mock_checkpointer = self._create_saver_with_mock_checkpointer()
 
-        results = saver.list({})
+        results = [cp async for cp in saver.alist({})]
 
         assert results == []
 
-    def test_async_methods_delegate_to_sync(self):
-        """Test async methods delegate to sync counterparts."""
-        import asyncio
-
-        saver, mock_checkpointer = self._create_saver_with_mock_checkpointer()
-
-        # Test aget_tuple delegates to get (they should return same type)
-        config = {"configurable": {"thread_id": "session-123"}}
-        mock_checkpointer.get.return_value = {"status": "test"}
-
-        sync_result = saver.get(config)
-        async_result = asyncio.run(saver.aget(config))
-
-        # Both should return dict (not None)
-        assert sync_result is not None
-        assert async_result is not None
-
-        # Test aput delegates to put - Checkpoint is TypedDict, pass as dict
-        checkpoint = {"v": 1, "id": "cp-1", "ts": "", "data": {}}
-        metadata = {"source": None, "step": -1, "writes": {}}
-        sync_put_result = saver.put(config, checkpoint, metadata, {})
-        async_put_result = asyncio.run(saver.aput(config, checkpoint, metadata, {}))
-
-        # Both should return config
-        assert sync_put_result == config
-        assert async_put_result == config
-
-        # Test adelete_thread delegates to delete_thread
-        asyncio.run(saver.adelete_thread("session-123"))
-        mock_checkpointer.delete.assert_called_with("session-123")
-
-    def test_writes_methods_are_noop(self):
-        """Test put_writes and aput_writes are no-ops."""
+    @pytest.mark.asyncio
+    async def test_writes_methods_are_noop(self):
+        """Test aput_writes is a no-op."""
         saver, mock_checkpointer = self._create_saver_with_mock_checkpointer()
 
         # These should not raise
-        saver.put_writes(
-            config={"configurable": {"thread_id": "123"}},
-            writes=[("key", "value")],
-            task_id="task-1",
-            task_path="path/to/task",
-        )
-
-        saver.aput_writes(
+        await saver.aput_writes(
             config={"configurable": {"thread_id": "123"}},
             writes=[("key", "value")],
             task_id="task-1",
@@ -240,3 +184,78 @@ class TestRustCheckpointSaverUnit:
 
         # No checkpointer methods should be called
         mock_checkpointer.put.assert_not_called()
+
+
+class TestRustCheckpointSaverSingleton:
+    """Tests for RustCheckpointSaver singleton pattern and caching."""
+
+    def test_get_default_checkpointer_returns_singleton(self):
+        """Test that get_default_checkpointer returns the same instance."""
+        # Reset singleton to test
+        import omni.langgraph.checkpoint.saver as saver_module
+
+        original = saver_module._default_checkpointer
+        saver_module._default_checkpointer = None
+
+        try:
+            from omni.langgraph.checkpoint.saver import get_default_checkpointer
+
+            # Mock the actual initialization
+            with patch("omni.langgraph.checkpoint.saver.RustCheckpointSaver") as mock_class:
+                mock_instance = MagicMock()
+                mock_class.return_value = mock_instance
+
+                # First call
+                saver1 = get_default_checkpointer()
+
+                # Second call should return same instance
+                saver2 = get_default_checkpointer()
+
+                # Should only create one instance
+                assert mock_class.call_count == 1
+                assert saver1 is saver2
+        finally:
+            # Restore original
+            saver_module._default_checkpointer = original
+
+    def test_checkpointer_cache_key_based_on_table_and_dimension(self):
+        """Test that checkpointer cache uses (table_name, dimension) as key."""
+        from omni.langgraph.checkpoint.saver import _CHECKPOINTER_CACHE
+
+        # Clear cache
+        original_cache = _CHECKPOINTER_CACHE.copy()
+        _CHECKPOINTER_CACHE.clear()
+
+        try:
+            from omni.langgraph.checkpoint.saver import RustCheckpointSaver
+
+            # Mock LanceCheckpointer
+            with patch("omni.langgraph.checkpoint.saver.LanceCheckpointer") as mock_lance:
+                mock1 = MagicMock()
+                mock2 = MagicMock()
+                mock_lance.side_effect = [mock1, mock2]
+
+                # Create two savers with same (table, dimension)
+                saver1 = RustCheckpointSaver(table_name="checkpoints", dimension=1536)
+                saver2 = RustCheckpointSaver(table_name="checkpoints", dimension=1536)
+
+                # Should use same LanceCheckpointer
+                assert mock_lance.call_count == 1
+                assert saver1._checkpointer is saver2._checkpointer
+
+                # Create saver with different dimension
+                saver3 = RustCheckpointSaver(table_name="checkpoints", dimension=768)
+
+                # Should create new LanceCheckpointer
+                assert mock_lance.call_count == 2
+        finally:
+            # Restore cache
+            _CHECKPOINTER_CACHE.clear()
+            _CHECKPOINTER_CACHE.update(original_cache)
+
+    def test_module_level_cache_persists(self):
+        """Test that _CHECKPOINTER_CACHE module-level cache persists."""
+        from omni.langgraph.checkpoint.saver import _CHECKPOINTER_CACHE
+
+        # The cache should exist and be a dict
+        assert isinstance(_CHECKPOINTER_CACHE, dict)

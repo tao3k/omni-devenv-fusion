@@ -1,7 +1,7 @@
 # Omni Loop (CCA Runtime)
 
 > **Status**: Active (Current)
-> **Version**: v2.0 | 2026-01-24
+> **Version**: v2.1 | 2026-01-25 (Self-Evolution Enabled)
 
 ## Overview
 
@@ -9,13 +9,14 @@ Omni Loop is the **CCA (Cognitive Code Agent) Runtime** that integrates all syst
 
 ### Core Components
 
-| Component      | Purpose                                               |
-| -------------- | ----------------------------------------------------- |
-| **ReAct Loop** | Execute tasks via Observe-Decide-Act-Reflect cycle    |
-| **Router**     | Semantic routing to select appropriate skills         |
-| **Librarian**  | RAG-powered knowledge retrieval                       |
-| **Note-Taker** | Session reflection & wisdom distillation              |
-| **Kernel**     | Tool execution via @skill_command decorated functions |
+| Component      | Purpose                                                     |
+| -------------- | ----------------------------------------------------------- |
+| **ReAct Loop** | Execute tasks via Observe-Decide-Act-Reflect cycle          |
+| **Router**     | Semantic routing to select appropriate skills               |
+| **Librarian**  | RAG-powered knowledge retrieval                             |
+| **Note-Taker** | Session reflection & wisdom distillation                    |
+| **Kernel**     | Tool execution via @skill_command decorated functions       |
+| **Evolution**  | Self-learning: harvest skills & extract rules from sessions |
 
 ## CCA Cycle
 
@@ -45,6 +46,80 @@ Omni Loop is the **CCA (Cognitive Code Agent) Runtime** that integrates all syst
 3. **Decide**: LLM reasoning with context
 4. **Act**: Execute tools via JIT loader
 5. **Reflect**: Distill wisdom and save to memory
+
+## Self-Evolution
+
+Omni Loop implements **Self-Evolution** to continuously improve from successful sessions.
+
+### Dual-Path Evolution Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    Self-Evolution Architecture                           │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │                    Fast Path: Semantic Memory                     │   │
+│  │  (System 1 - Fast Thinking)                                      │   │
+│  │                                                                   │   │
+│  │  User Correction → VectorStore → Context Injection → Future Action│   │
+│  │  Rules/preferences applied automatically                         │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │                    Slow Path: Procedural Skills                   │   │
+│  │  (System 2 - Slow Thinking)                                      │   │
+│  │                                                                   │   │
+│  │  Successful Workflow → Harvester → Factory → quarantined skill   │   │
+│  │  Complex workflows solidified into new Skills                    │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Memory Recall (Fast Path)
+
+Before executing a task, Omni Loop searches for relevant learned rules:
+
+```python
+async def _inject_memory_context(self, task: str) -> None:
+    """Associative Recall - Fast Path"""
+    memories = await vector_store.search(query=task, n_results=3)
+    if memories:
+        self.context.add_system_message(
+            f"\n[RECALLED MEMORIES]\n{memories}\n[/RECALLED MEMORIES]\n"
+        )
+```
+
+### Harvester (Post-Execution)
+
+After successful sessions (ending with `EXIT_LOOP_NOW`):
+
+| Path     | Trigger                        | Output                      |
+| -------- | ------------------------------ | --------------------------- |
+| **Fast** | User corrections/preferences   | Rule saved to VectorStore   |
+| **Slow** | Successful workflow (3+ tools) | Skill file in `quarantine/` |
+
+### Skill Factory
+
+Generated skills follow standard Omni Skill structure:
+
+```python
+# assets/skills/harvested/quarantine/{skill_name}.py
+@skill(name="{skill_name}", description="{description}")
+class {ClassName}:
+    @tool
+    async def run(self, ctx, {params}) -> str:
+        """Auto-generated skill from observed workflow."""
+        raise NotImplementedError("Requires manual implementation")
+```
+
+### Safety Measures
+
+- All harvested skills go to `quarantine/` directory
+- Must pass static analysis before promotion
+- Require at least one integration test
+- Human review recommended before activation
 
 ## Trinity Architecture Integration
 

@@ -1,6 +1,6 @@
 //! Tests for SkillScanner - SKILL.md parsing.
 
-use skills_scanner::{ScriptScanner, SkillScanner, SkillStructure};
+use skills_scanner::{SkillScanner, SkillStructure, ToolsScanner};
 use tempfile::TempDir;
 
 #[test]
@@ -127,7 +127,7 @@ fn test_extract_frontmatter_no_frontmatter() {
 #[test]
 fn test_scan_skill_tools_includes_routing_keywords() {
     let skill_scanner = SkillScanner::new();
-    let script_scanner = ScriptScanner::new();
+    let script_scanner = ToolsScanner::new();
     let structure = SkillStructure::default();
 
     // manifest_dir: packages/rust/crates/omni-vector

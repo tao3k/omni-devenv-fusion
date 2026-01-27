@@ -152,7 +152,7 @@ class TestSkillDiscoveryService:
                 assert matches[i].score >= matches[i + 1].score
 
     def test_search_tools_has_usage_template(self):
-        """Test that results have usage_template."""
+        """Test that results have usage_template with @omni() format."""
         from omni.core.skills.discovery import SkillDiscoveryService
 
         service = SkillDiscoveryService()
@@ -160,7 +160,9 @@ class TestSkillDiscoveryService:
 
         for m in matches:
             assert m.usage_template
-            assert "..." in m.usage_template or "()" in m.usage_template
+            # Template should contain @omni() format with tool name
+            assert "@omni(" in m.usage_template
+            assert m.name in m.usage_template
 
     def test_search_tools_with_limit(self):
         """Test that limit parameter works correctly."""

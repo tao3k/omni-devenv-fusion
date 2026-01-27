@@ -138,7 +138,7 @@ class TestRunCommandErrorHandling:
             from omni.agent.core.omni.loop import OmniLoop
 
             loop = OmniLoop()
-            result = await loop.run("Test task")
+            result = await loop.run("Test task: handle LLM failure gracefully")
 
             # Should return empty string on failure
             assert result == ""
@@ -161,7 +161,7 @@ class TestRunCommandErrorHandling:
             from omni.agent.core.omni.loop import OmniLoop
 
             loop = OmniLoop()
-            result = await loop.run("Test task")
+            result = await loop.run("Test task: handle timeout gracefully")
 
             # Should return empty string on timeout/failure
             assert result == ""
@@ -416,7 +416,7 @@ class TestRunCommandEdgeCases:
 
     @pytest.mark.asyncio
     async def test_empty_task_handling(self):
-        """Should handle empty task string."""
+        """Should handle empty task string with clarification message."""
         mock = MagicMock()
         mock.complete = AsyncMock(
             return_value={
@@ -436,8 +436,8 @@ class TestRunCommandEdgeCases:
             loop = OmniLoop()
             result = await loop.run("")
 
-            mock.complete.assert_called_once()
-            assert result == "I see you've sent an empty message."
+            # Epistemic gating should block empty tasks
+            assert "more information" in result.lower() or "too short" in result.lower()
 
     @pytest.mark.asyncio
     async def test_very_long_task(self):

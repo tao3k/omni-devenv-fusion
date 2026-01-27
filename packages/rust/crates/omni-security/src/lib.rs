@@ -1,14 +1,25 @@
 #![allow(clippy::doc_markdown)]
 
-//! omni-security - High-Performance Secret Scanning for Omni DevEnv
+//! omni-security - Security Scanner & Sandbox for Omni DevEnv
 //!
-//! Features:
+//! ## Modules
+//!
+//! - `security`: Secret scanning and permission gatekeeper
+//! - `sandbox`: Isolated execution environment for harvested skills
+//!
+//! ## Features
+//!
 //! - O(n) linear-time regex matching via RegexSet
 //! - Pre-compiled patterns at startup (Lazy static)
 //! - Zero-copy scanning for large files
 //! - Fail-fast on first detected secret
+//! - Docker/NsJail sandboxing for safe test execution
 //!
 //! Patterns follow ODF-REP Security Standards.
+
+mod sandbox;
+
+pub use sandbox::{SandboxConfig, SandboxError, SandboxMode, SandboxResult, SandboxRunner};
 
 use once_cell::sync::Lazy;
 use regex::RegexSet;

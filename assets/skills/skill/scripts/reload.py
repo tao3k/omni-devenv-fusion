@@ -5,7 +5,10 @@ Provides dynamic skill reloading via MCP tool:
 - @omni("skill.reload", {"name": "git"})
 """
 
+import os.path
+
 from omni.foundation.api.decorators import skill_command
+from omni.foundation.config.skills import SKILLS_DIR
 
 
 @skill_command(
@@ -42,17 +45,15 @@ from omni.foundation.api.decorators import skill_command
 )
 async def reload_skill(name: str = "git") -> str:
     """Reload a skill from disk to pick up structural changes."""
-    import os
-
     from omni.core.kernel import get_kernel
 
     kernel = get_kernel()
 
-    skill_path = os.path.join("assets/skills", name)
-    if not os.path.isdir(skill_path):
+    skill_path = SKILLS_DIR(name)
+    if not skill_path.is_dir():
         return f"""**Skill Not Found**
 
-Skill `{name}` does not exist in `assets/skills/`."""
+Skill `{name}` does not exist in `SKILLS_DIR()`."""
 
     # Check if skill was previously loaded
     loaded_skills = kernel.skill_context.list_skills()

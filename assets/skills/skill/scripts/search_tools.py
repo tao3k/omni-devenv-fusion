@@ -102,7 +102,56 @@ async def search_tools(
 
         # Collect tools from all loaded skills with their schemas
         all_tools = []
-        for skill_name in ctx.list_skills():
+        skills_to_search = ctx.list_skills()
+
+        # Fallback: Use SkillDiscoveryService if kernel has no skills or skills have no commands
+        use_fallback = False
+        if not skills_to_search:
+            use_fallback = True
+        else:
+            # Check if any skill has commands loaded
+            for skill_name in skills_to_search[:5]:  # Check first 5 skills
+                skill_obj = ctx.get_skill(skill_name)
+                if skill_obj and hasattr(skill_obj, "_script_loader") and skill_obj._script_loader:
+                    if (
+                        hasattr(skill_obj._script_loader, "commands")
+                        and skill_obj._script_loader.commands
+                    ):
+                        break
+            else:
+                # No skills have commands, use fallback
+                use_fallback = True
+
+        if use_fallback:
+            try:
+                from omni.core.skills.discovery import SkillDiscoveryService
+
+                service = SkillDiscoveryService()
+                tools = service.search_tools(query, limit=50)
+                # Get schema from registry for each tool
+                registry = service._load_registry()
+                for tool in tools:
+                    record = registry.get(tool.name)
+                    input_schema = {}
+                    if record:
+                        try:
+                            input_schema = (
+                                json.loads(record.input_schema) if record.input_schema else {}
+                            )
+                        except json.JSONDecodeError:
+                            pass
+                    all_tools.append(
+                        {
+                            "name": tool.name,
+                            "description": tool.description,
+                            "schema": input_schema,
+                            "skill": tool.skill_name,
+                        }
+                    )
+            except Exception:
+                pass  # Fallback also failed, continue with empty list
+
+        for skill_name in skills_to_search:
             skill_obj = ctx.get_skill(skill_name)
             if skill_obj is None:
                 continue

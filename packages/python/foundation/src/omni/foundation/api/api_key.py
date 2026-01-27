@@ -33,26 +33,15 @@ def _find_project_root() -> Path:
 
 def _load_settings_yaml() -> dict:
     """Load assets/settings.yaml configuration."""
-    project_root = _find_project_root()
-    settings_path = project_root / "assets" / "settings.yaml"
+    from omni.foundation.config.settings import get_settings
 
-    if not settings_path.exists():
-        return {}
-
-    try:
-        import yaml
-
-        with open(settings_path, encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
-    except Exception as e:
-        logger.warning("Failed to load settings.yaml", error=str(e))
-        return {}
+    return get_settings().get("api", {})
 
 
 def _get_settings_json_path() -> Path | None:
     """Get .claude/settings.json path from settings.yaml."""
-    settings = _load_settings_yaml()
-    anthropic_path = settings.get("api", {}).get("anthropic_settings", ".claude/settings.json")
+    api_settings = _load_settings_yaml()
+    anthropic_path = api_settings.get("anthropic_settings", ".claude/settings.json")
     project_root = _find_project_root()
     return project_root / anthropic_path
 

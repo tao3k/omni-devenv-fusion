@@ -4,18 +4,18 @@ omni.core.skills.memory - Skill Memory (Rust-Native)
 Context Hydration Engine - The Brain's Librarian.
 
 Responsibilities:
-1. Loading Skill Metadata (from Rust-generated skill-index.json)
+1. Loading Skill Metadata (from LanceDB - Single Source of Truth)
 2. Hydrating Context (Merging SKILL.md + required_refs content)
 3. Providing caching and safe file access.
 
 Architecture:
-    skill_index.json ──▶ SkillIndexLoader ──▶ Metadata O(1) Lookup
-                                    │
-                                    ▼
-                            ContextAssembler (Rust) ──▶ Full LLM Context
-                                    │
-                                    ▼
-                              FileCache (caching)
+    LanceDB ──────▶ SkillIndexLoader ──▶ Metadata O(1) Lookup
+                            │
+                            ▼
+                    ContextAssembler (Rust) ──▶ Full LLM Context
+                            │
+                            ▼
+                      FileCache (caching)
 
 Usage:
     from omni.core.skills import get_skill_memory
@@ -44,7 +44,7 @@ logger = get_logger("omni.core.skills.memory")
 class SkillMemory:
     """The Brain's Librarian - unified interface for skill context hydration.
 
-    Single source of truth: Rust-generated skill_index.json
+    Single source of truth: LanceDB (Rust/LanceDB)
     Uses Rust ContextAssembler for parallel I/O + templating + token counting.
     """
 
@@ -141,7 +141,7 @@ class SkillMemory:
     ) -> str:
         """Hydrate context with raw SKILL.md content (for dev mode).
 
-        Used when skill_index.json doesn't exist yet.
+        Used when data is not yet in LanceDB.
         """
         metadata = self._index_loader.get_metadata(skill_name) or {}
 

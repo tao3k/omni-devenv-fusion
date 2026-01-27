@@ -1,8 +1,10 @@
 """
 rust_analyzer.py - Code Analysis Implementation
 
-Rust-powered code analysis using ast-grep bindings.
-Provides high-performance pattern matching and symbol extraction.
+Code analysis utilities for pattern matching and symbol extraction.
+Uses Python's ast module for source code analysis.
+
+Note: Rust ast-grep bindings will be integrated in future updates.
 """
 
 from __future__ import annotations
@@ -17,11 +19,10 @@ logger = get_logger("omni.bridge.analyzer")
 
 
 class RustCodeAnalyzer:
-    """Code analysis implementation using Rust ast-grep bindings."""
+    """Code analysis implementation using Python's ast module."""
 
     def __init__(self):
-        # Note: No RUST_AVAILABLE check here - using pure Python for now
-        logger.info("Initialized RustCodeAnalyzer (Python fallback)")
+        logger.info("Initialized RustCodeAnalyzer (Python implementation)")
 
     def find_patterns(
         self,
@@ -29,42 +30,62 @@ class RustCodeAnalyzer:
         pattern: str,
         language: str = "python",
     ) -> list[dict[str, Any]]:
-        """Find AST patterns in source code.
-
-        Uses Rust ast-grep for high-performance pattern matching.
-        """
+        """Find patterns in source code using string matching."""
         logger.debug(f"Finding patterns: {pattern} in {language}")
-        # TODO: Implement when ast-grep bindings are available
-        return []
+        # Simple string-based pattern matching as fallback
+        # Full AST-based pattern matching requires ast-grep bindings
+        matches = []
+        lines = code.split("\n")
+        for i, line in enumerate(lines, 1):
+            if pattern in line:
+                matches.append(
+                    {
+                        "line": i,
+                        "content": line.strip(),
+                        "pattern": pattern,
+                    }
+                )
+        return matches
 
     def extract_symbols(
         self,
         code: str,
         language: str = "python",
     ) -> list[CodeSymbol]:
-        """Extract all symbols (functions, classes, etc.) from source code."""
+        """Extract symbols (functions, classes) from source code."""
+        import ast
+
         logger.debug(f"Extracting symbols from {language} code")
-        # TODO: Implement when symbol extraction bindings are available
-        return []
+        symbols = []
 
-    def count_lines_of_code(
-        self,
-        code: str,
-        language: str | None = None,
-    ) -> dict[str, int]:
-        """Count lines of code by category."""
-        lines = code.split("\n")
-        total = len(lines)
-        blank = sum(1 for line in lines if line.strip() == "")
-        comment = 0
-        code_lines = total - blank - comment
+        try:
+            tree = ast.parse(code)
 
-        return {
-            "total": total,
-            "blank": blank,
-            "comment": comment,
-            "code": code_lines,
-        }
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
+                    symbols.append(
+                        CodeSymbol(
+                            name=node.name,
+                            symbol_type="function",
+                            file_path="",
+                            line_number=node.lineno,
+                            end_line_number=node.end_lineno or node.lineno,
+                        )
+                    )
+                elif isinstance(node, ast.ClassDef):
+                    symbols.append(
+                        CodeSymbol(
+                            name=node.name,
+                            symbol_type="class",
+                            file_path="",
+                            line_number=node.lineno,
+                            end_line_number=node.end_lineno or node.lineno,
+                        )
+                    )
+        except SyntaxError:
+            logger.debug("Could not parse code for symbol extraction")
+
+        return symbols
 
     def get_file_outline(
         self,
@@ -72,10 +93,12 @@ class RustCodeAnalyzer:
         language: str = "python",
     ) -> dict[str, Any]:
         """Generate a high-level outline of the source file."""
+        symbols = self.extract_symbols(code, language)
+
         return {
             "language": language,
-            "functions": [],
-            "classes": [],
+            "functions": [s.model_dump() for s in symbols if s.symbol_type == "function"],
+            "classes": [s.model_dump() for s in symbols if s.symbol_type == "class"],
             "imports": [],
         }
 

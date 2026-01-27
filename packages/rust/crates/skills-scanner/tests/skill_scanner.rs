@@ -373,9 +373,9 @@ pattern = "pyproject.toml"
     )
     .unwrap();
 
-    use skills_scanner::{ScriptScanner, SkillScanner};
+    use skills_scanner::{SkillScanner, ToolsScanner};
     let scanner = SkillScanner::new();
-    let script_scanner = ScriptScanner::new();
+    let tools_scanner = ToolsScanner::new();
 
     let metadatas = scanner.scan_all(&skills_dir, None).unwrap();
     assert_eq!(metadatas.len(), 1);
@@ -383,7 +383,7 @@ pattern = "pyproject.toml"
     let metadata = &metadatas[0];
     let scripts_path = python_path.join("scripts");
     let tools = if scripts_path.exists() {
-        script_scanner
+        tools_scanner
             .scan_scripts(
                 &scripts_path,
                 &metadata.skill_name,

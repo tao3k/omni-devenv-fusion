@@ -81,14 +81,37 @@ class ActiveSkillProvider(ContextProvider):
 
 
 class AvailableToolsProvider(ContextProvider):
-    """Layer 2: Available tools index from Rust Scanner (filtered to core commands only)."""
+    """Layer 2: Available tools index from Rust Scanner (filtered to core commands only).
+
+    Uses Arrow Analyzer for efficient tool context generation.
+    Falls back to index-based approach if Arrow is unavailable.
+    """
 
     def __init__(self) -> None:
         self._index: list[dict] | None = None
         self._filtered_tools: set[str] | None = None
 
     async def provide(self, state: dict[str, Any], budget: int) -> ContextResult:
-        # Load tools index (lazy)
+        # Try Arrow Analyzer first for zero-copy optimization
+        try:
+            from omni.core.skills.analyzer import generate_system_context
+
+            # Use Arrow Analyzer for high-performance context generation
+            tools_context = generate_system_context(limit=50)
+
+            if tools_context:
+                content = f"<available_tools>\n{tools_context}\n</available_tools>"
+                token_count = len(content.split())
+                return ContextResult(
+                    content=content,
+                    token_count=token_count,
+                    name="tools",
+                    priority=20,
+                )
+        except Exception:
+            pass  # Fall through to index-based approach
+
+        # Fallback: Load tools index (lazy)
         if self._index is None:
             from omni.core.skills.index_loader import SkillIndexLoader
             from omni.core.config.loader import load_filter_commands

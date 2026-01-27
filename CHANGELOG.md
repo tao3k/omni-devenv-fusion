@@ -4,22 +4,22 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 ## [v0.4.0](https://github.com/tao3k/omni-dev-fusion/compare/d733fd3bf66f357c1f32f3d88143ff2ab090157d..v0.4.0) - 2026-01-25
 #### Features
-- (**agent**) Add modern engineering workflows SOP and cleanup Phase terminology - ([0995f7e](https://github.com/tao3k/omni-dev-fusion/commit/0995f7e58355a50a93f882b3ff78b2f7644be463)) - guangtao
+- Add modern engineering workflows SOP and cleanup terminology
 - (**agent**) Migrate Meta-Agent to Factory Extension with microkernel architecture - ([4cb1571](https://github.com/tao3k/omni-dev-fusion/commit/4cb1571c98a6733f67a6f0b795a423eed23813e8)) - guangtao
 - (**agent**) fix MCP stdio transport and skill discovery - ([0d3d48a](https://github.com/tao3k/omni-dev-fusion/commit/0d3d48a66122005bd6c7f4895a42ec24df980dca)) - guangtao
 - (**agent**) modularize testing framework and add GitHub Actions CI - ([64cc443](https://github.com/tao3k/omni-dev-fusion/commit/64cc4435b0ee63ad7ab76c793736634dd96ce24a)) - guangtao
-- (**agent**) implement Phase 43 Holographic Agent with Continuous State Injection - ([65e5564](https://github.com/tao3k/omni-dev-fusion/commit/65e5564b14458a65558ac8af75043fadb02619e7)) - guangtao
+- (**agent**) implement Holographic Agent with Continuous State Injection
 - (**core**) fix list_tools regression and improve tool metadata - ([65e2073](https://github.com/tao3k/omni-dev-fusion/commit/65e207337bd23d3ec17fdf6d5d6c391e35dd603f)) - guangtao
 - (**core**) optimize skill sync performance with path normalization - ([b982be9](https://github.com/tao3k/omni-dev-fusion/commit/b982be9362fbab18deccb0adc029ca199d528fa8)) - guangtao
 - (**core**) add vulture for dead code detection and cleanup - ([437fc7e](https://github.com/tao3k/omni-dev-fusion/commit/437fc7ebf4ce3a0b5526491e8884954f2b554964)) - guangtao
-- (**core**) implement Phase 44-45 Rust core integration and Python 3.13 support - ([2af0db6](https://github.com/tao3k/omni-dev-fusion/commit/2af0db60fe276014a306237b9de2da6be662e136)) - guangtao
-- (**core**) implement Auto-Route Skill Discovery (Phase 36.8) - ([ab44d06](https://github.com/tao3k/omni-dev-fusion/commit/ab44d06a38815feb5c2d1f957a1e2c847e5b76a3)) - guangtao
-- (**core**) implement Phase 36.5 Index Sync + Phase 36.6 Production Stability - ([6b0150c](https://github.com/tao3k/omni-dev-fusion/commit/6b0150ce812241aa5a0f6b109639e8783b346a1a)) - guangtao
-- (**git-workflow**) implement Phase 60 Grand Bazaar with hybrid semantic routing - ([812135f](https://github.com/tao3k/omni-dev-fusion/commit/812135ff672659e3f5116c198ff010c0fe54d3d9)) - guangtao
-- (**router**) implement Phase 41 Wisdom-Aware and Phase 42 State-Aware Routing - ([8e62b2b](https://github.com/tao3k/omni-dev-fusion/commit/8e62b2b77a6043c18c13bb2f5523194d496337d9)) - guangtao
-- (**rust-core**) Implement Phase 52 The Surgeon with AST-based editing - ([ef4ae0a](https://github.com/tao3k/omni-dev-fusion/commit/ef4ae0a987e3fb85b7b9e355e0e6beec22fe1b3d)) - guangtao
-- (**rust-core**) implement Phase 46-47 Rust core with type unification and Iron Lung - ([07e11bd](https://github.com/tao3k/omni-dev-fusion/commit/07e11bdeaa526235609f59b76a76ae9219062fe8)) - guangtao
-- Phase 46 Neural Bridge - Type Unification and Benchmark - ([15f849d](https://github.com/tao3k/omni-dev-fusion/commit/15f849d47e7ffe69a7f7bfd450298dbc2ff25300)) - guangtao
+- (**core**) implement Rust core integration and Python 3.13 support
+- (**core**) implement Auto-Route Skill Discovery
+- (**core**) implement Index Sync and Production Stability
+- (**git-workflow**) implement Grand Bazaar with hybrid semantic routing
+- (**router**) implement Wisdom-Aware and State-Aware Routing
+- (**rust-core**) Implement The Surgeon with AST-based editing
+- (**rust-core**) implement Rust core with type unification and Iron Lung
+- Neural Bridge - Type Unification and Benchmark
 - establish ODF-REP Rust Engineering Protocol - ([7f669ef](https://github.com/tao3k/omni-dev-fusion/commit/7f669efc03ef07dd9f591d347c093ead3d9e0871)) - guangtao
 #### Bug Fixes
 - (**agent**) Fix test imports to use new skill_runtime API - ([eeba2a3](https://github.com/tao3k/omni-dev-fusion/commit/eeba2a3d74167cec5eebd874d3e08e83e13b26d3)) - guangtao
@@ -27,7 +27,7 @@ All notable changes to this project will be documented in this file. See [conven
 - (**git-workflow**) stage all modified files before commit to capture lefthook reformatting - ([7390df8](https://github.com/tao3k/omni-dev-fusion/commit/7390df892a79202998cd8c2a575f1e5fd4e6b8f6)) - guangtao
 - (**scanner**) fix @skill_script ast-grep pattern using $$$ Sequence Wildcard - ([90b9362](https://github.com/tao3k/omni-dev-fusion/commit/90b936209d47ab3c4bc58ecc8947f9b19295e15e)) - guangtao
 #### Documentation
-- add Phase 64-65 documentation for sync, reindex, and reactive indexing - ([5bd9ddf](https://github.com/tao3k/omni-dev-fusion/commit/5bd9ddfb7fff03f68e501f7ae151fa6dcec8d43d)) - guangtao
+- add documentation for sync, reindex, and reactive indexing
 #### Tests
 - dynamic loading works - ([b18921e](https://github.com/tao3k/omni-dev-fusion/commit/b18921e7b37c1e3a47c4f6ef6675e39349a7e425)) - guangtao
 #### Refactoring
@@ -53,22 +53,22 @@ All notable changes to this project will be documented in this file. See [conven
 
 ## [v0.3.0](https://github.com/tao3k/omni-dev-fusion/compare/2156b92cfb35018cf690bf3d40bc1512de70a30a..v0.3.0) - 2026-01-10
 #### Features
-- (**agent**) Implement Phase 28.1 Subprocess/Shim Architecture - ([deb3fa3](https://github.com/tao3k/omni-dev-fusion/commit/deb3fa39835952b00f88faf82b8528cd54dd7b43)) - guangtao
-- (**agent**) Implement Phase 28 Safe Ingestion / Immune System - ([1bbcbd1](https://github.com/tao3k/omni-dev-fusion/commit/1bbcbd17823ddb2f8775abb3bb66249ee64765c5)) - guangtao
-- (**core**) Phase 34 - Cognitive System Enhancements - ([d95de38](https://github.com/tao3k/omni-dev-fusion/commit/d95de388b3a8e558d5ad05489490185c40738a88)) - guangtao
-- (**core**) implement Phase 27 JIT Skill Acquisition and Phase 28 Safe Ingestion - ([29f4308](https://github.com/tao3k/omni-dev-fusion/commit/29f43081eb4605683585fdf9dddeabdd7586be1f)) - guangtao
-- (**core**) implement Phase 26 Skill Network with Git installer - ([1349d88](https://github.com/tao3k/omni-dev-fusion/commit/1349d8897fda20ad272fb45b9a32b22ca9a5ea0e)) - guangtao
+- (**agent**) Implement Subprocess/Shim Architecture
+- (**agent**) Implement Safe Ingestion / Immune System
+- (**core**) Cognitive System Enhancements
+- (**core**) implement JIT Skill Acquisition and Safe Ingestion
+- (**core**) implement Skill Network with Git installer
 #### Documentation
-- (**agent**) Phase 35.1 skill testing framework updates - ([28d0b00](https://github.com/tao3k/omni-dev-fusion/commit/28d0b001ec22bf860f6a5f1843e4012afea0b729)) - guangtao
+- (**agent**) skill testing framework updates
 - (**version**) Add monorepo versioning documentation - ([6504513](https://github.com/tao3k/omni-dev-fusion/commit/65045136900500bca96d17c4aa98357c197d8395)) - guangtao
 #### Tests
 - (**agent**) Remove migrated skill tests from old test files - ([c17adcb](https://github.com/tao3k/omni-dev-fusion/commit/c17adcb19546f98552817d935992328919e6c767)) - guangtao
 - (**agent**) Add skill loading regression tests - ([a963802](https://github.com/tao3k/omni-dev-fusion/commit/a963802780b907365237424268a944bdf766dc46)) - guangtao
 #### Refactoring
 - (**agent**) Sidecar Execution Pattern with CLI modularization - ([9fff6fd](https://github.com/tao3k/omni-dev-fusion/commit/9fff6fd4b344dd229a934e99e71868d368628575)) - guangtao
-- (**agent**) Phase 35.2 - Hot reload support for scripts/* - ([de73511](https://github.com/tao3k/omni-dev-fusion/commit/de735117efd8c1fc7d0ad58bec64bc1fce00548f)) - guangtao
-- (**agent**) rename phase-based test files to feature-based naming - ([a2c057f](https://github.com/tao3k/omni-dev-fusion/commit/a2c057fb34aab8ce847be87d92b9be665c769e37)) - guangtao
-- (**git-ops**) Phase 35.2 - Unified skill.command naming convention - ([9649612](https://github.com/tao3k/omni-dev-fusion/commit/96496129f121b465949584930e47173af726cc0f)) - guangtao
+- (**agent**) Hot reload support for scripts/*
+- (**agent**) rename test files from phase-based to feature-based naming
+- (**git-ops**) Unified skill.command naming convention
 - (**mcp**) Modularize mcp_core with performance optimizations - ([0b221c4](https://github.com/tao3k/omni-dev-fusion/commit/0b221c4e8f983f96df86ca00e06bce2d0fa504bd)) - guangtao
 - (**mcp**) Implement One Tool Architecture - Remove @mcp.tool decorators - ([e3ab459](https://github.com/tao3k/omni-dev-fusion/commit/e3ab4598d05c2bc02e22733c5fcee6791d91b45a)) - guangtao
 - (**orchestrator**) Refactor into atomic module structure - ([ad489e8](https://github.com/tao3k/omni-dev-fusion/commit/ad489e834889717f0985a1e7532d5307319dddb8)) - guangtao
@@ -79,7 +79,7 @@ All notable changes to this project will be documented in this file. See [conven
 
 ## [v0.2.0](https://github.com/tao3k/omni-dev-fusion/compare/1c9c93cb0409380bf4e75a8ba32704ebc9b1b267..v0.2.0) - 2026-01-06
 #### Documentation
-- Update Phase 25 documentation - ([1690dae](https://github.com/tao3k/omni-dev-fusion/commit/1690dae41d55b5513896e254b8323d0928315475)) - guangtao
+- Update documentation
 #### Tests
 - (**core**) Remove dynamic git commands from syntax variations test - ([dc59a44](https://github.com/tao3k/omni-dev-fusion/commit/dc59a44eaad82175c05e01b42d5143fa223271e3)) - guangtao
 #### Miscellaneous Chores
@@ -93,19 +93,19 @@ All notable changes to this project will be documented in this file. See [conven
 - (**docs**) docs: add design philosophy and memory loading patterns - ([2942599](https://github.com/tao3k/omni-dev-fusion/commit/294259957c085b27baed5cfc9b160315e8d1506c)) - guangtao
 - (**docs**) add modular stress test framework specification - ([6ebc5ec](https://github.com/tao3k/omni-dev-fusion/commit/6ebc5ec3d4197a9b0077007d259528c18b1ee91f)) - guangtao
 - (**docs**) add advanced search tool spec and update claude documentation - ([56d4652](https://github.com/tao3k/omni-dev-fusion/commit/56d4652fba78558c652bf3376756284bb8d35f8b)) - guangtao
-- (**git-ops**) Phase 24 Living Skill Architecture with LangGraph - ([a2c865d](https://github.com/tao3k/omni-dev-fusion/commit/a2c865db0d3dd1fadc0ee2e3edd52020406d9de4)) - guangtao
+- (**git-ops**) Living Skill Architecture with LangGraph
 - (**git-ops**) add security guidelines for path safety - ([651b921](https://github.com/tao3k/omni-dev-fusion/commit/651b92154867f2ff7011704bf73d10e67567231c)) - guangtao
 - (**git-ops**) add GitWorkflowCache auto-load and workflow protocol in responses - ([7bba266](https://github.com/tao3k/omni-dev-fusion/commit/7bba2660bd5681f649dcf93e4d35be5388509b4e)) - guangtao
 - (**git-workflow**) enforce authorization protocol at code level - ([1f3a096](https://github.com/tao3k/omni-dev-fusion/commit/1f3a0966099a53f4de6e32d5ea19813e5db9b539)) - guangtao
-- (**mcp**) Phase 25 One Tool Architecture - Single Entry Point - ([fd1273e](https://github.com/tao3k/omni-dev-fusion/commit/fd1273e63d805fb7fd918d54fe6938dbd6675c46)) - guangtao
-- (**mcp**) Phase 24 MiniMax Shift - MCP Protocol compliance - ([eb0b17c](https://github.com/tao3k/omni-dev-fusion/commit/eb0b17c002d6d127a1a8d87fc0c213cb8543d289)) - guangtao
-- (**mcp**) Phase 19.7 Claude Code Symbiosis with configurable settings - ([bbcf197](https://github.com/tao3k/omni-dev-fusion/commit/bbcf197dc00d3cb6528762128942d454f85d9034)) - guangtao
-- (**mcp**) Phase 19 Cognitive Injection - ReAct Loop + Dependency Injection - ([98f6dfc](https://github.com/tao3k/omni-dev-fusion/commit/98f6dfc517b7dbdbde6c17e135c3a3906199842b)) - guangtao
-- (**mcp**) Phase 18 Glass Cockpit - TUI visualization for agent execution - ([b93109f](https://github.com/tao3k/omni-dev-fusion/commit/b93109fb26694ce8cea7128dac81403bf944de75)) - guangtao
-- (**mcp**) Phase 17 Repomix-Powered Knowledge Base - ([19e8bda](https://github.com/tao3k/omni-dev-fusion/commit/19e8bda098065150113a83fb74ce3bd2a238b41b)) - guangtao
-- (**mcp**) Phase 16 Neural Bridge - Active RAG for Agents - ([63a29f8](https://github.com/tao3k/omni-dev-fusion/commit/63a29f875096db3ce29c77e6fff03b5415e7d2b6)) - guangtao
+- (**mcp**) One Tool Architecture - Single Entry Point
+- (**mcp**) MiniMax Shift - MCP Protocol compliance
+- (**mcp**) Claude Code Symbiosis with configurable settings
+- (**mcp**) Cognitive Injection - ReAct Loop + Dependency Injection
+- (**mcp**) Glass Cockpit - TUI visualization for agent execution
+- (**mcp**) Repomix-Powered Knowledge Base
+- (**mcp**) Neural Bridge - Active RAG for Agents
 - (**mcp**) add knowledge skill for structural knowledge injection - ([063d64e](https://github.com/tao3k/omni-dev-fusion/commit/063d64ee3b3d833422467b5b28cd582a77b29390)) - guangtao
-- (**mcp**) implement Phase 12 Harvester and Phase 13 Skill-First Reformation - ([4d028ba](https://github.com/tao3k/omni-dev-fusion/commit/4d028bac5bad5e1795e0c3a4fad3e5f9f4e99400)) - guangtao
+- (**mcp**) implement Harvester and Skill-First Reformation
 - (**mcp**) add test scenario loading from MD files for smart_commit - ([271a43e](https://github.com/tao3k/omni-dev-fusion/commit/271a43e4c26737f8fa6bc27911ccfdea7ca87e5a)) - guangtao
 - (**mcp**) add start_spec gatekeeper with auto spec_path tracking - ([034dcee](https://github.com/tao3k/omni-dev-fusion/commit/034dceea93132dc0135c170dbfd4a6217ef697f1)) - guangtao
 - (**mcp**) add Actions Over Apologies principle with auto-loaded problem-solving.md - ([b8b8c09](https://github.com/tao3k/omni-dev-fusion/commit/b8b8c097165346559f69093a0f35b35556a7cfa7)) - guangtao
@@ -115,20 +115,20 @@ All notable changes to this project will be documented in this file. See [conven
 - (**mcp**) add load_git_workflow_memory tool for gh persistent memory - ([d729dda](https://github.com/tao3k/omni-dev-fusion/commit/d729dda1769d8d8fea2201b2d0fd3bfbbfe58f9f)) - guangtao
 - (**mcp**) implement Language Expert System for Router-Augmented Coding - ([f0845b6](https://github.com/tao3k/omni-dev-fusion/commit/f0845b68ca66e4bbbcb68324d73006e6bffdb8ac)) - guangtao
 - (**mcp**) implement Docs as Code system with MCP enforcement tools - ([bcc3ba0](https://github.com/tao3k/omni-dev-fusion/commit/bcc3ba07e438e12c3ca8449eb882f41ca1804e86)) - guangtao
-- (**mcp**) complete dual-server architecture with Phase 3 features - ([207d335](https://github.com/tao3k/omni-dev-fusion/commit/207d335bed1d78494eee4258c4c456a3d5db51e1)) - guangtao
-- (**mcp**) add delegate_to_coder bridge tool (Phase 2) - ([0d35e03](https://github.com/tao3k/omni-dev-fusion/commit/0d35e03ef76e17cb97eed3c4a835b9957f9f0d00)) - guangtao
+- (**mcp**) complete dual-server architecture with enhanced features
+- (**mcp**) add delegate_to_coder bridge tool
 - (**mcp**) add micro-level tools and safety enhancements - ([dcaa565](https://github.com/tao3k/omni-dev-fusion/commit/dcaa565242798ff7566c3ca8c97d68837dca9212)) - guangtao
-- (**mcp**) add save_file tool for write capabilities (Phase 3) - ([9fa3fcd](https://github.com/tao3k/omni-dev-fusion/commit/9fa3fcd9e9e0a798d92528e7200a84d33a49cf82)) - guangtao
+- (**mcp**) add save_file tool for write capabilities
 - (**mcp**) add list_directory_structure tool for token optimization - ([2c5005e](https://github.com/tao3k/omni-dev-fusion/commit/2c5005e1cefb35f067845cf25a93a40fcbfcb753)) - guangtao
 - (**mcp-core**) add rich terminal output utilities for beautiful MCP server startup - ([0f510d2](https://github.com/tao3k/omni-dev-fusion/commit/0f510d236abdf40f5a07b223f8504853896bbc82)) - guangtao
 - (**mcp-core**) add thread-safe instructions loader with knowledge base - ([917e225](https://github.com/tao3k/omni-dev-fusion/commit/917e2252f30d09cfc58167db5fc481475987d5f3)) - guangtao
-- (**orchestrator**) implement Phase 15 Virtuous Cycle feedback loop - ([1746159](https://github.com/tao3k/omni-dev-fusion/commit/1746159686ad52693b6e14af256712f01c917437)) - guangtao
-- (**orchestrator**) implement Phase 14 Orchestrator central switchboard - ([1baf650](https://github.com/tao3k/omni-dev-fusion/commit/1baf6504495416224121d88eae884abbc20539c5)) - guangtao
+- (**orchestrator**) implement Virtuous Cycle feedback loop
+- (**orchestrator**) implement Orchestrator central switchboard
 - (**orchestrator**) increase timeout and add API key config fallback - ([c1ea2ba](https://github.com/tao3k/omni-dev-fusion/commit/c1ea2ba22cb9b71b9851b8f1b8ef4bb607aac594)) - guangtao
 - (**orchestrator**) upgrade Hive to v3 Antifragile Edition with auto-healing - ([dab2ba7](https://github.com/tao3k/omni-dev-fusion/commit/dab2ba7e7fa8b6990acc284ad9b67d057e4ba9e6)) - guangtao
 - (**orchestrator**) add hive architecture for distributed multi-process execution - ([17fce7f](https://github.com/tao3k/omni-dev-fusion/commit/17fce7fe9567864782cd1046097451e8caee12de)) - guangtao
-- (**router**) Phase 14.5 Semantic Cortex enhancements - ([f74b4f8](https://github.com/tao3k/omni-dev-fusion/commit/f74b4f8e985c85c1e55c8bf63a948704322ba954)) - guangtao
-- (**router**) implement Phase 14 Telepathic Link with Mission Brief Protocol - ([9bb57d6](https://github.com/tao3k/omni-dev-fusion/commit/9bb57d6d0387e37093d193f3fe51ffd419287f9f)) - guangtao
+- (**router**) Semantic Cortex enhancements
+- (**router**) implement Telepathic Link with Mission Brief Protocol
 - automate claude module management based on secrets status - ([523f35a](https://github.com/tao3k/omni-dev-fusion/commit/523f35a1425733950d1c5b842e24998e04c65ae3)) - guangtao
 - allow orchestrator env from json file - ([1127ab1](https://github.com/tao3k/omni-dev-fusion/commit/1127ab1ea1151f02b4d8f67f08e8eb4dc9debce5)) - GuangTao Zhang
 - rename repo to omni-devenv-fusion with MiniMax integration - ([df30d83](https://github.com/tao3k/omni-dev-fusion/commit/df30d83cbc158dc40e1cdac8e91c5d3b703e5be9)) - guangtao
@@ -159,11 +159,11 @@ All notable changes to this project will be documented in this file. See [conven
 - (**git-workflow**) add legal binding protocol rules for authorization - ([e3a9f18](https://github.com/tao3k/omni-dev-fusion/commit/e3a9f1839dfd4fd53ab40c55cb05a5f9889bd9d5)) - guangtao
 - (**git-workflow**) clarify git commit ≡ just agent-commit rule - ([5ff6a7d](https://github.com/tao3k/omni-dev-fusion/commit/5ff6a7de2891b96718bf581d588da98a21c312cd)) - guangtao
 - (**git-workflow**) update authorization rules for agent commits - ([16ced57](https://github.com/tao3k/omni-dev-fusion/commit/16ced5789a6b3f3ce06c97604d8a64f2b2809b5c)) - guangtao
-- (**mcp**) add Phase 15-17 specs - ([47d97ba](https://github.com/tao3k/omni-dev-fusion/commit/47d97ba921a269221869b08a145bb034416ff1df)) - guangtao
+- (**mcp**) add specs documentation
 - (**mcp**) add start_spec Legislation Gate documentation - ([d37908b](https://github.com/tao3k/omni-dev-fusion/commit/d37908b64dc55843d056852017329f179c9b65c7)) - guangtao
 - (**mcp**) add GitWorkflowCache auto-load documentation - ([e06c18b](https://github.com/tao3k/omni-dev-fusion/commit/e06c18b055cb5ababfbf6ec622b10b6eb5a19c9c)) - guangtao
 - (**mcp**) add guidelines.md for persistent memory strategy - ([eb12ba7](https://github.com/tao3k/omni-dev-fusion/commit/eb12ba75c81dcb4532f4dd2372dd8754d54d16d9)) - guangtao
-- (**orchestrator**) mark Phase 10 milestone complete with Antifragile Edition - ([775b637](https://github.com/tao3k/omni-dev-fusion/commit/775b6378fb1cdcfacf9369bbd1e490d10511bb69)) - guangtao
+- (**orchestrator**) mark milestone complete with Antifragile Edition
 - Refactor commit workflow documentation - ([cf1c94d](https://github.com/tao3k/omni-dev-fusion/commit/cf1c94dd7c39f5bce016d888bfdedde7e770045d)) - guangtao
 - document Tri-MCP architecture and deprecate delegate_to_coder - ([4bbcfbd](https://github.com/tao3k/omni-dev-fusion/commit/4bbcfbdc95c9fbd5f2050086c7cef24b34012c29)) - guangtao
 - add release process guideline - ([b7e6ce9](https://github.com/tao3k/omni-dev-fusion/commit/b7e6ce9a3779c8db3e521e05248ba11016886e42)) - guangtao
@@ -195,8 +195,8 @@ All notable changes to this project will be documented in this file. See [conven
 - add claude test - ([9fabcea](https://github.com/tao3k/omni-dev-fusion/commit/9fabceaa79dfb90022233cf03748d5cf161ac082)) - guangtao
 #### Refactoring
 - (**cli**) use settings.yaml for config paths instead of hardcoded - ([eed450a](https://github.com/tao3k/omni-dev-fusion/commit/eed450adca27118ae8e11c1f3c9ff94771059070)) - guangtao
-- (**git-ops**) Phase 25 One Tool Architecture completion - ([b6b9950](https://github.com/tao3k/omni-dev-fusion/commit/b6b9950607d6eed5698e5ccf83e43dedaebd9cba)) - guangtao
-- (**git-ops**) continue Phase 25 One Tool Architecture - ([892fece](https://github.com/tao3k/omni-dev-fusion/commit/892fece26c624fe0f395b1510372fc07ac0cb822)) - guangtao
+- (**git-ops**) One Tool Architecture completion
+- (**git-ops**) continue One Tool Architecture
 - (**git-ops**) replace print with structlog for consistent logging - ([a047692](https://github.com/tao3k/omni-dev-fusion/commit/a047692dcb7aff528d40d6e2b80d3a410eec55ef)) - guangtao
 - (**git-ops**) clean up guide.md, remove duplicate authorization template - ([bb21bf1](https://github.com/tao3k/omni-dev-fusion/commit/bb21bf12f916a11f99163cfd5ece51c99424762a)) - guangtao
 - (**git-ops**) simplify git skill to executor mode - ([f249110](https://github.com/tao3k/omni-dev-fusion/commit/f24911064d0d88e5e9b288d07100b2ab8c5b0c73)) - guangtao
@@ -207,8 +207,8 @@ All notable changes to this project will be documented in this file. See [conven
 - (**mcp**) consolidate skills - move writer/knowledge logic to skill modules - ([95d73e2](https://github.com/tao3k/omni-dev-fusion/commit/95d73e204d907b7edfb0ebc988fddd8a9c2d072b)) - guangtao
 - (**mcp**) unify shell execution in terminal skill - ([f367762](https://github.com/tao3k/omni-dev-fusion/commit/f36776275fe82c53c2810c65d9b3b518315e73ae)) - guangtao
 - (**mcp**) extract shared library mcp_core for dual-server architecture - ([7111451](https://github.com/tao3k/omni-dev-fusion/commit/711145185712fbfa7fe30596eb0775611d966e57)) - guangtao
-- (**mcp**) split into dual-server architecture (Phase 1) - ([062f01f](https://github.com/tao3k/omni-dev-fusion/commit/062f01f670d6659995225aacc83618d55f3528c3)) - guangtao
-- (**mcp-core**) implement Phase 14 specialist agents - ([5a0e583](https://github.com/tao3k/omni-dev-fusion/commit/5a0e5831f7f9f131f9560ee5ebab26deb3888f6b)) - guangtao
+- (**mcp**) split into dual-server architecture
+- (**mcp-core**) implement specialist agents
 - (**orchestrator**) split into Dual-MCP (Brain + Hands) - ([478dcf3](https://github.com/tao3k/omni-dev-fusion/commit/478dcf39a27ccad36284251da1b158135cf3aa45)) - guangtao
 - (**router**) remove old monolithic router.py - ([9af1184](https://github.com/tao3k/omni-dev-fusion/commit/9af11841f90bacf20e27c904f9cb77c837be68fa)) - guangtao
 - (**router**) modularize router.py into router/ package - ([54d6917](https://github.com/tao3k/omni-dev-fusion/commit/54d6917c2b321ffc1a736a067bffce2f40d8e139)) - guangtao
@@ -227,7 +227,7 @@ All notable changes to this project will be documented in this file. See [conven
 - (**git-ops**) clean up parent.parent.parent patterns - ([01ee8ae](https://github.com/tao3k/omni-dev-fusion/commit/01ee8aedbc5e4698849d636f8edd4ff56959ce20)) - guangtao
 - (**git-ops**) add git commit rule warning to claude.md - ([9e42f0c](https://github.com/tao3k/omni-dev-fusion/commit/9e42f0c144cb56154579b363fe7b17a5052a418e)) - guangtao
 - (**mcp**) upgrade to Session-based Authorization - ([b050386](https://github.com/tao3k/omni-dev-fusion/commit/b0503864383e6f7e12bde244f6f5d4a0c6f042a1)) - guangtao
-- (**mcp**) implement Phase 13.8 Configuration-Driven Context - ([76c5498](https://github.com/tao3k/omni-dev-fusion/commit/76c54984b82952de295230aabe0e6b870457037c)) - guangtao
+- (**mcp**) implement Configuration-Driven Context
 - (**mcp**) migrate to skill-centric architecture - ([b48076c](https://github.com/tao3k/omni-dev-fusion/commit/b48076c23b55bbdedc3622ba0e9329a4393bc802)) - guangtao
 - (**mcp**) chore: remove unused output.py and add MCP dependency tests - ([daa00fb](https://github.com/tao3k/omni-dev-fusion/commit/daa00fbddaae4e54ce590ce042bce29f2d6876bd)) - guangtao
 - (**mcp**) add Coder server tests and fix ast-grep commands - ([5702eaf](https://github.com/tao3k/omni-dev-fusion/commit/5702eaf7bfc3219b801d7939aa9aa912c6031274)) - guangtao
@@ -248,7 +248,7 @@ All notable changes to this project will be documented in this file. See [conven
 - add settings.local.json to gitignore - ([48ab186](https://github.com/tao3k/omni-dev-fusion/commit/48ab186c2621cd179b11f40cb0d5a1943866ba49)) - guangtao
 - sync with release - ([be1b6a7](https://github.com/tao3k/omni-dev-fusion/commit/be1b6a74488dd626b19f136778f431c7d91bb2fb)) - guangtao
 - sync with release - ([ab1ba2f](https://github.com/tao3k/omni-dev-fusion/commit/ab1ba2f62d8bd367da6c7f1314e1de03f3ab4dd9)) - guangtao
-- migrate to GitOps + Phase 11 Authorization Flow - ([42f8eb3](https://github.com/tao3k/omni-dev-fusion/commit/42f8eb3a3fe4b4f6a93bc4e44f1749765ed3676b)) - guangtao
+- migrate to GitOps + Authorization Flow
 - sync with release - ([557c0e9](https://github.com/tao3k/omni-dev-fusion/commit/557c0e99c2d554dcc939b0f21b942602d6e03730)) - guangtao
 - sync claude.nix with .mcp.json - ([a1bc10f](https://github.com/tao3k/omni-dev-fusion/commit/a1bc10f103ba937513e3ef59e9f0438bcc60a5f6)) - guangtao
 - update files - ([2dc2643](https://github.com/tao3k/omni-dev-fusion/commit/2dc264322fa9d63172349088264df027fa3a80aa)) - guangtao
@@ -280,7 +280,7 @@ All notable changes to this project will be documented in this file. See [conven
 #### Features
 - (**git-ops**) add security guidelines for path safety - ([630b989](https://github.com/tao3k/omni-dev-fusion/commit/630b989502d18c07518d07f89d337ba49f419d3b)) - guangtao
 - (**mcp**) add knowledge skill for structural knowledge injection - ([a069e7a](https://github.com/tao3k/omni-dev-fusion/commit/a069e7a1a07a76aed7608cc040518b8b9326ed69)) - guangtao
-- (**mcp**) implement Phase 12 Harvester and Phase 13 Skill-First Reformation - ([7994b8d](https://github.com/tao3k/omni-dev-fusion/commit/7994b8de3fcbca492f5afcc8e7a467aad9a238b0)) - guangtao
+- (**mcp**) implement Harvester and Skill-First Reformation
 #### Bug Fixes
 - (**git-ops**) fix: ensure hot reload works by clearing sys.modules before reload - ([6cb7099](https://github.com/tao3k/omni-dev-fusion/commit/6cb70997caa6121b3f6b0470e30022d66ad1b2a3)) - guangtao
 #### Refactoring
@@ -297,7 +297,7 @@ All notable changes to this project will be documented in this file. See [conven
 - (**git-ops**) clean up output.py registration - ([a8357b3](https://github.com/tao3k/omni-dev-fusion/commit/a8357b3646fd571db6e31963aad89405a6546740)) - guangtao
 - (**git-ops**) clean up parent.parent.parent patterns - ([57c3b19](https://github.com/tao3k/omni-dev-fusion/commit/57c3b1924b734c0b0efe075ce8afc732a8c510df)) - guangtao
 - (**mcp**) upgrade to Session-based Authorization - ([eff0f1a](https://github.com/tao3k/omni-dev-fusion/commit/eff0f1a85a5d21cdbef06becbe70de716bc5581e)) - guangtao
-- (**mcp**) implement Phase 13.8 Configuration-Driven Context - ([c907dde](https://github.com/tao3k/omni-dev-fusion/commit/c907ddefefc361ba9caf70aaf91da4ff0f123aef)) - guangtao
+- (**mcp**) implement Configuration-Driven Context
 - (**mcp**) migrate to skill-centric architecture - ([0181543](https://github.com/tao3k/omni-dev-fusion/commit/018154308406a9d7be5a3704a5d3ce85c9854fa8)) - guangtao
 - (**mcp**) chore: remove unused output.py and add MCP dependency tests - ([cb2d551](https://github.com/tao3k/omni-dev-fusion/commit/cb2d55197579f87da61a609fa61760444b5d9b79)) - guangtao
 - sync with release - ([3144cdf](https://github.com/tao3k/omni-dev-fusion/commit/3144cdf78c17c872a33161a5ff848709b8e5b522)) - guangtao
@@ -314,7 +314,7 @@ All notable changes to this project will be documented in this file. See [conven
 - (**docs**) docs: rewrite README with Tri-MCP architecture and SDLC workflow - ([49daf7c](https://github.com/tao3k/omni-dev-fusion/commit/49daf7c13e0ee3305782cf85ac18bfb456f23470)) - guangtao
 #### Miscellaneous Chores
 - (**git-ops**) add git commit rule warning to claude.md - ([19e9cf3](https://github.com/tao3k/omni-dev-fusion/commit/19e9cf3dbe797f961e439ca14ab728ec59f613ac)) - guangtao
-- migrate to GitOps + Phase 11 Authorization Flow - ([3cb339c](https://github.com/tao3k/omni-dev-fusion/commit/3cb339c7de6f9708ba0a44302afef8316afb159d)) - guangtao
+- migrate to GitOps + Authorization Flow
 - sync with release - ([519ca61](https://github.com/tao3k/omni-dev-fusion/commit/519ca61209ba79baff7840a95beabfaaaf928c1e)) - guangtao
 
 - - -
@@ -339,7 +339,7 @@ All notable changes to this project will be documented in this file. See [conven
 - (**git-workflow**) clarify git commit ≡ just agent-commit rule - ([184cee7](https://github.com/tao3k/omni-dev-fusion/commit/184cee7c7d58c9194fe91397bd928d7311018cd6)) - guangtao
 - (**mcp-server**) add start_spec Legislation Gate documentation - ([4ee3276](https://github.com/tao3k/omni-dev-fusion/commit/4ee327660b0e0164c15e472209a77283b0a7362b)) - guangtao
 - (**mcp-server**) add GitWorkflowCache auto-load documentation - ([9ef48f2](https://github.com/tao3k/omni-dev-fusion/commit/9ef48f2dc3ebc90defee99a502adcbeb56e64613)) - guangtao
-- (**orchestrator**) mark Phase 10 milestone complete with Antifragile Edition - ([3df20b7](https://github.com/tao3k/omni-dev-fusion/commit/3df20b7772230501b932a1a2dc329e1f1f4344c4)) - guangtao
+- (**orchestrator**) mark milestone complete with Antifragile Edition
 - document Tri-MCP architecture and deprecate delegate_to_coder - ([ce7b017](https://github.com/tao3k/omni-dev-fusion/commit/ce7b0173e112254c309d559379f3780aad391664)) - guangtao
 - add release process guideline - ([059cefd](https://github.com/tao3k/omni-dev-fusion/commit/059cefdc9ca0824b77ece4271ec9c4e190c32412)) - guangtao
 #### Refactoring

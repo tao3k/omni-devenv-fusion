@@ -1,0 +1,15 @@
+{
+  "general": {
+    "previewFeatures": true
+  },
+  "mcpServers": {
+    "omniAgent": {
+      "args": ["mcp", "--transport", "stdio"],
+      "command": "omni",
+      "env": {
+        "OMNI_UX_MODE": "headless"
+      },
+      "type": "stdio"
+    }
+  }
+}

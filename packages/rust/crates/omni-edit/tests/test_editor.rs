@@ -2,7 +2,6 @@
 
 use std::fs::File;
 use std::io::Write;
-use std::path::Path;
 use tempfile::TempDir;
 
 use omni_edit::{EditResult, StructuralEditor};

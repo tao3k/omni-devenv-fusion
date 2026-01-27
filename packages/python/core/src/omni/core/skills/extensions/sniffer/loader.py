@@ -20,35 +20,15 @@ from __future__ import annotations
 
 import importlib.util
 import inspect
-import sys
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
 from omni.foundation.config.logging import get_logger
+from omni.foundation.runtime.path import temporary_sys_path
 
-from .decorators import SnifferFunc
+from .decorators import SnifferFunc  # Protocol-based type
 
 logger = get_logger("omni.core.ext.sniffer")
-
-
-@contextmanager
-def temporary_sys_path(path: str):
-    """Safely append path to sys.path and restore it afterwards.
-
-    Usage:
-        >>> with temporary_sys_path("/some/path"):
-        ...     import mymodule
-    """
-    added = False
-    if path not in sys.path:
-        sys.path.insert(0, path)
-        added = True
-    try:
-        yield
-    finally:
-        if added and path in sys.path:
-            sys.path.remove(path)
 
 
 class SnifferLoader:
@@ -206,4 +186,4 @@ def load_sniffers_from_path(sniffer_path: str | Path) -> list[SnifferFunc]:
     return loader.load_all()
 
 
-__all__ = ["SnifferLoader", "load_sniffers_from_path", "temporary_sys_path"]
+__all__ = ["SnifferLoader", "load_sniffers_from_path"]

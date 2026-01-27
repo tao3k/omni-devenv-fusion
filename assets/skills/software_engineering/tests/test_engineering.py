@@ -1,5 +1,5 @@
 """
-Software Engineering Skill Tests - Phase 5 Migration
+Software Engineering Skill Tests - Migration
 
 Tests for migrated software_engineering skill:
 - engineering.py: run_tests, analyze_project_structure, detect_tech_stack

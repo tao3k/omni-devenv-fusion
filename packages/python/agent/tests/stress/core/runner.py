@@ -103,7 +103,7 @@ class StressRunner:
         # Setup
         await test.setup()
 
-        # Warm-up phase
+        # Warm-up
         console.print(f"[yellow]Warm-up ({self.config.warm_up_turns} turns)...[/yellow]")
         for i in range(self.config.warm_up_turns):
             await test.execute_turn(i + 1)
@@ -116,7 +116,7 @@ class StressRunner:
         console.print(f"[bold green]Baseline: {baseline.rss_mb:.1f} MB[/bold green]")
 
         # Main test loop
-        console.print(f"[bold red]Test phase ({self.config.turns} turns)...[/bold red]")
+        console.print(f"[bold red]Test ({self.config.turns} turns)...[/bold red]")
         all_success = True
 
         for turn in range(1, self.config.turns + 1):

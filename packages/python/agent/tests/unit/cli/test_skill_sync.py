@@ -1,10 +1,10 @@
 """
 test_skill_sync.py - Skill Sync Command Tests
 
-Tests for the 'omni skill sync' command including:
+Tests for the 'omni skill sync' command with LanceDB storage:
 - No changes detection
-- Added skills detection
-- Deleted skills detection
+- Added tools detection
+- Deleted tools detection
 - JSON output format
 - Verbose output
 
@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -32,118 +32,148 @@ class TestSkillSync:
         """Create Typer CLI runner."""
         return CliRunner()
 
-    @pytest.fixture
-    def temp_skills_dir(self, tmp_path: Path) -> Path:
-        """Create temporary skills directory with sample skills."""
-        skills_dir = tmp_path / "assets" / "skills"
-        skills_dir.mkdir(parents=True)
+    def test_sync_no_changes(self, runner, tmp_path: Path):
+        """Test sync reports no changes when LanceDB is up to date."""
+        with patch("omni_core_rs.scan_skill_tools") as mock_scan:
+            mock_scan.return_value = []
 
-        # Create a sample skill
-        skill_dir = skills_dir / "test_skill"
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("""---
-name: test_skill
-version: 1.0.0
-description: A test skill
-""")
-        scripts_dir = skill_dir / "scripts"
-        scripts_dir.mkdir()
-        (scripts_dir / "__init__.py").write_text("")
+            with patch("omni_core_rs.diff_skills") as mock_diff:
+                mock_report = MagicMock()
+                mock_report.added = []
+                mock_report.updated = []
+                mock_report.deleted = []
+                mock_report.unchanged_count = 0
+                mock_diff.return_value = mock_report
 
-        return skills_dir
+                with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
+                    mock_store_instance = MagicMock()
+                    mock_store_instance.list_all_tools = AsyncMock(return_value=[])
+                    mock_store.return_value = mock_store_instance
 
-    @pytest.fixture
-    def temp_index_file(self, tmp_path: Path) -> Path:
-        """Create temporary skill index file."""
-        index_path = tmp_path / ".cache" / "skill_index.json"
-        index_path.parent.mkdir(parents=True)
-
-        # Write existing index with some skills
-        existing_index = [
-            {
-                "name": "existing_skill",
-                "description": "An existing skill",
-                "version": "1.0.0",
-                "path": str(tmp_path / "assets" / "skills" / "existing_skill"),
-            },
-            {
-                "name": "another_skill",
-                "description": "Another skill",
-                "version": "1.0.0",
-                "path": str(tmp_path / "assets" / "skills" / "another_skill"),
-            },
-        ]
-        index_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(index_path, "w") as f:
-            json.dump(existing_index, f)
-
-        return index_path
-
-    def test_sync_no_changes(self, runner, temp_skills_dir, temp_index_file):
-        """Test sync reports no changes when index matches filesystem."""
-        # Create matching index file
-        matching_index = [
-            {
-                "name": "test_skill",
-                "description": "A test skill",
-                "version": "1.0.0",
-                "path": str(temp_skills_dir / "test_skill"),
-            },
-        ]
-        with open(temp_index_file, "w") as f:
-            json.dump(matching_index, f)
-
-        with patch("omni.agent.cli.commands.skill.index_cmd.SKILLS_DIR") as mock_skills:
-            mock_skills.return_value = lambda: str(temp_skills_dir)
-
-            result = runner.invoke(app, ["skill", "sync"])
+                    result = runner.invoke(app, ["skill", "sync"])
 
         assert result.exit_code == 0
-        assert "No changes" in result.output or "0 added" in result.output
-        assert "total" in result.output.lower()
 
-    def test_sync_detects_added_skills(self, runner, temp_skills_dir, temp_index_file):
-        """Test sync detects newly added skills."""
-        # Create index with only one skill (simulating old state)
-        old_index = [
-            {
-                "name": "existing_skill",
-                "description": "An existing skill",
-                "version": "1.0.0",
-                "path": str(temp_skills_dir.parent / "assets" / "skills" / "existing_skill"),
-            },
-        ]
-        with open(temp_index_file, "w") as f:
-            json.dump(old_index, f)
+    def test_sync_detects_added_tools(self, runner, tmp_path: Path):
+        """Test sync detects newly added tools and auto-populates LanceDB."""
+        # Simulate finding a new tool
+        mock_tool = MagicMock()
+        mock_tool.tool_name = "new_tool"
+        mock_tool.description = "A new tool"
+        mock_tool.skill_name = "test_skill"
+        mock_tool.file_path = "assets/skills/test/scripts/tools.py"
+        mock_tool.function_name = "new_tool"
+        mock_tool.execution_mode = "local"
+        mock_tool.keywords = ["new"]
+        mock_tool.input_schema = "{}"
+        mock_tool.file_hash = "def456"
+        mock_tool.category = "test"
 
-        # The scanner should detect test_skill as added
-        with patch("omni.foundation.bridge.scanner.Path.cwd") as mock_cwd:
-            mock_cwd.return_value = temp_skills_dir.parent.parent
+        with patch("omni_core_rs.scan_skill_tools") as mock_scan:
+            mock_scan.return_value = [mock_tool]
 
-            result = runner.invoke(app, ["skill", "sync"])
+            with patch("omni_core_rs.diff_skills") as mock_diff:
+                mock_report = MagicMock()
+                mock_report.added = [mock_tool]
+                mock_report.updated = []
+                mock_report.deleted = []
+                mock_report.unchanged_count = 0
+                mock_diff.return_value = mock_report
 
-        # Check that the output indicates changes
+                with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
+                    mock_store_instance = MagicMock()
+                    # LanceDB is empty initially
+                    mock_store_instance.list_all_tools = AsyncMock(return_value=[])
+                    # Auto-populate fills LanceDB
+                    mock_store_instance.index_skill_tools = AsyncMock(return_value=1)
+                    mock_store.return_value = mock_store_instance
+
+                    result = runner.invoke(app, ["skill", "sync"])
+
         assert result.exit_code == 0
-        # Either shows "+X added" or "No changes" depending on state
+        # When LanceDB is empty and tools are added, sync auto-populates
+        # and reports "up to date" after successful population
+        assert "up to date" in result.output.lower() or "auto-populat" in result.output.lower()
 
-    def test_sync_json_output(self, runner, temp_skills_dir, temp_index_file):
+    def test_sync_detects_deleted_tools(self, runner, tmp_path: Path):
+        """Test sync detects deleted tools."""
+        # Simulate scanning returning fewer tools than in LanceDB
+        # Only one tool scanned (one was deleted)
+        mock_tool = MagicMock()
+        mock_tool.tool_name = "remaining_tool"
+        mock_tool.description = "Remaining tool"
+        mock_tool.skill_name = "test_skill"
+        mock_tool.file_path = "assets/skills/test/scripts/tools.py"
+        mock_tool.function_name = "remaining_tool"
+        mock_tool.execution_mode = "local"
+        mock_tool.keywords = ["test"]
+        mock_tool.input_schema = "{}"
+        mock_tool.file_hash = "abc123"
+        mock_tool.category = "test"
+
+        with patch("omni_core_rs.scan_skill_tools") as mock_scan:
+            mock_scan.return_value = [mock_tool]
+
+            with patch("omni_core_rs.diff_skills") as mock_diff:
+                mock_report = MagicMock()
+                mock_report.added = []
+                mock_report.updated = []
+                # diff_skills returns list of tool names as strings
+                mock_report.deleted = ["deleted_tool"]
+                mock_report.unchanged_count = 1
+                mock_diff.return_value = mock_report
+
+                with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store_cls:
+                    mock_store_instance = MagicMock()
+                    # LanceDB has both tools (one will be deleted)
+                    mock_store_instance.list_all_tools = AsyncMock(
+                        return_value=[
+                            {
+                                "tool_name": "remaining_tool",
+                                "description": "Remaining",
+                                "category": "test",
+                                "input_schema": "{}",
+                                "file_hash": "abc123",
+                            },
+                            {
+                                "tool_name": "deleted_tool",
+                                "description": "Deleted",
+                                "category": "test",
+                                "input_schema": "{}",
+                                "file_hash": "def456",
+                            },
+                        ]
+                    )
+                    # Mock delete method (sync calls this for actual deletions)
+                    mock_store_instance.delete = MagicMock(return_value=True)
+                    mock_store_cls.return_value = mock_store_instance
+
+                    # Use --dry-run to avoid actual deletions during test
+                    result = runner.invoke(app, ["skill", "sync", "--dry-run"])
+
+        assert result.exit_code == 0
+        # With changes detected, output should show the deleted tool count
+        assert "-1 deleted" in result.output or "deleted" in result.output.lower()
+
+    def test_sync_json_output(self, runner, tmp_path: Path):
         """Test sync with JSON output format."""
-        # Create matching index
-        matching_index = [
-            {
-                "name": "test_skill",
-                "description": "A test skill",
-                "version": "1.0.0",
-                "path": str(temp_skills_dir / "test_skill"),
-            },
-        ]
-        with open(temp_index_file, "w") as f:
-            json.dump(matching_index, f)
+        with patch("omni_core_rs.scan_skill_tools") as mock_scan:
+            mock_scan.return_value = []
 
-        with patch("omni.foundation.bridge.scanner.Path.cwd") as mock_cwd:
-            mock_cwd.return_value = temp_skills_dir.parent.parent
+            with patch("omni_core_rs.diff_skills") as mock_diff:
+                mock_report = MagicMock()
+                mock_report.added = []
+                mock_report.updated = []
+                mock_report.deleted = []
+                mock_report.unchanged_count = 0
+                mock_diff.return_value = mock_report
 
-            result = runner.invoke(app, ["skill", "sync", "--json"])
+                with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
+                    mock_store_instance = MagicMock()
+                    mock_store_instance.list_all_tools = AsyncMock(return_value=[])
+                    mock_store.return_value = mock_store_instance
+
+                    result = runner.invoke(app, ["skill", "sync", "--json"])
 
         assert result.exit_code == 0
 
@@ -154,95 +184,54 @@ description: A test skill
             assert "deleted" in output_data
             assert "total" in output_data
             assert "changes" in output_data
+            assert output_data.get("storage") == "lancedb"
         except json.JSONDecodeError:
-            # If JSON parsing fails, output should still contain key info
             pass
-
-    def test_sync_handles_missing_index(self, runner, temp_skills_dir, temp_index_file):
-        """Test sync handles missing index file gracefully."""
-        # Remove the index file
-        temp_index_file.unlink()
-
-        with patch("omni.foundation.bridge.scanner.Path.cwd") as mock_cwd:
-            mock_cwd.return_value = temp_skills_dir.parent.parent
-
-            result = runner.invoke(app, ["skill", "sync"])
-
-        # Should still work, just shows all skills as "added" (first sync)
-        assert result.exit_code == 0
-
-    def test_sync_handles_empty_index(self, runner, temp_skills_dir, temp_index_file):
-        """Test sync handles empty index file."""
-        # Create empty index
-        with open(temp_index_file, "w") as f:
-            json.dump([], f)
-
-        with patch("omni.foundation.bridge.scanner.Path.cwd") as mock_cwd:
-            mock_cwd.return_value = temp_skills_dir.parent.parent
-
-            result = runner.invoke(app, ["skill", "sync"])
-
-        assert result.exit_code == 0
-        # Should show all current skills as added
-
-    def test_sync_handles_invalid_json(self, runner, temp_skills_dir, temp_index_file):
-        """Test sync handles invalid JSON in index file."""
-        # Write invalid JSON
-        with open(temp_index_file, "w") as f:
-            f.write("invalid json {")
-
-        with patch("omni.foundation.bridge.scanner.Path.cwd") as mock_cwd:
-            mock_cwd.return_value = temp_skills_dir.parent.parent
-
-            result = runner.invoke(app, ["skill", "sync"])
-
-        # Should still work (gracefully handles errors)
-        assert result.exit_code == 0 or "Sync failed" in result.output
 
 
 class TestSkillSyncDeltaCalculation:
     """Test delta calculation logic for skill sync."""
 
     def test_added_delta(self):
-        """Test calculation of added skills."""
-        old_skills = {"skill_a", "skill_b"}
-        current_skills = {"skill_a", "skill_b", "skill_c"}
+        """Test calculation of added tools."""
+        old_tools = {"tool_a", "tool_b"}
+        current_tools = {"tool_a", "tool_b", "tool_c"}
 
-        added = current_skills - old_skills
-        deleted = old_skills - current_skills
+        added = current_tools - old_tools
+        deleted = old_tools - current_tools
 
-        assert added == {"skill_c"}
+        assert added == {"tool_c"}
         assert deleted == set()
 
     def test_deleted_delta(self):
-        """Test calculation of deleted skills."""
-        old_skills = {"skill_a", "skill_b", "skill_c"}
-        current_skills = {"skill_a", "skill_b"}
+        """Test calculation of deleted tools."""
+        old_tools = {"tool_a", "tool_b", "tool_c"}
+        current_tools = {"tool_a", "tool_b"}
 
-        added = current_skills - old_skills
-        deleted = old_skills - current_skills
+        added = current_tools - old_tools
+        deleted = old_tools - current_tools
 
         assert added == set()
-        assert deleted == {"skill_c"}
+        assert deleted == {"tool_c"}
 
     def test_both_added_and_deleted(self):
-        """Test calculation when skills are both added and deleted."""
-        old_skills = {"skill_a", "skill_b", "skill_c"}
-        current_skills = {"skill_a", "skill_d", "skill_e"}
+        """Test calculation when tools are both added and deleted."""
+        old_tools = {"tool_a", "tool_b", "tool_c"}
+        current_tools = {"tool_a", "tool_d", "tool_e"}
 
-        added = current_skills - old_skills
-        deleted = old_skills - current_skills
+        added = current_tools - old_tools
+        deleted = old_tools - current_tools
 
-        assert added == {"skill_d", "skill_e"}
-        assert deleted == {"skill_b", "skill_c"}
+        assert added == {"tool_d", "tool_e"}
+        assert deleted == {"tool_b", "tool_c"}
 
     def test_no_changes(self):
-        """Test when skills haven't changed."""
-        old_skills = {"skill_a", "skill_b"}
-        current_skills = {"skill_a", "skill_b"}
+        """Test when tools haven't changed."""
+        old_tools = {"tool_a", "tool_b"}
+        current_tools = {"tool_a", "tool_b"}
 
-        added = current_skills - old_skills
-        deleted = old_skills - current_skills
+        added = current_tools - old_tools
+        deleted = old_tools - current_tools
 
         assert added == set()
         assert deleted == set()
@@ -256,7 +245,6 @@ class TestSkillSyncOutput:
         """Test summary string with both additions and deletions."""
         added_count = 3
         deleted_count = 2
-        total = 10
 
         if added_count > 0 or deleted_count > 0:
             parts = []

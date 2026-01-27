@@ -53,7 +53,7 @@ just build
 
 ```bash
 # Run sync tests only
-uv run pytest packages/python/agent/src/agent/tests/unit/test_vector_store_sync.py -v
+uv run pytest packages/python/agent/src/omni/agent/tests/unit/test_vector_store_sync.py -v
 
 # Run all agent tests
 just test
@@ -98,7 +98,7 @@ async fn test_delete_by_file_path_with_underscores() {
 cargo test -p omni-vector test_delete_by_file_path_with_underscores
 
 # Step 2: Python integration test
-# File: packages/python/agent/src/agent/tests/unit/test_vector_store_sync.py
+# File: packages/python/agent/src/omni/agent/tests/unit/test_vector_store_sync.py
 
 def test_sync_idempotency_with_underscores(tmp_path):
     """Sync should handle paths with underscores correctly."""
@@ -137,7 +137,7 @@ async fn test_filter_by_metadata_domain() {
 cargo test -p omni-vector test_filter_by_metadata_domain
 
 # Step 2: Python integration test
-# packages/python/agent/src/agent/tests/test_vector_search.py
+# packages/python/agent/src/omni/agent/tests/test_vector_search.py
 
 @pytest.mark.asyncio
 async def test_rag_domain_filtering(vector_memory):
@@ -283,7 +283,7 @@ packages/python/
 │   ├── prj_dirs.py             # PRJ_DATA, PRJ_CACHE
 │   └── gitops.py               # Git operations
 │
-└── agent/src/agent/            # Agent implementation
+└── agent/src/omni/agent/        # Agent implementation (Note: omni/agent prefix)
     ├── core/                   # Core logic
     │   ├── skill_registry/     # Skill loading/management
     │   ├── skill_discovery/    # Skill discovery
@@ -305,15 +305,15 @@ packages/python/
 
 ### Namespace Layers
 
-| Layer                | Import Pattern                                | Example                                                    |
-| -------------------- | --------------------------------------------- | ---------------------------------------------------------- |
-| **common**           | `from common.{module} import ...`             | `from common.skills_path import SKILLS_DIR`                |
-| **agent.core**       | `from agent.core.{module} import ...`         | `from agent.core.skill_registry.core import SkillRegistry` |
-| **agent.core.sub**   | `from agent.core.{submodule} import ...`      | `from agent.core.skill_registry.loader import SkillLoader` |
-| **agent.tools**      | `from agent.tools.{module} import ...`        | `from agent.tools.router import ToolRouter`                |
-| **agent.mcp_server** | `from agent.mcp_server.{module} import ...`   | `from agent.mcp_server.server import MCPServer`            |
-| **agent.cli**        | `from agent.cli.{command} import ...`         | `from agent.cli.run import run_agent`                      |
-| **agent.tests**      | `from agent.tests.{type}.{module} import ...` | `from agent.tests.unit.test_skill_manager import ...`      |
+| Layer                   | Import Pattern                                     | Example                                                         |
+| ----------------------- | -------------------------------------------------- | --------------------------------------------------------------- |
+| **common**              | `from common.{module} import ...`                  | `from common.skills_path import SKILLS_DIR`                     |
+| **omni.agent.core**     | `from omni.agent.core.{module} import ...`         | `from omni.agent.core.skill_registry.core import SkillRegistry` |
+| **omni.agent.core.sub** | `from omni.agent.core.{submodule} import ...`      | `from omni.agent.core.skill_registry.loader import SkillLoader` |
+| **agent.tools**         | `from omni.agent.tools.{module} import ...`        | `from omni.agent.tools.router import ToolRouter`                |
+| **agent.mcp_server**    | `from omni.agent.mcp_server.{module} import ...`   | `from omni.agent.mcp_server.server import MCPServer`            |
+| **agent.cli**           | `from omni.agent.cli.{command} import ...`         | `from omni.agent.cli.run import run_agent`                      |
+| **agent.tests**         | `from omni.agent.tests.{type}.{module} import ...` | `from omni.agent.tests.unit.test_skill_manager import ...`      |
 
 ### Correct Import Examples
 
@@ -324,16 +324,16 @@ from common.config.settings import get_setting
 from common.prj_dirs import PRJ_DATA, PRJ_CACHE
 from common.gitops import get_project_root
 
-from agent.core.skill_registry import SkillRegistry
-from agent.core.skill_registry.loader import SkillLoader
-from agent.core.skill_registry.adapter import SkillAdapter
-from agent.core.swarm import get_swarm
-from agent.core.memory.manager import MemoryManager
+from omni.agent.core.skill_registry import SkillRegistry
+from omni.agent.core.skill_registry.loader import SkillLoader
+from omni.agent.core.skill_registry.adapter import SkillAdapter
+from omni.agent.core.swarm import get_swarm
+from omni.agent.core.memory.manager import MemoryManager
 
-from agent.tools.router import ToolRouter
-from agent.tools.orchestrator.core import OrchestratorCore
+from omni.agent.tools.router import ToolRouter
+from omni.agent.tools.orchestrator.core import OrchestratorCore
 
-from agent.mcp_server.server import MCPServer
+from omni.agent.mcp_server.server import MCPServer
 ```
 
 ### Import Anti-Patterns
@@ -343,25 +343,28 @@ from agent.mcp_server.server import MCPServer
 from ..common.skills_path import SKILLS_DIR
 
 # WRONG - Importing from wrong layer
-from agent.core.skills_path import SKILLS_DIR  # Should be from common!
+from omni.agent.core.skills_path import SKILLS_DIR  # Should be from common!
+
+# WRONG - Using old namespace (agent.core instead of omni.agent.core)
+from agent.core.skill_registry import SkillRegistry  # OLD pattern
 
 # WRONG - Circular imports by importing in wrong order
-from agent.core.omni_agent import get_agent  # If agent imports this too early
+from omni.agent.core.omni_agent import get_agent  # If agent imports this too early
 ```
 
 ### Common Modules
 
-| Module            | Location                      | Purpose                        |
-| ----------------- | ----------------------------- | ------------------------------ |
-| `skills_path`     | `common/skills_path.py`       | Path to skills directory       |
-| `prj_dirs`        | `common/prj_dirs.py`          | Runtime data/cache/config dirs |
-| `settings`        | `common/config/settings.py`   | SSOT configuration             |
-| `gitops`          | `common/gitops.py`            | Git operations                 |
-| `skill_registry`  | `agent/core/skill_registry/`  | Skill loading/management       |
-| `skill_discovery` | `agent/core/skill_discovery/` | Skill discovery/reconciliation |
-| `swarm`           | `agent/core/swarm.py`         | Process isolation/execution    |
-| `memory`          | `agent/core/memory/`          | Memory/vector store            |
-| `planner`         | `agent/core/planner/`         | Task decomposition/planning    |
+| Module            | Location                           | Purpose                        |
+| ----------------- | ---------------------------------- | ------------------------------ |
+| `skills_path`     | `common/skills_path.py`            | Path to skills directory       |
+| `prj_dirs`        | `common/prj_dirs.py`               | Runtime data/cache/config dirs |
+| `settings`        | `common/config/settings.py`        | SSOT configuration             |
+| `gitops`          | `common/gitops.py`                 | Git operations                 |
+| `skill_registry`  | `omni/agent/core/skill_registry/`  | Skill loading/management       |
+| `skill_discovery` | `omni/agent/core/skill_discovery/` | Skill discovery/reconciliation |
+| `swarm`           | `omni/agent/core/swarm.py`         | Process isolation/execution    |
+| `memory`          | `omni/agent/core/memory/`          | Memory/vector store            |
+| `planner`         | `omni/agent/core/planner/`         | Task decomposition/planning    |
 
 ### Key SSOT Utilities
 

@@ -2,7 +2,7 @@
 //!
 //! This crate provides modular scanning capabilities for skill directories:
 //! - `SkillScanner` - Parses SKILL.md for metadata and routing keywords
-//! - `ScriptScanner` - Scans scripts/ for @skill_command decorated functions
+//! - `ToolsScanner` - Scans scripts/ for @skill_command decorated functions
 //!
 //! # Architecture
 //!
@@ -11,21 +11,26 @@
 //! ├── lib.rs              # Main module and exports
 //! ├── skill_metadata.rs   # SkillMetadata, ToolRecord, ScanConfig
 //! ├── skill_scanner.rs    # SKILL.md parser
-//! └── script_scanner.rs   # @skill_command script parser
+//! ├── tools_scanner.rs    # @skill_command tool parser
+//! └── skill_command/      # @skill_command parsing utilities
+//!     ├── mod.rs
+//!     ├── category.rs
+//!     ├── parser.rs
+//!     └── annotations.rs
 //! ```
 //!
 //! # Usage
 //!
 //! ```ignore
-//! use skills_scanner::{SkillScanner, ScriptScanner, SkillMetadata, ToolRecord};
+//! use skills_scanner::{SkillScanner, ToolsScanner, SkillMetadata, ToolRecord};
 //!
 //! // Scan for skill metadata
 //! let skill_scanner = SkillScanner::new();
 //! let metadatas = skill_scanner.scan_all(PathBuf::from("assets/skills")).unwrap();
 //!
 //! // Scan for tools in scripts
-//! let script_scanner = ScriptScanner::new();
-//! let tools = script_scanner.scan_scripts(
+//! let tools_scanner = ToolsScanner::new();
+//! let tools = tools_scanner.scan_scripts(
 //!     PathBuf::from("assets/skills/writer/scripts"),
 //!     "writer",
 //!     &["write", "edit"]
@@ -37,15 +42,15 @@
 //! This crate is designed to be used by `omni-vector` for indexing skills:
 //!
 //! ```ignore
-//! use skills_scanner::{SkillScanner, ScriptScanner, SkillMetadata, ToolRecord};
+//! use skills_scanner::{SkillScanner, ToolsScanner, SkillMetadata, ToolRecord};
 //!
 //! // In omni-vector's skill.rs:
 //! fn index_skills(base_path: &str) -> Result<()> {
 //!     let skill_scanner = SkillScanner::new();
-//!     let script_scanner = ScriptScanner::new();
+//!     let tools_scanner = ToolsScanner::new();
 //!
 //!     for metadata in skill_scanner.scan_all(Path::new(base_path))? {
-//!         let tools = script_scanner.scan_scripts(
+//!         let tools = tools_scanner.scan_scripts(
 //!             &metadata.skill_path.join("scripts"),
 //!             &metadata.skill_name,
 //!             &metadata.routing_keywords
@@ -61,22 +66,25 @@
 // ============================================================================
 
 pub mod document_scanner;
-pub mod script_scanner;
+pub mod skill_command;
 pub mod skill_metadata;
 pub mod skill_scanner;
+pub mod sync;
+pub mod tools_scanner;
 
 // ============================================================================
 // Re-exports
 // ============================================================================
 
 pub use document_scanner::{DirectoryInventory, DocumentScanner, FileEntry, SkillInventory};
-pub use script_scanner::ScriptScanner;
 pub use skill_metadata::{
-    AssetRecord, DataRecord, DocsAvailable, IndexToolEntry, ReferencePath, ReferenceRecord,
-    ScanConfig, SkillIndexEntry, SkillMetadata, SkillStructure, SnifferRule, StructureItem,
-    TemplateRecord, TestRecord, ToolRecord,
+    AssetRecord, DataRecord, DecoratorArgs, DocsAvailable, IndexToolEntry, ReferencePath,
+    ReferenceRecord, ScanConfig, SkillIndexEntry, SkillMetadata, SkillStructure, SnifferRule,
+    StructureItem, TemplateRecord, TestRecord, ToolAnnotations, ToolRecord,
 };
 pub use skill_scanner::{SkillScanner, extract_frontmatter};
+pub use sync::{SyncReport, calculate_sync_ops};
+pub use tools_scanner::ToolsScanner;
 
 // ============================================================================
 // JSON Schema Generation

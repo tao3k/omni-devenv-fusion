@@ -1,10 +1,15 @@
 //! Environment Sniffer - High-performance Rust environment detection
 //!
-//! This module provides Python bindings for OmniSniffer, which detects
-//! git state, active context, and other environment information.
+//! This module provides Python bindings for:
+//! - OmniSniffer: Git state and active context detection
+//! - PyGlobSniffer: High-performance GlobSet-based context detection (1600+ rules)
+//!
+//! The GlobSet engine compiles all patterns into a single DFA, enabling
+//! O(1) pattern matching per file instead of O(Rules) loops.
 
-use omni_sniffer::OmniSniffer;
+use omni_sniffer::{OmniSniffer, SnifferEngine, SnifferRule};
 use pyo3::prelude::*;
+use pyo3::types::{PyAny, PyDict, PyList};
 
 /// Python wrapper for EnvironmentSnapshot.
 /// Uses omni_types::EnvironmentSnapshot for type unification.
@@ -140,4 +145,183 @@ pub fn get_environment_snapshot(root_path: &str) -> String {
     let sniffer = OmniSniffer::new(root_path);
     let snapshot = sniffer.get_snapshot();
     snapshot.to_prompt_string()
+}
+
+// ============================================================================
+// High-Performance GlobSet Sniffer (Rust-Native Cortex)
+// ============================================================================
+
+/// Python wrapper for the high-performance GlobSet-based sniffer.
+///
+/// Compiles 1600+ patterns into a single DFA for O(1) matching per file.
+///
+/// # Example
+///
+/// ```python
+/// from omni_core_rs import PyGlobSniffer
+///
+/// rules = [
+///     {"id": "python", "patterns": ["*.py", "pyproject.toml"]},
+///     {"id": "rust", "patterns": ["*.rs", "Cargo.toml"]},
+/// ]
+///
+/// sniffer = PyGlobSniffer(rules)
+/// contexts = sniffer.sniff_workspace("/path/to/project", max_depth=5)
+/// ```
+#[pyclass]
+#[derive(Clone)]
+pub struct PyGlobSniffer {
+    engine: SnifferEngine,
+}
+
+#[pymethods]
+impl PyGlobSniffer {
+    /// Create a new GlobSniffer from rules.
+    ///
+    /// Args:
+    ///     rules: List of dicts with 'id', 'patterns', and optional 'weight'
+    ///
+    /// Example:
+    ///     rules = [
+    ///         {"id": "python", "patterns": ["*.py"], "weight": 1.0},
+    ///         {"id": "rust", "patterns": ["*.rs"], "weight": 1.0},
+    ///     ]
+    #[new]
+    #[pyo3(signature = (rules))]
+    pub fn new(_py: Python, rules: Bound<'_, PyList>) -> PyResult<Self> {
+        let mut rust_rules: Vec<SnifferRule> = Vec::with_capacity(rules.len());
+
+        for item in rules.iter() {
+            let rule_dict: Bound<'_, PyDict> = item.extract()?;
+
+            // get_item returns Result<Option<Bound<PyAny>>, PyErr>
+            let id: String = if let Ok(Some(id_any)) = rule_dict.get_item("id") {
+                id_any.extract()?
+            } else {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "Rule missing 'id' field",
+                ));
+            };
+
+            let patterns_any: Bound<'_, PyAny> =
+                if let Ok(Some(patterns_item)) = rule_dict.get_item("patterns") {
+                    patterns_item
+                } else {
+                    return Err(pyo3::exceptions::PyValueError::new_err(
+                        "Rule missing 'patterns' field",
+                    ));
+                };
+
+            let patterns: Vec<String> = if patterns_any.is_instance_of::<PyList>() {
+                let patterns_list: Bound<'_, PyList> = patterns_any.extract()?;
+                patterns_list
+                    .iter()
+                    .map(|p: Bound<'_, PyAny>| p.extract::<String>())
+                    .collect::<Result<Vec<_>, _>>()?
+            } else {
+                vec![patterns_any.extract::<String>()?]
+            };
+
+            let weight: f32 = match rule_dict.get_item("weight") {
+                Ok(Some(w)) => w.extract::<f32>().unwrap_or(1.0),
+                _ => 1.0,
+            };
+
+            rust_rules.push(SnifferRule::with_weight(id, patterns, weight));
+        }
+
+        let engine = SnifferEngine::new(rust_rules).map_err(|e| {
+            pyo3::exceptions::PyValueError::new_err(format!(
+                "Failed to compile glob patterns: {}",
+                e
+            ))
+        })?;
+
+        Ok(PyGlobSniffer { engine })
+    }
+
+    /// Create from JSON string (for loading from LanceDB).
+    ///
+    /// Args:
+    ///     json_str: JSON array of rule objects
+    #[staticmethod]
+    #[pyo3(signature = (json_str))]
+    pub fn from_json(json_str: &str) -> PyResult<Self> {
+        let engine = SnifferEngine::from_json(json_str)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Invalid JSON: {}", e)))?;
+        Ok(PyGlobSniffer { engine })
+    }
+
+    /// Get pattern and context counts.
+    #[getter]
+    fn pattern_count(&self) -> usize {
+        self.engine.pattern_count()
+    }
+
+    #[getter]
+    fn context_count(&self) -> usize {
+        self.engine.context_count()
+    }
+
+    /// Scan workspace directory for active contexts.
+    ///
+    /// Uses parallel WalkDir + GlobSet for high performance.
+    ///
+    /// Args:
+    ///     root_path: Directory to scan
+    ///     max_depth: Maximum directory depth (default: 5)
+    ///
+    /// Returns:
+    ///     List of context IDs sorted alphabetically
+    fn sniff_workspace(&self, root_path: String, max_depth: Option<usize>) -> Vec<String> {
+        let depth = max_depth.unwrap_or(5);
+        self.engine.sniff_path(&root_path, depth)
+    }
+
+    /// Scan with scoring (contexts sorted by weight).
+    ///
+    /// Args:
+    ///     root_path: Directory to scan
+    ///     max_depth: Maximum directory depth (default: 5)
+    ///
+    /// Returns:
+    ///     List of (context_id, score) tuples sorted by score descending
+    fn sniff_workspace_with_scores(
+        &self,
+        root_path: String,
+        max_depth: Option<usize>,
+    ) -> Vec<(String, f32)> {
+        let depth = max_depth.unwrap_or(5);
+        self.engine.sniff_path_with_scores(&root_path, depth)
+    }
+
+    /// Check a single file path (for file watcher events).
+    ///
+    /// Args:
+    ///     relative_path: File path relative to workspace root
+    ///
+    /// Returns:
+    ///     List of matching context IDs
+    fn sniff_file(&self, relative_path: String) -> Vec<String> {
+        self.engine.sniff_file(&relative_path)
+    }
+
+    /// Check a single file with scoring.
+    ///
+    /// Args:
+    ///     relative_path: File path relative to workspace root
+    ///
+    /// Returns:
+    ///     List of (context_id, weight) tuples
+    fn sniff_file_with_weights(&self, relative_path: String) -> Vec<(String, f32)> {
+        self.engine.sniff_file_with_weights(&relative_path)
+    }
+
+    /// Quick check if any context would be detected.
+    ///
+    /// Faster than full scan - stops at first match.
+    fn has_any_context(&self, root_path: String, max_depth: Option<usize>) -> bool {
+        let depth = max_depth.unwrap_or(5);
+        self.engine.has_any_context(&root_path, depth)
+    }
 }

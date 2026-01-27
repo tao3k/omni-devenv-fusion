@@ -271,6 +271,6 @@ Names are automatically sanitized:
 
 ## See Also
 
-- [Skills Architecture](../../architecture/skills.md)
-- [ODF-EP Protocol](../../reference/odf-ep-protocol.md)
-- [Trinity Architecture](../../explanation/trinity-architecture.md)
+- [Skills Architecture](../architecture/skills.md)
+- [ODF-EP Protocol](odf-ep-protocol.md)
+- [Trinity Architecture](../explanation/trinity-architecture.md)

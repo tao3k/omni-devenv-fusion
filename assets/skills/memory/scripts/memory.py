@@ -17,6 +17,7 @@ from typing import Any
 from omni.foundation.api.decorators import skill_command
 from omni.foundation.config.logging import get_logger
 from omni.foundation.config.paths import ConfigPaths
+from omni.foundation.config.skills import SKILLS_DIR
 from omni.foundation.services.embedding import get_embedding_service
 from omni.foundation.services.vector import get_vector_store
 
@@ -62,14 +63,7 @@ def _get_embedding(text: str) -> list[float]:
 
 def _load_skill_manifest(skill_name: str) -> tuple[dict[str, Any] | None, str | None]:
     """Load a skill's manifest and prompts."""
-    from omni.foundation.config import get_setting
-
-    paths = ConfigPaths()
-    project_root = paths.project_root
-
-    skills_path = get_setting("skills.path", "assets/skills")
-    skills_dir = project_root / skills_path
-    skill_path = skills_dir / skill_name
+    skill_path = SKILLS_DIR(skill_name)
 
     if not skill_path.exists():
         return None, None

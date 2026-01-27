@@ -339,3 +339,84 @@ logger.info(f"Compiled app checkpointer: {_app.checkpointer}")
 **Configuration:**
 
 - `assets/settings.yaml` - Checkpoint configuration
+
+---
+
+## Event-Driven Checkpointing (v5.0)
+
+**Location**: `packages/python/core/src/omni/core/services/persistence.py`
+
+The `AsyncPersistenceService` provides fire-and-forget checkpoint saving via the Rust Event Bus.
+
+### Architecture
+
+```
+OmniLoop._publish_step_complete()
+              ↓
+PyGlobalEventBus.publish("agent", "agent/step_complete", payload)
+              ↓
+KernelReactor (Python async consumer)
+              ↓
+AsyncPersistenceService.handle_agent_step()
+              ↓
+Background Worker (async queue)
+              ↓
+Rust CheckpointStore.save_checkpoint()
+```
+
+### Usage
+
+```python
+from omni.core.services.persistence import AsyncPersistenceService
+from omni.core.kernel.reactor import get_reactor
+
+# Create service with Rust store wrapper
+service = AsyncPersistenceService(rust_store)
+
+# Register handler with reactor
+reactor = get_reactor()
+reactor.register_handler("agent/step_complete", service.handle_agent_step)
+
+# Start service
+await service.start()
+
+# Service runs in background - checkpoints queued and saved asynchronously
+```
+
+### Service Methods
+
+| Method                     | Description                             |
+| -------------------------- | --------------------------------------- |
+| `start()`                  | Start background save worker            |
+| `stop()`                   | Stop worker and flush pending saves     |
+| `handle_agent_step(event)` | Event handler for `agent/step_complete` |
+| `is_running`               | Check if service is active              |
+| `get_queue_size()`         | Get pending saves count                 |
+
+### Integration with Agent Loop
+
+The agent loop publishes checkpoint events:
+
+```python
+# In omni/agent/core/omni/loop.py
+try:
+    from omni_core_rs import PyGlobalEventBus
+    EVENT_BUS_AVAILABLE = True
+except ImportError:
+    EVENT_BUS_AVAILABLE = False
+
+def _publish_step_complete(self, state: Dict[str, Any]) -> None:
+    """Fire-and-forget checkpoint event to Rust Event Bus."""
+    if not EVENT_BUS_AVAILABLE:
+        return
+
+    self.current_step += 1
+    payload = json.dumps({
+        "thread_id": self.session_id,
+        "step": self.current_step,
+        "state": state,
+        "timestamp": time.time(),
+    })
+
+    PyGlobalEventBus.publish("agent", "agent/step_complete", payload)
+```

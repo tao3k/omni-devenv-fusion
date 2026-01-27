@@ -363,8 +363,10 @@ lint:
 test:
     @echo "TEST PIPELINE"
     @echo "========================================"
-    @python scripts/generate_skill_index.py
     @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ \
+        -v --tb=short
+    @echo ""
+    @uv run pytest packages/python/agent/tests/unit/cli/ \
         -v --tb=short
     @echo ""
     @cd packages/python/mcp-server && uv run pytest tests/ \
@@ -381,8 +383,7 @@ test:
 test-quick:
     @echo "TEST PIPELINE (QUICK)"
     @echo "========================================"
-    @python scripts/generate_skill_index.py
-    @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ -q --tb=short
+    @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ packages/python/agent/tests/unit/cli/ -q --tb=short
     @cd packages/python/mcp-server && uv run pytest tests/ -q --tb=short --ignore=tests/integration/test_sse.py \
         --ignore=tests/unit/test_interfaces.py \
         --ignore=tests/unit/test_types.py \
@@ -396,7 +397,7 @@ test-skills:
 [group('validate')]
 test-parallel:
     @echo "Running tests in parallel (faster)..."
-    @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ -n auto --tb=short
+    @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ packages/python/agent/tests/unit/cli/ -n auto --tb=short
     @cd packages/python/mcp-server && uv run pytest tests/ -n auto --tb=short --ignore=tests/integration/test_sse.py \
         --ignore=tests/unit/test_interfaces.py \
         --ignore=tests/unit/test_types.py \

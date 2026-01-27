@@ -3,13 +3,14 @@
 from typing import Any
 
 import pytest
+from mcp.types import JSONRPCRequest, JSONRPCResponse
+
 from omni.mcp.interfaces import (
     MCPRequestContext,
     MCPRequestHandler,
     MCPSession,
     MCPTransport,
 )
-from omni.mcp.types import JSONRPCRequest, JSONRPCResponse
 
 
 class TestMCPRequestHandlerProtocol:
@@ -26,7 +27,8 @@ class TestMCPRequestHandlerProtocol:
 
         class MockHandler:
             async def handle_request(self, request: JSONRPCRequest) -> JSONRPCResponse:
-                return JSONRPCResponse(id=request.id, result={})
+                req_id = request.get("id")
+                return JSONRPCResponse(jsonrpc="2.0", id=req_id, result={})
 
             async def handle_notification(self, method: str, params: Any) -> None:
                 pass

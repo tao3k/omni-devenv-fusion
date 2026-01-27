@@ -15,9 +15,32 @@ Usage:
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Protocol, runtime_checkable
 
-# Sniffer function signature: (cwd: str) -> float (0.0 ~ 1.0)
-SnifferFunc = Callable[[str], float]
+
+@runtime_checkable
+class SnifferFunc(Protocol):
+    """Protocol for sniffer functions.
+
+    Sniffer functions detect whether a skill is relevant for a given directory.
+    They receive a directory path and return a score between 0.0 (no match)
+    and 1.0 (strong match).
+
+    Example:
+        @sniffer(name="detect_venv")
+        def detect(cwd: str) -> float:
+            return 1.0 if os.path.exists(os.path.join(cwd, "venv")) else 0.0
+
+    Can be used for runtime type checking:
+        >>> if isinstance(func, SnifferFunc):
+        ...     score = func("/some/path")
+    """
+
+    def __call__(self, cwd: str) -> float: ...
+
+
+# Alias for backwards compatibility
+SnifferFuncAlias = Callable[[str], float]
 
 
 def sniffer(name: str | None = None, priority: int = 100):
@@ -73,4 +96,4 @@ class SnifferResult:
         return self.skill_name == other.skill_name and self.score == other.score
 
 
-__all__ = ["SnifferFunc", "SnifferResult", "sniffer"]
+__all__ = ["SnifferFunc", "SnifferFuncAlias", "SnifferResult", "sniffer"]

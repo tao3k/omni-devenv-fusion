@@ -8,6 +8,8 @@
 //! - Token counting accuracy
 //! - Template error fallback
 
+#![cfg(feature = "assembler")]
+
 use omni_io::ContextAssembler;
 use std::fs;
 use tempfile::TempDir;

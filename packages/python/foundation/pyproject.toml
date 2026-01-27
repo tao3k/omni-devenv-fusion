@@ -8,6 +8,8 @@ requires-python = ">=3.12"
 dependencies = [
     "structlog>=24.0.0",
     "orjson>=3.10.0",
+    # Async support for nested event loops
+    "nest-asyncio>=1.6.0",
     # AI & Embeddings
     "fastembed>=0.5.0",
     "openai>=1.0.0",

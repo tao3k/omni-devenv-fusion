@@ -1,7 +1,7 @@
 # MCP Transport Interface
 
 > Trinity Architecture - Agent Layer (L3 Transport)
-> Last Updated: 2026-01-21
+> Last Updated: 2026-01-26
 
 Omni Agent supports two transport mechanisms for MCP (Model Context Protocol) connections: **STDIO** for Claude Desktop and **SSE** for Claude Code CLI.
 
@@ -45,24 +45,39 @@ uv run omni mcp --transport stdio
 
 ```
 ┌─────────────────┐
-│  Claude Desktop │──stdin──► omni-mcp-server
+│  Claude Desktop │──stdin──► omni-agent-mcp-server
 └─────────────────┘                │
                     stdout ◄──────┘
 ```
 
-- Direct stdin/stdout communication (MCP JSON-RPC protocol)
-- Signal handling for graceful shutdown
-- Background watcher for hot-reload
+- Direct stdin/stdout communication using MCP SDK's `stdio_server()`
+- Signal handling via `asyncio.add_signal_handler()` for graceful shutdown
 - **Logging goes to stderr** (does not interfere with MCP protocol)
+
+### Implementation
+
+```python
+from omni.agent.mcp_server.server import AgentMCPServer
+from omni.mcp.transport.stdio import stdio_server
+
+async def run_stdio():
+    server = AgentMCPServer()
+    await server.run_stdio(verbose=True)
+```
+
+Uses MCP SDK's context manager for proper stream handling:
+
+```python
+async with stdio_server() as (read_stream, write_stream):
+    await server.run(read_stream, write_stream, init_options)
+```
 
 ### Key Behaviors
 
-| Behavior        | Description                                   |
-| --------------- | --------------------------------------------- |
-| Auto-reconnect  | Server waits for client connection after EOF  |
-| Signal handling | Ctrl+C gracefully shuts down                  |
-| Hot-reload      | Background watcher monitors skills/ directory |
-| Clean stderr    | Logging to stderr, MCP protocol to stdout     |
+| Behavior        | Description                                         |
+| --------------- | --------------------------------------------------- |
+| Signal handling | Ctrl+C gracefully shuts down via add_signal_handler |
+| Clean stderr    | Logging to stderr, MCP protocol to stdout           |
 
 ---
 
@@ -71,11 +86,11 @@ uv run omni mcp --transport stdio
 ### Usage
 
 ```bash
-# Default (port 3000)
+# Default (port 8080)
 uv run omni mcp
 
-# Custom host and port
-uv run omni mcp --host 0.0.0.0 --port 8080
+# Custom port
+uv run omni mcp --port 9000
 ```
 
 ### Endpoints
@@ -84,54 +99,48 @@ uv run omni mcp --host 0.0.0.0 --port 8080
 | ----------- | ------ | ---------------------------------------- |
 | `/sse`      | GET    | SSE stream for server-to-client messages |
 | `/messages` | POST   | Client-to-server message endpoint        |
-| `/health`   | GET    | Health check (returns "OK")              |
-| `/ready`    | GET    | Readiness check with loaded skills count |
+| `/health`   | GET    | Health check                             |
 
 ### Architecture
 
 ```
 ┌─────────────────┐    POST /messages    ┌─────────────────┐
-│  Claude Code    │ ──────────────────►  │  Omni MCP       │
-│     CLI         │                      │    SSE Server   │
+│  Claude Code    │ ──────────────────►  │  Omni Agent     │
+│     CLI         │                      │    MCP Server   │
 └─────────────────┘                      └────────┬────────┘
                                                   │
                           GET /sse ◄─────────────┘
                           (Server-Sent Events)
 ```
 
-### Performance Features
-
-- **uvloop**: High-performance event loop (auto-installed if available)
-- **orjson**: Fast JSON serialization
-- **Async**: Non-blocking request handling
-
 ---
 
 ## Code Structure
 
-**Location**: `packages/python/mcp-server/src/omni/mcp/`
+**Location**: `packages/python/agent/src/omni/agent/mcp_server/`
 
 ```
-omni/mcp/
-├── __init__.py              # Exports (MCPServer, StdioTransport, SSEServer)
-├── types.py                 # JSON-RPC 2.0 types (OrjsonModel-based)
-├── interfaces.py            # Protocol interfaces
-├── server.py                # MCPServer orchestration
-└── transport/
-    ├── __init__.py
-    ├── stdio.py             # StdioTransport (zero-copy orjson)
-    └── sse.py               # SSEServer (HTTP/SSE)
+omni/agent/mcp_server/
+├── __init__.py              # Exports
+├── server.py                # AgentMCPServer (main server)
+├── lifespan.py              # Lifespan context manager
+├── sse.py                   # SSE transport
+└── stdio.py                 # stdio_server context manager
 ```
 
-**Agent Handler**: `packages/python/agent/src/omni/agent/server.py`
+### Signal Handling
 
-```
-AgentMCPHandler
-    │
-    ├── _kernel: Kernel      # Core Layer (skill context, routing)
-    ├── _handle_initialize() # MCP handshake
-    ├── _handle_list_tools() # List skills as MCP tools
-    └── _handle_call_tool()  # Execute skill commands
+In stdio mode, SIGINT is handled via `asyncio.add_signal_handler()`:
+
+```python
+async def main_async():
+    loop = asyncio.get_running_loop()
+    shutdown_event = asyncio.Event()
+
+    def signal_handler():
+        shutdown_event.set()
+
+    loop.add_signal_handler(signal.SIGINT, signal_handler)
 ```
 
 ---
@@ -150,49 +159,36 @@ AgentMCPHandler
 
 **Debugging Steps**:
 
-1. **Check Claude Code debug logs**:
+1. **Check server logs**:
 
    ```bash
-   cat ~/.claude/debug/latest/*.log | grep -i mcp
+   uv run omni mcp 2>&1 | grep -E "(Kernel|Tools|Error)"
    ```
 
 2. **Verify server starts correctly**:
 
    ```bash
-   uv run omni mcp --transport stdio 2>&1 | head -50
-   ```
-
-3. **Validate tool schema**:
-   ```bash
-   uv run pytest packages/python/agent/tests/integration/test_mcp_stdio.py::TestMCPProtocolCompliance -v
+   uv run omni mcp --transport stdio 2>&1
    ```
 
 ### STDIO Connection Timeout
 
-**Problem**: Server starts but Claude Desktop shows "Connection timeout".
+**Problem**: Server starts but connection times out.
 
 **Solutions**:
 
 1. Check stderr interference (logging must go to stderr, not stdout)
 2. Verify working directory in MCP config
-3. Check environment variables
 
-### Skills Not Loading
+### SIGINT Not Handled
 
-**Problem**: Server starts but tools list is empty.
+**Problem**: Ctrl+C doesn't gracefully shutdown.
 
-**Solutions**:
+**Solution**: Ensure `add_signal_handler()` is used in `main_async()`:
 
-1. Run validation test:
-
-   ```bash
-   uv run pytest packages/python/agent/tests/integration/test_mcp_stdio.py::TestMCPProtocolCompliance -v
-   ```
-
-2. Check kernel initialization logs:
-   ```bash
-   uv run omni mcp 2>&1 | grep -E "(Kernel|Skills|Error)"
-   ```
+```python
+loop.add_signal_handler(signal.SIGINT, signal_handler)
+```
 
 ---
 

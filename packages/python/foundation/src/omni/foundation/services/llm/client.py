@@ -45,15 +45,15 @@ class InferenceClient:
         """
         # Read directly from settings.yaml
         self.api_key = api_key or get_anthropic_api_key()
-        self.base_url = base_url or get_setting("inference.base_url", "https://api.anthropic.com")
-        self.model = model or get_setting("inference.model", "claude-sonnet-4-20250514")
-        self.timeout = timeout or get_setting("inference.timeout", 120)
-        self.max_tokens = max_tokens or get_setting("inference.max_tokens", 4096)
+        self.base_url = base_url or get_setting("inference.base_url")
+        self.model = model or get_setting("inference.model")
+        self.timeout = timeout or get_setting("inference.timeout")
+        self.max_tokens = max_tokens or get_setting("inference.max_tokens")
 
         if not self.api_key:
             log.warning(
                 "inference.no_api_key",
-                configured_env=get_setting("inference.api_key_env", "ANTHROPIC_API_KEY"),
+                configured_env=get_setting("inference.api_key_env"),
             )
 
         # MiniMax requires Authorization: Bearer header (auth_token) instead of x-api-key

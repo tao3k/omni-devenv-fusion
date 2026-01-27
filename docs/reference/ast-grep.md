@@ -379,7 +379,7 @@ Directory search (158 Python files):
 
 ### 8.2 CCA Evolution
 
-This implementation is aligned with CCA's vision of **code-aware agents**. Future phases could extend:
+This implementation is aligned with CCA's vision of **code-aware agents**. Future extensions could include:
 
 - **Code Reasoning**: Understand what functions do
 - **Code Generation**: Write based on patterns

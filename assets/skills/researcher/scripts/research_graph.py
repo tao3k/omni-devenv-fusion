@@ -48,15 +48,15 @@ from omni.core.context import create_planner_orchestrator
 
 logger = get_logger("researcher.graph")
 
-# Import Rust checkpoint saver for LangGraph
+# Import Rust checkpoint saver for LangGraph (use shared singleton)
 try:
-    from omni.langgraph.checkpoint.saver import RustCheckpointSaver as _RustCheckpointSaver
+    from omni.langgraph.checkpoint.saver import get_default_checkpointer as _get_checkpointer
 
     _CHECKPOINT_AVAILABLE = True
-    logger.info("RustCheckpointSaver imported successfully")
+    _memory = _get_checkpointer()  # Get shared singleton (logs once)
 except ImportError as e:
     _CHECKPOINT_AVAILABLE = False
-    _RustCheckpointSaver = None
+    _memory = None
     logger.warning(f"RustCheckpointSaver import failed: {e}")
 
 # Cache the orchestrator instance for reuse
@@ -169,24 +169,24 @@ class ResearchState(TypedDict):
     request: str  # User's research goal
     repo_url: str  # Target repository URL
 
-    # Setup Phase
+    # Setup Stage
     repo_path: str  # Local clone path
     file_tree: str  # Repository structure map
     repo_name: str  # Repository name for filenames
 
-    # Planning Phase
+    # Planning Stage
     shards_queue: list[ShardDef]  # Shards to process (Plan output)
 
-    # Loop Phase (per shard)
+    # Loop Stage (per shard)
     current_shard: ShardDef  # Shard being processed
     shard_counter: int  # For ordering files (01_, 02_, etc.)
     shard_analyses: list[str]  # Accumulated shard summaries
 
-    # Final Phase
+    # Final Stage
     harvest_dir: str  # Path to .data/harvested/...
     final_report: str  # Complete analysis
 
-    # Cached Context (built once in architect phase)
+    # Cached Context (built once in architect stage)
     system_prompt: str  # Cached system prompt (persona + skill context)
 
     # Control
@@ -612,18 +612,7 @@ def create_sharded_research_graph() -> StateGraph:
     return workflow
 
 
-# Compile with Rust checkpoint for state persistence (LanceDB)
-if _CHECKPOINT_AVAILABLE and _RustCheckpointSaver:
-    try:
-        _memory = _RustCheckpointSaver()
-        logger.info(f"RustCheckpointSaver initialized: {_memory}")
-    except Exception as e:
-        logger.error(f"RustCheckpointSaver init failed: {e}")
-        _memory = None
-else:
-    _memory = None
-    logger.warning("Checkpointer not available, using None")
-
+# Compile with Rust checkpoint for state persistence (shared singleton)
 logger.info(f"Final checkpointer: {_memory}")
 _app = create_sharded_research_graph().compile(checkpointer=_memory)
 logger.info(f"Compiled app checkpointer: {_app.checkpointer}")

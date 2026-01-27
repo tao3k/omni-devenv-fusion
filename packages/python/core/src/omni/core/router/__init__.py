@@ -5,6 +5,7 @@ High-performance intent-to-action mapping using vector search.
 Migrated from: src/agent/core/router/
 
 Modules:
+- cache: Search result caching (LRU with TTL)
 - indexer: Build semantic index from skills
 - router: Route natural language to commands
 - hive: The Hive Mind (advanced routing strategy)
@@ -25,7 +26,9 @@ Usage:
     suggestions = sniffer.sniff("/path/to/project")
 """
 
+from .cache import SearchCache
 from .hive import HiveRouter, MultiHiveRouter
+from .hybrid_search import HybridMatch, HybridSearch
 from .indexer import IndexedSkill, SkillIndexer
 from .main import OmniRouter, RouterRegistry, get_router
 from .router import (
@@ -37,6 +40,8 @@ from .router import (
 from .sniffer import ActivationRule, ContextualSniffer, IntentSniffer
 
 __all__ = [
+    # Cache
+    "SearchCache",
     # Indexer
     "SkillIndexer",
     "IndexedSkill",
@@ -45,6 +50,9 @@ __all__ = [
     "FallbackRouter",
     "UnifiedRouter",
     "RouteResult",
+    # Hybrid Search
+    "HybridSearch",
+    "HybridMatch",
     # Hive
     "HiveRouter",
     "MultiHiveRouter",

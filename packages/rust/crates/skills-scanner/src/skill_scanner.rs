@@ -28,10 +28,10 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::script_scanner::ScriptScanner;
 use crate::skill_metadata::{
     IndexToolEntry, ReferencePath, SkillIndexEntry, SkillMetadata, SkillStructure, SnifferRule,
 };
+use crate::tools_scanner::ToolsScanner;
 
 /// TOML structure for rules.toml parsing.
 #[derive(Debug, Deserialize)]
@@ -349,10 +349,10 @@ impl SkillScanner {
     ///
     /// ```ignore
     /// let scanner = SkillScanner::new();
-    /// let script_scanner = ScriptScanner::new();
+    /// let tools_scanner = ToolsScanner::new();
     ///
     /// let metadata = scanner.scan_skill(&skill_path, None).unwrap().unwrap();
-    /// let tools = script_scanner.scan_scripts(&skill_path.join("scripts"), &metadata.skill_name, &metadata.routing_keywords).unwrap();
+    /// let tools = tools_scanner.scan_scripts(&skill_path.join("scripts"), &metadata.skill_name, &metadata.routing_keywords).unwrap();
     ///
     /// let entry = scanner.build_index_entry(metadata, &tools, &skill_path);
     /// ```
@@ -389,13 +389,23 @@ impl SkillScanner {
         // Add sniffer rules from rules.toml
         entry.sniffing_rules = parse_rules_toml(skill_path);
 
-        // Add tools (tool.tool_name already includes skill_name prefix from script_scanner)
+        // Add tools (tool.tool_name already includes skill_name prefix from tools_scanner)
+        // Deduplicate by tool_name - keep first occurrence (likely the real definition)
+        // This handles cases where docstring examples are incorrectly matched
+        // Use Vec with manual deduplication to preserve insertion order
+        let mut seen_names: Vec<String> = Vec::new();
         for tool in tools {
-            let tool_entry = IndexToolEntry {
-                name: tool.tool_name.clone(), // Already in format "skill.command"
-                description: tool.description.clone(),
-            };
-            entry.add_tool(tool_entry);
+            if !seen_names.contains(&tool.tool_name) {
+                seen_names.push(tool.tool_name.clone());
+                let tool_entry = IndexToolEntry {
+                    name: tool.tool_name.clone(),
+                    description: tool.description.clone(),
+                    category: tool.category.clone(),
+                    input_schema: tool.input_schema.clone(),
+                    file_hash: tool.file_hash.clone(),
+                };
+                entry.add_tool(tool_entry);
+            }
         }
 
         entry
@@ -414,19 +424,19 @@ impl SkillScanner {
     /// * `base_path` - Path to the skills directory (e.g., "assets/skills")
     /// * `output_path` - Path for the output JSON file
     /// * `structure` - Optional skill structure for validation (uses default if None)
-    /// * `script_scanner` - Script scanner for discovering tools
+    /// * `tools_scanner` - Tools scanner for discovering tools
     ///
     /// # Examples
     ///
     /// ```ignore
     /// let scanner = SkillScanner::new();
-    /// let script_scanner = ScriptScanner::new();
+    /// let tools_scanner = ToolsScanner::new();
     ///
     /// scanner.scan_all_full_to_index(
     ///     PathBuf::from("assets/skills"),
     ///     PathBuf::from("assets/skills/skill_index.json"),
     ///     None,
-    ///     &script_scanner
+    ///     &tools_scanner
     /// ).unwrap();
     /// ```
     pub fn scan_all_full_to_index(
@@ -434,7 +444,7 @@ impl SkillScanner {
         base_path: &Path,
         output_path: &Path,
         structure: Option<&SkillStructure>,
-        script_scanner: &ScriptScanner,
+        tools_scanner: &ToolsScanner,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let metadatas = self.scan_all(base_path, structure)?;
 
@@ -446,7 +456,7 @@ impl SkillScanner {
             // Scan for tools in scripts directory
             let scripts_path = skill_path.join("scripts");
             let tools = if scripts_path.exists() {
-                script_scanner.scan_scripts(
+                tools_scanner.scan_scripts(
                     &scripts_path,
                     &metadata.skill_name,
                     &metadata.routing_keywords,

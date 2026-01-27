@@ -196,6 +196,18 @@ class TestSkillCommandDecorator:
 
         assert self._get_category(list_directory) == "view"
 
+    def test_list_directory_type_filter_parameter(self):
+        """Test list_directory input_schema has type_filter parameter."""
+        from filesystem.scripts.io import list_directory
+
+        config = getattr(list_directory, "_skill_config", None)
+        assert config is not None
+        schema = config.get("input_schema", {})
+        props = schema.get("properties", {})
+        assert "type_filter" in props
+        assert props["type_filter"].get("default") == "all"
+        # type_filter exists with correct default - actual enum validation done at runtime
+
     def test_write_file_has_skill_command_attr(self):
         """Test write_file has _is_skill_command and _skill_config attributes."""
         from filesystem.scripts.io import write_file

@@ -1,14 +1,19 @@
 # tests/unit/services/test_embed.py
 """
 Unit tests for embedding module.
+
+Note: Tests use mocking to avoid depending on actual embedding backends
+(FastEmbed, OpenAI) which may have different dimensions.
 """
 
 import pytest
+from unittest.mock import patch, MagicMock
 
 from omni.foundation.services.embedding import (
     _simple_embed,
     batch_embed,
     embed_query,
+    get_embedding_service,
 )
 
 
@@ -64,9 +69,17 @@ class TestEmbedQuery:
 
     def test_embed_query_with_text(self):
         """embed_query should return embedding for non-empty text."""
-        result = embed_query("test query")
-        assert result is not None
-        assert len(result) == 1536
+        # Mock the embedding service to avoid backend dependencies
+        mock_service = MagicMock()
+        mock_service.embed.return_value = [[0.1] * 384]
+        mock_service._dimension = 384
+
+        with patch(
+            "omni.foundation.services.embedding.get_embedding_service", return_value=mock_service
+        ):
+            result = embed_query("test query")
+            assert result is not None
+            assert len(result) == 384  # Mock dimension
 
 
 class TestBatchEmbed:
@@ -79,17 +92,33 @@ class TestBatchEmbed:
 
     def test_batch_embed_single_text(self):
         """batch_embed should handle single text."""
-        result = batch_embed(["test"])
-        assert len(result) == 1
-        assert len(result[0]) == 1536
+        # Mock the embedding service
+        mock_service = MagicMock()
+        mock_service.embed_batch.return_value = [[0.1] * 384]
+        mock_service._dimension = 384
+
+        with patch(
+            "omni.foundation.services.embedding.get_embedding_service", return_value=mock_service
+        ):
+            result = batch_embed(["test"])
+            assert len(result) == 1
+            assert len(result[0]) == 384  # Mock dimension
 
     def test_batch_embed_multiple_texts(self):
         """batch_embed should handle multiple texts."""
-        texts = ["test 1", "test 2", "test 3"]
-        result = batch_embed(texts)
-        assert len(result) == 3
-        for emb in result:
-            assert len(emb) == 1536
+        # Mock the embedding service
+        mock_service = MagicMock()
+        mock_service.embed_batch.return_value = [[0.1] * 384, [0.2] * 384, [0.3] * 384]
+        mock_service._dimension = 384
+
+        with patch(
+            "omni.foundation.services.embedding.get_embedding_service", return_value=mock_service
+        ):
+            texts = ["test 1", "test 2", "test 3"]
+            result = batch_embed(texts)
+            assert len(result) == 3
+            for emb in result:
+                assert len(emb) == 384  # Mock dimension
 
     def test_batch_embed_same_texts_produce_same_embeddings(self):
         """Same texts should produce identical embeddings."""
@@ -119,6 +148,17 @@ class TestBatchEmbed:
         assert set(custom_calls) == set(texts)
         for emb in result:
             assert emb == [1.0] * 768
+
+
+class TestEmbeddingServiceDimension:
+    """Tests for embedding service dimension handling."""
+
+    def test_dimension_reflects_backend(self):
+        """Service dimension should match the initialized backend."""
+        service = get_embedding_service()
+        # Dimension should be one of the known values
+        valid_dimensions = [384, 1536, 3072]  # BGE small, OpenAI small, OpenAI large
+        assert service.dimension in valid_dimensions
 
 
 if __name__ == "__main__":

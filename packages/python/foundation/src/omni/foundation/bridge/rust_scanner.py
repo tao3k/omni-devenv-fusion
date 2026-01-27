@@ -113,24 +113,8 @@ class RustSkillScanner(SkillScannerProvider):
             return skills
 
         except Exception as e:
-            logger.error(f"Rust batch scan failed: {e}, falling back to Python")
-            return self._fallback_scan_all(base_path)
-
-    def _fallback_scan_all(self, base_path: str) -> list[SkillStructure]:
-        """Python fallback for scanning all skills."""
-        skills = []
-        if not os.path.isdir(base_path):
-            return skills
-
-        for entry in os.listdir(base_path):
-            skill_dir = os.path.join(base_path, entry)
-            if os.path.isdir(skill_dir):
-                skill = self.scan_skill(skill_dir)
-                if skill.skill_name:
-                    skills.append(skill)
-
-        logger.info(f"🔍 Scanned {len(skills)} skills in {base_path} (Python fallback)")
-        return skills
+            logger.error(f"Rust batch scan failed: {e}")
+            raise RuntimeError(f"Failed to scan skills: {e}")
 
     def parse_skill_metadata(self, skill_path: str) -> dict[str, Any]:
         """Parse the SKILL.md YAML frontmatter."""

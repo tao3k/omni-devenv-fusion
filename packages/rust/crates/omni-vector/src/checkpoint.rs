@@ -13,7 +13,8 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 use crate::{
-    CONTENT_COLUMN, DEFAULT_DIMENSION, ID_COLUMN, METADATA_COLUMN, VECTOR_COLUMN, VectorStoreError,
+    CONTENT_COLUMN, DEFAULT_DIMENSION, ID_COLUMN, METADATA_COLUMN, THREAD_ID_COLUMN, VECTOR_COLUMN,
+    VectorStoreError,
 };
 
 // ============================================================================
@@ -56,10 +57,10 @@ impl CheckpointStore {
     pub async fn new(path: &str, dimension: Option<usize>) -> Result<Self, VectorStoreError> {
         let base_path = PathBuf::from(path);
 
-        if let Some(parent) = base_path.parent()
-            && !parent.exists()
-        {
-            std::fs::create_dir_all(parent)?;
+        if let Some(parent) = base_path.parent() {
+            if !parent.exists() {
+                std::fs::create_dir_all(parent)?;
+            }
         }
 
         if !base_path.exists() {
@@ -83,6 +84,12 @@ impl CheckpointStore {
         Arc::new(Schema::new(vec![
             lance::deps::arrow_schema::Field::new(
                 ID_COLUMN,
+                lance::deps::arrow_schema::DataType::Utf8,
+                false,
+            ),
+            // thread_id as first-class column for predicate push-down filtering
+            lance::deps::arrow_schema::Field::new(
+                THREAD_ID_COLUMN,
                 lance::deps::arrow_schema::DataType::Utf8,
                 false,
             ),
@@ -122,8 +129,10 @@ impl CheckpointStore {
 
         {
             let datasets = self.datasets.lock().await;
-            if !force_create && let Some(cached) = datasets.get(table_name) {
-                return Ok(cached.clone());
+            if !force_create {
+                if let Some(cached) = datasets.get(table_name) {
+                    return Ok(cached.clone());
+                }
             }
         }
 
@@ -158,6 +167,10 @@ impl CheckpointStore {
             Arc::new(lance::deps::arrow_array::StringArray::from(
                 Vec::<String>::new(),
             )) as _,
+            // thread_id column
+            Arc::new(lance::deps::arrow_array::StringArray::from(
+                Vec::<String>::new(),
+            )) as _,
             Arc::new(lance::deps::arrow_array::FixedSizeListArray::new_null(
                 Arc::new(lance::deps::arrow_schema::Field::new(
                     "item",
@@ -186,7 +199,7 @@ impl CheckpointStore {
     ) -> Result<(), VectorStoreError> {
         let schema = self.create_schema();
 
-        // Build metadata JSON - merge user metadata with system fields
+        // Build metadata JSON - merge user metadata with system fields (thread_id now in separate column)
         let mut metadata_map = serde_json::Map::new();
         if let Some(ref user_meta) = record.metadata {
             if let Ok(user_obj) = serde_json::from_str::<serde_json::Value>(user_meta) {
@@ -197,11 +210,7 @@ impl CheckpointStore {
                 }
             }
         }
-        // Always override system fields
-        metadata_map.insert(
-            "thread_id".to_string(),
-            serde_json::Value::String(record.thread_id.clone()),
-        );
+        // Note: thread_id is now stored in separate column, not in metadata
         if let Some(parent) = &record.parent_id {
             metadata_map.insert(
                 "parent_id".to_string(),
@@ -235,12 +244,16 @@ impl CheckpointStore {
         )
         .map_err(VectorStoreError::Arrow)?;
 
-        // Build record batch
+        // Build record batch with thread_id as separate column
         let batch = RecordBatch::try_new(
             schema.clone(),
             vec![
                 Arc::new(lance::deps::arrow_array::StringArray::from(vec![
                     record.checkpoint_id.clone(),
+                ])),
+                // thread_id as first-class column for predicate push-down
+                Arc::new(lance::deps::arrow_array::StringArray::from(vec![
+                    record.thread_id.clone(),
                 ])),
                 Arc::new(vector_array),
                 Arc::new(lance::deps::arrow_array::StringArray::from(vec![
@@ -289,6 +302,9 @@ impl CheckpointStore {
 
         let mut scanner = dataset.scan();
         scanner.project(&[CONTENT_COLUMN, METADATA_COLUMN])?;
+        // PREDICATE PUSH-DOWN: Filter by thread_id column
+        let filter_expr = format!("{} = '{}'", THREAD_ID_COLUMN, thread_id.replace("'", "''"));
+        scanner.filter(&filter_expr)?;
 
         let mut stream = scanner
             .try_into_stream()
@@ -316,21 +332,19 @@ impl CheckpointStore {
                             continue;
                         }
 
+                        // thread_id already filtered, only need to parse timestamp from metadata
                         let metadata_str = metadata_strs.value(i);
                         if let Ok(metadata) =
                             serde_json::from_str::<serde_json::Value>(&metadata_str)
                         {
-                            if metadata.get("thread_id").and_then(|v| v.as_str()) == Some(thread_id)
-                            {
-                                let timestamp = metadata
-                                    .get("timestamp")
-                                    .and_then(|v| v.as_f64())
-                                    .unwrap_or(0.0);
-                                if timestamp > latest_timestamp {
-                                    latest_timestamp = timestamp;
-                                    if !content_strs.is_null(i) {
-                                        latest_content = Some(content_strs.value(i).to_string());
-                                    }
+                            let timestamp = metadata
+                                .get("timestamp")
+                                .and_then(|v| v.as_f64())
+                                .unwrap_or(0.0);
+                            if timestamp > latest_timestamp {
+                                latest_timestamp = timestamp;
+                                if !content_strs.is_null(i) {
+                                    latest_content = Some(content_strs.value(i).to_string());
                                 }
                             }
                         }
@@ -363,6 +377,9 @@ impl CheckpointStore {
 
         let mut scanner = dataset.scan();
         scanner.project(&[CONTENT_COLUMN, METADATA_COLUMN])?;
+        // PREDICATE PUSH-DOWN: Filter by thread_id column
+        let filter_expr = format!("{} = '{}'", THREAD_ID_COLUMN, thread_id.replace("'", "''"));
+        scanner.filter(&filter_expr)?;
 
         let mut stream = scanner
             .try_into_stream()
@@ -389,19 +406,17 @@ impl CheckpointStore {
                             continue;
                         }
 
+                        // thread_id already filtered, only need to parse timestamp from metadata
                         let metadata_str = metadata_strs.value(i);
                         if let Ok(metadata) =
                             serde_json::from_str::<serde_json::Value>(&metadata_str)
                         {
-                            if metadata.get("thread_id").and_then(|v| v.as_str()) == Some(thread_id)
-                            {
-                                let timestamp = metadata
-                                    .get("timestamp")
-                                    .and_then(|v| v.as_f64())
-                                    .unwrap_or(0.0);
-                                let content = content_strs.value(i).to_string();
-                                checkpoints.push((timestamp, content));
-                            }
+                            let timestamp = metadata
+                                .get("timestamp")
+                                .and_then(|v| v.as_f64())
+                                .unwrap_or(0.0);
+                            let content = content_strs.value(i).to_string();
+                            checkpoints.push((timestamp, content));
                         }
                     }
                 }
@@ -475,45 +490,32 @@ impl CheckpointStore {
             .await
             .map_err(VectorStoreError::LanceDB)?;
 
-        // First, get all matching checkpoint IDs (filter in memory since LanceDB json_extract expects binary)
-        let mut ids_to_delete: Vec<String> = Vec::new();
+        // PREDICATE PUSH-DOWN: Use thread_id column filter instead of metadata parsing
         let mut scanner = dataset.scan();
-        scanner.project(&[ID_COLUMN, METADATA_COLUMN])?;
+        scanner.project(&[ID_COLUMN])?;
+        let filter_expr = format!("{} = '{}'", THREAD_ID_COLUMN, thread_id.replace("'", "''"));
+        scanner.filter(&filter_expr)?;
 
         use futures::TryStreamExt;
-        use lance::deps::arrow_array::Array;
 
         let mut stream = scanner
             .try_into_stream()
             .await
             .map_err(VectorStoreError::LanceDB)?;
+
+        // Collect all IDs to delete
+        let mut ids_to_delete: Vec<String> = Vec::new();
+
         while let Some(batch) = stream.try_next().await.map_err(VectorStoreError::LanceDB)? {
             let id_col_opt = batch.column_by_name(ID_COLUMN);
-            let metadata_col_opt = batch.column_by_name(METADATA_COLUMN);
-
-            if let (Some(id_col), Some(metadata_col)) = (id_col_opt, metadata_col_opt) {
+            if let Some(id_col) = id_col_opt {
                 let ids = id_col
                     .as_any()
                     .downcast_ref::<lance::deps::arrow_array::StringArray>();
-                let metas = metadata_col
-                    .as_any()
-                    .downcast_ref::<lance::deps::arrow_array::StringArray>();
-
-                if let (Some(ids), Some(metas)) = (ids, metas) {
+                if let Some(ids) = ids {
                     for i in 0..batch.num_rows() {
-                        if metas.is_null(i) {
-                            continue;
-                        }
-                        let metadata_str = metas.value(i);
-                        if let Ok(metadata) =
-                            serde_json::from_str::<serde_json::Value>(&metadata_str)
-                        {
-                            if metadata.get("thread_id").and_then(|v| v.as_str()) == Some(thread_id)
-                            {
-                                if !ids.is_null(i) {
-                                    ids_to_delete.push(ids.value(i).to_string());
-                                }
-                            }
+                        if !ids.is_null(i) {
+                            ids_to_delete.push(ids.value(i).to_string());
                         }
                     }
                 }
@@ -544,10 +546,12 @@ impl CheckpointStore {
             .map_err(VectorStoreError::LanceDB)?;
 
         let mut scanner = dataset.scan();
-        scanner.project(&[ID_COLUMN, METADATA_COLUMN])?;
+        scanner.project(&[ID_COLUMN])?;
+        // PREDICATE PUSH-DOWN: Filter by thread_id column
+        let filter_expr = format!("{} = '{}'", THREAD_ID_COLUMN, thread_id.replace("'", "''"));
+        scanner.filter(&filter_expr)?;
 
         use futures::TryStreamExt;
-        use lance::deps::arrow_array::Array;
 
         let mut stream = scanner
             .try_into_stream()
@@ -556,28 +560,8 @@ impl CheckpointStore {
         let mut count = 0u32;
 
         while let Some(batch) = stream.try_next().await.map_err(VectorStoreError::LanceDB)? {
-            let metadata_col = batch.column_by_name(METADATA_COLUMN);
-            if let Some(meta_col) = metadata_col {
-                if let Some(metas) = meta_col
-                    .as_any()
-                    .downcast_ref::<lance::deps::arrow_array::StringArray>()
-                {
-                    for i in 0..batch.num_rows() {
-                        if metas.is_null(i) {
-                            continue;
-                        }
-                        let metadata_str = metas.value(i);
-                        if let Ok(metadata) =
-                            serde_json::from_str::<serde_json::Value>(&metadata_str)
-                        {
-                            if metadata.get("thread_id").and_then(|v| v.as_str()) == Some(thread_id)
-                            {
-                                count += 1;
-                            }
-                        }
-                    }
-                }
-            }
+            // thread_id already filtered, just count rows
+            count += batch.num_rows() as u32;
         }
 
         Ok(count)
@@ -617,31 +601,21 @@ impl CheckpointStore {
             .await
             .map_err(VectorStoreError::LanceDB)?;
 
-        // Build filter string from metadata conditions
-        let _filter_parts: Vec<String> = Vec::new();
-        if let Some(meta_filter) = &filter_metadata {
-            if let Some(obj) = meta_filter.as_object() {
-                for (key, value) in obj {
-                    match value {
-                        serde_json::Value::Bool(b) => {
-                            // Filter will be applied in post-processing
-                            log::debug!("Filtering by {} = {}", key, b);
-                        }
-                        serde_json::Value::String(s) => {
-                            log::debug!("Filtering by {} = '{}'", key, s);
-                        }
-                        serde_json::Value::Number(n) => {
-                            log::debug!("Filtering by {} = {}", key, n);
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
-
-        // Create scanner with all columns
+        // Create scanner with all columns needed for search
         let mut scanner = dataset.scan();
-        scanner.project(&[VECTOR_COLUMN, CONTENT_COLUMN, METADATA_COLUMN])?;
+        scanner.project(&[
+            THREAD_ID_COLUMN,
+            VECTOR_COLUMN,
+            CONTENT_COLUMN,
+            METADATA_COLUMN,
+        ])?;
+
+        // PREDICATE PUSH-DOWN: Use native LanceDB filter for thread_id
+        // This avoids full table scan and JSON parsing for thread_id filtering
+        if let Some(tid) = thread_id {
+            let filter_expr = format!("{} = '{}'", THREAD_ID_COLUMN, tid.replace("'", "''"));
+            scanner.filter(&filter_expr)?;
+        }
 
         let mut stream = scanner
             .try_into_stream()
@@ -694,28 +668,13 @@ impl CheckpointStore {
                             }
                             let distance = distance.sqrt();
 
-                            // Get metadata for filtering
+                            // Get metadata for filtering (thread_id already filtered by predicate push-down)
                             if metadata_strs.is_null(i) {
                                 continue;
                             }
                             let metadata_str = metadata_strs.value(i);
 
-                            // Filter by thread_id if specified
-                            if let Some(tid) = thread_id {
-                                if let Ok(metadata) =
-                                    serde_json::from_str::<serde_json::Value>(&metadata_str)
-                                {
-                                    if metadata.get("thread_id").and_then(|v| v.as_str())
-                                        != Some(tid)
-                                    {
-                                        continue;
-                                    }
-                                } else {
-                                    continue;
-                                }
-                            }
-
-                            // Filter by metadata conditions
+                            // Filter by metadata conditions (only if specified)
                             if let Some(meta_filter) = &filter_metadata {
                                 if let Ok(metadata) =
                                     serde_json::from_str::<serde_json::Value>(&metadata_str)

@@ -21,6 +21,7 @@ The Rust-Python bridge provides high-performance Rust implementations for perfor
 │  |  - navigation: File outline, code search               |  │
 │  |  - editor: Structural refactoring                      |  │
 │  |  - vector: LanceDB VectorStore                         |  │
+│  |  - events: Global Event Bus (GLOBAL_BUS)               |  │
 │  └───────────────────────────────────────────────────────┘  │
 └────────────────────────┬────────────────────────────────────┘
                          │
@@ -34,6 +35,7 @@ The Rust-Python bridge provides high-performance Rust implementations for perfor
 ┌────────────────────────▼────────────────────────────────────┐
 │ Rust Core Crates                                            │
 │                                                              │
+│  - omni-events: Global Event Bus (tokio broadcast)          │
 │  - omni-sniffer: Environment detection                      │
 │  - omni-io: Safe I/O, token counting                        │
 │  - omni-tags: Pattern extraction                            │
@@ -42,7 +44,66 @@ The Rust-Python bridge provides high-performance Rust implementations for perfor
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### Event Bus (v5.0 - The Grand Integration)
+
+**Location**: `packages/rust/crates/omni-events/`
+
+The Event Bus enables cross-language reactive architecture:
+
+```python
+from omni_core_rs import PyGlobalEventBus
+
+# Publish event (fire-and-forget)
+payload = '{"thread_id": "session-123", "step": 1, "state": {...}}'
+PyGlobalEventBus.publish("agent", "agent/step_complete", payload)
+```
+
+#### Event Topics
+
+| Topic                 | Source     | Purpose            |
+| --------------------- | ---------- | ------------------ |
+| `file/changed`        | Watcher    | File modification  |
+| `file/created`        | Watcher    | New file           |
+| `agent/step_complete` | Agent Loop | Checkpoint trigger |
+| `context/updated`     | Sniffer    | Context change     |
+
+#### Architecture
+
+```
+Rust GLOBAL_BUS.publish("source", "topic", payload)
+              ↓ (tokio broadcast - non-blocking)
+Python: PyGlobalEventBus.publish()
+              ↓
+KernelReactor._consumer_loop()
+              ↓
+Handlers: Cortex, Sniffer, Checkpoint
+```
+
 ## Available Modules
+
+### Event Bus (Global Event Bus)
+
+```python
+from omni_core_rs import (
+    PyGlobalEventBus,
+    topic_file_changed,
+    topic_file_created,
+    topic_agent_step_complete,
+)
+
+# Check availability
+if PyGlobalEventBus:
+    # Publish event (fire-and-forget)
+    PyGlobalEventBus.publish(
+        "agent",                      # source
+        "agent/step_complete",        # topic
+        '{"thread_id": "sess-1"}'     # payload (JSON string)
+    )
+
+    # Get topic constants
+    print(topic_file_changed())   # "file/changed"
+    print(topic_file_created())   # "file/created"
+```
 
 ### Sniffer (Environment Detection)
 
@@ -82,13 +143,62 @@ truncated = truncate_tokens("Long text...", 100)
 ### Scanner (Security & Metadata)
 
 ```python
-from omni_core_rs import scan_secrets, contains_secrets, scan_skill_tools
+from omni_core_rs import (
+    scan_secrets,           # Secret scanning (regex-based)
+    contains_secrets,       # Quick secret check
+    scan_code_security,     # AST-based security scan (omni-ast)
+    is_code_safe,           # Quick safety check
+    scan_skill_tools,       # Skill tool discovery
+    check_permission,       # Zero Trust permission check
+)
 
 # Security scanning
 has_secrets, findings = scan_secrets(file_content)
 
-# Skill tool discovery
-tools = scan_skill_tools("/assets/skills")
+# AST-based security scanning (omni-ast)
+# Detects: forbidden imports, dangerous calls, suspicious patterns
+is_safe, violations = scan_code_security(code)
+# violations = [
+#     {"rule_id": "SEC-IMPORT-001", "description": "...", "line": 5, "snippet": "import os"},
+# ]
+
+# Quick boolean check
+if is_code_safe(code):
+    print("Code passed security checks")
+
+# Permission gatekeeper
+allowed = check_permission("filesystem.read_file", ["filesystem:*", "git:status"])
+```
+
+### Immune System (Security + Sandbox)
+
+```python
+from omni.foundation.bridge.rust_immune import (
+    RustImmuneBridge,
+    scan_code_security,
+    is_code_safe,
+    run_sandbox,
+    is_rust_available,
+)
+
+# Check if Rust core is available
+if is_rust_available():
+    print("Rust core loaded - immune system active")
+
+# Level 1: Static Analysis
+is_safe, violations = scan_code_security(source_code)
+if not is_safe:
+    print(f"Security violations: {len(violations)}")
+
+# Level 2: Sandbox Execution (Docker/NsJail)
+result = run_sandbox("/path/to/test_script.py")
+# result = {
+#     "success": True,
+#     "exit_code": 0,
+#     "stdout": "TEST_PASSED",
+#     "stderr": "",
+#     "duration_ms": 150,
+# }
 ```
 
 ### Navigation (Code Analysis)
@@ -189,15 +299,25 @@ Output wheel: `target/wheels/omni_core_rs-*.whl`
 **Bindings:**
 
 - `packages/rust/bindings/python/src/lib.rs`
+- `packages/rust/bindings/python/src/events.rs` (Event Bus)
 - `packages/rust/bindings/python/src/io.rs`
 - `packages/rust/bindings/python/src/sniffer.rs`
 - `packages/rust/bindings/python/src/scanner.rs`
+- `packages/rust/bindings/python/src/security.rs` (Immune System)
 - `packages/rust/bindings/python/src/vector.rs`
 
 **Rust Crates:**
 
+- `packages/rust/crates/omni-events/` (Global Event Bus)
+- `packages/rust/crates/omni-ast/` (Security Scanner)
 - `packages/rust/crates/omni-sniffer/`
 - `packages/rust/crates/omni-io/`
 - `packages/rust/crates/omni-tags/`
 - `packages/rust/crates/omni-edit/`
+- `packages/rust/crates/omni-security/` (Sandbox)
 - `packages/rust/crates/omni-vector/`
+
+**Python Bridge:**
+
+- `packages/python/foundation/src/omni/foundation/bridge/rust_immune.py`
+- `packages/python/agent/src/omni/agent/core/evolution/immune/`

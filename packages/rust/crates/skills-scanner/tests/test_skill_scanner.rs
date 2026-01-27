@@ -2,14 +2,14 @@
 //!
 //! Tests SKILL.md parsing and SkillScanner functionality.
 
-use skills_scanner::{SkillScanner, SnifferRule, extract_frontmatter};
+use skills_scanner::{SkillMetadata, SkillScanner, SnifferRule, ToolRecord, extract_frontmatter};
 use std::fs;
 use tempfile::TempDir;
 
 /// Test SkillScanner creates valid instance.
 #[test]
 fn test_skill_scanner_new() {
-    let scanner = SkillScanner::new();
+    let _scanner = SkillScanner::new();
     // Just verify it can be created
     assert!(true);
 }
@@ -274,4 +274,147 @@ fn test_validate_structure_missing_skill_md() {
 
     let structure = SkillScanner::default_structure();
     assert!(!SkillScanner::validate_structure(&skill_path, &structure));
+}
+
+/// Test that build_index_entry deduplicates tools by name.
+#[test]
+fn test_build_index_entry_deduplicates_tools() {
+    let temp_dir = TempDir::new().unwrap();
+    let skill_path = temp_dir.path().join("test_skill");
+
+    let metadata = SkillMetadata {
+        skill_name: "test_skill".to_string(),
+        version: "1.0.0".to_string(),
+        description: "A test skill".to_string(),
+        routing_keywords: vec!["test".to_string()],
+        authors: vec!["test".to_string()],
+        intents: vec![],
+        require_refs: vec![],
+        repository: "".to_string(),
+        permissions: vec![],
+    };
+
+    // Create tools with duplicate names (simulates docstring example matching)
+    let tools = vec![
+        ToolRecord {
+            tool_name: "test_skill.real_tool".to_string(),
+            description: "The real tool".to_string(),
+            skill_name: "test_skill".to_string(),
+            file_path: "/test/scripts/real.py".to_string(),
+            function_name: "real_tool".to_string(),
+            execution_mode: "script".to_string(),
+            keywords: vec!["test".to_string()],
+            file_hash: "hash1".to_string(),
+            input_schema: r#"{"type": "object"}"#.to_string(),
+            docstring: "".to_string(),
+            category: "test".to_string(),
+            annotations: Default::default(),
+            parameters: vec![],
+        },
+        // Duplicate from docstring example
+        ToolRecord {
+            tool_name: "test_skill.real_tool".to_string(),
+            description: "Example in docstring".to_string(),
+            skill_name: "test_skill".to_string(),
+            file_path: "/test/scripts/other.py".to_string(),
+            function_name: "example_func".to_string(),
+            execution_mode: "script".to_string(),
+            keywords: vec!["test".to_string()],
+            file_hash: "hash2".to_string(),
+            input_schema: r#"{"type": "object"}"#.to_string(),
+            docstring: "".to_string(),
+            category: "test".to_string(),
+            annotations: Default::default(),
+            parameters: vec![],
+        },
+    ];
+
+    let scanner = SkillScanner::new();
+    let entry = scanner.build_index_entry(metadata, &tools, &skill_path);
+
+    // Should have only 1 tool (deduplicated)
+    assert_eq!(entry.tools.len(), 1);
+    assert_eq!(entry.tools[0].name, "test_skill.real_tool");
+    // Should keep the first occurrence (the real definition)
+    assert_eq!(entry.tools[0].description, "The real tool");
+}
+
+/// Test that build_index_entry preserves order of first occurrences.
+#[test]
+fn test_build_index_entry_preserves_order() {
+    let temp_dir = TempDir::new().unwrap();
+    let skill_path = temp_dir.path().join("test_skill");
+
+    let metadata = SkillMetadata {
+        skill_name: "test_skill".to_string(),
+        version: "1.0.0".to_string(),
+        description: "A test skill".to_string(),
+        routing_keywords: vec!["test".to_string()],
+        authors: vec!["test".to_string()],
+        intents: vec![],
+        require_refs: vec![],
+        repository: "".to_string(),
+        permissions: vec![],
+    };
+
+    // Create tools where tool_b appears before tool_a
+    let tools = vec![
+        ToolRecord {
+            tool_name: "test_skill.tool_b".to_string(),
+            description: "Tool B".to_string(),
+            skill_name: "test_skill".to_string(),
+            file_path: "/test/scripts/b.py".to_string(),
+            function_name: "tool_b".to_string(),
+            execution_mode: "script".to_string(),
+            keywords: vec![],
+            file_hash: "hash1".to_string(),
+            input_schema: "{}".to_string(),
+            docstring: "".to_string(),
+            category: "test".to_string(),
+            annotations: Default::default(),
+            parameters: vec![],
+        },
+        ToolRecord {
+            tool_name: "test_skill.tool_a".to_string(),
+            description: "Tool A".to_string(),
+            skill_name: "test_skill".to_string(),
+            file_path: "/test/scripts/a.py".to_string(),
+            function_name: "tool_a".to_string(),
+            execution_mode: "script".to_string(),
+            keywords: vec![],
+            file_hash: "hash2".to_string(),
+            input_schema: "{}".to_string(),
+            docstring: "".to_string(),
+            category: "test".to_string(),
+            annotations: Default::default(),
+            parameters: vec![],
+        },
+        // Duplicate of tool_b from docstring
+        ToolRecord {
+            tool_name: "test_skill.tool_b".to_string(),
+            description: "Duplicate B".to_string(),
+            skill_name: "test_skill".to_string(),
+            file_path: "/test/scripts/c.py".to_string(),
+            function_name: "dup_b".to_string(),
+            execution_mode: "script".to_string(),
+            keywords: vec![],
+            file_hash: "hash3".to_string(),
+            input_schema: "{}".to_string(),
+            docstring: "".to_string(),
+            category: "test".to_string(),
+            annotations: Default::default(),
+            parameters: vec![],
+        },
+    ];
+
+    let scanner = SkillScanner::new();
+    let entry = scanner.build_index_entry(metadata, &tools, &skill_path);
+
+    // Should have 2 tools
+    assert_eq!(entry.tools.len(), 2);
+    // Order should be preserved (tool_b first, then tool_a)
+    assert_eq!(entry.tools[0].name, "test_skill.tool_b");
+    assert_eq!(entry.tools[0].description, "Tool B");
+    assert_eq!(entry.tools[1].name, "test_skill.tool_a");
+    assert_eq!(entry.tools[1].description, "Tool A");
 }

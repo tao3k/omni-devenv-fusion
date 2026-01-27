@@ -21,17 +21,16 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 # Lazy exports - avoid importing at module level to prevent recursion
 _lazy_types = None
 _lazy_interfaces = None
-_lazy_rust_impl = None
 
 
 def __getattr__(name: str):
     """Lazy load bridge submodules."""
-    global _lazy_types, _lazy_interfaces, _lazy_rust_impl
+    global _lazy_types, _lazy_interfaces
 
     # Types
     if name in (
@@ -89,6 +88,12 @@ def __getattr__(name: str):
 
         return RustSkillScanner
 
+    # Immune System Bridge
+    if name == "rust_immune":
+        from . import rust_immune
+
+        return rust_immune
+
     # Status functions
     if name in (
         "is_rust_available",
@@ -109,18 +114,6 @@ def __getattr__(name: str):
             }
 
         return is_rust_available if name == "is_rust_available" else check_rust_availability
-
-    # Legacy / deprecated
-    if name in (
-        "RustFileScanner",
-        "RustBridge",
-    ):
-        # Fallback imports from legacy location
-        if _lazy_rust_impl is None:
-            from . import rust_impl
-
-            _lazy_rust_impl = rust_impl
-        return getattr(_lazy_rust_impl, name)
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
@@ -145,7 +138,7 @@ def __dir__():
         "RustVectorStore",
         "RustCodeAnalyzer",
         "RustSkillScanner",
-        "RustFileScanner",
+        "rust_immune",
         # Factories
         "get_vector_store",
         "get_code_analyzer",
@@ -153,6 +146,4 @@ def __dir__():
         "RUST_AVAILABLE",
         "is_rust_available",
         "check_rust_availability",
-        # Legacy
-        "RustBridge",
     ]

@@ -20,6 +20,7 @@ in
     __nixpkgs__.zk
     __nixpkgs__.claude-code
     # __nixpkgs__.playwright-driver.browsers
+    __inputs__.llm-agents.packages.${system}.gemini-cli
   ]
   ++ lib.optionals (system != "aarch64-darwin") [
     __inputs__.llm-agents.packages.${system}.backlog-md

@@ -11,8 +11,6 @@ from contextlib import asynccontextmanager
 
 import structlog
 
-from .server import server
-
 # Get structlog logger
 log = structlog.get_logger(__name__)
 
@@ -23,7 +21,7 @@ async def server_lifespan(enable_watcher: bool = True):
 
     Args:
         enable_watcher: Whether to start the skill watcher. Set to False for
-            stdio transport (watchdog + multiprocessing daemon issues).
+            stdio transport (prevents duplicate watchers in parent/child processes).
     """
     log.info("🚀 [Lifecycle] Starting Omni Agent Runtime via Kernel...")
 
@@ -53,13 +51,10 @@ async def _notify_tools_changed(skill_changes: dict[str, str]):
 
     Receives a batch of skill changes and sends one tool list update.
     """
-    try:
-        request_ctx = server.request_context
-        if request_ctx and request_ctx.session:
-            await request_ctx.session.send_tool_list_changed()
-            log.info("🔔 [Tools] Sent tool list update", skills=list(skill_changes.keys()))
-    except Exception as e:
-        log.debug(f"⚠️ [Hot Reload] Notification skipped (no session): {e}")
+    # Note: Tool list notification requires MCP SDK server context
+    # This is a placeholder for hot reload tool list updates
+    log.info("🔔 [Tools] Skill changes detected (hot reload)", skills=list(skill_changes.keys()))
+    # The actual tool list update is handled by the MCP handler's _handle_list_tools
 
 
 async def _update_search_index(skill_changes: dict[str, str]):
