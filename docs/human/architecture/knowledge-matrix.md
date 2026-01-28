@@ -14,7 +14,7 @@ The Knowledge Matrix provides **Knowledge RAG** - a unified matrix for indexing 
 | ------------------- | ----------------------------- | ---------------------------------------------- |
 | **Skills Table**    | Tool discovery and invocation | `assets/skills/*/scripts/*.py`                 |
 | **Knowledge Table** | Documentation and specs       | `docs/`, `assets/knowledge/`, `assets/how-to/` |
-| **Memory Table**    | Session and long-term memory  | `agent/core/memory/`                           |
+| **Memory Table**    | Session and long-term memory  | [Hippocampus](hippocampus.md) (LanceDB)        |
 
 ### Architecture
 
@@ -339,5 +339,6 @@ asyncio.run(test())
 
 ## Related Documentation
 
-- [Memory Mesh](memory-mesh.md) (Episodic memory for self-learning)
-- [Omni Loop](omni-loop.md) (CCA Runtime with Knowledge + Memory)
+- [Hippocampus](hippocampus.md) - Memory Interface (long-term memory for self-learning)
+- [Memory Mesh](memory-mesh.md) - Episodic memory detailed architecture
+- [Omni Loop](omni-loop.md) - CCA Runtime with Knowledge + Memory

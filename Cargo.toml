@@ -9,7 +9,7 @@ members = [
 
 # Workspace package metadata (inherited by all crates)
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 authors = ["Omni-Dev-Fusion Team"]
 license = "Apache-2.0"

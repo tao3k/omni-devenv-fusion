@@ -569,6 +569,7 @@ messages = ctx.get_active_context(strategy="pruned")
 
 - [Zero-Code Skill Architecture](./zero-code-skill-architecture.md)
 - [MCP Core Architecture](../developer/mcp-core-architecture.md)
+- [Hippocampus](../human/architecture/hippocampus.md) - Memory Interface (long-term memory)
 
 ### Feature Guides
 

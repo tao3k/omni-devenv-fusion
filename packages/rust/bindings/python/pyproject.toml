@@ -1,6 +1,6 @@
 [project]
 name = "omni-core-rs"
-version = "0.1.0"
+version = "0.1.1"
 description = "Rust core for Omni DevEnv"
 requires-python = ">=3.13"
 classifiers = [

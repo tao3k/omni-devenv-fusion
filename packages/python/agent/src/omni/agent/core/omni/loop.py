@@ -45,6 +45,7 @@ except ImportError:
 from .config import OmniLoopConfig
 from .react import ResilientReAct
 from .schemas import extract_tool_schemas
+from ..memory.archiver import MemoryArchiver
 
 logger = get_logger("omni.agent.loop")
 
@@ -143,10 +144,11 @@ class OmniLoop:
         # Epistemic Gating
         self._epistemic_gater = EpistemicGater()
 
-        # Initialize Context
+        # Initialize Context with Rust-powered pruner
         pruning_config = PruningConfig(
             max_tokens=self.config.max_tokens,
             retained_turns=self.config.retained_turns,
+            max_tool_output=self.config.max_tool_output,
         )
         self.context = ContextManager(pruner=ContextPruner(config=pruning_config))
 
@@ -154,6 +156,9 @@ class OmniLoop:
         self.orchestrator = create_omni_loop_context()
         self.history: List[Dict[str, Any]] = []
         self._initialized = False
+
+        # [NEW] Initialize Memory Archiver for long-term storage
+        self.archiver = MemoryArchiver()
 
     async def _ensure_initialized(self):
         if self._initialized:
@@ -337,6 +342,10 @@ class OmniLoop:
         self.history.extend(
             [{"role": "user", "content": task}, {"role": "assistant", "content": response}]
         )
+
+        # [NEW] Flush to Long-Term Memory (MemoryArchiver)
+        # Archiver handles incremental sync - only stores new messages
+        self.archiver.archive_turn(self.history)
 
         # [Step 4] Fire-and-forget checkpoint to Rust Event Bus
         # This replaces blocking checkpoint.save() with async event publishing

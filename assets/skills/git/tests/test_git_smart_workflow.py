@@ -323,3 +323,129 @@ class TestSmartCommitSecurity:
         assert "normal.txt" in result.get("staged_files", [])
         # Sensitive file should NOT be in staged_files
         assert ".env" not in result.get("staged_files", [])
+
+
+class TestSmartCommitLefthookError:
+    """Test lefthook error detection in smart_commit workflow."""
+
+    def _create_failing_lefthook_config(self, project_root: Path):
+        """Create a lefthook config that runs a script that always fails."""
+        # Create a script that always exits with error
+        fail_script = project_root / "fail_check.sh"
+        fail_script.write_text("#!/bin/bash\nexit 1\n")
+        fail_script.chmod(0o755)
+
+        # Create lefthook config that runs this script
+        lefthook_yaml = f"""
+pre-commit:
+  commands:
+    fail-check:
+      run: ./fail_check.sh
+      skip:
+        - merge
+        - rebase
+"""
+        config_file = project_root / "lefthook.yaml"
+        config_file.write_text(lefthook_yaml)
+        return config_file
+
+    def test_stage_and_scan_detects_lefthook_failure(self, tmp_path, monkeypatch):
+        """Test that stage_and_scan correctly detects and reports lefthook failures."""
+        import subprocess
+        import shutil
+        from git.scripts.prepare import stage_and_scan
+
+        monkeypatch.chdir(tmp_path)
+        project_root = _init_git_repo(tmp_path)
+        _commit_all(project_root)
+
+        # Create a failing lefthook config
+        self._create_failing_lefthook_config(project_root)
+
+        # Create a file
+        test_file = project_root / "test.txt"
+        test_file.write_text("test content")
+
+        subprocess.run(
+            ["git", "add", "test.txt"],
+            cwd=project_root,
+            capture_output=True,
+        )
+
+        # Run stage_and_scan
+        result = stage_and_scan(root_dir=str(project_root))
+
+        # If lefthook is installed, it should detect the failure
+        if shutil.which("lefthook"):
+            # lefthook_error should be set since our script fails
+            lefthook_error = result.get("lefthook_error", "")
+            assert lefthook_error != ""
+            # The error should contain "status" or "fail" keywords
+            lefthook_lower = lefthook_error.lower()
+            assert "status" in lefthook_lower or "fail" in lefthook_lower
+        else:
+            # If lefthook not installed, file should still be staged
+            assert "test.txt" in result.get("staged_files", [])
+
+    def test_lefthook_error_stops_commit_preparation(self, tmp_path, monkeypatch):
+        """Test that lefthook error prevents commit preparation."""
+        import asyncio
+        import shutil
+        from git.scripts.smart_commit_workflow import _start_smart_commit_async
+        from git.scripts.smart_commit_workflow import SmartCommitStatus
+
+        monkeypatch.chdir(tmp_path)
+        project_root = _init_git_repo(tmp_path)
+        _commit_all(project_root)
+
+        # Create a failing lefthook config
+        self._create_failing_lefthook_config(project_root)
+
+        # Create a file
+        test_file = project_root / "test.txt"
+        test_file.write_text("test content")
+
+        subprocess.run(
+            ["git", "add", "test.txt"],
+            cwd=project_root,
+            capture_output=True,
+        )
+
+        result = asyncio.run(_start_smart_commit_async(str(project_root)))
+
+        # If lefthook is installed, status should be LEFTHOOK_FAILED
+        if shutil.which("lefthook"):
+            assert result.get("status") == SmartCommitStatus.LEFTHOOK_FAILED
+            # Note: workflow stores lefthook_error in 'error' field
+            assert result.get("error", "") != ""
+
+    def test_lefthook_error_message_format(self, tmp_path, monkeypatch):
+        """Test that lefthook error message is properly formatted."""
+        import subprocess
+        from git.scripts.prepare import stage_and_scan
+
+        monkeypatch.chdir(tmp_path)
+        project_root = _init_git_repo(tmp_path)
+        _commit_all(project_root)
+
+        # Create a failing lefthook config
+        self._create_failing_lefthook_config(project_root)
+
+        # Create a file
+        test_file = project_root / "test.txt"
+        test_file.write_text("test content")
+
+        subprocess.run(
+            ["git", "add", "test.txt"],
+            cwd=project_root,
+            capture_output=True,
+        )
+
+        result = stage_and_scan(root_dir=str(project_root))
+
+        # Verify result structure is correct
+        assert isinstance(result, dict)
+        assert "lefthook_error" in result
+        assert "staged_files" in result
+        assert "security_issues" in result
+        assert "diff" in result

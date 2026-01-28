@@ -126,8 +126,8 @@ impl EventBus {
     }
 }
 
-/// Global event bus singleton
 lazy_static::lazy_static! {
+    /// Global event bus singleton
     pub static ref GLOBAL_BUS: Arc<EventBus> = Arc::new(EventBus::new(2048));
 }
 
@@ -149,36 +149,49 @@ pub fn subscribe() -> broadcast::Receiver<OmniEvent> {
 
 /// Event topic constants for type-safe routing
 pub mod topics {
-    // File system events
+    /// File changed event
     pub const FILE_CHANGED: &str = "file/changed";
+    /// File created event
     pub const FILE_CREATED: &str = "file/created";
+    /// File deleted event
     pub const FILE_DELETED: &str = "file/deleted";
-    pub const FILERenamed: &str = "file/renamed";
+    /// File renamed event
+    pub const FILE_RENAMED: &str = "file/renamed";
 
-    // Agent events
+    /// Agent think event
     pub const AGENT_THINK: &str = "agent/think";
+    /// Agent action event
     pub const AGENT_ACTION: &str = "agent/action";
+    /// Agent result event
     pub const AGENT_RESULT: &str = "agent/result";
 
-    // MCP events
+    /// MCP request event
     pub const MCP_REQUEST: &str = "mcp/request";
+    /// MCP response event
     pub const MCP_RESPONSE: &str = "mcp/response";
 
-    // System events
+    /// System shutdown event
     pub const SYSTEM_SHUTDOWN: &str = "system/shutdown";
+    /// System ready event
     pub const SYSTEM_READY: &str = "system/ready";
 
-    // Cortex events
+    /// Cortex index updated event
     pub const CORTEX_INDEX_UPDATED: &str = "cortex/index_updated";
+    /// Cortex query event
     pub const CORTEX_QUERY: &str = "cortex/query";
 }
 
 /// Event source constants
 pub mod sources {
+    /// File watcher source
     pub const WATCHER: &str = "watcher";
+    /// Kernel source
     pub const KERNEL: &str = "kernel";
+    /// MCP server source
     pub const MCP_SERVER: &str = "mcp:server";
+    /// Cortex source
     pub const CORTEX: &str = "cortex";
+    /// Agent source
     pub const AGENT: &str = "agent";
 }
 

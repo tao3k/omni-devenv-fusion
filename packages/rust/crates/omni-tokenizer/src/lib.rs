@@ -18,6 +18,34 @@
 use std::sync::OnceLock;
 use thiserror::Error;
 
+/// Token pruning utilities for context window management
+pub mod pruner;
+pub use pruner::{ContextPruner, Message};
+
+#[derive(Debug, Clone)]
+/// A helper struct for counting tokens.
+pub struct TokenCounter {
+    // We can add model specifics here later if needed
+}
+
+impl TokenCounter {
+    /// Create a new TokenCounter instance.
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    /// Count the number of tokens in a text string.
+    pub fn count_tokens(&self, text: &str) -> usize {
+        count_tokens(text)
+    }
+}
+
+impl Default for TokenCounter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Errors for tokenization operations.
 #[derive(Error, Debug)]
 pub enum TokenizerError {

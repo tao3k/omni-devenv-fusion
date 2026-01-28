@@ -133,11 +133,88 @@ Omni Loop implements the **Trinity Architecture** with three logical roles:
 
 ## CLI Usage
 
+### omni run vs omni run terminal: The Commander vs The Soldier
+
+Understanding the distinction between `omni run` and `omni run terminal` is fundamental to mastering the Omni-Dev Fusion architecture:
+
+| Aspect           | `omni run` (The Commander/Brain)             | `omni run terminal` (The Soldier/Limb)      |
+| ---------------- | -------------------------------------------- | ------------------------------------------- |
+| **Role**         | Perception, Memory, Reasoning, Orchestration | Actual execution (Git, Terminal, Shell)     |
+| **Input**        | High-level intent ("fix the bug")            | Specific commands ("git commit -m '...'")   |
+| **Output**       | Plans, strategies, decisions                 | File edits, git operations, command results |
+| **Memory**       | Full episodic memory access                  | Ephemeral execution context                 |
+| **Intelligence** | Intent-driven, context-aware                 | Stateless, deterministic execution          |
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    omni run (The Commander)                     │
+│                                                                 │
+│  ┌─────────────┐   ┌─────────────┐   ┌─────────────────────┐   │
+│  │ Perception  │ → │  Reasoning  │ → │   Orchestration     │   │
+│  │ Build Ctx   │   │  LLM + Mem  │   │   Route → Execute   │   │
+│  └─────────────┘   └─────────────┘   └─────────────────────┘   │
+│         │               │                    │                  │
+│         │               │                    ▼                  │
+│         │               │         ┌─────────────────────┐       │
+│         │               │         │  Decides: "Call    │       │
+│         │               │         │  terminal.spawn     │       │
+│         │               │         │  with command"      │       │
+│         │               │         └─────────────────────┘       │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                 omni run terminal (The Soldier)                 │
+│                                                                 │
+│  ┌─────────────┐   ┌─────────────┐   ┌─────────────────────┐   │
+│  │  Receive    │ → │  Execute    │ → │   Return Result     │   │
+│  │  Command    │   │  Precisely  │   │   (No thinking)     │   │
+│  └─────────────┘   └─────────────┘   └─────────────────────┘   │
+│                                                                 │
+│  "I don't decide WHAT to do, I just DO it exactly as told"     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Key Advantages of This Separation
+
+| Capability          | Without Separation                 | With Commander/Soldier Model               |
+| ------------------- | ---------------------------------- | ------------------------------------------ |
+| **Memory**          | Commands forgotten after execution | All decisions archived to VectorDB         |
+| **Attention**       | Full context in every command      | Rust Pruner compresses to ~45KB stable     |
+| **Self-Correction** | No learning from mistakes          | Fast Path: User corrections → VectorDB     |
+| **Intent-Driven**   | User must specify exact commands   | "Fix the bug" → Omni Loop plans & executes |
+
+### Practical Examples
+
+```bash
+# THE COMMANDER: High-level intent, memory-enabled (自然语言指令)
+uv run omni run "Please use terminal to echo 'Hello Memory'"
+# → Omni Loop reasons, recalls similar fixes, orchestrates solution
+# → Archives entire session to memory for future recall
+
+# THE SOLDIER: Direct tool execution (绕过 Agent)
+uv run omni skill run "terminal.run_command" '{"cmd": "echo hello"}'
+# → Executes exactly one command, returns output
+# → No context, no memory, no learning (Pruner/Archiver NOT triggered)
+```
+
+### When to Use Each
+
+| Task                             | Command                                     | Why                          |
+| -------------------------------- | ------------------------------------------- | ---------------------------- |
+| "Analyze this codebase"          | `omni run "..."`                            | Needs reasoning + memory     |
+| "Create a new feature"           | `omni run "..."`                            | Planning + execution         |
+| "Commit my changes"              | `omni run "..."`                            | Context-aware commit message |
+| "Run this specific bash command" | `omni skill run "terminal.run_command" ...` | Direct execution             |
+| "Run tests"                      | `omni skill run ...`                        | No intelligence needed       |
+| "Tail a log file"                | `omni skill run ...`                        | Simple pass-through          |
+
 ### Interactive REPL
 
 ```bash
 uv run omni run --repl
 # Enter interactive mode for continuous task execution
+# Each command benefits from accumulated context + memory
 ```
 
 ### Single Task Execution

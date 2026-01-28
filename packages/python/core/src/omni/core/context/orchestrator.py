@@ -129,9 +129,10 @@ def create_omni_loop_context() -> ContextOrchestrator:
     """Create orchestrator for the Main ReAct Loop (Omni-Orchestrator).
 
     Uses agent-specific RoutingGuidanceProvider for meta-cognition protocol.
+    Includes EpisodicMemoryProvider for automatic memory recall.
 
     Returns:
-        ContextOrchestrator with Persona + Routing Protocol + Tools + Active Skill
+        ContextOrchestrator with Persona + Routing Protocol + Tools + Active Skill + Memory
     """
     # Import from agent package (agent depends on core, not vice versa)
     # This allows core to remain framework-agnostic while agent provides
@@ -146,9 +147,10 @@ def create_omni_loop_context() -> ContextOrchestrator:
     return ContextOrchestrator(
         [
             SystemPersonaProvider(role="developer"),  # Main role for Omni Loop
-            RoutingGuidanceProvider(),  # [NEW] Meta-cognition protocol
+            RoutingGuidanceProvider(),  # Meta-cognition protocol
             AvailableToolsProvider(),  # Tool index
             ActiveSkillProvider(),  # Active skill context
+            EpisodicMemoryProvider(top_k=3),  # [NEW] Automatic memory recall
         ]
     )
 

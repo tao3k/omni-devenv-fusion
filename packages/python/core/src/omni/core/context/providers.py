@@ -28,7 +28,7 @@ class SystemPersonaProvider(ContextProvider):
         self.role = role
         self._content: str | None = None
 
-    async def provide(self, state: dict[str, Any], budget: int) -> ContextResult:
+    async def provide(self, state: dict[str, Any], budget: int) -> ContextResult | None:
         # Load persona content (cached)
         if self._content is None:
             self._content = self.DEFAULT_PERSONAS.get(
@@ -47,7 +47,7 @@ class SystemPersonaProvider(ContextProvider):
 class ActiveSkillProvider(ContextProvider):
     """Layer 1.5: Active skill protocol (SKILL.md + required_refs)."""
 
-    async def provide(self, state: dict[str, Any], budget: int) -> ContextResult:
+    async def provide(self, state: dict[str, Any], budget: int) -> ContextResult | None:
         active_skill = state.get("active_skill")
         if not active_skill:
             return ContextResult(content="", token_count=0, name="active_skill", priority=10)
@@ -91,7 +91,7 @@ class AvailableToolsProvider(ContextProvider):
         self._index: list[dict] | None = None
         self._filtered_tools: set[str] | None = None
 
-    async def provide(self, state: dict[str, Any], budget: int) -> ContextResult:
+    async def provide(self, state: dict[str, Any], budget: int) -> ContextResult | None:
         # Try Arrow Analyzer first for zero-copy optimization
         try:
             from omni.core.skills.analyzer import generate_system_context
@@ -164,30 +164,109 @@ class AvailableToolsProvider(ContextProvider):
 
 
 class EpisodicMemoryProvider(ContextProvider):
-    """Layer 4: RAG-based knowledge retrieval."""
+    """Layer 4: The Hippocampus (Long-term Memory Recall).
 
-    async def provide(self, state: dict[str, Any], budget: int) -> ContextResult:
-        # Skip if budget too small
-        if budget < 500:
-            return ContextResult(content="", token_count=0, name="rag", priority=40)
+    Automatically retrieves relevant past interactions from VectorDB
+    based on the current conversation context.
+
+    This provider implements "Passive Recall" - it automatically searches
+    for relevant memories before each agent step, solving the "forgetting" problem.
+    """
+
+    def __init__(self, top_k: int = 5, collection: str = "memory") -> None:
+        """Initialize the episodic memory provider.
+
+        Args:
+            top_k: Number of memories to retrieve (default: 5).
+            collection: VectorDB collection name for memories (default: "memory").
+        """
+        self.top_k = top_k
+        self.collection = collection
+
+    async def provide(self, state: dict[str, Any], budget: int) -> ContextResult | None:
+        # Skip if budget too small (memories are low priority)
+        if budget < 300:
+            logger.debug("EpisodicMemoryProvider: Budget too small, skipping")
+            return None
 
         messages = state.get("messages", [])
         query = state.get("current_task")
+
+        # Fallback: use last message content as query
         if not query and messages:
             last_msg = messages[-1]
-            # Handle both dict and object access patterns
             if isinstance(last_msg, dict):
                 query = last_msg.get("content") or last_msg.get("text") or ""
             else:
                 query = getattr(last_msg, "content", "") or getattr(last_msg, "text", "")
 
-        if not query:
-            return ContextResult(content="", token_count=0, name="rag", priority=40)
+        if not query or len(query) < 5:
+            logger.debug("EpisodicMemoryProvider: No valid query, skipping")
+            return None
 
-        # Placeholder: Integrate with vector store when available
-        # For now, return empty context
-        logger.debug("EpisodicMemoryProvider: Vector store not yet integrated")
-        return ContextResult(content="", token_count=0, name="rag", priority=40)
+        try:
+            # Import here to avoid circular dependencies
+            from omni.foundation.services.vector import get_vector_store
+
+            store = get_vector_store()
+
+            # Perform vector search in the "memory" collection
+            results = await store.search(
+                query=query,
+                n_results=self.top_k,
+                collection=self.collection,
+            )
+
+            if not results:
+                logger.debug("EpisodicMemoryProvider: No memories found")
+                return None
+
+            # Format memories for context
+            memory_blocks = []
+            for res in results:
+                # res.metadata contains role, timestamp, step_index
+                role = res.metadata.get("role", "unknown")
+                timestamp = res.metadata.get("timestamp", 0)
+                step_idx = res.metadata.get("step_index", -1)
+
+                # Truncate long content
+                content = res.content
+                if len(content) > 300:
+                    content = content[:300] + "..."
+
+                # Format with metadata
+                memory_blocks.append(f"[Past {role} (turn {step_idx})]: {content}")
+
+            content = "<recalled_memories>\n" + "\n".join(memory_blocks) + "\n</recalled_memories>"
+
+            # Estimate token count
+            token_count = len(content.split())
+
+            # Skip if still over budget
+            if token_count > budget:
+                logger.debug(
+                    f"EpisodicMemoryProvider: Content over budget ({token_count} > {budget}), skipping"
+                )
+                return None
+
+            logger.debug(
+                f"EpisodicMemoryProvider: Retrieved {len(results)} memories",
+                tokens=token_count,
+            )
+
+            return ContextResult(
+                content=content,
+                token_count=token_count,
+                name="episodic_memory",
+                priority=40,  # Lower than system/skill/tools, but above general chat
+            )
+
+        except ImportError as e:
+            logger.warning(f"EpisodicMemoryProvider: Vector store not available ({e})")
+            return None
+        except Exception as e:
+            logger.warning(f"EpisodicMemoryProvider: Search failed ({e})")
+            return None
 
 
 __all__ = [

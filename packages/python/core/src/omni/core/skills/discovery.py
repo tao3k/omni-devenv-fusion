@@ -331,14 +331,14 @@ class SkillDiscoveryService:
         self._load_registry()
         return len(self._registry)
 
-    def search_tools(self, query: str, limit: int = 3, threshold: float = 0.3) -> list[ToolMatch]:
+    async def search_tools_async(
+        self, query: str, limit: int = 10, threshold: float = 0.1
+    ) -> list[ToolMatch]:
         """
         Search for tools matching the given intent/query.
 
-        Search Flow:
-        1. Load Memory Registry (O(1) tool lookup)
-        2. Keyword matching (fast, works offline)
-        3. Generate usage template from schema
+        Uses Rust Weighted RRF for hybrid search (vector + keyword + field boosting).
+        Returns skill.discover as fallback when no tools match.
 
         Args:
             query: Natural language intent (e.g., "read markdown files")
@@ -348,24 +348,135 @@ class SkillDiscoveryService:
         Returns:
             List of ToolMatch objects sorted by score
         """
-        # Step 1: Load Memory Registry (O(1) lookup for tool metadata + schema)
+        try:
+            import re
+            from omni.foundation.bridge.rust_vector import get_vector_store
+            from omni.foundation.services.embedding import get_embedding_service
+
+            store = get_vector_store()
+            embed_service = get_embedding_service()
+
+            # Clean query for keyword search (remove quotes and other Tantivy-problematic chars)
+            # Keep original for embedding to preserve semantic meaning
+            keyword_query = re.sub(r'["\'\[\](){}]', "", query).strip()
+
+            # Generate query embedding (use original query for semantic search)
+            query_vector = embed_service.embed(query)
+            if isinstance(query_vector[0], list):
+                query_vector = query_vector[0]
+
+            # Use Rust search_tools with Weighted RRF + Field Boosting
+            # Note: RustVectorStore.search_tools is async and uses run_in_executor internally
+            # Use cleaned query for keyword rescue to avoid Tantivy parse errors
+            results = await store.search_tools(
+                table_name="skills",
+                query_vector=query_vector,
+                query_text=keyword_query,
+                limit=limit * 2,
+                threshold=threshold,
+            )
+
+            matches = []
+            for r in results:
+                # Results are dicts from Rust binding
+                if not isinstance(r, dict):
+                    continue
+
+                score = r.get("score", 0.0)
+                if score < threshold:
+                    continue
+
+                tool_name = r.get("name", "")
+                tool_record = self.get_tool_record(tool_name)
+
+                usage = generate_usage_template(
+                    tool_name, tool_record.input_schema if tool_record else "{}"
+                )
+
+                match = ToolMatch(
+                    name=tool_name,
+                    skill_name=r.get("skill_name", ""),
+                    description=r.get("description", ""),
+                    score=score,
+                    matched_intent=query,
+                    usage_template=usage,
+                )
+                matches.append(match)
+
+            # If no results, return skill.discover as fallback (Discovery First rule)
+            if not matches:
+                return [
+                    ToolMatch(
+                        name="skill.discover",
+                        skill_name="skill",
+                        description="Discover available skills and tools",
+                        score=0.05,
+                        matched_intent=query,
+                        usage_template='@omni("skill.discover", {"query": "..."})',
+                    )
+                ]
+
+            return matches[:limit]
+
+        except Exception as e:
+            logger.warning(f"Rust search failed, falling back to keyword matching: {e}")
+            fallback_results = self._search_tools_fallback(query, limit, threshold)
+
+            # If no fallback results, return skill.discover
+            if not fallback_results:
+                return [
+                    ToolMatch(
+                        name="skill.discover",
+                        skill_name="skill",
+                        description="Discover available skills and tools",
+                        score=0.05,
+                        matched_intent=query,
+                        usage_template='@omni("skill.discover", {"query": "..."})',
+                    )
+                ]
+
+            return fallback_results[:limit]
+
+    def search_tools(self, query: str, limit: int = 10, threshold: float = 0.1) -> list[ToolMatch]:
+        """Synchronous wrapper for search_tools.
+
+        Use this method when calling from synchronous code (e.g., tests, CLI).
+
+        Args:
+            query: Natural language intent (e.g., "read markdown files")
+            limit: Maximum number of results to return
+            threshold: Minimum score threshold (0.0-1.0)
+
+        Returns:
+            List of ToolMatch objects sorted by score
+        """
+        import asyncio
+
+        return asyncio.run(self.search_tools_async(query, limit, threshold))
+
+    def _detect_query_intent(self, query_words: set[str]) -> tuple[str, ...] | None:
+        """Detect query intent based on keywords to enable category boosting."""
+        for intent_keywords, _categories in self.CATEGORY_BOOSTS.items():
+            if any(word in query_words for word in intent_keywords):
+                return intent_keywords
+        return None
+
+    def _search_tools_fallback(self, query: str, limit: int, threshold: float) -> list[ToolMatch]:
+        """Fallback keyword-based search when Rust search is unavailable."""
         registry = self._load_registry()
         query_lower = query.lower()
         query_words = set(query_lower.split())
-
-        # Detect query intent for category boosting
         query_intent = self._detect_query_intent(query_words)
 
         matches: list[tuple[ToolMatch, float]] = []
 
-        # Step 2: Search through all tools using layered scoring
         for tool_name, tool_record in registry.items():
             tool_score = 0.0
             tool_desc = tool_record.description
             tool_category = tool_record.category
             skill_name = tool_record.skill_name
 
-            # Layer 1: Direct name match (anchor - highest priority)
+            # Direct name match
             if query_lower.replace(" ", "_") in tool_name.lower():
                 tool_score = max(tool_score, 0.95)
             elif query_lower.replace(" ", "") in tool_name.lower().replace("_", "").replace(
@@ -373,62 +484,21 @@ class SkillDiscoveryService:
             ):
                 tool_score = max(tool_score, 0.85)
 
-            # Layer 2: Category-specific name boost
+            # Category boost
             if query_intent and tool_category in self.CATEGORY_BOOSTS.get(query_intent, []):
                 tool_score = max(tool_score, 0.8)
 
-            # Layer 3: Keyword-based scoring for install/jit scenarios
-            if "install" in query_lower and "jit_install" in tool_name:
-                tool_score = max(tool_score, 0.9)
-            elif "install" in query_lower and "install" in tool_name.lower():
-                tool_score = max(tool_score, 0.85)
-
-            # Layer 4: Check if query words appear in tool name
+            # Token match in name
             for word in query_words:
                 if word in tool_name.lower() and len(word) > 3:
                     tool_score = max(tool_score, 0.7)
 
-            # Layer 5: Description match (lower priority)
+            # Description match
             if query_lower in tool_desc.lower():
                 tool_score = max(tool_score, 0.6)
 
-            # Layer 6: Keyword density in description
-            matched_keywords = [w for w in query_words if w in tool_desc.lower() and len(w) > 3]
-            tool_score += len(matched_keywords) * 0.05
-
-            # Layer 7: Category boosting
-            if query_intent and tool_category in self.CATEGORY_BOOSTS.get(query_intent, []):
-                tool_score = max(tool_score, 0.7)
-
-            # Layer 8: SPECIAL - skill.discover for uncertainty queries
-            if tool_name == "skill.discover":
-                uncertainty_keywords = [
-                    "analyze",
-                    "learn",
-                    "what can",
-                    "available",
-                    "capability",
-                    "tools",
-                    "commands",
-                    "find",
-                    "search",
-                    "discover",
-                    "look up",
-                    "how to",
-                    "which tool",
-                    "what tool",
-                ]
-                for keyword in uncertainty_keywords:
-                    if keyword in query_lower:
-                        tool_score = max(tool_score, 0.85)
-                        break
-                else:
-                    tool_score = max(tool_score, 0.6)
-
-            # Step 3: Generate usage template from schema
             if tool_score >= threshold:
                 usage = generate_usage_template(tool_name, tool_record.input_schema)
-
                 match = ToolMatch(
                     name=tool_name,
                     skill_name=skill_name,
@@ -439,16 +509,8 @@ class SkillDiscoveryService:
                 )
                 matches.append((match, tool_score))
 
-        # Step 4: Sort by score and limit
         matches.sort(key=lambda x: x[1], reverse=True)
         return [m[0] for m in matches[:limit]]
-
-    def _detect_query_intent(self, query_words: set[str]) -> tuple[str, ...] | None:
-        """Detect query intent based on keywords to enable category boosting."""
-        for intent_keywords, _categories in self.CATEGORY_BOOSTS.items():
-            if any(word in query_words for word in intent_keywords):
-                return intent_keywords
-        return None
 
     def discover_all(self, locations: list[str] | None = None) -> list[DiscoveredSkill]:
         """Discover all skills from LanceDB.
@@ -505,38 +567,66 @@ class SkillDiscoveryService:
 
         Returns:
             PyArrow Table with columns: id, content, skill_name, tool_name,
-            file_path, keywords, etc.
+            file_path, keywords, etc. Returns None if analyzer unavailable.
 
-        Raises:
-            ImportError: If pyarrow is not installed
-            RuntimeError: If LanceDB is not available
+        Note:
+            Falls back to None when analyzer module is not available.
         """
-        from omni.core.skills.analyzer import get_analytics_dataframe as _get_df
+        try:
+            from omni.core.skills.analyzer import get_analytics_dataframe as _get_df
 
-        return _get_df()
+            return _get_df()
+        except ImportError:
+            # Analyzer module not available - return None
+            return None
 
     def generate_system_context(self) -> str:
-        """Generate system context using Arrow vectorized operations.
+        """Generate system context using available data.
 
         This is optimized for generating tool context for LLM prompts.
-        Uses PyArrow Compute for efficient string operations.
 
         Returns:
             Formatted string with all tools in @omni() format
         """
-        from omni.core.skills.analyzer import generate_system_context as _gen_ctx
+        try:
+            from omni.core.skills.analyzer import generate_system_context as _gen_ctx
 
-        return _gen_ctx()
+            context = _gen_ctx()
+            if context:  # Analyzer returned non-empty context
+                return context
+        except ImportError:
+            pass
+
+        # Fallback: generate from registry when analyzer is unavailable or returns empty
+        registry = self._load_registry()
+        if not registry:
+            return ""
+
+        context_parts = ["# Available Tools\n"]
+        for tool_name, record in registry.items():
+            usage = generate_usage_template(tool_name, record.input_schema)
+            context_parts.append(f"- {usage}")
+
+        return "\n".join(context_parts)
 
     def get_category_distribution(self) -> dict[str, int]:
-        """Get tool count distribution by category using Arrow.
+        """Get tool count distribution by category.
 
         Returns:
             Dictionary mapping category names to tool counts
         """
-        from omni.core.skills.analyzer import get_category_distribution as _get_dist
+        try:
+            from omni.core.skills.analyzer import get_category_distribution as _get_dist
 
-        return _get_dist()
+            return _get_dist()
+        except ImportError:
+            # Analyzer module not available - compute from registry
+            registry = self._load_registry()
+            distribution: dict[str, int] = {}
+            for record in registry.values():
+                category = record.category or "uncategorized"
+                distribution[category] = distribution.get(category, 0) + 1
+            return distribution
 
 
 def is_rust_available() -> bool:

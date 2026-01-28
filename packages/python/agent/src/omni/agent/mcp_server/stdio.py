@@ -16,16 +16,14 @@ import os
 import signal as _signal
 import sys
 
-import structlog
-
 from omni.agent.server import create_agent_handler
-from omni.foundation.config.logging import configure_logging
+from omni.foundation.config.logging import configure_logging, get_logger
 from omni.mcp.server import MCPServer
 from omni.mcp.transport.stdio import StdioTransport
 
 from .lifespan import server_lifespan
 
-log = structlog.get_logger(__name__)
+log = get_logger("omni.agent.stdio")
 
 
 def get_init_options() -> dict:
@@ -42,9 +40,14 @@ def get_init_options() -> dict:
     }
 
 
-def get_server() -> MCPServer:
-    """Create and return the MCP server instance with handlers registered."""
-    configure_logging(level="INFO")
+def get_server(verbose: bool = False) -> MCPServer:
+    """Create and return the MCP server instance with handlers registered.
+
+    Args:
+        verbose: If True, enable DEBUG logging; otherwise INFO level.
+    """
+    log_level = "DEBUG" if verbose else "INFO"
+    configure_logging(level=log_level)
     handler = create_agent_handler()
     transport = StdioTransport()
     server = MCPServer(handler, transport)
@@ -114,11 +117,14 @@ def _setup_signal_handler() -> None:
     _signal.signal(_signal.SIGTERM, signal_handler)
 
 
-async def run_stdio() -> None:
+async def run_stdio(verbose: bool = False) -> None:
     """Run server in stdio mode for Claude Desktop.
 
     This runs directly without multiprocessing - the process itself
     communicates via stdin/stdout with the MCP client.
+
+    Args:
+        verbose: If True, enable DEBUG logging; otherwise INFO level.
 
     Performance:
     - Zero-copy reading from stdin.buffer
@@ -126,12 +132,13 @@ async def run_stdio() -> None:
     - orjson.dumps() with OPT_APPEND_NEWLINE
     - Binary output to stdout.buffer
     """
-    log.info("📡 Starting Omni MCP Server (STDIO - High Performance)")
+    log_level = "DEBUG" if verbose else "INFO"
+    log.info(f"📡 Starting Omni MCP Server (STDIO - {log_level} mode)")
 
     # Set up signal handlers
     _setup_signal_handler()
 
-    server = get_server()
+    server = get_server(verbose=verbose)
 
     # Lifespan: Run once at startup (load skills)
     # Enable watcher for hot-reload support

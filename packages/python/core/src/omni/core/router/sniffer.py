@@ -272,12 +272,12 @@ class IntentSniffer:
             Number of rules loaded from LanceDB.
         """
         try:
-            from omni.foundation.bridge import RustVectorStore
+            from omni.foundation.bridge.rust_vector import get_vector_store
 
             # Clear existing rules to prevent duplication on reload
             self.clear_declarative_rules()
 
-            store = RustVectorStore()
+            store = get_vector_store()
             tools = await store.list_all_tools()
 
             # Group tools by skill_name and extract routing keywords

@@ -31,12 +31,12 @@
 
 ## 2. Layered Design
 
-| Layer    | Provider               | Priority    | Responsibility          | Source                          |
-| -------- | ---------------------- | ----------- | ----------------------- | ------------------------------- |
-| **L0**   | SystemPersonaProvider  | 0 (highest) | Role definition         | Hardcoded personas              |
-| **L1.5** | ActiveSkillProvider    | 10          | Current skill protocol  | `skills/{skill}/SKILL.md`       |
-| **L2**   | AvailableToolsProvider | 20          | Available tools index   | Rust Scanner `skill-index.json` |
-| **L4**   | EpisodicMemoryProvider | 40          | RAG knowledge retrieval | LanceDB Vector Store            |
+| Layer    | Provider               | Priority    | Responsibility          | Source                                  |
+| -------- | ---------------------- | ----------- | ----------------------- | --------------------------------------- |
+| **L0**   | SystemPersonaProvider  | 0 (highest) | Role definition         | Hardcoded personas                      |
+| **L1.5** | ActiveSkillProvider    | 10          | Current skill protocol  | `skills/{skill}/SKILL.md`               |
+| **L2**   | AvailableToolsProvider | 20          | Available tools index   | Rust Scanner `skill-index.json`         |
+| **L4**   | EpisodicMemoryProvider | 40          | RAG knowledge retrieval | [Hippocampus](hippocampus.md) (LanceDB) |
 
 **Composition Order**: Sorted by priority ascending, concatenated into complete system prompt.
 
@@ -236,6 +236,7 @@ def create_planner_orchestrator():
 
 ## 9. Related Documentation
 
+- [Hippocampus](../human/architecture/hippocampus.md) - Memory Interface documentation
 - [Skill Standard](docs/human/architecture/skill-standard.md)
 - [LangGraph Workflow](../architecture/langgraph.md)
 - [Rust-Python Bridge](rust-python-bridge.md)

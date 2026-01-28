@@ -9,10 +9,9 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-import structlog
+from omni.foundation.config.logging import get_logger
 
-# Get structlog logger
-log = structlog.get_logger(__name__)
+log = get_logger("omni.agent.lifecycle")
 
 
 @asynccontextmanager
@@ -23,7 +22,7 @@ async def server_lifespan(enable_watcher: bool = True):
         enable_watcher: Whether to start the skill watcher. Set to False for
             stdio transport (prevents duplicate watchers in parent/child processes).
     """
-    log.info("🚀 [Lifecycle] Starting Omni Agent Runtime via Kernel...")
+    log.info("Starting Omni Agent Runtime via Kernel...")
 
     # Initialize Kernel (loads all skills)
     from omni.core.kernel import get_kernel
@@ -32,18 +31,18 @@ async def server_lifespan(enable_watcher: bool = True):
 
     try:
         await kernel.initialize()
-        log.info(f"✅ [Lifecycle] Kernel ready with {kernel.skill_context.skills_count} skills")
+        log.info(f"Kernel ready with {kernel.skill_context.skills_count} skills")
     except Exception as e:
-        log.warning(f"⚠️  [Lifecycle] Kernel initialization failed: {e}")
+        log.warning(f"Kernel initialization failed: {e}")
         raise
 
-    log.info("✅ [Lifecycle] Server ready")
+    log.info("Server ready")
 
     try:
         yield
     finally:
         # Shutdown
-        log.info("🛑 [Lifecycle] Shutting down...")
+        log.info("Shutting down...")
 
 
 async def _notify_tools_changed(skill_changes: dict[str, str]):
@@ -53,7 +52,7 @@ async def _notify_tools_changed(skill_changes: dict[str, str]):
     """
     # Note: Tool list notification requires MCP SDK server context
     # This is a placeholder for hot reload tool list updates
-    log.info("🔔 [Tools] Skill changes detected (hot reload)", skills=list(skill_changes.keys()))
+    log.info("Skill changes detected (hot reload)", skills=list(skill_changes.keys()))
     # The actual tool list update is handled by the MCP handler's _handle_list_tools
 
 
@@ -62,4 +61,4 @@ async def _update_search_index(skill_changes: dict[str, str]):
 
     Note: This feature requires the skill discovery service from omni.core.
     """
-    log.debug("⏭ [Index Sync] Feature pending migration to omni.core")
+    log.debug("Index Sync feature pending migration to omni.core")

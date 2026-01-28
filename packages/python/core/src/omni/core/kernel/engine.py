@@ -616,6 +616,13 @@ class Kernel:
         except Exception as e:
             logger.error(f"❌ Hot Reload Failed for {skill_name}: {e}")
 
+    async def _safe_build_cortex(self) -> None:
+        """Wrapper for build_cortex to handle background execution safety."""
+        try:
+            await self.build_cortex()
+        except Exception as e:
+            logger.error(f"Failed to build Cortex in background: {e}")
+
     async def _notify_clients_tool_list_changed(self) -> None:
         """Send tool list changed notification to MCP clients."""
         try:
@@ -632,11 +639,16 @@ class Kernel:
 
     async def _on_ready(self) -> None:
         """Called when kernel reaches READY state."""
+        import time as _time
+
+        t0 = _time.time()
         logger.info("🟢 Kernel initializing...")
 
         # Step 1: Initialize skill context
         skill_ctx = self.skill_context
         logger.debug(f"Skill context initialized: {self._skills_dir}")
+
+        t1 = _time.time()
 
         # Step 2: Load and Register Universal Skills
         # Use UniversalScriptSkill to load all skills from assets
@@ -658,14 +670,21 @@ class Kernel:
             except Exception as e:
                 logger.error(f"  ❌ Failed to load skill '{skill.name}': {e}")
 
+        t2 = _time.time()
+
         # Step 4: Build Semantic Cortex (The Cortex)
-        logger.info("🧠 Building Semantic Cortex...")
-        await self.build_cortex()
+        # Run in background to prevent blocking kernel startup (critical for MCP connection)
+        logger.info("🧠 Building Semantic Cortex (Background)...")
+        asyncio.create_task(self._safe_build_cortex())
+
+        t3 = _time.time()
 
         # Step 5: Initialize Intent Sniffer (The Nose)
         # Loads declarative rules from LanceDB (populated by Rust scanner)
         logger.info("👃 Initializing Context Sniffer...")
         await self.load_sniffer_rules()
+
+        t4 = _time.time()
 
         # Step 6: Initialize Event Reactor (Reactive Architecture)
         # Wire Cortex, Checkpoint, and Sniffer to the Rust Event Bus
@@ -691,6 +710,15 @@ class Kernel:
         from omni.core.skills.extensions.loader import log_extension_summary
 
         log_extension_summary()
+
+        # Timing summary
+        t5 = _time.time()
+        total_time = t5 - t0
+        logger.info(
+            f"[TIMING] Kernel startup: {total_time:.2f}s "
+            f"(skills: {t1 - t0:.2f}s, load: {t2 - t1:.2f}s, "
+            f"cortex_bg: {t3 - t2:.2f}s, sniffer: {t4 - t3:.2f}s, reactor: {t5 - t4:.2f}s)"
+        )
 
         # Summary of active services
         logger.info("━" * 60)

@@ -13,10 +13,13 @@ use tokio::sync::mpsc;
 #[pyclass]
 #[derive(Debug, Clone)]
 pub struct PyFileEvent {
+    /// Event type (created, modified, deleted, error)
     #[pyo3(get)]
     pub event_type: String,
+    /// Path to the file or directory
     #[pyo3(get)]
     pub path: String,
+    /// Whether the path is a directory
     #[pyo3(get)]
     pub is_directory: bool,
 }
@@ -52,14 +55,19 @@ impl From<omni_io::FileEvent> for PyFileEvent {
 #[pyclass]
 #[derive(Debug, Clone)]
 pub struct PyWatcherConfig {
+    /// Paths to watch
     #[pyo3(get, set)]
     pub paths: Vec<String>,
+    /// Recursively watch directories
     #[pyo3(get, set)]
     pub recursive: bool,
+    /// Debounce delay in milliseconds
     #[pyo3(get, set)]
     pub debounce_ms: u64,
+    /// File patterns to include
     #[pyo3(get, set)]
     pub patterns: Vec<String>,
+    /// Patterns to exclude
     #[pyo3(get, set)]
     pub exclude: Vec<String>,
 }
@@ -108,7 +116,7 @@ impl Default for PyWatcherConfig {
 /// State shared between the Python handle and the watcher thread
 struct WatcherState {
     _is_running: Arc<AtomicBool>, // Renamed to avoid conflict with PyFileWatcherHandle.is_running property
-    stop_tx: Arc<mpsc::Sender<()>>,
+    _stop_tx: Arc<mpsc::Sender<()>>, // Reserved for future use: signaling stop to watcher thread
     /// Keep the FileWatcherHandle alive in the thread
     _watcher_handle: Arc<Mutex<Option<omni_io::FileWatcherHandle>>>,
 }
@@ -275,7 +283,7 @@ pub fn py_watch_path(path: String) -> PyResult<PyFileWatcherHandle> {
     // Create shared state first (both state and thread use same is_running Arc)
     let state = Arc::new(WatcherState {
         _is_running: is_running.clone(),
-        stop_tx: Arc::new(stop_tx),
+        _stop_tx: Arc::new(stop_tx),
         _watcher_handle: watcher_handle,
     });
 
@@ -322,7 +330,7 @@ pub fn py_start_file_watcher(config: PyWatcherConfig) -> PyResult<PyFileWatcherH
     // Create shared state first (both state and thread use same is_running Arc)
     let state = Arc::new(WatcherState {
         _is_running: is_running.clone(),
-        stop_tx: Arc::new(stop_tx),
+        _stop_tx: Arc::new(stop_tx),
         _watcher_handle: watcher_handle,
     });
 

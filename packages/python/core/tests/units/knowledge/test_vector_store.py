@@ -33,7 +33,7 @@ class TestEmbeddingService:
         EmbeddingService._instance = None
         service = EmbeddingService()
         # Dimension should be one of the known values
-        valid_dimensions = [384, 1536, 3072]  # BGE small, OpenAI small, OpenAI large
+        valid_dimensions = [384, 1024, 1536, 3072]  # BGE small, LLM, OpenAI small, OpenAI large
         assert service.dimension in valid_dimensions
 
     def test_embed_returns_list(self):

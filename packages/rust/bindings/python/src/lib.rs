@@ -35,7 +35,7 @@ mod scanner;
 mod security;
 mod sniffer;
 pub mod utils;
-mod vector;
+pub mod vector;
 
 #[cfg(feature = "notify")]
 mod watcher;
@@ -47,7 +47,7 @@ mod watcher; // Empty module when feature disabled
 // ============================================================================
 
 pub use checkpoint::PyCheckpointStore;
-pub use context::{PyAssemblyResult, PyContextAssembler};
+pub use context::{PyAssemblyResult, PyContextAssembler, PyContextPruner}; // Add PyContextPruner here
 pub use editor::{
     PyBatchRefactorStats, batch_structural_replace, structural_apply, structural_preview,
     structural_replace,
@@ -155,6 +155,7 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Context Assembler (Parallel I/O + Templating + Token Counting)
     m.add_class::<PyContextAssembler>()?;
     m.add_class::<PyAssemblyResult>()?;
+    m.add_class::<PyContextPruner>()?; // Add PyContextPruner here
 
     // Script Scanner
     m.add_function(pyo3::wrap_pyfunction!(scan_skill_tools, m)?)?;

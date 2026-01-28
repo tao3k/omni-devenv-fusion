@@ -176,18 +176,18 @@ class TestSkillDiscoveryService:
     def test_search_tools_returns_discover_as_fallback(self):
         """Test that search_tools returns skill.discover as fallback for unknown queries.
 
-        This implements the "Discovery First" rule - skill.discover is always
-        available as a fallback when no specific tool matches.
+        When Rust search returns no results (high threshold), skill.discover
+        is returned as the fallback per the "Discovery First" rule.
         """
         from omni.core.skills.discovery import SkillDiscoveryService
 
         service = SkillDiscoveryService()
-        matches = service.search_tools(query="xyznonexistenttool123", limit=3)
+        # Use high threshold so Rust returns nothing for unknown query
+        matches = service.search_tools(query="xyznonexistenttool123", limit=3, threshold=0.8)
 
-        # skill.discover should always be returned as fallback
+        # skill.discover should be returned as fallback
         assert len(matches) > 0
-        # skill.discover should be in results (as fallback)
-        assert any(m.name == "skill.discover" for m in matches)
+        assert matches[0].name == "skill.discover"
 
 
 class TestSkillCommands:

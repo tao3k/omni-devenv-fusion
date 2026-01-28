@@ -89,12 +89,8 @@ class OmniRouter:
         # Keyword search disabled - semantic-only mode for Rust
         self._keyword_indexer = None
 
-        self._hybrid = HybridSearch(
-            self._indexer,
-            keyword_indexer=None,
-            semantic_weight=semantic_weight,
-            keyword_weight=0.0,  # Disabled
-        )
+        # Rust-native hybrid search (zero-copy from LanceDB + Tantivy)
+        self._hybrid = HybridSearch()
         self._cache = SearchCache(max_size=cache_size, ttl=cache_ttl)
         self._hive = HiveRouter(self._semantic)
         self._sniffer = IntentSniffer()
@@ -197,38 +193,43 @@ class OmniRouter:
                 logger.debug(f"Cache hit for: {query[:50]}...")
                 return cached
 
-        # 2. Hybrid Search
+        # 2. Hybrid Search (Rust-native, returns list of dicts)
         matches = await self._hybrid.search(query, limit=limit * 2)
 
         # 3. Convert to RouteResults and filter by threshold
         results: list[RouteResult] = []
         for match in matches:
-            if match.combined_score >= threshold:
-                # Extract skill and command from id (format: "skill.command" or "skill")
-                id_parts = match.id.split(".", 1) if "." in match.id else [match.id, ""]
-                skill_name = id_parts[0] if id_parts[0] else "unknown"
+            score = match.get("score", 0.0)
+            if score >= threshold:
+                # Parse skill_name and command_name
+                # Rust returns tool_name in "skill.command" format (e.g., "git.commit")
+                # We need to extract just the command part to avoid duplication
+                skill_name = match.get("skill_name", "unknown")
+                full_command = match.get("command", "") or match.get("tool_name", "")
 
-                # For command_name, try metadata first, then fall back to id
-                if len(id_parts) > 1:
-                    command_name = id_parts[1]
-                elif match.metadata.get("command"):
-                    command_name = match.metadata.get("command")
-                elif match.metadata.get("tool_name"):
-                    # Handle cases where tool_name is the full id
-                    tool_parts = match.metadata.get("tool_name", "").split(".")
-                    command_name = tool_parts[-1] if len(tool_parts) > 1 else ""
+                # Extract command_name by stripping skill_name prefix if present
+                # e.g., "git.commit" + "git" -> "commit"
+                if full_command.startswith(f"{skill_name}."):
+                    command_name = full_command[len(skill_name) + 1 :]
                 else:
-                    command_name = ""
+                    command_name = full_command
 
-                # Skip skill-level entries (not actual tools)
-                # Skill entries have empty command_name and type="skill"
+                # Skip entries with no command_name or empty file_path (meta entries like "git.git")
+                # These are skill-level metadata, not actual commands
                 if not command_name:
+                    continue
+                if not match.get("file_path", "").strip():
+                    logger.debug(
+                        f"Skipping meta entry without file_path: {skill_name}.{command_name}"
+                    )
                     continue
 
                 # Determine confidence (lowercase for RouteConfidence enum)
-                if match.combined_score >= 0.75:
+                # Clamp score to [0, 1] for RouteResult validation (RRF fusion can exceed 1.0)
+                clamped_score = max(0.0, min(1.0, score))
+                if clamped_score >= 0.75:
                     confidence = "high"
-                elif match.combined_score >= 0.5:
+                elif clamped_score >= 0.5:
                     confidence = "medium"
                 else:
                     confidence = "low"
@@ -237,7 +238,7 @@ class OmniRouter:
                     RouteResult(
                         skill_name=skill_name,
                         command_name=command_name,
-                        score=match.combined_score,
+                        score=clamped_score,
                         confidence=confidence,  # type: ignore
                     )
                 )

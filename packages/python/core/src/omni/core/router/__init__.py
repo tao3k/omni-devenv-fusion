@@ -1,29 +1,27 @@
 """
 omni.core.router - Semantic Routing Module
 
-High-performance intent-to-action mapping using vector search.
-Migrated from: src/agent/core/router/
+High-performance intent-to-action mapping with Rust-native hybrid search.
 
-Modules:
-- cache: Search result caching (LRU with TTL)
-- indexer: Build semantic index from skills
-- router: Route natural language to commands
-- hive: The Hive Mind (advanced routing strategy)
-- sniffer: Context-aware skill suggestions
-- main: Unified router facade
+Architecture:
+- HybridSearch: Rust-native (omni-vector) for vector + keyword search
+- HiveRouter: Decision logic layer
+- IntentSniffer: Context-aware skill suggestions
+- OmniRouter: Unified facade
+
+Migration: Python-side hybrid search logic moved to Rust (omni-vector).
+The Python HybridSearch is now a thin shell over Rust's search_tools.
 
 Usage:
-    from omni.core.router import OmniRouter, HiveRouter, IntentSniffer
+    from omni.core.router import OmniRouter, HybridSearch
 
     # Use unified router
     router = OmniRouter()
     await router.initialize(skills)
     result = await router.route("帮我提交代码")
 
-    # Or use components directly
-    hive = HiveRouter(semantic_router)
-    sniffer = IntentSniffer()
-    suggestions = sniffer.sniff("/path/to/project")
+    # Or use hybrid search directly (Rust-native)
+    results = await router.hybrid.search("git commit", limit=5)
 """
 
 from .cache import SearchCache

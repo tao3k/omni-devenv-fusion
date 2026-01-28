@@ -1118,7 +1118,7 @@ test = [
 
 [[package]]
 name = "omni-core-rs"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "packages/rust/bindings/python" }
 
 [[package]]

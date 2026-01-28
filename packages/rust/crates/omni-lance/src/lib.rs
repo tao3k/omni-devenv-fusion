@@ -1,6 +1,11 @@
 //! LanceDB RecordBatch utilities.
 //!
-//! Provides Arrow record batch helpers for LanceDB integration.
+//! Provides Arrow record batch helpers for LanceDB vector storage.
+//!
+//! **Embedding Configuration**:
+//! - Default dimension: 1024 (configured via settings.yaml)
+//! - LLM-based embedding: MiniMax-M2.1 generates 16 core values -> expanded to 1024
+//! - Storage: FixedSizeListArray<f32> with configured dimension
 
 use std::sync::Arc;
 
@@ -20,8 +25,8 @@ pub const METADATA_COLUMN: &str = "metadata";
 /// Thread ID column name (for checkpoint filtering)
 pub const THREAD_ID_COLUMN: &str = "thread_id";
 
-/// Default embedding dimension (OpenAI Ada-002)
-pub const DEFAULT_DIMENSION: usize = 1536;
+/// Default embedding dimension (LLM-generated semantic vector)
+pub const DEFAULT_DIMENSION: usize = 1024;
 
 /// A record batch reader for vector store data.
 pub struct VectorRecordBatchReader {

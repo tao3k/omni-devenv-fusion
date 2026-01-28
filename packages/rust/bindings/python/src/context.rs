@@ -3,7 +3,9 @@
 //! Provides Python API for assembling skill context with parallel I/O,
 //! template rendering, and token counting.
 
+use omni_tokenizer::{ContextPruner, Message};
 use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyList};
 use std::path::PathBuf;
 
 /// Result of assembling skill context.
@@ -121,5 +123,63 @@ impl PyContextAssembler {
             token_count: result.token_count,
             missing_refs: missing,
         })
+    }
+}
+
+/// Context pruner for message history compression.
+#[pyclass]
+pub struct PyContextPruner {
+    inner: ContextPruner,
+}
+
+#[pymethods]
+impl PyContextPruner {
+    #[new]
+    fn new(window_size: usize, max_tool_output: usize) -> Self {
+        Self {
+            inner: ContextPruner::new(window_size, max_tool_output),
+        }
+    }
+
+    fn compress(&self, py: Python, messages: Py<PyAny>) -> PyResult<Py<PyAny>> {
+        // Modern PyO3 API: bind() to get Bound<PyAny>, then cast
+        let list = messages
+            .bind(py)
+            .cast::<PyList>()
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyTypeError, _>(e.to_string()))?;
+
+        let mut rust_msgs = Vec::with_capacity(list.len());
+
+        for item in list {
+            let dict = item.cast::<PyDict>().map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyTypeError, _>(format!("Item not a dict: {}", e))
+            })?;
+
+            let role: String = dict
+                .get_item("role")?
+                .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("Missing role"))?
+                .extract()?;
+
+            let content: String = dict
+                .get_item("content")?
+                .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("Missing content"))?
+                .extract()?;
+
+            rust_msgs.push(Message { role, content });
+        }
+
+        // Run Logic in Rust
+        let processed = self.inner.compress(rust_msgs);
+
+        // Rust Vec<Message> -> Python List[Dict]
+        let result_list = PyList::empty(py);
+        for msg in processed {
+            let dict = PyDict::new(py);
+            dict.set_item("role", msg.role)?;
+            dict.set_item("content", msg.content)?;
+            result_list.append(dict)?;
+        }
+
+        Ok(result_list.into())
     }
 }

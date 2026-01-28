@@ -13,6 +13,7 @@ class OmniLoopConfig(BaseModel):
     Attributes:
         max_tokens: Maximum tokens for context (default: 128K)
         retained_turns: Number of conversation turns to retain (default: 10)
+        max_tool_output: Max characters for tool output in pruner (default: 1000)
         auto_summarize: Enable automatic context summarization
         max_tool_calls: Max tool calls per turn for safety (default: 20)
         verbose: Enable verbose logging with DEBUG output
@@ -23,6 +24,7 @@ class OmniLoopConfig(BaseModel):
 
     max_tokens: int = 128000
     retained_turns: int = 10
+    max_tool_output: int = 1000
     auto_summarize: bool = False
     max_tool_calls: int = 20
     verbose: bool = False

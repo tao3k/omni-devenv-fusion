@@ -1,7 +1,7 @@
 # MCP Transport Interface
 
 > Trinity Architecture - Agent Layer (L3 Transport)
-> Last Updated: 2026-01-26
+> Last Updated: 2026-01-27
 
 Omni Agent supports two transport mechanisms for MCP (Model Context Protocol) connections: **STDIO** for Claude Desktop and **SSE** for Claude Code CLI.
 
@@ -13,6 +13,9 @@ uv run omni mcp --transport stdio
 
 # Claude Code CLI (SSE - default)
 uv run omni mcp
+
+# With verbose logging
+uv run omni mcp --verbose
 ```
 
 ## Architecture
@@ -30,6 +33,14 @@ uv run omni mcp
 │  (blocking)                     /sse + /messages           │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+### Key Improvements (v2.0)
+
+| Feature             | Description                                      |
+| ------------------- | ------------------------------------------------ |
+| **Async Startup**   | Kernel ready in ~2s, Cortex builds in background |
+| **Smart Indexing**  | Skips unchanged skills (no Embedding API calls)  |
+| **Unified Logging** | Foundation layer prevents stderr pollution       |
 
 ---
 
@@ -52,7 +63,7 @@ uv run omni mcp --transport stdio
 
 - Direct stdin/stdout communication using MCP SDK's `stdio_server()`
 - Signal handling via `asyncio.add_signal_handler()` for graceful shutdown
-- **Logging goes to stderr** (does not interfere with MCP protocol)
+- **Logging goes to stderr** via Foundation layer (does not interfere with MCP protocol)
 
 ### Implementation
 
@@ -77,7 +88,8 @@ async with stdio_server() as (read_stream, write_stream):
 | Behavior        | Description                                         |
 | --------------- | --------------------------------------------------- |
 | Signal handling | Ctrl+C gracefully shuts down via add_signal_handler |
-| Clean stderr    | Logging to stderr, MCP protocol to stdout           |
+| Clean stdout    | MCP protocol to stdout, logging to stderr           |
+| Fast startup    | Kernel ready in ~2s (Cortex in background)          |
 
 ---
 
@@ -91,6 +103,9 @@ uv run omni mcp
 
 # Custom port
 uv run omni mcp --port 9000
+
+# With verbose logging
+uv run omni mcp --verbose
 ```
 
 ### Endpoints
@@ -121,12 +136,23 @@ uv run omni mcp --port 9000
 
 ```
 omni/agent/mcp_server/
-├── __init__.py              # Exports
 ├── server.py                # AgentMCPServer (main server)
 ├── lifespan.py              # Lifespan context manager
 ├── sse.py                   # SSE transport
 └── stdio.py                 # stdio_server context manager
 ```
+
+### Logging (v2.0)
+
+All modules use Foundation layer logging:
+
+```python
+from omni.foundation.config.logging import get_logger
+
+logger = get_logger("omni.agent.stdio")  # or "omni.agent.lifecycle"
+```
+
+**No more structlog in transport layer** - prevents stderr pollution.
 
 ### Signal Handling
 
@@ -145,6 +171,24 @@ async def main_async():
 
 ---
 
+## Performance (v2.0)
+
+### Startup Time
+
+| Scenario            | Before | After     |
+| ------------------- | ------ | --------- |
+| First connection    | ~200s  | **~2s**   |
+| Restart (unchanged) | ~200s  | **~0.5s** |
+| Restart (changed)   | ~200s  | ~2s       |
+
+### Why So Fast?
+
+1. **Async Cortex**: Kernel ready immediately, index builds in background
+2. **Smart Indexing**: Hash-based detection skips unchanged skills
+3. **Unified Logging**: No stderr pollution means cleaner stream handling
+
+---
+
 ## Troubleshooting
 
 > **Important**: When MCP issues occur, check Claude Code's debug logs first:
@@ -152,6 +196,38 @@ async def main_async():
 > ```
 > cat ~/.claude/debug/latest/*.log
 > ```
+
+### Connection Timeout (30s)
+
+**Problem**: MCP client times out during connection.
+
+**Diagnosis**:
+
+```bash
+# Enable verbose mode
+uv run omni mcp --verbose 2>&1 | head -100
+```
+
+**Solutions**:
+
+1. **Check async Cortex is working**:
+
+   ```bash
+   uv run omni mcp 2>&1 | grep -E "(Ready|Background|Cortex)"
+   # Should see "Kernel ready" within ~3 seconds
+   ```
+
+2. **Verify no stderr pollution**:
+
+   ```bash
+   uv run omni mcp --transport stdio 2>/dev/null
+   # If this hangs, something is writing to stdout
+   ```
+
+3. **Check embedding service**:
+   ```bash
+   uv run omni mcp 2>&1 | grep -E "(Embedding|timeout|hash)"
+   ```
 
 ### Tools Not Loading
 
@@ -162,13 +238,18 @@ async def main_async():
 1. **Check server logs**:
 
    ```bash
-   uv run omni mcp 2>&1 | grep -E "(Kernel|Tools|Error)"
+   uv run omni mcp 2>&1 | grep -E "(Kernel|Tools|Ready|Skills)"
    ```
 
-2. **Verify server starts correctly**:
+2. **Verify skills loaded**:
 
    ```bash
-   uv run omni mcp --transport stdio 2>&1
+   uv run omni mcp 2>&1 | grep -E "commands|skills"
+   ```
+
+3. **Check Cortex status**:
+   ```bash
+   uv run omni mcp 2>&1 | grep -E "(Cortex|index|hash)"
    ```
 
 ### STDIO Connection Timeout
@@ -177,14 +258,27 @@ async def main_async():
 
 **Solutions**:
 
-1. Check stderr interference (logging must go to stderr, not stdout)
-2. Verify working directory in MCP config
+1. **Verify logging goes to stderr**:
+
+   ```python
+   # Use Foundation layer
+   from omni.foundation.config.logging import get_logger
+   logger = get_logger("omni.agent.stdio")
+   logger.info("message")  # Goes to stderr
+   ```
+
+2. **Check working directory** in MCP config
+
+3. **Enable verbose for more info**:
+   ```bash
+   uv run omni mcp --transport stdio --verbose
+   ```
 
 ### SIGINT Not Handled
 
 **Problem**: Ctrl+C doesn't gracefully shutdown.
 
-**Solution**: Ensure `add_signal_handler()` is used in `main_async()`:
+**Solution**: Ensure `add_signal_handler()` is used:
 
 ```python
 loop.add_signal_handler(signal.SIGINT, signal_handler)
@@ -197,3 +291,4 @@ loop.add_signal_handler(signal.SIGINT, signal_handler)
 - [MCP Best Practices](mcp-best-practices.md)
 - [MCP Server Architecture](../architecture/mcp-server.md)
 - [Kernel Architecture](../architecture/kernel.md)
+- [Smart Indexing (indexer.py)](../reference/indexer.md)

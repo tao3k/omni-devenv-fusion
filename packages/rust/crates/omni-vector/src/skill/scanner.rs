@@ -1,4 +1,4 @@
-//! Skill Scanner - Parses SKILL.md for metadata and routing keywords.
+//! SkillScannerModule - Skill manifest parsing from SKILL.md
 //!
 //! Scans skill directories to extract:
 //! - Skill name, version, description
@@ -39,10 +39,10 @@ pub struct SkillManifest {
 }
 
 /// Skill Scanner - Extracts metadata from SKILL.md files.
-pub struct SkillScanner;
+pub struct SkillScannerModule;
 
-impl SkillScanner {
-    /// Create a new skill scanner.
+impl SkillScannerModule {
+    /// Create a new skill scanner module.
     #[must_use]
     pub fn new() -> Self {
         Self
@@ -180,7 +180,7 @@ fn extract_frontmatter(content: &str) -> Option<String> {
     Some(content_after_start[..end].to_string())
 }
 
-impl Default for SkillScanner {
+impl Default for SkillScannerModule {
     fn default() -> Self {
         Self::new()
     }

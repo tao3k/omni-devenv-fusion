@@ -14,13 +14,18 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import sys
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from omni.foundation.config.logging import get_logger
+# Logging is configured by the main app - don't override here
+# Use configure_logging() only if needed for standalone testing
+
+# Use err_console for consistent output with omni mcp
+from ..console import err_console
 
 # route.py imports
 
@@ -35,9 +40,11 @@ console = Console()
 @route_app.command("test")
 def test_route(
     query: str = typer.Argument(..., help="User intent to route"),
-    debug: bool = typer.Option(False, "--debug", "-d", help="Show scoring details"),
+    debug: bool = typer.Option(False, "--debug", "-d", help="Show detailed scoring"),
     limit: int = typer.Option(5, "-n", "--number", help="Maximum results"),
-    threshold: float = typer.Option(0.1, "-t", "--threshold", help="Score threshold"),
+    threshold: float = typer.Option(
+        0.4, "-t", "--threshold", help="Score threshold (default: 0.4, lower for more results)"
+    ),
 ) -> None:
     """
     Test the Hybrid Router logic for a query.
@@ -45,6 +52,11 @@ def test_route(
     Shows which tools/skills would be matched for the given query,
     along with their semantic and keyword scores.
     """
+    # Configure logging based on debug flag
+    from omni.foundation.config.logging import configure_logging
+
+    configure_logging(level="DEBUG" if debug else "INFO", colors=True)
+
     try:
         from omni.core.router.main import OmniRouter, RouterRegistry
     except ImportError as e:
@@ -84,24 +96,22 @@ def test_route(
 
                         if count >= len(tools) and count > 0:
                             # Data already indexed, just init keyword indexer (fast path)
-                            logger = get_logger("omni.agent.cli.route")
-                            logger.info(f"Using existing data in LanceDB ({count} tools)")
+                            err_console.print(f"Using existing data in LanceDB ({count} tools)")
 
                             # Initialize indexer with existing store
                             from omni.core.router.indexer import SkillIndexer
 
                             if router._indexer._store is None:
-                                router._indexer = SkillIndexer(main_path, dimension=384)
+                                router._indexer = SkillIndexer(main_path)
                                 router._indexer.initialize()
                             router._indexer._store = store
 
-                            router._hybrid._indexer = router._indexer
+                            router._hybrid._semantic_indexer = router._indexer
                             router._semantic._indexer = router._indexer
                             router._initialized = True
                         else:
                             # Need to re-index with real embeddings
-                            logger = get_logger("omni.agent.cli.route")
-                            logger.info(
+                            err_console.print(
                                 f"Re-indexing {len(tools)} tools with real embeddings (count={count})"
                             )
 
@@ -110,13 +120,17 @@ def test_route(
 
                             embed = get_embedding_service()
 
-                            # Drop old table ONLY when re-indexing
-                            try:
-                                asyncio.run(store.drop_table("skills"))
-                            except Exception:
-                                pass
+                            # Check embedding service is available before destructive operation
+                            if embed._backend is None:
+                                err_console.print(
+                                    "[red]Embedding service unavailable. Cannot re-index.[/]"
+                                )
+                                err_console.print(
+                                    "[cyan]Tip: Check your LLM/API configuration, then try again.[/]"
+                                )
+                                return
 
-                            # Generate real embeddings for each tool
+                            # Generate real embeddings for each tool FIRST
                             ids = []
                             vectors = []
                             contents = []
@@ -143,31 +157,106 @@ def test_route(
                                 }
                                 metadatas.append(json.dumps(metadata))
 
+                            # Add new data first (add_documents handles upsert)
                             asyncio.run(
                                 store.add_documents("skills", ids, vectors, contents, metadatas)
                             )
 
-                            logger.info(f"Indexed {len(ids)} tools with real embeddings")
+                            err_console.print(f"Indexed {len(ids)} tools with real embeddings")
 
-                            router._hybrid._indexer = router._indexer
+                            router._hybrid._semantic_indexer = router._indexer
                             router._semantic._indexer = router._indexer
                             router._initialized = True
                     else:
-                        # Fallback: index from analyzer
+                        # No tools in LanceDB - check if skills directory has content
                         from omni.core.skills.analyzer import get_analytics_dataframe
 
                         table = get_analytics_dataframe()
 
                         if table is None or table.num_rows == 0:
-                            console.print("[yellow]No tools found in the database.[/]")
-                            console.print(
-                                "[cyan]Tip: Run 'omni skill reindex' to index your skills.[/]"
-                            )
-                            return
+                            # Skills table missing or empty - try to build from skills dir
+                            console.print("[yellow]Skills table missing or empty.[/]")
+                            console.print("[cyan]Attempting to rebuild from skills directory...[/]")
 
-                        # Convert table to skill dicts format for indexing
-                        skill_dicts = _table_to_skills(table)
-                        await router.initialize(skill_dicts)
+                            try:
+                                # Get skills directly from directory using Rust scanner
+                                import json
+                                from pathlib import Path
+                                from omni.foundation.config.skills import SKILLS_DIR
+
+                                skills_dir = SKILLS_DIR()
+                                skill_dicts: list[dict] = []
+
+                                # Scan skills directory
+                                for skill_path in sorted(skills_dir.iterdir()):
+                                    if skill_path.is_dir() and not skill_path.name.startswith("_"):
+                                        # Read SKILL.md for description
+                                        skill_file = skill_path / "SKILL.md"
+                                        description = f"{skill_path.name} skill"
+                                        if skill_file.exists():
+                                            content = skill_file.read_text()
+                                            # Extract description from frontmatter or first lines
+                                            if "---" in content:
+                                                parts = content.split("---", 2)
+                                                if len(parts) >= 2:
+                                                    try:
+                                                        frontmatter = json.loads(parts[1])
+                                                        description = frontmatter.get(
+                                                            "description", description
+                                                        )
+                                                    except json.JSONDecodeError:
+                                                        pass
+
+                                        # Collect commands from tools.py
+                                        commands: list[dict] = []
+                                        tools_file = skill_path / "tools.py"
+                                        if tools_file.exists():
+                                            # Simple parsing - look for @skill_command decorated functions
+                                            content = tools_file.read_text()
+                                            import re
+
+                                            # Match function definitions with docstrings
+                                            for match in re.finditer(
+                                                r'def\s+(\w+)\s*\([^)]*\)\s*->\s*[^:]+:\s*["\']{0,3}(.*?)["\']{0,3}\n',
+                                                content,
+                                            ):
+                                                cmd_name = match.group(1)
+                                                cmd_desc = (
+                                                    match.group(2).strip()
+                                                    if match.group(2)
+                                                    else f"Execute {cmd_name}"
+                                                )
+                                                commands.append(
+                                                    {"name": cmd_name, "description": cmd_desc}
+                                                )
+
+                                        if commands:
+                                            skill_dicts.append(
+                                                {
+                                                    "name": skill_path.name,
+                                                    "description": description,
+                                                    "commands": commands,
+                                                }
+                                            )
+
+                                if skill_dicts:
+                                    await router.initialize(skill_dicts)
+                                    console.print(
+                                        f"[green]Indexed {len(skill_dicts)} skills from {skills_dir}[/]"
+                                    )
+                                else:
+                                    console.print("[yellow]No skills found in assets/skills/[/]")
+                                    return
+                            except Exception as e:
+                                console.print(f"[red]Failed to rebuild: {e}[/]")
+                                console.print(
+                                    "[cyan]Tip: Run 'omni skill reindex' to manually rebuild.[/]"
+                                )
+                                return
+                        else:
+                            # Convert table to skill dicts format for indexing
+                            skill_dicts = _table_to_skills(table)
+                            await router.initialize(skill_dicts)
                 except Exception as e:
                     console.print(f"[red]Error loading tools: {e}[/]")
                     return
@@ -178,6 +267,69 @@ def test_route(
                 limit=limit,
                 threshold=threshold,
             )
+
+            # Auto-healing: If no results found but we have tools, the index might be broken/incompatible
+            if not results and router._initialized and hasattr(router._indexer, "_store"):
+                try:
+                    store = router._indexer._store
+                    # health_check is async, but we are in run_test which is async
+                    is_healthy = await store.health_check()
+                    if store and is_healthy:
+                        count = store._inner.count("skills")
+                        if count > 0:
+                            console.print(
+                                "[yellow]Warning: No results found despite existing data. Index might be corrupted or incompatible.[/]"
+                            )
+
+                            # Check if embedding service is available before attempting repair
+                            try:
+                                from omni.foundation.services.embedding import get_embedding_service
+
+                                embed = get_embedding_service()
+                                # Quick health check - don't actually generate embedding
+                                if embed._backend is None:
+                                    raise RuntimeError("Embedding backend not available")
+                            except Exception as embed_error:
+                                console.print(
+                                    f"[red]Cannot auto-repair: Embedding service unavailable ({embed_error})[/]"
+                                )
+                                console.print(
+                                    "[cyan]Tip: Check your LLM/API configuration, then run 'omni skill reindex'[/]"
+                                )
+                                return
+
+                            console.print(
+                                "[yellow]Attempting to rebuild index with current embedding model...[/]"
+                            )
+
+                            # Force re-index
+                            from omni.core.skills.analyzer import get_analytics_dataframe
+
+                            table = get_analytics_dataframe()
+                            if table and table.num_rows > 0:
+                                # index_skills handles upsert (update or insert), no need to drop
+                                # It will update both LanceDB vector store AND keyword index
+                                skill_dicts = _table_to_skills(table)
+                                # Reset indexer state to force re-indexing
+                                router._indexer._indexed_count = 0
+                                indexed_count = await router._indexer.index_skills(skill_dicts)
+
+                                if indexed_count > 0:
+                                    console.print(
+                                        f"[green]Rebuilt index with {indexed_count} tools.[/]"
+                                    )
+                                else:
+                                    console.print("[red]Failed to rebuild index.[/]")
+                                    return
+
+                                # Retry routing
+                                results = await router.route_hybrid(
+                                    query=query,
+                                    limit=limit,
+                                    threshold=threshold,
+                                )
+                except Exception as e:
+                    err_console.print(f"Auto-healing failed: {e}")
 
         # Display results
         if not results:

@@ -109,6 +109,55 @@ class AgentMCPServer:
                 logger.error(f"Tool execution failed: {e}")
                 return [TextContent(type="text", text=f"Error: {str(e)}")]
 
+        @self._app.call_tool()
+        async def system_status(arguments: dict) -> list[Any]:
+            """Get system status for debugging startup issues.
+
+            Returns kernel readiness, cortex status, and component health.
+            """
+            try:
+                cortex_ready = False
+                indexed_count = 0
+                router_status = "unknown"
+
+                if self._kernel and self._kernel.is_ready:
+                    # Check router and cortex status
+                    router = getattr(self._kernel, "router", None)
+                    if router:
+                        semantic = getattr(router, "_semantic", None)
+                        if semantic:
+                            indexer = getattr(semantic, "_indexer", None)
+                            if indexer:
+                                cortex_ready = indexer.is_ready
+                                stats = indexer.get_stats()
+                                indexed_count = stats.get("entries_indexed", 0)
+
+                    router_status = "ready" if router else "not_initialized"
+                    skill_count = len(self._kernel.skill_context.get_core_commands())
+                else:
+                    skill_count = 0
+
+                uptime = time.time() - self._start_time
+                return [
+                    TextContent(
+                        type="text",
+                        text=json.dumps(
+                            {
+                                "kernel_ready": self._kernel.is_ready if self._kernel else False,
+                                "cortex_ready": cortex_ready,
+                                "cortex_indexed": indexed_count,
+                                "router_status": router_status,
+                                "tool_count": skill_count,
+                                "uptime_seconds": round(uptime, 2),
+                                "version": "2.0.0",
+                            },
+                            indent=2,
+                        ),
+                    )
+                ]
+            except Exception as e:
+                return [TextContent(type="text", text=f"Error: {str(e)}")]
+
         @self._app.list_resources()
         async def list_resources() -> list[Resource]:
             """Expose Agentic OS internals as Resources."""

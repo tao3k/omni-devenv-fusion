@@ -1,6 +1,4 @@
-//! Checkpoint Store - State Checkpoint Persistence with Semantic Search
-//!
-//! This module provides checkpoint storage for LangGraph workflows using LanceDB.
+//! CheckpointStore - LanceDB-based checkpoint storage for LangGraph
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -9,40 +7,13 @@ use anyhow::Result;
 use lance::dataset::{Dataset, WriteParams};
 use lance::deps::arrow_array::{Array, RecordBatch, RecordBatchIterator};
 use lance::deps::arrow_schema::{ArrowError, Schema};
-use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
+use crate::checkpoint::CheckpointRecord;
 use crate::{
     CONTENT_COLUMN, DEFAULT_DIMENSION, ID_COLUMN, METADATA_COLUMN, THREAD_ID_COLUMN, VECTOR_COLUMN,
     VectorStoreError,
 };
-
-// ============================================================================
-// Data Types
-// ============================================================================
-
-/// Checkpoint record for persistence.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CheckpointRecord {
-    /// Unique checkpoint identifier
-    pub checkpoint_id: String,
-    /// Thread/session identifier
-    pub thread_id: String,
-    /// Parent checkpoint ID (for history chain)
-    pub parent_id: Option<String>,
-    /// Timestamp of checkpoint creation
-    pub timestamp: f64,
-    /// Serialized state JSON
-    pub content: String,
-    /// State embedding for semantic search (optional)
-    pub embedding: Option<Vec<f32>>,
-    /// Additional metadata (JSON serialized)
-    pub metadata: Option<String>,
-}
-
-// ============================================================================
-// Checkpoint Store Implementation
-// ============================================================================
 
 /// LanceDB-based checkpoint storage for LangGraph.
 #[derive(Clone)]

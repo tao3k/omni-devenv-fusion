@@ -61,7 +61,7 @@ async def discover(intent: str, limit: int = 3) -> dict[str, Any]:
     from omni.core.skills.discovery import SkillDiscoveryService
 
     service = SkillDiscoveryService()
-    matches = service.search_tools(query=intent, limit=limit)
+    matches = await service.search_tools(query=intent, limit=limit)
 
     if not matches:
         return {

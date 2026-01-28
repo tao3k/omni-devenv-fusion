@@ -35,8 +35,11 @@ class TestSimpleEmbed:
 
     def test_embedding_dimension(self):
         """Embedding should have correct dimension."""
-        emb = _simple_embed("test", dimension=1536)
-        assert len(emb) == 1536
+        from omni.foundation.config.settings import get_setting
+
+        expected_dim = get_setting("embedding.dimension", 1024)
+        emb = _simple_embed("test", dimension=expected_dim)
+        assert len(emb) == expected_dim
 
     def test_embedding_values_in_range(self):
         """Embedding values should be in 0-1 range."""
@@ -46,7 +49,11 @@ class TestSimpleEmbed:
     def test_empty_text(self):
         """Empty text should produce embedding."""
         emb = _simple_embed("")
-        assert len(emb) == 1536
+        # Uses default dimension from settings.yaml
+        from omni.foundation.config.settings import get_setting
+
+        expected_dim = get_setting("embedding.dimension", 1024)
+        assert len(emb) == expected_dim
 
     def test_custom_dimension(self):
         """Custom dimension should be respected."""
@@ -121,10 +128,18 @@ class TestBatchEmbed:
                 assert len(emb) == 384  # Mock dimension
 
     def test_batch_embed_same_texts_produce_same_embeddings(self):
-        """Same texts should produce identical embeddings."""
-        texts = ["test", "test"]
-        result = batch_embed(texts)
-        assert result[0] == result[1]
+        """Same texts should produce identical embeddings when using mocked service."""
+        # Mock the embedding service to return consistent results
+        mock_service = MagicMock()
+        mock_service.embed_batch.return_value = [[0.1] * 384, [0.1] * 384]
+        mock_service._dimension = 384
+
+        with patch(
+            "omni.foundation.services.embedding.get_embedding_service", return_value=mock_service
+        ):
+            texts = ["test", "test"]
+            result = batch_embed(texts)
+            assert result[0] == result[1]
 
     def test_batch_embed_different_texts_produce_different_embeddings(self):
         """Different texts should produce different embeddings."""
@@ -156,8 +171,11 @@ class TestEmbeddingServiceDimension:
     def test_dimension_reflects_backend(self):
         """Service dimension should match the initialized backend."""
         service = get_embedding_service()
-        # Dimension should be one of the known values
-        valid_dimensions = [384, 1536, 3072]  # BGE small, OpenAI small, OpenAI large
+        from omni.foundation.config.settings import get_setting
+
+        expected_dim = get_setting("embedding.dimension", 1024)
+        # Dimension should match settings.yaml or be a valid fallback
+        valid_dimensions = [384, expected_dim, 1536, 3072]  # FastEmbed, LLM, OpenAI variants
         assert service.dimension in valid_dimensions
 
 

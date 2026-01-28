@@ -8,13 +8,15 @@
 
 The Memory Mesh completes the **Cognitive Trinity** by adding episodic memory - the ability for the Agent to remember past experiences and learn from them.
 
+See [Hippocampus](hippocampus.md) for the main Memory Interface documentation.
+
 ### Cognitive Trinity
 
 | Component     | Capability                     | Data Source                    |
 | ------------- | ------------------------------ | ------------------------------ |
 | **Skills**    | "I know how to do"             | `assets/skills/*/scripts/*.py` |
 | **Knowledge** | "I know what that is"          | `docs/`, `assets/specs/`       |
-| **Memory**    | "I remember doing that before" | VectorDB (LanceDB)             |
+| **Memory**    | "I remember doing that before" | [Hippocampus](hippocampus.md)  |
 
 ### Architecture
 
@@ -575,6 +577,7 @@ async def _inject_memory_context(self, task: str) -> None:
 
 ## Related Documentation
 
-- [Knowledge Matrix](knowledge-matrix.md) (Documentation RAG)
-- [Omni Loop](omni-loop.md) (CCA Runtime with Knowledge + Memory)
-- [Self-Evolution](omni-loop.md#self-evolution) (Skill harvesting and rule extraction)
+- [Hippocampus](hippocampus.md) - Memory Interface (main documentation)
+- [Knowledge Matrix](knowledge-matrix.md) - Documentation RAG
+- [Omni Loop](omni-loop.md) - CCA Runtime with Knowledge + Memory
+- [Self-Evolution](omni-loop.md#self-evolution) - Skill harvesting and rule extraction

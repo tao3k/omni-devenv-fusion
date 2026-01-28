@@ -19,7 +19,7 @@ class TestLoadRulesFromLanceDB:
     @pytest.mark.asyncio
     async def test_load_rules_from_lancedb_happy_path(self):
         """Test loading rules from LanceDB (Happy Path)."""
-        # Mock RustVectorStore - list_all_tools is async
+        # Mock tools with keywords
         mock_tools = [
             {
                 "skill_name": "python_engineering",
@@ -35,10 +35,12 @@ class TestLoadRulesFromLanceDB:
             },
         ]
 
-        with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store_cls:
+        # Mock get_vector_store function which returns the store singleton
+        # Patch where it's imported, not where it's used (import is inside the function)
+        with patch("omni.foundation.bridge.rust_vector.get_vector_store") as mock_get_store:
             mock_store = MagicMock()
             mock_store.list_all_tools = AsyncMock(return_value=mock_tools)
-            mock_store_cls.return_value = mock_store
+            mock_get_store.return_value = mock_store
 
             sniffer = IntentSniffer()
             count = await sniffer.load_rules_from_lancedb()
@@ -49,10 +51,10 @@ class TestLoadRulesFromLanceDB:
     @pytest.mark.asyncio
     async def test_load_rules_from_lancedb_empty(self):
         """Test loading from empty LanceDB returns zero rules."""
-        with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store_cls:
+        with patch("omni.foundation.bridge.rust_vector.get_vector_store") as mock_get_store:
             mock_store = MagicMock()
             mock_store.list_all_tools = AsyncMock(return_value=[])
-            mock_store_cls.return_value = mock_store
+            mock_get_store.return_value = mock_store
 
             sniffer = IntentSniffer()
             count = await sniffer.load_rules_from_lancedb()
@@ -78,10 +80,10 @@ class TestLoadRulesFromLanceDB:
             },
         ]
 
-        with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store_cls:
+        with patch("omni.foundation.bridge.rust_vector.get_vector_store") as mock_get_store:
             mock_store = MagicMock()
             mock_store.list_all_tools = AsyncMock(return_value=mock_tools)
-            mock_store_cls.return_value = mock_store
+            mock_get_store.return_value = mock_store
 
             sniffer = IntentSniffer()
             count = await sniffer.load_rules_from_lancedb()

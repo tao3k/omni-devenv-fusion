@@ -169,23 +169,22 @@ class TestEpisodicMemoryProvider:
         assert provider is not None
 
     @pytest.mark.asyncio
-    async def test_low_budget_returns_empty(self):
-        """Test that low budget returns empty content."""
+    async def test_low_budget_returns_none(self):
+        """Test that low budget returns None (skips episodic memory)."""
         provider = EpisodicMemoryProvider()
         result = await provider.provide({}, 100)
 
-        assert result.content == ""
-        assert result.token_count == 0
-        assert result.priority == 40
-        assert result.name == "rag"
+        # Budget < 300 should skip and return None
+        assert result is None
 
     @pytest.mark.asyncio
-    async def test_no_query_returns_empty(self):
-        """Test that missing query returns empty content."""
+    async def test_no_query_returns_none(self):
+        """Test that missing query returns None (skips episodic memory)."""
         provider = EpisodicMemoryProvider()
         result = await provider.provide({}, 1000)
 
-        assert result.name == "rag"
+        # No query should return None
+        assert result is None
 
 
 class TestContextOrchestrator:

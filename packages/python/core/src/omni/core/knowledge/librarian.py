@@ -59,21 +59,27 @@ class Librarian:
     def __init__(
         self,
         storage_path: str | None = None,
-        dimension: int = 1536,
+        dimension: int | None = None,
         collection: str = "knowledge",
     ):
         """Initialize the librarian.
 
         Args:
             storage_path: Path to vector store (None = use unified path, ":memory:" for in-memory)
-            dimension: Embedding dimension (1536 for OpenAI Ada-002)
+            dimension: Embedding dimension (default: from settings.yaml embedding.dimension)
             collection: Collection/table name for isolation
         """
+        from omni.foundation.config.settings import get_setting
+
         # Use unified path if not specified
         if storage_path is None:
             from omni.foundation.config.dirs import get_vector_db_path
 
             storage_path = str(get_vector_db_path() / "knowledge.lance")
+
+        # Use dimension from settings.yaml (default to 1024)
+        if dimension is None:
+            dimension = get_setting("embedding.dimension", 1024)
 
         self._storage_path = storage_path
         self._dimension = dimension

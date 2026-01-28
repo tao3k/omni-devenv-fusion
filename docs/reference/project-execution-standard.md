@@ -77,6 +77,45 @@ just validate
 
 ---
 
+## Coding Standards
+
+### No Hardcoded Values - Use settings.yaml
+
+**Rule**: Never hardcode configuration values. Always use `get_setting()` from `omni.foundation.config.settings`.
+
+**Why**:
+
+- Centralized configuration management
+- Easy to change values without code modifications
+- Consistent behavior across environments
+- Tests can verify behavior without magic numbers
+
+**Correct**:
+
+```python
+from omni.foundation.config.settings import get_setting
+
+dimension = get_setting("embedding.dimension", 1024)
+```
+
+**Incorrect**:
+
+```python
+dimension = 1024  # Hardcoded - will break when settings.yaml changes
+```
+
+**In Tests**:
+
+```python
+def test_embedding_dimension():
+    from omni.foundation.config.settings import get_setting
+    expected_dim = get_setting("embedding.dimension", 1024)
+    emb = _simple_embed("test", dimension=expected_dim)
+    assert len(emb) == expected_dim
+```
+
+---
+
 ## Workflow Examples
 
 ### Example: Fixing SQL Query Logic in Rust

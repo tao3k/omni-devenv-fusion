@@ -178,6 +178,22 @@ memory:
   path: ""
 
 # =============================================================================
+# Embedding Configuration
+# =============================================================================
+# Configure embedding provider for vector storage (RAG, memory, skills)
+# Uses the same LLM as Omni Loop - no separate embedding model needed
+
+embedding:
+  # Provider: "llm" (use same LLM as Omni Loop) or "fastembed" (local fallback)
+  # Using LLM means embedding quality matches your chat model
+  provider: "llm"
+
+  # Embedding dimension (depends on provider)
+  # LLM: 1024 (high-quality semantic vectors from LLM hidden states)
+  # FastEmbed: 384 (BAAI/bge-small-en-v1.5)
+  dimension: 1024
+
+# =============================================================================
 # Checkpoint / Workflow State Configuration
 # =============================================================================
 # Unified checkpoint storage using Rust LanceDB backend
@@ -193,8 +209,8 @@ checkpoint:
   # smart_commit -> table: checkpoint_smart_commit
   table_prefix: "checkpoint_"
 
-  # Default dimension for embeddings (OpenAI text-embedding-3-small)
-  embedding_dimension: 1536
+  # Default dimension for embeddings (should match embedding.dimension above)
+  embedding_dimension: 1024
 
 # =============================================================================
 # Cache Configuration

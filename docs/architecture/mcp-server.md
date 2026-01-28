@@ -2,7 +2,7 @@
 
 > Model Context Protocol Server Implementation
 > Trinity Architecture - Agent Layer (L3 Transport)
-> Last Updated: 2026-01-26
+> Last Updated: 2026-01-27
 
 ---
 
@@ -13,6 +13,7 @@ The **MCP-Server** (L3 - Transport) provides the Model Context Protocol implemen
 - **MCP SDK** integration for JSON-RPC 2.0 protocol handling
 - **Transport implementations** (stdio, SSE)
 - **Agent integration** via Kernel
+- **Unified logging** via Foundation layer (no stderr pollution)
 
 ### MCP Protocol
 
@@ -32,6 +33,15 @@ The **MCP-Server** (L3 - Transport) provides the Model Context Protocol implemen
 └─────────────────────────────────────────────────────────┘
 ```
 
+### Key Features (v2.0)
+
+| Feature             | Description                                                               |
+| ------------------- | ------------------------------------------------------------------------- |
+| **Async Cortex**    | Kernel starts immediately, semantic index builds in background            |
+| **Smart Indexing**  | Hash-based skipping of unchanged skills (zero Embedding calls on restart) |
+| **Unified Logging** | All logs via Foundation layer (stderr only, no stdout interference)       |
+| **Zero-Copy Tools** | Tools served directly from Rust Registry                                  |
+
 ---
 
 ## Architecture
@@ -40,7 +50,6 @@ The **MCP-Server** (L3 - Transport) provides the Model Context Protocol implemen
 
 ```
 omni/agent/mcp_server/
-├── __init__.py              # Exports
 ├── server.py                # AgentMCPServer (main server)
 ├── lifespan.py              # Lifespan context manager
 ├── sse.py                   # SSE transport
@@ -89,6 +98,95 @@ await server.run_sse_server(port=8080, verbose=False)
 
 ---
 
+## Kernel Startup (Critical for MCP)
+
+The Kernel uses **async Cortex building** to ensure fast MCP connection:
+
+### Startup Flow (v2.0)
+
+```
+1. Load Skills (2s)
+   └─ All skills loaded into context
+
+2. Build Cortex (BACKGROUND)
+   └─ Semantic index builds asynchronously
+   └─ Kernel ready immediately!
+
+3. Initialize Sniffer
+   └─ Context detection ready
+
+4. Kernel Ready (IMMEDIATE!)
+   └─ MCP connection can complete
+   └─ Tools available
+   └─ Cortex building in background...
+```
+
+### Async Cortex Building
+
+```python
+# engine.py:668-671
+# Step 4: Build Semantic Cortex (The Cortex)
+# Run in background to prevent blocking kernel startup
+logger.info("Building Semantic Cortex (Background)...")
+asyncio.create_task(self._safe_build_cortex())
+```
+
+**Benefits**:
+
+- MCP connection completes in ~2-3 seconds
+- No 30-second timeout issues
+- Tools immediately available
+- Semantic routing activates when Cortex ready
+
+### Smart Indexing
+
+The Cortex uses hash-based detection to skip unchanged skills:
+
+```python
+# indexer.py:197-227
+# Calculate hash of skills configuration
+current_hash = hashlib.md5(json.dumps(current_state).encode())
+
+# Check if already indexed
+if saved_meta.get("hash") == current_hash:
+    logger.info(f"Cortex index up-to-date, skipping build")
+    return self._indexed_count  # Skip ALL embedding calls!
+```
+
+**Performance**:
+| Scenario | Before | After |
+|----------|--------|-------|
+| First run | ~200s | ~2s |
+| Restart (no changes) | ~200s | **~0.5s** |
+| Restart (changes) | ~200s | ~2s |
+
+---
+
+## Logging (v2.0)
+
+All MCP logging uses Foundation layer to prevent stdout interference:
+
+```python
+from omni.foundation.config.logging import get_logger
+
+logger = get_logger("omni.agent.mcp_server")
+```
+
+**Key rules**:
+
+- Logs go to stderr (via Foundation layer)
+- MCP protocol messages go to stdout
+- No DEBUG logs without `--verbose` flag
+
+### Verbose Mode
+
+```bash
+# Enable debug logging
+uv run omni mcp --transport stdio --verbose
+```
+
+---
+
 ## Transport
 
 ### STDIO Mode
@@ -108,6 +206,7 @@ async def run_stdio_server():
 - Proper stdin/stdout stream handling via MCP SDK
 - Graceful shutdown on SIGINT
 - Kernel initialization and shutdown
+- Logging to stderr (via Foundation)
 
 ### SSE Mode
 
@@ -148,6 +247,69 @@ async def main_async():
 
 ---
 
+## Troubleshooting
+
+### Connection Timeout (30s)
+
+**Problem**: MCP client times out during connection.
+
+**Solutions**:
+
+1. **Enable verbose mode to see progress**:
+
+   ```bash
+   uv run omni mcp --verbose 2>&1 | head -50
+   ```
+
+2. **Check for stderr pollution**:
+
+   ```bash
+   # Ensure no print() statements going to stdout
+   uv run omni mcp --transport stdio 2>/dev/null
+   ```
+
+3. **Verify async Cortex is working**:
+   ```bash
+   uv run omni mcp 2>&1 | grep -E "(Ready|Background|Cortex)"
+   # Should see: "Kernel ready" within ~3 seconds
+   ```
+
+### Empty Tools List
+
+**Problem**: Connected but no tools available.
+
+**Solutions**:
+
+1. Check kernel initialization:
+
+   ```bash
+   uv run omni mcp 2>&1 | grep -E "(Kernel|Ready|Skills)"
+   ```
+
+2. Verify skills loaded:
+   ```bash
+   uv run omni mcp 2>&1 | grep -E "commands|skills"
+   ```
+
+### Slow First Connection
+
+**Problem**: First connection takes >30 seconds.
+
+**Cause**: Embedding API call during Cortex build.
+
+**Solution**: Smart Indexing now skips unchanged skills:
+
+```bash
+# First run creates .meta.json
+uv run omni mcp
+
+# Subsequent runs skip embedding (if skills unchanged)
+uv run omni mcp
+# Should be ~0.5s
+```
+
+---
+
 ## Testing
 
 ### Stdio Server Tests
@@ -168,27 +330,10 @@ uv run pytest packages/python/mcp-server/tests/ -v
 
 ---
 
-## Debugging
-
-> When MCP issues occur, check Claude Code's debug logs first:
->
-> ```
-> cat ~/.claude/debug/latest/*.log
-> ```
-
-### Common Issues
-
-| Issue              | Cause                          | Solution                      |
-| ------------------ | ------------------------------ | ----------------------------- |
-| Empty tools list   | Kernel not ready               | Check kernel initialization   |
-| Connection timeout | Stderr interfering with stdout | Ensure logging goes to stderr |
-| SIGINT not handled | Missing signal handler         | Use `add_signal_handler()`    |
-
----
-
 ## Related Documentation
 
 - [MCP Transport Reference](../reference/mcp-transport.md)
 - [MCP Best Practices](../reference/mcp-best-practices.md)
 - [Kernel Architecture](kernel.md)
 - [Router Architecture](router.md)
+- [Smart Indexing (indexer.py)](../reference/indexer.md)

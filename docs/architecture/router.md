@@ -1,7 +1,7 @@
 # Router Architecture - Omni-Dev-Fusion
 
 > Semantic Routing System (The Cortex)
-> Last Updated: 2026-01-20
+> Last Updated: 2026-01-27
 
 ---
 
@@ -9,11 +9,12 @@
 
 1. [Overview](#overview)
 2. [OmniRouter](#omnirouter)
-3. [HiveRouter](#hiverouter)
-4. [SemanticRouter](#semanticrouter)
-5. [IntentSniffer](#intentsniffer)
-6. [SkillIndexer](#skillindexer)
-7. [Routing Flow](#routing-flow)
+3. [HybridSearch (Rust-Native)](#hybridsearch-rust-native)
+4. [HiveRouter](#hiverouter)
+5. [SemanticRouter](#semanticrouter)
+6. [IntentSniffer](#intentsniffer)
+7. [SkillIndexer](#skillindexer)
+8. [Routing Flow](#routing-flow)
 
 ---
 
@@ -31,20 +32,54 @@ User Query
     │           │           │
     ▼           ▼           ▼
 ┌─────────┐ ┌─────────┐ ┌─────────┐
-│  Hive   │ │ Semantic │ │ Sniffer │
-│ (Logic) │ │ (Match)  │ │(Context)│
+│  Hive   │ │ Hybrid  │ │ Sniffer │
+│ (Logic) │ │  (Rust) │ │(Context)│
 └─────────┘ └─────────┘ └─────────┘
 ```
 
 ### Components
 
-| Component        | Purpose               | Location                   |
-| ---------------- | --------------------- | -------------------------- |
-| `OmniRouter`     | Unified entry point   | `omni.core.router.main`    |
-| `HiveRouter`     | Decision logic        | `omni.core.router.hive`    |
-| `SemanticRouter` | Vector-based matching | `omni.core.router.router`  |
-| `IntentSniffer`  | Context detection     | `omni.core.router.sniffer` |
-| `SkillIndexer`   | Index building        | `omni.core.router.indexer` |
+| Component        | Purpose                   | Location                   |
+| ---------------- | ------------------------- | -------------------------- |
+| `OmniRouter`     | Unified entry point       | `omni.core.router.main`    |
+| `HybridSearch`   | Rust-native hybrid search | `omni.core.router.hybrid`  |
+| `HiveRouter`     | Decision logic            | `omni.core.router.hive`    |
+| `SemanticRouter` | Vector-based matching     | `omni.core.router.router`  |
+| `IntentSniffer`  | Context detection         | `omni.core.router.sniffer` |
+| `SkillIndexer`   | Index building            | `omni.core.router.indexer` |
+
+### Rust-Native Hybrid Search
+
+The `HybridSearch` component is now **100% Rust-native** using `omni-vector`:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Rust: omni-vector                         │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐    ┌─────────────────┐                 │
+│  │  Vector Search  │    │  Keyword Rescue │                 │
+│  │   (LanceDB)     │    │   (Tantivy)     │                 │
+│  └────────┬────────┘    └────────┬────────┘                 │
+│           │                      │                          │
+│           └──────────┬───────────┘                          │
+│                      ▼                                      │
+│           ┌─────────────────────┐                           │
+│           │  Score Fusion       │                           │
+│           │  (0.4*vec + 0.6*kw) │                           │
+│           └─────────────────────┘                           │
+└─────────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+                    Python: HybridSearch
+                    (thin wrapper)
+```
+
+**Benefits:**
+
+- Zero serialization overhead (no Python↔Rust data copying)
+- Atomic scoring (vector + keyword in single operation)
+- 10-100x faster than Python-based hybrid search
+- Consistent behavior between CLI and MCP server
 
 ---
 
@@ -60,7 +95,7 @@ The unified entry point for all routing operations.
 OmniRouter
     │
     ├── _indexer  → SkillIndexer (Memory)
-    ├── _semantic → SemanticRouter (Vector Search)
+    ├── _hybrid   → HybridSearch (Rust-Native)
     ├── _hive     → HiveRouter (Decision Logic)
     └── _sniffer  → IntentSniffer (Context)
 ```
@@ -78,18 +113,95 @@ await router.initialize(skills)
 # Route a query
 result = await router.route("commit git changes")
 
+# Hybrid search (Rust-native)
+results = await router.route_hybrid("git commit", limit=5, threshold=0.4)
+
 # Suggest skills based on context
 skills = await router.suggest_skills("/project/path")
 ```
 
 ### Properties
 
-| Property   | Type             | Description          |
-| ---------- | ---------------- | -------------------- |
-| `indexer`  | `SkillIndexer`   | Vector index manager |
-| `semantic` | `SemanticRouter` | Semantic matching    |
-| `hive`     | `HiveRouter`     | Decision logic       |
-| `sniffer`  | `IntentSniffer`  | Context detection    |
+| Property  | Type            | Description               |
+| --------- | --------------- | ------------------------- |
+| `indexer` | `SkillIndexer`  | Vector index manager      |
+| `hybrid`  | `HybridSearch`  | Rust-native hybrid search |
+| `hive`    | `HiveRouter`    | Decision logic            |
+| `sniffer` | `IntentSniffer` | Context detection         |
+
+---
+
+## HybridSearch (Rust-Native)
+
+**Location**: `packages/python/core/src/omni/core/router/hybrid_search.py`
+
+The **Rust-native hybrid search engine** that delegates all heavy computation to `omni-vector`:
+
+### Architecture
+
+```python
+class HybridSearch:
+    """Rust-native hybrid search (thin Python shell).
+
+    All search logic is in Rust:
+    - Vector similarity (LanceDB)
+    - Keyword rescue (Tantivy BM25)
+    - Score fusion (0.4*vector + 0.6*keyword)
+    """
+
+    def __init__(self):
+        self._store = get_vector_store()  # Rust omni-vector
+
+    async def search(self, query: str, limit: int = 5, min_score: float = 0.0):
+        # 1. Generate embedding (Python)
+        # 2. Call Rust search_tools (vector + keyword rescue)
+        # 3. Return formatted results (Python)
+```
+
+### Rust API
+
+The actual search is performed by `omni-vector`'s `search_tools`:
+
+```rust
+// Rust: omni-vector/src/skill.rs
+pub async fn search_tools(
+    &self,
+    table_name: &str,
+    query_vector: &[f32],
+    query_text: Option<&str>,  // Triggers keyword rescue
+    limit: usize,
+    threshold: f32,
+) -> Result<Vec<ToolSearchResult>>
+```
+
+### Usage
+
+```python
+search = HybridSearch()
+
+# Simple search
+results = await search.search("git commit", limit=5)
+
+# Results are dicts with:
+# {
+#     "id": "git.commit",
+#     "content": "Commit changes to repository",
+#     "score": 0.85,
+#     "skill_name": "git",
+#     "command": "commit",
+#     "file_path": "git/scripts/commit.py",
+#     "keywords": ["commit", "git", "vcs"],
+# }
+```
+
+### Weights (Fixed)
+
+| Component | Weight | Description                 |
+| --------- | ------ | --------------------------- |
+| Semantic  | 0.4    | Vector similarity score     |
+| Keyword   | 0.6    | BM25 keyword match + rescue |
+
+Weights are **fixed** in the Rust implementation for performance.
 
 ### Router Registry
 

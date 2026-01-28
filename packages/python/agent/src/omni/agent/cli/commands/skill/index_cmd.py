@@ -60,18 +60,26 @@ def skill_reindex(
     )
 
     try:
+        from omni.foundation.config.settings import get_setting
+        from omni.foundation.services.embedding import get_dimension
+
         skills_path = str(SKILLS_DIR())
+
+        # Use dimension from settings.yaml
+        dimension = get_setting("embedding.dimension", 1024)
+        if dimension == 0:
+            dimension = get_dimension()
 
         # Drop existing table for full reindex (always clear for consistency)
         err_console.print("Dropping existing index table...")
         try:
-            store = RustVectorStore(dimension=384)
+            store = RustVectorStore(dimension=dimension, enable_keyword_index=True)
             asyncio.run(store.drop_table("skills"))
         except Exception:
             pass  # Table may not exist
 
-        # Full reindex using Rust bindings (writes to LanceDB)
-        store = RustVectorStore(dimension=384)
+        # Full reindex using Rust bindings (writes to LanceDB and keyword index)
+        store = RustVectorStore(dimension=dimension, enable_keyword_index=True)
         indexed_count = asyncio.run(store.index_skill_tools(skills_path))
 
         if json_output:

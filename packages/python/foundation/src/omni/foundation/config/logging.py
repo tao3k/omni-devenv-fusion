@@ -101,10 +101,10 @@ def format_log(
     Returns:
         Formatted log string with ANSI colors
     """
-    # Get colors setting from event_dict or auto-detect
+    # Get colors setting from event_dict or use global forced value
     colors = event_dict.pop("_colors", None)
     if colors is None:
-        colors = sys.stderr.isatty()
+        colors = _force_colors
 
     # Extract message
     msg = event_dict.get("event", "")
@@ -189,6 +189,7 @@ class SubprocessLogFilter(logging.Filter):
 
 # Track whether logging has been configured
 _configured = False
+_force_colors = False  # Global flag for color forcing
 
 
 def configure_logging(
@@ -214,6 +215,10 @@ def configure_logging(
     # Auto-detect colors if not specified
     if colors is None:
         colors = sys.stderr.isatty()
+
+    # Store colors in a global for format_log to access
+    global _force_colors
+    _force_colors = colors
 
     # 1. Configure standard logging
     root_logger = logging.getLogger()

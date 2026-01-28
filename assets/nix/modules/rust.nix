@@ -32,5 +32,10 @@ in
   env = {
     PYO3_PYTHON = "${config.languages.python.package}/bin/python";
     PROTOC = "${pkgs.protobuf}/bin/protoc";
+    # Fix PyO3 extension module linking for cargo test
+    # Add Python library path for macOS and Linux
+    PYTHON_LIB_PATH = "${config.languages.python.package}/lib";
+    DYLD_LIBRARY_PATH = "${config.languages.python.package}/lib:${pkgs.openssl.out}/lib:''\${DYLD_LIBRARY_PATH:-}";
+    LD_LIBRARY_PATH = "${config.languages.python.package}/lib:${pkgs.openssl.out}/lib:''\${LD_LIBRARY_PATH:-}";
   };
 }

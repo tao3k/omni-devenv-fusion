@@ -177,7 +177,8 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
         try:
             if transport == TransportMode.stdio:
                 # Configure logging (stdout is used by MCP, so log to stderr)
-                configure_logging(level="INFO")
+                log_level = "DEBUG" if verbose else "INFO"
+                configure_logging(level=log_level)
                 logger = get_logger("omni.mcp.stdio")
 
                 # Use omni.mcp transport with AgentMCPHandler
@@ -239,7 +240,7 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
                     """Run stdio mode - delegate to old stdio.py which handles Ctrl-C properly."""
                     from omni.agent.mcp_server.stdio import run_stdio as old_run_stdio
 
-                    await old_run_stdio()
+                    await old_run_stdio(verbose=verbose)
 
                 logger.info("📡 Starting Omni MCP Server (STDIO mode)")
                 asyncio.run(run_stdio())

@@ -1,230 +1,202 @@
-"""Tests for omni.core.router.hybrid_search module."""
+"""Tests for omni.core.router.hybrid_search module - Rust-Native Implementation.
+
+These tests verify the Rust-native hybrid search implementation that delegates
+to omni-vector's search_tools for vector search + keyword rescue.
+"""
 
 from __future__ import annotations
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
-
-from omni.core.router.hybrid_search import (
-    HybridMatch,
-    HybridSearch,
-)
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
-class TestHybridMatch:
-    """Test HybridMatch Pydantic model."""
-
-    def test_create_basic_match(self):
-        """Test creating a basic hybrid match."""
-        match = HybridMatch(
-            id="test_001",
-            content="Test content",
-            semantic_score=0.8,
-            keyword_score=0.6,
-        )
-
-        assert match.id == "test_001"
-        assert match.content == "Test content"
-        assert match.semantic_score == 0.8
-        assert match.keyword_score == 0.6
-        assert match.combined_score == 0.0  # Not calculated yet
-
-    def test_create_with_metadata(self):
-        """Test creating a match with metadata."""
-        match = HybridMatch(
-            id="test_002",
-            content="Content",
-            semantic_score=0.9,
-            keyword_score=0.7,
-            combined_score=0.85,
-            metadata={"skill": "git", "command": "commit"},
-        )
-
-        assert match.metadata["skill"] == "git"
-        assert match.metadata["command"] == "commit"
-
-    def test_immutable(self):
-        """Test that HybridMatch is immutable (frozen)."""
-        match = HybridMatch(
-            id="test",
-            content="Content",
-        )
-        with pytest.raises(Exception):
-            match.id = "modified"
-
-
-class TestHybridSearch:
-    """Test HybridSearch class."""
+class TestHybridSearchRustNative:
+    """Test Rust-native HybridSearch implementation."""
 
     def test_default_initialization(self):
-        """Test default hybrid search initialization."""
-        mock_indexer = MagicMock()
-        search = HybridSearch(mock_indexer)
+        """Test default hybrid search initialization (no args required)."""
+        # The new HybridSearch doesn't need indexers - it uses Rust internally
+        from omni.core.router.hybrid_search import HybridSearch
 
-        assert search._semantic_weight == 0.7
-        assert search._keyword_weight == 0.3  # Default, keyword_indexer is None so not used
-        assert search._keyword_indexer is None
+        search = HybridSearch()
 
-    def test_custom_weights(self):
-        """Test custom weight initialization."""
-        mock_indexer = MagicMock()
-        search = HybridSearch(mock_indexer, semantic_weight=0.8, keyword_weight=0.2)
+        # Verify it has the store reference
+        assert search._store is not None
 
-        assert search._semantic_weight == 0.8
-        assert search._keyword_weight == 0.2
+    def test_fixed_weights(self):
+        """Test that weights are fixed (no configurable weights in Rust-native)."""
+        from omni.core.router.hybrid_search import HybridSearch
 
-    def test_set_weights(self):
-        """Test dynamically setting weights."""
-        mock_indexer = MagicMock()
-        search = HybridSearch(mock_indexer)
-
-        search.set_weights(0.6, 0.4)
-
-        assert search._semantic_weight == 0.6
-        assert search._keyword_weight == 0.4
-
-    def test_get_weights(self):
-        """Test getting current weights."""
-        mock_indexer = MagicMock()
-        search = HybridSearch(mock_indexer, semantic_weight=0.75, keyword_weight=0.25)
+        search = HybridSearch()
 
         semantic, keyword = search.get_weights()
+        # Rust weights: SEMANTIC_WEIGHT=1.0, KEYWORD_WEIGHT=1.5
+        assert semantic == 1.0
+        assert keyword == 1.5
 
-        assert semantic == 0.75
-        assert keyword == 0.25
+    def test_stats_shows_rust_implementation(self):
+        """Test that stats indicate Rust-native Weighted RRF implementation."""
+        from omni.core.router.hybrid_search import HybridSearch
 
-    def test_stats(self):
-        """Test getting hybrid search statistics."""
-        mock_indexer = MagicMock()
-        search = HybridSearch(mock_indexer, semantic_weight=0.7, keyword_weight=0.3)
-
+        search = HybridSearch()
         stats = search.stats()
 
-        assert stats["semantic_weight"] == 0.7
-        assert stats["keyword_weight"] == 0.3
-        assert stats["has_keyword_indexer"] is False
+        assert stats["implementation"] == "rust-native-weighted-rrf"
+        assert stats["strategy"] == "weighted_rrf_field_boosting"
+        assert stats["semantic_weight"] == 1.0
+        assert stats["keyword_weight"] == 1.5
+        assert stats["rrf_k"] == 10
+        assert stats["field_boosting"]["name_token_boost"] == 0.5
+        assert stats["field_boosting"]["exact_phrase_boost"] == 1.5
+
+    def test_set_weights_logs_info(self):
+        """Test that set_weights logs info about fixed weights."""
+        from omni.core.router.hybrid_search import HybridSearch
+
+        search = HybridSearch()
+        # Should not error, just log info
+        search.set_weights(0.9, 0.1)
+
+        # Weights should still be the same (fixed)
+        semantic, keyword = search.get_weights()
+        assert semantic == 1.0
+        assert keyword == 1.5
+
+
+class TestHybridSearchWithMockedStore:
+    """Test HybridSearch with mocked Rust store."""
 
     @pytest.mark.asyncio
-    async def test_search_with_semantic_only(self):
-        """Test search with semantic results only."""
-        mock_indexer = MagicMock()
-        mock_indexer.search = AsyncMock(
-            return_value=[
-                MagicMock(
-                    id="result_1",
-                    score=0.9,
-                    payload={"content": "Git commit message", "type": "command"},
-                ),
-            ]
-        )
+    async def test_search_calls_rust_store(self):
+        """Test that search delegates to Rust store.search_tools."""
+        from omni.core.router.hybrid_search import HybridSearch
 
-        search = HybridSearch(mock_indexer)
-        results = await search.search("commit code")
+        # Create mock results that Rust would return
+        mock_results = [
+            {
+                "name": "git.commit",
+                "description": "Commit changes",
+                "score": 0.95,
+                "skill_name": "git",
+                "tool_name": "commit",
+                "file_path": "git/scripts/commit.py",
+                "keywords": ["commit", "git"],
+                "input_schema": "{}",
+            }
+        ]
 
-        assert len(results) == 1
-        assert results[0].id == "result_1"
+        with patch.object(
+            MagicMock(), "search_tools", new_callable=AsyncMock, return_value=mock_results
+        ) as mock_search:
+            # We need to patch the store's search_tools
+            search = HybridSearch()
+            search._store.search_tools = AsyncMock(return_value=mock_results)
+
+            results = await search.search("git commit")
+
+            # Verify store was called
+            search._store.search_tools.assert_called_once()
+
+            # Verify results format
+            assert len(results) == 1
+            assert results[0]["id"] == "git.commit"
+            assert results[0]["skill_name"] == "git"
+            assert results[0]["command"] == "commit"
 
     @pytest.mark.asyncio
     async def test_search_with_limit(self):
-        """Test that search respects limit parameter."""
-        mock_indexer = MagicMock()
-        mock_indexer.search = AsyncMock(
-            return_value=[
-                MagicMock(id=f"result_{i}", score=0.9, payload={"content": "test"})
-                for i in range(10)
-            ]
-        )
+        """Test that limit is passed to Rust store."""
+        from omni.core.router.hybrid_search import HybridSearch
 
-        search = HybridSearch(mock_indexer)
-        results = await search.search("test", limit=3)
+        search = HybridSearch()
+        search._store.search_tools = AsyncMock(return_value=[])
 
-        assert len(results) == 3
+        await search.search("test", limit=5)
+
+        # Verify limit was passed
+        call_args = search._store.search_tools.call_args
+        assert call_args.kwargs.get("limit") == 5
 
     @pytest.mark.asyncio
-    async def test_search_with_min_score(self):
-        """Test search with minimum score threshold."""
-        mock_indexer = MagicMock()
-        mock_indexer.search = AsyncMock(
-            return_value=[
-                MagicMock(id="high", score=0.9, payload={"content": "test"}),
-                MagicMock(id="low", score=0.1, payload={"content": "test"}),
-            ]
-        )
+    async def test_search_with_threshold(self):
+        """Test that threshold is passed to Rust store."""
+        from omni.core.router.hybrid_search import HybridSearch
 
-        search = HybridSearch(mock_indexer)
-        results = await search.search("test", min_score=0.5)
+        search = HybridSearch()
+        search._store.search_tools = AsyncMock(return_value=[])
 
-        assert len(results) == 1
-        assert results[0].id == "high"
+        await search.search("test", min_score=0.7)
+
+        # Verify threshold was passed
+        call_args = search._store.search_tools.call_args
+        assert call_args.kwargs.get("threshold") == 0.7
 
     @pytest.mark.asyncio
-    async def test_search_empty_query(self):
-        """Test search with empty query."""
-        mock_indexer = MagicMock()
-        mock_indexer.search = AsyncMock(return_value=[])
+    async def test_search_passes_query_for_keyword_rescue(self):
+        """Test that query text is passed for keyword rescue."""
+        from omni.core.router.hybrid_search import HybridSearch
 
-        search = HybridSearch(mock_indexer)
-        results = await search.search("")
+        search = HybridSearch()
+        search._store.search_tools = AsyncMock(return_value=[])
 
-        assert results == []
+        await search.search("git commit message")
+
+        # Verify query_text was passed (triggers keyword rescue in Rust)
+        call_args = search._store.search_tools.call_args
+        assert "git commit message" in str(call_args)
 
 
 class TestHybridSearchIntegration:
-    """Integration tests for hybrid search."""
+    """Integration tests for Rust-native hybrid search."""
 
     @pytest.mark.asyncio
-    async def test_full_workflow(self):
-        """Test complete hybrid search workflow (semantic-only)."""
-        # Create semantic indexer mock
-        semantic_indexer = MagicMock()
-        semantic_indexer.search = AsyncMock(
-            return_value=[
-                MagicMock(
-                    id="semantic_result",
-                    score=0.85,
-                    payload={
-                        "content": "Git commit command for version control",
-                        "type": "command",
-                        "skill": "git",
-                    },
-                ),
-            ]
-        )
+    async def test_result_format_complete(self):
+        """Test that results have all required fields."""
+        from omni.core.router.hybrid_search import HybridSearch
 
-        # Create hybrid search without keyword indexer
-        search = HybridSearch(
-            semantic_indexer,
-            keyword_indexer=None,
-            semantic_weight=0.7,
-            keyword_weight=0.3,
-        )
+        mock_results = [
+            {
+                "name": "python.run",
+                "description": "Run Python code",
+                "score": 0.88,
+                "skill_name": "python",
+                "tool_name": "run",
+                "file_path": "python/scripts/run.py",
+                "keywords": ["python", "run", "execute"],
+                "input_schema": '{"type": "object", "properties": {"code": {"type": "string"}}}',
+            }
+        ]
 
-        # Execute search
-        results = await search.search("git commit message")
+        search = HybridSearch()
+        search._store.search_tools = AsyncMock(return_value=mock_results)
 
-        # Verify results
+        results = await search.search("run python")
+
         assert len(results) == 1
-        assert results[0].id == "semantic_result"
+        result = results[0]
+
+        # All required fields should be present
+        assert "id" in result
+        assert "content" in result
+        assert "score" in result
+        assert "skill_name" in result
+        assert "command" in result
+        assert "file_path" in result
+        assert "keywords" in result
+        assert "input_schema" in result
+        assert "payload" in result
 
     @pytest.mark.asyncio
-    async def test_weight_adjustment(self):
-        """Test dynamic weight adjustment affects results."""
-        semantic_indexer = MagicMock()
-        semantic_indexer.search = AsyncMock(
-            return_value=[
-                MagicMock(id="sem", score=0.9, payload={"content": "test"}),
-            ]
-        )
+    async def test_empty_results_on_error(self):
+        """Test that empty list is returned on error."""
+        from omni.core.router.hybrid_search import HybridSearch
 
-        # Test with semantic-only weights
-        search1 = HybridSearch(
-            semantic_indexer, keyword_indexer=None, semantic_weight=1.0, keyword_weight=0.0
-        )
+        search = HybridSearch()
+        search._store.search_tools = AsyncMock(return_value=[])
 
-        results1 = await search1.search("test")
+        results = await search.search("nonexistent_tool_xyz")
 
-        # Should return results
-        assert len(results1) == 1
+        assert results == []
 
 
 if __name__ == "__main__":

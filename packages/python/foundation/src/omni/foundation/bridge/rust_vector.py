@@ -34,12 +34,18 @@ logger = get_logger("omni.bridge.vector")
 class RustVectorStore:
     """Vector store implementation using Rust bindings (LanceDB)."""
 
-    def __init__(self, index_path: str | None = None, dimension: int = 1536):
+    def __init__(
+        self,
+        index_path: str | None = None,
+        dimension: int = 1536,
+        enable_keyword_index: bool = True,
+    ):
         """Initialize the vector store.
 
         Args:
             index_path: Path to the vector index/database. Defaults to get_vector_db_path()
             dimension: Vector dimension (default: 1536 for OpenAI embeddings)
+            enable_keyword_index: Enable Tantivy keyword index for BM25 search
         """
         if not RUST_AVAILABLE:
             raise RuntimeError("Rust bindings not installed. Run: just build-rust-dev")
@@ -50,10 +56,13 @@ class RustVectorStore:
 
             index_path = str(get_vector_db_path())
 
-        self._inner = _rust.create_vector_store(index_path, dimension)
+        self._inner = _rust.create_vector_store(index_path, dimension, enable_keyword_index)
         self._index_path = index_path
         self._dimension = dimension
-        logger.info(f"Initialized RustVectorStore at {index_path}")
+        self._enable_keyword_index = enable_keyword_index
+        logger.info(
+            f"Initialized RustVectorStore at {index_path} (keyword_index={enable_keyword_index})"
+        )
 
     @cached_property
     def _embedding_service(self):
@@ -61,6 +70,62 @@ class RustVectorStore:
         from omni.foundation.services.embedding import get_embedding_service
 
         return get_embedding_service()
+
+    async def search_tools(
+        self,
+        table_name: str,
+        query_vector: list[float],
+        query_text: str | None = None,
+        limit: int = 5,
+        threshold: float = 0.0,
+    ) -> list[dict]:
+        """Direct access to Rust search_tools with Keyword Rescue.
+
+        This method provides direct access to Rust's native hybrid search:
+        - Vector similarity (LanceDB)
+        - Keyword rescue (Tantivy BM25) when query_text is provided
+        - Score fusion (0.4 vector + 0.6 keyword)
+
+        Args:
+            table_name: Table to search (default: "skills")
+            query_vector: Pre-computed query embedding
+            query_text: Raw query text for keyword rescue
+            limit: Maximum results to return
+            threshold: Minimum score threshold
+
+        Returns:
+            List of dicts with: name, description, score, skill_name, tool_name, etc.
+        """
+        try:
+            # Call Rust's search_tools (synchronous in the binding, run in thread pool)
+            # Note: Rust signature is (table_name, query_vector, query_text, limit, threshold)
+            loop = asyncio.get_event_loop()
+            json_results = await loop.run_in_executor(
+                None,
+                lambda: self._inner.search_tools(
+                    table_name,
+                    query_vector,
+                    query_text,  # query_text comes BEFORE limit in Rust
+                    limit,
+                    threshold,
+                ),
+            )
+
+            # Convert PyObject dicts to Python dicts
+            results = []
+            for data in json_results:
+                if hasattr(data, "__dict__"):
+                    # PyObject with dict protocol
+                    results.append(dict(data))
+                elif isinstance(data, dict):
+                    results.append(data)
+                # Otherwise skip (shouldn't happen)
+
+            logger.debug(f"search_tools: {len(results)} results for '{str(query_text)[:30]}...'")
+            return results
+        except Exception as e:
+            logger.debug(f"search_tools failed: {e}")
+            return []
 
     async def search(
         self,
@@ -88,12 +153,60 @@ class RustVectorStore:
             else:
                 query_vector = query_embedding
 
+            # Use new search_tools API which supports Keyword Rescue (Hybrid Search)
+            # This passes the raw query text to Rust for Tantivy fallback
+            if hasattr(self._inner, "search_tools"):
+                # Correct parameter order matching Rust signature:
+                # (table_name, query_vector, query_text, limit, threshold)
+                json_results = self._inner.search_tools(
+                    "skills",
+                    query_vector,
+                    query,  # query_text for keyword rescue
+                    limit,
+                    0.0,  # threshold
+                )
+
+                # Convert dicts (PyObject) to SearchResult objects directly
+                # search_tools returns list[dict], not list[json_str]
+                results = []
+                for data in json_results:
+                    # data is already a dict
+                    score = data.get("score", 0.0)
+
+                    # Convert to SearchResult
+                    # The Rust tool search returns flattened structure, adapt to payload
+                    metadata = {
+                        "command": data.get("name"),  # search_tools maps command -> name
+                        "tool_name": data.get("tool_name"),
+                        "skill_name": data.get("skill_name"),
+                        "description": data.get("description"),
+                        "keywords": data.get("keywords"),
+                        "file_path": data.get("file_path"),
+                    }
+
+                    results.append(
+                        SearchResult(
+                            score=score,
+                            payload=metadata,
+                            id=data.get("tool_name", ""),
+                        )
+                    )
+
+                logger.info(
+                    f"Hybrid route: '{query}' -> {len(results)} results (via Rust search_tools)"
+                )
+                return results
+
+            # Fallback for old bindings (should not happen if compiled correctly)
             if filters:
                 json_results = self._inner.search_filtered(
                     "skills", query_vector, limit, json.dumps(filters)
                 )
             else:
                 json_results = self._inner.search("skills", query_vector, limit)
+
+            logger.info(f"DEBUG: Query vec len={len(query_vector)}, sample={query_vector[:3]}")
+            logger.info(f"DEBUG: Raw json_results count={len(json_results)}")
 
             results = []
             for json_str in json_results:
@@ -104,8 +217,15 @@ class RustVectorStore:
                         metadata = {}
 
                     # Convert distance to similarity score (smaller distance = higher score)
+                    # LanceDB uses L2 distance by default. For normalized vectors:
+                    # L2^2 = 2(1 - cosine_sim) => cosine_sim = 1 - L2^2 / 2
+                    # The 'distance' returned by LanceDB for L2 is the squared distance (L2^2).
                     distance = data.get("distance", 1.0)
-                    score = max(0.0, 1.0 - distance)  # distance 0 -> score 1.0
+                    score = max(0.0, 1.0 - distance / 2.0)
+
+                    logger.debug(
+                        f"DEBUG SEARCH: id={data.get('id')} dist={distance:.4f} score={score:.4f}"
+                    )
 
                     results.append(
                         SearchResult(
@@ -274,27 +394,44 @@ class RustVectorStore:
 
 
 # =============================================================================
-# Factory
+# Factory - Per-path caching to support multiple stores (e.g., router + default)
 # =============================================================================
 
-_vector_store: RustVectorStore | None = None
+_vector_stores: dict[str, RustVectorStore] = {}
 
 
-def get_vector_store(index_path: str | None = None, dimension: int = 384) -> RustVectorStore:
-    """Get or create the global vector store instance.
+def get_vector_store(
+    index_path: str | None = None,
+    dimension: int | None = None,
+    enable_keyword_index: bool = True,
+) -> RustVectorStore:
+    """Get or create a vector store instance, cached by path.
+
+    Multiple stores can coexist with different paths (e.g., router.lance vs default).
 
     Args:
         index_path: Path to the vector database. Defaults to get_vector_db_path()
-        dimension: Vector dimension (default: 384 for BAAI/bge-small-en-v1.5)
+        dimension: Vector dimension (default: from settings.yaml embedding.dimension)
+        enable_keyword_index: Enable keyword index for hybrid search (default: True)
     """
     from omni.foundation.config.dirs import get_vector_db_path
+    from omni.foundation.config.settings import get_setting
 
     if index_path is None:
         index_path = str(get_vector_db_path())
-    global _vector_store
-    if _vector_store is None:
-        _vector_store = RustVectorStore(index_path, dimension)
-    return _vector_store
+
+    # Use dimension from settings.yaml (default to 1024)
+    if dimension is None:
+        dimension = get_setting("embedding.dimension", 1024)
+
+    # Check cache first
+    if index_path in _vector_stores:
+        return _vector_stores[index_path]
+
+    # Create new store and cache it
+    store = RustVectorStore(index_path, dimension, enable_keyword_index)
+    _vector_stores[index_path] = store
+    return store
 
 
 __all__ = [

@@ -8,6 +8,7 @@ from __future__ import annotations
 import pytest
 
 from omni.core.router.indexer import IndexedEntry, InMemoryIndex, IndexedSkill, SkillIndexer
+from omni.foundation.config.settings import get_setting
 
 
 def _is_indexing_available() -> bool:
@@ -42,21 +43,23 @@ class TestSkillIndexer:
 
     def test_default_initialization(self):
         """Test default initialization uses unified path."""
+        expected_dimension = get_setting("embedding.dimension", 1024)
         indexer = SkillIndexer()
 
         # Default should use unified path
         assert "omni-vector" in indexer._storage_path
         assert "router.lance" in indexer._storage_path
-        assert indexer._dimension == 384  # BAAI/bge-small-en-v1.5 default
+        assert indexer._dimension == expected_dimension
         assert indexer._store is None
         assert indexer._indexed_count == 0
 
     def test_in_memory_initialization(self):
         """Test in-memory mode initialization."""
+        expected_dimension = get_setting("embedding.dimension", 1024)
         indexer = SkillIndexer(storage_path=":memory:")
 
         assert indexer._storage_path == ":memory:"
-        assert indexer._dimension == 384
+        assert indexer._dimension == expected_dimension
         assert indexer._store is None
         assert indexer._indexed_count == 0
 
@@ -69,7 +72,7 @@ class TestSkillIndexer:
 
     def test_is_ready_false_when_not_initialized(self):
         """Test is_ready returns False before initialization."""
-        indexer = SkillIndexer()
+        indexer = SkillIndexer(storage_path=":memory:")
 
         assert indexer.is_ready is False
 
@@ -321,7 +324,8 @@ class TestSkillIndexerIndexing:
     @indexing_available
     async def test_index_skills_single_skill(self):
         """Test indexing a single skill."""
-        indexer = SkillIndexer()
+        # Use in-memory storage for test isolation
+        indexer = SkillIndexer(storage_path=":memory:")
 
         skills = [
             {
@@ -343,7 +347,8 @@ class TestSkillIndexerIndexing:
     @indexing_available
     async def test_index_skills_extracts_metadata(self):
         """Test that indexing extracts correct metadata."""
-        indexer = SkillIndexer()
+        # Use in-memory storage for test isolation
+        indexer = SkillIndexer(storage_path=":memory:")
 
         skills = [
             {
@@ -368,7 +373,7 @@ class TestSkillIndexerSearch:
     @indexing_available
     async def test_search_empty_index(self):
         """Test searching empty index returns empty list."""
-        indexer = SkillIndexer()
+        indexer = SkillIndexer(storage_path=":memory:")
 
         results = await indexer.search("test query")
 
@@ -378,7 +383,7 @@ class TestSkillIndexerSearch:
     @indexing_available
     async def test_search_with_limit(self):
         """Test search respects limit parameter."""
-        indexer = SkillIndexer()
+        indexer = SkillIndexer(storage_path=":memory:")
 
         # Index some data first
         skills = [
@@ -398,7 +403,7 @@ class TestSkillIndexerSearch:
     @indexing_available
     async def test_search_with_threshold(self):
         """Test search with threshold filtering."""
-        indexer = SkillIndexer()
+        indexer = SkillIndexer(storage_path=":memory:")
 
         # Index some data
         skills = [

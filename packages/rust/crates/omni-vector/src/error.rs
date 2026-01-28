@@ -1,7 +1,8 @@
 //! Error types for vector store operations.
 
-use lance::deps::arrow_schema::ArrowError;
+pub use lance::deps::arrow_schema::ArrowError;
 use thiserror::Error;
+use tokio::task::JoinError;
 
 /// Errors for vector store operations
 #[derive(Error, Debug)]
@@ -9,6 +10,10 @@ pub enum VectorStoreError {
     /// IO error during file operations
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+
+    /// Tokio task join error
+    #[error("Tokio task join error: {0}")]
+    JoinError(#[from] JoinError), // Added
 
     /// `LanceDB` error
     #[error("LanceDB error: {0}")]
@@ -21,6 +26,10 @@ pub enum VectorStoreError {
     /// Serialization error
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
+
+    /// Tantivy error (keyword search)
+    #[error("Tantivy error: {0}")]
+    Tantivy(#[from] tantivy::TantivyError),
 
     /// Table not found
     #[error("Table not found: {0}")]

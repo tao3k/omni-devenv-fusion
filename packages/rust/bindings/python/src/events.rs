@@ -12,14 +12,19 @@ use std::sync::Arc;
 #[pyclass]
 #[derive(Debug, Clone)]
 pub struct PyOmniEvent {
+    /// Unique event identifier
     #[pyo3(get)]
     pub id: String,
+    /// Event source (e.g., "watcher", "kernel")
     #[pyo3(get)]
     pub source: String,
+    /// Event topic (e.g., "file/changed")
     #[pyo3(get)]
     pub topic: String,
+    /// Event payload as JSON string
     #[pyo3(get)]
     pub payload: String,
+    /// Unix timestamp in seconds
     #[pyo3(get)]
     pub timestamp: f64,
 }
@@ -151,35 +156,42 @@ pub fn publish_event(source: String, topic: String, payload_json: String) -> PyR
 
 /// Event topic constants
 #[pyfunction]
+/// Returns "file/changed" topic string
 pub fn topic_file_changed() -> String {
     omni_events::topics::FILE_CHANGED.to_string()
 }
 
+/// Returns "file/created" topic string
 #[pyfunction]
 pub fn topic_file_created() -> String {
     omni_events::topics::FILE_CREATED.to_string()
 }
 
+/// Returns "file/deleted" topic string
 #[pyfunction]
 pub fn topic_file_deleted() -> String {
     omni_events::topics::FILE_DELETED.to_string()
 }
 
+/// Returns "agent/think" topic string
 #[pyfunction]
 pub fn topic_agent_think() -> String {
     omni_events::topics::AGENT_THINK.to_string()
 }
 
+/// Returns "agent/action" topic string
 #[pyfunction]
 pub fn topic_agent_action() -> String {
     omni_events::topics::AGENT_ACTION.to_string()
 }
 
+/// Returns "agent/result" topic string
 #[pyfunction]
 pub fn topic_agent_result() -> String {
     omni_events::topics::AGENT_RESULT.to_string()
 }
 
+/// Returns "system/ready" topic string
 #[pyfunction]
 pub fn topic_system_ready() -> String {
     omni_events::topics::SYSTEM_READY.to_string()
