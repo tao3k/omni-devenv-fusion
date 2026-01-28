@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import sys
 import threading
+from pathlib import Path
 from typing import Any
 
 # Project root detection using GitOps
@@ -121,6 +122,8 @@ class ReferenceLibrary:
         try:
             content = refs_path.read_text(encoding="utf-8")
             if YAML_AVAILABLE:
+                import yaml
+
                 self._data = yaml.safe_load(content) or {}
             else:
                 self._data = self._parse_simple_yaml(content)
@@ -255,18 +258,76 @@ class ReferenceLibrary:
 # =============================================================================
 
 
-def get_reference_path(key: str) -> str:
+class _Ref:
+    """Global reference accessor - use ref() or REF for single-source path resolution.
+
+    Usage:
+        from omni.foundation.services.reference import ref, REF
+
+        # Get path as Path object (supports / operator for chaining)
+        harvest_dir = ref("harvested_knowledge.dir")
+        commands_path = ref("skills.directory") / "git" / "scripts" / "commands.py"
+
+        # With fallback
+        docs_dir = ref("docs.dir", fallback="docs")
+
+        # Check existence
+        if ref("specs.dir").exists():
+            ...
     """
-    Get a document path reference.
+
+    def __call__(self, key: str, fallback: str | None = None) -> Path:
+        """Get a path reference as Path object.
+
+        Args:
+            key: Dot-separated path (e.g., "harvested_knowledge.dir")
+            fallback: Optional fallback path if key not found
+
+        Returns:
+            Path object resolved from project root
+        """
+        lib = ReferenceLibrary()
+        value = lib.get_path(key)
+
+        if not value:
+            if fallback is None:
+                return Path()
+            value = fallback
+
+        # Return absolute path
+        if Path(value).is_absolute():
+            return Path(value)
+
+        # Resolve relative to project root
+        root = get_project_root()
+        return root / value
+
+    def exists(self, key: str) -> bool:
+        """Check if a reference path exists."""
+        return self(key).exists()
+
+    def __truediv__(self, key: str) -> Path:
+        """Support ref("key") / "subpath" chaining."""
+        return self(key)
+
+
+# Global instance for convenience
+ref = _Ref()
+REF = ref  # Alias for cleaner imports
+
+
+def get_reference_path(key: str, fallback: str | None = None) -> str:
+    """
+    Get a document path reference as string.
 
     Args:
-        key: Dot-separated path (e.g., "specs.dir")
+        key: Dot-separated path (e.g., "harvested_knowledge.dir")
+        fallback: Optional fallback path if key not found
 
     Returns:
-        Document path string
+        Absolute path string, or empty string if not found and no fallback
     """
-    ref = ReferenceLibrary()
-    return ref.get_path(key)
+    return str(ref(key, fallback)) if fallback else str(ref(key))
 
 
 def get_reference_cache(key: str) -> str:

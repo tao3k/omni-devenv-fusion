@@ -4,7 +4,7 @@ argument-hint: [skill_name]
 ---
 
 Load the skill into LanceDB for semantic recall:
-Call @omni("memory.load_skill", {"skill_name": "$ARGUMENT"})
+`@omni("memory.load_skill", {"skill_name": "$ARGUMENT"})`
 
 Examples:
 

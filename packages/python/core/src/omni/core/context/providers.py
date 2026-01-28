@@ -114,22 +114,24 @@ class AvailableToolsProvider(ContextProvider):
         # Fallback: Load tools index (lazy)
         if self._index is None:
             from omni.core.skills.index_loader import SkillIndexLoader
-            from omni.core.config.loader import load_filter_commands
+
+            # [FIX] Import is_filtered for pattern-based filtering
+            from omni.core.config.loader import is_filtered
 
             loader = SkillIndexLoader()
             # Must call _ensure_loaded() to populate _metadata_map
             loader._ensure_loaded()
             self._index = [{"name": name, **meta} for name, meta in loader._metadata_map.items()]
 
-            # Cache filtered commands
-            filter_config = load_filter_commands()
-            self._filtered_tools = set(filter_config.commands)
-
         if not self._index:
             return ContextResult(content="", token_count=0, name="tools", priority=20)
 
         # Build lightweight summary with tools (filtering out filtered commands)
         summary_parts = ["<available_tools>"]
+
+        # [FIX] Import is_filtered for usage in loop
+        from omni.core.config.loader import is_filtered
+
         for skill in self._index[:15]:  # Limit to top 15 skills
             skill_name = skill.get("name", "unknown")
             desc = skill.get("description", "")[:80]
@@ -139,7 +141,8 @@ class AvailableToolsProvider(ContextProvider):
             filtered_tool_names = []
             for t in tools[:10]:  # Check more tools to find 5 non-filtered
                 tool_name = t.get("name", "")
-                if tool_name and tool_name not in self._filtered_tools:
+                # [FIX] Use is_filtered() pattern matcher instead of exact set lookup
+                if tool_name and not is_filtered(tool_name):
                     filtered_tool_names.append(tool_name)
                 if len(filtered_tool_names) >= 5:
                     break

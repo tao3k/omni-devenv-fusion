@@ -5,7 +5,7 @@ Unified discovery system for Agent capabilities.
 Replaces the old suggest/discover dual-tool pattern with a single powerful discover.
 
 Key Features:
-- Hybrid search (keyword + intent matching)
+- Hybrid search (Rust-native via HybridSearch)
 - Usage templates to prevent parameter errors
 - "Anti-hallucination" quick guide for LLM
 """
@@ -13,13 +13,6 @@ Key Features:
 from typing import Any
 
 from omni.foundation.api.decorators import skill_command
-
-
-def _get_discovery_service():
-    """Get SkillDiscoveryService instance (lazy loaded)."""
-    from omni.core.skills.discovery import SkillDiscoveryService
-
-    return SkillDiscoveryService()
 
 
 @skill_command(
@@ -54,16 +47,16 @@ def _get_discovery_service():
 )
 async def discover(intent: str, limit: int = 3) -> dict[str, Any]:
     """
-    Unified discovery tool. Replaces 'suggest' and old 'discover'.
+    Unified discovery tool using Rust-native HybridSearch.
 
     This is the "Google for Agent Tools" - always consult when unsure.
     """
-    from omni.core.skills.discovery import SkillDiscoveryService
+    from omni.core.router.hybrid_search import HybridSearch
 
-    service = SkillDiscoveryService()
-    matches = await service.search_tools(query=intent, limit=limit)
+    search = HybridSearch()
+    results = await search.search(query=intent, limit=limit, min_score=0.0)
 
-    if not matches:
+    if not results:
         return {
             "status": "no_result",
             "message": f"No specific tools found for '{intent}'. Fallback to basic `terminal` or `filesystem` skills.",
@@ -77,21 +70,57 @@ async def discover(intent: str, limit: int = 3) -> dict[str, Any]:
     quick_guide = []
     details = []
 
-    for m in matches:
-        usage = m.usage_template if m.usage_template else f'@omni("{m.name}", {{"..."}})'
+    for r in results:
+        tool_id = r.get("id", "")
+        skill_name = r.get("skill_name", "")
+        command = r.get("command", "")
+        description = r.get("description", "")
+        input_schema = r.get("input_schema", "{}")
+        score = r.get("score", 0.0)
+        confidence = r.get("confidence", "unknown")
 
-        # Create a clear instruction for the LLM
-        if m.name == "skill.jit_install":
+        # Generate usage template
+        import json
+
+        try:
+            schema = json.loads(input_schema) if isinstance(input_schema, str) else input_schema
+            props = schema.get("properties", {})
+            required = schema.get("required", [])
+            args = {}
+            for prop_name, prop_meta in props.items():
+                if prop_name not in required:
+                    continue
+                prop_type = prop_meta.get("type", "string")
+                if prop_type == "integer":
+                    args[prop_name] = 0
+                elif prop_type == "number":
+                    args[prop_name] = 0.0
+                elif prop_type == "boolean":
+                    args[prop_name] = True
+                elif prop_type == "array":
+                    args[prop_name] = []
+                elif prop_type == "object":
+                    args[prop_name] = {}
+                else:
+                    args[prop_name] = f"<{prop_name}>"
+            args_str = json.dumps(args, separators=(", ", ": "))
+            usage = f'@omni("{tool_id}", {args_str})'
+        except Exception:
+            usage = f'@omni("{tool_id}", {{"..."}})'
+
+        # Create quick guide entry
+        if tool_id == "skill.jit_install":
             quick_guide.append(f"To install a new skill, use: {usage}")
         else:
-            quick_guide.append(f"If you want to {m.matched_intent}, use: {usage}")
+            quick_guide.append(f"If you want to {intent}, use: {usage}")
 
         details.append(
             {
-                "name": m.name,
-                "skill": m.skill_name,
-                "description": m.description,
-                "score": f"{m.score:.2f}",
+                "name": tool_id,
+                "skill": skill_name,
+                "description": description,
+                "score": f"{score:.2f}",
+                "confidence": confidence,
                 "usage_example": usage,
                 "how_to_use": f"Copy and use the @omni() format above exactly as shown.",
             }
@@ -99,7 +128,7 @@ async def discover(intent: str, limit: int = 3) -> dict[str, Any]:
 
     return {
         "status": "success",
-        "analysis": f"Found {len(matches)} capabilities matching '{intent}'",
+        "analysis": f"Found {len(results)} capabilities matching '{intent}'",
         "quick_guide": quick_guide,
         "details": details,
     }

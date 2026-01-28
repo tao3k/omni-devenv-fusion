@@ -122,7 +122,7 @@ User: "What is the git flow?"
 
 ## The Evolution: From Agent-Centric to Skill-Centric to One Tool
 
-### Agent-Centric (Legacy)
+### Agent-Centric (Previous Pattern)
 
 ```
 Orchestrator (The Brain) ← All tools loaded always

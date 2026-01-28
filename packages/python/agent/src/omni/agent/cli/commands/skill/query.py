@@ -83,40 +83,100 @@ def skill_query(
 
 
 @skill_app.command("list")
-def skill_list():
-    """List installed and loaded skills."""
+def skill_list(
+    compact: bool = typer.Option(False, "--compact", "-c", help="Show compact view (names only)"),
+):
+    """
+    List installed skills and their commands.
+
+    Displays a hierarchical inventory of all available capabilities,
+    including command aliases defined in settings.yaml.
+    """
+    from rich.tree import Tree
+    from rich.text import Text
     from omni.core.kernel import get_kernel
+    from omni.core.config.loader import load_command_overrides, is_filtered
     from omni.foundation.config.skills import SKILLS_DIR
 
     skills_dir = SKILLS_DIR()
     kernel = get_kernel()
     ctx = kernel.skill_context
+    overrides = load_command_overrides()
 
     # Get available skills from filesystem
-    available = []
+    available_skills = []
     if skills_dir.exists():
-        available = [
-            d.name for d in skills_dir.iterdir() if d.is_dir() and not d.name.startswith("_")
-        ]
+        available_skills = sorted(
+            [d.name for d in skills_dir.iterdir() if d.is_dir() and not d.name.startswith("_")]
+        )
 
-    # Get loaded skills
-    loaded = ctx.list_skills()
+    loaded_skills = ctx.list_skills()
 
-    table = Table(title="📦 Installed Skills", show_header=True)
-    table.add_column("Skill", style="bold")
-    table.add_column("Status")
-    table.add_column("Commands")
+    # Build Tree
+    tree = Tree("📦 [bold]Skill Inventory[/bold]", guide_style="dim")
 
-    for skill in sorted(available):
-        status = "loaded" if skill in loaded else "unloaded"
-        status_style = "green" if status == "loaded" else "yellow"
+    for skill_name in available_skills:
+        is_loaded = skill_name in loaded_skills
+        status_color = "green" if is_loaded else "dim white"
+        status_icon = "🟢" if is_loaded else "⚪"
 
-        skill_obj = ctx.get_skill(skill)
-        cmd_count = len(skill_obj.list_commands()) if skill_obj else 0
+        skill_node = tree.add(f"{status_icon} [bold {status_color}]{skill_name}[/]")
 
-        table.add_row(skill, f"[{status_style}]{status}[/{status_style}]", str(cmd_count))
+        if is_loaded and not compact:
+            skill_obj = ctx.get_skill(skill_name)
+            commands = skill_obj.list_commands() if skill_obj else []
 
-    err_console.print(table)
+            # Sort commands: Aliased first, then others
+            commands.sort(key=lambda c: (c not in overrides.commands, c))
+
+            for full_cmd in commands:
+                # Filter hidden commands
+                if is_filtered(full_cmd):
+                    continue
+
+                # Handle Alias
+                override = overrides.commands.get(full_cmd)
+                alias = override.alias if override else None
+                append_doc = override.append_doc if override else None
+
+                cmd_text = Text()
+                if alias:
+                    cmd_text.append("⭐ ", style="yellow")
+                    cmd_text.append(alias, style="bold cyan")
+                    cmd_text.append(f" (Canon: {full_cmd})", style="dim")
+                else:
+                    cmd_text.append("🔧 ", style="dim")
+                    cmd_text.append(full_cmd, style="white")
+
+                # Handle Description
+                cmd_obj = ctx.get_command(full_cmd)
+                desc = getattr(cmd_obj, "description", "") or ""
+                if append_doc:
+                    desc = f"{desc} {append_doc}"
+
+                # Truncate description for clean display
+                desc = desc.strip().split("\n")[0]
+                if len(desc) > 60:
+                    desc = desc[:57] + "..."
+
+                if desc:
+                    cmd_text.append(f" - {desc}", style="dim italic")
+
+                skill_node.add(cmd_text)
+
+            if not skill_node.children:
+                skill_node.add("[dim italic]No public commands[/]")
+
+    err_console.print(tree)
+    err_console.print(
+        Panel(
+            'Use [bold cyan]omni run "intent"[/] to execute a task.\n'
+            "Use [bold cyan]omni run skill.discover[/] to find specific tools.",
+            title="💡 Tip",
+            style="blue",
+            expand=False,
+        )
+    )
 
 
 @skill_app.command("info")

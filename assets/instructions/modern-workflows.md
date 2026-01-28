@@ -120,15 +120,15 @@ assert test["success"] is True
 
 Always prefer the most specialized tool for the job:
 
-| Task                  | Preferred Tool                          | Legacy/Alternative              |
-| --------------------- | --------------------------------------- | ------------------------------- |
-| **Text Search**       | `advanced_tools.smart_search` (ripgrep) | `code_tools.search_code` (grep) |
-| **File Finding**      | `advanced_tools.smart_find` (fd)        | `filesystem.list_directory`     |
-| **Project Structure** | `advanced_tools.tree_view`              | Manual directory traversal      |
-| **Single File Edit**  | `code_tools.apply_file_edit`            | -                               |
-| **Multi-File Edit**   | `advanced_tools.batch_replace`          | Sequential `apply_file_edit`    |
-| **Surgical Read**     | `filesystem.read_files_context`         | `filesystem.read_files`         |
-| **Test Execution**    | `testing.run_pytest`                    | Manual pytest command           |
+| Task                  | Tool                                    |
+| --------------------- | --------------------------------------- |
+| **Text Search**       | `advanced_tools.smart_search` (ripgrep) |
+| **File Finding**      | `advanced_tools.smart_find` (fd)        |
+| **Project Structure** | `advanced_tools.tree_view`              |
+| **Single File Edit**  | `code_tools.apply_file_edit`            |
+| **Multi-File Edit**   | `advanced_tools.batch_replace`          |
+| **Surgical Read**     | `filesystem.read_files_context`         |
+| **Test Execution**    | `testing.run_pytest`                    |
 
 ---
 

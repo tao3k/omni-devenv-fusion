@@ -39,7 +39,6 @@
 
 - SOPs in `assets/instructions/modern-workflows.md`
 - System prompt updates
-- Legacy tool deprecation
 
 ---
 

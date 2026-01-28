@@ -14,8 +14,8 @@
 | `docs/how-to/*.md`          | Developers             | Task solutions                 | High             |
 | `docs/reference/*.md`       | Developers             | API/config reference           | Medium           |
 | `docs/explanation/*.md`     | Architects             | Design decisions               | Low              |
-| `agent/skills/*/prompts.md` | Claude (on skill load) | Skill rules                    | High             |
-| `agent/skills/*/guide.md`   | Human developers       | Skill implementation reference | Medium           |
+| `assets/skills/*/SKILL.md`  | Claude (on skill load) | Skill metadata + rules         | High             |
+| `assets/skills/*/README.md` | Human developers       | Skill implementation reference | Medium           |
 
 ---
 
@@ -141,50 +141,57 @@ One-line description.
 
 ---
 
-## agent/ Directory Structure
+## assets/skills/ Directory Structure
 
-### agent/skills/\*/prompts.md (Skill Rules)
+### assets/skills/\*/SKILL.md (Skill Definition)
 
-**Reader**: Claude (when skill is loaded into context)
+**Reader**: Claude (when skill is loaded into context) + Developers
 
 **Contents**:
 
-- Skill usage rules
+- YAML frontmatter (name, version, description, routing_keywords)
+- System Prompt Additions (LLM rules)
 - Router Logic (when to use which tool)
 - Authorization Protocol
 - Anti-Patterns
 
-**Style**: Rule-oriented, machine-executable
+**Style**: Rule-oriented, YAML frontmatter + Markdown body
 
 **Example**:
 
 ```markdown
-# Git Skill Policy
+---
+name: "git"
+version: "2.0.0"
+description: "Git operations with Smart Commit"
+routing_keywords: ["git", "commit", "push", "branch"]
+---
+
+# Git Skill
+
+## System Prompt Additions
+
+When this skill is active, add these guidelines:
+
+- Use `git.status` for read-only operations
+- Use `git.commit` with explicit confirmation
 
 ## Router Logic
 
 | Operation | Tool           | When               |
 | --------- | -------------- | ------------------ |
 | Commit    | `git_commit()` | User says "commit" |
-
-## Authorization Protocol
-
-When user says "commit":
-
-1. Show analysis
-2. Wait for "yes"
-3. Then execute
 ```
 
-### agent/skills/\*/guide.md (Skill Reference)
+### assets/skills/\*/README.md (Skill Documentation)
 
 **Reader**: Human developers (understanding implementation details)
 
 **Contents**:
 
 - How the skill works
-- Function signatures and parameters
-- Usage examples
+- Command reference with examples
+- Usage patterns
 - Implementation notes
 
 **Style**: Reference-oriented, detailed but readable
@@ -223,7 +230,7 @@ Before writing, ask:
 
 ### 4. Match Update Frequency
 
-Keep frequently updated documents (like prompts.md) concise. Less frequently updated documents (like explanation) can be more detailed.
+Keep frequently updated documents (like SKILL.md) concise. Less frequently updated documents (like explanation) can be more detailed.
 
 ---
 

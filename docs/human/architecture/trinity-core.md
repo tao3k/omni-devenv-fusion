@@ -119,6 +119,5 @@ class GitSkill:
 
 ## Related Documentation
 
-- [Trinity v2.0](trinity-v2.md) (Legacy - Swarm Engine)
-- [Omni Loop](omni-loop.md) (Current CCA Runtime)
+- [Omni Loop](omni-loop.md) (CCA Runtime)
 - [Skill Standard](skill-standard.md)

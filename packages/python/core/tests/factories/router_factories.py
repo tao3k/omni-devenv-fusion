@@ -14,9 +14,7 @@ import pytest
 from polyfactory.factories.dataclass_factory import DataclassFactory
 from polyfactory.factories.pydantic_factory import ModelFactory
 
-pytestmark = pytest.mark.skip(
-    reason="Legacy module deleted - tests preserved for potential future porting"
-)
+pytestmark = pytest.mark.skip(reason="Module deleted - tests preserved for future reference")
 
 from omni.agent.core.router.models import (
     AgentResponse,

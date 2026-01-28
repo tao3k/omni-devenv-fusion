@@ -4,9 +4,14 @@ omni.agent.mcp_server.server - High-Performance MCP Gateway (v2.0)
 Trinity Architecture - Agent Layer
 
 High-Speed Interface exposing Rust-powered capabilities:
-- Tools: Zero-copy via Rust Registry (Step 3)
+- Tools: Zero-copy via Rust Registry with Alias Mapping (Step 3)
 - Resources: Context (Sniffer) + Memory (Checkpoint) (Steps 5-6)
 - Prompts: Standardized system prompts
+
+Key Features:
+- Bi-directional alias mapping (LLM-friendly names -> canonical names)
+- Glob pattern filtering for tool exposure
+- Zero-copy Rust registry access
 
 Usage:
     python -m omni.agent.mcp_server.server
@@ -26,6 +31,11 @@ from pydantic.networks import AnyUrl
 
 from omni.foundation.config.logging import configure_logging, get_logger
 from omni.core.kernel import get_kernel
+from omni.core.config.loader import load_command_overrides, is_filtered
+from omni.core.omni_tool import get_omni_tool_info
+
+# [NEW] Import shared formatting logic
+from omni.foundation.utils.formatting import sanitize_tool_args, one_line_preview
 from omni.mcp.transport.sse import SSEServer
 from omni.mcp.transport.stdio import stdio_server
 
@@ -41,13 +51,65 @@ class AgentMCPServer:
     Leverages Rust components for microsecond-level responses:
     - tools/list: Zero-copy via Rust Vector Store registry
     - resources/read: Direct from Sniffer (context) and Checkpoint Store (memory)
+
+    Features:
+    - Bi-directional alias mapping: LLM sees 'save_memory', kernel executes 'memory.remember_insight'
+    - Glob pattern filtering: Control which tools are exposed to LLM
     """
 
     def __init__(self):
         self._kernel = None
         self._app = Server("omni-agent-os-v2")
         self._start_time = time.time()
+
+        # [NEW] Routing Tables for Alias Resolution
+        self._alias_to_real: dict[str, str] = {}  # alias -> real_name (Incoming calls)
+        self._real_to_display: dict[str, dict] = {}  # real_name -> {name, append_doc} (Outgoing)
+
+        self._build_routing_table()
         self._register_handlers()
+
+    def _build_routing_table(self):
+        """Pre-compute routing tables from overrides config."""
+        overrides = load_command_overrides()
+
+        for real_name, config in overrides.commands.items():
+            if config.alias:
+                # Map 'save_memory' -> 'memory.remember_insight' (for incoming calls)
+                self._alias_to_real[config.alias] = real_name
+
+                # Store display metadata (for outgoing list_tools)
+                self._real_to_display[real_name] = {
+                    "name": config.alias,
+                    "append_doc": config.append_doc,
+                }
+
+        if self._alias_to_real:
+            logger.info(f"🔀 Built routing table with {len(self._alias_to_real)} aliases")
+
+    def _validate_overrides(self):
+        """Check if configured overrides actually exist in kernel.
+
+        Logs warnings if settings.yaml contains overrides for tools that don't exist.
+        """
+        if not self._kernel or not self._kernel.is_ready:
+            return
+
+        # Get all real commands
+        real_commands = set(self._kernel.skill_context.get_core_commands())
+        overrides = load_command_overrides()
+
+        for configured_name in overrides.commands.keys():
+            if configured_name not in real_commands:
+                # Find close matches or just list a few
+                suggestions = sorted(
+                    [cmd for cmd in real_commands if cmd.startswith(configured_name.split(".")[0])]
+                )
+                hint = f" Did you mean: {', '.join(suggestions[:3])}?" if suggestions else ""
+
+                logger.warning(
+                    f"⚠️  Config Warning: Override key '{configured_name}' does not match any loaded tool.{hint}"
+                )
 
     def _register_handlers(self):
         """Register MCP protocol handlers."""
@@ -55,9 +117,12 @@ class AgentMCPServer:
         @self._app.list_tools()
         async def list_tools() -> list[Tool]:
             """
-            List tools using Zero-Copy Rust Registry.
+            List tools using Zero-Copy Rust Registry with Alias Resolution.
 
-            Performance: ~1-5ms (vs ~100ms+ for Python iteration)
+            Features:
+            - Applies command overrides (alias, append_doc)
+            - Filters out commands via glob patterns
+            - Performance: ~1-5ms (vs ~100ms+ for Python iteration)
             """
             if not self._kernel or not self._kernel.is_ready:
                 logger.warning("Kernel not ready, returning empty tools list")
@@ -69,19 +134,42 @@ class AgentMCPServer:
                 commands = context.get_core_commands()
 
                 mcp_tools = []
+
+                # [MASTER] Omni - Highest Authority Universal Gateway (from common module)
+                omni_info = get_omni_tool_info()
+                mcp_tools.append(
+                    Tool(
+                        name="omni",
+                        description=omni_info["description"],
+                        inputSchema=omni_info["inputSchema"],
+                    )
+                )
+
                 for cmd_name in commands:
+                    # [NEW] 1. Apply Filter (Global Hide)
+                    if is_filtered(cmd_name):
+                        continue
+
                     cmd = context.get_command(cmd_name)
                     if cmd is None:
                         continue
 
+                    # [NEW] 2. Apply Alias / Renaming Logic
+                    override = self._real_to_display.get(cmd_name, {})
+                    exposed_name = override.get("name", cmd_name)
+
+                    # Build exposed description
+                    base_desc = getattr(cmd, "description", "") or f"Execute {cmd_name}"
+                    extra_doc = override.get("append_doc")
+                    exposed_desc = f"{base_desc} {extra_doc}" if extra_doc else base_desc
+
                     # Fast path: Use cached schema from Rust
                     input_schema = getattr(cmd, "input_schema", {})
-                    description = getattr(cmd, "description", "") or f"Execute {cmd_name}"
 
                     mcp_tools.append(
                         Tool(
-                            name=cmd_name,
-                            description=description,
+                            name=exposed_name,  # LLM sees 'save_memory'
+                            description=exposed_desc,
                             inputSchema=input_schema,
                         )
                     )
@@ -98,15 +186,75 @@ class AgentMCPServer:
 
         @self._app.call_tool()
         async def call_tool(name: str, arguments: dict) -> list[Any]:
-            """Execute tool via Kernel."""
+            """Execute tool via Kernel with Clean Logging."""
+            # [NEW] Universal Master Proxy Support
+            if name == "omni":
+                intent = arguments.get("intent")
+                real_target = arguments.get("command")
+                real_args = arguments.get("args", {})
+
+                # [NEW] Intent-based Routing Logic
+                if intent and not real_target:
+                    logger.info(f"🔮 Master Proxy Routing Intent: '{intent}'")
+                    if not self._kernel or not self._kernel.is_ready:
+                        return [
+                            TextContent(type="text", text="Error: Kernel not ready for routing")
+                        ]
+
+                    route_result = await self._kernel.router.route(intent)
+                    if route_result and route_result.command_name:
+                        real_target = f"{route_result.skill_name}.{route_result.command_name}"
+                        logger.info(
+                            f"🎯 Routed to: {real_target} (Score: {route_result.score:.2f})"
+                        )
+                    else:
+                        return [
+                            TextContent(
+                                type="text",
+                                text=f"Error: Could not resolve intent '{intent}' to any command",
+                            )
+                        ]
+
+                if not real_target:
+                    return [
+                        TextContent(
+                            type="text",
+                            text="Error: Either 'command' or 'intent' is required for omni proxy",
+                        )
+                    ]
+
+                name = real_target
+                arguments = real_args
+
             if not self._kernel or not self._kernel.is_ready:
                 return [TextContent(type="text", text="Error: Kernel not ready")]
 
             try:
-                result = await self._kernel.execute_tool(name, arguments, caller="MCP")
+                # [NEW] Log the INCOMING request cleanly
+                # Solves the "noise" problem when Claude writes huge files
+                clean_args = sanitize_tool_args(arguments)
+                logger.info(f"🔧 Call: {name}({clean_args})")
+
+                # Resolve Alias
+                real_command = self._alias_to_real.get(name, name)
+
+                # Optional: Debug log for alias resolution
+                if name != real_command:
+                    logger.debug(f"🔀 Route Alias: '{name}' -> '{real_command}'")
+
+                # Execute
+                start_t = time.time()
+                result = await self._kernel.execute_tool(real_command, arguments, caller="mcp")
+                duration = time.time() - start_t
+
+                # [NEW] Log the OUTGOING result cleanly
+                # Prevents "read_file" from flooding the terminal
+                clean_result = one_line_preview(result, max_len=100)
+                logger.info(f"✅ Done: {name} -> {clean_result} ({duration:.2f}s)")
+
                 return [TextContent(type="text", text=str(result))]
             except Exception as e:
-                logger.error(f"Tool execution failed: {e}")
+                logger.error(f"❌ Fail: {name} -> {e}")
                 return [TextContent(type="text", text=f"Error: {str(e)}")]
 
         @self._app.call_tool()
@@ -385,6 +533,9 @@ Focus on:
                 f"✅ Kernel ready with {len(self._kernel.skill_context.get_core_commands())} tools"
             )
 
+        # [NEW] Validate overrides against loaded tools
+        self._validate_overrides()
+
         # Enable verbose mode
         if verbose:
             self._kernel.enable_hot_reload()
@@ -430,6 +581,9 @@ async def run_sse_server(port: int = 8080, verbose: bool = False) -> None:
         logger.info(
             f"✅ Kernel ready with {len(server._kernel.skill_context.get_core_commands())} tools"
         )
+
+    # [NEW] Validate overrides
+    server._validate_overrides()
 
     # Create SSE server
     sse = SSEServer(server._app, host="0.0.0.0", port=port)

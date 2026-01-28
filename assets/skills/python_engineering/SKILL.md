@@ -42,7 +42,7 @@ When writing or editing Python code:
 2. **Control Flow** - Prefer `match/case` over complex `if/elif` chains
 3. **Type Safety** - Use `@override` for inherited methods and new generic syntax `class Foo[T]`
 4. **Concurrency** - Use `asyncio.TaskGroup` instead of `gather`
-5. **Legacy Standards** - Follow PEP 8, 4 spaces, and Google style docstrings
+5. **Standards** - Follow PEP 8, 4 spaces, and Google style docstrings
 
 See [lang-python-modern.md](../knowledge/references/standards/lang-python-modern.md) for complete standards.
 

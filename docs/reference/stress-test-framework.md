@@ -154,14 +154,14 @@ These practices applied to the legacy stress test framework. For current testing
 
 For the current zero-configuration testing approach:
 
-| Aspect            | Legacy                      | Current                         |
-| ----------------- | --------------------------- | ------------------------------- |
-| **Test Location** | `mcp-server/tests/stress/`  | `assets/skills/*/tests/`        |
-| **Configuration** | `conftest.py` per directory | None (Pytest plugin auto-loads) |
-| **Fixtures**      | Manual registration         | Auto-injected by plugin         |
-| **Skill Tests**   | Not supported               | Native via `git`, etc. fixtures |
+| Aspect            | Description                     |
+| ----------------- | ------------------------------- |
+| **Test Location** | `assets/skills/*/tests/`        |
+| **Configuration** | None (Pytest plugin auto-loads) |
+| **Fixtures**      | Auto-injected by plugin         |
+| **Skill Tests**   | Native via `git`, etc. fixtures |
 
-**Quick Start (Current)**:
+**Quick Start**:
 
 ```bash
 # Run all skill tests

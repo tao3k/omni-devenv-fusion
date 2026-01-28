@@ -439,12 +439,6 @@ pub struct DocsAvailable {
     /// Whether README.md exists.
     #[serde(default)]
     pub readme: bool,
-    /// Whether a guide document exists.
-    #[serde(default)]
-    pub guide: bool,
-    /// Whether prompts.md exists.
-    #[serde(default)]
-    pub prompts: bool,
     /// Whether tests exist.
     #[serde(default)]
     pub tests: bool,
@@ -455,8 +449,6 @@ impl Default for DocsAvailable {
         Self {
             skill_md: true,
             readme: false,
-            guide: false,
-            prompts: false,
             tests: false,
         }
     }

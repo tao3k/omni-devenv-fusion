@@ -456,7 +456,7 @@ class UniversalSkillFactory:
     """Factory for creating UniversalScriptSkill instances.
 
     Supports two creation modes:
-    1. Legacy mode: create_skill(name) - scans directory (deprecated)
+    1. Direct mode: create_skill(name) - scans directory
     2. Index mode: create_from_discovered(ds) - uses DiscoveredSkill from Index
     """
 
@@ -465,7 +465,7 @@ class UniversalSkillFactory:
         self.base_path = Path(base_path)
 
     def discover_skills(self) -> list[tuple[str, Path]]:
-        """Discover all skills in the base path (Legacy mode - deprecated).
+        """Discover all skills in the base path.
 
         Use SkillDiscoveryService.discover_all() instead for Rust-First Indexing.
 
@@ -482,7 +482,7 @@ class UniversalSkillFactory:
         return skills
 
     def create_skill(self, skill_name_or_path: str | Path) -> UniversalScriptSkill:
-        """Create a UniversalScriptSkill from a name or path (Legacy mode).
+        """Create a UniversalScriptSkill from a name or path.
 
         Args:
             skill_name_or_path: Skill name (e.g., "git") or tuple (name, path)
@@ -529,7 +529,7 @@ class UniversalSkillFactory:
         )
 
     def create_all_skills(self) -> list[UniversalScriptSkill]:
-        """Create UniversalScriptSkill for all discovered skills (Legacy mode).
+        """Create UniversalScriptSkill for all discovered skills.
 
         Returns:
             List of UniversalScriptSkill instances (not loaded)

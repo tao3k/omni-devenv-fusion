@@ -147,7 +147,7 @@ class Librarian:
                     self._cache = []
                 self._cache.append(entry)
 
-            logger.info(f"📚 Librarian ingested: {file_path} ({len(chunks)} chunks)")
+            logger.debug(f"📚 Librarian ingested: {file_path} ({len(chunks)} chunks)")
             return True
 
         except Exception as e:
@@ -180,7 +180,7 @@ class Librarian:
                     if self.ingest_file(str(file_path)):
                         count += 1
 
-        logger.info(f"📚 Librarian ingested {count} files from {directory}")
+        logger.debug(f"📚 Librarian ingested {count} files from {directory}")
         return count
 
     async def search(

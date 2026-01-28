@@ -26,13 +26,13 @@ Skills with heavy dependencies pollute the main agent environment:
 ┌─────────────────────────────────────────────────────────────┐
 │                    Omni Core (Main Agent)                   │
 │                                                             │
-│  tools.py (lightweight) ──────┐                             │
-│  - imports only from common   │                             │
-│  - no heavy dependencies      │                             │
-│                              ↓                              │
+│  scripts/commands.py (lightweight) ──────┐                  │
+│  - imports only from common              │                  │
+│  - no heavy dependencies                 │                  │
+│                                        ↓                     │
 │                      uv run --directory skill/              │
 │                      python scripts/engine.py               │
-│                              ↓                              │
+│                                        ↓                     │
 │              ┌──────────────────────────────┐               │
 │              │    Skill Isolated Env        │               │
 │              │    (Independent .venv)       │               │
@@ -49,13 +49,13 @@ Skills with heavy dependencies pollute the main agent environment:
 ```
 assets/skills/crawl4ai/
 ├── pyproject.toml        # Skill dependencies (crawl4ai, fire, pydantic)
-├── tools.py              # Lightweight interface (uses common.isolation)
 ├── scripts/
-│   └── engine.py         # Heavy implementation (imports crawl4ai)
+│   ├── __init__.py       # Package marker
+│   └── commands.py       # Lightweight interface (uses common.isolation)
 └── SKILL.md              # Skill documentation + rules
 ```
 
-### tools.py (Lightweight Interface)
+### scripts/commands.py (Lightweight Interface)
 
 ```python
 from common.isolation import run_skill_command

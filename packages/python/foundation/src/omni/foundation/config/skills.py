@@ -11,11 +11,11 @@ Usage:
     from omni.foundation.runtime.gitops import get_project_root
 
     # Get skill directory path from settings.yaml -> assets/skills
-    git_path = SKILLS_DIR("git")              # -> /project/root/assets/skills/git
-    git_tools = SKILLS_DIR("git", "tools.py") # -> /project/root/assets/skills/git/tools.py
+    git_path = SKILLS_DIR("git")                   # -> /project/root/assets/skills/git
+    git_commands = SKILLS_DIR("git", "scripts/commands.py")  # -> /project/root/assets/skills/git/scripts/commands.py
 
     # Load skill module
-    git_tools = load_skill_module("git")
+    git_commands = load_skill_module("git")
 
     # Project root (uses git rev-parse --show-toplevel)
     root = get_project_root()
@@ -36,10 +36,10 @@ class _SkillDirCallable:
     """Callable that returns skill paths based on settings.yaml config.
 
     Usage:
-        SKILLS_DIR("git")                    # -> Path("assets/skills/git")
-        SKILLS_DIR("git", "tools.py")        # -> Path("assets/skills/git/tools.py")
-        SKILLS_DIR()                         # -> Path("assets/skills") (base path)
-        SKILLS_DIR.definition_file("git")    # -> Path("assets/skills/git/SKILL.md")
+        SKILLS_DIR("git")                           # -> Path("assets/skills/git")
+        SKILLS_DIR("git", "scripts/commands.py")    # -> Path("assets/skills/git/scripts/commands.py")
+        SKILLS_DIR()                                # -> Path("assets/skills") (base path)
+        SKILLS_DIR.definition_file("git")           # -> Path("assets/skills/git/SKILL.md")
     """
 
     _cached_base_path: Path | None = None
@@ -116,7 +116,7 @@ class _SkillDirCallable:
         Usage:
             SKILLS_DIR()                                  # -> assets/skills (base)
             SKILLS_DIR(skill="git")                       # -> assets/skills/git
-            SKILLS_DIR(skill="git", filename="tools.py")  # -> assets/skills/git/tools.py
+            SKILLS_DIR(skill="git", filename="scripts/commands.py")  # -> assets/skills/git/scripts/commands.py
             SKILLS_DIR(skill="skill", path="data/known_skills.json")  # -> assets/skills/skill/data/known_skills.json
         """
         base = self._get_base_path()
@@ -198,7 +198,7 @@ def load_skill_module(
     """
     Load a skill module.
 
-    Supports both scripts/__init__.py and tools.py patterns.
+    Supports scripts/__init__.py pattern.
 
     Replaces the verbose pattern:
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "assets/skills/git"))
@@ -206,8 +206,8 @@ def load_skill_module(
 
     With the simple pattern:
         from omni.foundation.config.skills import load_skill_module
-        git_tools = load_skill_module("git")
-        scopes = git_tools._get_cog_scopes()
+        git_commands = load_skill_module("git")
+        scopes = git_commands._get_cog_scopes()
 
     Args:
         skill_name: Name of the skill (e.g., "git", "filesystem")
@@ -218,7 +218,7 @@ def load_skill_module(
         The loaded module object
 
     Raises:
-        FileNotFoundError: If neither scripts/__init__.py nor tools.py found
+        FileNotFoundError: If scripts/__init__.py not found
     """
     if project_root is None:
         from omni.foundation.runtime.gitops import get_project_root
@@ -227,17 +227,14 @@ def load_skill_module(
 
     # Use SKILLS_DIR to get the path (already resolved with project_root)
     skills_dir = SKILLS_DIR()
-    scripts_dir = skills_dir / skill_name / "scripts"
-    tools_path = skills_dir / skill_name / "tools.py"
+    scripts_init = skills_dir / skill_name / "scripts" / "__init__.py"
 
-    # Prefer scripts/__init__.py over tools.py
-    if scripts_dir.exists() and (scripts_dir / "__init__.py").exists():
-        source_path = scripts_dir / "__init__.py"
-    elif tools_path.exists():
-        source_path = tools_path
+    # Use scripts/__init__.py (new standard)
+    if scripts_init.exists():
+        source_path = scripts_init
     else:
         raise FileNotFoundError(
-            f"Skill module not found for '{skill_name}': no scripts/__init__.py or tools.py"
+            f"Skill module not found for '{skill_name}': no scripts/__init__.py"
         )
 
     if module_name is None:
@@ -292,7 +289,7 @@ class SkillPathBuilder:
 
     Usage:
         builder = SkillPathBuilder()
-        builder.git / "tools.py"
+        builder.git / "scripts/commands.py"
         builder.definition("git")  # Uses settings.yaml definition_file
     """
 
@@ -331,8 +328,12 @@ class SkillPathBuilder:
         return self._skills_base / skill_name / SKILLS_DIR.definition_file()
 
     def tools(self, skill_name: str) -> Path:
-        """Get the tools.py for a skill."""
-        return self._skills_base / skill_name / "tools.py"
+        """Get the commands.py for a skill (legacy alias, use scripts_commands instead)."""
+        return self._skills_base / skill_name / "scripts" / "commands.py"
+
+    def scripts_commands(self, skill_name: str) -> Path:
+        """Get the scripts/commands.py for a skill (new standard)."""
+        return self._skills_base / skill_name / "scripts" / "commands.py"
 
 
 # =============================================================================

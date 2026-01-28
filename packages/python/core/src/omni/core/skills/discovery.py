@@ -360,13 +360,19 @@ class SkillDiscoveryService:
             # Keep original for embedding to preserve semantic meaning
             keyword_query = re.sub(r'["\'\[\](){}]', "", query).strip()
 
-            # Generate query embedding (use original query for semantic search)
-            query_vector = embed_service.embed(query)
-            if isinstance(query_vector[0], list):
-                query_vector = query_vector[0]
+            # Generate query embedding (sync embed handles event loop internally)
+            try:
+                query_vector = embed_service.embed(query)
+                if query_vector and isinstance(query_vector[0], list):
+                    query_vector = query_vector[0]
+                else:
+                    # Fallback: use empty vector for keyword-only search
+                    query_vector = []
+            except Exception as embed_err:
+                logger.warning(f"Embedding failed: {embed_err}, using keyword-only search")
+                query_vector = []
 
             # Use Rust search_tools with Weighted RRF + Field Boosting
-            # Note: RustVectorStore.search_tools is async and uses run_in_executor internally
             # Use cleaned query for keyword rescue to avoid Tantivy parse errors
             results = await store.search_tools(
                 table_name="skills",
@@ -395,8 +401,8 @@ class SkillDiscoveryService:
 
                 match = ToolMatch(
                     name=tool_name,
-                    skill_name=r.get("skill_name", ""),
-                    description=r.get("description", ""),
+                    skill_name=str(r.get("skill_name") or ""),
+                    description=str(r.get("description") or ""),
                     score=score,
                     matched_intent=query,
                     usage_template=usage,

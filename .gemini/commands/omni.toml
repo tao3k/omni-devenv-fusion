@@ -1,0 +1,19 @@
+description = "[MASTER] High-authority tool execution via the omni proxy (Precision & Intent modes)"
+
+prompt = """
+[CRITICAL PROTOCOL: MASTER INTERFACE]
+The user is invoking the '/omni' high-authority command. 
+Your SOLE TASK is to execute the 'omni' tool provided by the 'omniAgent' MCP server.
+
+### EXECUTION INSTRUCTIONS:
+1. **IDENTIFY TARGET**: Look for the tool named 'omni' belonging to the 'omniAgent' MCP server.
+2. **MAP INPUT**:
+   - If '{{args}}' is a command (e.g., 'git.status'), use: `omniAgent.omni(command="{{args}}")`
+   - If '{{args}}' is natural language, use: `omniAgent.omni(intent="{{args}}")`
+3. **MANDATORY**:
+   - Use the 'omni' proxy for ALL requests coming through this command.
+   - Do not attempt to use tools from other MCP servers.
+   - If the user provided JSON-like arguments after a command, pass them into the 'args' field.
+
+INPUT: {{args}}
+"""

@@ -112,7 +112,7 @@ omni-dev-fusion/
 │   │   ├── foundation/              # L1 - Infrastructure
 │   │   ├── core/                    # L2 - Microkernel Core
 │   │   ├── mcp-server/              # L3 - Transport
-│   │   └── agent/                   # Legacy agent (being migrated)
+│   │   └── agent/                   # Agent implementation
 │   │
 │   └── rust/                        # Rust crates
 │       ├── crates/                  # 11 Rust crates

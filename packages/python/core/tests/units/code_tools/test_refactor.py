@@ -101,11 +101,11 @@ class OldClass:
         except ImportError:
             pytest.skip("Rust structural refactoring not available")
 
-        content = "class LegacyClass:\n    pass\n\nx = LegacyClass()"
-        result = structural_replace(content, "LegacyClass", "ModernClass", "python")
+        content = "class OldClass:\n    pass\n\nx = OldClass()"
+        result = structural_replace(content, "OldClass", "NewClass", "python")
 
         assert result is not None
-        assert "ModernClass" in result or "Replacements:" in result
+        assert "NewClass" in result or "Replacements:" in result
 
     def test_structural_replace_ignores_strings(self):
         """Test structural replace doesn't match inside strings."""

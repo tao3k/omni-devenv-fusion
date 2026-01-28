@@ -12,7 +12,7 @@ This skill operates within the **Trinity Architecture**:
 
 | Component   | File            | Purpose                       |
 | ----------- | --------------- | ----------------------------- |
-| **Code**    | `tools.py`      | Hot-reloaded via ModuleLoader |
+| **Code**    | `scripts/commands.py` | Hot-reloaded via ModuleLoader |
 | **Context** | `SKILL.md`      | LLM behavior guidelines       |
 | **State**   | `SKILL.md`      | Metadata and configuration    |
 
@@ -49,7 +49,7 @@ This skill operates within the **Trinity Architecture**:
 This skill template follows the **"Python Zenith" Engineering Protocol**:
 
 ```python
-# tools.py - @skill_command decorator pattern
+# scripts/commands.py - @skill_command decorator pattern
 from agent.skills.decorators import skill_command
 
 @skill_command(
@@ -66,7 +66,7 @@ async def example(param: str) -> str:
 
 - **Import time:** Uses lazy initialization for fast loading
 - **Execution:** O(1) command lookup via SkillManager cache
-- **Hot reload:** Automatically reloads when `tools.py` is modified
+- **Hot reload:** Automatically reloads when `scripts/commands.py` is modified
 
 ## Related
 

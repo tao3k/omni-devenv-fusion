@@ -351,7 +351,6 @@ A skill is OSS 2.0 compliant when:
 - [ ] `README.md` exists with usage documentation
 - [ ] `scripts/` directory exists with commands
 - [ ] `scripts/__init__.py` exists (package marker)
-- [ ] No deprecated files (`manifest.json`, `tools.py`, `prompts.md`)
 
 ## Anti-Patterns
 

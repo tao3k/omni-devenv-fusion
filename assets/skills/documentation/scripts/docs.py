@@ -3,24 +3,21 @@ documentation/scripts/docs.py - Documentation Skill Commands
 """
 
 import datetime
+from pathlib import Path
 
 import structlog
 
 from omni.foundation.api.decorators import skill_command
-from omni.foundation.runtime.gitops import get_project_root
+from omni.foundation.services.reference import get_reference_path
 
 logger = structlog.get_logger(__name__)
-
-# Get knowledge directory
-root = get_project_root()
-knowledge_dir = root / "agent" / "knowledge"
 
 
 @skill_command(
     name="create_knowledge_entry",
     category="write",
     description="""
-    Create a new standardized knowledge entry in agent/knowledge/harvested/.
+    Create a new standardized knowledge entry in assets/knowledge/harvested/.
 
     Args:
         - title: str - Human readable title (e.g., Fixing Deadlocks) (required)
@@ -41,8 +38,8 @@ async def create_knowledge_entry(title: str, category: str, content: str) -> str
         content: The Markdown content (excluding the header which is auto-generated).
     """
     try:
-        # 1. Prepare Paths
-        harvest_dir = knowledge_dir / "harvested"
+        # Get harvest directory from references.yaml (SSOT)
+        harvest_dir = Path(get_reference_path("harvested_knowledge.dir"))
         harvest_dir.mkdir(parents=True, exist_ok=True)
 
         # 2. Format Filename
@@ -66,7 +63,7 @@ async def create_knowledge_entry(title: str, category: str, content: str) -> str
     name="rebuild_knowledge_index",
     category="write",
     description="""
-    Scan all markdown files in agent/knowledge and update the main README.md index.
+    Scan all markdown files in assets/knowledge and update the main README.md index.
 
     Call this after adding or deleting files.
 
@@ -79,7 +76,7 @@ async def create_knowledge_entry(title: str, category: str, content: str) -> str
 )
 async def rebuild_knowledge_index() -> str:
     """
-    Scan all markdown files in agent/knowledge and update the main README.md index.
+    Scan all markdown files in assets/knowledge and update the main README.md index.
     Call this after adding or deleting files.
     """
     try:
@@ -90,8 +87,8 @@ async def rebuild_knowledge_index() -> str:
             "|---|---|---|---|",
         ]
 
-        # Scan harvested
-        harvest_dir = knowledge_dir / "harvested"
+        # Get knowledge directory from references.yaml
+        harvest_dir = Path(get_reference_path("harvested_knowledge.dir"))
         if harvest_dir.exists():
             files = sorted(harvest_dir.glob("*.md"), reverse=True)
             for f in files:
@@ -103,7 +100,7 @@ async def rebuild_knowledge_index() -> str:
                     index_lines.append(f"| {date} | {cat} | {title} | [`{f.name}`]({link}) |")
 
         # Update README
-        readme_path = knowledge_dir / "README.md"
+        readme_path = harvest_dir.parent / "README.md"
         readme_path.write_text("\n".join(index_lines), encoding="utf-8")
 
         return f"Index rebuilt. Found {len(index_lines) - 4} entries."
@@ -130,6 +127,8 @@ async def search_knowledge_base(query: str) -> str:
     """
     results = []
     try:
+        # Get knowledge directory from references.yaml
+        knowledge_dir = Path(get_reference_path("harvested_knowledge.dir")).parent
         for f in knowledge_dir.rglob("*.md"):
             if "node_modules" in str(f) or ".git" in str(f):
                 continue

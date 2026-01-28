@@ -2,24 +2,18 @@
 logging.py - Pretty Console Output for OmniLoop
 
 Provides clean, human-readable logging for tool execution:
+- Smart truncation: Shows a one-line preview for large content
 - Step indicators: [1/10] 🔧 tool_name(args)
-- Result previews: → Result preview...
-- Completion summaries: ✅ Completed in N steps, M tool calls
-- LLM responses: 💭 Thinking process from LLM
 """
 
 from typing import Any
-
 from rich.console import Console
 from rich.text import Text
 
+# [NEW] Import from foundation
+from omni.foundation.utils.formatting import sanitize_tool_args, one_line_preview
+
 _console = Console()
-
-
-def _truncate(text: Any, max_len: int = 50) -> str:
-    """Truncate text for display."""
-    s = str(text)
-    return s[:max_len] + "..." if len(s) > max_len else s
 
 
 def log_llm_response(response: str) -> None:
@@ -60,37 +54,29 @@ def log_llm_response(response: str) -> None:
 
 
 def log_step(step: int, total: int, tool_name: str, args: dict[str, Any]) -> None:
-    """Log a tool call step with clean format.
+    """Log a tool call step using unified formatting.
 
     Example output:
-        [1/10] 🔧 filesystem.read_files(path=test.txt)
+        [1/10] 🔧 documentation.create_entry(category=arch, content="# Bi-directional Alias Mapping ## Overview The BAM mechanism...")
     """
-    # Format args for display (show first 3 args)
-    if args:
-        args_str = ", ".join(f"{k}={_truncate(v, 30)}" for k, v in list(args.items())[:3])
-        args_display = f"({args_str})"
-    else:
-        args_display = ""
+    # Use shared logic
+    args_display = f"({sanitize_tool_args(args)})" if args else ""
 
     step_text = Text()
     step_text.append(f"[{step}/{total}]", style="dim")
     step_text.append(" 🔧 ", style="cyan")
     step_text.append(tool_name, style="bold yellow")
-    step_text.append(args_display, style="dim")
+    # Arguments use dim style to not overshadow the tool name
+    step_text.append(args_display, style="dim white")
     _console.print(step_text)
 
 
 def log_result(result: str, is_error: bool = False) -> None:
-    """Log a tool result.
-
-    Example output:
-        → Result: Successfully wrote 11 bytes
-        ❌ Error: Permission denied
-    """
+    """Log result using unified formatting."""
     if is_error:
-        _console.print(f"    ❌ {_truncate(result, 100)}")
+        _console.print(f"    ❌ {one_line_preview(result, 150)}")
     else:
-        preview = _truncate(result, 100)
+        preview = one_line_preview(result, 100)
         _console.print(f"    → {preview}")
 
 
@@ -104,3 +90,6 @@ def log_completion(step_count: int, tool_count: int) -> None:
     _console.print(
         f"✅ Completed in [bold]{step_count}[/bold] steps, [bold]{tool_count}[/bold] tool calls"
     )
+
+
+__all__ = ["log_step", "log_result", "log_completion", "log_llm_response"]

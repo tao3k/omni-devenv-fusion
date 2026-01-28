@@ -100,17 +100,14 @@ def get_skill_tools(skill_name: str) -> list[dict[str, Any]]:
     return []
 
 
-# Legacy re-exports removed (agent.core.skill_registry no longer exists)
-
-
 __all__ = [
     # Core
     "SkillRegistry",
     "get_skill_registry",
-    # Deprecated remote operations
+    # Remote operations
     "install_remote_skill",
     "update_remote_skill",
-    # JIT and discovery (deprecated)
+    # JIT and discovery
     "jit_install_skill",
     "security_scan_skill",
     "discover_skills",

@@ -224,18 +224,47 @@ cache:
 # Skill Management
 # =============================================================================
 skills:
-  # Skills to preload at server startup
-  # NOTE: These are "Core" skills but can still be manually unloaded via skill.unload
+  # =============================================================================
+  # Core Preload (Base Layer) - Loaded in ALL modes
+  # =============================================================================
+  # Keep this minimal to reduce LLM context noise
   preload:
     - knowledge
     - memory
     - git
-    - filesystem
-    - writer
-    - terminal
-    - testing_protocol
     - code_tools
     - skill
+
+  # =============================================================================
+  # CLI / Omni Run Extensions
+  # =============================================================================
+  # Skills to ADD when running via 'omni run' (CLI mode).
+  # This inherits from 'preload' and adds the tools below.
+  cli:
+    extend:
+      - filesystem # Essential for CLI file ops
+      - terminal # Essential for running shell commands
+      - writer
+      - testing_protocol
+
+  # =============================================================================
+  # Filter Commands (Pattern Matching)
+  # =============================================================================
+  # Use glob patterns to hide tools from the LLM (MCP Server).
+  # Syntax:
+  #   "pattern"   -> Filter matching commands
+  #   "!pattern"  -> Whitelist (Keep these even if they match a filter)
+  filter_commands:
+    # --- Terminal: Hide noisy ops, keep safe ones for LLM ---
+    - "terminal.*" # Filter ALL terminal commands
+    # - "!terminal.run_task"        # Exception: Allow task runner
+
+    # --- Filesystem: Hide atomic ops, keep efficient ones ---
+    - "filesystem.*"
+    # - "!filesystem.apply_changes"  # Exception: Keep batch operations
+
+    # --- Git: Hide raw plumbing commands ---
+    - "git.raw_*" # Hide internal raw commands
 
   # LRU + TTL eviction settings
   ttl:
@@ -246,21 +275,8 @@ skills:
 
   # Reload behavior
   reload:
-    # Allow LLM to reload skills via load_skill
     enabled: true
-    # Default to false - require explicit confirmation
     auto_confirm: false
-
-  # =============================================================================
-  # Filter Commands from Core Tools
-  # =============================================================================
-  # Commands to FILTER from being in core tools.
-  # Use Claude's native capabilities instead - MCP adds unnecessary latency.
-  # These commands are still available via dynamic loading when explicitly needed.
-  filter_commands:
-    - "terminal.run_command" # Use Claude's native bash runner
-    - "terminal.run_task" # Value not proven, use direct commands
-    - "terminal.inspect_environment" # Use pwd/uname directly
 
   # =============================================================================
   # Dynamic Tool Loading Limits
@@ -381,10 +397,8 @@ skills:
       auto_generate:
         - source: "SKILL.md.j2"
           target: "SKILL.md"
-        - source: "tools.py.j2"
-          target: "tools.py"
-        - source: "RAEDME.md.j2"
-          target: "README.md"
+        - source: "scripts/commands.py.j2"
+          target: "scripts/commands.py"
 
     # Validation rules
     validation:
@@ -396,8 +410,7 @@ skills:
 
       # Disallowed files (must not exist - causes LLM confusion)
       disallowed_files:
-        - "manifest.json" # Redundant - metadata in SKILL.md YAML frontmatter
-        - "prompts.md" # Redundant - prompts in SKILL.md body
+        - "state.py" # Legacy - inline state in scripts/commands.py
 
   # =============================================================================
   # Configuration-Driven Tool Aliasing (Native Mimicry)
@@ -415,8 +428,8 @@ skills:
 
   overrides:
     # Web Fetching - Critical override to prevent curl/wget usage
-    crawl4ai.crawl_webpage:
-      alias: "web_fetch"
+    crawl4ai.crawl_url:
+      alias: "webCrawl"
       append_doc: |
 
         ## ⚡️ OPERATIONAL RULE
@@ -425,49 +438,14 @@ skills:
         - **OUTPUT**: Returns structured Markdown, optimized for reading.
 
     # File Operations - Consolidated from file_ops
-    filesystem.read_files:
-      alias: "read_file"
-      append_doc: "\n\nUse this instead of `cat` for safe file reading with line numbering."
-    filesystem.write_file:
-      alias: "write_file"
-      append_doc: "\n\nUse this instead of `echo` or redirection for atomic file writes."
-    filesystem.save_file:
-      alias: "save_file"
-      append_doc: "\n\nWrite with backup (.bak), syntax validation, and auto-writing-check."
-    filesystem.search_files:
-      alias: "search_files"
-      append_doc: "\n\nUse this instead of `grep` for text search in files."
-    filesystem.apply_changes:
-      alias: "apply_changes"
-      append_doc: "\n\n[BATCH] Apply multiple file operations in one call."
-    filesystem.ast_search:
-      alias: "ast_search"
-      append_doc: "\n\nQuery code structure using ast-grep patterns."
-    filesystem.ast_rewrite:
-      alias: "ast_rewrite"
-      append_doc: "\n\nApply AST-based code refactoring with ast-grep."
-
-    # Terminal - Command execution
-    terminal.run_task:
-      alias: "run_command"
-      append_doc: "\n\nUse this instead of raw Bash when you need stdout/stderr capture and error handling."
-
-    # Git Operations - Structured output
-    git.status:
-      alias: "git_status"
-      append_doc: "\n\nUse this instead of running `git status` in terminal for structured output."
-    git.stage_all:
-      alias: "git_stage"
-      append_doc: "\n\nUse this to stage all changes before commit."
-    git.commit:
-      alias: "git_commit"
-      append_doc: "\n\nUse this for structured commit messages. Requires message parameter."
-
+    # filesystem.save_file:
+    #   alias: "save_file"
+    #   append_doc: "\n\nWrite with backup (.bak), syntax validation, and auto-writing-check."
     # Memory Operations
-    memory.recall:
-      alias: "search_memory"
+    memory.get_memory_stats:
+      alias: "get_memory_stats_rename"
       append_doc: "\n\nSemantic search across your project's memory/knowledge base."
-    memory.remember_insight:
+    memory.save_memory:
       alias: "save_memory"
       append_doc: "\n\nPersist important context for future sessions."
 

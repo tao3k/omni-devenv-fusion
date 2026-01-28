@@ -7,8 +7,7 @@
 //!
 //! Follows the skill structure defined in settings.yaml:
 //! - Required: SKILL.md (skill metadata)
-//! - Required: tools.py (MCP tools)
-//! - Default: scripts/ (standalone executables)
+//! - Required: scripts/commands.py (MCP tools)
 
 use std::fs;
 use std::path::Path;

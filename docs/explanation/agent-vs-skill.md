@@ -146,8 +146,8 @@ agent/skills/
 ├── git/
 ├── testing/
 └── audit_standards/          # Optional: Review standards as a "skill"
-    ├── prompts.md            # Defines quality criteria
-    └── SKILL.yaml            # Skill metadata
+    ├── SKILL.md              # Skill metadata + rules (no prompts.md needed)
+    └── README.md             # Usage documentation
 ```
 
 ReviewerAgent loads `audit_standards` just like any other skill.

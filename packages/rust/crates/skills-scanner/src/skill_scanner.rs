@@ -8,7 +8,6 @@
 //! Follows the skill structure defined in `settings.yaml` under `skills.architecture`:
 //! - Required: `SKILL.md` - Skill metadata (YAML frontmatter) and system prompts
 //! - Default: `scripts/` - Standalone executables (tools)
-//!   NOTE: `tools.py` is deprecated - use `scripts/` instead
 //!
 //! # Example
 //!

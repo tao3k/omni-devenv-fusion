@@ -85,7 +85,7 @@ Build & Verify → Full integration test
 
 ```
 .claude/commands/     # Slash command templates
-agent/skills/*/       # Skill implementations (tools.py + prompts.md)
+assets/skills/*/       # Skill implementations (scripts/commands.py + SKILL.md)
 docs/                 # Documentation (see docs/skills.md for index)
 .cache/               # Repomix skill contexts (auto-generated)
 ```

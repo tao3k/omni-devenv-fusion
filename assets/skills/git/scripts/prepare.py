@@ -53,13 +53,13 @@ def _check_sensitive_files(staged_files: list[str]) -> list[str]:
 
 
 def _get_cog_scopes(project_root: Path | None = None) -> list[str]:
-    """Read allowed scopes from cog.toml or .conform.yaml (legacy support).
+    """Read allowed scopes from cog.toml or .conform.yaml.
 
     Supports both formats:
     - cog.toml: scopes = ["scope1", "scope2"]
     - .conform.yaml: YAML list format
 
-    Legacy support: Falls back to .conform.yaml if cog.toml doesn't exist.
+    Falls back to .conform.yaml if cog.toml doesn't exist.
     """
     try:
         from omni.foundation.config.settings import get_setting

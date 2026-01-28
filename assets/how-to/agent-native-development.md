@@ -10,11 +10,11 @@
 
 Modern Agent systems should follow a clear separation of concerns:
 
-| Layer          | Purpose               | Technology                          | Rules                   |
-| -------------- | --------------------- | ----------------------------------- | ----------------------- |
-| **Brain**      | Rules, logic, routing | Markdown (`prompts.md`, `guide.md`) | LLM learns from docs    |
-| **Muscle**     | Atomic execution      | Python (`tools.py`)                 | Blind, stateless        |
-| **Guardrails** | Hard compliance       | Lefthook, Cog, Pre-commit           | System-level validation |
+| Layer          | Purpose               | Technology                        | Rules                   |
+| -------------- | --------------------- | --------------------------------- | ----------------------- |
+| **Brain**      | Rules, logic, routing | Markdown (`SKILL.md`, `guide.md`) | LLM learns from docs    |
+| **Muscle**     | Atomic execution      | Python (`scripts/commands.py`)    | Blind, stateless        |
+| **Guardrails** | Hard compliance       | Lefthook, Cog, Pre-commit         | System-level validation |
 
 ### Key Principle
 
@@ -39,7 +39,7 @@ if scope not in VALID_SCOPES:
 **Agent Native Approach:**
 
 ```markdown
-# prompts.md
+# SKILL.md - Rules in Markdown
 
 Valid scopes: feat, fix, docs, style, refactor, perf, test, build, ci, chore
 ```
@@ -52,18 +52,18 @@ Valid scopes: feat, fix, docs, style, refactor, perf, test, build, ci, chore
 
 ### 2. True Agentic Behavior
 
-| Traditional              | Agent Native           |
-| ------------------------ | ---------------------- |
-| Python `if/else` routing | LLM reads `prompts.md` |
-| Hard-coded validation    | LLM understands rules  |
-| Code-driven workflow     | Prompt-driven routing  |
+| Traditional              | Agent Native          |
+| ------------------------ | --------------------- |
+| Python `if/else` routing | LLM reads `SKILL.md`  |
+| Hard-coded validation    | LLM understands rules |
+| Code-driven workflow     | Prompt-driven routing |
 
 ### 3. Separation of Concerns
 
 ```
 ┌─────────────────────────────────────────────────┐
 │  LLM (Brain)                                    │
-│  - Reads prompts.md                             │
+│  - Reads SKILL.md                               │
 │  - Understands rules                            │
 │  - Makes decisions                              │
 └────────────────────┬────────────────────────────┘
@@ -92,21 +92,20 @@ Valid scopes: feat, fix, docs, style, refactor, perf, test, build, ci, chore
 Every skill follows this structure:
 
 ```
-agent/skills/{skill_name}/
-├── manifest.json   # Skill metadata (name, version, description)
-├── tools.py        # Atomic tools (execution only)
-├── prompts.md      # Router logic (rules for LLM)
-└── guide.md        # Procedural knowledge
+assets/skills/{skill_name}/
+├── SKILL.md        # Skill metadata + router logic
+└── scripts/        # Atomic commands
+    └── commands.py # @skill_command decorated functions
 ```
 
-### tools.py (Muscle)
+### scripts/commands.py (Muscle)
 
 ```python
 """
 {skill_name} Skill - Atomic Operations
 
 This module provides atomic git operations.
-Rules are in prompts.md. Python only executes.
+Rules are in SKILL.md. Python only executes.
 """
 from mcp.server.fastmcp import FastMCP
 
@@ -114,61 +113,18 @@ async def git_commit(message: str) -> str:
     """
     Execute git commit directly.
 
-    Rules (from prompts.md):
+    Rules (from SKILL.md):
     - Message must follow "type(scope): description"
     - Claude generates message, shows analysis, then calls this tool
     """
     # Pure execution - no validation logic
-    # Validation happens at: LLM (reads prompts.md) + System (lefthook)
+    # Validation happens at: LLM (reads SKILL.md) + System (lefthook)
     result = subprocess.run(["git", "commit", "-m", message], ...)
     return result.stdout
 
 def register(mcp: FastMCP):
     mcp.tool()(git_commit)
 ```
-
-### prompts.md (Brain)
-
-```markdown
-# {Skill Name} Policy
-
-## Router Logic
-
-### When user says "X"
-
-1. **Observe**: Read context
-2. **Analyze**: Generate plan
-3. **Execute**: Call appropriate tool
-
-### Anti-Patterns
-
-- Don't use [deprecated tool]
-- Don't do [wrong behavior]
-
-## Example Flow
-```
-
-User: commit
-Claude: (analyzes) → shows analysis → calls tool
-
-```
-
-```
-
-### manifest.json
-
-```json
-{
-  "name": "skill_name",
-  "version": "1.0.0",
-  "description": "What this skill does",
-  "tools_module": "agent.skills.skill_name.tools",
-  "guide_file": "guide.md",
-  "prompts_file": "prompts.md"
-}
-```
-
----
 
 ## Development Workflow
 
@@ -182,13 +138,13 @@ Claude: (analyzes) → shows analysis → calls tool
 
 **After (Agent Native):**
 
-1. Edit `prompts.md`
+1. Edit `SKILL.md`
 2. Done - LLM learns immediately
 
 ### Example: Adding New Commit Type
 
 ```markdown
-# In agent/skills/git/prompts.md
+# In assets/skills/git/SKILL.md
 
 ## Valid Types
 
@@ -234,7 +190,7 @@ def commit_workflow():
 ### ✅ Do: Workflow in Prompt
 
 ```markdown
-# In prompts.md
+# In SKILL.md
 
 ## Workflow
 
@@ -291,7 +247,7 @@ skills:
     - code_insight
 
   # On-demand: LLM can load via load_skill()
-  # (all skills in agent/skills/ are available)
+  # (all skills in assets/skills/ are available)
 ```
 
 **How it works:**
@@ -362,10 +318,9 @@ The `knowledge` skill is the **Project Cortex** - it provides structural knowled
 
 When migrating a skill to Agent Native:
 
-- [ ] Remove validation logic from `tools.py`
-- [ ] Move rules to `prompts.md`
-- [ ] Simplify tools to atomic operations
-- [ ] Add router logic in prompts.md
+- [ ] Move rules to `SKILL.md`
+- [ ] Consolidate commands into `scripts/commands.py`
+- [ ] Add router logic in SKILL.md
 - [ ] Update CLAUDE.md
 - [ ] Test with LLM (verify it follows rules)
 
@@ -373,14 +328,14 @@ When migrating a skill to Agent Native:
 
 ## References
 
-- `agent/skills/knowledge/tools.py` - Knowledge skill (no execution)
-- `agent/skills/knowledge/prompts.md` - Knowledge router logic
-- `agent/skills/git/prompts.md` - Git router logic example
-- `agent/skills/git/tools.py` - Git atomic execution example
-- `agent/settings.yaml` - Skill loading configuration
+- `assets/skills/knowledge/scripts/commands.py` - Knowledge skill (no execution)
+- `assets/skills/knowledge/SKILL.md` - Knowledge router logic
+- `assets/skills/git/SKILL.md` - Git router logic example
+- `assets/skills/git/scripts/commands.py` - Git atomic execution example
+- `assets/settings.yaml` - Skill loading configuration
 - `packages/python/agent/src/agent/core/skill_registry.py` - Config-driven skill loading
 - `CLAUDE.md` - Quick reference for LLM
-- `agent/how-to/gitops.md` - Git workflow documentation
+- `assets/how-to/gitops.md` - Git workflow documentation
 
 ---
 
@@ -390,12 +345,12 @@ This section captures key insights from migrating from **Traditional Engineering
 
 ### The Transformation
 
-We migrated from `commit_flow.py` (old pattern) to `skill_registry.py` + `prompts.md` (new pattern):
+We migrated from `commit_flow.py` (old pattern) to `skill_registry.py` + `SKILL.md` (new pattern):
 
 | Aspect             | Old Pattern (`commit_flow.py`) | New Pattern (Skill System)     |
 | ------------------ | ------------------------------ | ------------------------------ |
 | **Control**        | Python scripts call LLM        | LLM is the runtime master      |
-| **Business Logic** | Hardcoded in Python            | Defined in Markdown prompts    |
+| **Business Logic** | Hardcoded in Python            | Defined in SKILL.md            |
 | **Flexibility**    | Restart required for changes   | LLM learns immediately         |
 | **Complexity**     | LangGraph state machines       | Atomic tools + dynamic routing |
 
@@ -423,7 +378,7 @@ def analyze_commit():
 **The Solution (New):**
 
 ```markdown
-# prompts.md - Policy in Markdown
+# SKILL.md - Policy in Markdown
 
 ## Commit Authorization Protocol
 
@@ -460,7 +415,7 @@ state_graph.set_entry_point("analyze")
 **The Agent Native Way:**
 
 ```markdown
-# prompts.md - LLM makes routing decisions
+# SKILL.md - LLM makes routing decisions
 
 ## Router Logic
 
@@ -549,11 +504,11 @@ packages/python/agent/src/agent/core/
 ├── settings.py         # Configuration driven
 └── mcp_core/           # I/O mechanisms only
 
-agent/skills/{skill}/
-├── manifest.json       # Protocol definition
-├── tools.py            # Atomic execution
-├── prompts.md          # Router logic (the "brain")
-└── guide.md            # Procedural knowledge
+assets/skills/{skill}/
+├── SKILL.md            # Protocol definition
+├── scripts/            # Atomic execution
+│   └── commands.py     # @skill_command decorated functions
+└── ...                 # Other skill files
 ```
 
 ### What to Delete, Not Keep
@@ -566,25 +521,25 @@ agent/skills/{skill}/
 
 **Keep and nurture:**
 
-- `prompts.md` with clear router logic
-- `tools.py` with atomic operations
+- `SKILL.md` with clear router logic
+- `scripts/commands.py` with atomic operations
 - `skill_registry.py` for dynamic loading
 
 ### Anti-Patterns to Avoid
 
-| Anti-Pattern                | Why It's Wrong         | Correct Approach              |
-| --------------------------- | ---------------------- | ----------------------------- |
-| `if/else` routing in Python | LLM should decide      | Route in prompts.md           |
-| Complex state graphs        | Over-engineering       | Atomic tools + LLM            |
-| Business logic in tools.py  | Couples code to policy | Move rules to prompts.md      |
-| Hardcoded validation        | LLM can't adapt        | Trust LLM + system guardrails |
+| Anti-Pattern                  | Why It's Wrong         | Correct Approach              |
+| ----------------------------- | ---------------------- | ----------------------------- |
+| `if/else` routing in Python   | LLM should decide      | Route in SKILL.md             |
+| Complex state graphs          | Over-engineering       | Atomic tools + LLM            |
+| Business logic in commands.py | Couples code to policy | Move rules to SKILL.md        |
+| Hardcoded validation          | LLM can't adapt        | Trust LLM + system guardrails |
 
 ### References
 
 - `packages/python/agent/src/agent/core/skill_registry.py` - Dynamic loading implementation
-- `agent/skills/git/prompts.md` - Router logic example
-- `agent/skills/git/tools.py` - Atomic execution example
-- `agent/how-to/gitops.md` - Git workflow documentation
+- `assets/skills/git/SKILL.md` - Router logic example
+- `assets/skills/git/scripts/commands.py` - Atomic execution example
+- `assets/how-to/gitops.md` - Git workflow documentation
 
 ---
 

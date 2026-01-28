@@ -24,26 +24,26 @@ def current_skill_dir() -> Path:
     """
     Get the current skill's root directory.
 
-    Returns the directory containing the calling skill's tools.py.
+    Returns the directory containing the calling skill's scripts/__init__.py.
     Useful for referencing skill-local resources (backlogs, assets, etc.).
 
     Example:
         from omni.foundation.utils.skills import current_skill_dir
 
-        # In assets/skills/git/tools.py:
+        # In assets/skills/git/scripts/commands.py:
         backlog = current_skill_dir() / "assets" / "Backlog.md"
         readme = current_skill_dir() / "references" / "readme.md"
 
     Returns:
         Path to the skill's root directory
     """
-    # Get the directory of the caller's module (tools.py)
+    # Get the directory of the caller's module (scripts/__init__.py)
     # Walk up to find the skill root (parent of scripts/, references/, assets/)
     caller_frame = _get_caller_frame()
     caller_file = Path(caller_frame.filename)
     skill_dir = caller_file.parent
 
-    # If tools.py is directly in skill root, return it
+    # If scripts/__init__.py is in skill root/scripts/, walk up
     # Otherwise, if called from a subdirectory, walk up
     while skill_dir.name not in ("scripts", "references", "assets", "data"):
         parent = skill_dir.parent

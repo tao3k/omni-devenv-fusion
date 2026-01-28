@@ -51,10 +51,9 @@ let
     "deps" # Dependency management
     "ci" # GitHub Actions, DevContainer
     "data" # JSONL examples, assets
-    # Legacy scopes (for backward compatibility)
-    "mcp" # Legacy MCP application
-    "mcp-core" # Legacy MCP core modules
-    "inference" # Legacy AI inference engine
+    "mcp" # MCP application
+    "mcp-core" # MCP core modules
+    "inference" # AI inference engine
     "router" # Tool routing & intent
     "orchestrator" # Orchestrator module
     "git-ops" # Git operations tools

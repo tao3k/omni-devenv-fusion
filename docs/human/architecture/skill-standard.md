@@ -28,16 +28,6 @@ assets/skills/<skill_name>/
 | `scripts/commands.py` | Execution          | @skill_command decorated async functions                  |
 | `tests/`              | Quality            | Unit tests                                                |
 
-### Legacy Files (Move to references/ if needed)
-
-| File            | Status | Action                                  |
-| --------------- | ------ | --------------------------------------- |
-| `manifest.json` | Legacy | Remove, use `SKILL.md` YAML frontmatter |
-| `tools.py`      | Legacy | Consolidate into `scripts/commands.py`  |
-| `workflow.py`   | Legacy | Consolidate into `scripts/commands.py`  |
-| `prompts.md`    | Legacy | Move to `references/` if content needed |
-| `state.py`      | Legacy | Inline in `scripts/commands.py`         |
-
 ## SKILL.md Format
 
 Every skill MUST have a `SKILL.md` with YAML frontmatter:
@@ -193,9 +183,8 @@ python scripts/generate_llm_index.py
 A skill is OSS 1.0 compliant when:
 
 - [ ] `SKILL.md` exists with valid YAML frontmatter
-- [ ] `README.md` or `guide.md` exists
+- [ ] `README.md` exists
 - [ ] `scripts/` directory exists with commands
-- [ ] No deprecated files (`manifest.json`, `tools.py`, `prompts.md`)
 
 Run compliance check:
 
@@ -203,17 +192,6 @@ Run compliance check:
 python scripts/generate_llm_index.py
 # Check for ✅ marks
 ```
-
-## Migration from Legacy Skills
-
-For skills using old structure (`manifest.json`, `tools.py`, `prompts.md`):
-
-1. **Extract metadata** from `manifest.json` to `SKILL.md` frontmatter
-2. **Move rules** from `prompts.md` to `SKILL.md` under "System Prompt Additions"
-3. **Consolidate functions** from `tools.py` into `scripts/commands.py`
-4. **Move** `prompts.md` to `references/` if content needed
-5. **Remove** `manifest.json`, `tools.py`, `workflow.py`, `state.py`
-6. **Run** `python scripts/generate_llm_index.py` to verify
 
 ## Related Documentation
 

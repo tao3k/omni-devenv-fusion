@@ -222,9 +222,11 @@ class OmniLoop:
             return []
 
         from omni.core.cache.tool_schema import get_cached_schema
+        from omni.core.config.loader import load_command_overrides
 
         # 1. Get All Core Commands
         commands = self.kernel.skill_context.get_core_commands()
+        overrides = load_command_overrides()
 
         # 2. Epistemic Gating Logic
         # Check if we have high-level skills loaded
@@ -265,14 +267,32 @@ class OmniLoop:
         for cmd in filtered_commands:
             s = get_cached_schema(cmd, lambda c=cmd: extract_cb(c))
             if s:
+                # [NEW] Apply Alias and Documentation Overrides for LLM Projection
+                override = overrides.commands.get(cmd)
+                if override:
+                    if override.alias:
+                        s["name"] = override.alias  # LLM sees 'web_fetch'
+                    if override.append_doc:
+                        # Append behavioral hints to description
+                        s["description"] = (
+                            s.get("description", "") + "\n\n" + override.append_doc
+                        ).strip()
                 schemas.append(s)
 
         return schemas
 
     async def _execute_tool_proxy(self, name: str, args: Dict[str, Any]) -> Any:
         """Secure Proxy for Tool Execution."""
+        # [NEW] Resolve Alias back to Canonical Name before execution
+        # e.g. 'web_fetch' -> 'crawl4ai.crawl_url'
+        from omni.core.config.loader import resolve_alias
+
+        real_name = resolve_alias(name) or name
+
         if self.kernel:
-            return await self.kernel.execute_tool(name, args, caller="OmniLoop")
+            # Caller=None means ROOT/User access (bypasses skill-to-skill permission checks)
+            # The Agent acts as the User's proxy.
+            return await self.kernel.execute_tool(real_name, args, caller=None)
 
         # Fallback for standalone testing
         from omni.core.skills.runtime import run_command, get_skill_context

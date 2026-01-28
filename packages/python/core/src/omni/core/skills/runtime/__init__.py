@@ -273,7 +273,7 @@ class SkillContext:
 
 
 class SkillRegistry:
-    """Legacy skill registry (for compatibility)."""
+    """Skill registry for compatibility."""
 
     def __init__(self):
         self._skills: dict[str, Any] = {}

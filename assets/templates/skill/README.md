@@ -7,27 +7,25 @@ Centralized Jinja2 templates for skill generation with **Isolated Sandbox + Expl
 ```
 skill/
 ├── SKILL.md           # Skill metadata (YAML Frontmatter)
-├── tools.py           # Router (just dispatches to scripts/)
-└── scripts/           # Controllers (actual implementation)
+└── scripts/           # Commands (actual implementation)
     ├── __init__.py    # Package marker (required for isolation)
-    ├── example.py     # Atomic implementation
-    └── ...
+    └── commands.py    # @skill_command decorated functions
 ```
 
 **Key Design Principles:**
 
-1. **Router-Controller Pattern**: `tools.py` only routes, `scripts/` implements
-2. **Namespace Isolation**: `__init__.py` in `scripts/` prevents conflicts
-3. **Explicit Relative Imports**: `from .scripts import x` instead of global imports
+1. **No tools.py:** All commands live in `scripts/commands.py`
+2. **Namespace Isolation:** `__init__.py` in `scripts/` prevents conflicts
+3. **Explicit Relative Imports:** Use standard Python imports
 
 ## Templates
 
-| Template                 | Target                | Description                           |
-| ------------------------ | --------------------- | ------------------------------------- |
-| `SKILL.md.j2`            | `SKILL.md`            | Skill metadata with YAML Frontmatter  |
-| `tools.py.j2`            | `tools.py`            | Router with @skill_command decorators |
-| `scripts/__init__.py.j2` | `scripts/__init__.py` | Package exports                       |
-| `guide.md.j2`            | `guide.md`            | Procedural documentation for LLM      |
+| Template                 | Target                | Description                          |
+| ------------------------ | --------------------- | ------------------------------------ |
+| `SKILL.md.j2`            | `SKILL.md`            | Skill metadata with YAML Frontmatter |
+| `scripts/__init__.py.j2` | `scripts/__init__.py` | Package exports                      |
+| `scripts/commands.py.j2` | `scripts/commands.py` | @skill_command decorated commands    |
+| `guide.md.j2`            | `guide.md`            | Procedural documentation for LLM     |
 
 ## Usage
 

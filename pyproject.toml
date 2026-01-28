@@ -104,6 +104,7 @@ addopts = [
     "-n", "auto",  # Parallel execution with auto-detected workers
     "--maxprocesses=4",  # Limit to 4 processes
     "-p", "no:randomly",  # Disable random order for consistent output
+    "-p", "no:benchmark", # Disable benchmark to avoid xdist warnings
 ]
 testpaths = [
     "packages/python/agent/tests",
@@ -120,6 +121,8 @@ filterwarnings = [
     # websockets library deprecation warnings (from starlette dependency)
     "ignore::DeprecationWarning:websockets",
     "ignore::DeprecationWarning:starlette",
+    # Ignore benchmark disabled warning when running in parallel (xdist)
+    "ignore:Benchmarks are automatically disabled:pytest_benchmark.logger.PytestBenchmarkWarning",
 ]
 norecursedirs = ["stress_tests"]
 markers = [

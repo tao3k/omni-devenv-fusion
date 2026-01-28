@@ -107,9 +107,8 @@ assets/skills/git/templates/
 
 ## 📁 Structure
 ├── SKILL.md              # Required
-├── tools.py              # Required
+├── scripts/              # Required (commands.py with @skill_command)
 ├── templates/            # Optional (cascading)
-├── scripts/              # Optional (isolated)
 └── tests/                # Optional (zero-config)
 ```
 
@@ -532,10 +531,10 @@ just validate
 Each skill is a self-contained module:
 
 ```
-agent/skills/{skill}/
-├── prompts.md       # Rules & routing (LLM reads when active)
-├── tools.py         # Atomic execution (blind, stateless)
-└── commit-workflow.md  # Workflow documentation (if applicable)
+assets/skills/{skill}/
+├── SKILL.md              # Rules & routing (LLM reads when active)
+├── scripts/commands.py   # Atomic execution (@skill_command decorated)
+└── ...                   # Other skill files
 ```
 
 **To load a skill:** `/load-skill <skill_name>`

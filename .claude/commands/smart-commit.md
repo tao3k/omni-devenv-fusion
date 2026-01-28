@@ -7,12 +7,12 @@ argument-hint: [message]
 
 ## Steps
 
-1. **Start**: `@omni git.smart_commit(action='start')`
+1. **Start**: `@omni("git.smart_commit", {"action": "start"})`
    - LLM reads output: commit analysis table, git diff, valid scopes
 
 2. **Analyze**: Review diff → Generate commit message (conventional format)
 
-3. **Approve**: `@omni git.smart_commit(action='approve', workflow_id='xxx', message='type(scope): description')`
+3. **Approve**: `@omni("git.smart_commit", {"action": "approve", "workflow_id": "xxx", "message": "type(scope): description"})`
 
 ## User Confirmation
 

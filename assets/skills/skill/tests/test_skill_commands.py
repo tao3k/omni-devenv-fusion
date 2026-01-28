@@ -40,6 +40,129 @@ class TestSkillScripts:
         assert hasattr(unload, "unload_skill")
 
 
+class TestMCPValidator:
+    """Tests for MCP tool validation using decorator-generated schemas."""
+
+    def test_discover_has_input_schema(self):
+        """Test that discover has input_schema from @skill_command decorator."""
+        from skill.scripts import discovery
+        from omni.foundation.api.decorators import get_script_config
+
+        config = get_script_config(discovery.discover)
+        assert config is not None
+        assert "input_schema" in config
+        schema = config["input_schema"]
+        assert schema["type"] == "object"
+        assert "properties" in schema
+        assert "required" in schema
+
+    def test_discover_schema_validates_intent(self):
+        """Test that discover schema validates 'intent' parameter."""
+        from skill.scripts import discovery
+        from omni.foundation.api.decorators import get_script_config
+
+        config = get_script_config(discovery.discover)
+        schema = config["input_schema"]
+
+        # intent should be required
+        assert "intent" in schema.get("required", [])
+
+        # Check intent is string type
+        properties = schema.get("properties", {})
+        intent_prop = properties.get("intent", {})
+        assert intent_prop.get("type") == "string"
+
+    def test_discover_schema_has_limit(self):
+        """Test that discover schema has optional 'limit' parameter."""
+        from skill.scripts import discovery
+        from omni.foundation.api.decorators import get_script_config
+
+        config = get_script_config(discovery.discover)
+        schema = config["input_schema"]
+        properties = schema.get("properties", {})
+
+        assert "limit" in properties
+        # limit should be integer
+        assert properties["limit"].get("type") == "integer"
+
+    def test_validate_discover_args_with_schema(self):
+        """Test validating discover arguments against its own schema."""
+        from skill.scripts import discovery
+        from omni.foundation.api.decorators import get_script_config
+
+        config = get_script_config(discovery.discover)
+        schema = config["input_schema"]
+
+        # Valid args
+        valid_args = {"intent": "git commit", "limit": 5}
+        errors = _validate_args_against_schema(valid_args, schema)
+        assert len(errors) == 0, f"Expected no errors, got: {errors}"
+
+        # Missing required 'intent'
+        invalid_args = {"limit": 5}
+        errors = _validate_args_against_schema(invalid_args, schema)
+        assert "intent" in errors
+
+        # Wrong type for limit
+        wrong_type_args = {"intent": "git commit", "limit": "five"}
+        errors = _validate_args_against_schema(wrong_type_args, schema)
+        assert "limit" in errors
+
+    def test_validate_returns_json_serializable(self):
+        """Test that validated result is JSON serializable (MCP requirement)."""
+        from skill.scripts import discovery
+        from omni.foundation.api.decorators import get_script_config
+        import json
+
+        config = get_script_config(discovery.discover)
+        schema = config["input_schema"]
+
+        # Convert to JSON and back
+        json_str = json.dumps(schema)
+        restored = json.loads(json_str)
+
+        assert restored == schema
+
+
+def _validate_args_against_schema(args: dict, schema: dict) -> list[str]:
+    """Simple schema validator for testing.
+
+    Args:
+        args: Arguments to validate.
+        schema: JSON Schema dict.
+
+    Returns:
+        List of field names that failed validation.
+    """
+    errors = []
+    properties = schema.get("properties", {})
+    required_fields = schema.get("required", [])
+
+    # Check required fields
+    for field in required_fields:
+        if field not in args:
+            errors.append(field)
+
+    # Check types
+    for field, value in args.items():
+        if field in properties:
+            prop_schema = properties[field]
+            expected_type = prop_schema.get("type")
+
+            if expected_type == "string" and not isinstance(value, str):
+                errors.append(field)
+            elif expected_type == "integer" and not isinstance(value, int):
+                errors.append(field)
+            elif expected_type == "boolean" and not isinstance(value, bool):
+                errors.append(field)
+            elif expected_type == "array" and not isinstance(value, list):
+                errors.append(field)
+            elif expected_type == "object" and not isinstance(value, dict):
+                errors.append(field)
+
+    return errors
+
+
 class TestDiscoverTool:
     """Tests for the discover tool."""
 

@@ -38,7 +38,7 @@ def parse_skill_md_frontmatter(skill_path: Path) -> dict[str, Any]:
     if not skill_md.exists():
         return {
             "name": skill_path.name,
-            "description": "Legacy skill (no SKILL.md)",
+            "description": "Skill missing SKILL.md",
             "version": "0.0.0",
             "routing_keywords": [],
             "intents": [],
@@ -154,15 +154,11 @@ def scan_skills() -> list[dict[str, Any]]:
 
             has_skill_md = (item / "SKILL.md").exists()
             has_readme = (item / "README.md").exists()
-            has_guide = (item / "guide.md").exists()
-            has_prompts = (item / "prompts.md").exists()
             has_tests = (item / "tests").exists()
 
             entry["docs_available"] = {
                 "skill_md": has_skill_md,
                 "readme": has_readme,
-                "guide": has_guide,
-                "prompts": has_prompts,
                 "tests": has_tests,
             }
 
@@ -171,16 +167,12 @@ def scan_skills() -> list[dict[str, Any]]:
                 compliance.append("SKILL.md")
             if has_readme:
                 compliance.append("README.md")
-            if has_guide:
-                compliance.append("guide.md")
-            if has_prompts:
-                compliance.append("prompts.md")
             if entry["tools"]:
                 compliance.append("scripts")
             if has_tests:
                 compliance.append("tests")
 
-            entry["oss_compliant"] = has_skill_md and entry["tools"] and (has_readme or has_guide)
+            entry["oss_compliant"] = has_skill_md and entry["tools"] and has_readme
             entry["compliance_details"] = compliance
 
             skill_index.append(entry)

@@ -7,7 +7,6 @@
 //!
 //! Follows the skill structure defined in `settings.yaml`:
 //! - Default: `scripts/` - Standalone executables (Python workflows, state management)
-//!   NOTE: `tools.py` is deprecated - all tools should be in `scripts/`
 //!
 //! # Example
 //!

@@ -78,7 +78,7 @@ __all__ = [
     # From paths (Layer 1)
     "ConfigPaths",
     "get_config_paths",
-    # Legacy compatibility
+    # Compatibility
     "get_conf_directory",
     "set_configuration_directory",
     "get_config_path",

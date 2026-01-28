@@ -207,12 +207,12 @@ def test_route(
                                                     except json.JSONDecodeError:
                                                         pass
 
-                                        # Collect commands from tools.py
+                                        # Collect commands from scripts/__init__.py
                                         commands: list[dict] = []
-                                        tools_file = skill_path / "tools.py"
-                                        if tools_file.exists():
+                                        scripts_init = skill_path / "scripts" / "__init__.py"
+                                        if scripts_init.exists():
                                             # Simple parsing - look for @skill_command decorated functions
-                                            content = tools_file.read_text()
+                                            content = scripts_init.read_text()
                                             import re
 
                                             # Match function definitions with docstrings

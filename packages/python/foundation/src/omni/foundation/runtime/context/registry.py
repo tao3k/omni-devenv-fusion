@@ -218,7 +218,7 @@ assets/skills/<skill_name>/
 ├── SKILL.md        # Skill metadata (frontmatter)
 ├── scripts/        # @skill_command functions
 │   ├── __init__.py
-│   └── tools.py
+│   └── commands.py
 └── README.md       # LLM guidance
 ```
 

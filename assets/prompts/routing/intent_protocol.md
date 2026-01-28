@@ -78,14 +78,6 @@ Or simply output the completion signal alone:
 [TOOL_CALL: completion_signal]({"reason": "Task completed successfully"})
 ```
 
-### Legacy Exit Signal (Still Supported)
-
-You can also use the legacy text-based signal:
-
-```
-the user task has been all completed, All requested analysis has been finished. EXIT_LOOP_NOW
-```
-
 **CRITICAL: You MUST include the exact phrase `EXIT_LOOP_NOW` at the end of your reflection when using the legacy format. This is the only signal the system recognizes to exit the ReAct loop. Do NOT add any text after it.**
 
 Example of GOOD final response (structured):

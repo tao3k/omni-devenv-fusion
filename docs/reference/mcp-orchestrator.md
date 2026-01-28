@@ -415,11 +415,11 @@ Once approved:
 
 ---
 
-## Self-Evolution (Legacy Concept)
+## Bootstrapping
 
 The Orchestrator supports **Bootstrapping** - it can extend itself by adding new capabilities without human coding.
 
-### The Graduation Test
+### Adding a New Capability
 
 Give the Agent this prompt to add a new capability:
 
@@ -439,9 +439,7 @@ The Agent will:
 3. Route to Immune System → Review the code
 4. Run tests → Smart commit
 
-### search_project_code
-
-**High-performance code search using ripgrep:**
+### search_project_code - High-performance code search using ripgrep
 
 ```json
 {
@@ -477,7 +475,7 @@ mcp-server/mcp_core/memory.py:156:    def update_context(self, updates: dict[str
 
 ---
 
-## Code Intelligence (ast-grep) - Legacy
+## Code Intelligence (ast-grep)
 
 The Orchestrator includes **Code Intelligence** capabilities using `ast-grep` for structural code search and refactoring.
 
@@ -533,70 +531,6 @@ The Orchestrator includes **Code Intelligence** capabilities using `ast-grep` fo
 | `search_project_code` | General text search across all files                     |
 | `ast_search`          | Find code by AST structure (functions, classes, imports) |
 | `ast_rewrite`         | Refactor code patterns safely                            |
-
----
-
-## Stress Test Framework (Legacy)
-
-> **Note**: This section describes the legacy mcp-server stress test framework. For the current skill test framework, see [Testing Guide](../developer/testing.md) or [Skills Documentation](../skills.md).
-
-A modular, systematic stress testing framework for legacy systems.
-
-### Directory Structure
-
-```
-mcp-server/tests/
-├── stress/                    # Stress test framework
-│   ├── __init__.py            # Core (Config, Runner, Reporter)
-│   ├── core/
-│   │   └── fixtures.py        # Pytest fixtures
-│   ├── suites/
-│   │   ├── legacy_suite.py     # Legacy test suite
-│   │   └── template.py        # Test template
-│   └── conftest.py            # Pytest configuration
-├── conftest.py                # Shared fixtures
-└── test_stress.py             # Test entry point
-```
-
-### Core Components
-
-| Component             | Purpose                                    |
-| --------------------- | ------------------------------------------ |
-| `StressConfig`        | Configuration (files, thresholds, cleanup) |
-| `BenchmarkRunner`     | Performance benchmarks                     |
-| `LogicTestRunner`     | Logic depth tests                          |
-| `StabilityTestRunner` | Chaos/stability tests                      |
-| `StressReporter`      | Report generation                          |
-| `LegacySuite`         | Complete legacy test suite                 |
-
-### Run Tests
-
-```bash
-just stress-test          # Run all stress tests
-pytest mcp-server/tests/test_stress.py -v  # Verbose
-```
-
-### Adding New Test Suites
-
-1. Copy `stress/suites/template.py` → `stress/suites/phase10.py`
-2. Implement `run_benchmarks()`, `run_logic_tests()`, `run_stability_tests()`
-3. Register in `stress/suites/__init__.py`
-4. Import in `test_stress.py`
-
-### Example: Custom Benchmark
-
-```python
-from stress import BenchmarkRunner, StressConfig
-
-runner = BenchmarkRunner(StressConfig())
-result = runner.run(
-    name="My Benchmark",
-    pattern="my_pattern",
-    lang="py",
-    path="/path/to/code"
-)
-print(f"Duration: {result.duration}s")
-```
 
 ---
 

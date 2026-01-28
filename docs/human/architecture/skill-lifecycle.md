@@ -1,185 +1,96 @@
 # Skill Lifecycle
 
-> **Status**: Active | **Version**: v1.0 | **Date**: 2024-XX-XX
+> **Status**: Active | **Version**: v2.0 | **Date**: 2026-01-28
 
 ## Overview
 
-This document describes the lifecycle of a "Living Skill" - an Intelligent Microservice Unit using LangGraph for orchestration.
+This document describes the lifecycle of a skill in Omni-Dev-Fusion - a self-contained module with atomic commands that follows the **scripts/commands.py** pattern.
 
-## Omni Skill Standard (OSS) - Directory Structure
+## Omni Skill Standard (OSS) 2.0 - Directory Structure
 
 ```
-agent/skills/<skill_name>/
-├── 📄 SKILL.md           # [IDENTITY]  Metadata & configuration
-├── 🛠️ scripts/           # [HANDS]     Atomic commands (stateless, side-effects only)
-├── 🧠 workflow.py        # [BRAIN]     Workflow logic (LangGraph graph)
-├── 💾 state.py           # [MEMORY]    State definition (Pydantic models)
-├── 📘 guide.md           # [INTERFACE] Usage docs (RAG/prompt context)
-└── 📝 prompts.md         # [PERSONA]   Routing rules & prompt injection
+assets/skills/<skill_name>/
+├── SKILL.md              # [REQUIRED] Metadata + YAML Frontmatter + LLM rules
+├── README.md             # [REQUIRED] Usage documentation and examples
+├── scripts/              # [REQUIRED] Command implementations
+│   ├── __init__.py       # Package marker
+│   └── commands.py       # @skill_command decorated functions
+└── tests/                # [RECOMMENDED] Test files
 ```
 
 ### File Responsibilities
 
-| File           | Role      | Intelligence | Purpose                             |
-| -------------- | --------- | ------------ | ----------------------------------- |
-| `SKILL.md`     | Identity  | ❌ None      | Metadata, dependencies, entry_point |
-| `scripts/*.py` | Hands     | 🔵 Low       | Atomic actions, side-effects only   |
-| `workflow.py`  | Brain     | 🔴 High      | Orchestration, LangGraph graph      |
-| `state.py`     | Memory    | 🟡 Medium    | Pydantic models, structured context |
-| `guide.md`     | Interface | 🟣 Semantic  | LLM alignment, usage docs           |
-| `prompts.md`   | Persona   | 🟣 Semantic  | Routing rules, prompt injection     |
+| File                  | Role          | Purpose                                               |
+| --------------------- | ------------- | ----------------------------------------------------- |
+| `SKILL.md`            | Identity      | YAML frontmatter for routing, command list, LLM rules |
+| `README.md`           | Documentation | Usage examples, command reference                     |
+| `scripts/commands.py` | Execution     | @skill_command decorated async functions              |
+| `tests/`              | Quality       | Unit and integration tests                            |
 
 ## Current Git Skill Structure
 
 ```
-agent/skills/git/
-├── SKILL.md              # v2.0.0 - Skill metadata
+assets/skills/git/
+├── SKILL.md              # Skill metadata + LLM rules
+├── README.md             # Usage documentation
 ├── scripts/              # All Git operations (atomic commands)
 │   ├── __init__.py
-│   ├── status.py
-│   ├── commit.py
-│   ├── push.py
-│   └── ...
-├── workflow.py           # LangGraph workflow orchestration
-├── state.py              # GitWorkflowState Pydantic model
-├── guide.md              # Usage documentation
-├── prompts.md            # Routing rules & persona
-└── Backlog.md            # Feature backlog (optional)
+│   └── commands.py       # @skill_command decorated functions
+└── tests/                # Test files
 ```
 
-## State Definition
+## @skill_command Pattern
+
+Commands are defined in `scripts/commands.py` with the `@skill_command` decorator:
 
 ```python
-# agent/skills/git/state.py
-from pydantic import BaseModel, Field
-from typing import Optional, List
+from agent.skills.decorators import skill_command
 
-class GitWorkflowState(BaseModel):
-    # Input
-    intent: str = Field(..., description="User's high-level intent, e.g. 'hotfix'")
-    target_branch: str = ""
-    commit_message: str = ""
-
-    # Runtime state
-    current_step: str = "init"
-    stashed_hash: Optional[str] = None
-    files_changed: List[str] = []
-    is_dirty: bool = False
-
-    # Results
-    error_message: Optional[str] = None
-    success: bool = False
-
-    class Config:
-        extra = "allow"  # Allow additional fields for flexibility
+@skill_command(
+    name="status",
+    category="read",
+    description="Show working tree status",
+)
+async def git_status() -> str:
+    """Display the working tree status."""
+    import subprocess
+    result = subprocess.run(["git", "status", "--short"], capture_output=True, text=True)
+    return result.stdout or "Working tree clean"
 ```
 
-## Workflow Engine
+## Skill Lifecycle
 
-```python
-# agent/skills/git/workflow.py
-from langgraph.graph import StateGraph, END
-from .state import GitWorkflowState
-from .scripts import git_status, git_stash_save, git_checkout, git_add
+### 1. Discovery
 
-# 1. Nodes (atomic thoughts)
-def node_check_env(state: GitWorkflowState):
-    status = git_status(short=True)
-    is_dirty = bool(status and "nothing to commit" not in status)
-    return {"is_dirty": is_dirty, "current_step": "check_env"}
+Skills are discovered from `assets/skills/` directories by the skills-scanner crate.
 
-def node_stash(state: GitWorkflowState):
-    hash = git_stash_save("Auto-stash by Omni Living Skill")
-    return {"stashed_hash": hash, "current_step": "stash"}
+### 2. Loading
 
-def node_commit(state: GitWorkflowState):
-    git_add(".")
-    # ... call git_commit
-    return {"success": True, "current_step": "commit"}
+Skills are loaded on-demand via SkillContext or MCP server initialization.
 
-# 2. Graph (logic orchestration)
-workflow = StateGraph(GitWorkflowState)
-workflow.add_node("check_env", node_check_env)
-workflow.add_node("stash", node_stash)
-workflow.add_node("commit", node_commit)
+### 3. Hot Reload
 
-workflow.set_entry_point("check_env")
+Skills support hot reload when `scripts/commands.py` is modified:
 
-# 3. Conditional Edges (smart routing)
-def route_env(state: GitWorkflowState):
-    if state.is_dirty:
-        return "stash"
-    return "commit"
+- Syntax validation (py_compile)
+- Inline unload (sys.modules cleanup)
+- Load fresh (from disk)
+- Update skill commands
 
-workflow.add_conditional_edges("check_env", route_env, {"stash": "stash", "commit": "commit"})
-workflow.add_edge("stash", "commit")
-workflow.add_edge("commit", END)
+### 4. Unloading
 
-app = workflow.compile()
-```
+Skills can be unloaded when memory pressure requires it (non-pinned skills only).
 
-## Manifest Structure
+## Compliance Checklist
 
-```json
-{
-  "name": "git",
-  "version": "2.0.0",
-  "description": "Git operations with LangGraph workflow support",
-  "dependencies": ["langgraph"],
-  "entry_point": "workflow",
-  "scripts_module": "agent.skills.git.scripts",
-  "workflow_module": "agent.skills.git.workflow",
-  "intents": ["git_hotfix", "git_pr", "git_branch", "git_commit"]
-}
-```
+A skill is OSS 2.0 compliant when:
 
-## Integration Points
-
-### MCP Server Integration
-
-```python
-# In mcp_server.py or router.py
-from agent.skills.git.workflow import app, GitWorkflowState
-
-@mcp.tool()
-async def invoke_git_workflow(intent: str, **kwargs) -> str:
-    """Invoke Git skill with LangGraph workflow."""
-    state = GitWorkflowState(intent=intent, **kwargs)
-    result = app.invoke(state)
-    return format_result(result)
-```
-
-### Router Integration
-
-```python
-# In router.py - detect git intents
-GIT_INTENTS = ["hotfix", "pr", "branch", "commit", "stash"]
-
-def detect_git_intent(query: str) -> Optional[str]:
-    for intent in GIT_INTENTS:
-        if intent in query.lower():
-            return intent
-    return None
-```
-
-## Test Scenarios
-
-1. **Hotfix Workflow**: Dirty → Stash → Switch → Commit → Pop
-2. **Clean Workflow**: Direct commit when working tree is clean
-3. **Interrupt & Resume**: State persists across sessions
-4. **Error Handling**: Graceful degradation on failures
-
-## Key Technical Decisions
-
-1. **State Schema**: Pydantic BaseModel with `extra = "allow"` for flexibility
-2. **Graph Engine**: LangGraph StateGraph (not ComplexGraph for simplicity)
-3. **Node Functions**: Pure functions taking state, returning state dict
-4. **Conditional Edges**: Function-based routing with type hints
-5. **Backward Compatibility**: All existing command functions remain accessible
+- [ ] `SKILL.md` exists with valid YAML frontmatter
+- [ ] `README.md` exists with usage documentation
+- [ ] `scripts/` directory exists with commands
 
 ## Related Documentation
 
 - [Skills Architecture](skills-architecture.md) - Complete skills architecture guide
-- [Skill Standard](skill-standard.md) - OSS 1.0 compliance
+- [Skill Standard](skill-standard.md) - OSS 2.0 compliance
 - [Trinity Architecture](../explanation/trinity-architecture.md)
-- [LangGraph Workflow Guide](../llm/langgraph-workflow-guide.md)

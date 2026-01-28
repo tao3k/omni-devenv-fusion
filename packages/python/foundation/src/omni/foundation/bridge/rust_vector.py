@@ -112,14 +112,25 @@ class RustVectorStore:
             )
 
             # Convert PyObject dicts to Python dicts
+            # PyO3 returns Py<PyAny> which is a reference to Python objects
             results = []
             for data in json_results:
-                if hasattr(data, "__dict__"):
-                    # PyObject with dict protocol
-                    results.append(dict(data))
-                elif isinstance(data, dict):
-                    results.append(data)
-                # Otherwise skip (shouldn't happen)
+                try:
+                    # Use pyo3's proper conversion
+                    if hasattr(data, "keys") and callable(getattr(data, "keys", None)):
+                        # It's a dict-like object, convert properly
+                        results.append({k: data[k] for k in data.keys()})
+                    elif isinstance(data, dict):
+                        results.append(data)
+                    else:
+                        # Fallback: try dict() conversion
+                        try:
+                            results.append(dict(data))
+                        except (TypeError, ValueError):
+                            logger.debug(f"Skipping unconvertible result: {type(data)}")
+                except Exception as convert_err:
+                    logger.debug(f"Failed to convert result: {convert_err}")
+                    continue
 
             logger.debug(f"search_tools: {len(results)} results for '{str(query_text)[:30]}...'")
             return results

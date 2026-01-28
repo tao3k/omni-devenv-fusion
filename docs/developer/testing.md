@@ -333,24 +333,6 @@ show_missing = true
 
 ---
 
-## Legacy Agent Tests (Archived)
-
-The old test suite at `packages/python/agent/tests/` has been migrated/deleted:
-
-| Old Location                 | Status  | New Location               |
-| ---------------------------- | ------- | -------------------------- |
-| `tests/unit/test_memory/`    | DELETED | Referenced deleted modules |
-| `tests/unit/test_discovery/` | DELETED | Referenced deleted modules |
-| `tests/conftest.py`          | DELETED | Invalid pytest_plugins     |
-| `tests/integration/`         | DELETED | Empty directory            |
-
-Tests referencing these deleted modules were removed, not migrated:
-
-- `omni.agent.core.skill_runtime.core.memory_core`
-- `omni.agent.core.skill_discovery`
-
----
-
 ## Rust Tests
 
 Located in `packages/rust/crates/omni-*/src/*.rs` with inline `#[cfg(test)]` modules.

@@ -34,7 +34,7 @@ pub struct StructureItem {
 /// Defines which files and directories should be scanned for each skill.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SkillStructure {
-    /// Required files (e.g., SKILL.md, tools.py)
+    /// Required files (e.g., SKILL.md, scripts/commands.py)
     pub required: Vec<StructureItem>,
     /// Default files/directories (scripts/, templates/, etc.)
     pub default: Vec<StructureItem>,

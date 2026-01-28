@@ -81,14 +81,14 @@ class ConfigPaths:
 
         Strategy:
         1. Modern: $PRJ_CONFIG_HOME/anthropic/settings.json
-        2. Legacy: $PRJ_ROOT/.claude/settings.json (backward compatibility)
+        2. Fallback: $PRJ_ROOT/.claude/settings.json
         """
         # 1. Try Modern Standard
         modern_path = PRJ_CONFIG("anthropic", "settings.json")
         if modern_path.exists():
             return modern_path
 
-        # 2. Fallback to Legacy
+        # 2. Fallback
         return self.project_root / ".claude" / "settings.json"
 
     def get_api_key(self, env_var: str = "ANTHROPIC_API_KEY") -> str | None:

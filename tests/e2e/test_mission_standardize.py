@@ -30,14 +30,14 @@ sys.path.insert(0, str(ASSETS_ROOT))
 
 @pytest.fixture
 def mission_env(tmp_path):
-    """Setup a sandbox environment with a 'legacy' file."""
-    # 1. Create Legacy File
-    legacy_file = tmp_path / "legacy_service.py"
-    legacy_file.write_text("""
+    """Setup a sandbox environment with a test file."""
+    # 1. Create Test Service File
+    service_file = tmp_path / "test_service.py"
+    service_file.write_text("""
 import os
 
 def process_data(data):
-    print(f"Processing {len(data)} items")  # TODO: Convert to logger
+    print(f"Processing {len(data)} items")
     result = [x * 2 for x in data]
     print(f"Processed {len(data)} items, result: {result}")
     return result
@@ -48,9 +48,9 @@ def cleanup():
 """)
 
     # 2. Create Dummy Test
-    test_file = tmp_path / "test_legacy.py"
+    test_file = tmp_path / "test_service.py"
     test_file.write_text("""
-from legacy_service import process_data, cleanup
+from test_service import process_data, cleanup
 
 def test_process():
     result = process_data([1, 2, 3])
