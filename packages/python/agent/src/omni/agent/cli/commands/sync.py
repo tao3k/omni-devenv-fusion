@@ -85,6 +85,7 @@ def _find_markdown_files(directory: str) -> list[str]:
 
 def _sync_knowledge(clear: bool = False) -> dict[str, Any]:
     """Internal logic to sync knowledge base."""
+    import asyncio
     from omni.core.knowledge.librarian import Librarian
     from rich.progress import (
         Progress,
@@ -130,7 +131,13 @@ def _sync_knowledge(clear: bool = False) -> dict[str, Any]:
                         total_indexed += 1
                     progress.advance(task)
 
-        return {"status": "success", "details": f"Indexed {total_indexed}/{total_found} docs"}
+        # Commit cached entries to vector store
+        committed = asyncio.run(librarian.commit())
+
+        return {
+            "status": "success",
+            "details": f"Indexed {total_indexed}/{total_found} docs, committed {committed} entries",
+        }
     except Exception as e:
         return {"status": "error", "details": str(e)}
 

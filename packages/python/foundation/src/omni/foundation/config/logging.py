@@ -187,6 +187,67 @@ class SubprocessLogFilter(logging.Filter):
         return True
 
 
+# =============================================================================
+# Safe Stream Handler (for concurrent tests)
+# =============================================================================
+
+
+class _SafeStreamHandler(logging.StreamHandler):
+    """StreamHandler that safely handles closed file handles in tests.
+
+    Prevents "I/O operation on closed file" errors when pytest workers
+    shut down but background threads still try to log.
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            if self.stream and hasattr(self.stream, "closed") and self.stream.closed:
+                return
+            super().emit(record)
+        except Exception:
+            pass  # Silently ignore logging errors during shutdown
+
+
+def _configure_safe_logging() -> None:
+    """Configure logging handlers to safely handle closed file handles."""
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        if isinstance(handler, logging.StreamHandler):
+            handler.__class__ = _SafeStreamHandler
+
+
+def _setup_log_filters(level: int) -> None:
+    """Configure log filter levels for third-party libraries."""
+    # Always suppress HTTP tracing logs (connect/send/receive details)
+    # These are too verbose for human-readable output
+    http_tracing = [
+        "httpx.dispatch",
+        "httpx.client",
+        "httpcore.dispatch",
+        "httpcore.connection",
+        "httpcore.http11",
+        "httpcore.pool",
+    ]
+
+    for logger_name in http_tracing:
+        logging.getLogger(logger_name).setLevel(logging.WARNING)
+
+    noisy_loggers = [
+        ("uvicorn", logging.WARNING),
+        ("uvicorn.access", logging.WARNING),
+        ("starlette", logging.WARNING),
+        ("httpx", logging.WARNING if level > logging.DEBUG else logging.INFO),
+        ("httpcore", logging.WARNING if level > logging.DEBUG else logging.INFO),
+    ]
+
+    for logger_name, log_lvl in noisy_loggers:
+        logging.getLogger(logger_name).setLevel(log_lvl)
+
+
+# =============================================================================
+# Configuration
+# =============================================================================
+
 # Track whether logging has been configured
 _configured = False
 _force_colors = False  # Global flag for color forcing
@@ -196,6 +257,7 @@ def configure_logging(
     level: str = "INFO",
     colors: bool | None = None,
     verbose: bool = False,
+    force: bool = False,
 ) -> None:
     """Configure global logging with beautiful structured output.
 
@@ -203,9 +265,10 @@ def configure_logging(
         level: Log level (DEBUG, INFO, WARNING, ERROR)
         colors: Enable ANSI colors. If None, auto-detect from TTY.
         verbose: Enable verbose mode (DEBUG level)
+        force: Force reconfiguration even if already configured
     """
     global _configured
-    if _configured:
+    if _configured and not force:
         return
 
     log_level = getattr(logging, level.upper(), logging.INFO)
@@ -250,38 +313,13 @@ def configure_logging(
         cache_logger_on_first_use=True,
     )
 
+    # 3. Configure safe logging for concurrent test environments
+    _configure_safe_logging()
+
     _configured = True
 
-    # Suppress noisy third-party loggers
+    # 4. Suppress noisy third-party loggers
     _setup_log_filters(log_level)
-
-
-def _setup_log_filters(level: int) -> None:
-    """Configure log filter levels for third-party libraries."""
-    # Always suppress HTTP tracing logs (connect/send/receive details)
-    # These are too verbose for human-readable output
-    http_tracing = [
-        "httpx.dispatch",
-        "httpx.client",
-        "httpcore.dispatch",
-        "httpcore.connection",
-        "httpcore.http11",
-        "httpcore.pool",
-    ]
-
-    for logger_name in http_tracing:
-        logging.getLogger(logger_name).setLevel(logging.WARNING)
-
-    noisy_loggers = [
-        ("uvicorn", logging.WARNING),
-        ("uvicorn.access", logging.WARNING),
-        ("starlette", logging.WARNING),
-        ("httpx", logging.WARNING if level > logging.DEBUG else logging.INFO),
-        ("httpcore", logging.WARNING if level > logging.DEBUG else logging.INFO),
-    ]
-
-    for logger_name, log_lvl in noisy_loggers:
-        logging.getLogger(logger_name).setLevel(log_lvl)
 
 
 def get_logger(name: str = "omni") -> structlog.BoundLogger:

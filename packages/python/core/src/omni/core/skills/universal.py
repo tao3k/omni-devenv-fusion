@@ -262,6 +262,27 @@ class UniversalScriptSkill:
         )
 
     @property
+    def protocol_content(self) -> str:
+        """Get the Markdown instructions (protocol) from SKILL.md.
+
+        This excludes the YAML frontmatter and provides the core guidance
+        used for cognitive re-anchoring.
+        """
+        skill_md = self._path / "SKILL.md"
+        if not skill_md.exists():
+            return f"No detailed protocol defined for skill '{self._name}'."
+
+        try:
+            content = skill_md.read_text()
+            # Split by the second --- to get the body
+            parts = re.split(r"^---\n.*?\n---", content, maxsplit=1, flags=re.DOTALL)
+            if len(parts) > 1:
+                return parts[1].strip()
+            return content.strip()
+        except Exception as e:
+            return f"Error reading protocol for '{self._name}': {e}"
+
+    @property
     def name(self) -> str:
         """Skill name."""
         return self._name

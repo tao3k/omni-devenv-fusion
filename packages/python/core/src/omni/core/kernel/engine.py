@@ -62,6 +62,7 @@ class Kernel:
     """
 
     __slots__ = (
+        "_background_tasks",  # Track background tasks for cleanup
         "_components",
         "_discovered_skills",
         "_discovery_service",
@@ -102,6 +103,7 @@ class Kernel:
         self._sniffer: IntentSniffer | None = None  # Lazy init in sniffer property
         self._security = None  # Security Validator (Permission Gatekeeper) - lazy init
         self._reactor = None  # Event-driven reactor - initialized in _on_ready
+        self._background_tasks: set[asyncio.Task] = set()
 
         # Resolve paths
         from omni.foundation.runtime.gitops import get_project_root
@@ -241,10 +243,17 @@ class Kernel:
             # Check if caller has permission to invoke target_tool
             # Uses Rust-powered PermissionGatekeeper under the hood
             permissions = getattr(caller_skill.metadata, "permissions", [])
+
+            # Cognitive Enhancement: Pass protocol guidance for re-anchoring
+            protocol_guidance = None
+            if hasattr(caller_skill, "protocol_content"):
+                protocol_guidance = caller_skill.protocol_content
+
             self.security.validate_or_raise(
                 skill_name=caller,
                 tool_name=tool_name,
                 skill_permissions=permissions,
+                protocol_guidance=protocol_guidance,
             )
 
         # 3. Resolve Target
@@ -257,7 +266,22 @@ class Kernel:
             raise ValueError(f"Skill '{target_skill_name}' is not executable.")
 
         logger.debug(f"🔐 Executing {tool_name} (Caller: {caller or 'ROOT'})")
-        return await target_skill.execute(command_name, **args)
+        result = await target_skill.execute(command_name, **args)
+
+        # 5. Proactive Cognitive Management
+        # If successfully executed but skills are overloaded, inject a subtle warning
+        if caller:
+            warning = self.security.get_overload_warning(proactive=True)
+            if warning:
+                # Append warning to result if it's a string, or log it
+                if isinstance(result, str):
+                    result = f"{result}\n{warning}"
+                elif isinstance(result, dict) and "message" in result:
+                    result["message"] = f"{result['message']}\n{warning}"
+                elif isinstance(result, dict):
+                    result["_cognition"] = warning
+
+        return result
 
     # =========================================================================
     # Skill Discovery (Rust-Powered)
@@ -675,7 +699,9 @@ class Kernel:
         # Step 4: Build Semantic Cortex (The Cortex)
         # Run in background to prevent blocking kernel startup (critical for MCP connection)
         logger.info("🧠 Building Semantic Cortex (Background)...")
-        asyncio.create_task(self._safe_build_cortex())
+        cortex_task = asyncio.create_task(self._safe_build_cortex())
+        self._background_tasks.add(cortex_task)
+        cortex_task.add_done_callback(self._background_tasks.discard)
 
         t3 = _time.time()
 
@@ -740,7 +766,17 @@ class Kernel:
         """Called when kernel starts shutting down - graceful cleanup."""
         logger.info("🛑 Kernel shutting down...")
 
-        # Step 0: Unregister sniffer from reactor (cleanup handlers)
+        # Step 0: Cancel background tasks
+        if self._background_tasks:
+            logger.debug(f"Cancelling {len(self._background_tasks)} background tasks")
+            for task in self._background_tasks:
+                task.cancel()
+
+            # Wait for tasks to finish cancelling
+            await asyncio.gather(*self._background_tasks, return_exceptions=True)
+            self._background_tasks.clear()
+
+        # Step 1: Unregister sniffer from reactor (cleanup handlers)
         if self._sniffer is not None:
             self._sniffer.unregister_from_reactor()
             logger.debug("Sniffer unregistered from reactor")

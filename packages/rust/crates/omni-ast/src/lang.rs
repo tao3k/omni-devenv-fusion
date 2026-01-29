@@ -63,10 +63,10 @@ impl Lang {
     #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Python => "py",
+            Self::Python => "python",
             Self::Rust => "rust",
-            Self::JavaScript => "js",
-            Self::TypeScript => "ts",
+            Self::JavaScript => "javascript",
+            Self::TypeScript => "typescript",
             Self::Bash => "bash",
             Self::Go => "go",
             Self::Java => "java",

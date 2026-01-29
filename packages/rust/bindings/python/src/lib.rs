@@ -60,10 +60,10 @@ pub use events::{
 pub use io::{
     count_tokens, get_cache_home, get_config_home, get_data_home, read_file_safe, truncate_tokens,
 };
-pub use navigation::{get_file_outline, search_code, search_directory};
+pub use navigation::{get_file_outline, search_code, search_directory, search_with_rules};
 pub use scanner::{
-    PySkillMetadata, PySyncReport, diff_skills, export_skill_index, get_skill_index_schema,
-    scan_skill, scan_skill_from_content, scan_skill_tools,
+    PySkillMetadata, PySyncReport, diff_skills, scan_skill, scan_skill_from_content,
+    scan_skill_tools,
 };
 pub use security::{
     PySandboxMode, PySandboxResult, PySandboxRunner, PySecurityViolation, check_permission,
@@ -130,6 +130,7 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(pyo3::wrap_pyfunction!(get_file_outline, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(search_code, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(search_directory, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(search_with_rules, m)?)?;
 
     // Surgeon (Structural Refactoring)
     m.add_function(pyo3::wrap_pyfunction!(structural_replace, m)?)?;
@@ -159,8 +160,6 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Script Scanner
     m.add_function(pyo3::wrap_pyfunction!(scan_skill_tools, m)?)?;
-    m.add_function(pyo3::wrap_pyfunction!(export_skill_index, m)?)?;
-    m.add_function(pyo3::wrap_pyfunction!(get_skill_index_schema, m)?)?;
 
     // SKILL.md Frontmatter Parser
     m.add_function(pyo3::wrap_pyfunction!(scan_skill, m)?)?;

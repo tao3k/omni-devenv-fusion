@@ -102,7 +102,11 @@ impl ToolsScanner {
             return Ok(tools);
         }
 
-        for entry in WalkDir::new(scripts_dir).into_iter().filter_map(|e| e.ok()) {
+        for entry in WalkDir::new(scripts_dir)
+            .follow_links(false)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
             let path = entry.path();
 
             if path.is_dir() {
@@ -114,12 +118,20 @@ impl ToolsScanner {
                 continue;
             }
 
-            // Skip __init__.py
-            if path.file_name().map_or(false, |name| name == "__init__.py") {
+            // Skip __init__.py and internal private files
+            let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if file_name == "__init__.py" || file_name.starts_with('_') {
                 continue;
             }
 
             let parsed_tools = self.parse_script(path, skill_name, skill_keywords)?;
+            if !parsed_tools.is_empty() {
+                log::debug!(
+                    "ToolsScanner: Found {} tools in {:?}",
+                    parsed_tools.len(),
+                    path
+                );
+            }
             tools.extend(parsed_tools);
         }
 
@@ -234,6 +246,13 @@ impl ToolsScanner {
 
         // Find all decorators with their positions
         let decorators = find_skill_command_decorators(&content);
+        if !decorators.is_empty() {
+            log::debug!(
+                "ToolsScanner: Found {} @skill_command decorators in {:?}",
+                decorators.len(),
+                path
+            );
+        }
 
         // Find all function definitions using AST pattern matching
         let all_funcs = scan(&content, "def $NAME", Lang::Python)?;
@@ -244,7 +263,7 @@ impl ToolsScanner {
 
         for func in &all_funcs {
             let func_start = func.start;
-            let _func_name = match func.get_capture("NAME") {
+            let func_name = match func.get_capture("NAME") {
                 Some(n) => n,
                 None => continue,
             };
@@ -255,9 +274,9 @@ impl ToolsScanner {
             for dec in &decorators {
                 let dec_end = dec.1;
                 if dec_end < func_start {
-                    // Check if decorator is within reasonable distance (500 chars)
+                    // Check if decorator is within reasonable distance (increased to 2000 chars)
                     let distance = func_start - dec_end;
-                    if distance < 500 {
+                    if distance < 2000 {
                         if best_decorator.is_none() || dec_end > best_decorator.unwrap().1 {
                             best_decorator = Some(dec);
                         }
@@ -266,6 +285,10 @@ impl ToolsScanner {
             }
 
             if let Some(dec) = best_decorator {
+                log::debug!(
+                    "ToolsScanner: Associated decorator with function: {}",
+                    func_name
+                );
                 decorated_funcs.push((dec.2.clone(), func.clone()));
             }
         }

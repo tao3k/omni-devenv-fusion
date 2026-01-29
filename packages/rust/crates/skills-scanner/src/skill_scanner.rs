@@ -30,7 +30,6 @@ use serde::Deserialize;
 use crate::skill_metadata::{
     IndexToolEntry, ReferencePath, SkillIndexEntry, SkillMetadata, SkillStructure, SnifferRule,
 };
-use crate::tools_scanner::ToolsScanner;
 
 /// TOML structure for rules.toml parsing.
 #[derive(Debug, Deserialize)]
@@ -249,16 +248,6 @@ impl SkillScanner {
     ///
     /// * `base_path` - Path to the skills directory (e.g., "assets/skills")
     /// * `structure` - Optional skill structure for validation (uses default if None)
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// let scanner = SkillScanner::new();
-    /// let structure = SkillScanner::default_structure();
-    /// let metadatas = scanner.scan_all(PathBuf::from("assets/skills"), Some(&structure)).unwrap();
-    ///
-    /// println!("Found {} skills", metadatas.len());
-    /// ```
     pub fn scan_all(
         &self,
         base_path: &Path,
@@ -286,53 +275,6 @@ impl SkillScanner {
         Ok(metadatas)
     }
 
-    /// Scan all skills and write to skill-index.json.
-    ///
-    /// This is a convenience method that scans all skills and writes
-    /// the metadata to a JSON file for consumption by Python.
-    ///
-    /// # Arguments
-    ///
-    /// * `base_path` - Path to the skills directory (e.g., "assets/skills")
-    /// * `output_path` - Path for the output JSON file
-    /// * `structure` - Optional skill structure for validation (uses default if None)
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// let scanner = SkillScanner::new();
-    /// scanner.scan_all_to_index(
-    ///     PathBuf::from("assets/skills"),
-    ///     PathBuf::from("assets/skills/skill-index.json"),
-    ///     None
-    /// ).unwrap();
-    /// ```
-    pub fn scan_all_to_index(
-        &self,
-        base_path: &Path,
-        output_path: &Path,
-        structure: Option<&SkillStructure>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let metadatas = self.scan_all(base_path, structure)?;
-
-        // Create parent directories if needed
-        if let Some(parent) = output_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        // Write as JSON
-        let json = serde_json::to_string_pretty(&metadatas)?;
-        fs::write(output_path, json)?;
-
-        log::info!(
-            "Wrote skill-index.json with {} skills to {:?}",
-            metadatas.len(),
-            output_path
-        );
-
-        Ok(())
-    }
-
     /// Build a full SkillIndexEntry from metadata and tools.
     ///
     /// Combines skill metadata from SKILL.md frontmatter with discovered
@@ -343,18 +285,6 @@ impl SkillScanner {
     /// * `metadata` - Skill metadata from SKILL.md
     /// * `tools` - Tools discovered in the skill's scripts directory
     /// * `skill_path` - Path to the skill directory
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// let scanner = SkillScanner::new();
-    /// let tools_scanner = ToolsScanner::new();
-    ///
-    /// let metadata = scanner.scan_skill(&skill_path, None).unwrap().unwrap();
-    /// let tools = tools_scanner.scan_scripts(&skill_path.join("scripts"), &metadata.skill_name, &metadata.routing_keywords).unwrap();
-    ///
-    /// let entry = scanner.build_index_entry(metadata, &tools, &skill_path);
-    /// ```
     pub fn build_index_entry(
         &self,
         metadata: SkillMetadata,
@@ -389,9 +319,6 @@ impl SkillScanner {
         entry.sniffing_rules = parse_rules_toml(skill_path);
 
         // Add tools (tool.tool_name already includes skill_name prefix from tools_scanner)
-        // Deduplicate by tool_name - keep first occurrence (likely the real definition)
-        // This handles cases where docstring examples are incorrectly matched
-        // Use Vec with manual deduplication to preserve insertion order
         let mut seen_names: Vec<String> = Vec::new();
         for tool in tools {
             if !seen_names.contains(&tool.tool_name) {
@@ -408,83 +335,6 @@ impl SkillScanner {
         }
 
         entry
-    }
-
-    /// Scan all skills and write to skill_index.json with full metadata.
-    ///
-    /// This method:
-    /// 1. Scans all skill directories for metadata (SKILL.md frontmatter)
-    /// 2. Scans scripts/ directories for @skill_command decorated functions
-    /// 3. Combines metadata with discovered tools
-    /// 4. Writes the complete skill_index.json
-    ///
-    /// # Arguments
-    ///
-    /// * `base_path` - Path to the skills directory (e.g., "assets/skills")
-    /// * `output_path` - Path for the output JSON file
-    /// * `structure` - Optional skill structure for validation (uses default if None)
-    /// * `tools_scanner` - Tools scanner for discovering tools
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// let scanner = SkillScanner::new();
-    /// let tools_scanner = ToolsScanner::new();
-    ///
-    /// scanner.scan_all_full_to_index(
-    ///     PathBuf::from("assets/skills"),
-    ///     PathBuf::from("assets/skills/skill_index.json"),
-    ///     None,
-    ///     &tools_scanner
-    /// ).unwrap();
-    /// ```
-    pub fn scan_all_full_to_index(
-        &self,
-        base_path: &Path,
-        output_path: &Path,
-        structure: Option<&SkillStructure>,
-        tools_scanner: &ToolsScanner,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let metadatas = self.scan_all(base_path, structure)?;
-
-        let mut entries: Vec<SkillIndexEntry> = Vec::new();
-
-        for metadata in metadatas {
-            let skill_path = base_path.join(&metadata.skill_name);
-
-            // Scan for tools in scripts directory
-            let scripts_path = skill_path.join("scripts");
-            let tools = if scripts_path.exists() {
-                tools_scanner.scan_scripts(
-                    &scripts_path,
-                    &metadata.skill_name,
-                    &metadata.routing_keywords,
-                )?
-            } else {
-                Vec::new()
-            };
-
-            // Build full entry
-            let entry = self.build_index_entry(metadata, &tools, &skill_path);
-            entries.push(entry);
-        }
-
-        // Create parent directories if needed
-        if let Some(parent) = output_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        // Write as JSON
-        let json = serde_json::to_string_pretty(&entries)?;
-        fs::write(output_path, json)?;
-
-        log::info!(
-            "Wrote skill_index.json with {} skills to {:?}",
-            entries.len(),
-            output_path
-        );
-
-        Ok(())
     }
 
     /// Parse YAML frontmatter from SKILL.md content.

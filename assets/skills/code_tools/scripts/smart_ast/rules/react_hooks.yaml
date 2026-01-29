@@ -1,0 +1,13 @@
+id: react-hooks
+language: typescript
+rule:
+  any:
+    - pattern: "useState($$$)"
+    - pattern: "useEffect($$$)"
+    - pattern: "useContext($$$)"
+    - pattern: "useReducer($$$)"
+    - pattern: "useCallback($$$)"
+    - pattern: "useMemo($$$)"
+    - pattern: "useRef($$$)"
+    - pattern: "useLayoutEffect($$$)"
+note: "Finds common React Hook usages."

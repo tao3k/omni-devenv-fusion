@@ -11,6 +11,7 @@ publish = false
 # ast-grep - AST pattern matching (unified version)
 ast-grep-core = "0.40.5"
 ast-grep-language = "0.40.5"
+ast-grep-config = "0.40.5"
 
 # Common utilities
 serde = { workspace = true, features = ["derive"] }

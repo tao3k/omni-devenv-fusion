@@ -56,7 +56,7 @@ class ContextOrchestrator:
         for task in asyncio.as_completed(tasks):
             try:
                 result = await task
-                if isinstance(result, ContextResult):
+                if result is not None and isinstance(result, ContextResult):
                     results.append(result)
                     provider_outputs.append(
                         {
@@ -67,8 +67,6 @@ class ContextOrchestrator:
                             "preview": result.content[:100].replace("\n", " ") + "...",
                         }
                     )
-                elif result is None:
-                    logger.warning("A provider returned None")
             except Exception as e:
                 logger.error(f"Provider error: {e}")
 

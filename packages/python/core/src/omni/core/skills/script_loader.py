@@ -74,10 +74,18 @@ class ScriptLoader:
         full_scripts_pkg = f"{self.skill_name}.scripts"
 
         try:
-            for py_file in self.scripts_path.glob("*.py"):
+            # Recursive scan for all .py files in scripts/ and subdirectories
+            for py_file in self.scripts_path.rglob("*.py"):
                 if py_file.name.startswith("_"):
                     continue
-                self._load_script(py_file, full_scripts_pkg)
+
+                # Calculate relative package name for subdirectories
+                rel_path = py_file.relative_to(self.scripts_path)
+                pkg_parts = list(rel_path.parent.parts)
+                pkg_suffix = ".".join(pkg_parts)
+                current_pkg = f"{full_scripts_pkg}.{pkg_suffix}" if pkg_suffix else full_scripts_pkg
+
+                self._load_script(py_file, current_pkg)
 
             logger.debug(f"[{self.skill_name}] {len(self.commands)} commands")
         finally:
@@ -87,82 +95,76 @@ class ScriptLoader:
                     sys.path.remove(path)
 
     def _load_script(self, path: Path, scripts_pkg: str) -> None:
-        """Load a single script file using importlib.
+        """Load a single script file using a robust modular strategy."""
+        import importlib.util
+        import types
 
-        Args:
-            path: Path to the .py file
-            scripts_pkg: Full package path (e.g., "git.scripts")
-        """
         module_name = path.stem
-        full_module_name = f"{scripts_pkg}.{module_name}"  # e.g., "git.scripts.commit_state"
-
-        # Clear cached module to ensure fresh load (hot reload support)
-        if full_module_name in sys.modules:
-            del sys.modules[full_module_name]
+        # Construct the full internal package path, e.g. "skill.scripts.subdir.module"
+        full_module_name = f"{scripts_pkg}.{module_name}"
 
         try:
-            # Try import_module first for PEP 420 namespace packages
-            try:
-                module = importlib.import_module(full_module_name)
-            except ModuleNotFoundError:
-                # Fall back to direct file import when skill name conflicts with pip package
-                # (e.g., crawl4ai skill vs crawl4ai pip package)
-                spec = importlib.util.spec_from_file_location(full_module_name, path)
-                if spec is None or spec.loader is None:
-                    logger.debug(f"[{self.skill_name}] Cannot load spec for {path}")
-                    return
-                module = importlib.util.module_from_spec(spec)
-                sys.modules[full_module_name] = module
-                spec.loader.exec_module(module)
+            # 1. Ensure the parent packages exist in sys.modules (Fundamental Fix)
+            # This is required for relative imports to work in PEP 420 namespace packages.
+            parts = full_module_name.split(".")
+            for i in range(1, len(parts)):
+                parent_pkg = ".".join(parts[:i])
+                if parent_pkg not in sys.modules:
+                    # Create a dummy namespace package
+                    m = types.ModuleType(parent_pkg)
+                    m.__path__ = []  # Mark as package
+                    sys.modules[parent_pkg] = m
 
-            # Inject context into module globals
-            # Scripts can use 'rust' directly without importing
+            # 2. Load the actual module
+            spec = importlib.util.spec_from_file_location(full_module_name, path)
+            if not (spec and spec.loader):
+                return
+
+            module = importlib.util.module_from_spec(spec)
+
+            # 3. Critical Metadata for Relative Imports
+            module.__package__ = ".".join(parts[:-1])
+
+            # 4. Inject Search Path for sibling discovery
+            script_dir = str(path.parent)
+            if script_dir not in sys.path:
+                sys.path.insert(0, script_dir)
+
+            sys.modules[full_module_name] = module
+
+            # 5. Inject Foundation Context
             for key, value in self._context.items():
                 setattr(module, key, value)
-
-            # Add skill_name for decorator registration
             module.skill_name = self.skill_name
 
-            # Scan for @skill_command decorated functions AND native functions
-            # Only process functions defined in THIS module (not imported from elsewhere)
+            # 6. Execute
+            spec.loader.exec_module(module)
+
+            # 7. Harvest @skill_command functions
+            count = 0
             for attr_name in dir(module):
                 if attr_name.startswith("_"):
                     continue
-
                 attr = getattr(module, attr_name)
-                if not inspect.isfunction(attr):
-                    continue
 
-                # Skip functions imported from other modules
-                # Check if function's __module__ matches current module's name
-                func_module = getattr(attr, "__module__", None)
-                if func_module is not None and func_module != full_module_name:
-                    continue
-
-                if getattr(attr, "_is_skill_command", False):
-                    # Registered command with decorator
-                    attr._skill_name = self.skill_name
-                    # Support both V1 (_command_name) and V2 (_skill_config["name"]) decorators
+                if hasattr(attr, "_is_skill_command") and attr._is_skill_command:
                     config = getattr(attr, "_skill_config", {})
-                    if config and "name" in config:
-                        cmd_name = config["name"]
-                    else:
-                        cmd_name = getattr(attr, "_command_name", attr_name)
+                    cmd_name = (
+                        config.get("name") if config else getattr(attr, "_command_name", attr_name)
+                    )
+
                     full_name = f"{self.skill_name}.{cmd_name}"
-                    # Only register if not already registered (prevent duplicate from imports)
-                    if full_name not in self.commands:
-                        self.commands[full_name] = attr
-                        logger.debug(f"[{self.skill_name}] Registered command: {full_name}")
-                elif not attr_name.startswith("_"):
-                    # Native function (no decorator) - still useful for direct routing
-                    # Only register if not already registered
-                    if attr_name not in self.native_functions:
-                        self.native_functions[attr_name] = attr
-                        logger.debug(f"[{self.skill_name}] Native function: {attr_name}")
+                    self.commands[full_name] = attr
+                    count += 1
+
+            if count > 0:
+                logger.debug(f"[{self.skill_name}] Modular load success: {full_name}")
 
         except Exception as e:
-            # Script loading is best-effort - log at debug level
-            logger.debug(f"[{self.skill_name}] Failed to load script {full_module_name}: {e}")
+            logger.debug(f"[{self.skill_name}] Modular load failed for {path}: {e}")
+            # Clean up if failed to prevent poisoned imports
+            if full_module_name in sys.modules:
+                del sys.modules[full_module_name]
 
     def get_command(self, full_name: str) -> Callable | None:
         """Get a command by its full name (e.g., 'git.status')."""

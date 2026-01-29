@@ -38,7 +38,22 @@ Then wait for skill.discover to return the exact tool and parameters before proc
 - If you get a "File not found" error, STOP guessing and use `skill.discover`
 - Never assume a path exists (e.g., `intent_protocol.md`, `skills/`, `agent/`)
 
-## 🚨 ABSOLUTE RULE #3: Always Generate [TOOL_CALL:...] After Thinking
+## 🚨 ABSOLUTE RULE #4: MANDATORY Semantic Search
+
+**You MUST use `code_tools.smart_ast_search` for all structural searches. Manual AST patterns are FORBIDDEN for common elements.**
+
+- **DO NOT** use `def $NAME($$$)` -> **USE** `smart_ast_search(query="functions")`
+- **DO NOT** use `class $NAME` -> **USE** `smart_ast_search(query="classes")`
+- **DO NOT** use `@$DECORATOR` -> **USE** `smart_ast_search(query="decorators")`
+
+Raw AST patterns (like `ast_search_dir`) should ONLY be used for custom, non-standard code structures that don't have a semantic shortcut.
+
+### Variadic Pattern Syntax (If semantic intent is impossible):
+
+- Use `$$$` for variadic matches.
+- DO NOT use `$ARGS` or `$PARAMS`.
+
+## 🚨 ABSOLUTE RULE #5: Always Generate [TOOL_CALL:...] After Thinking
 
 **IF YOU GENERATE A <thinking> BLOCK, YOU MUST ALSO GENERATE A [TOOL_CALL:...] BLOCK!**
 

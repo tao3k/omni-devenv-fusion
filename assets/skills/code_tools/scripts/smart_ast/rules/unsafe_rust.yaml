@@ -1,0 +1,5 @@
+id: unsafe-rust
+language: rust
+rule:
+  pattern: unsafe { $$$ }
+note: "Finds all unsafe blocks in Rust code."

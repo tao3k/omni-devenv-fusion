@@ -111,25 +111,16 @@ assets/skills/{skill_name}/
 ├── SKILL.md                   # Skill documentation + YAML frontmatter
 ├── README.md                  # Additional readme (optional)
 ├── pyproject.toml             # Skill-specific dependencies (optional)
-├── scripts/
-│   ├── __init__.py
-│   ├── commands.py            # Command implementations
-│   └── ...                    # Additional script modules
+├── scripts/                   # Command implementations (scanned recursively)
+│   ├── commands.py            # Primary command module
+│   ├── feature_a/             # Subdirectory for modular feature
+│   │   ├── helpers.py         # Submodule (supports relative imports)
+│   │   └── tools.py           # Additional tools
+│   └── ...
 ├── extensions/                # Optional Rust extensions
 │   ├── Cargo.toml
 │   ├── src/
 │   │   └── lib.rs
-│   └── tests/
-│       └── test_extension.rs
-├── references/                # Reference documentation
-│   └── ...
-├── tests/                     # Skill-specific tests
-│   ├── __init__.py
-│   ├── test_commands.py
-│   └── test_data/
-│       └── ...
-└── assets/                    # Skill-specific assets
-    └── ...
 ```
 
 ### Minimal Skill Layout
@@ -138,7 +129,6 @@ assets/skills/{skill_name}/
 assets/skills/minimal/
 ├── SKILL.md
 └── scripts/
-    ├── __init__.py
     └── commands.py
 ```
 
@@ -201,61 +191,59 @@ assets/skills/minimal/
 
 ### SKILL.md Frontmatter
 
-````yaml
+```yaml
 ---
 name: skill_name
 description: One-line description of the skill
 version: 1.0.0
 author: Author Name
 tags: [tag1, tag2, tag3]
-commands:
-  - name: command1
-    description: Description of command1
-    parameters:
-      type: object
-      properties:
-        param1:
-          type: string
-          description: Description of param1
-      required: [param1]
-  - name: command2
-    description: Description of command2
+permissions:
+  - "service:method"
+  - "service:*"
+require_refs:
+  - "path/to/reference.md"
+routing_keywords:
+  - "keyword1"
+  - "keyword2"
 ---
-
-# Skill Documentation
+# Skill Documentation (Protocol)
 
 Detailed documentation about this skill...
-
-## Usage
-
-```python
-@omni("skill_name.command1", param1="value")
-````
-
-## Examples
-
-Example usage of this skill...
-
-````
+```
 
 ### Metadata Fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | Yes | Skill name (kebab-case) |
-| `description` | string | Yes | One-line description |
-| `version` | string | No | Semantic version (default: 1.0.0) |
-| `author` | string | No | Author name |
-| `tags` | array | No | Tags for categorization |
-| `commands` | array | Yes | List of commands |
+| Field              | Type   | Required | Description                                   |
+| ------------------ | ------ | -------- | --------------------------------------------- |
+| `name`             | string | Yes      | Skill name (kebab-case)                       |
+| `description`      | string | Yes      | One-line description                          |
+| `permissions`      | array  | No       | List of authorized tool patterns (Zero-Trust) |
+| `require_refs`     | array  | No       | External files to hydrate into context        |
+| `routing_keywords` | array  | No       | Keywords for HiveRouter matching              |
 
-### Commands Array
+---
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | Yes | Command name (snake_case) |
-| `description` | string | Yes | Command description |
-| `parameters` | object | No | JSON Schema for parameters |
+## Cognitive Enforcement & Security
+
+### Permission Gatekeeper
+
+The Skills System implements a **Zero-Trust Security Model** via the `SecurityValidator` (Gatekeeper). Every tool execution is validated against the calling skill's declared `permissions`.
+
+### Cognitive Re-anchoring
+
+To prevent "protocol forgetting" in long sessions, the Gatekeeper provides **Reactive Re-anchoring**:
+
+1. **Drift Detection**: When a skill attempts an unauthorized tool call (e.g., using raw shell instead of a specialized tool), the Gatekeeper intercepts the call.
+2. **Protocol Injection**: The system extracts the Markdown instructions from the skill's `SKILL.md` and injects them into the error message.
+3. **Self-Correction**: This forces the LLM to re-align with the specific expertise and constraints of the active skill.
+
+### Cognitive Load Management
+
+When multiple skills are active, the context can become cluttered. The system monitors **Active Skill Count**:
+
+- **Threshold**: Defaults to 5 active skills.
+- **Proactive Warning**: If the threshold is exceeded, a `[COGNITIVE LOAD WARNING]` is appended to tool results, suggesting context "slimming" via `/skills disable`.
 
 ---
 
@@ -317,7 +305,7 @@ def commit(
         "output": result.stdout,
         "error": result.stderr if result.returncode != 0 else None
     }
-````
+```
 
 ### Parameter Types
 
@@ -519,35 +507,6 @@ uv run pytest assets/skills/git/tests/test_commands.py::TestGitStatus::test_stat
 4. **Parameters**: Provide default values when possible
 5. **Error Handling**: Return structured error responses
 6. **Tests**: Write tests for each command
-
----
-
-## Skill Index
-
-The skill index is automatically generated and stored in `assets/skill_index.json`:
-
-```json
-{
-  "skills": [
-    {
-      "name": "git",
-      "description": "Git operations skill",
-      "commands": ["status", "commit", "branch", "checkout", "push", "pull"],
-      "path": "assets/skills/git",
-      "version": "1.0.0"
-    }
-  ],
-  "commands": [
-    {
-      "skill": "git",
-      "name": "status",
-      "description": "Show working tree status"
-    }
-  ]
-}
-```
-
----
 
 ## Related Documentation
 

@@ -38,6 +38,25 @@ pub fn search_code(path: String, pattern: String, language: Option<&str>) -> Str
     })
 }
 
+/// Search for AST patterns using complex YAML rules.
+///
+/// This allows for sophisticated queries with constraints like 'inside', 'has', 'not'.
+///
+/// Args:
+///   path: File path to search
+///   yaml_rule: ast-grep rule in YAML format
+///   language: Optional language hint
+#[pyfunction]
+#[pyo3(signature = (path, yaml_rule, language = None))]
+pub fn search_with_rules(path: String, yaml_rule: String, language: Option<&str>) -> String {
+    Python::attach(|py| {
+        py.detach(|| {
+            TagExtractor::search_with_rules(&path, &yaml_rule, language)
+                .unwrap_or_else(|e| format!("[Rule search error: {}]", e))
+        })
+    })
+}
+
 /// Search for AST patterns recursively in a directory.
 ///
 /// Args:

@@ -77,6 +77,81 @@ impl TagExtractor {
         Ok(output)
     }
 
+    /// Search for structural rules defined in a YAML string
+    ///
+    /// # Arguments
+    /// * `path` - Path to the file to search
+    /// * `yaml_rule` - ast-grep rule in YAML format
+    /// * `language` - Optional language hint
+    pub fn search_with_rules<P: AsRef<Path>>(
+        path: P,
+        yaml_rule: &str,
+        language: Option<&str>,
+    ) -> Result<String, SearchError> {
+        let path = path.as_ref();
+        let content = omni_io::read_text_safe(path, 1024 * 1024)?;
+
+        let lang = match language {
+            Some(l) => match SupportLang::from_str(l) {
+                Ok(lang) => lang,
+                Err(_) => return Err(SearchError::UnsupportedLanguage(l.to_string())),
+            },
+            None => SupportLang::from_path(path).ok_or_else(|| {
+                SearchError::UnsupportedLanguage(
+                    path.extension()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string(),
+                )
+            })?,
+        };
+
+        // Use Rule Core for complex YAML patterns
+        let root = lang.ast_grep(content);
+        let root_node = root.root();
+
+        // Parse the YAML rule using SerializableRuleCore
+        use omni_ast::{DeserializeEnv, SerializableRuleCore};
+        let serializable: SerializableRuleCore = serde_yaml::from_str(yaml_rule)
+            .map_err(|e| SearchError::Pattern(format!("Invalid YAML rule: {}", e)))?;
+        let env = DeserializeEnv::new(lang);
+        let rule = serializable
+            .get_matcher(env)
+            .map_err(|e| SearchError::Pattern(format!("Rule error: {}", e)))?;
+
+        let mut matches = Vec::new();
+
+        for node in root_node.dfs() {
+            if let Some(m) = rule.match_node(node.clone()) {
+                let start_pos = m.start_pos();
+                matches.push(SearchMatch {
+                    path: path.to_string_lossy().to_string(),
+                    line: start_pos.line(),
+                    column: start_pos.column(&m),
+                    content: m.text().to_string(),
+                    captures: std::collections::HashMap::new(),
+                });
+
+                if matches.len() >= 100 {
+                    break;
+                }
+            }
+        }
+
+        if matches.is_empty() {
+            return Ok(format!("[No matches for YAML rule in {}]", path.display()));
+        }
+
+        let mut output = String::new();
+        output.push_str(&format!("// RULE SEARCH: {}\n", path.display()));
+        output.push_str(&format!("// Total matches: {}\n", matches.len()));
+        for m in &matches {
+            output.push_str(&format!("L{: <4}:{: <3} {}\n", m.line, m.column, m.content));
+        }
+
+        Ok(output)
+    }
+
     // ============================================================================
     // The Hunter - Structural Code Search
     // ============================================================================

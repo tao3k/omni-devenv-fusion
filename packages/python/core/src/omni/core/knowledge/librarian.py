@@ -56,6 +56,26 @@ class Librarian:
         results = librarian.search("how to commit")
     """
 
+    # Class-level cache shared across instances
+    _shared_cache: list[KnowledgeEntry] = []
+    _instance: "Librarian | None" = None
+
+    def __new__(cls, *args, **kwargs):
+        """Singleton pattern - share cache across instances."""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    @property
+    def _cache(self) -> list[KnowledgeEntry]:
+        """Backward compatibility property for tests."""
+        return self._shared_cache
+
+    @_cache.setter
+    def _cache(self, value: list[KnowledgeEntry]):
+        """Backward compatibility property setter."""
+        self._shared_cache = value
+
     def __init__(
         self,
         storage_path: str | None = None,
@@ -135,7 +155,7 @@ class Librarian:
 
             for i, chunk in enumerate(chunks):
                 doc_id = f"{Path(file_path).stem}_{i}"
-                # For now, just track in local cache until vector store is fully implemented
+                # Track in shared class-level cache
                 entry = KnowledgeEntry(
                     id=doc_id,
                     content=chunk,
@@ -143,9 +163,7 @@ class Librarian:
                     metadata={**entry_metadata, "chunk": i},
                     score=0.0,
                 )
-                if not hasattr(self, "_cache"):
-                    self._cache = []
-                self._cache.append(entry)
+                self._shared_cache.append(entry)
 
             logger.debug(f"📚 Librarian ingested: {file_path} ({len(chunks)} chunks)")
             return True
@@ -183,10 +201,70 @@ class Librarian:
         logger.debug(f"📚 Librarian ingested {count} files from {directory}")
         return count
 
+    async def _commit_cache_to_store(self) -> int:
+        """Commit cached entries to the vector store."""
+        if not self.is_ready or not self._shared_cache:
+            return 0
+
+        try:
+            import json as _json
+
+            # Use simple hash-based embeddings for knowledge base (no LLM needed)
+            # This is much faster than calling LLM API for 100s of entries
+            def simple_embed(text: str, dim: int = 1024) -> list[float]:
+                import hashlib
+
+                hash_bytes = hashlib.sha256(text.encode()).digest()
+                vector = [float(b) / 255.0 for b in hash_bytes]
+                repeats = (dim + len(vector) - 1) // len(vector)
+                return (vector * repeats)[:dim]
+
+            # Generate simple embeddings
+            contents = [entry.content for entry in self._shared_cache]
+            embeddings = [simple_embed(c) for c in contents]
+
+            # Prepare for vector store (metadatas must be JSON strings)
+            ids = [entry.id for entry in self._shared_cache]
+            metadatas = []
+            for entry in self._shared_cache:
+                meta = entry.metadata.copy()
+                meta["source"] = entry.source
+                metadatas.append(_json.dumps(meta))
+
+            # Add to vector store (use collection as table name)
+            await self._store.add_documents(
+                table_name=self._collection,
+                ids=ids,
+                vectors=embeddings,
+                contents=contents,
+                metadatas=metadatas,
+            )
+
+            count = len(self._shared_cache)
+            logger.info(f"📚 Librarian committed {count} entries to vector store")
+            return count
+        except Exception as e:
+            logger.error(f"Failed to commit cache to store: {e}")
+            return 0
+
+    async def commit(self) -> int:
+        """Commit all cached entries to the vector store.
+
+        Returns:
+            Number of entries committed
+        """
+        return await self._commit_cache_to_store()
+
+    @classmethod
+    def reset_singleton(cls):
+        """Reset singleton state - use only for testing."""
+        cls._instance = None
+        cls._shared_cache = []
+
     async def search(
         self, query: str, limit: int = 5, threshold: float = 0.0
     ) -> list[SearchResult]:
-        """Search the knowledge base.
+        """Search the knowledge base using keyword matching.
 
         Args:
             query: Search query
@@ -201,23 +279,38 @@ class Librarian:
             return []
 
         try:
-            # Note: RustVectorStore.search() is sync, not async
-            # We call it directly without await
-            raw_results = self._store.search(query, limit=limit)
+            # Use list_all + keyword matching (since we use hash embeddings)
+            all_entries = await self._store.list_all(self._collection)
+
+            query_words = query.lower().split()
+            scored = []
+
+            for entry in all_entries:
+                content = entry.get("content", "").lower()
+                source = entry.get("source", "").lower()
+
+                # Count matching words
+                match_count = sum(1 for w in query_words if w in content or w in source)
+                if match_count > 0:
+                    score = match_count / max(len(query_words), 1)
+                    scored.append((score, entry))
+
+            # Sort by score
+            scored.sort(reverse=True, key=lambda x: x[0])
 
             results = []
-            for r in raw_results:
-                if r.score < threshold:
+            for score, entry in scored[:limit]:
+                if score < threshold:
                     continue
 
-                entry = KnowledgeEntry(
-                    id=r.id,
-                    content=r.payload.get("content", ""),
-                    source=r.payload.get("source", ""),
-                    metadata=r.payload,
-                    score=r.score,
+                knowledge_entry = KnowledgeEntry(
+                    id=entry.get("id", ""),
+                    content=entry.get("content", ""),
+                    source=entry.get("source", ""),
+                    metadata=entry,
+                    score=score,
                 )
-                results.append(SearchResult(entry=entry, score=r.score))
+                results.append(SearchResult(entry=knowledge_entry, score=score))
 
             return results
 
@@ -235,6 +328,66 @@ class Librarian:
             "storage_path": self._storage_path,
             "collection": self._collection,
         }
+
+    async def list_entries(self, limit: int = 100) -> list[dict[str, Any]]:
+        """List all knowledge entries.
+
+        Args:
+            limit: Maximum number of entries to return
+
+        Returns:
+            List of entry summaries with id, source, and metadata
+        """
+        if not self.is_ready:
+            return []
+
+        # Use list_all() to get all entries from knowledge table
+        try:
+            raw_results = await self._store.list_all(self._collection)
+            if raw_results:
+                entries = []
+                for r in raw_results:
+                    entries.append(
+                        {
+                            "id": r.get("id", ""),
+                            "source": r.get("source", ""),
+                            "type": r.get("type", ""),
+                            "score": r.get("score", 0.0),
+                        }
+                    )
+                return entries[:limit]
+        except Exception as e:
+            logger.debug(f"Failed to list entries from store: {e}")
+
+        # Fall back to cache (used by ingest_file)
+        if self._cache:
+            return [
+                {
+                    "id": entry.id,
+                    "source": entry.source,
+                    "type": entry.metadata.get("type", ""),
+                    "score": entry.score,
+                }
+                for entry in self._shared_cache[:limit]
+            ]
+
+        return []
+
+    async def count(self) -> int:
+        """Get total count of knowledge entries."""
+        if not self.is_ready:
+            return 0
+
+        # Try vector store first
+        try:
+            entries = await self.list_entries(limit=10000)
+            if entries:
+                return len(entries)
+        except Exception:
+            pass
+
+        # Fall back to cache
+        return len(self._cache)
 
     def _chunk_text(self, text: str, max_chunk_size: int = 2000) -> list[str]:
         """Split text into chunks.

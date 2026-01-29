@@ -4,23 +4,39 @@ test_librarian_scenario.py - Integration Scenarios for The Librarian
 The Librarian's Exam: Real-world scenarios to verify knowledge recall capabilities.
 
 Scenarios:
-1. "The Architect": Semantic search over Markdown documentation.
+1. "The Architect": Keyword search over Markdown documentation.
 2. "The Debugger": Keyword search for specific Error Codes.
 3. "The Developer": Retrieving specific function definitions from Code.
 4. "The Updater": Modifying a file and verifying the index updates.
 
-Note: These tests use mocking for the vector store search since the real
+Note: These tests use mocking for the vector store since the real
 implementation requires embedding generation which is handled by a separate
 embedding service.
 """
 
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 
 import pytest
 
 from omni.core.knowledge.librarian import Librarian
-from omni.foundation.bridge.types import SearchResult as BridgeSearchResult
+
+
+def async_mock(return_value):
+    """Create an async mock that returns the given value."""
+    mock = AsyncMock()
+    mock.return_value = return_value
+    return mock
+
+
+@pytest.fixture(autouse=True)
+def reset_librarian_singleton():
+    """Reset librarian singleton before each test."""
+    from omni.core.knowledge.librarian import Librarian
+
+    Librarian.reset_singleton()
+    yield
+    Librarian.reset_singleton()
 
 
 @pytest.fixture
@@ -76,41 +92,43 @@ def corpus(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def mock_search_results():
-    """Helper to create mock search results using the bridge SearchResult type."""
+    """Helper to create mock search results as dicts (matching list_all format)."""
 
     def _create(content: str, source: str, score: float = 0.9):
-        return BridgeSearchResult(
-            score=score,
-            payload={"content": content, "source": source},
-            id=f"doc_{hash(source) % 10000}",
-        )
+        return {
+            "id": f"doc_{hash(source) % 10000}",
+            "content": content,
+            "source": source,
+            "type": "test",
+            "score": score,
+        }
 
     return _create
 
 
 class TestScenarioArchitect:
-    """Scenario 1: Semantic Search understands concepts."""
+    """Scenario 1: Keyword search finds concepts."""
 
     @pytest.mark.asyncio
-    async def test_semantic_search_finds_concepts_not_keywords(
-        self, temp_librarian: Librarian, corpus: Path, mock_search_results
-    ):
-        """The Architect: Semantic search should understand 'system structure'."""
+    async def test_keyword_search_finds_concepts(self, temp_librarian: Librarian, corpus: Path):
+        """The Architect: Search should find content about 'system' and 'layers'."""
         # Ingest the architecture doc
         temp_librarian.ingest_file(str(corpus / "arch.md"))
 
-        # Mock the search to return relevant result
-        mock_result = mock_search_results(
-            content="The Trinity Architecture divides the system into Foundation, Core, and Agent layers.",
-            source=str(corpus / "arch.md"),
-        )
-        temp_librarian._store.search = MagicMock(return_value=[mock_result])
+        # Mock list_all to return the ingested content (as async mock)
+        mock_result = {
+            "id": "arch_0",
+            "content": "The Trinity Architecture divides the system into Foundation, Core, and Agent layers.",
+            "source": str(corpus / "arch.md"),
+            "type": "documentation",
+            "score": 1.0,
+        }
+        temp_librarian._store.list_all = async_mock([mock_result])
 
-        # Search for concept, not exact words
-        results = await temp_librarian.search("How is the system structured?", limit=3)
+        # Search for concept keywords
+        results = await temp_librarian.search("system layers", limit=3)
 
         assert len(results) > 0, "Expected at least one search result"
-        # The content should mention layers or structure
         content = results[0].entry.content.lower()
         assert any(
             word in content for word in ["layer", "foundation", "core", "agent", "system"]
@@ -121,18 +139,19 @@ class TestScenarioDebugger:
     """Scenario 2: Keyword search finds exact error codes."""
 
     @pytest.mark.asyncio
-    async def test_keyword_search_finds_error_codes(
-        self, temp_librarian: Librarian, corpus: Path, mock_search_results
-    ):
+    async def test_keyword_search_finds_error_codes(self, temp_librarian: Librarian, corpus: Path):
         """The Debugger: Search for ERROR_503 should find the service unavailable message."""
         temp_librarian.ingest_file(str(corpus / "errors.log"))
 
-        # Mock the search to return error code result
-        mock_result = mock_search_results(
-            content="ERROR_503: Service Unavailable - Retry after backoff.",
-            source=str(corpus / "errors.log"),
-        )
-        temp_librarian._store.search = MagicMock(return_value=[mock_result])
+        # Mock list_all to return error content
+        mock_result = {
+            "id": "errors_0",
+            "content": "ERROR_503: Service Unavailable - Retry after backoff.",
+            "source": str(corpus / "errors.log"),
+            "type": "log",
+            "score": 1.0,
+        }
+        temp_librarian._store.list_all = async_mock([mock_result])
 
         # Search for specific error code
         results = await temp_librarian.search("ERROR_503", limit=3)
@@ -148,17 +167,20 @@ class TestScenarioDeveloper:
 
     @pytest.mark.asyncio
     async def test_code_search_finds_function_definitions(
-        self, temp_librarian: Librarian, corpus: Path, mock_search_results
+        self, temp_librarian: Librarian, corpus: Path
     ):
         """The Developer: Search for function name should find its definition."""
         temp_librarian.ingest_file(str(corpus / "api.py"))
 
-        # Mock the search to return function definition
-        mock_result = mock_search_results(
-            content="def connect_to_db(timeout: int) -> bool:\n    '''Establishes connection to the database.'''\n    return True",
-            source=str(corpus / "api.py"),
-        )
-        temp_librarian._store.search = MagicMock(return_value=[mock_result])
+        # Mock list_all to return function definition
+        mock_result = {
+            "id": "api_0",
+            "content": "def connect_to_db(timeout: int) -> bool:\n    '''Establishes connection to the database.'''\n    return True",
+            "source": str(corpus / "api.py"),
+            "type": "code",
+            "score": 1.0,
+        }
+        temp_librarian._store.list_all = async_mock([mock_result])
 
         # Search for function definition
         results = await temp_librarian.search("connect_to_db", limit=3)
@@ -175,7 +197,7 @@ class TestScenarioUpdater:
 
     @pytest.mark.asyncio
     async def test_updated_content_reflects_in_search(
-        self, temp_librarian: Librarian, corpus: Path, mock_search_results
+        self, temp_librarian: Librarian, corpus: Path
     ):
         """The Updater: Updating content should update search results."""
         status_file = corpus / "status.md"
@@ -183,11 +205,15 @@ class TestScenarioUpdater:
         # Ingest initial content
         temp_librarian.ingest_file(str(status_file))
 
-        # Mock search for GREEN
-        mock_green = mock_search_results(
-            content="Status: GREEN - All systems operational.", source=str(status_file), score=0.95
-        )
-        temp_librarian._store.search = MagicMock(return_value=[mock_green])
+        # Mock list_all for GREEN
+        mock_green = {
+            "id": "status_0",
+            "content": "Status: GREEN - All systems operational.",
+            "source": str(status_file),
+            "type": "documentation",
+            "score": 0.95,
+        }
+        temp_librarian._store.list_all = async_mock([mock_green])
 
         # Verify initial state - search for GREEN
         results_green = await temp_librarian.search("Status", limit=1)
@@ -202,11 +228,15 @@ class TestScenarioUpdater:
         # Re-ingest the updated file
         temp_librarian.ingest_file(str(status_file))
 
-        # Mock search for RED
-        mock_red = mock_search_results(
-            content="Status: RED - Critical Failure detected!", source=str(status_file), score=0.95
-        )
-        temp_librarian._store.search = MagicMock(return_value=[mock_red])
+        # Mock list_all for RED
+        mock_red = {
+            "id": "status_0",
+            "content": "Status: RED - Critical Failure detected!",
+            "source": str(status_file),
+            "type": "documentation",
+            "score": 0.95,
+        }
+        temp_librarian._store.list_all = async_mock([mock_red])
 
         # Verify updated state - search for RED
         results_red = await temp_librarian.search("Status", limit=5)
@@ -219,39 +249,43 @@ class TestScenarioUpdater:
 
 
 class TestScenarioHybridSearch:
-    """Scenario 5: Hybrid search combines semantic and keyword."""
+    """Scenario 5: Search combines keyword matching."""
 
     @pytest.mark.asyncio
-    async def test_hybrid_search_works(
-        self, temp_librarian: Librarian, corpus: Path, mock_search_results
-    ):
-        """Test that search works with both semantic and keyword queries."""
+    async def test_keyword_search_works(self, temp_librarian: Librarian, corpus: Path):
+        """Test that keyword search works."""
         # Ingest all documents
         for file in corpus.iterdir():
             if file.is_file():
                 temp_librarian.ingest_file(str(file))
 
-        # Mock semantic query results
-        mock_semantic = mock_search_results(
-            content="def connect_to_db(timeout: int) -> bool: Establishes connection to the database.",
-            source=str(corpus / "api.py"),
-        )
-        temp_librarian._store.search = MagicMock(return_value=[mock_semantic])
-
-        # Semantic query
-        semantic_results = await temp_librarian.search("database connection", limit=3)
-        assert len(semantic_results) > 0, "Semantic search should find results"
-
-        # Mock keyword query results
-        mock_keyword = mock_search_results(
-            content="ERROR_500: Internal Server Error - Check logs for details.",
-            source=str(corpus / "errors.log"),
-        )
-        temp_librarian._store.search = MagicMock(return_value=[mock_keyword])
+        # Mock list_all for database query
+        mock_db = {
+            "id": "api_0",
+            "content": "def connect_to_db(timeout: int) -> bool: Establishes connection to the database.",
+            "source": str(corpus / "api.py"),
+            "type": "code",
+            "score": 0.95,
+        }
+        temp_librarian._store.list_all = async_mock([mock_db])
 
         # Keyword query
-        keyword_results = await temp_librarian.search("ERROR_500", limit=3)
-        assert len(keyword_results) > 0, "Keyword search should find results"
+        results = await temp_librarian.search("database", limit=3)
+        assert len(results) > 0, "Keyword search should find results"
+
+        # Mock list_all for error code query
+        mock_error = {
+            "id": "errors_0",
+            "content": "ERROR_500: Internal Server Error - Check logs for details.",
+            "source": str(corpus / "errors.log"),
+            "type": "log",
+            "score": 0.95,
+        }
+        temp_librarian._store.list_all = async_mock([mock_error])
+
+        # Error code query
+        error_results = await temp_librarian.search("ERROR_500", limit=3)
+        assert len(error_results) > 0, "Error code search should find results"
 
 
 class TestScenarioEdgeCases:
@@ -287,7 +321,7 @@ class TestScenarioEdgeCases:
         low_score_result = mock_search_results(
             content="Low relevance match", source="test.md", score=0.3
         )
-        temp_librarian._store.search = MagicMock(return_value=[low_score_result])
+        temp_librarian._store.list_all = async_mock([low_score_result])
 
         # Search with high threshold
         results = await temp_librarian.search("anything", limit=5, threshold=0.5)
@@ -296,8 +330,9 @@ class TestScenarioEdgeCases:
     @pytest.mark.asyncio
     async def test_search_handles_error_gracefully(self, temp_librarian: Librarian):
         """Test that search handles errors gracefully."""
-        # Mock search to raise exception
-        temp_librarian._store.search = MagicMock(side_effect=Exception("Search failed"))
+        # Mock list_all to raise exception using AsyncMock
+        error_mock = AsyncMock(side_effect=Exception("Search failed"))
+        temp_librarian._store.list_all = error_mock
 
         results = await temp_librarian.search("anything", limit=5)
         assert len(results) == 0, "Expected empty results on error"

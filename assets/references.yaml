@@ -157,7 +157,6 @@ knowledge_caches:
 # =============================================================================
 context:
   system_context: "docs/llm/system_context.xml"
-  skill_index: ".cache/skill_index.json"
   architecture_docs_dir: "docs/human/architecture"
   description: "Context orchestrator and LLM system paths"
 

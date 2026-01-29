@@ -53,14 +53,19 @@ This skill provides **AST-based code operations** in three categories:
 
 ## Tool Categories
 
-### Navigation (Read) - Search Code Structure
+### Smart Exploration (Unified Interface)
 
-| Tool               | Description                            |
-| ------------------ | -------------------------------------- |
-| `outline_file`     | Get high-level skeleton of source file |
-| `count_symbols`    | Count classes and functions in file    |
-| `search_code`      | Search AST patterns in a single file   |
-| `search_directory` | Search AST patterns across directory   |
+| Tool               | Description                                       |
+| ------------------ | ------------------------------------------------- |
+| `smart_ast_search` | **PRIMARY SEARCH TOOL**. Handles patterns & rules |
+
+### Navigation (View)
+
+| Tool            | Description                            |
+| --------------- | -------------------------------------- |
+| `outline_file`  | Get high-level skeleton of source file |
+| `count_symbols` | Count classes and functions in file    |
+| `list_symbols`  | Get structured symbol list             |
 
 ### Analysis (Read) - Static Code Analysis
 
@@ -87,22 +92,49 @@ This skill provides **AST-based code operations** in three categories:
 
 ## Pattern Syntax (Navigation & Refactoring)
 
-| Pattern   | Meaning               | Example Match     |
-| --------- | --------------------- | ----------------- |
-| `$NAME`   | Any single identifier | `foo`, `MyClass`  |
-| `$ARGS`   | Any argument list     | `(a, b, c)`       |
-| `$PARAMS` | Any parameter list    | `(data, options)` |
-| `$EXPR`   | Any expression        | `x + y`           |
-| `$$$`     | Variadic match        | `(a, b, c)`       |
+| Pattern | Meaning               | Example Match    |
+| ------- | --------------------- | ---------------- |
+| `$NAME` | Any single identifier | `foo`, `MyClass` |
+| `$$$`   | Variadic match        | `(a, b, c)`      |
+| `$EXPR` | Any expression        | `x + y`          |
 
-### Refactoring-Specific Patterns
+### Examples for `smart_ast_search`
 
-| Pattern        | Meaning                   | Example Match           |
-| -------------- | ------------------------- | ----------------------- |
-| `$$$`          | Variadic match (refactor) | `(host, port)`          |
-| `$$$ARGS`      | Named variadic            | `(x, y, z)`             |
-| `connect($$$)` | Function call with args   | `connect("host", 8080)` |
-| `class $NAME`  | Class definition          | `class Agent:`          |
+1. **Semantic Intents (PREFERRED)**:
+   - `query="classes"`: Find all class definitions.
+   - `query="functions"`: Find all function definitions.
+   - `query="methods"`: Find all method definitions.
+   - `query="decorators"`: Find all decorated functions.
+
+2. **AST Patterns**:
+   - `query="class $NAME"`: Specific class search.
+   - `query="def $NAME($$$)"`: Specific function search.
+   - `query="connect($$$)"`: Function call with any arguments.
+
+## Advanced YAML Rules (Power Search)
+
+For complex searches that require multiple conditions or nested constraints, use `search_with_rules` with YAML syntax:
+
+```yaml
+rule:
+  any:
+    - pattern: "print($$$)"
+    - pattern: "logger.info($$$)"
+  inside:
+    kind: function_definition
+    has:
+      field: name
+      regex: "^test_"
+```
+
+_The above rule finds all print or logger.info calls that are inside function definitions starting with 'test\_'._
+
+### Rule Key Concepts
+
+- **rule**: The core matching logic
+- **any/all/not**: Logical combinations of patterns
+- **inside/has/follows**: Structural constraints based on relationship to other nodes
+- **regex**: Regular expression matching for captured variables
 
 ## Usage Examples
 

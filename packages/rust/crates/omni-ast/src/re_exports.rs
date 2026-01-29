@@ -8,6 +8,7 @@
 // ============================================================================
 
 // Core pattern matching
+pub use ast_grep_config::{DeserializeEnv, RuleCore, SerializableRuleCore};
 pub use ast_grep_core::Doc;
 pub use ast_grep_core::Language as AstLanguage;
 pub use ast_grep_core::Pattern;

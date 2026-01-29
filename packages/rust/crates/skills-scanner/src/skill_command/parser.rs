@@ -26,26 +26,73 @@ pub fn find_skill_command_decorators(content: &str) -> Vec<(usize, usize, String
 
         // Check if this is a valid decorator call with parentheses
         if after_decorator.starts_with('(') {
-            let paren_content = &after_decorator[1..]; // Skip opening paren
             let mut depth = 1;
-            let mut end_pos = absolute_start + prefix.len() + 1;
+            let mut end_offset = None;
 
-            for (i, c) in paren_content.chars().enumerate() {
-                if c == '(' {
-                    depth += 1;
-                } else if c == ')' {
-                    depth -= 1;
-                    if depth == 0 {
-                        end_pos = absolute_start + prefix.len() + 1 + i + 1;
-                        break;
+            let mut in_string = false;
+            let mut quote_char = '\0';
+            let mut in_triple_quote = false;
+
+            let paren_start = absolute_start + prefix.len();
+            let search_content = &content[paren_start + 1..];
+
+            let mut i = 0;
+            let chars: Vec<char> = search_content.chars().collect();
+
+            while i < chars.len() {
+                let c = chars[i];
+
+                if in_triple_quote {
+                    if c == quote_char
+                        && i + 2 < chars.len()
+                        && chars[i + 1] == quote_char
+                        && chars[i + 2] == quote_char
+                    {
+                        in_triple_quote = false;
+                        i += 2;
+                    }
+                } else if in_string {
+                    if c == quote_char && (i == 0 || chars[i - 1] != '\\') {
+                        in_string = false;
+                    }
+                } else {
+                    // Check for triple quotes
+                    if i + 2 < chars.len() {
+                        if (chars[i] == '"' && chars[i + 1] == '"' && chars[i + 2] == '"')
+                            || (chars[i] == '\'' && chars[i + 1] == '\'' && chars[i + 2] == '\'')
+                        {
+                            in_triple_quote = true;
+                            quote_char = chars[i];
+                            i += 2;
+                            i += 1;
+                            continue;
+                        }
+                    }
+
+                    if c == '"' || c == '\'' {
+                        in_string = true;
+                        quote_char = c;
+                    } else if c == '(' {
+                        depth += 1;
+                    } else if c == ')' {
+                        depth -= 1;
+                        if depth == 0 {
+                            end_offset = Some(paren_start + 1 + i + 1);
+                            break;
+                        }
                     }
                 }
+                i += 1;
             }
 
-            // Extract the full decorator text including @ sign
-            let full_text = &content[line_start..end_pos];
-            decorators.push((line_start, end_pos, full_text.to_string()));
-            search_start = end_pos;
+            if let Some(end_pos) = end_offset {
+                // Extract the full decorator text including @ sign
+                let full_text = &content[line_start..end_pos];
+                decorators.push((line_start, end_pos, full_text.to_string()));
+                search_start = end_pos;
+            } else {
+                search_start = absolute_start + prefix.len();
+            }
         } else {
             // Invalid format, skip
             search_start = absolute_start + prefix.len();

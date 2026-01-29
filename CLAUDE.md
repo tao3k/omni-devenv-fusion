@@ -45,6 +45,13 @@ Memory system, knowledge indexing, context optimization
 
 ## Critical Rules
 
+### Cognitive Alignment & Protocols
+
+- **Protocol Adherence**: Strictly follow the instructions in each skill's `SKILL.md`.
+- **Re-anchoring**: If you drift from the protocol or attempt unauthorized tool calls, the Gatekeeper will inject the correct `SKILL.md` rules into your context to force re-alignment.
+- **Overload Management**: Avoid activating more than 5 skills simultaneously. If you see a `COGNITIVE LOAD WARNING`, disable unused skills to maintain precision.
+- **Tool Selection**: Prioritize skill-specific MCP tools over generic shell commands for all write operations.
+
 ### Git Commit
 
 **Use `/commit` slash command** - Never `git commit` via terminal.
@@ -85,7 +92,7 @@ Build & Verify → Full integration test
 
 ```
 .claude/commands/     # Slash command templates
-assets/skills/*/       # Skill implementations (scripts/commands.py + SKILL.md)
+assets/skills/*/       # Skill implementations (scanned recursively in scripts/)
 docs/                 # Documentation (see docs/skills.md for index)
 .cache/               # Repomix skill contexts (auto-generated)
 ```

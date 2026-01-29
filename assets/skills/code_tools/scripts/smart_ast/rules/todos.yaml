@@ -1,0 +1,5 @@
+id: find-todos
+language: python
+rule:
+  regex: "(?i)TODO|FIXME"
+note: "Finds TODO or FIXME markers in Python code."

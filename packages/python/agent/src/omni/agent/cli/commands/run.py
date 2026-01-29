@@ -133,7 +133,25 @@ async def _execute_task_via_kernel(task: str, max_steps: int | None, verbose: bo
 
     try:
         # Use the router to find appropriate skill
-        router = kernel.router
+        # Use cached router from registry (like omni route does) to avoid re-indexing
+        from omni.core.router.main import RouterRegistry
+
+        router = RouterRegistry.get("run_command")
+        # Ensure router is initialized (loads existing data if available)
+        if not router._initialized:
+            # Try to load existing data from LanceDB first (fast path)
+            try:
+                from omni.foundation.bridge.rust_vector import get_vector_store
+
+                store = get_vector_store()
+                tools = await store.list_all_tools()
+                if tools:
+                    # Mark as initialized if we have existing data
+                    router._initialized = True
+                    router._hybrid._semantic_indexer = router._indexer
+                    router._semantic._indexer = router._indexer
+            except Exception:
+                pass
 
         # Route the task to find matching skill
         result = await router.route(task)

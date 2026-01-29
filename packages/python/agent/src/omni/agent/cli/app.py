@@ -26,6 +26,7 @@ from omni.foundation.config.settings import get_settings, set_configuration_dire
 
 # Command Imports
 from .commands import (
+    register_knowledge_command,
     register_mcp_command,
     register_route_command,
     register_run_command,
@@ -235,6 +236,7 @@ register_mcp_command(app)
 register_route_command(app)
 register_run_command(app)
 register_sync_command(app)
+register_knowledge_command(app)
 
 
 def entry_point():

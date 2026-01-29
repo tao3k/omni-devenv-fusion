@@ -346,10 +346,31 @@ class RustVectorStore:
             logger.debug(f"Failed to list tools from LanceDB: {e}")
             return []
 
-    async def get_analytics_table(self):
+    async def list_all(self, table_name: str = "knowledge") -> list[dict]:
+        """List all entries from a table.
+
+        Args:
+            table_name: Name of the table to list (default: "knowledge")
+
+        Returns:
+            List of entry dictionaries with id, content, metadata.
+        """
+        try:
+            json_result = self._inner.list_all_tools(table_name)
+            entries = json.loads(json_result) if json_result else []
+            logger.debug(f"Listed {len(entries)} entries from {table_name}")
+            return entries
+        except Exception as e:
+            logger.debug(f"Failed to list entries from {table_name}: {e}")
+            return []
+
+    async def get_analytics_table(self, table_name: str = "skills"):
         """Get all tools as a PyArrow Table for analytics.
 
         This is optimized for high-performance operations using Arrow's columnar format.
+
+        Args:
+            table_name: Name of the table to get analytics for (default: "skills")
 
         Returns:
             PyArrow Table with columns: id, content, skill_name, tool_name, file_path, keywords.
@@ -358,7 +379,7 @@ class RustVectorStore:
         try:
             import pyarrow as pa
 
-            table = self._inner.get_analytics_table("skills")
+            table = self._inner.get_analytics_table(table_name)
             if table is not None:
                 return pa.table(table)
             return None

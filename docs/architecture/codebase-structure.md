@@ -75,7 +75,6 @@ omni-dev-fusion/
 ├── assets/                          # Core assets (skills, configs, templates)
 │   ├── skills/                      # 21 Zero-Code skills
 │   ├── settings.yaml                # Central configuration
-│   ├── skill_index.json             # Master skill registry
 │   ├── prompts/                     # LLM prompts
 │   ├── templates/                   # File templates
 │   ├── knowledge/                   # RAG knowledge base
@@ -528,14 +527,13 @@ assets/skills/
 
 ### Core Configuration
 
-| File                      | Purpose                                                                  |
-| ------------------------- | ------------------------------------------------------------------------ |
-| `assets/settings.yaml`    | Central configuration: skills dir, knowledge dir, API keys, LLM settings |
-| `assets/skill_index.json` | Master registry of all skills with metadata                              |
-| `pyproject.toml`          | Python project configuration (uv workspace, ruff, mypy)                  |
-| `Cargo.toml`              | Rust workspace configuration (11 crates)                                 |
-| `justfile`                | Task automation (build, test, lint commands)                             |
-| `.mcp.json`               | MCP server configuration                                                 |
+| File                   | Purpose                                                                  |
+| ---------------------- | ------------------------------------------------------------------------ |
+| `assets/settings.yaml` | Central configuration: skills dir, knowledge dir, API keys, LLM settings |
+| `pyproject.toml`       | Python project configuration (uv workspace, ruff, mypy)                  |
+| `Cargo.toml`           | Rust workspace configuration (11 crates)                                 |
+| `justfile`             | Task automation (build, test, lint commands)                             |
+| `.mcp.json`            | MCP server configuration                                                 |
 
 ### Git Configuration
 

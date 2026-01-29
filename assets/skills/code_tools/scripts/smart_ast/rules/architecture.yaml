@@ -1,0 +1,13 @@
+id: find-entrypoints
+language: python
+rule:
+  any:
+    - pattern: "def main($$$): $$$"
+    - pattern: 'if __name__ == "__main__": $$$'
+note: "Finds entry points in Python files."
+---
+id: find-entrypoints-rust
+language: rust
+rule:
+  pattern: "fn main($$$) { $$$ }"
+note: "Finds entry points in Rust files."

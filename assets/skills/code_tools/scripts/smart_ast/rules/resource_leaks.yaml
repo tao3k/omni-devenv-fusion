@@ -1,0 +1,8 @@
+id: open-without-with
+language: python
+rule:
+  pattern: open($$$)
+  not:
+    inside:
+      kind: with_statement
+note: "Finds open() calls not used within a 'with' context manager, which can lead to resource leaks."

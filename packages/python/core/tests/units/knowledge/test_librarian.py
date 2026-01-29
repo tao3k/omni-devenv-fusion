@@ -10,6 +10,16 @@ import tempfile
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def reset_librarian_singleton():
+    """Reset librarian singleton before each test."""
+    from omni.core.knowledge.librarian import Librarian
+
+    Librarian.reset_singleton()
+    yield
+    Librarian.reset_singleton()
+
+
 class TestKnowledgeEntry:
     """Tests for the KnowledgeEntry dataclass."""
 

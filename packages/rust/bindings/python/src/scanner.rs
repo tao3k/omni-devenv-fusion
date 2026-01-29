@@ -113,57 +113,6 @@ pub fn scan_skill_tools(base_path: String) -> Vec<PyToolRecord> {
     }
 }
 
-/// Export full skill index to JSON file.
-///
-/// This function scans all skills and writes a complete skill_index.json
-/// including metadata from SKILL.md frontmatter and discovered tools.
-///
-/// Args:
-///   base_path: Base directory containing skills (e.g., "assets/skills")
-///   output_path: Path for the output JSON file (e.g., "assets/skills/skill_index.json")
-///
-/// Returns:
-///   PyResult with JSON string of the index on success, or error on failure
-#[pyfunction]
-#[pyo3(signature = (base_path, output_path))]
-pub fn export_skill_index(base_path: String, output_path: String) -> PyResult<String> {
-    let skill_scanner = SkillScanner::new();
-    let script_scanner = ToolsScanner::new();
-    let skills_path = Path::new(&base_path);
-    let output = Path::new(&output_path);
-
-    if !skills_path.exists() {
-        return Err(pyo3::exceptions::PyValueError::new_err(format!(
-            "Skills directory does not exist: {}",
-            base_path
-        )));
-    }
-
-    // Convert the error to a string for PyErr
-    skill_scanner
-        .scan_all_full_to_index(skills_path, output, None, &script_scanner)
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-    // Read and return the generated JSON
-    let json_content = std::fs::read_to_string(output)
-        .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-
-    Ok(json_content)
-}
-
-/// Get JSON Schema for skill index.
-///
-/// Returns the JSON Schema as a string that can be used by Python
-/// for validation and documentation.
-///
-/// Returns:
-///   PyResult with JSON schema string on success, or error on failure
-#[pyfunction]
-pub fn get_skill_index_schema() -> PyResult<String> {
-    let schema = skills_scanner::skill_index_schema();
-    Ok(schema)
-}
-
 /// Scan a single skill directory and return its metadata (SKILL.md frontmatter).
 ///
 /// This function parses the SKILL.md file in a skill directory and returns

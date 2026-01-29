@@ -1,0 +1,16 @@
+id: deep-nesting
+language: python
+rule:
+  any:
+    - pattern: "if $COND: $$$"
+    - pattern: "for $VAR in $SEQ: $$$"
+    - pattern: "while $COND: $$$"
+  inside:
+    any:
+      - pattern: "if $C1: $$$"
+      - pattern: "for $V1 in $S1: $$$"
+    inside:
+      any:
+        - pattern: "if $C2: $$$"
+        - pattern: "for $V2 in $S2: $$$"
+note: "Finds code nested 3+ levels deep (ifs/loops), indicating high cyclomatic complexity."

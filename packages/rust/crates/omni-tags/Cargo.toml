@@ -10,6 +10,7 @@ once_cell = "1.19"
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 omni-io = { path = "../omni-io" }
+serde_yaml = "0.9"
 tree-sitter = "0.26"
 walkdir = "2"
 

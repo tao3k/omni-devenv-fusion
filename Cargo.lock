@@ -335,6 +335,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "ast-grep-config"
+version = "0.40.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26471fd4ff938559435e373a9d0340fc2c4443cc8054e3bb4e313d365216c40e"
+dependencies = [
+ "ast-grep-core",
+ "bit-set 0.8.0",
+ "globset",
+ "regex",
+ "schemars",
+ "serde",
+ "serde_yaml",
+ "thiserror 2.0.17",
+]
+
+[[package]]
 name = "ast-grep-core"
 version = "0.40.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4532,6 +4548,7 @@ name = "omni-ast"
 version = "0.1.1"
 dependencies = [
  "anyhow",
+ "ast-grep-config",
  "ast-grep-core",
  "ast-grep-language",
  "omni-io",
@@ -4656,6 +4673,7 @@ dependencies = [
  "omni-io",
  "once_cell",
  "serde",
+ "serde_yaml",
  "tempfile",
  "thiserror 2.0.17",
  "tree-sitter",

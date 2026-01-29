@@ -1,0 +1,21 @@
+id: unawaited-async
+language: python
+rule:
+  any:
+    - pattern: "$FUNC($$$)"
+    - pattern: "$OBJ.$FUNC($$$)"
+  all:
+    - inside:
+        kind: function_definition
+        all:
+          - has:
+              kind: async
+    - not:
+        inside:
+          kind: await_expression
+    - matches:
+        id: is-async-call
+note: "Finds calls to async functions that are not awaited inside an async function. (Heuristic: matches common async naming patterns or known async functions)"
+constraints:
+  FUNC:
+    regex: "^(async_|get_|request_|fetch_)"
