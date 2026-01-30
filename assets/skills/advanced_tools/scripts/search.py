@@ -2,15 +2,15 @@
 Advanced Search Tools (Modernized)
 
 Wraps modern Rust-based CLI tools for high-performance retrieval.
-Responsibilities:
-- Fast Search: ripgrep (rg)
-- Fast Location: fd-find (fd)
-- Output: Structured JSON for LLM consumption
+Provides superior [FIND] and [SEARCH] capabilities for the Agentic OS.
 """
 
 import json
+import os
 import shutil
 import subprocess
+import time
+from pathlib import Path
 from typing import Any
 
 from omni.foundation.api.decorators import skill_command
@@ -20,43 +20,90 @@ from omni.foundation.config.paths import ConfigPaths
 logger = get_logger("skill.advanced_tools.search")
 
 
+def _run_rg_with_retry(cmd: list[str], root: str, max_retries: int = 2) -> tuple[str, str, int]:
+    """Run rg with stdin handling and retry logic for transient errors."""
+    for attempt in range(max_retries + 1):
+        try:
+            process = subprocess.Popen(
+                cmd,
+                cwd=root,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                stdin=subprocess.DEVNULL,
+            )
+            stdout, stderr = process.communicate(timeout=30)
+            return stdout, stderr, process.returncode
+        except Exception:
+            if attempt < max_retries:
+                time.sleep(0.1 * (attempt + 1))
+            continue
+    return "", "", 1
+
+
 # =============================================================================
-# Ripgrep (rg) - High Performance Search
+# Ripgrep (rg) - High Performance Content Search
 # =============================================================================
 
 
 @skill_command(
     name="smart_search",
-    description="High-performance code search using 'ripgrep' (rg). Respects .gitignore.",
+    description="""
+    [SEARCH] High-performance code/text search using 'ripgrep' (rg).
+    
+    Use this tool to find TEXT CONTENT, string literals, TODOs, or regex patterns INSIDE files.
+    
+    Architecture: Parallelized File Scan -> Regex Match Engine -> Context Extraction -> JSON Stream Output
+    
+    Why this is the Gold Standard:
+    1. Speed: Faster than grep, ack, or ag by orders of magnitude.
+    2. Smart Filtering: Respects .gitignore, .ignore, and .rgignore automatically.
+    3. Contextual Insight: Can provide lines around the match to understand usage.
+    4. Multiline Support: Capable of searching across line boundaries if required. 
+    
+    Usage Guidelines:
+    - Use when you need to know WHERE a variable, function, or string is defined or used.
+    - Prefer specific file_globs (e.g., "*.py") to reduce noise in large projects.
+    - Use context_lines to get a preview of the surrounding code for better analysis.
+
+    Common Use Cases:
+    - "Find all usages of class 'Kernel' in the project"
+    - "Search for 'TODO' or 'FIXME' tags across all documentation"
+    - "Locate error handling patterns in rust files": pattern='Err\\(.*?\\)', file_globs='*.rs'
+
+    Args:
+        - pattern: str - The regex or literal string to search for (required).
+        - file_globs: str | None - Filter files using glob patterns (e.g. "*.py *.ts").
+        - case_sensitive: bool = True - Whether to perform a case-sensitive search.
+        - context_lines: int = 0 - Number of lines of context to show around each match.
+
+    Returns:
+        Structured JSON with:
+        - success: bool
+        - count: int (total matches found)
+        - matches: List[dict] (file, line, content snippets)
+    """,
+    keywords=["search", "ripgrep", "rg", "grep", "regex", "text", "content", "find in files"],
     autowire=True,
 )
 def smart_search(
     pattern: str,
-    file_globs: str | None = None,  # e.g. "*.py *.ts"
+    file_globs: str | None = None,
     case_sensitive: bool = True,
     context_lines: int = 0,
     paths: ConfigPaths | None = None,
 ) -> dict[str, Any]:
-    """
-    Search using `rg --json`.
-    Much faster than grep and provides structured output.
-    """
+    """Search using `rg --json`."""
     if paths is None:
         paths = ConfigPaths()
-
     root = paths.project_root
 
-    # 1. Environment Check (Environment Driven)
     rg_exec = shutil.which("rg")
     if not rg_exec:
-        return {
-            "success": False,
-            "error": "Tool 'rg' (ripgrep) not found. Please install it in your environment.",
-        }
+        return {"success": False, "error": "Tool 'rg' (ripgrep) not found in path."}
 
-    # 2. Build Command (JSON mode is safer for parsing)
+    # Build ripgrep command
     cmd = [rg_exec, "--json", pattern]
-
     if not case_sensitive:
         cmd.append("--ignore-case")
     else:
@@ -66,26 +113,15 @@ def smart_search(
         cmd.extend(["--context", str(context_lines)])
 
     if file_globs:
-        # rg expects globs like -g '*.py'
         for glob in file_globs.split():
             cmd.extend(["-g", glob])
 
     try:
-        # 3. Execute
-        # cwd=root ensures we search in project context
-        process = subprocess.Popen(
-            cmd,
-            cwd=root,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        stdout, stderr = process.communicate()
+        stdout, stderr, returncode = _run_rg_with_retry(cmd, root)
 
-        if process.returncode > 1:  # 0=found, 1=not found, >1=error
-            return {"success": False, "error": f"rg failed: {stderr}"}
+        if returncode > 1:
+            return {"success": False, "error": f"ripgrep error: {stderr}"}
 
-        # 4. Parse JSON Stream
         matches = []
         file_matches = 0
         limit_reached = False
@@ -95,7 +131,6 @@ def smart_search(
                 data = json.loads(line)
                 if data["type"] == "match":
                     file_matches += 1
-                    # Hard limit to protect Context Window
                     if file_matches > 300:
                         limit_reached = True
                         continue
@@ -124,13 +159,49 @@ def smart_search(
 
 
 # =============================================================================
-# fd-find - Fast File Location
+# fd-find - Fast File Location and Discovery
 # =============================================================================
 
 
 @skill_command(
     name="smart_find",
-    description="Fast file location using 'fd'. Respects .gitignore.",
+    description="""
+    [FIND] Ultra-fast file/directory discovery engine using 'fd'.
+    
+    Best for finding FILES and DIRECTORIES by name, extension, or path pattern.
+    
+    Architecture: Parallelized Rust Traversal -> Pattern Match -> .gitignore Filter -> Output
+    
+    Key Features:
+    - High Performance: Written in Rust, outperforms standard 'find' by 10x+.
+    - Developer Friendly: Automatically skips hidden folders (.git) and respects .gitignore.
+    - Smart Case: Sensitive only when uppercase characters are provided in the pattern.
+    - Combined Mode: Can find files by content when search_mode='content' (powered by rg).
+    
+    When to Use:
+    - Use this whenever you need to locate a specific file but don't know its exact path.
+    - Excellent for exploring project structure or verifying file existence.
+    - Faster than 'list_directory' for recursive project-wide discovery.
+
+    Common Use Cases:
+    - "Find all python files (*.py) in the project" -> pattern='.', extension='py'
+    - "Locate the 'settings.yaml' file" -> pattern='settings.yaml'
+    - "Find all test files excluding node_modules" -> pattern='test', exclude='node_modules'
+    - "Find all files containing 'TODO'" -> pattern='TODO', search_mode='content'
+
+    Args:
+        - pattern: str = "." - The search pattern (regex or glob). Default matches all files.
+        - extension: str | None - Filter by file extension (e.g. 'py', 'rs').
+        - exclude: str | None - Glob pattern to exclude (e.g. 'build/*', 'target/').
+        - search_mode: str = "filename" - "filename" (uses fd) or "content" (uses rg).
+
+    Returns:
+        A dictionary containing:
+        - success: bool
+        - count: int (number of files matched)
+        - files: List[str] (project-relative paths to matches, top 100)
+    """,
+    keywords=["find", "fd", "locate", "files", "discovery", "search files", "path"],
     autowire=True,
 )
 def smart_find(
@@ -138,50 +209,66 @@ def smart_find(
     extension: str | None = None,
     exclude: str | None = None,
     paths: ConfigPaths | None = None,
+    # Search mode: "filename" (default, uses fd) or "content" (uses rg)
+    search_mode: str = "filename",
 ) -> dict[str, Any]:
-    """
-    Find files using `fd`.
-    """
+    """Find files using 'fd' (by filename) or 'rg --files-with-matches' (by content)."""
     if paths is None:
         paths = ConfigPaths()
 
     root = paths.project_root
 
-    # 1. Env Check (Handle ubuntu/debian renaming 'fd' to 'fdfind')
+    # Mode 1: Content Search (Delegates to ripgrep)
+    if search_mode == "content":
+        rg_exec = shutil.which("rg")
+        if not rg_exec:
+            return {"success": False, "error": "Tool 'rg' (ripgrep) not found."}
+
+        cmd = [rg_exec, "--files-with-matches", pattern]
+        if extension:
+            cmd.extend(["--type", extension.replace(".", "")])
+        if exclude:
+            for excl in exclude.split():
+                cmd.extend(["-g", f"!{excl}"])
+
+        try:
+            result = subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=30)
+            files = [line for line in result.stdout.splitlines() if line.strip()]
+            return {
+                "success": True,
+                "tool": "ripgrep",
+                "search_mode": "content",
+                "count": len(files),
+                "files": files[:100],
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Content search failed: {e}"}
+
+    # Mode 2: Filename Search (Uses fd)
     fd_exec = shutil.which("fd") or shutil.which("fdfind")
     if not fd_exec:
-        return {"success": False, "error": "Tool 'fd' not found in PATH."}
+        return {"success": False, "error": "Tool 'fd' not found in system path."}
 
-    cmd = [fd_exec, "--type", "f"]  # Files only
-
+    cmd = [fd_exec, "--type", "f"]  # Default to files
     if extension:
         cmd.extend(["--extension", extension])
-
     if exclude:
         cmd.extend(["--exclude", exclude])
-
+    
     cmd.append(pattern)
 
     try:
-        result = subprocess.run(
-            cmd,
-            cwd=root,
-            capture_output=True,
-            text=True,
-        )
-
-        files = [f for f in result.stdout.splitlines() if f.strip()]
-
+        result = subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=30)
+        files = [line for line in result.stdout.splitlines() if line.strip()]
         return {
             "success": True,
             "tool": "fd",
+            "search_mode": "filename",
             "count": len(files),
-            "files": files[:200],  # Limit
-            "truncated": len(files) > 200,
+            "files": files[:100],
         }
     except Exception as e:
-        logger.error(f"Smart find failed: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": f"Filename search failed: {e}"}
 
 
 __all__ = ["smart_find", "smart_search"]

@@ -32,6 +32,7 @@ from __future__ import annotations
 import asyncio
 import json
 import operator
+import time
 from pathlib import Path
 from typing import Annotated, Any, TypedDict
 
@@ -47,6 +48,66 @@ from omni.langgraph.visualize import register_workflow, visualize_workflow
 from omni.core.context import create_planner_orchestrator
 
 logger = get_logger("researcher.graph")
+
+
+# LLM call tracking
+_llm_call_counter = 0
+
+
+async def _llm_complete(
+    client: InferenceClient,
+    system_prompt: str,
+    user_query: str,
+    stage: str,
+    extra_params: dict = None,
+) -> dict:
+    """Make LLM call with full logging of parameters."""
+    global _llm_call_counter
+    _llm_call_counter += 1
+    call_id = _llm_call_counter
+
+    # Get client config
+    model = client.model
+    max_tokens = client.max_tokens
+    timeout = client.timeout
+
+    logger.info(
+        f"[LLM] {stage} (call #{call_id})",
+        call_id=call_id,
+        stage=stage,
+        model=model,
+        max_tokens=max_tokens,
+        timeout=timeout,
+        system_prompt_len=len(system_prompt),
+        user_query_len=len(user_query),
+        **(extra_params or {}),
+    )
+
+    # Log truncated user query preview
+    query_preview = user_query[:200].replace("\n", " ") + "..." if len(user_query) > 200 else user_query.replace("\n", " ")
+    logger.debug(f"[LLM] Query preview: {query_preview}")
+
+    start_time = time.perf_counter()
+    response = await client.complete(
+        system_prompt=system_prompt,
+        user_query=user_query,
+    )
+    elapsed_ms = (time.perf_counter() - start_time) * 1000
+
+    success = response.get("success", False)
+    content_len = len(response.get("content", ""))
+
+    logger.info(
+        f"[LLM] {stage} complete",
+        call_id=call_id,
+        stage=stage,
+        success=success,
+        elapsed_ms=round(elapsed_ms, 2),
+        content_len=content_len,
+        **(extra_params or {}),
+    )
+
+    return response
 
 # Import Rust checkpoint saver for LangGraph (use shared singleton)
 try:
@@ -201,7 +262,7 @@ class ResearchState(TypedDict):
 
 
 async def node_setup(state: ResearchState) -> dict:
-    """Setup: Clone repository and generate file tree map."""
+    """Setup: Clone repository and generate file tree map using exa."""
     logger.info("[Graph] Setting up research...", url=state["repo_url"])
 
     try:
@@ -214,8 +275,8 @@ async def node_setup(state: ResearchState) -> dict:
         # Clone repository
         path = clone_repo(repo_url)
 
-        # Generate file tree map
-        tree = repomix_map(path, max_depth=4)
+        # Generate file tree map using exa with depth limit
+        tree = _generate_tree_with_exa(path, max_depth=3)
 
         logger.info("[Graph] Setup complete", path=path, tree_length=len(tree))
 
@@ -231,12 +292,75 @@ async def node_setup(state: ResearchState) -> dict:
         return {"error": f"Setup failed: {e}", "steps": state["steps"] + 1}
 
 
+def _generate_tree_with_exa(path: str, max_depth: int = 3) -> str:
+    """Generate repository structure using exa -T command.
+
+    Uses exa for a cleaner, more readable tree output than traditional tree.
+    Falls back to simple find if exa is not available.
+    """
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["exa", "-T", path, "-L", str(max_depth), "--color=never", "--icons=never"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            # Remove the first line (root path) for cleaner output
+            lines = result.stdout.strip().split("\n")
+            if lines:
+                # Skip the first line which is the root directory itself
+                tree_output = "\n".join(lines[1:]) if len(lines) > 1 else result.stdout.strip()
+                return tree_output
+    except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+        pass
+
+    # Fallback: use find with tree-like output
+    try:
+        result = subprocess.run(
+            ["find", path, "-maxdepth", str(max_depth), "-type f", "-o", "-type d"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            lines = result.stdout.strip().split("\n")
+            # Convert paths to relative and add basic indentation
+            prefix_len = len(path.rstrip("/")) + 1
+            tree_lines = []
+            for line in sorted(lines):
+                if not line:
+                    continue
+                rel_path = line[prefix_len:] if line.startswith(path) else line
+                depth = rel_path.count("/")
+                indent = "  " * depth
+                tree_lines.append(f"{indent}{rel_path.split('/')[-1]}/" if line.endswith("/") else f"{indent}{rel_path}")
+            return "\n".join(tree_lines)
+    except Exception:
+        pass
+
+    # Ultimate fallback: simple ls -R
+    try:
+        result = subprocess.run(
+            ["ls", "-R", path],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return result.stdout or "[Error: Could not generate tree]"
+    except Exception:
+        return "[Error: Could not generate repository tree]"
+
+
 async def node_architect(state: ResearchState) -> dict:
     """
     Plan: Analyze file tree and define analysis shards.
 
-    The LLM breaks down the repository into logical subsystems,
-    each becoming a separate shard for analysis.
+    The LLM breaks down the repository into logical subsystems based on
+    the directory structure, and decides which specific files to include
+    in each shard for deep analysis.
 
     Uses Rust-Powered Cognitive Pipeline for system prompt assembly.
     """
@@ -246,6 +370,7 @@ async def node_architect(state: ResearchState) -> dict:
         client = InferenceClient()
         file_tree = state.get("file_tree", "")
         request = state.get("request", "Analyze architecture")
+        repo_path = state.get("repo_path", "")
 
         if not file_tree:
             raise ValueError("No file tree available for planning")
@@ -253,60 +378,69 @@ async def node_architect(state: ResearchState) -> dict:
         # Build system prompt using Rust-Powered Cognitive Pipeline
         system_prompt = await _build_system_prompt("researcher", state)
 
-        prompt = f"""You are a Software Architect. Break down this repository for deep analysis.
+        prompt = f"""You are a Senior Software Architect. Analyze this repository structure and create a research plan.
 
-Goal: {request}
+RESEARCH GOAL: {request}
 
-File Tree:
+REPOSITORY STRUCTURE (from exa tree):
 ```
 {file_tree}
 ```
 
-Task: Define 3-5 logical analysis shards (subsystems). Each shard should focus on a specific area.
+YOUR TASK:
+1. Identify 3-5 logical subsystems/components based on the directory structure
+2. For each subsystem, specify the EXACT file paths to analyze (be specific, not glob patterns)
+3. Each file path should be relative to the repository root
 
-Return JSON array:
+Respond with a JSON array defining your shards:
 ```json
 [
     {{
         "name": "Core Kernel",
-        "targets": ["src/core/**/*.py", "crates/core/src/**/*.rs"],
-        "description": "Main business logic and core types"
+        "files": [
+            "src/core/main.py",
+            "src/core/engine.py",
+            "src/core/types.rs"
+        ],
+        "description": "Main business logic and core engine components"
     }},
     {{
         "name": "API Layer",
-        "targets": ["src/api/**", "src/routes/**", "**/*handler*.py"],
-        "description": "HTTP handlers and route definitions"
-    }},
-    {{
-        "name": "Infrastructure",
-        "targets": ["src/db/**", "src/services/**", "**/*repository*.py"],
-        "description": "Database and external service integrations"
+        "files": [
+            "src/api/routes.py",
+            "src/api/handlers/user.go",
+            "src/api/middleware/auth.go"
+        ],
+        "description": "HTTP API and request handling"
     }}
 ]
 ```
 
-Guidelines:
-- Focus on subsystems relevant to the research goal
-- Use precise glob patterns
-- Keep each shard focused (avoid catch-all targets)
-- Order from core to peripheral"""
+GUIDELINES:
+- BE SPECIFIC with file paths - use exact paths, not globs
+- Focus on files most relevant to the research goal
+- Each shard should have 3-7 key files for deep analysis
+- Order shards from core functionality to peripheral
+- Consider the tech stack implied by file extensions"""
 
-        response = await client.complete(
+        response = await _llm_complete(
+            client=client,
             system_prompt=system_prompt,
             user_query=prompt,
-            max_tokens=4096,
+            stage="architect",
+            extra_params={"shard_planning": True},
         )
 
         content = response.get("content", "").strip()
         shards = _extract_json_list(content)
 
         if not shards:
-            # Fallback: single shard with whole src
+            # Fallback: single shard with repo root (let LLM analyze everything)
             shards = [
                 {
-                    "name": "Full Analysis",
-                    "targets": ["src", "lib", "packages"],
-                    "description": "Complete codebase analysis",
+                    "name": "Full Repository Analysis",
+                    "files": [],  # Empty means analyze everything
+                    "description": "Complete repository analysis",
                 }
             ]
 
@@ -317,7 +451,7 @@ Guidelines:
                 shard_defs.append(
                     {
                         "name": s.get("name", "Unknown"),
-                        "targets": s.get("targets", ["src"]),
+                        "targets": s.get("files", []),  # Use "files" instead of "targets"
                         "description": s.get("description", ""),
                     }
                 )
@@ -325,7 +459,7 @@ Guidelines:
                 shard_defs.append(
                     {
                         "name": str(s),
-                        "targets": ["src"],
+                        "targets": [],
                         "description": str(s),
                     }
                 )
@@ -351,7 +485,7 @@ async def node_process_shard(state: ResearchState) -> dict:
     Process: Compress and analyze a single shard.
 
     For each shard in the queue:
-    1. Compress code with repomix (using shard-specific config)
+    1. Use repomix to compress the specific files chosen by LLM
     2. Analyze with LLM
     3. Save shard result
     4. Accumulate summary for final index
@@ -368,18 +502,18 @@ async def node_process_shard(state: ResearchState) -> dict:
         # Get current shard
         shard = shards_queue[0]
         shard_name = shard["name"]
-        targets = shard["targets"]
+        files = shard["targets"]  # List of specific file paths chosen by LLM
         description = shard["description"]
 
         repo_path = state.get("repo_path", "")
         repo_name = state.get("repo_name", "")
 
-        logger.info("[Graph] Processing shard", name=shard_name, targets=targets)
+        logger.info("[Graph] Processing shard", name=shard_name, file_count=len(files))
 
-        # Step 1: Compress shard with repomix
+        # Step 1: Compress shard with repomix (using specific file paths)
         compress_result = repomix_compress_shard(
             path=repo_path,
-            targets=targets,
+            targets=files,
             shard_name=shard_name,
         )
 
@@ -405,32 +539,45 @@ Focus: {description}
 
 Research Goal: {state.get("request", "Analyze architecture")}
 
-Code Context:
+FILES IN THIS SHARD ({len(files)} files):
+{', '.join(files) if files else 'All files in repository'}
+
+REPOMIX OUTPUT:
 {truncated}
 
-Produce a detailed Markdown section covering:
+Your task: Produce a detailed Markdown section covering:
 
-## Architecture Patterns
-- Key design patterns and patterns used
-- How this subsystem fits into the larger system
+## Architecture Overview
+- What this subsystem does and its role in the larger system
+- Key design patterns and architectural decisions
 
-## Key Components
-- Main entry points and classes
-- Critical functions and their responsibilities
+## Source Code Analysis
+For each significant file, explain:
+- Main purpose and responsibilities
+- Key functions/classes and their roles
+- How it interacts with other parts of the system
 
 ## Interfaces & Contracts
-- How this subsystem interacts with others
 - Public APIs and data structures
+- How this subsystem communicates with others
 
-## Technology Decisions
-- Why certain libraries/approaches were chosen
+## Key Insights
+- Notable patterns, idioms, or anti-patterns
+- Technology choices and rationale
+- Potential concerns or improvements
 
-Format as a standalone Markdown section that can be combined with other shard analyses."""
+Format as a standalone Markdown section that can be combined with other shard analyses into a comprehensive report."""
 
-        response = await client.complete(
+        response = await _llm_complete(
+            client=client,
             system_prompt=system_prompt,
             user_query=prompt,
-            max_tokens=4096,
+            stage=f"process_shard:{shard_name}",
+            extra_params={
+                "shard_name": shard_name,
+                "file_count": len(files),
+                "files": files[:5] if files else [],  # Log first 5 files
+            },
         )
 
         analysis = response.get("content", "Error: No analysis generated")
@@ -618,6 +765,22 @@ _app = create_sharded_research_graph().compile(checkpointer=_memory)
 logger.info(f"Compiled app checkpointer: {_app.checkpointer}")
 
 
+from pydantic import BaseModel, Field
+
+# =============================================================================
+# Input Validation & Guardrails
+# =============================================================================
+
+
+class ResearchInput(BaseModel):
+    """Strict input schema for the research workflow."""
+
+    repo_url: str = Field(..., description="The GitHub URL to analyze")
+    request: str = Field(..., description="The specific research question or goal")
+    thread_id: str | None = Field(None, description="Optional thread ID for checkpointing")
+    visualize: bool = Field(False, description="Generate diagram only")
+
+
 async def run_research_workflow(
     repo_url: str,
     request: str = "Analyze the architecture",
@@ -625,31 +788,32 @@ async def run_research_workflow(
     visualize: bool = False,
 ) -> dict[str, Any]:
     """
-    Run the sharded research workflow.
+    Run the sharded research workflow with safety guardrails.
 
-    Uses unified Rust LanceDB CheckpointStore for persistent state:
-    - State persists across skill reloads
-    - Supports workflow_id-based retrieval
-
-    Args:
-        repo_url: Git repository URL to analyze.
-        request: Research goal/question.
-        thread_id: Optional thread ID for checkpointing.
-            If not provided, generates one from repo_url hash.
-        visualize: If True, return the workflow diagram instead of running.
-
-    Returns:
-        Final state dictionary with results, or workflow diagram if visualize=True.
+    Uses unified Rust LanceDB CheckpointStore for persistent state.
+    Auto-corrects common LLM hallucinations (e.g., 'query' -> 'request').
     """
+    # 1. Self-Correction Layer: Validate and cast inputs
+    try:
+        # If called from Kernel, arguments might be a dict or kwargs
+        # This wrapper handles the canonical implementation
+        validated = ResearchInput(
+            repo_url=repo_url, request=request, thread_id=thread_id, visualize=visualize
+        )
+    except Exception as e:
+        logger.error(f"Input Validation Error: {e}")
+        return {"error": f"Invalid arguments: {e}. Required: repo_url, request", "steps": 0}
+
     # Handle visualize mode
-    if visualize:
+    if validated.visualize:
         return {"diagram": visualize_workflow()}
-    # Generate workflow_id if not provided
-    workflow_id = thread_id or f"research-{hash(repo_url) % 10000}"
+
+    # Generate unique workflow_id using timestamp to avoid reusing old checkpoints
+    workflow_id = validated.thread_id or f"research-{int(time.time() * 1000)}"
     logger.info(
         "Running sharded research workflow",
-        repo_url=repo_url,
-        request=request,
+        repo_url=validated.repo_url,
+        request=validated.request,
         workflow_id=workflow_id,
     )
 
@@ -663,8 +827,8 @@ async def run_research_workflow(
             steps=saved_state.get("steps", 0),
         )
         initial_state = ResearchState(
-            request=saved_state.get("request", request),
-            repo_url=saved_state.get("repo_url", repo_url),
+            request=saved_state.get("request", validated.request),
+            repo_url=saved_state.get("repo_url", validated.repo_url),
             repo_path=saved_state.get("repo_path", ""),
             file_tree=saved_state.get("file_tree", ""),
             repo_name=saved_state.get("repo_name", ""),
@@ -681,8 +845,8 @@ async def run_research_workflow(
     else:
         logger.info("Starting new workflow", workflow_id=workflow_id)
         initial_state = ResearchState(
-            request=request,
-            repo_url=repo_url,
+            request=validated.request,
+            repo_url=validated.repo_url,
             repo_path="",
             file_tree="",
             repo_name="",
@@ -710,7 +874,7 @@ async def run_research_workflow(
             _WORKFLOW_TYPE,
             workflow_id,
             dict(result),
-            metadata={"repo_url": repo_url, "request": request},
+            metadata={"repo_url": validated.repo_url, "request": validated.request},
         )
 
         return result

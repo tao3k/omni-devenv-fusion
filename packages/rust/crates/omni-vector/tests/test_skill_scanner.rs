@@ -177,6 +177,7 @@ fn test_scan_skill_tools_includes_routing_keywords() {
             &skill_scripts_path,
             "writer",
             &writer_metadata.routing_keywords,
+            &[],
         )
         .unwrap();
 

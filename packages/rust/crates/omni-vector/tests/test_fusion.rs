@@ -18,6 +18,7 @@ fn make_tool_result(name: &str, score: f32) -> ToolSearchResult {
         tool_name: name.to_string(),
         file_path: String::new(),
         keywords: vec![],
+        intents: vec![],
     }
 }
 

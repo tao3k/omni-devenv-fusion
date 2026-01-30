@@ -94,6 +94,7 @@ impl ToolsScanner {
         scripts_dir: &Path,
         skill_name: &str,
         skill_keywords: &[String],
+        skill_intents: &[String],
     ) -> Result<Vec<ToolRecord>, Box<dyn std::error::Error>> {
         let mut tools = Vec::new();
 
@@ -124,7 +125,8 @@ impl ToolsScanner {
                 continue;
             }
 
-            let parsed_tools = self.parse_script(path, skill_name, skill_keywords)?;
+            let parsed_tools =
+                self.parse_script(path, skill_name, skill_keywords, skill_intents)?;
             if !parsed_tools.is_empty() {
                 log::debug!(
                     "ToolsScanner: Found {} tools in {:?}",
@@ -157,6 +159,7 @@ impl ToolsScanner {
     /// * `skill_path` - Path to the skill directory (e.g., "assets/skills/writer")
     /// * `skill_name` - Name of the skill
     /// * `skill_keywords` - Routing keywords from SKILL.md
+    /// * `skill_intents` - Intents from SKILL.md
     ///
     /// # Returns
     ///
@@ -166,9 +169,10 @@ impl ToolsScanner {
         skill_path: &Path,
         skill_name: &str,
         skill_keywords: &[String],
+        skill_intents: &[String],
     ) -> Result<Vec<ToolRecord>, Box<dyn std::error::Error>> {
         let scripts_dir = skill_path.join("scripts");
-        self.scan_scripts(&scripts_dir, skill_name, skill_keywords)
+        self.scan_scripts(&scripts_dir, skill_name, skill_keywords, skill_intents)
     }
 
     /// Scan a skill directory using the canonical skill structure.
@@ -181,6 +185,7 @@ impl ToolsScanner {
     /// * `skill_path` - Path to the skill directory
     /// * `skill_name` - Name of the skill
     /// * `skill_keywords` - Routing keywords from SKILL.md
+    /// * `skill_intents` - Intents from SKILL.md
     /// * `structure` - Skill structure defining which directories to scan
     ///
     /// # Returns
@@ -191,6 +196,7 @@ impl ToolsScanner {
         skill_path: &Path,
         skill_name: &str,
         skill_keywords: &[String],
+        skill_intents: &[String],
         structure: &SkillStructure,
     ) -> Result<Vec<ToolRecord>, Box<dyn std::error::Error>> {
         let mut all_tools = Vec::new();
@@ -201,7 +207,8 @@ impl ToolsScanner {
         for dir_name in script_dirs {
             let dir_path = skill_path.join(dir_name);
             if dir_path.exists() && dir_path.is_dir() {
-                let tools = self.scan_scripts(&dir_path, skill_name, skill_keywords)?;
+                let tools =
+                    self.scan_scripts(&dir_path, skill_name, skill_keywords, skill_intents)?;
                 all_tools.extend(tools);
             }
         }
@@ -219,6 +226,7 @@ impl ToolsScanner {
     /// * `path` - Path to the Python script file
     /// * `skill_name` - Name of the parent skill
     /// * `skill_keywords` - Routing keywords from SKILL.md
+    /// * `skill_intents` - Intents from SKILL.md
     ///
     /// # Returns
     ///
@@ -228,6 +236,7 @@ impl ToolsScanner {
         path: &Path,
         skill_name: &str,
         skill_keywords: &[String],
+        skill_intents: &[String],
     ) -> Result<Vec<ToolRecord>, Box<dyn std::error::Error>> {
         let content = fs::read_to_string(path)?;
         let file_path = path.to_string_lossy().to_string();
@@ -366,6 +375,7 @@ impl ToolsScanner {
                 func_name.clone(),
                 "script".to_string(),
                 combined_keywords,
+                skill_intents.to_vec(),
                 file_hash.clone(),
                 docstring,
                 category,

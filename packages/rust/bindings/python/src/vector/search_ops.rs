@@ -112,6 +112,7 @@ pub fn scan_skill_tools_raw(base_path: &str) -> pyo3::PyResult<Vec<String>> {
             &skill_scripts_path,
             &metadata.skill_name,
             &metadata.routing_keywords,
+            &[], // Pass empty intents
         ) {
             Ok(tools) => all_tools.extend(tools),
             Err(e) => eprintln!(

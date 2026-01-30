@@ -47,90 +47,98 @@ from omni.foundation.api.decorators import skill_command
 )
 async def discover(intent: str, limit: int = 3) -> dict[str, Any]:
     """
-    Unified discovery tool using Rust-native HybridSearch.
+    Unified discovery tool using the Grand Unified Router (OmniRouter).
 
     This is the "Google for Agent Tools" - always consult when unsure.
     """
-    from omni.core.router.hybrid_search import HybridSearch
-
-    search = HybridSearch()
-    results = await search.search(query=intent, limit=limit, min_score=0.0)
+    from omni.core.router.main import RouterRegistry
+    from omni.core.kernel import get_kernel
+    
+    kernel = get_kernel()
+    router = RouterRegistry.get()
+    
+    # Use the Grand Unified Router's Hybrid logic
+    results = await router.route_hybrid(query=intent, limit=limit, threshold=0.1)
 
     if not results:
         return {
-            "status": "no_result",
-            "message": f"No specific tools found for '{intent}'. Fallback to basic `terminal` or `filesystem` skills.",
-            "quick_guide": [
-                "No matching tools found.",
-                "Consider using: terminal.run(cmd='...') or filesystem.read_files(paths=['...'])",
-            ],
+            "status": "not_found",
+            "message": f"No specific tools match '{intent}'.",
+            "suggestions": [
+                "Try a broader query (e.g., 'file' instead of 'json parser')",
+                "Use `skill.list_index` to see all available skills",
+                "Fallback to `terminal.run_command` if you need to explore manually"
+            ]
         }
 
-    # Construct "anti-hallucination" guide
-    quick_guide = []
+    # Construct "Intelligent Discovery Report"
     details = []
 
     for r in results:
-        tool_id = r.get("id", "")
-        skill_name = r.get("skill_name", "")
-        command = r.get("command", "")
-        description = r.get("description", "")
-        input_schema = r.get("input_schema", "{}")
-        score = r.get("score", 0.0)
-        confidence = r.get("confidence", "unknown")
+        full_id = f"{r.skill_name}.{r.command_name}"
+        # Fetch actual handler to get the most accurate config
+        handler = kernel.skill_context.get_command(full_id)
+        
+        description = ""
+        input_schema = {}
+        file_path = ""
+        
+        if handler:
+            if hasattr(handler, "_skill_config"):
+                config = handler._skill_config
+                description = config.get("description", "")
+                input_schema = config.get("input_schema", {})
+                file_path = config.get("file_path", "")
+            else:
+                description = (handler.__doc__ or "").split("\n")[0]
 
-        # Generate usage template
-        import json
-
+        # 1. Calculate direct path to SKILL.md
+        from omni.foundation.config.skills import SKILLS_DIR
+        doc_path = ""
         try:
-            schema = json.loads(input_schema) if isinstance(input_schema, str) else input_schema
-            props = schema.get("properties", {})
-            required = schema.get("required", [])
-            args = {}
-            for prop_name, prop_meta in props.items():
-                if prop_name not in required:
-                    continue
-                prop_type = prop_meta.get("type", "string")
-                if prop_type == "integer":
-                    args[prop_name] = 0
-                elif prop_type == "number":
-                    args[prop_name] = 0.0
-                elif prop_type == "boolean":
-                    args[prop_name] = True
-                elif prop_type == "array":
-                    args[prop_name] = []
-                elif prop_type == "object":
-                    args[prop_name] = {}
-                else:
-                    args[prop_name] = f"<{prop_name}>"
-            args_str = json.dumps(args, separators=(", ", ": "))
-            usage = f'@omni("{tool_id}", {args_str})'
+            potential_doc = SKILLS_DIR.definition_file(r.skill_name)
+            if potential_doc.exists():
+                doc_path = str(potential_doc)
         except Exception:
-            usage = f'@omni("{tool_id}", {{"..."}})'
+            pass
 
-        # Create quick guide entry
-        if tool_id == "skill.jit_install":
-            quick_guide.append(f"To install a new skill, use: {usage}")
-        else:
-            quick_guide.append(f"If you want to {intent}, use: {usage}")
+        # 2. Generate EXACT usage template (SSOT)
+        import json
+        try:
+            props = input_schema.get("properties", {})
+            required = input_schema.get("required", [])
+            args = {}
+            for p_name, p_meta in props.items():
+                if p_name in required:
+                    p_type = p_meta.get("type", "string")
+                    args[p_name] = f"<{p_name}: {p_type}>"
+                else:
+                    if len(args) < 5: args[p_name] = f"<{p_name}?>"
+            
+            usage = f'@omni("{full_id}", {json.dumps(args)})'
+        except:
+            usage = f'@omni("{full_id}", {{...}})'
 
-        details.append(
-            {
-                "name": tool_id,
-                "skill": skill_name,
-                "description": description,
-                "score": f"{score:.2f}",
-                "confidence": confidence,
-                "usage_example": usage,
-                "how_to_use": f"Copy and use the @omni() format above exactly as shown.",
-            }
-        )
+        # 3. Documentation hints
+        doc_cues = []
+        if doc_path: doc_cues.append(f"Full manual available at: {doc_path}")
+        
+        details.append({
+            "tool": full_id,
+            "score": r.score,
+            "description": description,
+            "usage": usage,
+            "documentation_path": doc_path,
+            "source_code_path": file_path,
+            "documentation_hints": doc_cues,
+            "advice": f"Check the usage pattern. If arguments are complex, read 'documentation_path'."
+        })
 
     return {
         "status": "success",
-        "analysis": f"Found {len(results)} capabilities matching '{intent}'",
-        "quick_guide": quick_guide,
-        "details": details,
+        "intent_matched": intent,
+        "discovered_capabilities": details,
+        "protocol_reminder": "NEVER guess parameters. Use the EXACT usage strings provided above."
     }
 
 

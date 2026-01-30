@@ -44,26 +44,3 @@ async def crawl_url(
         args={"url": url, "fit_markdown": fit_markdown},
     )
     return result
-
-
-@skill_command(
-    name="check_crawler_ready",
-    description="Check if the crawler skill is properly configured and ready.",
-)
-async def check_crawler_ready() -> dict[str, Any]:
-    """
-    Check if Playwright browsers are installed and crawler is ready.
-
-    Returns:
-        dict with 'ready' status and any error messages
-    """
-    # For check_crawler_ready, we run a simple version inline
-    # to avoid the complexity of the engine.py main() interface
-    try:
-        from playwright.sync_api import sync_playwright
-
-        with sync_playwright() as p:
-            browsers = p.chromium.executable_path
-            return {"ready": True, "browsers": str(browsers)}
-    except Exception as e:
-        return {"ready": False, "error": str(e)}

@@ -265,20 +265,37 @@ class SkillIndexer:
             for cmd in skill.get("commands", []):
                 cmd_name = cmd.get("name", "")
                 cmd_desc = cmd.get("description", "") or cmd_name
-                doc_content = f"Command {cmd_name}: {cmd_desc}"
+                cmd_keywords = cmd.get("keywords", [])
+                cmd_intents = skill.get("intents", []) # Commands inherit skill intents
+                
+                # [SEO] Build a highly descriptive search block for both Vector and Keyword engines
+                # Combining name, description, intents, and keywords into a single semantic unit
+                doc_content = f"COMMAND: {skill_name}.{cmd_name}\n"
+                doc_content += f"DESCRIPTION: {cmd_desc}\n"
+                if cmd_intents:
+                    doc_content += f"INTENTS: {', '.join(cmd_intents)}\n"
+                if cmd_keywords:
+                    doc_content += f"KEYWORDS: {', '.join(cmd_keywords)}"
+                
                 cmd_id = f"{skill_name}.{cmd_name}" if cmd_name else entry_id
+
+                # Match the metadata schema expected by Rust for Keyword Indexing
+                metadata = {
+                    "type": "command",
+                    "skill_name": skill_name,
+                    "tool_name": cmd_id,
+                    "command": cmd_name,
+                    "keywords": cmd_keywords, 
+                    "intents": cmd_intents,
+                    "weight": 2.0,
+                    "id": cmd_id,
+                }
 
                 docs.append(
                     {
                         "id": cmd_id,
                         "content": doc_content,
-                        "metadata": {
-                            "type": "command",
-                            "skill_name": skill_name,
-                            "command": cmd_name,
-                            "weight": 2.0,
-                            "id": cmd_id,
-                        },
+                        "metadata": metadata,
                     }
                 )
 

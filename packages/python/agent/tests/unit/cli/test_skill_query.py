@@ -3,6 +3,7 @@ test_skill_query.py - Skill Query Commands Tests
 
 Tests for:
 - list: List installed and loaded skills
+- list --json: Output all skills info as JSON (from Rust DB)
 - info: Show information about a skill
 - discover: Discover skills from remote index [DEPRECATED]
 - search: Search skills [DEPRECATED]
@@ -13,8 +14,9 @@ Usage:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -74,6 +76,164 @@ description: A test skill
                 result = runner.invoke(app, ["skill", "list"])
 
         assert result.exit_code == 0
+
+    def test_list_json_output(self, runner, tmp_path: Path):
+        """Test list --json outputs skills from Rust DB as JSON with full metadata."""
+        # Create mock skill index data (what get_skill_index returns)
+        mock_skills = [
+            {
+                "name": "git",
+                "path": "assets/skills/git",
+                "description": "Git operations",
+                "version": "1.0.0",
+                "repository": "https://github.com/example/git-skill",
+                "routing_keywords": ["git", "version control"],
+                "intents": ["commit changes", "check status"],
+                "authors": ["omni-dev-fusion"],
+                "permissions": ["filesystem:*", "terminal:run_command"],
+                "require_refs": [{"path": "docs/git-guide.md"}],
+                "oss_compliant": ["apache-2.0"],
+                "compliance_details": ["License verified"],
+                "sniffing_rules": [{"type": "file_match", "pattern": "**/.git/**"}],
+                "docs_available": {"skill_md": True, "readme": True, "tests": False},
+                "tools": [
+                    {
+                        "name": "git.status",
+                        "description": "Show working tree status",
+                        "category": "query",
+                        "input_schema": '{"type": "object", "properties": {}}',
+                        "file_hash": "abc123",
+                    },
+                    {
+                        "name": "git.commit",
+                        "description": "Commit changes",
+                        "category": "write",
+                        "input_schema": '{"type": "object", "properties": {"message": {"type": "string"}},"required": ["message"]}',
+                        "file_hash": "def456",
+                    },
+                ],
+            },
+            {
+                "name": "filesystem",
+                "path": "assets/skills/filesystem",
+                "description": "File operations",
+                "version": "1.0.0",
+                "repository": "",
+                "routing_keywords": ["file", "io"],
+                "intents": ["read file", "write file"],
+                "authors": ["omni-dev-fusion"],
+                "permissions": ["filesystem:read"],
+                "require_refs": [],
+                "oss_compliant": [],
+                "compliance_details": [],
+                "sniffing_rules": [],
+                "docs_available": {"skill_md": True, "readme": False, "tests": False},
+                "tools": [
+                    {
+                        "name": "filesystem.read",
+                        "description": "Read file",
+                        "category": "read",
+                        "input_schema": '{"type": "object", "properties": {"path": {"type": "string"}}}',
+                        "file_hash": "ghi789",
+                    },
+                ],
+            },
+        ]
+
+        with patch("asyncio.run", return_value=mock_skills):
+            with patch("omni.foundation.config.skills.SKILLS_DIR", return_value=tmp_path / "assets" / "skills"):
+                result = runner.invoke(app, ["skill", "list", "--json"])
+
+        assert result.exit_code == 0
+        # Parse JSON output
+        output_data = json.loads(result.output)
+        assert isinstance(output_data, list)
+        assert len(output_data) == 2
+
+        # Verify skill 1 has full metadata
+        assert output_data[0]["name"] == "git"
+        assert output_data[0]["path"] == "assets/skills/git"
+        assert output_data[0]["docs_path"] == "assets/skills/git/SKILL.md"
+        assert output_data[0]["description"] == "Git operations"
+        assert output_data[0]["version"] == "1.0.0"
+        assert output_data[0]["repository"] == "https://github.com/example/git-skill"
+        assert output_data[0]["routing_keywords"] == ["git", "version control"]
+        assert output_data[0]["intents"] == ["commit changes", "check status"]
+        assert output_data[0]["authors"] == ["omni-dev-fusion"]
+        assert output_data[0]["permissions"] == ["filesystem:*", "terminal:run_command"]
+        assert output_data[0]["require_refs"] == ["docs/git-guide.md"]
+        assert output_data[0]["oss_compliant"] == ["apache-2.0"]
+        assert output_data[0]["compliance_details"] == ["License verified"]
+        assert output_data[0]["sniffing_rules"] == [{"type": "file_match", "pattern": "**/.git/**"}]
+        assert output_data[0]["docs_available"]["skill_md"] is True
+        assert output_data[0]["docs_available"]["readme"] is True
+        assert output_data[0]["docs_available"]["tests"] is False
+        assert output_data[0]["has_extensions"] is True
+        assert len(output_data[0]["tools"]) == 2
+
+        # Verify tool has all fields
+        tool = output_data[0]["tools"][1]
+        assert tool["name"] == "git.commit"
+        assert tool["category"] == "write"
+        assert "input_schema" in tool
+        assert "message" in tool["input_schema"]
+        assert tool["file_hash"] == "def456"
+
+        # Verify skill 2
+        assert output_data[1]["name"] == "filesystem"
+        assert output_data[1]["permissions"] == ["filesystem:read"]
+        assert output_data[1]["has_extensions"] is True
+
+    def test_list_json_empty_skills(self, runner, tmp_path: Path):
+        """Test list --json with no skills in Rust DB."""
+        with patch("asyncio.run", return_value=[]):
+            with patch("omni.foundation.config.skills.SKILLS_DIR", return_value=tmp_path / "assets" / "skills"):
+                result = runner.invoke(app, ["skill", "list", "--json"])
+
+        assert result.exit_code == 0
+        output_data = json.loads(result.output)
+        assert isinstance(output_data, list)
+        assert len(output_data) == 0
+
+    def test_list_json_preserves_full_metadata(self, runner, tmp_path: Path):
+        """Test that --json preserves all skill metadata from Rust scanner."""
+        mock_skills = [
+            {
+                "name": "test_skill",
+                "path": "assets/skills/test_skill",
+                "description": "Test skill description",
+                "version": "2.0.0",
+                "routing_keywords": ["test", "example"],
+                "intents": ["run tests", "verify code"],
+                "authors": ["Test Author"],
+                "permissions": ["network:http"],
+                "tools": [
+                    {"name": "test_skill.run", "description": "Run tests", "category": "test"},
+                    {"name": "test_skill.verify", "description": "Verify code", "category": "check"},
+                ],
+            },
+        ]
+
+        with patch("asyncio.run", return_value=mock_skills):
+            with patch("omni.foundation.config.skills.SKILLS_DIR", return_value=tmp_path / "assets" / "skills"):
+                result = runner.invoke(app, ["skill", "list", "--json"])
+
+        assert result.exit_code == 0
+        output_data = json.loads(result.output)
+        skill_data = output_data[0]
+
+        assert skill_data["name"] == "test_skill"
+        assert skill_data["path"] == "assets/skills/test_skill"
+        assert skill_data["description"] == "Test skill description"
+        assert skill_data["version"] == "2.0.0"
+        assert skill_data["routing_keywords"] == ["test", "example"]
+        assert skill_data["intents"] == ["run tests", "verify code"]
+        assert skill_data["authors"] == ["Test Author"]
+        assert skill_data["permissions"] == ["network:http"]
+        assert skill_data["has_extensions"] is True
+        assert len(skill_data["tools"]) == 2
+        assert skill_data["tools"][0]["name"] == "test_skill.run"
+        assert skill_data["tools"][0]["category"] == "test"
 
 
 class TestSkillInfo:

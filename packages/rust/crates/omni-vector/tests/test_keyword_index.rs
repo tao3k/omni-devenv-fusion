@@ -24,6 +24,7 @@ async fn test_keyword_index_bulk_upsert() {
                 "Commit changes to repository".to_string(),
                 "git".to_string(),
                 vec!["commit".to_string(), "save".to_string(), "push".to_string()],
+                vec![],
             ),
             (
                 "git_status".to_string(),
@@ -34,12 +35,14 @@ async fn test_keyword_index_bulk_upsert() {
                     "dirty".to_string(),
                     "clean".to_string(),
                 ],
+                vec![],
             ),
             (
                 "filesystem_read".to_string(),
                 "Read file contents".to_string(),
                 "filesystem".to_string(),
                 vec!["read".to_string(), "file".to_string(), "cat".to_string()],
+                vec![],
             ),
         ])
         .unwrap();
@@ -60,12 +63,14 @@ async fn test_keyword_index_search() {
                 "Commit changes to repository".to_string(),
                 "git".to_string(),
                 vec!["commit".to_string(), "save".to_string()],
+                vec![],
             ),
             (
                 "git_status".to_string(),
                 "Show working tree status".to_string(),
                 "git".to_string(),
                 vec!["status".to_string()],
+                vec![],
             ),
         ])
         .unwrap();

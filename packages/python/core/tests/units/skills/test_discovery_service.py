@@ -187,8 +187,8 @@ class TestGenerateUsageTemplate:
 
         # Should include required fields
         assert "message" in template
-        # Should not include optional fields
-        assert "repo_path" not in template
+        # Should now include optional fields with '?' suffix
+        assert "repo_path?" in template
 
     def test_template_handles_string_schema(self):
         """Verify template handles JSON string input_schema."""

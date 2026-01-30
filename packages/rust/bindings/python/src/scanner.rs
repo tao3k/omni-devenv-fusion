@@ -95,6 +95,7 @@ pub fn scan_skill_tools(base_path: String) -> Vec<PyToolRecord> {
                         &scripts_path,
                         &metadata.skill_name,
                         &metadata.routing_keywords,
+                        &[], // Pass empty intents
                     ) {
                         // Deduplicate by tool_name (keep first occurrence)
                         for tool in tools {

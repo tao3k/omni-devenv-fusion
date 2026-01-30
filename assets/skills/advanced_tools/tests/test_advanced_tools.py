@@ -3,13 +3,12 @@ Advanced Tools Skill Tests - Phase 6 Migration
 
 Tests for migrated advanced_tools skills:
 - search.py: smart_search, smart_find
-- fs.py: tree_view
 - mutation.py: regex_replace
 
 Verifies:
 - @skill_command with autowire=True pattern
 - ConfigPaths integration
-- Modern toolchain (rg, fd, tree, sed)
+- Modern toolchain (rg, fd, sed)
 - Environment-driven tool discovery
 """
 
@@ -159,84 +158,6 @@ class TestSmartFind:
             assert "count" in result
 
 
-class TestFsImports:
-    """Test fs module imports."""
-
-    def test_fs_script_imports(self):
-        """Test fs script imports successfully."""
-        from advanced_tools.scripts import fs
-
-        assert fs is not None
-
-    def test_tree_view_function_exists(self):
-        """Test tree_view function is exported."""
-        from advanced_tools.scripts.fs import tree_view
-
-        assert callable(tree_view)
-
-
-class TestTreeView:
-    """Test tree_view function."""
-
-    def _has_skill_command_attr(self, func) -> bool:
-        """Check if function has skill command attributes."""
-        return hasattr(func, "_is_skill_command") and hasattr(func, "_skill_config")
-
-    def test_tree_view_has_skill_command(self):
-        """Test tree_view has skill command attributes."""
-        from advanced_tools.scripts.fs import tree_view
-
-        assert self._has_skill_command_attr(tree_view)
-
-    def test_tree_view_returns_structure(self):
-        """Test tree_view returns structured result."""
-        import shutil
-
-        from advanced_tools.scripts.fs import tree_view
-
-        # Skip if tree is not installed
-        if not shutil.which("tree"):
-            import pytest
-
-            pytest.skip("tree command not installed")
-
-        result = tree_view(depth=1)
-
-        assert "success" in result
-        assert "output" in result
-        assert "tool" in result
-        assert result["tool"] == "tree"
-
-    def test_tree_view_error_when_missing(self):
-        """Test tree_view returns error when tree is not installed."""
-        import shutil
-
-        from advanced_tools.scripts.fs import tree_view
-
-        # If tree is not installed, we should get an error
-        if not shutil.which("tree"):
-            result = tree_view(depth=1)
-            assert result["success"] is False
-            assert "tree" in result["error"].lower()
-
-    def test_tree_view_ignores_hidden(self):
-        """Test tree_view ignores hidden directories by default."""
-        import shutil
-
-        from advanced_tools.scripts.fs import tree_view
-
-        # Skip if tree is not installed
-        if not shutil.which("tree"):
-            import pytest
-
-            pytest.skip("tree command not installed")
-
-        result = tree_view(depth=2)
-
-        # Should not contain hidden directories in output
-        assert ".git" not in result["output"]
-
-
 class TestMutationImports:
     """Test mutation module imports."""
 
@@ -334,13 +255,6 @@ class TestExports:
         for item in expected:
             assert item in search.__all__, f"{item} not in search.__all__"
 
-    def test_fs_all_exports(self):
-        """Test fs module __all__ is defined."""
-        from advanced_tools.scripts import fs
-
-        assert hasattr(fs, "__all__")
-        assert "tree_view" in fs.__all__
-
     def test_mutation_all_exports(self):
         """Test mutation module __all__ is defined."""
         from advanced_tools.scripts import mutation
@@ -351,10 +265,10 @@ class TestExports:
     def test_main_all_exports(self):
         """Test main scripts __all__ is defined."""
         # Import the search module and check it exports everything
-        from advanced_tools.scripts import fs, mutation, search
+        from advanced_tools.scripts import mutation, search
 
-        expected = ["smart_search", "smart_find", "tree_view", "regex_replace"]
+        expected = ["smart_search", "smart_find", "regex_replace"]
         for item in expected:
             # Check if item is exported from any of the submodules
-            found = hasattr(search, item) or hasattr(fs, item) or hasattr(mutation, item)
+            found = hasattr(search, item) or hasattr(mutation, item)
             assert found, f"{item} not found in any module"

@@ -150,10 +150,6 @@
       {
         "name": "crawl4ai.crawl_url",
         "description": "Execute crawl4ai.crawl_url"
-      },
-      {
-        "name": "crawl4ai.check_crawler_ready",
-        "description": "Execute crawl4ai.check_crawler_ready"
       }
     ],
     "routingKeywords": ["crawl", "scrape", "web", "fetch", "scrape"],
@@ -241,10 +237,6 @@
     "version": "1.0.0",
     "path": "assets/skills/skill",
     "tools": [
-      {
-        "name": "skill.search_tools",
-        "description": "Execute skill.search_tools"
-      },
       {
         "name": "skill.reload",
         "description": "Execute skill.reload"

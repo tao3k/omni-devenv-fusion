@@ -1,205 +1,102 @@
 ---
 name: "advanced_tools"
-version: "1.1.0"
-description: "High-performance text search, file operations, and batch refactoring using Rust-based tools (ripgrep, fd, tree). Includes safe batch replacement with dry-run preview."
+version: "1.2.0"
+description: "High-performance [FIND] and [SEARCH] engine for the project. Uses Rust-native tools (fd, ripgrep) to locate files and search code content with extreme speed. Includes safe batch refactoring."
 routing_keywords:
   [
-    "search",
-    "grep",
     "find",
+    "search",
+    "locate",
+    "grep",
     "ripgrep",
+    "rg",
+    "fd",
+    "discovery",
+    "explore",
+    "pattern",
     "regex",
     "match",
     "content",
     "text",
-    "advanced",
+    "files",
+    "codebase",
+    "batch",
     "refactor",
     "replace",
-    "batch",
-    "tree",
-    "directory",
   ]
 authors: ["omni-dev-fusion"]
 intents:
-  - "Search code with regex"
-  - "Find text in files"
-  - "Find patterns in code"
-  - "Count matches in codebase"
-  - "Batch replace across files"
-  - "Preview refactoring changes"
-  - "View directory tree"
+  - "Find files by name, extension, or glob pattern"
+  - "Search for text or regex patterns in code content"
+  - "Locate specific files across the entire project"
+  - "Fast codebase exploration and discovery"
+  - "Batch find and replace across multiple files"
+  - "High-performance grep replacement"
 ---
 
-You have loaded the **Advanced Tools Skill**.
+You have loaded the **Advanced Tools (Find & Search) Skill**.
 
-## Architecture
+## 🚀 The Search Engine of Agentic OS
 
-This skill provides three categories of tools:
+This skill is the **PRIMARY** gateway for locating anything in the project. It wraps high-performance Rust tools.
 
-| Category      | Tools                            | Use For                           |
-| ------------- | -------------------------------- | --------------------------------- |
-| **Search**    | `smart_search`, `smart_find`     | Fast text and file discovery      |
-| **Visualize** | `tree_view`                      | Directory structure visualization |
-| **Mutation**  | `regex_replace`, `batch_replace` | Safe text transformation          |
-
-## What to Use Instead
-
-| Task                        | Use Skill      | Tool                                       |
-| --------------------------- | -------------- | ------------------------------------------ |
-| Search code structure (AST) | **code_tools** | `search_code`, `search_directory`          |
-| Code refactoring            | **code_tools** | `structural_replace`, `structural_preview` |
-| File I/O                    | **filesystem** | `read_file`, `save_file`                   |
-| Surgical file read          | **filesystem** | `read_file_context`                        |
-
-## Key Differences
-
-### Text Search (advanced_tools) vs AST Search (code_tools)
-
-| Aspect          | advanced_tools (ripgrep)       | code_tools (AST)              |
-| --------------- | ------------------------------ | ----------------------------- |
-| **Search Type** | Text patterns                  | Code structure                |
-| **Example**     | `class \w+` finds "class" text | `class $NAME` finds classes   |
-| **Scope**       | Literal                        | Semantic                      |
-| **Use Case**    | Finding text, TODO comments    | Refactoring, pattern matching |
-
-### Single Replace vs Batch Replace
-
-| Aspect       | `regex_replace` | `batch_replace`  |
-| ------------ | --------------- | ---------------- |
-| **Files**    | Single file     | Multiple files   |
-| **Preview**  | No              | Yes (dry-run)    |
-| **Safety**   | Manual review   | Automatic diff   |
-| **Use Case** | One-off changes | Mass refactoring |
+| Category     | Tool            | Implementation  | Best For                      |
+| ------------ | --------------- | --------------- | ----------------------------- |
+| **Locator**  | `smart_find`    | **fd-find**     | Finding FILES by name/path    |
+| **Searcher** | `smart_search`  | **ripgrep**     | Finding TEXT inside files     |
+| **Refactor** | `batch_replace` | **Rust/Python** | Multi-file search and replace |
 
 ## Available Tools
 
-### Search Commands
+### 🔍 smart_find: Fast File Location
 
-#### smart_search
-
-Fast regex search using ripgrep with structured output.
-
-```python
-def smart_search(
-    pattern: str,
-    path: str = ".",
-    file_type: str = None,
-    context_lines: int = 2,
-    max_results: int = 50,
-) -> dict[str, Any]
-```
-
-#### smart_find
-
-Fast file finding using fd with pattern matching.
+**ALWAYS use this to find files.** Superior to `ls` or `list_directory` for discovery.
 
 ```python
 def smart_find(
-    pattern: str = ".",
-    path: str = ".",
-    extension: str = None,
-    max_results: int = 100,
-) -> dict[str, Any]
+    pattern: str = ".",      # Regex or glob for filename
+    extension: str = None,   # Filter: 'py', 'rs', 'md'
+    exclude: str = None,     # Patterns to ignore
+    search_mode: str = "filename" # "filename" (fd) or "content" (rg -l)
+) -> dict
 ```
 
-### Visualization Commands
+### 🧠 smart_search: Fast Code Search
 
-#### tree_view
-
-Directory tree visualization (requires `tree` command).
+**ALWAYS use this to find code content.** The gold standard for `grep`.
 
 ```python
-def tree_view(
-    path: str = ".",
-    depth: int = 3,
-    ignore_hidden: bool = True,
-) -> dict[str, Any]
+def smart_search(
+    pattern: str,            # Text or regex to find (REQUIRED)
+    file_globs: str = None,  # Filter: "*.py *.ts"
+    case_sensitive: bool = True,
+    context_lines: int = 0
+) -> dict
 ```
 
-### Mutation Commands
+### 🛠️ batch_replace: Safe Refactoring
 
-#### regex_replace
-
-Single file regex replacement using sed.
-
-```python
-def regex_replace(
-    file_path: str,
-    pattern: str,
-    replacement: str,
-) -> dict[str, Any]
-```
-
-#### batch_replace
-
-**Batch refactoring with dry-run safety** (RECOMMENDED for refactoring).
+**RECOMMENDED for mass changes.** Always includes a dry-run preview.
 
 ```python
 def batch_replace(
-    pattern: str,
-    replacement: str,
+    pattern: str,            # Find this
+    replacement: str,        # Replace with this
     file_glob: str = "**/*",
-    dry_run: bool = True,  # Safety: default is preview
-    max_files: int = 50,
-) -> dict[str, Any]
+    dry_run: bool = True     # Default is PREVIEW for safety
+) -> dict
 ```
 
-## Common Patterns
+## Use Cases & Intention
 
-### Finding Function Definitions
+- **"Find all python files"** -> `smart_find(extension="py")`
+- **"Where is the Kernel defined?"** -> `smart_search(pattern="class Kernel")`
+- **"Find files containing API_KEY"** -> `smart_find(pattern="API_KEY", search_mode="content")`
+- **"Rename variable 'old_name' to 'new_name'"** -> `batch_replace(...)`
 
-```
-pattern: def \w+
-file_type: py
-```
+## Important Rules
 
-### Finding TODO Comments
-
-```
-pattern: TODO|FIXME|HACK
-context_lines: 1
-```
-
-### Batch Refactoring (Safe)
-
-```python
-# Step 1: Preview changes
-result = batch_replace(
-    pattern="old_function",
-    replacement="new_function",
-    file_glob="**/*.py",
-    dry_run=True,  # Preview mode
-)
-
-# Step 2: Review diffs
-for change in result["changes"]:
-    print(change["diff"])
-
-# Step 3: Apply if满意
-result = batch_replace(
-    pattern="old_function",
-    replacement="new_function",
-    file_glob="**/*.py",
-    dry_run=False,  # Live mode
-)
-```
-
-## References
-
-- **[Scenario: Batch Refactoring](./references/scenario-batch-refactoring.md)** - Detailed guide for safe batch replacement
-
-## Optimization Tips
-
-1. **Use file_type/glob filters** - Restricts search to specific languages
-2. **Narrow path scope** - Search specific directories, not whole repo
-3. **Use context_lines sparingly** - More context = more output = more tokens
-4. **Use specific regex** - `"def test_"` matches fewer than `"test"`
-5. **Always dry-run first** - Use `dry_run=True` for batch_replace
-
-## Best Practices
-
-1. Start with broad search, narrow with results
-2. Use context_lines to understand matches
-3. Check `stats.elapsed_ms` - if high, add filters
-4. For refactoring: always preview with dry-run before applying
-5. Combine with read_file for full context
+1. **Discovery First**: If you don't know where a file is, use `smart_find`.
+2. **Context Matters**: Use `smart_search` with `context_lines` to understand match surroundings.
+3. **Respect Ignored**: All tools automatically respect `.gitignore`.
+4. **Prefer Patterns**: Use specific regex patterns to reduce noise.

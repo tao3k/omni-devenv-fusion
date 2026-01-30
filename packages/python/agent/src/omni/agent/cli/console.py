@@ -106,6 +106,26 @@ def print_result(result: Any, is_tty: bool = False, json_output: bool = False) -
             # Handle isolation.py direct format: content / metadata
             content = result.get("content", result.get("markdown", ""))
             metadata = result.get("metadata", {})
+            # Handle skill.discover format: quick_guide / details
+            if not content and ("quick_guide" in result or "details" in result):
+                import json
+                content = json.dumps(result, indent=2, ensure_ascii=False)
+                metadata = {}
+            # Handle tools like smart_search that return matches/count
+            if not content and "matches" in result:
+                import json
+                # Truncate matches for display
+                display_result = result.copy()
+                if "matches" in display_result and len(display_result["matches"]) > 20:
+                    display_result["matches"] = display_result["matches"][:20]
+                    display_result["matches_truncated"] = True
+                content = json.dumps(display_result, indent=2, ensure_ascii=False)
+                metadata = {}
+            # Handle skill.discover format: discovered_capabilities
+            if not content and "discovered_capabilities" in result:
+                import json
+                content = json.dumps(result, indent=2, ensure_ascii=False)
+                metadata = {}
     elif isinstance(result, str):
         content = result
         metadata = {}

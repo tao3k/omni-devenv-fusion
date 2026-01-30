@@ -9,7 +9,7 @@ _engine = SmartAstEngine()
 
 
 @skill_command(
-    name="smart_ast",
+    name="smart_ast_search",
     category="search",
     description="""
     UNIFIED Code Intelligence & Refactoring Tool.

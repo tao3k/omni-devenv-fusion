@@ -485,7 +485,21 @@ class Kernel:
             for skill in self._skill_context._skills.values():
                 # Get command names and create command entries
                 cmd_names = skill.list_commands() if hasattr(skill, "list_commands") else []
-                commands = [{"name": cmd, "description": ""} for cmd in cmd_names]
+                commands = []
+                for cmd_name in cmd_names:
+                    # Fetch actual command handler to get metadata
+                    handler = skill.get_command(cmd_name)
+                    cmd_keywords = []
+                    cmd_desc = ""
+                    if handler and hasattr(handler, "_skill_config"):
+                        cmd_keywords = handler._skill_config.get("keywords", [])
+                        cmd_desc = handler._skill_config.get("description", "")
+                    
+                    commands.append({
+                        "name": cmd_name, 
+                        "description": cmd_desc,
+                        "keywords": cmd_keywords
+                    })
 
                 skills_data.append(
                     {

@@ -346,6 +346,33 @@ class RustVectorStore:
             logger.debug(f"Failed to list tools from LanceDB: {e}")
             return []
 
+    async def get_skill_index(self, base_path: str) -> list[dict]:
+        """Get complete skill index with full metadata from filesystem scan.
+
+        This method directly scans the skills directory and returns all metadata
+        including: routing_keywords, intents, authors, version, permissions, etc.
+
+        Unlike list_all_tools which only returns tool records from LanceDB,
+        this method returns full skill metadata from SKILL.md frontmatter.
+
+        Args:
+            base_path: Base directory containing skills (e.g., "assets/skills")
+
+        Returns:
+            List of skill dictionaries with full metadata including:
+            - name, description, version, path
+            - routing_keywords, intents, authors, permissions
+            - tools (with name, description, category, input_schema)
+        """
+        try:
+            json_result = self._inner.get_skill_index(base_path)
+            skills = json.loads(json_result) if json_result else []
+            logger.debug(f"Found {len(skills)} skills in index")
+            return skills
+        except Exception as e:
+            logger.debug(f"Failed to get skill index: {e}")
+            return []
+
     async def list_all(self, table_name: str = "knowledge") -> list[dict]:
         """List all entries from a table.
 

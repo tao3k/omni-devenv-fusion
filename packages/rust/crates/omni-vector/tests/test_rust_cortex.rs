@@ -274,30 +274,34 @@ async fn test_search_tools_weighted_rrf() {
         .unwrap();
 
     // Index keywords
-    let kw_docs: Vec<(String, String, String, Vec<String>)> = vec![
+    let kw_docs: Vec<(String, String, String, Vec<String>, Vec<String>)> = vec![
         (
             "git.commit".to_string(),
             "Commit changes to repository".to_string(),
             "git".to_string(),
             vec!["git".to_string(), "commit".to_string()],
+            vec![],
         ),
         (
             "git.status".to_string(),
             "Show working tree status".to_string(),
             "git".to_string(),
             vec!["git".to_string(), "status".to_string()],
+            vec![],
         ),
         (
             "git.branch".to_string(),
             "Create or list branches".to_string(),
             "git".to_string(),
             vec!["git".to_string(), "branch".to_string()],
+            vec![],
         ),
         (
             "python.run".to_string(),
             "Run Python code".to_string(),
             "python".to_string(),
             vec!["python".to_string(), "run".to_string()],
+            vec![],
         ),
     ];
     store.bulk_index_keywords(kw_docs).unwrap();
@@ -355,18 +359,20 @@ async fn test_search_tools_field_boosting() {
         .unwrap();
 
     // Index keywords
-    let kw_docs: Vec<(String, String, String, Vec<String>)> = vec![
+    let kw_docs: Vec<(String, String, String, Vec<String>, Vec<String>)> = vec![
         (
             "git.commit".to_string(),
             "Commit changes to repository".to_string(),
             "git".to_string(),
             vec!["git".to_string(), "commit".to_string()],
+            vec![],
         ),
         (
             "git.status".to_string(),
             "Show git status".to_string(),
             "git".to_string(),
             vec!["git".to_string(), "status".to_string()],
+            vec![],
         ),
     ];
     store.bulk_index_keywords(kw_docs).unwrap();
@@ -437,18 +443,20 @@ async fn test_search_tools_keyword_rescue() {
         .unwrap();
 
     // Index keywords
-    let kw_docs: Vec<(String, String, String, Vec<String>)> = vec![
+    let kw_docs: Vec<(String, String, String, Vec<String>, Vec<String>)> = vec![
         (
             "git.commit".to_string(),
             "Commit changes".to_string(),
             "git".to_string(),
             vec!["git".to_string(), "commit".to_string()],
+            vec![],
         ),
         (
             "filesystem.read".to_string(),
             "Read file contents".to_string(),
             "filesystem".to_string(),
             vec!["file".to_string(), "read".to_string()],
+            vec![],
         ),
     ];
     store.bulk_index_keywords(kw_docs).unwrap();

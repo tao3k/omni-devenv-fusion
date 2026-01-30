@@ -142,15 +142,9 @@ class RustCheckpointSaver(BaseCheckpointSaver):
         if not thread_id:
             return None
 
-        state = self._checkpointer.get(thread_id)
-        if state:
-            checkpoint = _make_checkpoint(state)
-            return CheckpointTuple(
-                config=config,
-                checkpoint=checkpoint,
-                metadata={"source": None, "step": -1, "writes": {}},
-            )
-        return None
+        # Use the async method from LanceCheckpointer
+        result = await self._checkpointer.aget_tuple(config)
+        return result
 
     async def aput(
         self,
@@ -160,44 +154,8 @@ class RustCheckpointSaver(BaseCheckpointSaver):
         new_versions: dict,
     ) -> dict:
         """Async save a checkpoint."""
-        thread_id = config.get("configurable", {}).get("thread_id")
-        if not thread_id:
-            return config
-
-        # Extract state from checkpoint (LangGraph 1.0+ format)
-        if isinstance(checkpoint, dict):
-            state = checkpoint.get("channel_values") or checkpoint.get("data") or checkpoint
-            checkpoint_id = checkpoint.get("id", uuid6().hex)
-        else:
-            state = getattr(checkpoint, "channel_values", None) or getattr(
-                checkpoint, "data", checkpoint
-            )
-            checkpoint_id = getattr(checkpoint, "id", uuid6().hex)
-
-        logger.debug(
-            "Saving checkpoint",
-            thread_id=thread_id,
-            checkpoint_id=checkpoint_id,
-            state_keys=list(state.keys()) if isinstance(state, dict) else [],
-        )
-
-        self._checkpointer.put(
-            thread_id=thread_id,
-            state=state,
-            checkpoint_id=checkpoint_id,
-            metadata={
-                "source": metadata.get("source")
-                if hasattr(metadata, "get")
-                else getattr(metadata, "source", None),
-                "step": metadata.get("step")
-                if hasattr(metadata, "get")
-                else getattr(metadata, "step", -1),
-                "writes": metadata.get("writes")
-                if hasattr(metadata, "get")
-                else getattr(metadata, "writes", {}),
-            },
-        )
-
+        # Delegate to LanceCheckpointer's aput
+        await self._checkpointer.aput(config, checkpoint, metadata, new_versions)
         return config
 
     async def alist(
@@ -209,23 +167,13 @@ class RustCheckpointSaver(BaseCheckpointSaver):
         limit: int | None = None,
     ) -> AsyncIterator[CheckpointTuple]:
         """Async list checkpoints for a config."""
-        thread_id = config.get("configurable", {}).get("thread_id") if config else None
-        if not thread_id:
-            return
-
-        limit = limit or 10
-        history = self._checkpointer.get_history(thread_id, limit=limit)
-
-        for state in history:
-            yield CheckpointTuple(
-                config=config or {"configurable": {"thread_id": thread_id}},
-                checkpoint=_make_checkpoint(state),
-                metadata={"source": None, "step": -1, "writes": {}},
-            )
+        # Delegate to LanceCheckpointer's alist
+        async for tuple in self._checkpointer.alist(config, filter=filter, before=before, limit=limit):
+            yield tuple
 
     async def adelete_thread(self, thread_id: str) -> None:
         """Async delete all checkpoints for a thread."""
-        self._checkpointer.delete(thread_id)
+        await self._checkpointer.adelete_thread(thread_id)
 
     # Optional: put_writes not implemented for LanceDB
     def put_writes(

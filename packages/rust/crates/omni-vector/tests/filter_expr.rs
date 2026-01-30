@@ -1,6 +1,6 @@
 //! Tests for filter expression utilities.
 
-use omni_vector::search::filter::json_to_lance_where;
+use omni_vector::json_to_lance_where;
 use serde_json::json;
 
 #[test]

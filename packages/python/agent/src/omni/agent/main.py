@@ -78,8 +78,44 @@ From Claude Code CLI:
         default="text",
         help="Output format (default: text)",
     )
+    parser.add_argument(
+        "--graph",
+        action="store_true",
+        help="Run using the experimental LangGraph Robust Workflow",
+    )
 
     args = parser.parse_args()
+
+    # Special handling for --graph mode
+    if args.graph:
+        from omni.agent.workflows.robust_task.graph import build_graph
+        
+        async def run_graph(request):
+            app = build_graph()
+            initial_state = {
+                "user_request": request,
+                "execution_history": [],
+                "retry_count": 0
+            }
+            print(f"🚀 Starting Robust Task Graph for: {request}")
+            try:
+                final_state = await app.ainvoke(initial_state)
+                # print(f"✅ Workflow Completed.\nResult: {final_state.get('validation_result')}")
+                if final_state.get('validation_result', {}).get('is_valid'):
+                     print(f"✅ Workflow Completed Successfully")
+                else:
+                     print(f"❌ Workflow Failed")
+
+            except Exception as e:
+                print(f"❌ Graph Execution Error: {e}")
+
+        try:
+            # When using --graph, the first argument 'command' is treated as the user request
+            asyncio.run(run_graph(args.command))
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            sys.exit(1)
+        return
 
     # Parse arguments
     try:

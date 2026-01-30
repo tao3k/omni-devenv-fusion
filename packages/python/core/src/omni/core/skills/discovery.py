@@ -35,7 +35,8 @@ Unified Search Flow:
 
 import json
 import os
-from typing import Any
+import inspect
+from typing import Any, Callable, get_type_hints
 
 from omni.foundation.bridge.scanner import (
     DiscoveredSkillRules,
@@ -47,70 +48,81 @@ from pydantic import BaseModel
 logger = get_logger("omni.core.discovery")
 
 
-def generate_usage_template(tool_name: str, input_schema: dict | str | None) -> str:
+def _py_type_to_json_type(py_type: Any) -> dict:
+    """Map Python types to concise JSON Schema for LLM Context."""
+    if py_type == str:
+        return {"type": "string"}
+    if py_type == int:
+        return {"type": "integer"}
+    if py_type == bool:
+        return {"type": "boolean"}
+    if py_type == float:
+        return {"type": "number"}
+    if py_type == list:
+        return {"type": "array"}
+    if py_type == dict:
+        return {"type": "object"}
+    # Handle Optional/Union types roughly for context window efficiency
+    return {"type": "string", "description": str(py_type)}
+
+
+def generate_usage_template(
+    tool_name: str, input_schema: dict | str | None, implementation: Callable | None = None
+) -> str:
     """
-    Generate a smart usage template based on JSON Schema.
-
-    Example Output:
-        @omni("git.commit", {"message": "feat: ...", "repo_path": "."})
-
+    Generate a STRICT usage template aligned with JSON Schema.
     Args:
         tool_name: Full tool name (e.g., "git.commit")
         input_schema: JSON Schema dict or string for the tool's parameters
-
-    Returns:
-        Formatted @omni() call template with type-appropriate placeholders
+        implementation: (Kept for API compatibility, not used for docstrings)
     """
-    # Parse schema if it's a string
-    if input_schema is None:
-        return f'@omni("{tool_name}", {{"..."}})'
+    schema = {}
 
-    if isinstance(input_schema, str):
-        try:
-            schema = json.loads(input_schema)
-            # Handle double-encoded JSON from LanceDB (Rust serialization)
-            # If result is still a string, parse again
-            if isinstance(schema, str):
-                schema = json.loads(schema)
-        except (json.JSONDecodeError, TypeError):
-            return f'@omni("{tool_name}", {{"..."}})'
-    else:
-        schema = input_schema
+    # 1. Parse schema
+    if input_schema:
+        if isinstance(input_schema, str):
+            try:
+                schema = json.loads(input_schema)
+                if isinstance(schema, str):
+                    schema = json.loads(schema)
+            except (json.JSONDecodeError, TypeError):
+                schema = {}
+        else:
+            schema = input_schema
+
+    if not schema:
+        return f'@omni("{tool_name}", {{"..."}})'
 
     properties = schema.get("properties", {})
     required = schema.get("required", [])
 
     args = {}
-
     for prop_name, prop_meta in properties.items():
-        # Only include required args to avoid cluttering context window
         if prop_name not in required:
-            continue
-
-        # Generate placeholder based on type
-        prop_type = prop_meta.get("type", "string")
-        enum_values = prop_meta.get("enum")
-
-        if enum_values:
-            # Use first enum value as placeholder
-            placeholder = enum_values[0] if isinstance(enum_values[0], str) else f"<{prop_name}>"
-        elif prop_type == "integer":
-            placeholder = 0
-        elif prop_type == "number":
-            placeholder = 0.0
-        elif prop_type == "boolean":
-            placeholder = True
-        elif prop_type == "array":
-            placeholder = []
-        elif prop_type == "object":
-            placeholder = {}
+            if len(args) > 5:
+                continue
+            placeholder = f"<{prop_name}?>"
         else:
-            # String - add type hint in placeholder
-            placeholder = f"<{prop_name}>"
+            prop_type = prop_meta.get("type", "string")
+            enum_values = prop_meta.get("enum")
+
+            if enum_values:
+                placeholder = enum_values[0] if isinstance(enum_values[0], str) else f"<{prop_name}>"
+            elif prop_type == "integer":
+                placeholder = 0
+            elif prop_type == "number":
+                placeholder = 0.0
+            elif prop_type == "boolean":
+                placeholder = True
+            elif prop_type == "array":
+                placeholder = []
+            elif prop_type == "object":
+                placeholder = {}
+            else:
+                placeholder = f"<{prop_name}>"
 
         args[prop_name] = placeholder
 
-    # Format as compact JSON string
     args_str = json.dumps(args, separators=(", ", ": "))
     return f'@omni("{tool_name}", {args_str})'
 

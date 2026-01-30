@@ -17,7 +17,19 @@
 
 ## High Priority
 
-_(No active high priority items - see Medium Priority below)_
+### Hybrid Search Optimization
+
+Enhance Hybrid Search to fix keyword matching issues (e.g., "Research" intent not triggering `researcher.run_research_graph`).
+
+| Task                      | Status | Description                                                                      |
+| ------------------------- | ------ | -------------------------------------------------------------------------------- |
+| **Intent Cleansing Fix**  | `Todo` | Stop excessive intent abstraction. Keep keywords from user query.                |
+| **Keyword Rescue**        | `Todo` | Force-inject strong keywords (e.g., "research", "analyze") into query.           |
+| **Skill Keywords Update** | `Todo` | Add explicit synonyms to `SKILL.md` (e.g., `researcher`: "research", "analyze"). |
+| **Discovery Node Logic**  | `Todo` | Update `discovery_node` prompt to return `<keywords>` tag along with `<intent>`. |
+
+**Context:**
+Currently, `skill.discover` fails to rank `researcher` tools highly for "Research ..." queries because LLM abstraction dilutes keywords, and Semantic Search (MiniMax) associates "Research" with "Test" (false positive).
 
 ---
 
@@ -132,6 +144,7 @@ uv run omni run "git commit" --tui    # Start TUI mode
 
 | Feature                             | Date       | Notes                                                    |
 | ----------------------------------- | ---------- | -------------------------------------------------------- |
+| **Robust Task Workflow**            | 2026-01-29 | Graph-based workflow with Reflection & Discovery Fixes   |
 | **Permission Gatekeeper**           | 2026-01-21 | Zero Trust security with Rust PermissionGatekeeper       |
 | **Context Optimization**            | 2026-01-21 | ContextPruner + ContextManager for token diet            |
 | **Skill Ecosystem Standardization** | 2026-01-20 | Template upgrades, writer cleanup, skill check --example |

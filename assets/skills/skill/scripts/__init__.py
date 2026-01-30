@@ -5,7 +5,6 @@ Contains atomic implementations for skill-related commands:
 - discovery.py: Tool discovery (unified discover tool)
 - templates.py: Cascading template management
 - list_tools.py: List registered MCP tools
-- search_tools.py: Intent-driven tool search
 - unload.py: Dynamic skill unload
 - reload.py: Dynamic skill reload
 """
@@ -20,7 +19,6 @@ from skill.scripts.discovery import (
 )
 from skill.scripts.list_tools import format_tools_list, list_tools
 from skill.scripts.reload import reload_skill
-from skill.scripts.search_tools import format_search_result, search_tools
 from skill.scripts.templates import (
     eject_template,
     format_eject_result,
@@ -48,9 +46,6 @@ __all__ = [
     "format_tools_list",
     # Tool list command
     "list_tools",
-    # Search commands
-    "search_tools",
-    "format_search_result",
     # Unload/Reload commands
     "unload_skill",
     "reload_skill",

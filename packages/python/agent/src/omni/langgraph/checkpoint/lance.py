@@ -144,8 +144,20 @@ class RustLanceCheckpointSaver(BaseCheckpointSaver):
         # Get parent checkpoint ID from config
         parent_id = config.get("configurable", {}).get("checkpoint_id")
 
-        # Get timestamp from checkpoint or metadata
-        timestamp = checkpoint.get("ts") or metadata.get("ts") or 0.0
+        # Get timestamp from checkpoint or metadata (convert ISO string to float)
+        ts_value = checkpoint.get("ts") or metadata.get("ts")
+        if isinstance(ts_value, str):
+            # Parse ISO timestamp string to float
+            try:
+                from datetime import datetime
+                dt = datetime.fromisoformat(ts_value.replace("Z", "+00:00"))
+                timestamp = dt.timestamp()
+            except (ValueError, AttributeError):
+                timestamp = 0.0
+        elif isinstance(ts_value, (int, float)):
+            timestamp = float(ts_value)
+        else:
+            timestamp = 0.0
 
         # Call Rust store (blocking call wrapped in async)
         # Uses global connection pool - no performance penalty

@@ -9,6 +9,7 @@ Contains: list, info, query commands.
 from __future__ import annotations
 
 import json
+import sys
 
 import typer
 from rich.markdown import Markdown
@@ -85,18 +86,107 @@ def skill_query(
 @skill_app.command("list")
 def skill_list(
     compact: bool = typer.Option(False, "--compact", "-c", help="Show compact view (names only)"),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output all skills info as JSON (from Rust DB)"),
 ):
     """
     List installed skills and their commands.
 
     Displays a hierarchical inventory of all available capabilities,
     including command aliases defined in settings.yaml.
+
+    Use --json to get machine-readable output of all skills from the Rust DB index.
     """
+    import asyncio
+
     from rich.tree import Tree
     from rich.text import Text
     from omni.core.kernel import get_kernel
     from omni.core.config.loader import load_command_overrides, is_filtered
     from omni.foundation.config.skills import SKILLS_DIR
+    from omni.foundation.bridge import RustVectorStore
+
+    # JSON output mode - dump all skills from Rust DB with full metadata
+    if json_output:
+        try:
+            store = RustVectorStore()
+            skills_dir = SKILLS_DIR()
+            skills = asyncio.run(store.get_skill_index(str(skills_dir)))
+
+            output = []
+            for skill in skills:
+                skill_path = skill.get("path", "")
+                docs_path = f"{skill_path}/SKILL.md" if skill_path else ""
+
+                # Extract docs_available subfields
+                docs_avail = skill.get("docs_available", {})
+                docs_status = {
+                    "skill_md": docs_avail.get("skill_md", False) if isinstance(docs_avail, dict) else False,
+                    "readme": docs_avail.get("readme", False) if isinstance(docs_avail, dict) else False,
+                    "tests": docs_avail.get("tests", False) if isinstance(docs_avail, dict) else False,
+                }
+
+                # Convert require_refs to list of strings
+                require_refs = skill.get("require_refs", [])
+                if require_refs and isinstance(require_refs[0], dict):
+                    require_refs = [r.get("path", r) if isinstance(r, dict) else r for r in require_refs]
+                elif require_refs and isinstance(require_refs[0], str):
+                    pass  # Already strings
+                else:
+                    require_refs = []
+
+                # Convert sniffing_rules to simplified format
+                sniffing_rules = skill.get("sniffing_rules", [])
+                if sniffing_rules and isinstance(sniffing_rules[0], dict):
+                    sniffing_rules = [
+                        {
+                            "type": r.get("type", ""),
+                            "pattern": r.get("pattern", ""),
+                        }
+                        for r in sniffing_rules
+                    ]
+
+                skill_data = {
+                    "name": skill.get("name", ""),
+                    "path": skill_path,
+                    "docs_path": docs_path,
+                    "description": skill.get("description", ""),
+                    "version": skill.get("version", "unknown"),
+                    "repository": skill.get("repository", ""),
+                    "routing_keywords": skill.get("routing_keywords", []),
+                    "intents": skill.get("intents", []),
+                    "authors": skill.get("authors", []),
+                    "permissions": skill.get("permissions", []),
+                    "require_refs": require_refs,
+                    "oss_compliant": skill.get("oss_compliant", []),
+                    "compliance_details": skill.get("compliance_details", []),
+                    "sniffing_rules": sniffing_rules,
+                    "docs_available": docs_status,
+                    "has_extensions": bool(skill.get("tools")),
+                    "tools": [
+                        {
+                            "name": t.get("name", ""),
+                            "description": t.get("description", ""),
+                            "category": t.get("category", ""),
+                            "input_schema": t.get("input_schema", ""),
+                            "file_hash": t.get("file_hash", ""),
+                        }
+                        for t in skill.get("tools", [])
+                    ],
+                }
+                output.append(skill_data)
+
+            # Output JSON to stdout (for piping) instead of stderr
+            sys.stdout.write(json.dumps(output, indent=2, ensure_ascii=False) + "\n")
+            return
+        except Exception as e:
+            err_console.print(
+                Panel(
+                    f"Failed to load skill index: {e}",
+                    title="Error",
+                    style="red",
+                )
+            )
+            raise typer.Exit(1)
 
     skills_dir = SKILLS_DIR()
     kernel = get_kernel()

@@ -24,10 +24,7 @@ pub const SEMANTIC_WEIGHT: f32 = 1.0;
 /// Keywords are precise anchors for code/tools, so we weight them higher
 pub const KEYWORD_WEIGHT: f32 = 1.5;
 
-/// Boost per token match in tool name (BM25F-inspired field boosting)
-/// Increased from 0.2 to 0.5 for "brute force" keyword matching effect
-pub const NAME_TOKEN_BOOST: f32 = 0.5;
-
+/// Boost for exact token match in tool name (e.g., "commit" in "git.commit")
+pub const NAME_TOKEN_BOOST: f32 = 2.0;
 /// Boost for exact phrase match in tool name
-/// Increased from 0.5 to 1.5 to make full matches decisive
-pub const EXACT_PHRASE_BOOST: f32 = 1.5;
+pub const EXACT_PHRASE_BOOST: f32 = 5.0;

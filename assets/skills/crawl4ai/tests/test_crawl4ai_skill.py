@@ -90,22 +90,6 @@ class TestCrawl4aiCommands:
         assert config is not None
         assert config.get("name") == "crawl_url"
 
-    def test_check_crawler_ready_has_skill_command_attr(self):
-        """Test that check_crawler_ready has _is_skill_command attribute."""
-        sys.path.insert(0, str(Path(__file__).parent.parent))
-        from scripts.crawl_url import check_crawler_ready
-
-        assert getattr(check_crawler_ready, "_is_skill_command", False) is True
-
-    def test_check_crawler_ready_has_skill_config(self):
-        """Test that check_crawler_ready has _skill_config."""
-        sys.path.insert(0, str(Path(__file__).parent.parent))
-        from scripts.crawl_url import check_crawler_ready
-
-        config = getattr(check_crawler_ready, "_skill_config", None)
-        assert config is not None
-        assert config.get("name") == "check_crawler_ready"
-
 
 class TestCrawl4aiScriptLoader:
     """Tests for script loading with script_loader."""
@@ -119,9 +103,8 @@ class TestCrawl4aiScriptLoader:
         loader.load_all()
 
         # Check commands are registered
-        assert len(loader.commands) >= 2
+        assert len(loader.commands) >= 1
         assert "crawl4ai.crawl_url" in loader.commands
-        assert "crawl4ai.check_crawler_ready" in loader.commands
 
     def test_crawl4ai_commands_are_callable(self):
         """Test that registered commands are callable."""

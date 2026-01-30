@@ -268,68 +268,22 @@ def test_route(
                 threshold=threshold,
             )
 
-            # Auto-healing: If no results found but we have tools, the index might be broken/incompatible
+            # Optional: Check if index might need manual re-indexing
             if not results and router._initialized and hasattr(router._indexer, "_store"):
                 try:
                     store = router._indexer._store
-                    # health_check is async, but we are in run_test which is async
                     is_healthy = await store.health_check()
                     if store and is_healthy:
                         count = store._inner.count("skills")
                         if count > 0:
                             console.print(
-                                "[yellow]Warning: No results found despite existing data. Index might be corrupted or incompatible.[/]"
+                                "[yellow]Note: No results found despite having tools in database.[/]"
                             )
-
-                            # Check if embedding service is available before attempting repair
-                            try:
-                                from omni.foundation.services.embedding import get_embedding_service
-
-                                embed = get_embedding_service()
-                                # Quick health check - don't actually generate embedding
-                                if embed._backend is None:
-                                    raise RuntimeError("Embedding backend not available")
-                            except Exception as embed_error:
-                                console.print(
-                                    f"[red]Cannot auto-repair: Embedding service unavailable ({embed_error})[/]"
-                                )
-                                console.print(
-                                    "[cyan]Tip: Check your LLM/API configuration, then run 'omni skill reindex'[/]"
-                                )
-                                return
-
                             console.print(
-                                "[yellow]Attempting to rebuild index with current embedding model...[/]"
+                                "[cyan]Tip: If you recently changed embedding models, try: 'omni skill reindex'[/]"
                             )
-
-                            # Force re-index
-                            from omni.core.skills.analyzer import get_analytics_dataframe
-
-                            table = get_analytics_dataframe()
-                            if table and table.num_rows > 0:
-                                # index_skills handles upsert (update or insert), no need to drop
-                                # It will update both LanceDB vector store AND keyword index
-                                skill_dicts = _table_to_skills(table)
-                                # Reset indexer state to force re-indexing
-                                router._indexer._indexed_count = 0
-                                indexed_count = await router._indexer.index_skills(skill_dicts)
-
-                                if indexed_count > 0:
-                                    console.print(
-                                        f"[green]Rebuilt index with {indexed_count} tools.[/]"
-                                    )
-                                else:
-                                    console.print("[red]Failed to rebuild index.[/]")
-                                    return
-
-                                # Retry routing
-                                results = await router.route_hybrid(
-                                    query=query,
-                                    limit=limit,
-                                    threshold=threshold,
-                                )
                 except Exception as e:
-                    err_console.print(f"Auto-healing failed: {e}")
+                    err_console.print(f"Health check failed: {e}")
 
         # Display results
         if not results:

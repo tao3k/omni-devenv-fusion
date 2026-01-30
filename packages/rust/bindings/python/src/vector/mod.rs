@@ -353,8 +353,10 @@ impl PyVectorStore {
     }
 
     fn scan_skill_tools_raw(&self, base_path: String) -> PyResult<Vec<String>> {
-        let skill_scanner = omni_vector::SkillScanner::new();
-        let script_scanner = omni_vector::ToolsScanner::new();
+        use skills_scanner::{SkillScanner, ToolRecord, ToolsScanner};
+
+        let skill_scanner = SkillScanner::new();
+        let script_scanner = ToolsScanner::new();
         let skills_path = Path::new(&base_path);
 
         if !skills_path.exists() {
@@ -365,7 +367,8 @@ impl PyVectorStore {
             .scan_all(skills_path, None)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
-        let mut all_tools: Vec<omni_vector::ToolRecord> = Vec::new();
+        let mut all_tools: Vec<ToolRecord> = Vec::new();
+        let empty_intents: &[String] = &[];
 
         for metadata in &metadatas {
             let skill_scripts_path = skills_path.join(&metadata.skill_name).join("scripts");
@@ -374,6 +377,7 @@ impl PyVectorStore {
                 &skill_scripts_path,
                 &metadata.skill_name,
                 &metadata.routing_keywords,
+                empty_intents,
             ) {
                 Ok(tools) => all_tools.extend(tools),
                 Err(e) => eprintln!(
@@ -392,28 +396,83 @@ impl PyVectorStore {
         Ok(json_tools)
     }
 
-    fn get_tools_by_skill(&self, skill_name: String) -> PyResult<Vec<String>> {
-        let path = self.path.clone();
-        let dimension = self.dimension;
-        let enable_kw = self.enable_keyword_index;
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
+    /// Get complete skill index with full metadata (routing_keywords, intents, authors, etc.)
+    ///
+    /// This scans the filesystem directly and returns all SkillIndexEntry data as JSON.
+    /// Unlike list_all_tools which only returns tool records from LanceDB,
+    /// this method returns full skill metadata from SKILL.md frontmatter.
+    fn get_skill_index(&self, base_path: String) -> PyResult<String> {
+        use skills_scanner::{
+            DocsAvailable, IndexToolEntry, SkillIndexEntry, SkillScanner, ToolsScanner,
+        };
+
+        let skill_scanner = SkillScanner::new();
+        let script_scanner = ToolsScanner::new();
+        let skills_path = Path::new(&base_path);
+
+        if !skills_path.exists() {
+            return Ok("[]".to_string());
+        }
+
+        let metadatas = skill_scanner
+            .scan_all(skills_path, None)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        rt.block_on(async {
-            let store = VectorStore::new_with_keyword_index(&path, Some(dimension), enable_kw)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            let tools = store
-                .get_tools_by_skill(&skill_name)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            let json_tools: Vec<String> = tools
-                .into_iter()
-                .map(|t| serde_json::to_string(&t).unwrap_or_default())
-                .collect();
-            Ok(json_tools)
-        })
+
+        // Build SkillIndexEntry for each skill with its tools
+        let mut skill_entries: Vec<SkillIndexEntry> = Vec::new();
+
+        for metadata in &metadatas {
+            let skill_scripts_path = skills_path.join(&metadata.skill_name).join("scripts");
+
+            // Scan tools for this skill
+            let tools: Vec<IndexToolEntry> = match script_scanner.scan_scripts(
+                &skill_scripts_path,
+                &metadata.skill_name,
+                &metadata.routing_keywords,
+                &metadata.intents,
+            ) {
+                Ok(tool_records) => tool_records
+                    .into_iter()
+                    .map(|tr| IndexToolEntry {
+                        name: tr.tool_name,
+                        description: tr.description,
+                        category: tr.category,
+                        input_schema: tr.input_schema,
+                        file_hash: tr.file_hash,
+                    })
+                    .collect(),
+                Err(e) => {
+                    eprintln!(
+                        "Warning: Failed to scan tools for '{}': {}",
+                        metadata.skill_name, e
+                    );
+                    Vec::new()
+                }
+            };
+
+            // Build the full skill index entry with all metadata
+            let entry = SkillIndexEntry {
+                name: metadata.skill_name.clone(),
+                description: metadata.description.clone(),
+                version: metadata.version.clone(),
+                path: format!("assets/skills/{}", metadata.skill_name),
+                tools,
+                routing_keywords: metadata.routing_keywords.clone(),
+                intents: metadata.intents.clone(),
+                authors: metadata.authors.clone(),
+                docs_available: DocsAvailable::default(),
+                oss_compliant: Vec::new(),
+                compliance_details: Vec::new(),
+                require_refs: metadata.require_refs.clone(),
+                sniffing_rules: Vec::new(),
+                permissions: metadata.permissions.clone(),
+            };
+
+            skill_entries.push(entry);
+        }
+
+        serde_json::to_string(&skill_entries)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
     fn list_all_tools(&self, table_name: Option<String>) -> PyResult<String> {

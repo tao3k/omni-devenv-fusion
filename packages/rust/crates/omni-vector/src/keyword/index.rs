@@ -28,6 +28,8 @@ pub struct KeywordIndex {
     pub category: Field,
     /// Field handle for routing keywords (used for keyword matching)
     pub keywords: Field,
+    /// Field handle for intents (used for semantic alignment)
+    pub intents: Field,
 }
 
 impl KeywordIndex {
@@ -76,6 +78,9 @@ impl KeywordIndex {
         let keywords = schema
             .get_field("keywords")
             .map_err(|_| VectorStoreError::General("Missing keywords field".to_string()))?;
+        let intents = schema
+            .get_field("intents")
+            .map_err(|_| VectorStoreError::General("Missing intents field".to_string()))?;
 
         // 3. Create Reader with Manual Policy (We control reloads)
         let reader = index
@@ -91,6 +96,7 @@ impl KeywordIndex {
             description,
             category,
             keywords,
+            intents,
         })
     }
 
@@ -101,7 +107,6 @@ impl KeywordIndex {
         let mut schema_builder = Schema::builder();
 
         // Use code_tokenizer with FULL indexing (including positions for phrase queries)
-        // This enables phrase queries like "pub async fn" to work correctly
         let text_options = TextOptions::default()
             .set_indexing_options(
                 TextFieldIndexing::default()
@@ -113,7 +118,8 @@ impl KeywordIndex {
         schema_builder.add_text_field("tool_name", text_options.clone());
         schema_builder.add_text_field("description", text_options.clone());
         schema_builder.add_text_field("category", text_options.clone());
-        schema_builder.add_text_field("keywords", text_options);
+        schema_builder.add_text_field("keywords", text_options.clone());
+        schema_builder.add_text_field("intents", text_options);
 
         let schema = schema_builder.build();
         Index::create_in_dir(path, schema)
@@ -126,14 +132,13 @@ impl KeywordIndex {
         description: &str,
         category: &str,
         keywords: &[String],
+        intents: &[String],
     ) -> Result<(), VectorStoreError> {
-        // 50MB heap
         let mut index_writer = self
             .index
             .writer(50_000_000)
             .map_err(VectorStoreError::Tantivy)?;
 
-        // Delete existing term to avoid duplicates
         let term = Term::from_field_text(self.tool_name, name);
         index_writer.delete_term(term);
 
@@ -142,41 +147,37 @@ impl KeywordIndex {
                 self.tool_name => name,
                 self.description => description,
                 self.category => category,
-                self.keywords => keywords.join(" ")
+                self.keywords => keywords.join(" "),
+                self.intents => intents.join(" | ")
             ))
             .map_err(VectorStoreError::Tantivy)?;
 
         index_writer.commit().map_err(VectorStoreError::Tantivy)?;
-
-        // Important: Reload the reader so this process sees the changes immediately
         self.reader.reload().map_err(VectorStoreError::Tantivy)?;
-
         Ok(())
     }
 
-    /// Bulk upsert documents (more efficient than individual calls)
+    /// Bulk upsert documents
     pub fn bulk_upsert<I>(&self, docs: I) -> Result<(), VectorStoreError>
     where
-        I: IntoIterator<Item = (String, String, String, Vec<String>)>,
+        I: IntoIterator<Item = (String, String, String, Vec<String>, Vec<String>)>,
     {
-        // 100MB heap
         let mut index_writer = self
             .index
             .writer(100_000_000)
             .map_err(VectorStoreError::Tantivy)?;
 
-        for (name, description, category, kw_list) in docs {
-            // Delete existing
+        for (name, description, category, kw_list, intent_list) in docs {
             let term = Term::from_field_text(self.tool_name, &name);
             index_writer.delete_term(term);
 
-            // Add new document
             index_writer
                 .add_document(doc!(
                     self.tool_name => name,
                     self.description => description,
                     self.category => category,
-                    self.keywords => kw_list.join(" ")
+                    self.keywords => kw_list.join(" "),
+                    self.intents => intent_list.join(" | ")
                 ))
                 .map_err(VectorStoreError::Tantivy)?;
         }
@@ -186,12 +187,11 @@ impl KeywordIndex {
         Ok(())
     }
 
-    /// Batch index ToolRecords (Force Commit)
+    /// Batch index ToolRecords
     pub fn index_batch(&self, tools: &[ToolSearchResult]) -> Result<(), TantivyError> {
-        let mut index_writer = self.index.writer(100_000_000)?; // 100MB buffer
+        let mut index_writer = self.index.writer(100_000_000)?;
 
         for tool in tools {
-            // Use full tool name (skill.command format) for keyword index
             let term = Term::from_field_text(self.tool_name, &tool.name);
             index_writer.delete_term(term);
 
@@ -199,16 +199,13 @@ impl KeywordIndex {
                 self.tool_name => tool.name.as_str(),
                 self.description => tool.description.as_str(),
                 self.category => tool.skill_name.as_str(),
-                self.keywords => tool.keywords.join(" ")
+                self.keywords => tool.keywords.join(" "),
+                self.intents => tool.intents.join(" | ")
             ))?;
         }
 
-        // Explicit Commit is mandatory
         index_writer.commit()?;
-
-        // Wait for searchers to reload
         self.reader.reload()?;
-
         Ok(())
     }
 
@@ -224,17 +221,19 @@ impl KeywordIndex {
             return Ok(vec![]);
         }
 
-        // Query Parser across multiple fields with boosting
         let mut query_parser = QueryParser::for_index(
             &self.index,
-            vec![self.tool_name, self.keywords, self.description],
+            vec![
+                self.tool_name,
+                self.keywords,
+                self.intents,
+                self.description,
+            ],
         );
 
-        // Boost Tool Name (Significant weight)
         query_parser.set_field_boost(self.tool_name, 5.0);
-        // Boost Keywords (Explicit tags)
+        query_parser.set_field_boost(self.intents, 4.0);
         query_parser.set_field_boost(self.keywords, 3.0);
-        // Description is baseline
         query_parser.set_field_boost(self.description, 1.0);
 
         let query = query_parser
@@ -265,10 +264,17 @@ impl KeywordIndex {
                 .get_first(self.keywords)
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
+            let intents_str = doc
+                .get_first(self.intents)
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+
             let keywords = keywords_str
                 .split_whitespace()
                 .map(|s| s.to_string())
                 .collect();
+            let intents = intents_str.split(" | ").map(|s| s.to_string()).collect();
+
             let skill_name = tool_name.split('.').next().unwrap_or("").to_string();
 
             results.push(ToolSearchResult {
@@ -280,6 +286,7 @@ impl KeywordIndex {
                 tool_name,
                 file_path: String::new(),
                 keywords,
+                intents,
             });
         }
 
@@ -329,23 +336,31 @@ impl KeywordIndex {
                 .get_first(self.keywords)
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
+            let intents_str = doc
+                .get_first(self.intents)
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+
             let keywords = keywords_str
                 .split_whitespace()
                 .map(|s| s.to_string())
                 .collect();
-
-            // Infer skill_name from tool_name (e.g. "git.commit" -> "git")
-            let skill_name = tool_name.split('.').next().unwrap_or("").to_string();
+            let intents = intents_str.split(" | ").map(|s| s.to_string()).collect();
 
             Ok(Some(ToolSearchResult {
                 name: tool_name.clone(),
                 description,
                 input_schema: serde_json::json!({}),
-                score: 0.95, // High confidence for keyword match
-                skill_name,
+                score: 1.0,
+                skill_name: doc
+                    .get_first(self.category)
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
                 tool_name,
-                file_path: String::new(),
+                file_path: "".to_string(),
                 keywords,
+                intents,
             }))
         } else {
             Ok(None)

@@ -7,7 +7,7 @@
     uv = {
       enable = true;
       # package = inputs.nixpkgs.uv;
-      sync.enable = true;
+      # sync.enable = true;
     };
   };
 }

@@ -10,7 +10,7 @@ in
 {
   packages = [
     pkgs.protobuf
-    nixpkgs-latest.maturin
+    pkgs.maturin
     pkgs.openssl
     pkgs.pkg-config
     pkgs.libiconv

@@ -193,39 +193,56 @@ class OmniRouter:
                 logger.debug(f"Cache hit for: {query[:50]}...")
                 return cached
 
-        # 2. Hybrid Search (Rust-native, returns list of dicts)
-        matches = await self._hybrid.search(query, limit=limit * 2)
-
-        # 3. Convert to RouteResults and filter by threshold
+        # 2. Hybrid Search with adaptive threshold
+        # If user requests more results than threshold would normally provide,
+        # temporarily lower threshold to fetch more results
         results: list[RouteResult] = []
-        for match in matches:
-            score = match.get("score", 0.0)
-            if score >= threshold:
+        current_threshold = threshold
+        fetch_attempts = 0
+        max_attempts = 3
+
+        while len(results) < limit and fetch_attempts < max_attempts:
+            fetch_attempts += 1
+            # Fetch more than needed to account for duplicates/invalid entries
+            fetch_limit = limit * (max_attempts - fetch_attempts + 2)
+            matches = await self._hybrid.search(
+                query, limit=fetch_limit, min_score=current_threshold
+            )
+
+            # Convert matches to RouteResults
+            seen_commands: set[str] = {f"{r.skill_name}.{r.command_name}" for r in results}
+
+            for match in matches:
+                score = match.get("score", 0.0)
+                if score < current_threshold:
+                    continue
+
                 # Parse skill_name and command_name
-                # Rust returns tool_name in "skill.command" format (e.g., "git.commit")
-                # We need to extract just the command part to avoid duplication
                 skill_name = match.get("skill_name", "unknown")
                 full_command = match.get("command", "") or match.get("tool_name", "")
 
-                # Extract command_name by stripping skill_name prefix if present
-                # e.g., "git.commit" + "git" -> "commit"
+                # Extract command_name
                 if full_command.startswith(f"{skill_name}."):
                     command_name = full_command[len(skill_name) + 1 :]
                 else:
                     command_name = full_command
 
-                # Skip entries with no command_name or empty file_path (meta entries like "git.git")
-                # These are skill-level metadata, not actual commands
+                # Skip entries with no command_name
                 if not command_name:
                     continue
-                if not match.get("file_path", "").strip():
-                    logger.debug(
-                        f"Skipping meta entry without file_path: {skill_name}.{command_name}"
-                    )
+
+                # Skip entries where skill_name equals command_name (likely malformed data)
+                if skill_name == command_name:
+                    logger.debug(f"Skipping malformed entry: {skill_name}.{command_name}")
                     continue
 
-                # Determine confidence (lowercase for RouteConfidence enum)
-                # Clamp score to [0, 1] for RouteResult validation (RRF fusion can exceed 1.0)
+                # Deduplicate by skill.command
+                cmd_key = f"{skill_name}.{command_name}"
+                if cmd_key in seen_commands:
+                    continue
+                seen_commands.add(cmd_key)
+
+                # Determine confidence
                 clamped_score = max(0.0, min(1.0, score))
                 if clamped_score >= 0.75:
                     confidence = "high"
@@ -243,7 +260,11 @@ class OmniRouter:
                     )
                 )
 
-        # 4. Update Cache
+            # If still not enough results, lower threshold and retry
+            if len(results) < limit:
+                current_threshold = max(0.0, current_threshold - 0.15)
+
+        # 3. Update Cache
         if use_cache:
             self._cache.set(query, results)
 

@@ -33,4 +33,6 @@ pub struct ToolSearchResult {
     pub file_path: String,
     /// Routing keywords for hybrid search
     pub keywords: Vec<String>,
+    /// Associated intents for semantic alignment
+    pub intents: Vec<String>,
 }

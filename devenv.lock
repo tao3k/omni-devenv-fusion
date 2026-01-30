@@ -38,10 +38,10 @@
         "systems": "systems"
       },
       "locked": {
-        "lastModified": 1767386128,
+        "lastModified": 1769353768,
         "owner": "numtide",
         "repo": "blueprint",
-        "rev": "0ed984d51a3031065925ab08812a5434f40b93d4",
+        "rev": "c7da5c70ad1c9b60b6f5d4f674fbe205d48d8f6c",
         "type": "github"
       },
       "original": {
@@ -67,10 +67,10 @@
     "devenv": {
       "locked": {
         "dir": "src/modules",
-        "lastModified": 1769263214,
+        "lastModified": 1769762496,
         "owner": "cachix",
         "repo": "devenv",
-        "rev": "328752c05f1745c7f613689a9df0bd1ffc8f3922",
+        "rev": "d14540e3cda37859b2e44f8c169668c876a064e1",
         "type": "github"
       },
       "original": {
@@ -217,10 +217,10 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1769234232,
+        "lastModified": 1769763865,
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "861ade6060a73482cfd08bd992fa687f910e5c7c",
+        "rev": "62f5bff0fafe0b3eedc2f835e94a7dd4da4a6f11",
         "type": "github"
       },
       "original": {
@@ -245,10 +245,10 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1769298235,
+        "lastModified": 1769527094,
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "26b0093bc977081dc7653175a3fadab11e07bed7",
+        "rev": "afce96367b2e37fc29afb5543573cd49db3357b7",
         "type": "github"
       },
       "original": {
@@ -260,10 +260,10 @@
     },
     "nixpkgs-latest": {
       "locked": {
-        "lastModified": 1769298235,
+        "lastModified": 1769527094,
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "26b0093bc977081dc7653175a3fadab11e07bed7",
+        "rev": "afce96367b2e37fc29afb5543573cd49db3357b7",
         "type": "github"
       },
       "original": {
@@ -327,10 +327,10 @@
         ]
       },
       "locked": {
-        "lastModified": 1769309768,
+        "lastModified": 1769742225,
         "owner": "oxalica",
         "repo": "rust-overlay",
-        "rev": "140c9dc582cb73ada2d63a2180524fcaa744fad5",
+        "rev": "bcdd8d37594f0e201639f55889c01c827baf5c75",
         "type": "github"
       },
       "original": {
@@ -361,10 +361,10 @@
         ]
       },
       "locked": {
-        "lastModified": 1768158989,
+        "lastModified": 1769691507,
         "owner": "numtide",
         "repo": "treefmt-nix",
-        "rev": "e96d59dff5c0d7fddb9d113ba108f03c3ef99eca",
+        "rev": "28b19c5844cc6e2257801d43f2772a4b4c050a1b",
         "type": "github"
       },
       "original": {

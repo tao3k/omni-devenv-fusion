@@ -229,6 +229,9 @@ pub struct ToolRecord {
     pub execution_mode: String,
     /// Keywords for tool discovery and routing.
     pub keywords: Vec<String>,
+    /// Intents this tool can fulfill (inherited from skill).
+    #[serde(default)]
+    pub intents: Vec<String>,
     /// Hash of the source file for change detection.
     pub file_hash: String,
     /// JSON schema for tool input validation.
@@ -266,6 +269,7 @@ impl ToolRecord {
             function_name,
             execution_mode: String::new(),
             keywords: Vec::new(),
+            intents: Vec::new(),
             file_hash: String::new(),
             input_schema: String::new(),
             docstring: String::new(),
@@ -285,6 +289,7 @@ impl ToolRecord {
         function_name: String,
         execution_mode: String,
         keywords: Vec<String>,
+        intents: Vec<String>,
         file_hash: String,
         docstring: String,
         category: String,
@@ -300,6 +305,7 @@ impl ToolRecord {
             function_name,
             execution_mode,
             keywords,
+            intents,
             file_hash,
             input_schema,
             docstring,

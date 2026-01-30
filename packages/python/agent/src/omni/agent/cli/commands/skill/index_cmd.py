@@ -237,20 +237,23 @@ def skill_sync(
                 updated = []
                 deleted = []
             else:
-                # Delete removed tools
-                for tool_name in deleted:
-                    store.delete("skills", [tool_name])
-
-                # Note: add/update would require embedding computation
-                # For now, recommend reindex for significant changes
-                if added or updated:
+                # If there are changes, run reindex to apply them
+                if added or updated or deleted:
                     err_console.print(
                         Panel(
-                            "Changes detected. Run 'omni skill reindex' to apply.",
-                            title="⚠️ Action Required",
-                            style="yellow",
+                            "Applying changes to LanceDB...",
+                            title="🔄 Syncing",
+                            style="blue",
                         )
                     )
+                    # Index all tools to LanceDB (handles add, update, delete)
+                    asyncio.run(store.index_skill_tools(skills_path))
+                    # Reset tracking since we've applied all changes
+                    has_changes = False
+                    unchanged_count = len(scanned_data)
+                    added = []
+                    updated = []
+                    deleted = []
 
         # Output results
         if json_output:

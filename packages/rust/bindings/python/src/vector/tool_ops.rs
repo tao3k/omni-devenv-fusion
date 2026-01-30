@@ -26,26 +26,6 @@ pub async fn index_skill_tools_async(
     Ok(count as usize)
 }
 
-/// Get tools by skill helper
-pub async fn get_tools_by_skill_async(
-    path: &str,
-    dimension: usize,
-    enable_kw: bool,
-    skill_name: &str,
-) -> pyo3::PyResult<Vec<String>> {
-    let store = VectorStore::new_with_keyword_index(path, Some(dimension), enable_kw)
-        .await
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-    let tools = store
-        .get_tools_by_skill(skill_name)
-        .await
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-    Ok(tools
-        .into_iter()
-        .map(|t| serde_json::to_string(&t).unwrap_or_default())
-        .collect())
-}
-
 /// List all tools helper
 pub async fn list_all_tools_async(
     path: &str,

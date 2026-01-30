@@ -213,12 +213,14 @@ class HybridSearch:
         # Clean query for keyword search (remove Tantivy-problematic chars)
         # Keep original for embedding to preserve semantic meaning
         #
-        # Removed chars that cause Tantivy parse errors:
+        # Removed chars that cause Tantivy parse errors or unexpected field searches:
         # - Quotes: " ' (trigger phrase queries requiring position index)
-        # - Brackets: [ ] (array syntax)
-        # - Braces: { } (object syntax)
-        # - Parentheses: ( ) (grouping syntax)
-        keyword_query = re.sub(r'["\'\[\](){}]', "", query).strip()
+        # - Brackets/Braces/Parentheses: [ ] { } ( ) (syntax chars)
+        # - Colon: : (triggers field search: "https:..." -> searches field "https")
+        # - Slash/Backslash: / \ (path delimiters)
+        # - Comma: , ， (punctuation)
+        keyword_query = re.sub(r'[:"\'\[\](){}/\\,，]', " ", query).strip()
+        keyword_query = re.sub(r'\s+', " ", keyword_query)  # Normalize spaces
 
         # Get query embedding (required for vector search) - use original query
         embed_service = self._get_embed_service()
