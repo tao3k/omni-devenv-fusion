@@ -360,8 +360,12 @@ def get_vector_db_path() -> Path:
 
     This is the unified directory for all LanceDB databases in the project.
     Individual stores append their own filenames:
+    - Skills: get_vector_db_path() / "skills.lance"
     - Router: get_vector_db_path() / "router.lance"
     - Librarian: get_vector_db_path() / "knowledge.lance"
+
+    NOTE: Use get_database_path() from omni.agent.cli.commands.reindex
+    for centralized database path management.
 
     Returns:
         Path to .cache/omni-vector/
@@ -403,6 +407,20 @@ def get_checkpoints_db_path() -> Path:
     return project_root / db_path
 
 
+def get_memory_db_path() -> Path:
+    """Get the memory LanceDB database path.
+
+    Returns:
+        Path to the memory database (.cache/omni-vector/memory.lance)
+
+    Usage:
+        >>> from omni.foundation.config.dirs import get_memory_db_path
+        >>> db_path = get_memory_db_path()
+        >>> # Returns: /project/.cache/omni-vector/memory.lance
+    """
+    return get_vector_db_path() / "memory.lance"
+
+
 # =============================================================================
 # Exports
 # =============================================================================
@@ -421,6 +439,7 @@ __all__ = [
     "get_checkpoint_table_name",
     "get_config_dir",
     "get_data_dir",
+    "get_memory_db_path",
     "get_prj_dir",
     "get_runtime_dir",
     "get_skills_dir",

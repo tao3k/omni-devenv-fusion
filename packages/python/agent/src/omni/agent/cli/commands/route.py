@@ -3,31 +3,21 @@ route.py - Router Test Command
 
 Test the Hybrid Router with semantic + keyword search and caching.
 
-This command provides debugging tools for the routing system.
-
 Usage:
     omni route test "git commit"           # Test routing for a query
     omni route test "git commit" --debug   # Show detailed scoring
     omni route stats                       # Show router statistics
+    omni route cache                       # Show cache stats
 """
 
 from __future__ import annotations
-
-import asyncio
-import sys
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-# Logging is configured by the main app - don't override here
-# Use configure_logging() only if needed for standalone testing
-
-# Use err_console for consistent output with omni mcp
 from ..console import err_console
-
-# route.py imports
 
 route_app = typer.Typer(
     name="route",
@@ -52,238 +42,21 @@ def test_route(
     Shows which tools/skills would be matched for the given query,
     along with their semantic and keyword scores.
     """
-    # Configure logging based on debug flag
-    from omni.foundation.config.logging import configure_logging
-
-    configure_logging(level="DEBUG" if debug else "INFO", colors=True)
-
     try:
-        from omni.core.router.main import OmniRouter, RouterRegistry
+        from omni.core.router.hybrid_search import HybridSearch
     except ImportError as e:
         console.print(f"[red]Error: Could not import router module: {e}[/]")
         raise typer.Exit(1)
 
+    import asyncio
+
     async def run_test():
-        with console.status(f"[bold green]Routing: '{query}'..."):
-            # Use cached router from registry (avoids re-indexing)
-            router = RouterRegistry.get("route_test")
-
-            # Check if we can use existing data (fast path)
-            if not router._initialized:
-                try:
-                    # Check if LanceDB already has tools
-                    from omni.foundation.bridge.rust_vector import get_vector_store
-
-                    store = get_vector_store()
-                    tools = await store.list_all_tools()
-
-                    if tools:
-                        from omni.foundation.config.dirs import get_vector_db_path
-
-                        main_path = str(get_vector_db_path())
-
-                        # Use the store that has the data (from get_vector_store at line 63-65)
-                        store = get_vector_store()
-                        if store is None:
-                            console.print("[red]Error: Failed to get vector store[/]")
-                            return
-
-                        # Check if we already have data (fast path: LanceDB has data)
-                        try:
-                            count = store._inner.count("skills")
-                        except Exception:
-                            count = 0
-
-                        if count >= len(tools) and count > 0:
-                            # Data already indexed, just init keyword indexer (fast path)
-                            err_console.print(f"Using existing data in LanceDB ({count} tools)")
-
-                            # Initialize indexer with existing store
-                            from omni.core.router.indexer import SkillIndexer
-
-                            if router._indexer._store is None:
-                                router._indexer = SkillIndexer(main_path)
-                                router._indexer.initialize()
-                            router._indexer._store = store
-
-                            router._hybrid._semantic_indexer = router._indexer
-                            router._semantic._indexer = router._indexer
-                            router._initialized = True
-                        else:
-                            # Need to re-index with real embeddings
-                            err_console.print(
-                                f"Re-indexing {len(tools)} tools with real embeddings (count={count})"
-                            )
-
-                            from omni.foundation.services.embedding import get_embedding_service
-                            import json
-
-                            embed = get_embedding_service()
-
-                            # Check embedding service is available before destructive operation
-                            if embed._backend is None:
-                                err_console.print(
-                                    "[red]Embedding service unavailable. Cannot re-index.[/]"
-                                )
-                                err_console.print(
-                                    "[cyan]Tip: Check your LLM/API configuration, then try again.[/]"
-                                )
-                                return
-
-                            # Generate real embeddings for each tool FIRST
-                            ids = []
-                            vectors = []
-                            contents = []
-                            metadatas = []
-
-                            for tool in tools:
-                                tool_id = tool.get("id", "")
-                                content = tool.get("content", "")
-                                skill_name = tool.get("skill_name", "")
-
-                                ids.append(tool_id)
-                                contents.append(content)
-
-                                query_vec = embed.embed(content)
-                                if isinstance(query_vec[0], list):
-                                    vectors.append(query_vec[0])
-                                else:
-                                    vectors.append(query_vec)
-
-                                metadata = {
-                                    "skill_name": skill_name,
-                                    "command": tool_id.split(".", 1)[1] if "." in tool_id else "",
-                                    "type": "command",
-                                }
-                                metadatas.append(json.dumps(metadata))
-
-                            # Add new data first (add_documents handles upsert)
-                            asyncio.run(
-                                store.add_documents("skills", ids, vectors, contents, metadatas)
-                            )
-
-                            err_console.print(f"Indexed {len(ids)} tools with real embeddings")
-
-                            router._hybrid._semantic_indexer = router._indexer
-                            router._semantic._indexer = router._indexer
-                            router._initialized = True
-                    else:
-                        # No tools in LanceDB - check if skills directory has content
-                        from omni.core.skills.analyzer import get_analytics_dataframe
-
-                        table = get_analytics_dataframe()
-
-                        if table is None or table.num_rows == 0:
-                            # Skills table missing or empty - try to build from skills dir
-                            console.print("[yellow]Skills table missing or empty.[/]")
-                            console.print("[cyan]Attempting to rebuild from skills directory...[/]")
-
-                            try:
-                                # Get skills directly from directory using Rust scanner
-                                import json
-                                from pathlib import Path
-                                from omni.foundation.config.skills import SKILLS_DIR
-
-                                skills_dir = SKILLS_DIR()
-                                skill_dicts: list[dict] = []
-
-                                # Scan skills directory
-                                for skill_path in sorted(skills_dir.iterdir()):
-                                    if skill_path.is_dir() and not skill_path.name.startswith("_"):
-                                        # Read SKILL.md for description
-                                        skill_file = skill_path / "SKILL.md"
-                                        description = f"{skill_path.name} skill"
-                                        if skill_file.exists():
-                                            content = skill_file.read_text()
-                                            # Extract description from frontmatter or first lines
-                                            if "---" in content:
-                                                parts = content.split("---", 2)
-                                                if len(parts) >= 2:
-                                                    try:
-                                                        frontmatter = json.loads(parts[1])
-                                                        description = frontmatter.get(
-                                                            "description", description
-                                                        )
-                                                    except json.JSONDecodeError:
-                                                        pass
-
-                                        # Collect commands from scripts/__init__.py
-                                        commands: list[dict] = []
-                                        scripts_init = skill_path / "scripts" / "__init__.py"
-                                        if scripts_init.exists():
-                                            # Simple parsing - look for @skill_command decorated functions
-                                            content = scripts_init.read_text()
-                                            import re
-
-                                            # Match function definitions with docstrings
-                                            for match in re.finditer(
-                                                r'def\s+(\w+)\s*\([^)]*\)\s*->\s*[^:]+:\s*["\']{0,3}(.*?)["\']{0,3}\n',
-                                                content,
-                                            ):
-                                                cmd_name = match.group(1)
-                                                cmd_desc = (
-                                                    match.group(2).strip()
-                                                    if match.group(2)
-                                                    else f"Execute {cmd_name}"
-                                                )
-                                                commands.append(
-                                                    {"name": cmd_name, "description": cmd_desc}
-                                                )
-
-                                        if commands:
-                                            skill_dicts.append(
-                                                {
-                                                    "name": skill_path.name,
-                                                    "description": description,
-                                                    "commands": commands,
-                                                }
-                                            )
-
-                                if skill_dicts:
-                                    await router.initialize(skill_dicts)
-                                    console.print(
-                                        f"[green]Indexed {len(skill_dicts)} skills from {skills_dir}[/]"
-                                    )
-                                else:
-                                    console.print("[yellow]No skills found in assets/skills/[/]")
-                                    return
-                            except Exception as e:
-                                console.print(f"[red]Failed to rebuild: {e}[/]")
-                                console.print(
-                                    "[cyan]Tip: Run 'omni skill reindex' to manually rebuild.[/]"
-                                )
-                                return
-                        else:
-                            # Convert table to skill dicts format for indexing
-                            skill_dicts = _table_to_skills(table)
-                            await router.initialize(skill_dicts)
-                except Exception as e:
-                    console.print(f"[red]Error loading tools: {e}[/]")
-                    return
-
-            # Run hybrid routing
-            results = await router.route_hybrid(
-                query=query,
-                limit=limit,
-                threshold=threshold,
-            )
-
-            # Optional: Check if index might need manual re-indexing
-            if not results and router._initialized and hasattr(router._indexer, "_store"):
-                try:
-                    store = router._indexer._store
-                    is_healthy = await store.health_check()
-                    if store and is_healthy:
-                        count = store._inner.count("skills")
-                        if count > 0:
-                            console.print(
-                                "[yellow]Note: No results found despite having tools in database.[/]"
-                            )
-                            console.print(
-                                "[cyan]Tip: If you recently changed embedding models, try: 'omni skill reindex'[/]"
-                            )
-                except Exception as e:
-                    err_console.print(f"Health check failed: {e}")
+        search = HybridSearch()
+        results = await search.search(
+            query=query,
+            limit=limit,
+            min_score=threshold,
+        )
 
         # Display results
         if not results:
@@ -306,41 +79,36 @@ def test_route(
                 "HIGH": "green",
                 "MEDIUM": "yellow",
                 "LOW": "red",
-            }.get(result.confidence, "white")
+            }.get(result.get("confidence", ""), "white")
 
-            score_str = f"{result.score:.3f}"
+            score_str = f"{result.get('score', 0):.3f}"
+
+            # Use full tool name (skill.command)
+            tool_id = f"{result.get('skill_name', '')}.{result.get('command', '')}"
+            if result.get("command") and not result.get("skill_name"):
+                tool_id = result.get("id", result.get("command", ""))
 
             if debug:
-                # Show breakdown - use full tool name (skill.command)
-                tool_id = (
-                    f"{result.skill_name}.{result.command_name}"
-                    if result.command_name
-                    else result.skill_name
-                )
                 table.add_row(
                     tool_id,
                     score_str,
-                    f"[{conf_style}]{result.confidence}[/]",
-                    f"sem={result.score * 0.7:.2f} | kw={result.score * 0.3:.2f}",
+                    f"[{conf_style}]{result.get('confidence', 'unknown')}[/]",
+                    f"sem={result.get('score', 0) * 0.7:.2f} | kw={result.get('score', 0) * 0.3:.2f}",
                 )
             else:
-                # Use full tool name (e.g., "git.commit" instead of just "commit")
-                tool_id = (
-                    f"{result.skill_name}.{result.command_name}"
-                    if result.command_name
-                    else result.skill_name
-                )
                 table.add_row(
                     tool_id,
                     score_str,
-                    f"[{conf_style}]{result.confidence}[/]",
+                    f"[{conf_style}]{result.get('confidence', 'unknown')}[/]",
                 )
 
         console.print(table)
 
-        # Show cache stats
-        stats = router.get_stats()
-        console.print(f"\n[dim]Cache size: {stats['cache_stats']['size']} entries[/dim]")
+        # Show stats
+        stats = search.stats()
+        console.print(
+            f"\n[dim]Search weights: semantic={stats['semantic_weight']}, keyword={stats['keyword_weight']}[/dim]"
+        )
 
     asyncio.run(run_test())
 
@@ -349,26 +117,25 @@ def test_route(
 def route_stats() -> None:
     """Show router statistics."""
     try:
-        from omni.core.router.main import OmniRouter
+        from omni.core.router.hybrid_search import HybridSearch
     except ImportError as e:
         console.print(f"[red]Error: {e}[/]")
         raise typer.Exit(1)
 
-    router = OmniRouter()
-    stats = router.get_stats()
+    search = HybridSearch()
+    stats = search.stats()
 
     console.print(
         Panel.fit(
             f"[bold]Router Statistics[/]\n\n"
-            f"Initialized: [cyan]{stats['initialized']}[/]\n"
-            f"Ready: [cyan]{stats['is_ready']}[/]\n\n"
             f"[bold]Hybrid Search:[/]\n"
-            f"  Semantic weight: {stats['hybrid_stats']['semantic_weight']}\n"
-            f"  Keyword weight: {stats['hybrid_stats']['keyword_weight']}\n\n"
-            f"[bold]Cache:[/]\n"
-            f"  Size: {stats['cache_stats']['size']}/{stats['cache_stats']['max_size']}\n"
-            f"  TTL: {stats['cache_stats']['ttl_seconds']}s\n"
-            f"  Hit rate: {stats['cache_stats']['hit_rate']:.1%}",
+            f"  Semantic weight: {stats['semantic_weight']}\n"
+            f"  Keyword weight: {stats['keyword_weight']}\n"
+            f"  RRF smoothing (k): {stats['rrf_k']}\n"
+            f"  Strategy: {stats['strategy']}\n\n"
+            f"[bold]Field Boosting:[/]\n"
+            f"  Name token boost: {stats['field_boosting']['name_token_boost']}\n"
+            f"  Exact phrase boost: {stats['field_boosting']['exact_phrase_boost']}",
             title="Router Stats",
             border_style="green",
         )
@@ -386,7 +153,9 @@ def route_cache(
         console.print(f"[red]Error: {e}[/]")
         raise typer.Exit(1)
 
-    router = OmniRouter()
+    from omni.core.router.main import RouterRegistry
+
+    router = RouterRegistry.get("route_cache")
 
     if clear:
         count = router.cache.clear()
@@ -405,38 +174,9 @@ def route_cache(
         )
 
 
-def register_route_command(parent_app: typer.Typer):
+def register_route_command(parent_app: typer.Typer) -> None:
     """Register the route command with the parent app."""
     parent_app.add_typer(route_app, name="route")
 
 
-def _table_to_skills(table) -> list[dict]:
-    """Convert PyArrow Table to skill dicts format for indexing.
-
-    Takes the Arrow table from analyzer and converts it to the format
-    expected by SkillIndexer.index_skills().
-    """
-    skills_by_name: dict[str, dict] = {}
-
-    ids = table["id"].to_pylist()
-    contents = table["content"].to_pylist()
-    skill_names = table["skill_name"].to_pylist()
-
-    for id_, content, skill_name in zip(ids, contents, skill_names):
-        if skill_name not in skills_by_name:
-            skills_by_name[skill_name] = {
-                "name": skill_name,
-                "description": content[:200] if content else f"{skill_name} skill",
-                "commands": [],
-            }
-
-        # Add command to skill
-        cmd_name = id_.split(".")[-1] if "." in id_ else id_
-        skills_by_name[skill_name]["commands"].append(
-            {
-                "name": cmd_name,
-                "description": content[:200] if content else f"Execute {cmd_name}",
-            }
-        )
-
-    return list(skills_by_name.values())
+__all__ = ["route_app", "register_route_command"]

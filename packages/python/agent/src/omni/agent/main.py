@@ -89,22 +89,18 @@ From Claude Code CLI:
     # Special handling for --graph mode
     if args.graph:
         from omni.agent.workflows.robust_task.graph import build_graph
-        
+
         async def run_graph(request):
             app = build_graph()
-            initial_state = {
-                "user_request": request,
-                "execution_history": [],
-                "retry_count": 0
-            }
+            initial_state = {"user_request": request, "execution_history": [], "retry_count": 0}
             print(f"🚀 Starting Robust Task Graph for: {request}")
             try:
                 final_state = await app.ainvoke(initial_state)
                 # print(f"✅ Workflow Completed.\nResult: {final_state.get('validation_result')}")
-                if final_state.get('validation_result', {}).get('is_valid'):
-                     print(f"✅ Workflow Completed Successfully")
+                if final_state.get("validation_result", {}).get("is_valid"):
+                    print(f"✅ Workflow Completed Successfully")
                 else:
-                     print(f"❌ Workflow Failed")
+                    print(f"❌ Workflow Failed")
 
             except Exception as e:
                 print(f"❌ Graph Execution Error: {e}")

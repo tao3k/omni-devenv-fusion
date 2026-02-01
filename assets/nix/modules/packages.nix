@@ -16,5 +16,7 @@ in
     nixpkgs-latest.google-cloud-sdk
 
     nixpkgs-latest.nickel
+    nixpkgs-latest.nushell
+    nixpkgs-latest.shellcheck
   ];
 }

@@ -48,8 +48,9 @@ impl VectorStore {
             .collect();
         let contents: Vec<String> = tools.iter().map(|t| t.description.clone()).collect();
         let metadatas: Vec<String> = tools.iter().map(|t| {
+            let command_name = t.tool_name.split('.').skip(1).collect::<Vec<_>>().join(".");
             serde_json::json!({
-                "type": "command", "skill_name": t.skill_name, "command": t.tool_name, "tool_name": t.tool_name,
+                "type": "command", "skill_name": t.skill_name, "command": command_name, "tool_name": t.tool_name,
                 "file_path": t.file_path, "function_name": t.function_name, "keywords": t.keywords, "intents": t.intents,
                 "file_hash": t.file_hash, "input_schema": t.input_schema, "docstring": t.docstring,
             }).to_string()

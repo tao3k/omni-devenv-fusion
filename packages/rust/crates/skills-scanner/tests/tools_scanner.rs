@@ -28,7 +28,7 @@ def write_text(content: str) -> str:
 
     let scanner = ToolsScanner::new();
     let tools = scanner
-        .scan_scripts(&scripts_dir, "writer", &["write".to_string()])
+        .scan_scripts(&scripts_dir, "writer", &["write".to_string()], &[])
         .unwrap();
 
     assert_eq!(tools.len(), 1);
@@ -68,7 +68,7 @@ def branch(name: str) -> str:
 
     let scanner = ToolsScanner::new();
     let tools = scanner
-        .scan_scripts(&scripts_dir, "git", &["git".to_string()])
+        .scan_scripts(&scripts_dir, "git", &["git".to_string()], &[])
         .unwrap();
 
     assert_eq!(tools.len(), 3);
@@ -84,7 +84,9 @@ fn test_scan_scripts_no_scripts_dir() {
     let scripts_dir = temp_dir.path().join("empty/scripts");
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "empty", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "empty", &[], &[])
+        .unwrap();
 
     assert!(tools.is_empty());
 }
@@ -97,7 +99,9 @@ fn test_scan_scripts_empty_dir() {
     fs::create_dir_all(&scripts_dir).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "empty", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "empty", &[], &[])
+        .unwrap();
 
     assert!(tools.is_empty());
 }
@@ -123,7 +127,9 @@ def init_tool():
     fs::write(&init_file, init_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert!(tools.is_empty());
 }
@@ -152,7 +158,7 @@ def polish_text(text: str) -> str:
         "polish".to_string(),
     ];
     let tools = scanner
-        .scan_scripts(&scripts_dir, "writer", &routing_keywords)
+        .scan_scripts(&scripts_dir, "writer", &routing_keywords, &[])
         .unwrap();
 
     assert_eq!(tools.len(), 1);
@@ -188,7 +194,7 @@ def test_tool():
 
     let scanner = ToolsScanner::new();
     let tools = scanner
-        .scan_skill_scripts(&skill_path, "test_skill", &[])
+        .scan_skill_scripts(&skill_path, "test_skill", &[], &[])
         .unwrap();
 
     assert_eq!(tools.len(), 1);
@@ -216,7 +222,7 @@ def write_text(content: str) -> str:
     let routing_keywords = vec!["write".to_string(), "edit".to_string()];
 
     let tools = scanner
-        .scan_with_structure(&skill_path, "writer", &routing_keywords, &structure)
+        .scan_with_structure(&skill_path, "writer", &routing_keywords, &[], &structure)
         .unwrap();
 
     assert_eq!(tools.len(), 1);
@@ -235,7 +241,13 @@ fn test_scan_with_structure_skips_missing_directories() {
     let routing_keywords = vec![];
 
     let tools = scanner
-        .scan_with_structure(&skill_path, "empty_skill", &routing_keywords, &structure)
+        .scan_with_structure(
+            &skill_path,
+            "empty_skill",
+            &routing_keywords,
+            &[],
+            &structure,
+        )
         .unwrap();
 
     assert!(tools.is_empty());
@@ -252,7 +264,13 @@ fn test_scan_with_structure_nonexistent_skill_path() {
     let routing_keywords = vec![];
 
     let tools = scanner
-        .scan_with_structure(&nonexistent_path, "ghost", &routing_keywords, &structure)
+        .scan_with_structure(
+            &nonexistent_path,
+            "ghost",
+            &routing_keywords,
+            &[],
+            &structure,
+        )
         .unwrap();
 
     assert!(tools.is_empty());
@@ -279,7 +297,7 @@ def commit(message: str) -> str:
     let routing_keywords = vec!["git".to_string(), "version_control".to_string()];
 
     let tools = scanner
-        .scan_with_structure(&skill_path, "git", &routing_keywords, &structure)
+        .scan_with_structure(&skill_path, "git", &routing_keywords, &[], &structure)
         .unwrap();
 
     assert_eq!(tools.len(), 1);
@@ -306,7 +324,9 @@ def example():
     fs::write(&script_path, script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     // File path should be set
@@ -336,7 +356,9 @@ def nested_tool():
     fs::write(&nested_dir.join("nested.py"), script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "writer", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "writer", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     assert_eq!(tools[0].tool_name, "writer.nested_tool");
@@ -362,7 +384,9 @@ def py_tool():
     fs::write(&scripts_dir.join("data.json"), "{}").unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     assert_eq!(tools[0].tool_name, "test.py_tool");
@@ -396,7 +420,7 @@ def query(sql: str) -> str:
     ];
 
     let tools = scanner
-        .scan_scripts(&scripts_dir, "database", &routing_keywords)
+        .scan_scripts(&scripts_dir, "database", &routing_keywords, &[])
         .unwrap();
 
     assert_eq!(tools.len(), 1);
@@ -444,7 +468,7 @@ def delete_user(user_id: str) -> bool:
     let routing_keywords = vec!["api".to_string(), "rest".to_string(), "user".to_string()];
 
     let tools = scanner
-        .scan_scripts(&scripts_dir, "api", &routing_keywords)
+        .scan_scripts(&scripts_dir, "api", &routing_keywords, &[])
         .unwrap();
 
     assert_eq!(tools.len(), 3);
@@ -477,7 +501,7 @@ def hello() -> str:
     let routing_keywords: Vec<String> = vec![];
 
     let tools = scanner
-        .scan_scripts(&scripts_dir, "test", &routing_keywords)
+        .scan_scripts(&scripts_dir, "test", &routing_keywords, &[])
         .unwrap();
 
     assert_eq!(tools.len(), 1);
@@ -512,7 +536,7 @@ def semantic_search(query: str, limit: int = 10) -> list:
     ];
 
     let tools = scanner
-        .scan_scripts(&scripts_dir, "search", &routing_keywords)
+        .scan_scripts(&scripts_dir, "search", &routing_keywords, &[])
         .unwrap();
 
     assert_eq!(tools.len(), 1);
@@ -562,7 +586,7 @@ def generate_docs(source_path: str, output_format: str = "markdown") -> str:
     let routing_keywords = vec!["documentation".to_string(), "docs".to_string()];
 
     let tools = scanner
-        .scan_scripts(&scripts_dir, "docs", &routing_keywords)
+        .scan_scripts(&scripts_dir, "docs", &routing_keywords, &[])
         .unwrap();
 
     assert_eq!(tools.len(), 1);
@@ -599,7 +623,7 @@ def create_plan(goal: str, constraints: list[str] = None) -> dict:
     ];
 
     let tools = scanner
-        .scan_scripts(&scripts_dir, "planner", &routing_keywords)
+        .scan_scripts(&scripts_dir, "planner", &routing_keywords, &[])
         .unwrap();
 
     assert_eq!(tools.len(), 1);
@@ -635,7 +659,9 @@ def fetch_data(url: str) -> dict:
     fs::write(&scripts_dir.join("api.py"), script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -662,7 +688,9 @@ def process_data(input: str) -> str:
     fs::write(&scripts_dir.join("process.py"), script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -689,7 +717,9 @@ def delete_all() -> str:
     fs::write(&scripts_dir.join("danger.py"), script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -717,7 +747,9 @@ def get_status() -> dict:
     fs::write(&scripts_dir.join("status.py"), script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -751,7 +783,9 @@ def complex_operation(param1: str, param2: int, optional: bool = True) -> str:
     fs::write(&scripts_dir.join("complex.py"), script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -785,7 +819,9 @@ def example(a: str, b: int, c: bool) -> str:
     fs::write(&scripts_dir.join("params.py"), script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -812,7 +848,9 @@ def with_defaults(required: str, optional: str = "default", number: int = 42) ->
     fs::write(&scripts_dir.join("defaults.py"), script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -839,7 +877,9 @@ def with_varargs(a: str, *args, b: int, **kwargs) -> str:
     fs::write(&scripts_dir.join("varargs.py"), script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -864,7 +904,9 @@ def no_args() -> str:
     fs::write(&scripts_dir.join("no_args.py"), script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -893,7 +935,9 @@ def get_data() -> dict:
     fs::write(&scripts_dir.join("getter.py"), script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -919,7 +963,9 @@ def remove_file(path: str) -> bool:
     fs::write(&scripts_dir.join("remover.py"), script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -945,7 +991,9 @@ def fetch_url(url: str) -> str:
     fs::write(&scripts_dir.join("fetcher.py"), script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -972,7 +1020,9 @@ def delete_data() -> str:
     fs::write(&scripts_dir.join("delete.py"), script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -1009,7 +1059,9 @@ def delete_data(id: str) -> bool:
     fs::write(&scripts_dir.join("db.py"), script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 3);
 
@@ -1050,7 +1102,9 @@ def get_data(param: str) -> str:
     fs::write(&scripts_dir.join("test.py"), script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -1100,7 +1154,9 @@ def load_skill(skill_name: str) -> str:
     fs::write(&scripts_dir.join("load.py"), script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "memory", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "memory", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -1129,7 +1185,9 @@ def process_data(input: str) -> str:
     fs::write(&scripts_dir.join("process.py"), script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -1153,7 +1211,9 @@ def query_data(user_id: str, limit: int = 10) -> list:
     fs::write(&scripts_dir.join("query.py"), script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -1193,7 +1253,9 @@ def get_status() -> dict:
     fs::write(&scripts_dir.join("status.py"), script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -1223,7 +1285,9 @@ def fetch_data(url: str) -> str:
     fs::write(&scripts_dir.join("fetch.py"), script_content).unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -1267,7 +1331,7 @@ def process_data(input: str) -> str:
     let entry = scanner.build_index_entry(
         scanner.scan_skill(&skill_path, None).unwrap().unwrap(),
         &script_scanner
-            .scan_scripts(&scripts_dir, "test_skill", &[])
+            .scan_scripts(&scripts_dir, "test_skill", &[], &[])
             .unwrap(),
         &skill_path,
     );

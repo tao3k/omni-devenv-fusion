@@ -51,6 +51,7 @@ in
     nixosModules.python
     nixosModules.llm
     nixosModules.rust
+    nixosModules.packages
     #./modules/flake-parts/omnibus-hive.nix
     ({
       config = lib.mkMerge [
@@ -75,12 +76,6 @@ in
 
   # https://devenv.sh/packages/
   packages = [
-    pkgs.git
-    pkgs.just
-    nixpkgs-latest.glow
-    nixpkgs-latest.google-cloud-sdk
-
-    nixpkgs-latest.nickel
     packages.secretspec
   ];
 

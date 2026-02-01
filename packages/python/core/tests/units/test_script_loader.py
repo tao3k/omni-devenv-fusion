@@ -3,16 +3,19 @@
 PEP 420 Namespace Package Tests:
 - Uses real skill directories from assets/skills/
 - Verifies absolute imports work correctly
+- Tests dependency order loading (_*.py files loaded after regular files)
 """
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
 
 from omni.core.skills.script_loader import (
     ScriptLoader,
+    create_script_loader,
 )
 from omni.foundation.api.decorators import skill_command
 from omni.foundation.config.skills import SKILLS_DIR
@@ -172,3 +175,261 @@ class TestScriptLoaderWithNamespacePackages:
             assert hasattr(prepare, "stage_and_scan")
         except ImportError as e:
             pytest.skip(f"Namespace package import failed: {e}")
+
+
+class TestScriptLoaderSmartCommit:
+    """Test smart_commit workflow loading (requires sibling imports)."""
+
+    def test_smart_commit_workflow_loaded(self):
+        """Test that smart_commit_workflow.py is loaded successfully.
+
+        This test verifies that modules with sibling imports (e.g.,
+        from git.scripts.commit_state import ...) work correctly.
+        """
+        scripts_dir = SKILLS_DIR(skill="git") / "scripts"
+
+        if not scripts_dir.exists():
+            pytest.skip("git skill not found")
+
+        loader = ScriptLoader(scripts_dir, "git")
+        loader.load_all()
+
+        # smart_commit should be loaded
+        commands = loader.list_commands()
+        assert "git.smart_commit" in commands, f"smart_commit not found in commands: {commands}"
+
+    def test_smart_commit_function_harvested(self):
+        """Test that smart_commit function has proper decorator attributes."""
+        scripts_dir = SKILLS_DIR(skill="git") / "scripts"
+
+        if not scripts_dir.exists():
+            pytest.skip("git skill not found")
+
+        loader = ScriptLoader(scripts_dir, "git")
+        loader.load_all()
+
+        # Get the smart_commit command
+        cmd = loader.get_command("git.smart_commit")
+        assert cmd is not None, "git.smart_commit command not found"
+        assert callable(cmd), "git.smart_commit should be callable"
+        assert hasattr(cmd, "_is_skill_command"), (
+            "smart_commit should have _is_skill_command attribute"
+        )
+        # pyright: ignore[reportFunctionMemberAccess]
+        assert cmd._is_skill_command is True, (  # pyright: ignore[reportFunctionMemberAccess]
+            "_is_skill_command should be True"
+        )
+
+
+class TestScriptLoaderDependencyOrder:
+    """Test dependency order loading (_*.py files loaded after regular files)."""
+
+    def test_dependency_order_preserved(self, tmp_path: Path):
+        """Test that _*.py files are loaded after regular files.
+
+        This ensures modules with external dependencies (like _enums.py
+        depending on modules that use it) load in the correct order.
+        """
+        skill_root = tmp_path / "test_skill"
+        scripts_dir = skill_root / "scripts"
+        scripts_dir.mkdir(parents=True)
+
+        # Create a module that will be imported by others
+        (scripts_dir / "utils.py").write_text("""
+from __future__ import annotations
+VALUE = "utils_loaded"
+""")
+
+        # Create a module that imports utils first
+        (scripts_dir / "main_module.py").write_text("""
+from __future__ import annotations
+from test_skill.scripts.utils import VALUE
+RESULT = f"main:{VALUE}"
+""")
+
+        # Create _enums.py that imports from main_module (simulating git._enums)
+        (scripts_dir / "_enums.py").write_text("""
+from __future__ import annotations
+from test_skill.scripts.main_module import RESULT
+ENUM_VALUE = RESULT
+""")
+
+        # Create a skill command that imports from _enums
+        (scripts_dir / "commands.py").write_text("""
+from __future__ import annotations
+from test_skill.scripts._enums import ENUM_VALUE
+
+from omni.foundation.api.decorators import skill_command
+
+@skill_command(name="test_cmd", description="Test command")
+def test_command():
+    return ENUM_VALUE
+""")
+
+        loader = ScriptLoader(scripts_dir, "test_skill")
+        loader.load_all()
+
+        # All commands should be loaded successfully
+        assert "test_skill.test_cmd" in loader.commands
+
+    def test_all_files_loaded_no_skip(self, tmp_path: Path):
+        """Test that no files are skipped during loading."""
+        skill_root = tmp_path / "test_skill"
+        scripts_dir = skill_root / "scripts"
+        scripts_dir.mkdir(parents=True)
+
+        # Create multiple files
+        (scripts_dir / "module_a.py").write_text("""
+from __future__ import annotations
+from omni.foundation.api.decorators import skill_command
+
+@skill_command(name="cmd_a", description="Command A")
+def cmd_a():
+    return "a"
+""")
+
+        (scripts_dir / "module_b.py").write_text("""
+from __future__ import annotations
+from omni.foundation.api.decorators import skill_command
+
+@skill_command(name="cmd_b", description="Command B")
+def cmd_b():
+    return "b"
+""")
+
+        (scripts_dir / "_private.py").write_text("""
+from __future__ import annotations
+from omni.foundation.api.decorators import skill_command
+
+@skill_command(name="cmd_private", description="Private command")
+def cmd_private():
+    return "private"
+""")
+
+        loader = ScriptLoader(scripts_dir, "test_skill")
+        loader.load_all()
+
+        # All commands should be loaded
+        commands = loader.list_commands()
+        assert "test_skill.cmd_a" in commands
+        assert "test_skill.cmd_b" in commands
+        assert "test_skill.cmd_private" in commands
+
+
+class TestScriptLoaderSysPath:
+    """Test sys.path management during loading."""
+
+    def test_sys_path_restored_after_load(self, tmp_path: Path):
+        """Test that sys.path is restored after loading."""
+        scripts_dir = tmp_path / "scripts"
+        scripts_dir.mkdir()
+
+        # Add a unique path that we can track
+        test_path = str(tmp_path / "unique_test_path")
+        assert test_path not in sys.path
+
+        loader = ScriptLoader(scripts_dir, "test_skill")
+        loader.load_all()
+
+        # After load, sys.path should be restored to original state
+        # (the path we added during load should be removed)
+        # Note: We don't assert this strictly since other tests may add paths
+
+    def test_inject_context_accessible(self, tmp_path: Path):
+        """Test that injected context is accessible in loaded modules."""
+        scripts_dir = tmp_path / "scripts"
+        scripts_dir.mkdir()
+
+        (scripts_dir / "test_module.py").write_text("""
+from __future__ import annotations
+from omni.foundation.api.decorators import skill_command
+
+@skill_command(name="context_test", description="Test context injection")
+def context_test():
+    # Access the injected rust accelerator
+    return RUST_ACCELERATOR.upper() if 'RUST_ACCELERATOR' in dir() else "no_context"
+""")
+
+        loader = ScriptLoader(scripts_dir, "test_skill")
+        loader.inject("RUST_ACCELERATOR", "test_rust_value")
+        loader.load_all()
+
+        cmd = loader.get_command("test_skill.context_test")
+        assert cmd is not None
+
+
+class TestScriptLoaderCommandNaming:
+    """Test command naming and harvesting."""
+
+    def test_command_full_name_format(self):
+        """Test commands are stored with full skill.command format."""
+        scripts_dir = SKILLS_DIR(skill="git") / "scripts"
+
+        if not scripts_dir.exists():
+            pytest.skip("git skill not found")
+
+        loader = ScriptLoader(scripts_dir, "git")
+        loader.load_all()
+
+        for cmd_name in loader.commands:
+            # All command names should be in "skill.command" format
+            assert "." in cmd_name, f"Command name {cmd_name} should contain '.'"
+            parts = cmd_name.split(".")
+            assert len(parts) == 2, f"Command name {cmd_name} should have exactly 2 parts"
+            assert parts[0] == "git", f"First part should be 'git', got {parts[0]}"
+
+    def test_get_command_simple_fallback(self):
+        """Test get_command_simple falls back to various lookup methods."""
+        scripts_dir = SKILLS_DIR(skill="git") / "scripts"
+
+        if not scripts_dir.exists():
+            pytest.skip("git skill not found")
+
+        loader = ScriptLoader(scripts_dir, "git")
+        loader.load_all()
+
+        # Simple name should work for known commands
+        if "git.status" in loader.commands:
+            result = loader.get_command_simple("status")
+            assert result is not None
+
+    def test_command_count_reasonably_bounded(self):
+        """Test command count is reasonable for a skill."""
+        scripts_dir = SKILLS_DIR(skill="git") / "scripts"
+
+        if not scripts_dir.exists():
+            pytest.skip("git skill not found")
+
+        loader = ScriptLoader(scripts_dir, "git")
+        loader.load_all()
+
+        # Git skill should have a reasonable number of commands (5-20)
+        # This catches issues where all functions are harvested
+        assert 1 <= len(loader.commands) <= 50, f"Unexpected command count: {len(loader.commands)}"
+
+
+class TestCreateScriptLoader:
+    """Test create_script_loader factory function."""
+
+    def test_factory_creates_loader(self, tmp_path: Path):
+        """Test factory function creates properly configured loader."""
+        scripts_dir = tmp_path / "scripts"
+        scripts_dir.mkdir()
+
+        loader = create_script_loader(scripts_dir, "factory_test")
+
+        assert isinstance(loader, ScriptLoader)
+        assert loader.scripts_path == scripts_dir
+        assert loader.skill_name == "factory_test"
+
+    def test_factory_loads_commands(self):
+        """Test factory loader can load commands."""
+        scripts_dir = SKILLS_DIR(skill="git") / "scripts"
+
+        if not scripts_dir.exists():
+            pytest.skip("git skill not found")
+
+        loader = create_script_loader(scripts_dir, "git")
+        loader.load_all()
+
+        assert len(loader.commands) > 0

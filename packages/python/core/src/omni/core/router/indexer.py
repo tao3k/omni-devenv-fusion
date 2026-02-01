@@ -209,6 +209,13 @@ class SkillIndexer:
                             "description_hash": hashlib.md5(
                                 s.get("description", "").encode()
                             ).hexdigest(),
+                            # Include routing keywords and intents in hash
+                            "keywords_hash": hashlib.md5(
+                                json.dumps(s.get("routing_keywords", []), sort_keys=True).encode()
+                            ).hexdigest(),
+                            "intents_hash": hashlib.md5(
+                                json.dumps(s.get("intents", []), sort_keys=True).encode()
+                            ).hexdigest(),
                         }
                         for s in skills
                     ],
@@ -266,8 +273,8 @@ class SkillIndexer:
                 cmd_name = cmd.get("name", "")
                 cmd_desc = cmd.get("description", "") or cmd_name
                 cmd_keywords = cmd.get("keywords", [])
-                cmd_intents = skill.get("intents", []) # Commands inherit skill intents
-                
+                cmd_intents = skill.get("intents", [])  # Commands inherit skill intents
+
                 # [SEO] Build a highly descriptive search block for both Vector and Keyword engines
                 # Combining name, description, intents, and keywords into a single semantic unit
                 doc_content = f"COMMAND: {skill_name}.{cmd_name}\n"
@@ -276,7 +283,7 @@ class SkillIndexer:
                     doc_content += f"INTENTS: {', '.join(cmd_intents)}\n"
                 if cmd_keywords:
                     doc_content += f"KEYWORDS: {', '.join(cmd_keywords)}"
-                
+
                 cmd_id = f"{skill_name}.{cmd_name}" if cmd_name else entry_id
 
                 # Match the metadata schema expected by Rust for Keyword Indexing
@@ -285,7 +292,7 @@ class SkillIndexer:
                     "skill_name": skill_name,
                     "tool_name": cmd_id,
                     "command": cmd_name,
-                    "keywords": cmd_keywords, 
+                    "keywords": cmd_keywords,
                     "intents": cmd_intents,
                     "weight": 2.0,
                     "id": cmd_id,

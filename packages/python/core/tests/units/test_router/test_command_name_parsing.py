@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 def create_mock_search(mock_matches):
     """Helper to create a mock async search function that returns specified matches."""
 
-    async def mock_search(query, limit=5):
+    async def mock_search(query, limit=5, min_score=0.0):
         return mock_matches
 
     return mock_search
@@ -73,7 +73,7 @@ class TestCommandNameParsing:
 
     @pytest.mark.asyncio
     async def test_meta_entries_without_file_path_skipped(self):
-        """Verify entries without file_path are filtered out (prevents 'git.git')."""
+        """Verify entries where skill_name == command_name are filtered out (prevents 'git.git')."""
         from omni.core.router.main import OmniRouter
 
         mock_matches = [
@@ -81,7 +81,7 @@ class TestCommandNameParsing:
                 "score": 0.9,
                 "skill_name": "git",
                 "tool_name": "git",  # Skill-level metadata, not a command
-                "file_path": "",  # Empty file_path - should be filtered
+                "file_path": "assets/skills/git/SKILL.md",  # Has file_path but is skill-level entry
             }
         ]
 
@@ -91,7 +91,7 @@ class TestCommandNameParsing:
 
         results = await router.route_hybrid("git", use_cache=False)
 
-        # Should be empty - meta entry without file_path
+        # Should be empty - skill-level entry where skill_name == command_name
         assert len(results) == 0
 
     @pytest.mark.asyncio

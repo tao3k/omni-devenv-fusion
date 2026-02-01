@@ -150,6 +150,7 @@ class RustLanceCheckpointSaver(BaseCheckpointSaver):
             # Parse ISO timestamp string to float
             try:
                 from datetime import datetime
+
                 dt = datetime.fromisoformat(ts_value.replace("Z", "+00:00"))
                 timestamp = dt.timestamp()
             except (ValueError, AttributeError):

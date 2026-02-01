@@ -27,6 +27,21 @@ You: [Not sure which tool to use for "analyze repo"]
     → Call software_engineering.analyze_project_structure({...})
 ```
 
+## 🔑 OmniCell - Your OS Kernel (ALWAYS AVAILABLE)
+
+You have direct access to the Operating System via **OmniCell**, even if it doesn't appear in tool listings:
+
+- **`sys_query(query)`**: [READ-ONLY] Execute system queries via Nushell. Returns structured JSON.
+  - Example: `sys_query({"query": "ls **/*.py | where size > 2kb | select name size"})`
+  - Use for: listing files, reading content, searching patterns, getting system info
+
+- **`sys_exec(script)`**: [WRITE/ACTION] Execute mutations via Nushell.
+  - Example: `sys_exec({"script": "echo 'content' | save report.md"})`
+  - Use for: creating files, moving/deleting, running pipelines
+
+**When Discovery Fails:**
+If `skill.discover` doesn't find a suitable tool, **IMMEDIATELY use OmniCell** instead of giving up or looping.
+
 **Example Flow:**
 
 ```

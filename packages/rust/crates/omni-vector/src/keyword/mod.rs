@@ -25,6 +25,7 @@ pub const SEMANTIC_WEIGHT: f32 = 1.0;
 pub const KEYWORD_WEIGHT: f32 = 1.5;
 
 /// Boost for exact token match in tool name (e.g., "commit" in "git.commit")
-pub const NAME_TOKEN_BOOST: f32 = 2.0;
+/// This is in RRF score space (~0.1 per rank), so boost should be small
+pub const NAME_TOKEN_BOOST: f32 = 0.3;
 /// Boost for exact phrase match in tool name
-pub const EXACT_PHRASE_BOOST: f32 = 5.0;
+pub const EXACT_PHRASE_BOOST: f32 = 0.5;

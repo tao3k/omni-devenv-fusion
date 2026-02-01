@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ExperienceMetadata",
+  "description": "Experience metadata for multi-dimensional filtered retrieval",
+  "type": "object",
+  "properties": {
+    "type": {
+      "const": "experience_trace",
+      "description": "Type discriminator"
+    },
+    "trace_id": {
+      "type": "string",
+      "description": "Reference to the original trace"
+    },
+    "domain": {
+      "type": "string",
+      "description": "Domain category: file_manipulation | git | test | search"
+    },
+    "nu_pattern": {
+      "type": "string",
+      "description": "Nu script skeleton pattern"
+    },
+    "complexity": {
+      "type": "string",
+      "enum": ["low", "medium", "high"],
+      "description": "Task complexity level"
+    },
+    "success": {
+      "const": true,
+      "description": "Only successful experiences are stored"
+    },
+    "tags": {
+      "type": "array",
+      "description": "Custom tags for filtering",
+      "items": {
+        "type": "string"
+      }
+    },
+    "task_description": {
+      "type": "string",
+      "description": "Normalized task description"
+    }
+  },
+  "required": ["type", "trace_id", "domain", "success"]
+}

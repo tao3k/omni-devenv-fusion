@@ -107,7 +107,9 @@ def generate_usage_template(
             enum_values = prop_meta.get("enum")
 
             if enum_values:
-                placeholder = enum_values[0] if isinstance(enum_values[0], str) else f"<{prop_name}>"
+                placeholder = (
+                    enum_values[0] if isinstance(enum_values[0], str) else f"<{prop_name}>"
+                )
             elif prop_type == "integer":
                 placeholder = 0
             elif prop_type == "number":

@@ -66,7 +66,12 @@ routing_keywords: ["commit", "branch"]
     let tools_scanner = ToolsScanner::new();
     let writer_metadata = metadatas.iter().find(|m| m.skill_name == "writer").unwrap();
     let tools = tools_scanner
-        .scan_scripts(&writer_scripts, "writer", &writer_metadata.routing_keywords)
+        .scan_scripts(
+            &writer_scripts,
+            "writer",
+            &writer_metadata.routing_keywords,
+            &writer_metadata.intents,
+        )
         .unwrap();
 
     assert_eq!(tools.len(), 1);
@@ -191,7 +196,7 @@ def run_test_alt(path: str) -> str:
     // Scan scripts
     let tools_scanner = ToolsScanner::new();
     let tools = tools_scanner
-        .scan_scripts(&test_scripts, "test", &["test".to_string()])
+        .scan_scripts(&test_scripts, "test", &["test".to_string()], &[])
         .unwrap();
 
     // The scanner SHOULD find 2 tools (both definitions)
@@ -272,10 +277,20 @@ def process(data: str) -> str:
     let tools_scanner = ToolsScanner::new();
 
     let tools1 = tools_scanner
-        .scan_scripts(&skill1_path.join("scripts"), "skill1", &["s1".to_string()])
+        .scan_scripts(
+            &skill1_path.join("scripts"),
+            "skill1",
+            &["s1".to_string()],
+            &[],
+        )
         .unwrap();
     let tools2 = tools_scanner
-        .scan_scripts(&skill2_path.join("scripts"), "skill2", &["s2".to_string()])
+        .scan_scripts(
+            &skill2_path.join("scripts"),
+            "skill2",
+            &["s2".to_string()],
+            &[],
+        )
         .unwrap();
 
     // Both should have 1 tool

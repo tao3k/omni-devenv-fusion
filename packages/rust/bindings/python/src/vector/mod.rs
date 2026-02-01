@@ -1,28 +1,37 @@
 //! Vector Store - Python Bindings for omni-vector / LanceDB
 //!
-//! Provides semantic search and vector storage capabilities.
-//!
 //! ## Module Structure (by functionality)
 //!
 //! ```text
 //! vector/
-//!   ├── mod.rs           # Main module, all PyVectorStore methods
-//!   ├── tool_record.rs   # PyToolRecord wrapper (reusable)
-//!   ├── doc_ops.rs       # Document operation helpers (for internal use)
-//!   ├── search_ops.rs    # Search operation helpers (for internal use)
-//!   └── tool_ops.rs      # Tool indexing helpers (for internal use)
+//!   ├── mod.rs           # PyVectorStore definition and public API
+//!   ├── store.rs         # Store lifecycle (new, count, drop_table)
+//!   ├── doc_ops.rs       # Document operations (add, delete)
+//!   ├── search_ops.rs    # Search operations (search, search_tools, scan)
+//!   ├── tool_ops.rs      # Tool indexing operations
+//!   ├── analytics.rs     # Analytics operations
+//!   └── tool_record.rs   # PyToolRecord wrapper
 //! ```
 
-use omni_vector::VectorStore;
 use pyo3::prelude::*;
-use std::path::Path;
 
+mod analytics;
 mod doc_ops;
 mod search_ops;
+mod store;
 mod tool_ops;
 pub mod tool_record;
 
 pub use tool_record::PyToolRecord;
+
+// Re-export helper functions for use in PyVectorStore methods
+use analytics::{get_all_file_hashes_async, get_analytics_table_async};
+use doc_ops::{add_documents_async, add_single_async, delete_async, delete_by_file_path_async};
+use search_ops::{
+    create_index_async, load_tool_registry_async, scan_skill_tools_raw, search_async,
+    search_filtered_async, search_hybrid_async, search_tools_async,
+};
+use store::{create_vector_store, store_count, store_drop_table, store_new};
 
 // ============================================================================
 // PyVectorStore - Main vector store class
@@ -45,60 +54,25 @@ impl PyVectorStore {
     #[new]
     #[pyo3(signature = (path, dimension = 1536, enable_keyword_index = false))]
     fn new(path: String, dimension: usize, enable_keyword_index: bool) -> PyResult<Self> {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-        rt.block_on(async {
-            VectorStore::new_with_keyword_index(&path, Some(dimension), enable_keyword_index)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-        })?;
-
-        Ok(PyVectorStore {
-            path,
-            dimension,
-            enable_keyword_index,
-        })
+        store_new(path, dimension, enable_keyword_index)
     }
 
     fn count(&self, table_name: String) -> PyResult<u32> {
-        let path = self.path.clone();
-        let dimension = self.dimension;
-        let enable_kw = self.enable_keyword_index;
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        rt.block_on(async {
-            let store = VectorStore::new_with_keyword_index(&path, Some(dimension), enable_kw)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            store
-                .count(&table_name)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-        })
+        store_count(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            table_name,
+        )
     }
 
     fn drop_table(&self, table_name: String) -> PyResult<()> {
-        let path = self.path.clone();
-        let dimension = self.dimension;
-        let enable_kw = self.enable_keyword_index;
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        rt.block_on(async {
-            let store = VectorStore::new_with_keyword_index(&path, Some(dimension), enable_kw)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            store
-                .drop_table(&table_name)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-        })
+        store_drop_table(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            table_name,
+        )
     }
 
     // -------------------------------------------------------------------------
@@ -113,22 +87,16 @@ impl PyVectorStore {
         contents: Vec<String>,
         metadatas: Vec<String>,
     ) -> PyResult<()> {
-        let path = self.path.clone();
-        let dimension = self.dimension;
-        let enable_kw = self.enable_keyword_index;
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        rt.block_on(async {
-            let store = VectorStore::new_with_keyword_index(&path, Some(dimension), enable_kw)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            store
-                .add_documents(&table_name, ids, vectors, contents, metadatas)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-        })
+        add_documents_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            &table_name,
+            ids,
+            vectors,
+            contents,
+            metadatas,
+        )
     }
 
     fn add(
@@ -138,48 +106,25 @@ impl PyVectorStore {
         vector: Vec<f32>,
         metadata: String,
     ) -> PyResult<()> {
-        let path = self.path.clone();
-        let dimension = self.dimension;
-        let enable_kw = self.enable_keyword_index;
-        let id = uuid::Uuid::new_v4().to_string();
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        rt.block_on(async {
-            let store = VectorStore::new_with_keyword_index(&path, Some(dimension), enable_kw)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            store
-                .add_documents(
-                    &table_name,
-                    vec![id],
-                    vec![vector],
-                    vec![content],
-                    vec![metadata],
-                )
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-        })
+        add_single_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            &table_name,
+            content,
+            vector,
+            metadata,
+        )
     }
 
     fn delete(&self, table_name: String, ids: Vec<String>) -> PyResult<()> {
-        let path = self.path.clone();
-        let dimension = self.dimension;
-        let enable_kw = self.enable_keyword_index;
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        rt.block_on(async {
-            let store = VectorStore::new_with_keyword_index(&path, Some(dimension), enable_kw)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            store
-                .delete(&table_name, ids)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-        })
+        delete_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            &table_name,
+            ids,
+        )
     }
 
     fn delete_by_file_path(
@@ -187,23 +132,13 @@ impl PyVectorStore {
         table_name: Option<String>,
         file_paths: Vec<String>,
     ) -> PyResult<()> {
-        let path = self.path.clone();
-        let dimension = self.dimension;
-        let enable_kw = self.enable_keyword_index;
-        let table_name = table_name.unwrap_or_else(|| "skills".to_string());
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        rt.block_on(async {
-            let store = VectorStore::new_with_keyword_index(&path, Some(dimension), enable_kw)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            store
-                .delete_by_file_path(&table_name, file_paths)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-        })
+        delete_by_file_path_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            &table_name.unwrap_or_else(|| "skills".to_string()),
+            file_paths,
+        )
     }
 
     // -------------------------------------------------------------------------
@@ -211,28 +146,14 @@ impl PyVectorStore {
     // -------------------------------------------------------------------------
 
     fn search(&self, table_name: String, query: Vec<f32>, limit: usize) -> PyResult<Vec<String>> {
-        let path = self.path.clone();
-        let dimension = self.dimension;
-        let enable_kw = self.enable_keyword_index;
-        let query = query.clone();
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        rt.block_on(async {
-            let store = VectorStore::new_with_keyword_index(&path, Some(dimension), enable_kw)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            let results = store
-                .search(&table_name, query, limit)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            let json_results: Vec<String> = results
-                .into_iter()
-                .map(|r| serde_json::to_string(&r).unwrap_or_default())
-                .collect();
-            Ok(json_results)
-        })
+        search_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            &table_name,
+            query,
+            limit,
+        )
     }
 
     fn search_filtered(
@@ -242,28 +163,15 @@ impl PyVectorStore {
         limit: usize,
         where_filter: Option<String>,
     ) -> PyResult<Vec<String>> {
-        let path = self.path.clone();
-        let dimension = self.dimension;
-        let enable_kw = self.enable_keyword_index;
-        let query = query.clone();
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        rt.block_on(async {
-            let store = VectorStore::new_with_keyword_index(&path, Some(dimension), enable_kw)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            let results = store
-                .search_filtered(&table_name, query, limit, where_filter)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            let json_results: Vec<String> = results
-                .into_iter()
-                .map(|r| serde_json::to_string(&r).unwrap_or_default())
-                .collect();
-            Ok(json_results)
-        })
+        search_filtered_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            &table_name,
+            query,
+            limit,
+            where_filter,
+        )
     }
 
     fn search_hybrid(
@@ -273,54 +181,25 @@ impl PyVectorStore {
         keywords: Vec<String>,
         limit: usize,
     ) -> PyResult<Vec<String>> {
-        let path = self.path.clone();
-        let dimension = self.dimension;
-        let enable_kw = self.enable_keyword_index;
-        let query = query.clone();
-        let keywords = keywords.clone();
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        rt.block_on(async {
-            let store = VectorStore::new_with_keyword_index(&path, Some(dimension), enable_kw)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            let results = store
-                .search_tools(
-                    &table_name,
-                    &query,
-                    keywords.first().as_ref().map(|s| s.as_str()),
-                    limit,
-                    0.0,
-                )
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            let json_results: Vec<String> = results
-                .into_iter()
-                .map(|r| serde_json::to_string(&r).unwrap_or_default())
-                .collect();
-            Ok(json_results)
-        })
+        let query_text = keywords.first().cloned().unwrap_or_default();
+        search_hybrid_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            &table_name,
+            query,
+            query_text,
+            limit,
+        )
     }
 
     fn create_index(&self, table_name: String) -> PyResult<()> {
-        let path = self.path.clone();
-        let dimension = self.dimension;
-        let enable_kw = self.enable_keyword_index;
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        rt.block_on(async {
-            let store = VectorStore::new_with_keyword_index(&path, Some(dimension), enable_kw)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            store
-                .create_index(&table_name)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-        })
+        create_index_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            &table_name,
+        )
     }
 
     // -------------------------------------------------------------------------
@@ -328,83 +207,29 @@ impl PyVectorStore {
     // -------------------------------------------------------------------------
 
     fn index_skill_tools(&self, base_path: String, table_name: Option<String>) -> PyResult<usize> {
-        let path = self.path.clone();
-        let dimension = self.dimension;
-        let enable_kw = self.enable_keyword_index;
+        use tool_ops::index_skill_tools_async;
+
         let table_name = table_name.unwrap_or_else(|| "skills".to_string());
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        rt.block_on(async {
-            let store = VectorStore::new_with_keyword_index(&path, Some(dimension), enable_kw)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            store
-                .index_skill_tools(&base_path, &table_name)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            let count = store
-                .count(&table_name)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            Ok(count as usize)
-        })
+        index_skill_tools_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            &base_path,
+            &table_name,
+        )
     }
 
     fn scan_skill_tools_raw(&self, base_path: String) -> PyResult<Vec<String>> {
-        use skills_scanner::{SkillScanner, ToolRecord, ToolsScanner};
-
-        let skill_scanner = SkillScanner::new();
-        let script_scanner = ToolsScanner::new();
-        let skills_path = Path::new(&base_path);
-
-        if !skills_path.exists() {
-            return Ok(vec![]);
-        }
-
-        let metadatas = skill_scanner
-            .scan_all(skills_path, None)
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-        let mut all_tools: Vec<ToolRecord> = Vec::new();
-        let empty_intents: &[String] = &[];
-
-        for metadata in &metadatas {
-            let skill_scripts_path = skills_path.join(&metadata.skill_name).join("scripts");
-
-            match script_scanner.scan_scripts(
-                &skill_scripts_path,
-                &metadata.skill_name,
-                &metadata.routing_keywords,
-                empty_intents,
-            ) {
-                Ok(tools) => all_tools.extend(tools),
-                Err(e) => eprintln!(
-                    "Warning: Failed to scan for '{}': {}",
-                    metadata.skill_name, e
-                ),
-            }
-        }
-
-        let json_tools: Vec<String> = all_tools
-            .into_iter()
-            .map(|t| serde_json::to_string(&t).unwrap_or_default())
-            .filter(|s| !s.is_empty())
-            .collect();
-
-        Ok(json_tools)
+        scan_skill_tools_raw(&base_path)
     }
 
     /// Get complete skill index with full metadata (routing_keywords, intents, authors, etc.)
     ///
     /// This scans the filesystem directly and returns all SkillIndexEntry data as JSON.
-    /// Unlike list_all_tools which only returns tool records from LanceDB,
-    /// this method returns full skill metadata from SKILL.md frontmatter.
+    /// Uses `SkillScanner::build_index_entry` for consistent tool deduplication.
     fn get_skill_index(&self, base_path: String) -> PyResult<String> {
-        use skills_scanner::{
-            DocsAvailable, IndexToolEntry, SkillIndexEntry, SkillScanner, ToolsScanner,
-        };
+        use skills_scanner::{SkillIndexEntry, SkillScanner, ToolsScanner};
+        use std::path::Path;
 
         let skill_scanner = SkillScanner::new();
         let script_scanner = ToolsScanner::new();
@@ -419,28 +244,21 @@ impl PyVectorStore {
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
         // Build SkillIndexEntry for each skill with its tools
+        // Reuse build_index_entry for consistent deduplication logic
         let mut skill_entries: Vec<SkillIndexEntry> = Vec::new();
 
-        for metadata in &metadatas {
-            let skill_scripts_path = skills_path.join(&metadata.skill_name).join("scripts");
+        for metadata in metadatas {
+            let skill_path = skills_path.join(&metadata.skill_name);
+            let skill_scripts_path = &skill_path;
 
-            // Scan tools for this skill
-            let tools: Vec<IndexToolEntry> = match script_scanner.scan_scripts(
-                &skill_scripts_path,
+            // Scan tools for this skill (returns ToolRecord, not IndexToolEntry)
+            let tool_records: Vec<skills_scanner::ToolRecord> = match script_scanner.scan_scripts(
+                skill_scripts_path,
                 &metadata.skill_name,
                 &metadata.routing_keywords,
                 &metadata.intents,
             ) {
-                Ok(tool_records) => tool_records
-                    .into_iter()
-                    .map(|tr| IndexToolEntry {
-                        name: tr.tool_name,
-                        description: tr.description,
-                        category: tr.category,
-                        input_schema: tr.input_schema,
-                        file_hash: tr.file_hash,
-                    })
-                    .collect(),
+                Ok(tools) => tools,
                 Err(e) => {
                     eprintln!(
                         "Warning: Failed to scan tools for '{}': {}",
@@ -450,24 +268,9 @@ impl PyVectorStore {
                 }
             };
 
-            // Build the full skill index entry with all metadata
-            let entry = SkillIndexEntry {
-                name: metadata.skill_name.clone(),
-                description: metadata.description.clone(),
-                version: metadata.version.clone(),
-                path: format!("assets/skills/{}", metadata.skill_name),
-                tools,
-                routing_keywords: metadata.routing_keywords.clone(),
-                intents: metadata.intents.clone(),
-                authors: metadata.authors.clone(),
-                docs_available: DocsAvailable::default(),
-                oss_compliant: Vec::new(),
-                compliance_details: Vec::new(),
-                require_refs: metadata.require_refs.clone(),
-                sniffing_rules: Vec::new(),
-                permissions: metadata.permissions.clone(),
-            };
-
+            // build_index_entry handles tool deduplication internally
+            let entry =
+                skill_scanner.build_index_entry(metadata, &tool_records, skill_scripts_path);
             skill_entries.push(entry);
         }
 
@@ -476,23 +279,15 @@ impl PyVectorStore {
     }
 
     fn list_all_tools(&self, table_name: Option<String>) -> PyResult<String> {
-        let path = self.path.clone();
-        let dimension = self.dimension;
-        let enable_kw = self.enable_keyword_index;
+        use tool_ops::list_all_tools_async;
+
         let table_name = table_name.unwrap_or_else(|| "skills".to_string());
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        rt.block_on(async {
-            let store = VectorStore::new_with_keyword_index(&path, Some(dimension), enable_kw)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            store
-                .list_all_tools(&table_name)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-        })
+        list_all_tools_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            &table_name,
+        )
     }
 
     // -------------------------------------------------------------------------
@@ -500,108 +295,28 @@ impl PyVectorStore {
     // -------------------------------------------------------------------------
 
     fn get_all_file_hashes(&self, table_name: Option<String>) -> PyResult<String> {
-        let path = self.path.clone();
-        let dimension = self.dimension;
-        let enable_kw = self.enable_keyword_index;
         let table_name = table_name.unwrap_or_else(|| "skills".to_string());
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        rt.block_on(async {
-            let store = VectorStore::new_with_keyword_index(&path, Some(dimension), enable_kw)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            store
-                .get_all_file_hashes(&table_name)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-        })
+        get_all_file_hashes_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            &table_name,
+        )
     }
 
     fn get_analytics_table(&self, table_name: Option<String>) -> PyResult<Py<PyAny>> {
-        let path = self.path.clone();
-        let dimension = self.dimension;
-        let enable_kw = self.enable_keyword_index;
         let table_name = table_name.unwrap_or_else(|| "skills".to_string());
-
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-        let json_tools = rt.block_on(async {
-            let store = VectorStore::new_with_keyword_index(&path, Some(dimension), enable_kw)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            store
-                .list_all_tools(&table_name)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
-        })?;
-
-        pyo3::Python::attach(|py| -> PyResult<Py<PyAny>> {
-            let json_mod = py.import("json")?;
-            let loads_fn = json_mod.getattr("loads")?;
-            let tools_py: pyo3::Bound<'_, pyo3::types::PyList> =
-                loads_fn.call1((json_tools,))?.extract()?;
-
-            let ids = pyo3::types::PyList::empty(py);
-            let contents = pyo3::types::PyList::empty(py);
-            let skill_names = pyo3::types::PyList::empty(py);
-            let tool_names = pyo3::types::PyList::empty(py);
-            let file_paths = pyo3::types::PyList::empty(py);
-            let keywords = pyo3::types::PyList::empty(py);
-
-            for item in tools_py.iter() {
-                let tool_dict = item.cast::<pyo3::types::PyDict>()?;
-                if let Ok(Some(id_any)) = tool_dict.get_item("id") {
-                    let id_: String = id_any.extract()?;
-                    ids.append(id_)?;
-                }
-                if let Ok(Some(content_any)) = tool_dict.get_item("content") {
-                    let content: String = content_any.extract()?;
-                    contents.append(content)?;
-                }
-                if let Ok(Some(skill_any)) = tool_dict.get_item("skill_name") {
-                    let skill: String = skill_any.extract()?;
-                    skill_names.append(skill)?;
-                }
-                if let Ok(Some(tool_any)) = tool_dict.get_item("tool_name") {
-                    let tool_: String = tool_any.extract()?;
-                    tool_names.append(tool_)?;
-                }
-                if let Ok(Some(fp_any)) = tool_dict.get_item("file_path") {
-                    let fp: String = fp_any.extract()?;
-                    file_paths.append(fp)?;
-                }
-                if let Ok(Some(kw_any)) = tool_dict.get_item("keywords") {
-                    let kw_list: pyo3::Bound<'_, pyo3::types::PyList> = kw_any.extract()?;
-                    let mut kw_strings: Vec<String> = Vec::new();
-                    for kw in kw_list.iter() {
-                        if let Ok(kw_str) = kw.extract() {
-                            kw_strings.push(kw_str);
-                        }
-                    }
-                    keywords.append(kw_strings)?;
-                }
-            }
-
-            let pyarrow = py.import("pyarrow")?;
-            let table_fn = pyarrow.getattr("table")?;
-            let columns_dict = pyo3::types::PyDict::new(py);
-
-            columns_dict.set_item("id", ids.as_any())?;
-            columns_dict.set_item("content", contents.as_any())?;
-            columns_dict.set_item("skill_name", skill_names.as_any())?;
-            columns_dict.set_item("tool_name", tool_names.as_any())?;
-            columns_dict.set_item("file_path", file_paths.as_any())?;
-            columns_dict.set_item("keywords", keywords.as_any())?;
-
-            let table = table_fn.call1((columns_dict,))?;
-            Ok(table.unbind())
-        })
+        get_analytics_table_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            &table_name,
+        )
     }
+
+    // -------------------------------------------------------------------------
+    // Tool Operations
+    // -------------------------------------------------------------------------
 
     #[pyo3(signature = (table_name, query_vector, query_text=None, limit=5, threshold=0.0))]
     fn search_tools(
@@ -612,101 +327,37 @@ impl PyVectorStore {
         limit: usize,
         threshold: f32,
     ) -> PyResult<Vec<Py<PyAny>>> {
-        let path = self.path.clone();
-        let dimension = self.dimension;
-        let enable_kw = self.enable_keyword_index;
         let table_name = table_name.unwrap_or_else(|| "skills".to_string());
-
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-        rt.block_on(async {
-            let store = VectorStore::new_with_keyword_index(&path, Some(dimension), enable_kw)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-            let results = store
-                .search_tools(
-                    &table_name,
-                    &query_vector,
-                    query_text.as_deref(),
-                    limit,
-                    threshold,
-                )
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-            let py_results = pyo3::Python::attach(|py| -> PyResult<Vec<Py<PyAny>>> {
-                let mut dicts = Vec::with_capacity(results.len());
-                for r in results {
-                    let dict = pyo3::types::PyDict::new(py);
-                    dict.set_item("name", r.name)?;
-                    dict.set_item("description", r.description)?;
-                    dict.set_item("input_schema", r.input_schema.to_string())?;
-                    dict.set_item("score", r.score)?;
-                    dict.set_item("skill_name", r.skill_name)?;
-                    dict.set_item("tool_name", r.tool_name)?;
-                    dict.set_item("file_path", r.file_path)?;
-                    dict.set_item("keywords", r.keywords)?;
-                    dicts.push(dict.into_pyobject(py)?.into());
-                }
-                Ok(dicts)
-            });
-            py_results
-        })
+        search_tools_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            &table_name,
+            query_vector,
+            query_text,
+            limit,
+            threshold,
+        )
     }
 
     fn load_tool_registry(&self, table_name: Option<String>) -> PyResult<Vec<Py<PyAny>>> {
-        let path = self.path.clone();
-        let dimension = self.dimension;
-        let enable_kw = self.enable_keyword_index;
         let table_name = table_name.unwrap_or_else(|| "skills".to_string());
-
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-        rt.block_on(async {
-            let store = VectorStore::new_with_keyword_index(&path, Some(dimension), enable_kw)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-            let results = store
-                .load_tool_registry(&table_name)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-            let py_results = pyo3::Python::attach(|py| -> PyResult<Vec<Py<PyAny>>> {
-                let mut dicts = Vec::with_capacity(results.len());
-                for r in results {
-                    let dict = pyo3::types::PyDict::new(py);
-                    dict.set_item("name", r.name)?;
-                    dict.set_item("description", r.description)?;
-                    dict.set_item("input_schema", r.input_schema.to_string())?;
-                    dict.set_item("score", r.score)?;
-                    dict.set_item("skill_name", r.skill_name)?;
-                    dict.set_item("tool_name", r.tool_name)?;
-                    dict.set_item("file_path", r.file_path)?;
-                    dict.set_item("keywords", r.keywords)?;
-                    dicts.push(dict.into_pyobject(py)?.into());
-                }
-                Ok(dicts)
-            });
-            py_results
-        })
+        load_tool_registry_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            &table_name,
+        )
     }
 }
 
-/// Create a vector store (convenience function)
+/// Create a vector store (exported as create_vector_store in Python)
 #[pyfunction]
-#[pyo3(signature = (path, dimension = 1536, enable_keyword_index = false))]
-pub fn create_vector_store(
+#[pyo3(name = "create_vector_store", signature = (path, dimension = 1536, enable_keyword_index = false))]
+pub fn create_vector_store_py(
     path: String,
     dimension: usize,
     enable_keyword_index: bool,
 ) -> PyResult<PyVectorStore> {
-    PyVectorStore::new(path, dimension, enable_keyword_index)
+    create_vector_store(path, dimension, enable_keyword_index)
 }

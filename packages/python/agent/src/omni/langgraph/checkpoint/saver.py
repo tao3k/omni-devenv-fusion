@@ -168,7 +168,9 @@ class RustCheckpointSaver(BaseCheckpointSaver):
     ) -> AsyncIterator[CheckpointTuple]:
         """Async list checkpoints for a config."""
         # Delegate to LanceCheckpointer's alist
-        async for tuple in self._checkpointer.alist(config, filter=filter, before=before, limit=limit):
+        async for tuple in self._checkpointer.alist(
+            config, filter=filter, before=before, limit=limit
+        ):
             yield tuple
 
     async def adelete_thread(self, thread_id: str) -> None:

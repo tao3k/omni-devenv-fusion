@@ -40,17 +40,22 @@ class TestPrintResultFormats:
         class MockResult:
             def model_dump(self):
                 return {"output": "test output", "success": True}
+
             def model_dump_json(self):
                 return '{"output": "test output", "success": true}'
+
             @property
             def output(self):
                 return "test output"
+
             @property
             def success(self):
                 return True
+
             @property
             def duration_ms(self):
                 return 100.0
+
             @property
             def error(self):
                 return None
@@ -70,10 +75,7 @@ class TestPrintResultFormats:
         """Test handling dict with content/metadata keys."""
         from omni.agent.cli.console import print_result
 
-        result = {
-            "content": "file content here",
-            "metadata": {"lines": 10, "encoding": "utf-8"}
-        }
+        result = {"content": "file content here", "metadata": {"lines": 10, "encoding": "utf-8"}}
 
         stdout_capture = io.StringIO()
         stderr_capture = io.StringIO()
@@ -93,11 +95,9 @@ class TestPrintResultFormats:
         result = {
             "quick_guide": [
                 '@omni("git.status", {})',
-                '@omni("git.commit", {"message": "<message: string>"})'
+                '@omni("git.commit", {"message": "<message: string>"})',
             ],
-            "details": [
-                {"tool": "git.status", "description": "Show working tree status"}
-            ]
+            "details": [{"tool": "git.status", "description": "Show working tree status"}],
         }
 
         stdout_capture = io.StringIO()
@@ -130,15 +130,15 @@ class TestPrintResultFormats:
                     "documentation_path": "/path/to/SKILL.md",
                     "source_code_path": "/path/to/research_entry.py",
                     "documentation_hints": ["Full manual available at: /path/to/SKILL.md"],
-                    "advice": "Use filesystem.read_files on documentation_path for the manual"
+                    "advice": "Use filesystem.read_files on documentation_path for the manual",
                 },
                 {
                     "tool": "crawl4ai.crawl_url",
                     "purpose": "Crawl a web page and extract content",
-                    "usage": '@omni("crawl4ai.crawl_url", {"url": "<url: string>"})'
-                }
+                    "usage": '@omni("crawl4ai.crawl_url", {"url": "<url: string>"})',
+                },
             ],
-            "protocol_reminder": "NEVER guess parameters."
+            "protocol_reminder": "NEVER guess parameters.",
         }
 
         stdout_capture = io.StringIO()
@@ -166,7 +166,7 @@ class TestPrintResultFormats:
             "matches": [
                 {"file": "test.py", "line": 10, "content": "def test(): pass"},
                 {"file": "test.py", "line": 20, "content": "class Test:"},
-            ]
+            ],
         }
 
         stdout_capture = io.StringIO()
@@ -185,16 +185,8 @@ class TestPrintResultFormats:
         from omni.agent.cli.console import print_result
 
         # Create 25 matches to trigger truncation
-        matches = [
-            {"file": f"file{i}.py", "line": i, "content": f"content {i}"}
-            for i in range(25)
-        ]
-        result = {
-            "success": True,
-            "tool": "ripgrep",
-            "count": 25,
-            "matches": matches
-        }
+        matches = [{"file": f"file{i}.py", "line": i, "content": f"content {i}"} for i in range(25)]
+        result = {"success": True, "tool": "ripgrep", "count": 25, "matches": matches}
 
         stdout_capture = io.StringIO()
         stderr_capture = io.StringIO()
@@ -212,10 +204,7 @@ class TestPrintResultFormats:
         """Test handling dict without recognized content keys."""
         from omni.agent.cli.console import print_result
 
-        result = {
-            "unknown_key": "value",
-            "another_key": 123
-        }
+        result = {"unknown_key": "value", "another_key": 123}
 
         stdout_capture = io.StringIO()
         stderr_capture = io.StringIO()
@@ -250,17 +239,22 @@ class TestPrintResultFormats:
         class MockResult:
             def model_dump(self):
                 return {"output": "test"}
+
             def model_dump_json(self, indent: bool = False):
                 return '{"output": "test", "success": true}'
+
             @property
             def output(self):
                 return "test"
+
             @property
             def success(self):
                 return True
+
             @property
             def duration_ms(self):
                 return 50.0
+
             @property
             def error(self):
                 return None
@@ -280,7 +274,7 @@ class TestPrintResultFormats:
         result = {
             "status": "not_found",
             "discovered_capabilities": [],
-            "suggestions": ["Try a broader query"]
+            "suggestions": ["Try a broader query"],
         }
 
         stdout_capture = io.StringIO()
@@ -315,10 +309,10 @@ class TestPrintResultIntegration:
                     "documentation_path": "/Users/test/assets/skills/researcher/SKILL.md",
                     "source_code_path": "/Users/test/assets/skills/researcher/scripts/research_entry.py",
                     "documentation_hints": ["Full manual available at: /path/to/SKILL.md"],
-                    "advice": "Read the 'purpose'. Use filesystem.read_files on 'documentation_path' for the manual."
+                    "advice": "Read the 'purpose'. Use filesystem.read_files on 'documentation_path' for the manual.",
                 }
             ],
-            "protocol_reminder": "NEVER guess parameters. Use the EXACT usage strings provided above."
+            "protocol_reminder": "NEVER guess parameters. Use the EXACT usage strings provided above.",
         }
 
         stdout_capture = io.StringIO()
@@ -347,7 +341,7 @@ class TestPrintResultIntegration:
                 {"file": "src/main.py", "line": 42, "content": "def main(): pass"},
                 {"file": "src/main.py", "line": 100, "content": "if __name__ == '__main__':"},
             ],
-            "truncated": False
+            "truncated": False,
         }
 
         stdout_capture = io.StringIO()
@@ -376,12 +370,8 @@ class TestPrintResultIntegration:
             "tool": "ripgrep",
             "search_mode": "content",
             "count": 5,
-            "files": [
-                "README.md",
-                "docs/guide.md",
-                "packages/core/src/main.py"
-            ],
-            "truncated": False
+            "files": ["README.md", "docs/guide.md", "packages/core/src/main.py"],
+            "truncated": False,
         }
 
         stdout_capture = io.StringIO()

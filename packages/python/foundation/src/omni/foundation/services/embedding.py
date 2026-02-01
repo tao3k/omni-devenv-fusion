@@ -231,20 +231,36 @@ Example: 0.5,0.3,-0.2,0.8,0.1,0.9,-0.5,0.2,0.7,-0.1,0.4,0.6,-0.3,0.8,0.0,0.5"""
 
     def _embed_batch_llm_parallel(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings using parallel LLM calls (faster for batches)."""
+        logger.info(f"_embed_batch_llm_parallel: starting with {len(texts)} texts")
         # Process in parallel chunks to avoid overwhelming the API
-        BATCH_SIZE = 10
+        BATCH_SIZE = 5  # Reduced batch size for better reliability
 
         async def embed_chunk(chunk: list[str]) -> list[list[float]]:
             """Embed a chunk of texts in parallel."""
             tasks = [self._embed_with_llm_async(text) for text in chunk]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            try:
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+            except Exception as e:
+                logger.error(f"Chunk gather failed: {e}, using sequential fallback")
+                # Fallback to sequential processing for this chunk
+                results = []
+                for text in chunk:
+                    try:
+                        r = await asyncio.wait_for(
+                            self._embed_with_llm_async(text),
+                            timeout=20.0,  # Individual timeout
+                        )
+                        results.append(r)
+                    except Exception as e2:
+                        logger.warning(f"Sequential embed failed: {e2}, using hash fallback")
+                        results.append([self._simple_embed(text, self._dimension)])
             # Handle exceptions by returning hash-based vectors
             final = []
             for idx, (text, r) in enumerate(zip(chunk, results)):
                 if isinstance(r, Exception):
                     logger.warning(f"Chunk embed failed for item {idx}: {r}")
                     final.append(self._simple_embed(text, self._dimension))
-                elif r and len(r) > 0:
+                elif isinstance(r, list) and len(r) > 0:
                     final.append(r[0])
                 else:
                     final.append(self._simple_embed(text, self._dimension))
@@ -263,7 +279,12 @@ Example: 0.5,0.3,-0.2,0.8,0.1,0.9,-0.5,0.2,0.7,-0.1,0.4,0.6,-0.3,0.8,0.0,0.5"""
             return all_results
 
         try:
-            return asyncio.run(embed_all())
+            # Overall timeout for entire batch (60s per item with 10s buffer)
+            total_timeout = min(60.0 * len(texts), 300.0)  # Max 5 minutes
+            return asyncio.run(asyncio.wait_for(embed_all(), timeout=total_timeout))
+        except asyncio.TimeoutError:
+            logger.error(f"Batch embed timed out after {total_timeout}s, using hash fallback")
+            return [self._simple_embed(text, self._dimension) for text in texts]
         except Exception as e:
             logger.error(f"Parallel batch embed failed: {e}, falling back to sequential")
             return self._embed_batch_llm(texts)

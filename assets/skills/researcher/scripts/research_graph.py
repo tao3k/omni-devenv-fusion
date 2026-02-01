@@ -84,7 +84,11 @@ async def _llm_complete(
     )
 
     # Log truncated user query preview
-    query_preview = user_query[:200].replace("\n", " ") + "..." if len(user_query) > 200 else user_query.replace("\n", " ")
+    query_preview = (
+        user_query[:200].replace("\n", " ") + "..."
+        if len(user_query) > 200
+        else user_query.replace("\n", " ")
+    )
     logger.debug(f"[LLM] Query preview: {query_preview}")
 
     start_time = time.perf_counter()
@@ -108,6 +112,7 @@ async def _llm_complete(
     )
 
     return response
+
 
 # Import Rust checkpoint saver for LangGraph (use shared singleton)
 try:
@@ -336,7 +341,11 @@ def _generate_tree_with_exa(path: str, max_depth: int = 3) -> str:
                 rel_path = line[prefix_len:] if line.startswith(path) else line
                 depth = rel_path.count("/")
                 indent = "  " * depth
-                tree_lines.append(f"{indent}{rel_path.split('/')[-1]}/" if line.endswith("/") else f"{indent}{rel_path}")
+                tree_lines.append(
+                    f"{indent}{rel_path.split('/')[-1]}/"
+                    if line.endswith("/")
+                    else f"{indent}{rel_path}"
+                )
             return "\n".join(tree_lines)
     except Exception:
         pass
@@ -540,7 +549,7 @@ Focus: {description}
 Research Goal: {state.get("request", "Analyze architecture")}
 
 FILES IN THIS SHARD ({len(files)} files):
-{', '.join(files) if files else 'All files in repository'}
+{", ".join(files) if files else "All files in repository"}
 
 REPOMIX OUTPUT:
 {truncated}

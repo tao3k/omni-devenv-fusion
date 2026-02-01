@@ -26,9 +26,11 @@ dev = [
     "pytest-json-report>=1.5.0",
 ]
 
+
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
 
 [tool.hatch.version]
 source = "vcs"

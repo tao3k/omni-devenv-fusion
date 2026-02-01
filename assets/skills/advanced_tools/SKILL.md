@@ -23,6 +23,8 @@ routing_keywords:
     "batch",
     "refactor",
     "replace",
+    "directory",
+    "tree",
   ]
 authors: ["omni-dev-fusion"]
 intents:
@@ -32,6 +34,7 @@ intents:
   - "Fast codebase exploration and discovery"
   - "Batch find and replace across multiple files"
   - "High-performance grep replacement"
+  - "Scan directory for files matching a pattern"
 ---
 
 You have loaded the **Advanced Tools (Find & Search) Skill**.

@@ -1,0 +1,36 @@
+[package]
+name = "omni-tui"
+version = "0.1.0"
+edition = "2021"
+description = "Rust-driven TUI engine for Omni Dev Fusion"
+authors = ["Omni Dev Fusion Team"]
+
+[dependencies]
+# TUI framework - latest 0.30 version
+ratatui = "0.30"
+crossterm = "0.29"
+
+# Async support
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+
+# Event system integration
+omni-events = { path = "../omni-events" }
+
+# Type definitions
+omni-types = { path = "../omni-types" }
+
+# Logging
+log = "0.4"
+env_logger = "0.10"
+
+# Error handling
+anyhow = "1.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[dev-dependencies]
+tempfile = "3"
+clap = { version = "4.5", features = ["derive"] }

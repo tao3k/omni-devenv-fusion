@@ -2,6 +2,7 @@ use std::path::Path;
 
 impl VectorStore {
     /// Index all tools found in a skill directory.
+    /// This drops and recreates the table to ensure sync with filesystem.
     pub async fn index_skill_tools(
         &self,
         base_path: &str,
@@ -13,6 +14,10 @@ impl VectorStore {
         if !skills_path.exists() {
             return Ok(());
         }
+
+        // Drop existing table to ensure clean sync (removes deleted skills)
+        let _ = self.drop_table(table_name).await;
+
         let metadatas = skill_scanner
             .scan_all(skills_path, None)
             .map_err(|e| VectorStoreError::General(e.to_string()))?;
@@ -27,7 +32,8 @@ impl VectorStore {
                 )
                 .map_err(|e| VectorStoreError::General(e.to_string()))?;
             for tool in tools {
-                tools_map.insert(format!("{}.{}", tool.skill_name, tool.tool_name), tool);
+                // tool.tool_name already includes skill_name prefix from tools_scanner
+                tools_map.insert(tool.tool_name.clone(), tool);
             }
         }
         self.add(table_name, tools_map.into_values().collect())
@@ -156,10 +162,10 @@ impl VectorStore {
                                 if let Some(vals) = values {
                                     for i in 0..batch.num_rows() {
                                         let mut dist_sq = 0.0f32;
-                                        let v_len = vals.len();
+                                        let v_len = vals.len() / batch.num_rows();
                                         for j in 0..query_len {
                                             let db_val = if j < v_len {
-                                                vals.value(i * v_len / batch.num_rows() + j)
+                                                vals.value(i * v_len + j)
                                             } else {
                                                 0.0
                                             };

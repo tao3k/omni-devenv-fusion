@@ -33,6 +33,93 @@ pub struct KeywordIndex {
 }
 
 impl KeywordIndex {
+    /// Helper to create a fresh index with correct schema
+    fn create_new_index(path: &Path) -> Result<Index, TantivyError> {
+        use tantivy::schema::TextFieldIndexing;
+
+        let mut schema_builder = Schema::builder();
+
+        // Use code_tokenizer with FULL indexing (including positions for phrase queries)
+        let text_options = TextOptions::default()
+            .set_indexing_options(
+                TextFieldIndexing::default()
+                    .set_tokenizer("code_tokenizer")
+                    .set_index_option(tantivy::schema::IndexRecordOption::WithFreqsAndPositions),
+            )
+            .set_stored();
+
+        schema_builder.add_text_field("tool_name", text_options.clone());
+        schema_builder.add_text_field("description", text_options.clone());
+        schema_builder.add_text_field("category", text_options.clone());
+        schema_builder.add_text_field("keywords", text_options.clone());
+        schema_builder.add_text_field("intents", text_options);
+
+        let schema = schema_builder.build();
+        Index::create_in_dir(path, schema)
+    }
+
+    /// Create a new KeywordIndex with schema migration (deletes old index if needed)
+    fn new_with_migration<P: AsRef<Path>>(path: P) -> Result<Self, VectorStoreError> {
+        let base_path = path.as_ref();
+        let index_path = base_path.join("keyword_index");
+
+        // Remove old index directory if it exists
+        if index_path.exists() {
+            std::fs::remove_dir_all(&index_path).map_err(|e| {
+                VectorStoreError::General(format!("Failed to remove old index: {}", e))
+            })?;
+        }
+
+        // Create fresh index with correct schema
+        let index = Self::create_new_index(&index_path).map_err(VectorStoreError::Tantivy)?;
+
+        // 1. Register Tokenizer
+        let code_tokenizer = TextAnalyzer::builder(SimpleTokenizer::default())
+            .filter(RemoveLongFilter::limit(40))
+            .filter(LowerCaser)
+            .filter(AsciiFoldingFilter)
+            .build();
+        index
+            .tokenizers()
+            .register("code_tokenizer", code_tokenizer);
+
+        // 2. Resolve Fields from the new Schema
+        let schema = index.schema();
+
+        let tool_name = schema
+            .get_field("tool_name")
+            .map_err(|_| VectorStoreError::General("Missing tool_name field".to_string()))?;
+        let description = schema
+            .get_field("description")
+            .map_err(|_| VectorStoreError::General("Missing description field".to_string()))?;
+        let category = schema
+            .get_field("category")
+            .map_err(|_| VectorStoreError::General("Missing category field".to_string()))?;
+        let keywords = schema
+            .get_field("keywords")
+            .map_err(|_| VectorStoreError::General("Missing keywords field".to_string()))?;
+        let intents = schema
+            .get_field("intents")
+            .map_err(|_| VectorStoreError::General("Missing intents field".to_string()))?;
+
+        // 3. Create Reader
+        let reader = index
+            .reader_builder()
+            .reload_policy(ReloadPolicy::Manual)
+            .try_into()
+            .map_err(VectorStoreError::Tantivy)?;
+
+        Ok(Self {
+            index,
+            reader,
+            tool_name,
+            description,
+            category,
+            keywords,
+            intents,
+        })
+    }
+
     /// Create a new KeywordIndex or open existing one
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, VectorStoreError> {
         let base_path = path.as_ref();
@@ -78,9 +165,14 @@ impl KeywordIndex {
         let keywords = schema
             .get_field("keywords")
             .map_err(|_| VectorStoreError::General("Missing keywords field".to_string()))?;
-        let intents = schema
-            .get_field("intents")
-            .map_err(|_| VectorStoreError::General("Missing intents field".to_string()))?;
+        // Check for intents field - if missing, recreate the index (schema migration)
+        let intents = match schema.get_field("intents") {
+            Ok(field) => field,
+            Err(_) => {
+                // Schema is missing intents field - recreate the index
+                return Self::new_with_migration(path);
+            }
+        };
 
         // 3. Create Reader with Manual Policy (We control reloads)
         let reader = index
@@ -98,31 +190,6 @@ impl KeywordIndex {
             keywords,
             intents,
         })
-    }
-
-    /// Helper to create a fresh index with correct schema
-    fn create_new_index(path: &Path) -> Result<Index, TantivyError> {
-        use tantivy::schema::TextFieldIndexing;
-
-        let mut schema_builder = Schema::builder();
-
-        // Use code_tokenizer with FULL indexing (including positions for phrase queries)
-        let text_options = TextOptions::default()
-            .set_indexing_options(
-                TextFieldIndexing::default()
-                    .set_tokenizer("code_tokenizer")
-                    .set_index_option(tantivy::schema::IndexRecordOption::WithFreqsAndPositions),
-            )
-            .set_stored();
-
-        schema_builder.add_text_field("tool_name", text_options.clone());
-        schema_builder.add_text_field("description", text_options.clone());
-        schema_builder.add_text_field("category", text_options.clone());
-        schema_builder.add_text_field("keywords", text_options.clone());
-        schema_builder.add_text_field("intents", text_options);
-
-        let schema = schema_builder.build();
-        Index::create_in_dir(path, schema)
     }
 
     /// Add or update a document in the index

@@ -26,10 +26,10 @@ def get_knowledge_dataframe(collection: str = "knowledge"):
         raise ImportError("pyarrow is required for analytics. Install with: pip install pyarrow")
 
     try:
-        from omni.foundation.config.dirs import get_vector_db_path
+        from omni.agent.cli.commands.reindex import get_database_path
 
         # Librarian uses collection.lance by default for storage path
-        storage_path = str(get_vector_db_path() / "knowledge.lance")
+        storage_path = get_database_path("knowledge")
 
         from omni.foundation.bridge.rust_vector import get_vector_store
 

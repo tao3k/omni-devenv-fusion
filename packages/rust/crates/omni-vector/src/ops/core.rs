@@ -39,7 +39,17 @@ impl VectorStore {
         if self.base_path.as_os_str() == ":memory:" {
             PathBuf::from(format!(":memory:_{}", table_name))
         } else {
-            self.base_path.join(format!("{table_name}.lance"))
+            // Check if base_path already ends with the table's .lance directory
+            // This handles cases where the storage path is passed as "xxx.lance"
+            // instead of the parent directory
+            let expected_suffix = format!("{}.lance", table_name);
+            if self.base_path.ends_with(&expected_suffix) {
+                // base_path is already the table directory, use it directly
+                self.base_path.clone()
+            } else {
+                // Append table_name.lance to base_path
+                self.base_path.join(format!("{table_name}.lance"))
+            }
         }
     }
 

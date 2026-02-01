@@ -86,7 +86,9 @@ def skill_query(
 @skill_app.command("list")
 def skill_list(
     compact: bool = typer.Option(False, "--compact", "-c", help="Show compact view (names only)"),
-    json_output: bool = typer.Option(False, "--json", "-j", help="Output all skills info as JSON (from Rust DB)"),
+    json_output: bool = typer.Option(
+        False, "--json", "-j", help="Output all skills info as JSON (from Rust DB)"
+    ),
 ):
     """
     List installed skills and their commands.
@@ -120,15 +122,23 @@ def skill_list(
                 # Extract docs_available subfields
                 docs_avail = skill.get("docs_available", {})
                 docs_status = {
-                    "skill_md": docs_avail.get("skill_md", False) if isinstance(docs_avail, dict) else False,
-                    "readme": docs_avail.get("readme", False) if isinstance(docs_avail, dict) else False,
-                    "tests": docs_avail.get("tests", False) if isinstance(docs_avail, dict) else False,
+                    "skill_md": docs_avail.get("skill_md", False)
+                    if isinstance(docs_avail, dict)
+                    else False,
+                    "readme": docs_avail.get("readme", False)
+                    if isinstance(docs_avail, dict)
+                    else False,
+                    "tests": docs_avail.get("tests", False)
+                    if isinstance(docs_avail, dict)
+                    else False,
                 }
 
                 # Convert require_refs to list of strings
                 require_refs = skill.get("require_refs", [])
                 if require_refs and isinstance(require_refs[0], dict):
-                    require_refs = [r.get("path", r) if isinstance(r, dict) else r for r in require_refs]
+                    require_refs = [
+                        r.get("path", r) if isinstance(r, dict) else r for r in require_refs
+                    ]
                 elif require_refs and isinstance(require_refs[0], str):
                     pass  # Already strings
                 else:

@@ -152,7 +152,10 @@ class HybridSearch:
         The vector store is cached globally to avoid repeated initialization.
         Embedding service is loaded lazily on first use.
         """
-        self._store = get_vector_store()
+        from omni.agent.cli.commands.reindex import get_database_path
+
+        router_path = get_database_path("router")
+        self._store = get_vector_store(router_path)
 
     async def search(
         self,
@@ -220,7 +223,7 @@ class HybridSearch:
         # - Slash/Backslash: / \ (path delimiters)
         # - Comma: , ， (punctuation)
         keyword_query = re.sub(r'[:"\'\[\](){}/\\,，]', " ", query).strip()
-        keyword_query = re.sub(r'\s+', " ", keyword_query)  # Normalize spaces
+        keyword_query = re.sub(r"\s+", " ", keyword_query)  # Normalize spaces
 
         # Get query embedding (required for vector search) - use original query
         embed_service = self._get_embed_service()
@@ -246,6 +249,11 @@ class HybridSearch:
             raw_score = r.get("score", 0.0)
             confidence, final_score = self._calibrate_confidence(raw_score)
 
+            # Extract command from tool_name (tool_name is "skill.command" format)
+            full_tool_name = r.get("tool_name", "")
+            parts = full_tool_name.split(".")
+            command = ".".join(parts[1:]) if len(parts) > 1 else full_tool_name
+
             # r is already a dict from Rust
             formatted.append(
                 {
@@ -255,13 +263,13 @@ class HybridSearch:
                     "confidence": confidence,
                     "final_score": final_score,
                     "skill_name": r.get("skill_name", ""),
-                    "command": r.get("tool_name", ""),
+                    "command": command,
                     "file_path": r.get("file_path", ""),
                     "keywords": r.get("keywords", []),
                     "input_schema": r.get("input_schema", "{}"),
                     "payload": {
                         "skill_name": r.get("skill_name", ""),
-                        "command": r.get("tool_name", ""),
+                        "command": command,
                         "type": "command",
                         "content": r.get("description", ""),
                     },

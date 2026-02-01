@@ -28,6 +28,7 @@
 // Module Declarations
 // ============================================================================
 
+mod extract;
 mod item;
 mod lang;
 mod python;
@@ -60,3 +61,6 @@ pub use python::{
 
 // Security scanner for harvested skills
 pub use security::{SecurityConfig, SecurityScanner, SecurityViolation};
+
+// Code extraction utilities
+pub use extract::{ExtractResult, extract_items};

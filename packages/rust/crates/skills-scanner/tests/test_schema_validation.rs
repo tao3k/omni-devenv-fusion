@@ -42,7 +42,7 @@ def smart_commit(action: str = "start") -> str:
 
     let scanner = ToolsScanner::new();
     let tools = scanner
-        .scan_scripts(&scripts_dir, "git", &["commit".to_string()])
+        .scan_scripts(&scripts_dir, "git", &["commit".to_string()], &[])
         .unwrap();
 
     assert_eq!(tools.len(), 1, "Should find exactly one tool");
@@ -92,6 +92,7 @@ fn test_tool_record_json_serialization_schema() {
         function_name: "smart_commit".to_string(),
         execution_mode: "script".to_string(),
         keywords: vec!["git".to_string(), "smart_commit".to_string()],
+        intents: vec![],
         file_hash: "abc123".to_string(),
         input_schema: "{}".to_string(),
         docstring: "Smart commit workflow".to_string(),
@@ -127,6 +128,7 @@ fn test_skill_index_entry_tool_format() {
         function_name: "smart_commit".to_string(),
         execution_mode: "script".to_string(),
         keywords: vec![],
+        intents: vec![],
         file_hash: "hash".to_string(),
         input_schema: "{}".to_string(),
         docstring: "".to_string(),
@@ -199,7 +201,7 @@ def status() -> str:
     .unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "git", &[]).unwrap();
+    let tools = scanner.scan_scripts(&scripts_dir, "git", &[], &[]).unwrap();
 
     assert_eq!(tools.len(), 2);
 
@@ -246,7 +248,9 @@ def run_test() -> str:
     .unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "my_skill", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "my_skill", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -279,7 +283,9 @@ def my_function():
     .unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "test", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -373,6 +379,7 @@ fn test_build_index_entry_no_double_prefix_regression() {
         function_name: "status".to_string(),
         execution_mode: "script".to_string(),
         keywords: vec![],
+        intents: vec![],
         file_hash: "hash".to_string(),
         input_schema: "{}".to_string(),
         docstring: "".to_string(),
@@ -436,7 +443,9 @@ def list_items() -> str:
     .unwrap();
 
     let scanner = ToolsScanner::new();
-    let tools = scanner.scan_scripts(&scripts_dir, "my_skill", &[]).unwrap();
+    let tools = scanner
+        .scan_scripts(&scripts_dir, "my_skill", &[], &[])
+        .unwrap();
 
     assert_eq!(tools.len(), 1);
     let tool = &tools[0];
@@ -488,7 +497,7 @@ def test_cmd() -> str:
 
     // Scan with structure
     let tools = scanner
-        .scan_with_structure(&skill_path, "test_skill", &[], &structure)
+        .scan_with_structure(&skill_path, "test_skill", &[], &[], &structure)
         .unwrap();
 
     assert_eq!(tools.len(), 1);

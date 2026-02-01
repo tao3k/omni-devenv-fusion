@@ -83,7 +83,6 @@ def _run_rg_with_retry(cmd: list[str], root: str, max_retries: int = 2) -> tuple
         - count: int (total matches found)
         - matches: List[dict] (file, line, content snippets)
     """,
-    keywords=["search", "ripgrep", "rg", "grep", "regex", "text", "content", "find in files"],
     autowire=True,
 )
 def smart_search(
@@ -201,7 +200,6 @@ def smart_search(
         - count: int (number of files matched)
         - files: List[str] (project-relative paths to matches, top 100)
     """,
-    keywords=["find", "fd", "locate", "files", "discovery", "search files", "path"],
     autowire=True,
 )
 def smart_find(
@@ -254,7 +252,7 @@ def smart_find(
         cmd.extend(["--extension", extension])
     if exclude:
         cmd.extend(["--exclude", exclude])
-    
+
     cmd.append(pattern)
 
     try:

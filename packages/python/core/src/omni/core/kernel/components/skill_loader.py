@@ -37,6 +37,12 @@ async def load_skill_scripts(skill_name: str, scripts_dir: Path) -> dict[str, An
     pkg_name = f"omni.skills.{skill_name}"
     scripts_pkg_name = f"{pkg_name}.scripts"
 
+    # Add skill's parent directory to sys.path for skill-internal imports
+    # This allows "from git.scripts.xxx import ..." to work
+    skills_parent = scripts_dir.parent.parent  # skills/parent/
+    if str(skills_parent) not in sys.path:
+        sys.path.insert(0, str(skills_parent))
+
     # Ensure parent packages exist in sys.modules
     parent_pkgs = ["omni", "omni.skills"]
     for parent in parent_pkgs:
@@ -76,7 +82,13 @@ async def load_skill_scripts(skill_name: str, scripts_dir: Path) -> dict[str, An
                     module = types.ModuleType(module_full_name)
                     module.__package__ = scripts_pkg_name
                     module.__file__ = str(script_path)
-                    sys.modules[module_full_name] = spec.loader.exec_module(module)
+                    sys.modules[module_full_name] = module
+                    try:
+                        spec.loader.exec_module(module)
+                    except Exception as e:
+                        # Remove failed module from sys.modules
+                        sys.modules.pop(module_full_name, None)
+                        raise e
 
             # Extract @skill_command functions
             for attr_name in dir(module):

@@ -23,5 +23,16 @@ pub use ast_grep_language::SupportLang;
 pub use ast_grep_core::meta_var::MetaVarEnv;
 pub use ast_grep_core::meta_var::MetaVariable;
 
+// ============================================================================
+// AST Document & Parsing (for semantic analysis)
+// ============================================================================
+
+// String document (for parsing shell commands)
+pub use ast_grep_core::tree_sitter::StrDoc;
+
+// Tree traversal utilities
+pub use ast_grep_core::tree_sitter::TsPre;
+pub use ast_grep_core::tree_sitter::Visitor;
+
 /// Type alias for language parser (re-exported from ast-grep).
 pub type LangParser = SupportLang;

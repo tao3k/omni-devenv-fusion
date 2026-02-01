@@ -33,6 +33,7 @@ from omni.foundation.config.logging import configure_logging, get_logger
 from omni.core.kernel import get_kernel
 from omni.core.config.loader import load_command_overrides, is_filtered
 from omni.core.omni_tool import get_omni_tool_info
+from omni.core.skills.runtime.omni_cell import ActionType, get_runner
 
 # [NEW] Import shared formatting logic
 from omni.foundation.utils.formatting import sanitize_tool_args, one_line_preview
@@ -142,6 +143,42 @@ class AgentMCPServer:
                         name="omni",
                         description=omni_info["description"],
                         inputSchema=omni_info["inputSchema"],
+                    )
+                )
+
+                # [NEW] OmniCell Kernel Tools - Direct Rust/Nushell Bridge
+                # These tools bypass skill resolution for maximum performance
+                mcp_tools.append(
+                    Tool(
+                        name="sys_query",
+                        description="[READ-ONLY] Execute a system query via OmniCell. Returns structured JSON data for file listing, reading, and searching.",
+                        inputSchema={
+                            "type": "object",
+                            "properties": {
+                                "query": {
+                                    "type": "string",
+                                    "description": "Nushell command to execute (read-only: ls, cat, grep, etc.)",
+                                }
+                            },
+                            "required": ["query"],
+                        },
+                    )
+                )
+
+                mcp_tools.append(
+                    Tool(
+                        name="sys_exec",
+                        description="[WRITE/ACTION] Execute a system command via OmniCell. Use for mutations: save, rm, mv, cp, mkdir. All mutations are safety-validated.",
+                        inputSchema={
+                            "type": "object",
+                            "properties": {
+                                "script": {
+                                    "type": "string",
+                                    "description": "Nushell command to execute (mutations: save, rm, mv, cp, etc.)",
+                                }
+                            },
+                            "required": ["script"],
+                        },
                     )
                 )
 
@@ -304,6 +341,101 @@ class AgentMCPServer:
                     )
                 ]
             except Exception as e:
+                return [TextContent(type="text", text=f"Error: {str(e)}")]
+
+        @self._app.call_tool()
+        async def sys_query(arguments: dict) -> list[Any]:
+            """[READ-ONLY] Execute a system query via OmniCell to find files or read data.
+
+            Use this for read-only operations:
+            - List files (ls, find)
+            - Read file contents (open, cat)
+            - Search for patterns (grep, where)
+            - Get system information (ps, date, git status)
+
+            Returns structured JSON data for easy parsing.
+            """
+            try:
+                query = arguments.get("query")
+                if not query:
+                    return [TextContent(type="text", text="Error: 'query' parameter required")]
+
+                logger.info(f"[MCP] sys_query called: {query[:100]}...")
+                runner = get_runner()
+                result = await runner.run(query, action=ActionType.OBSERVE, ensure_structured=True)
+
+                if result.status == "success":
+                    data_preview = (
+                        str(result.data)[:200] + "..."
+                        if len(str(result.data)) > 200
+                        else str(result.data)
+                    )
+                    logger.info(f"[MCP] sys_query success: {data_preview}")
+                    return [TextContent(type="text", text=json.dumps(result.data, indent=2))]
+                else:
+                    error_msg = result.metadata.get(
+                        "reason", result.metadata.get("error_msg", "unknown")
+                    )
+                    logger.error(f"[MCP] sys_query error: {error_msg}")
+                    return [
+                        TextContent(
+                            type="text",
+                            text=f"Error: {result.status} - {error_msg}",
+                        )
+                    ]
+            except Exception as e:
+                logger.error(f"sys_query failed: {e}")
+                return [TextContent(type="text", text=f"Error: {str(e)}")]
+
+        @self._app.call_tool()
+        async def sys_exec(arguments: dict) -> list[Any]:
+            """[WRITE/ACTION] Execute a system command via OmniCell that modifies files.
+
+            Use this for mutation operations:
+            - Create/update files (save, write, echo)
+            - Move or copy files (mv, cp)
+            - Delete files (rm)
+            - Create directories (mkdir)
+            - Modify permissions (chmod)
+
+            All mutations are validated for safety before execution.
+            """
+            try:
+                script = arguments.get("script")
+                if not script:
+                    return [TextContent(type="text", text="Error: 'script' parameter required")]
+
+                logger.info(f"[MCP] sys_exec called: {script[:100]}...")
+                runner = get_runner()
+                result = await runner.run(script, action=ActionType.MUTATE, ensure_structured=False)
+
+                if result.status == "success":
+                    # For mutations, return a concise success message
+                    output = (
+                        result.data if isinstance(result.data, str) else json.dumps(result.data)
+                    )
+                    logger.info(f"[MCP] sys_exec success: {output}")
+                    return [TextContent(type="text", text=f"Success: {output}")]
+                elif result.status == "blocked":
+                    reason = result.metadata.get("reason", "Safety check failed")
+                    logger.warn(f"[MCP] sys_exec blocked: {reason}")
+                    return [
+                        TextContent(
+                            type="text",
+                            text=f"Blocked: {reason}",
+                        )
+                    ]
+                else:
+                    error_msg = result.metadata.get("error_msg", result.status)
+                    logger.error(f"[MCP] sys_exec error: {error_msg}")
+                    return [
+                        TextContent(
+                            type="text",
+                            text=f"Error: {error_msg}",
+                        )
+                    ]
+            except Exception as e:
+                logger.error(f"sys_exec failed: {e}")
                 return [TextContent(type="text", text=f"Error: {str(e)}")]
 
         @self._app.list_resources()

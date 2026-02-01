@@ -445,7 +445,7 @@ def write_text(content: str) -> str:
 
         let scanner = ToolsScanner::new();
         let tools = scanner
-            .scan_scripts(&scripts_dir, "writer", &["write".to_string()])
+            .scan_scripts(&scripts_dir, "writer", &["write".to_string()], &[])
             .unwrap();
 
         assert_eq!(tools.len(), 1);
@@ -481,7 +481,7 @@ def status() -> str:
 
         let scanner = ToolsScanner::new();
         let tools = scanner
-            .scan_scripts(&scripts_dir, "git", &["git".to_string()])
+            .scan_scripts(&scripts_dir, "git", &["git".to_string()], &[])
             .unwrap();
 
         assert_eq!(tools.len(), 2);
@@ -495,7 +495,9 @@ def status() -> str:
         let scripts_dir = temp_dir.path().join("empty/scripts");
 
         let scanner = ToolsScanner::new();
-        let tools = scanner.scan_scripts(&scripts_dir, "empty", &[]).unwrap();
+        let tools = scanner
+            .scan_scripts(&scripts_dir, "empty", &[], &[])
+            .unwrap();
 
         assert!(tools.is_empty());
     }
@@ -507,7 +509,9 @@ def status() -> str:
         std::fs::create_dir_all(&scripts_dir).unwrap();
 
         let scanner = ToolsScanner::new();
-        let tools = scanner.scan_scripts(&scripts_dir, "empty", &[]).unwrap();
+        let tools = scanner
+            .scan_scripts(&scripts_dir, "empty", &[], &[])
+            .unwrap();
 
         assert!(tools.is_empty());
     }
@@ -531,7 +535,7 @@ def test_tool():
 
         let scanner = ToolsScanner::new();
         let tools = scanner
-            .scan_skill_scripts(&skill_path, "test_skill", &[])
+            .scan_skill_scripts(&skill_path, "test_skill", &[], &[])
             .unwrap();
 
         assert_eq!(tools.len(), 1);
@@ -560,7 +564,9 @@ def init_tool():
         std::fs::write(&init_file, init_content).unwrap();
 
         let scanner = ToolsScanner::new();
-        let tools = scanner.scan_scripts(&scripts_dir, "test", &[]).unwrap();
+        let tools = scanner
+            .scan_scripts(&scripts_dir, "test", &[], &[])
+            .unwrap();
 
         assert!(tools.is_empty());
     }
@@ -588,7 +594,7 @@ def polish_text(text: str) -> str:
             "polish".to_string(),
         ];
         let tools = scanner
-            .scan_scripts(&scripts_dir, "writer", &routing_keywords)
+            .scan_scripts(&scripts_dir, "writer", &routing_keywords, &[])
             .unwrap();
 
         assert_eq!(tools.len(), 1);

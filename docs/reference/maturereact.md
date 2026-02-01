@@ -120,10 +120,7 @@ from omni.agent.core.omni.loop import OmniLoop, TIER_1_ATOMIC, HIGH_LEVEL_KEYWOR
 
 # Tier 1: Atomic Tools (Hidden when high-level skills exist)
 TIER_1_ATOMIC = {
-    "filesystem.read_file",
-    "filesystem.write_file",
-    "filesystem.list_dir",
-    "terminal.run_command",
+    "omnicell.run_command",  # Unified Nushell bridge for all file/command ops
 }
 
 # High-level skill indicators
@@ -154,7 +151,7 @@ Prevents infinite loops by tracking tool call hashes.
 
 ```python
 # First call - executes
-tool_hash = workflow._compute_tool_hash("read_file", {"path": "/test.py"})
+tool_hash = workflow._compute_tool_hash("omnicell.run_command", {"cmd": "open /test.py", "ensure_structured": true})
 workflow._tool_hash_history.add(tool_hash)
 
 # Same call again - detected as loop

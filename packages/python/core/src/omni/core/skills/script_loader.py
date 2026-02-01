@@ -48,6 +48,11 @@ class ScriptLoader:
         - Adds skill root to sys.path for proper package resolution
         - Uses importlib.import_module for full module path loading
         - Enables 'from git.scripts.commit_state import ...' style imports
+
+        Loading Strategy:
+        - First load all non-underscore modules (excluding _*.py initially)
+        - Then load underscore modules (_*.py) to satisfy internal dependencies
+        - This ensures modules with external dependencies load first
         """
         if not self.scripts_path.exists():
             logger.debug(f"Scripts path does not exist: {self.scripts_path}")
@@ -73,12 +78,31 @@ class ScriptLoader:
         # Full module path for this skill's scripts (e.g., "git.scripts")
         full_scripts_pkg = f"{self.skill_name}.scripts"
 
-        try:
-            # Recursive scan for all .py files in scripts/ and subdirectories
-            for py_file in self.scripts_path.rglob("*.py"):
-                if py_file.name.startswith("_"):
-                    continue
+        # Ensure scripts_path is in sys.path for sibling imports
+        # This is critical for 'from git.scripts.commit_state import ...' to work
+        scripts_path_str = str(self.scripts_path)
+        if scripts_path_str not in sys.path:
+            sys.path.insert(0, scripts_path_str)
+            paths_added.append(scripts_path_str)
 
+        try:
+            # Collect all files first
+            all_files: list[Path] = []
+            for py_file in self.scripts_path.rglob("*.py"):
+                if py_file.name == "__init__.py":
+                    continue
+                all_files.append(py_file)
+
+            # Separate underscore and non-underscore files
+            # Load non-underscore files first, then underscore files
+            # This ensures modules with external deps load before modules that depend on them
+            non_underscore_files = sorted([f for f in all_files if not f.stem.startswith("_")])
+            underscore_files = sorted([f for f in all_files if f.stem.startswith("_")])
+
+            # Load in order: non-underscore first, then underscore
+            ordered_files = non_underscore_files + underscore_files
+
+            for py_file in ordered_files:
                 # Calculate relative package name for subdirectories
                 rel_path = py_file.relative_to(self.scripts_path)
                 pkg_parts = list(rel_path.parent.parts)
@@ -107,13 +131,24 @@ class ScriptLoader:
             # 1. Ensure the parent packages exist in sys.modules (Fundamental Fix)
             # This is required for relative imports to work in PEP 420 namespace packages.
             parts = full_module_name.split(".")
+            scripts_path_str = str(self.scripts_path)
+
             for i in range(1, len(parts)):
                 parent_pkg = ".".join(parts[:i])
                 if parent_pkg not in sys.modules:
                     # Create a dummy namespace package
                     m = types.ModuleType(parent_pkg)
-                    m.__path__ = []  # Mark as package
+                    m.__path__ = [scripts_path_str]  # Include scripts path for sibling imports
                     sys.modules[parent_pkg] = m
+                else:
+                    # Update existing package's __path__ to include scripts directory
+                    # This enables 'from git.scripts.commit_state import ...' to work
+                    parent_mod = sys.modules[parent_pkg]
+                    if (
+                        hasattr(parent_mod, "__path__")
+                        and scripts_path_str not in parent_mod.__path__
+                    ):
+                        parent_mod.__path__.append(scripts_path_str)
 
             # 2. Load the actual module
             spec = importlib.util.spec_from_file_location(full_module_name, path)

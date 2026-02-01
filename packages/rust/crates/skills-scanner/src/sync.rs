@@ -149,6 +149,7 @@ mod tests {
             function_name: name.to_string(),
             execution_mode: "script".to_string(),
             keywords: _keywords,
+            intents: vec![],
             file_hash: file_hash.to_string(),
             docstring: String::new(),
             category: category.to_string(),

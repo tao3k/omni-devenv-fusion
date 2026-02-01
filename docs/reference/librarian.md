@@ -355,14 +355,14 @@ Agents retrieve skill-specific lessons before execution:
 
 ```python
 # In BaseAgent._get_agent_skill_lessons()
-lessons = await get_skill_lessons(skills=["git", "filesystem"])
+lessons = await get_skill_lessons(skills=["git", "omnicell"])
 
 # Injected into system prompt:
 """
 ### 🛑 KNOWN PITFALLS & PAST LESSONS
 
 ⭐⭐⭐⭐ **git**: Don't run git commit without staging files first
-⭐⭐⭐ **filesystem**: Always use absolute paths, never relative
+⭐⭐⭐ **omnicell**: Uses Nushell for all file operations, returns structured JSON
 """
 ```
 

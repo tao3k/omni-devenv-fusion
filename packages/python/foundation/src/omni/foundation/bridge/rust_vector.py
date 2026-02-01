@@ -419,6 +419,7 @@ class RustVectorStore:
 
         Scans `base_path/skills/*/scripts/*.py` for @skill_command decorated
         functions and indexes them for discovery.
+        Updates the default database (skills.lance) for skill tools.
 
         Args:
             base_path: Base directory containing skills (e.g., "assets/skills")
@@ -426,8 +427,12 @@ class RustVectorStore:
         Returns:
             Number of tools indexed, or 0 on error.
         """
+        # Index to the default path (skills.lance)
         try:
-            count = self._inner.index_skill_tools(base_path, "skills")
+            import omni_core_rs as _rust
+
+            store = _rust.create_vector_store(self._index_path, self._dimension, True)
+            count = store.index_skill_tools(base_path, "skills")
             logger.info(f"Indexed {count} tools from {base_path}")
             return count
         except Exception as e:

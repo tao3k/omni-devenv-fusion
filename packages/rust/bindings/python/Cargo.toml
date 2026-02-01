@@ -35,6 +35,10 @@ omni-edit = { path = "../../crates/omni-edit" }
 omni-vector = { path = "../../crates/omni-vector" }
 # Skills Scanner - Skill metadata and tool discovery
 skills-scanner = { path = "../../crates/skills-scanner" }
+# OmniCell - Nushell Native Bridge
+omni-executor = { path = "../../crates/omni-executor" }
+# Omni-TUI - Terminal UI Engine
+omni-tui = { path = "../../crates/omni-tui" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }

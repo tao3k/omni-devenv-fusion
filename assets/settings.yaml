@@ -242,8 +242,6 @@ skills:
   # This inherits from 'preload' and adds the tools below.
   cli:
     extend:
-      - filesystem # Essential for CLI file ops
-      - terminal # Essential for running shell commands
       - writer
       - testing_protocol
 
@@ -259,8 +257,6 @@ skills:
     - "terminal.*" # Filter ALL terminal commands
     # - "!terminal.run_task"        # Exception: Allow task runner
 
-    # --- Filesystem: Hide atomic ops, keep efficient ones ---
-    - "filesystem.*"
     # - "!filesystem.apply_changes"  # Exception: Keep batch operations
 
     # --- Git: Hide raw plumbing commands ---
@@ -437,10 +433,6 @@ skills:
         - **FORBIDDEN**: Do NOT use `curl`, `wget`, or shell requests.
         - **OUTPUT**: Returns structured Markdown, optimized for reading.
 
-    # File Operations - Consolidated from file_ops
-    # filesystem.save_file:
-    #   alias: "save_file"
-    #   append_doc: "\n\nWrite with backup (.bak), syntax validation, and auto-writing-check."
     # Memory Operations
     memory.get_memory_stats:
       alias: "get_memory_stats_rename"

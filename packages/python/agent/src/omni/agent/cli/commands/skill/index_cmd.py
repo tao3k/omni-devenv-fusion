@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 
 import typer
 from rich.panel import Panel
@@ -17,13 +18,30 @@ from rich.panel import Panel
 from .base import SKILLS_DIR, err_console, skill_app
 
 
+def _reindex_with_embeddings() -> int:
+    """Reindex skills using Rust's built-in indexing (no LLM calls)."""
+    from omni.foundation.bridge import RustVectorStore
+
+    skills_path = str(SKILLS_DIR())
+
+    # Drop existing table for full reindex
+    print("Dropping existing index table...")
+    try:
+        store = RustVectorStore(enable_keyword_index=True)
+        asyncio.run(store.drop_table("skills"))
+    except Exception:
+        pass  # Table may not exist
+
+    # Re-create store and use Rust's built-in indexing (fast, no LLM)
+    print("Indexing skills...")
+    store = RustVectorStore(enable_keyword_index=True)
+    count = asyncio.run(store.index_skill_tools(skills_path))
+    return count
+
+
 @skill_app.command("reindex")
 def skill_reindex(
-    clear: bool = typer.Option(
-        False, "--clear", "-c", help="Clear existing index before reindexing"
-    ),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output result as JSON"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed progress logs"),
 ):
     """
     [Heavy] Wipe and rebuild the entire skill tool index in LanceDB.
@@ -40,17 +58,6 @@ def skill_reindex(
         omni skill reindex           # Full reindex all skills
         omni skill reindex --json    # JSON output for scripting
     """
-    import logging
-
-    from omni.foundation.bridge import RustVectorStore
-    from omni.foundation.config.logging import get_logger
-
-    logger = get_logger("omni.core.reindex")
-
-    # Suppress verbose logging by default
-    if not verbose:
-        logging.getLogger("omni.core.discovery").setLevel(logging.WARNING)
-
     err_console.print(
         Panel(
             "Full reindex of skill tools to LanceDB...",
@@ -60,27 +67,7 @@ def skill_reindex(
     )
 
     try:
-        from omni.foundation.config.settings import get_setting
-        from omni.foundation.services.embedding import get_dimension
-
-        skills_path = str(SKILLS_DIR())
-
-        # Use dimension from settings.yaml
-        dimension = get_setting("embedding.dimension", 1024)
-        if dimension == 0:
-            dimension = get_dimension()
-
-        # Drop existing table for full reindex (always clear for consistency)
-        err_console.print("Dropping existing index table...")
-        try:
-            store = RustVectorStore(dimension=dimension, enable_keyword_index=True)
-            asyncio.run(store.drop_table("skills"))
-        except Exception:
-            pass  # Table may not exist
-
-        # Full reindex using Rust bindings (writes to LanceDB and keyword index)
-        store = RustVectorStore(dimension=dimension, enable_keyword_index=True)
-        indexed_count = asyncio.run(store.index_skill_tools(skills_path))
+        indexed_count = _reindex_with_embeddings()
 
         if json_output:
             err_console.print(

@@ -144,10 +144,10 @@ This is how the tool appears in the MCP protocol:
 
 ```json
 {
-  "name": "filesystem.search_code",
-  "description": "Search for patterns in code files",
+  "name": "omnicell.run_command",
+  "description": "Execute Nushell command, returns structured JSON",
   "annotations": {
-    "title": "Code Search",
+    "title": "OmniCell Command",
     "readOnlyHint": true,
     "destructiveHint": false,
     "idempotentHint": true,
@@ -156,12 +156,16 @@ This is how the tool appears in the MCP protocol:
   "inputSchema": {
     "type": "object",
     "properties": {
-      "query": {
+      "cmd": {
         "type": "string",
-        "description": "搜索查询字符串"
+        "description": "Nushell command to execute"
+      },
+      "ensure_structured": {
+        "type": "boolean",
+        "description": "Force JSON output for observation commands"
       }
     },
-    "required": ["query"]
+    "required": ["cmd"]
   }
 }
 ```

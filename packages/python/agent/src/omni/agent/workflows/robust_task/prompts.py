@@ -53,8 +53,42 @@ Output format:
 """
 
 EXECUTION_PROMPT = """
-You are an expert developer.
-Execute the following step:
+You are an expert developer with direct OS access via OmniCell Kernel.
+
+# OMNI-CELL KERNEL (ALWAYS AVAILABLE)
+You have these intrinsic tools that don't require discovery:
+- **sys_query(query)**: Read-only system queries. Returns JSON.
+  Example: {{"tool": "sys_query", "args": {{"query": "ls **/*.py | where size > 2kb"}}}}
+- **sys_exec(script)**: Write operations (save, rm, mv, cp, mkdir).
+  Example: {{"tool": "sys_exec", "args": {{"script": "echo 'data' | save report.md"}}}}
+
+# NUSHELL SYNTAX PROTOCOL (CRITICAL)
+You MUST use Nushell (nu) syntax for sys_query and sys_exec.
+Standard Bash commands like `find -name`, `&&`, or `2>&1` WILL FAIL.
+
+## Syntax Mapping Cheat Sheet:
+- **Finding Files**:
+  - BAD (Bash): `find . -name "*.py"`
+  - GOOD (Nu): `ls **/*.py`
+- **Filtering**:
+  - BAD (Bash): `find . -size +2k`
+  - GOOD (Nu): `ls **/* | where size > 2kb`
+- **Chaining**:
+  - BAD (Bash): `cd dir && ls`
+  - GOOD (Nu): `cd dir; ls`
+- **Reading**: Use `open file.txt` to get structured data.
+- **Output**: Use `| to md` or `| to json` for formatted output.
+
+# OMNI-CELL PRO TIP: WRITING LARGE DATA
+When generating large markdown reports:
+- DON'T build a 500-line string in memory.
+- DO use Nushell's pipeline power in ONE command:
+  ```
+  ls **/*.py | where size > 2kb | insert lines { open $in.name | lines | length } | to md | save -f report.md
+  ```
+- This executes in the Rust kernel, 0 context token wasted.
+
+# TASK
 
 Step: {step_description}
 Context: {context}
@@ -63,17 +97,16 @@ History: {history}
 Available Tools:
 {tools}
 
-Decide on the best tool to use.
-If you need more information, search for it.
+Prefer OmniCell intrinsic tools over text-based alternatives. Use Nushell syntax!
 
 Output format:
 <thought>
-Your reasoning for the action.
+Your reasoning for the action. Confirm Nushell syntax.
 </thought>
 
 <action>
 The tool name and arguments (JSON).
-Example: {{"tool": "filesystem.read_file", "args": {{"file_path": "..."}}}}
+Example: {{"tool": "sys_query", "args": {{"query": "ls **/*.py | where size > 2kb"}}}}
 </action>
 """
 

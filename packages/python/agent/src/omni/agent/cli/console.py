@@ -6,6 +6,11 @@ Modular CLI Architecture
 Provides:
 - err_console: stderr console for logs and UI
 - Output formatting functions (metadata panels, results)
+- TUIBridge: Real-time state sync with Rust TUI (omni-tui)
+
+Event System:
+- Uses omni-events format: {"source": "...", "topic": "...", "payload": {...}, "timestamp": "..."}
+- See: packages/rust/crates/omni-events/src/lib.rs
 
 UNIX Philosophy:
 - stderr: Logs, progress, UI elements (visible to user, invisible to pipes)
@@ -14,7 +19,12 @@ UNIX Philosophy:
 
 from __future__ import annotations
 
+import json
+import socket
 import sys
+import threading
+import time
+from pathlib import Path
 from typing import Any
 
 from rich.console import Console
@@ -23,6 +33,171 @@ from rich.panel import Panel
 
 # err_console: responsible for UI, panels, logs, spinners (user visible, pipe invisible)
 err_console = Console(stderr=True)
+
+
+class TUIBridge:
+    """
+    Bridge for sending events from Python Agent to Rust TUI (omni-tui).
+
+    Communication via Unix Domain Socket:
+    - Writes JSON events to the socket
+    - TUI subscribes and renders in real-time
+
+    Event Format (omni-events compatible):
+        {
+            "source": "omega",
+            "topic": "omega/mission/start",
+            "payload": {"message": "...", "data": {...}},
+            "timestamp": "ISO8601"
+        }
+
+    Usage:
+        bridge = TUIBridge()
+        bridge.connect("/tmp/omni-omega.sock")
+        bridge.send_event({"source": "omega", "topic": "omega/mission/start", ...})
+        bridge.disconnect()
+    """
+
+    def __init__(self, socket_path: str = "/tmp/omni-omega.sock"):
+        """Initialize TUIBridge."""
+        self.socket_path = Path(socket_path)
+        self.socket: socket.socket | None = None
+        self._connected = False
+        self._lock = threading.Lock()
+        self._reconnect_attempts = 0
+        self._max_reconnect_attempts = 5
+        self._event_queue: list[str] = []
+        self._worker_thread: threading.Thread | None = None
+        self._running = False
+
+    def connect(self, socket_path: str | None = None) -> bool:
+        """Connect to TUI socket."""
+        if socket_path:
+            self.socket_path = Path(socket_path)
+
+        try:
+            self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            self.socket.connect(str(self.socket_path))
+            self.socket.setblocking(False)
+            self._connected = True
+            self._reconnect_attempts = 0
+
+            # Start background worker to flush queue
+            self._running = True
+            self._worker_thread = threading.Thread(target=self._flush_worker, daemon=True)
+            self._worker_thread.start()
+
+            err_console.print(f"[green]✓[/] Connected to TUI at {self.socket_path}")
+            return True
+
+        except (socket.error, FileNotFoundError) as e:
+            err_console.print(f"[yellow]⚠[/] TUI not connected: {e}")
+            self._connected = False
+            return False
+
+    def disconnect(self):
+        """Disconnect from TUI socket."""
+        self._running = False
+
+        with self._lock:
+            if self.socket:
+                try:
+                    self.socket.close()
+                except Exception:
+                    pass
+                self.socket = None
+            self._connected = False
+
+    def is_connected(self) -> bool:
+        """Check if connected to TUI."""
+        return self._connected and self.socket is not None
+
+    def send_event(self, event: dict) -> bool:
+        """
+        Send event to TUI.
+
+        Args:
+            event: Dictionary in omni-events format
+
+        Returns:
+            True if sent successfully, False otherwise
+        """
+        try:
+            msg = json.dumps(event) + "\n"
+
+            with self._lock:
+                if self._connected and self.socket:
+                    try:
+                        self.socket.sendall(msg.encode())
+                        return True
+                    except (socket.error, BlockingIOError):
+                        # Queue for later sending
+                        self._event_queue.append(msg)
+                        return True
+                else:
+                    # Not connected, queue
+                    self._event_queue.append(msg)
+                    return False
+
+        except Exception:
+            return False
+
+    def _flush_worker(self):
+        """Background worker to flush queued events."""
+        while self._running:
+            try:
+                with self._lock:
+                    if not self._connected or not self._event_queue:
+                        continue
+
+                    # Try to send queued events
+                    queue_copy = self._event_queue.copy()
+                    self._event_queue.clear()
+
+                for msg in queue_copy:
+                    if self._connected and self.socket:
+                        try:
+                            self.socket.sendall(msg.encode())
+                        except (socket.error, BlockingIOError):
+                            with self._lock:
+                                self._event_queue.append(msg)
+                                break
+                    else:
+                        with self._lock:
+                            self._event_queue.insert(0, msg)
+                            break
+
+            except Exception:
+                pass
+
+            # Sleep briefly
+            time.sleep(0.05)
+
+
+# Global TUI bridge instance
+_tui_bridge: TUIBridge | None = None
+
+
+def get_tui_bridge() -> TUIBridge:
+    """Get or create global TUI bridge instance."""
+    global _tui_bridge
+    if _tui_bridge is None:
+        _tui_bridge = TUIBridge()
+    return _tui_bridge
+
+
+def init_tui(socket_path: str = "/tmp/omni-omega.sock") -> bool:
+    """Initialize TUI bridge and connect."""
+    bridge = get_tui_bridge()
+    return bridge.connect(socket_path)
+
+
+def shutdown_tui():
+    """Shutdown TUI bridge."""
+    global _tui_bridge
+    if _tui_bridge:
+        _tui_bridge.disconnect()
+        _tui_bridge = None
 
 
 def cli_log_handler(message: str) -> None:
@@ -108,13 +283,10 @@ def print_result(result: Any, is_tty: bool = False, json_output: bool = False) -
             metadata = result.get("metadata", {})
             # Handle skill.discover format: quick_guide / details
             if not content and ("quick_guide" in result or "details" in result):
-                import json
                 content = json.dumps(result, indent=2, ensure_ascii=False)
                 metadata = {}
             # Handle tools like smart_search that return matches/count
             if not content and "matches" in result:
-                import json
-                # Truncate matches for display
                 display_result = result.copy()
                 if "matches" in display_result and len(display_result["matches"]) > 20:
                     display_result["matches"] = display_result["matches"][:20]
@@ -123,7 +295,6 @@ def print_result(result: Any, is_tty: bool = False, json_output: bool = False) -
                 metadata = {}
             # Handle skill.discover format: discovered_capabilities
             if not content and "discovered_capabilities" in result:
-                import json
                 content = json.dumps(result, indent=2, ensure_ascii=False)
                 metadata = {}
     elif isinstance(result, str):
@@ -161,4 +332,9 @@ __all__ = [
     "err_console",
     "print_metadata_box",
     "print_result",
+    # TUI Bridge
+    "TUIBridge",
+    "get_tui_bridge",
+    "init_tui",
+    "shutdown_tui",
 ]

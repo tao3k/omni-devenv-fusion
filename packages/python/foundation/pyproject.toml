@@ -19,6 +19,8 @@ dependencies = [
     # Text & Data
     "jinja2>=3.1.0",
     "python-frontmatter>=1.1.0",
+    # Database
+    "lancedb>=0.17.0",
     # Workflow Engine
     "langgraph>=1.0.5",
     "langsmith>=0.6.0",

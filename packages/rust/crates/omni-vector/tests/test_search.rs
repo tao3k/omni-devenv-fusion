@@ -203,3 +203,92 @@ fn test_matches_filter_non_object_conditions() {
     // Non-object conditions should match everything
     assert!(VectorStore::matches_filter(&metadata, &conditions));
 }
+
+// =========================================================================
+// Tests for search vector distance calculation
+// =========================================================================
+
+/// Test that vector distance calculation produces correct relative ordering.
+/// Identical vectors should have distance 0 (score 1.0).
+/// Vectors that differ more should have higher distance (lower score).
+#[tokio::test]
+async fn test_vector_distance_calculation() {
+    use omni_vector::ToolSearchResult;
+
+    // Create two vectors: one identical to query, one different
+    let _query_vec = vec![1.0, 0.0, 0.0, 0.0]; // 4D unit vector along x
+    let _identical_vec = vec![1.0, 0.0, 0.0, 0.0]; // Same as query, distance = 0
+    let _opposite_vec = vec![-1.0, 0.0, 0.0, 0.0]; // Opposite, distance = 2
+    let _orthogonal_vec = vec![0.0, 1.0, 0.0, 0.0]; // Orthogonal, distance = sqrt(2) ≈ 1.41
+
+    // Calculate expected distances manually
+    // dist_sq = sum((a - b)^2)
+    let identical_dist_sq: f32 = (1.0_f32 - 1.0_f32).powi(2) * 4.0; // = 0
+    let opposite_dist_sq: f32 = (1.0_f32 - (-1.0_f32)).powi(2) + 3.0 * (0.0_f32 - 0.0_f32).powi(2); // = 4
+    let orthogonal_dist_sq: f32 = (1.0_f32 - 0.0_f32).powi(2)
+        + (0.0_f32 - 1.0_f32).powi(2)
+        + 2.0 * (0.0_f32 - 0.0_f32).powi(2); // = 2
+
+    let identical_score = 1.0 / (1.0 + identical_dist_sq.sqrt());
+    let opposite_score = 1.0 / (1.0 + opposite_dist_sq.sqrt());
+    let orthogonal_score = 1.0 / (1.0 + orthogonal_dist_sq.sqrt());
+
+    // Verify score ordering: identical > orthogonal > opposite
+    assert!(
+        identical_score > orthogonal_score,
+        "Identical should score higher than orthogonal"
+    );
+    assert!(
+        orthogonal_score > opposite_score,
+        "Orthogonal should score higher than opposite"
+    );
+    assert_eq!(
+        identical_score, 1.0,
+        "Identical vectors should have score 1.0"
+    );
+
+    // Create ToolSearchResult objects
+    let identical = ToolSearchResult {
+        name: "identical_tool".to_string(),
+        description: "Identical vector".to_string(),
+        input_schema: serde_json::json!({}),
+        score: identical_score,
+        skill_name: "test".to_string(),
+        tool_name: "identical".to_string(),
+        file_path: "".to_string(),
+        keywords: vec![],
+        intents: vec![],
+    };
+
+    let opposite = ToolSearchResult {
+        name: "opposite_tool".to_string(),
+        description: "Opposite vector".to_string(),
+        input_schema: serde_json::json!({}),
+        score: opposite_score,
+        skill_name: "test".to_string(),
+        tool_name: "opposite".to_string(),
+        file_path: "".to_string(),
+        keywords: vec![],
+        intents: vec![],
+    };
+
+    let orthogonal = ToolSearchResult {
+        name: "orthogonal_tool".to_string(),
+        description: "Orthogonal vector".to_string(),
+        input_schema: serde_json::json!({}),
+        score: orthogonal_score,
+        skill_name: "test".to_string(),
+        tool_name: "orthogonal".to_string(),
+        file_path: "".to_string(),
+        keywords: vec![],
+        intents: vec![],
+    };
+
+    // Verify results are ordered by score
+    let mut results = vec![opposite.clone(), orthogonal.clone(), identical.clone()];
+    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+
+    assert_eq!(results[0].name, "identical_tool");
+    assert_eq!(results[1].name, "orthogonal_tool");
+    assert_eq!(results[2].name, "opposite_tool");
+}

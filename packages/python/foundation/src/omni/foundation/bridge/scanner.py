@@ -12,6 +12,7 @@ Migration Context:
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 # Apply nest_asyncio patch early to allow nested event loops (needed for pytest)
@@ -80,8 +81,11 @@ class PythonSkillScanner:
         try:
             import asyncio
             from omni.foundation.bridge import RustVectorStore
+            from omni.foundation.config.dirs import get_vector_db_path
 
-            store = RustVectorStore()
+            # Use skills.lance specifically for tool registry
+            skills_path = str(Path(get_vector_db_path()) / "skills.lance")
+            store = RustVectorStore(skills_path)
             # Use asyncio.run() - now works with nest_asyncio.patch
             tools = asyncio.run(store.list_all_tools())
 

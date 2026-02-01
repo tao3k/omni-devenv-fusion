@@ -67,10 +67,10 @@
     "devenv": {
       "locked": {
         "dir": "src/modules",
-        "lastModified": 1769762496,
+        "lastModified": 1769263214,
         "owner": "cachix",
         "repo": "devenv",
-        "rev": "d14540e3cda37859b2e44f8c169668c876a064e1",
+        "rev": "328752c05f1745c7f613689a9df0bd1ffc8f3922",
         "type": "github"
       },
       "original": {
@@ -217,10 +217,10 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1769763865,
+        "lastModified": 1769789134,
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "62f5bff0fafe0b3eedc2f835e94a7dd4da4a6f11",
+        "rev": "17171ab58a49896a1c1f193bbf6a3e6760e53cd0",
         "type": "github"
       },
       "original": {
@@ -245,10 +245,10 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1769527094,
+        "lastModified": 1769740369,
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "afce96367b2e37fc29afb5543573cd49db3357b7",
+        "rev": "6308c3b21396534d8aaeac46179c14c439a89b8a",
         "type": "github"
       },
       "original": {
@@ -260,10 +260,10 @@
     },
     "nixpkgs-latest": {
       "locked": {
-        "lastModified": 1769527094,
+        "lastModified": 1769298235,
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "afce96367b2e37fc29afb5543573cd49db3357b7",
+        "rev": "26b0093bc977081dc7653175a3fadab11e07bed7",
         "type": "github"
       },
       "original": {
@@ -327,10 +327,10 @@
         ]
       },
       "locked": {
-        "lastModified": 1769742225,
+        "lastModified": 1769309768,
         "owner": "oxalica",
         "repo": "rust-overlay",
-        "rev": "bcdd8d37594f0e201639f55889c01c827baf5c75",
+        "rev": "140c9dc582cb73ada2d63a2180524fcaa744fad5",
         "type": "github"
       },
       "original": {

@@ -163,13 +163,12 @@ def _print_enrich_result(task: str, result: str, agent):
     console.print(Panel(grid, title="✨ CCA Session Report ✨", border_style="green", expand=False))
 
 
-async def run_task(task: str, max_steps: int | None, use_smart_loop: bool = False):
+async def run_task(task: str, max_steps: int | None):
     """Run a single task through the CCA loop.
 
     Args:
         task: The task to execute
         max_steps: None = auto-estimate, 1 = single step, N = max steps
-        use_smart_loop: Whether to use the Agentic OS OODA loop
     """
     # Import the NEW Core OmniLoop
     from omni.agent.core.omni import OmniLoop
@@ -177,30 +176,23 @@ async def run_task(task: str, max_steps: int | None, use_smart_loop: bool = Fals
 
     print_banner()
     console.print(f"\n[bold]🚀 Starting:[/bold] {task}")
-    
+
     # Initialize kernel first (loads skills)
     kernel = get_kernel()
     console.print(
         f"[dim]Loaded {len(kernel.skill_context._skills)} skills, {len(kernel.skill_context.get_core_commands())} core commands[/dim]\n"
     )
 
-    if use_smart_loop:
-        from omni.agent.cli.smart_loop import SmartAgentLoop
-        console.print("[bold yellow]🧠 Using SmartAgentLoop (OODA Loop)[/bold yellow]\n")
-        agent = SmartAgentLoop(kernel=kernel)
-        result = await agent.run(task, max_steps=max_steps or 10)
+    # Initialize the standard OmniLoop
+    agent = OmniLoop(kernel=kernel)
+    if max_steps is None:
+        console.print("[dim]Max steps: Auto (AdaptivePlanner)[/dim]\n")
     else:
-        # Initialize the standard OmniLoop
-        agent = OmniLoop(kernel=kernel)
-        if max_steps is None:
-            console.print("[dim]Max steps: Auto (AdaptivePlanner)[/dim]\n")
-        else:
-            console.print(f"[dim]Max steps: {max_steps}[/dim]\n")
-        result = await agent.run(task, max_steps=max_steps)
+        console.print(f"[dim]Max steps: {max_steps}[/dim]\n")
+    result = await agent.run(task, max_steps=max_steps)
 
     # Report
-    if not use_smart_loop:
-        _print_enrich_result(task, result, agent)
+    _print_enrich_result(task, result, agent)
     return result
 
 
@@ -211,13 +203,10 @@ def main():
     parser.add_argument(
         "-s", "--steps", type=int, default=None, help="Max steps (default: auto-estimate)"
     )
-    parser.add_argument(
-        "--smart", action="store_true", help="Use Agentic OS Smart Loop (OODA)"
-    )
     args, _ = parser.parse_known_args()
 
     if args.task:
-        asyncio.run(run_task(args.task, args.steps, use_smart_loop=args.smart))
+        asyncio.run(run_task(args.task, args.steps))
     else:
         console.print("[yellow]Interactive mode: Use `omni` without arguments[/yellow]")
         console.print("[dim]For interactive mode: Run `omni` in a REPL setup[/dim]")

@@ -141,7 +141,10 @@ description: A test skill
         ]
 
         with patch("asyncio.run", return_value=mock_skills):
-            with patch("omni.foundation.config.skills.SKILLS_DIR", return_value=tmp_path / "assets" / "skills"):
+            with patch(
+                "omni.foundation.config.skills.SKILLS_DIR",
+                return_value=tmp_path / "assets" / "skills",
+            ):
                 result = runner.invoke(app, ["skill", "list", "--json"])
 
         assert result.exit_code == 0
@@ -187,7 +190,10 @@ description: A test skill
     def test_list_json_empty_skills(self, runner, tmp_path: Path):
         """Test list --json with no skills in Rust DB."""
         with patch("asyncio.run", return_value=[]):
-            with patch("omni.foundation.config.skills.SKILLS_DIR", return_value=tmp_path / "assets" / "skills"):
+            with patch(
+                "omni.foundation.config.skills.SKILLS_DIR",
+                return_value=tmp_path / "assets" / "skills",
+            ):
                 result = runner.invoke(app, ["skill", "list", "--json"])
 
         assert result.exit_code == 0
@@ -209,13 +215,20 @@ description: A test skill
                 "permissions": ["network:http"],
                 "tools": [
                     {"name": "test_skill.run", "description": "Run tests", "category": "test"},
-                    {"name": "test_skill.verify", "description": "Verify code", "category": "check"},
+                    {
+                        "name": "test_skill.verify",
+                        "description": "Verify code",
+                        "category": "check",
+                    },
                 ],
             },
         ]
 
         with patch("asyncio.run", return_value=mock_skills):
-            with patch("omni.foundation.config.skills.SKILLS_DIR", return_value=tmp_path / "assets" / "skills"):
+            with patch(
+                "omni.foundation.config.skills.SKILLS_DIR",
+                return_value=tmp_path / "assets" / "skills",
+            ):
                 result = runner.invoke(app, ["skill", "list", "--json"])
 
         assert result.exit_code == 0

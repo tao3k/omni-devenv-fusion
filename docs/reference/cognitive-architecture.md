@@ -4,7 +4,7 @@
 
 ## Overview
 
-Cognitive Architecture introduces **Dependency Injection** and **ReAct Loop** capabilities to the agent system, giving CoderAgent a "brain" (LLM inference) and "hands" (filesystem tools).
+Cognitive Architecture introduces **Dependency Injection** and **ReAct Loop** capabilities to the agent system, giving CoderAgent a "brain" (LLM inference) and "hands" (OmniCell tools).
 
 ## The Problem
 

@@ -53,10 +53,10 @@ async def discover(intent: str, limit: int = 3) -> dict[str, Any]:
     """
     from omni.core.router.main import RouterRegistry
     from omni.core.kernel import get_kernel
-    
+
     kernel = get_kernel()
     router = RouterRegistry.get()
-    
+
     # Use the Grand Unified Router's Hybrid logic
     results = await router.route_hybrid(query=intent, limit=limit, threshold=0.1)
 
@@ -67,8 +67,8 @@ async def discover(intent: str, limit: int = 3) -> dict[str, Any]:
             "suggestions": [
                 "Try a broader query (e.g., 'file' instead of 'json parser')",
                 "Use `skill.list_index` to see all available skills",
-                "Fallback to `terminal.run_command` if you need to explore manually"
-            ]
+                "Fallback to `terminal.run_command` if you need to explore manually",
+            ],
         }
 
     # Construct "Intelligent Discovery Report"
@@ -78,11 +78,11 @@ async def discover(intent: str, limit: int = 3) -> dict[str, Any]:
         full_id = f"{r.skill_name}.{r.command_name}"
         # Fetch actual handler to get the most accurate config
         handler = kernel.skill_context.get_command(full_id)
-        
+
         description = ""
         input_schema = {}
         file_path = ""
-        
+
         if handler:
             if hasattr(handler, "_skill_config"):
                 config = handler._skill_config
@@ -94,6 +94,7 @@ async def discover(intent: str, limit: int = 3) -> dict[str, Any]:
 
         # 1. Calculate direct path to SKILL.md
         from omni.foundation.config.skills import SKILLS_DIR
+
         doc_path = ""
         try:
             potential_doc = SKILLS_DIR.definition_file(r.skill_name)
@@ -104,6 +105,7 @@ async def discover(intent: str, limit: int = 3) -> dict[str, Any]:
 
         # 2. Generate EXACT usage template (SSOT)
         import json
+
         try:
             props = input_schema.get("properties", {})
             required = input_schema.get("required", [])
@@ -113,32 +115,36 @@ async def discover(intent: str, limit: int = 3) -> dict[str, Any]:
                     p_type = p_meta.get("type", "string")
                     args[p_name] = f"<{p_name}: {p_type}>"
                 else:
-                    if len(args) < 5: args[p_name] = f"<{p_name}?>"
-            
+                    if len(args) < 5:
+                        args[p_name] = f"<{p_name}?>"
+
             usage = f'@omni("{full_id}", {json.dumps(args)})'
         except:
             usage = f'@omni("{full_id}", {{...}})'
 
         # 3. Documentation hints
         doc_cues = []
-        if doc_path: doc_cues.append(f"Full manual available at: {doc_path}")
-        
-        details.append({
-            "tool": full_id,
-            "score": r.score,
-            "description": description,
-            "usage": usage,
-            "documentation_path": doc_path,
-            "source_code_path": file_path,
-            "documentation_hints": doc_cues,
-            "advice": f"Check the usage pattern. If arguments are complex, read 'documentation_path'."
-        })
+        if doc_path:
+            doc_cues.append(f"Full manual available at: {doc_path}")
+
+        details.append(
+            {
+                "tool": full_id,
+                "score": r.score,
+                "description": description,
+                "usage": usage,
+                "documentation_path": doc_path,
+                "source_code_path": file_path,
+                "documentation_hints": doc_cues,
+                "advice": f"Check the usage pattern. If arguments are complex, read 'documentation_path'.",
+            }
+        )
 
     return {
         "status": "success",
         "intent_matched": intent,
         "discovered_capabilities": details,
-        "protocol_reminder": "NEVER guess parameters. Use the EXACT usage strings provided above."
+        "protocol_reminder": "NEVER guess parameters. Use the EXACT usage strings provided above.",
     }
 
 

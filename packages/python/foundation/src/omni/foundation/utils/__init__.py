@@ -19,6 +19,7 @@ from ..config.settings import get_setting
 # Re-export SKILLS_DIR from config.skills for backward compatibility
 from ..config.skills import SKILLS_DIR
 from .common import agent_src, common_src, project_root, setup_import_paths
+from .fs import find_files_by_extension, find_markdown_files
 from .skills import (
     current_skill_dir,
     skill_asset,
@@ -34,6 +35,8 @@ __all__ = [
     "agent_src",
     "common_src",
     "current_skill_dir",
+    "find_files_by_extension",
+    "find_markdown_files",
     "get_setting",
     "project_root",
     "render_string",

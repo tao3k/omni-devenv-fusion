@@ -388,6 +388,7 @@ pattern = "pyproject.toml"
                 &scripts_path,
                 &metadata.skill_name,
                 &metadata.routing_keywords,
+                &[],
             )
             .unwrap()
     } else {

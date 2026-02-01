@@ -184,8 +184,9 @@ class TestRustCheckpointSaverCheckpointStructure:
         """
         import asyncio
         from omni.langgraph.checkpoint.saver import RustCheckpointSaver
+        from unittest.mock import AsyncMock
 
-        mock_inner = MagicMock()
+        mock_inner = AsyncMock()
 
         async def test_put():
             saver = RustCheckpointSaver.__new__(RustCheckpointSaver)
@@ -208,10 +209,12 @@ class TestRustCheckpointSaverCheckpointStructure:
 
             # Use async aput instead
             result = await saver.aput(config, dict_checkpoint, dict_metadata, new_versions)
-            mock_inner.put.assert_called_once()
-            call_args = mock_inner.put.call_args
-            assert call_args.kwargs["checkpoint_id"] == "test-checkpoint-1"
-            assert call_args.kwargs["state"] == {"key": "value"}
+            mock_inner.aput.assert_called_once()
+            call_args = mock_inner.aput.call_args
+            # checkpoint is passed as positional arg (call_args[0][1])
+            passed_checkpoint = call_args[0][1]
+            assert passed_checkpoint["id"] == "test-checkpoint-1"
+            assert passed_checkpoint["channel_values"] == {"key": "value"}
 
         asyncio.run(test_put())
 
@@ -222,8 +225,9 @@ class TestRustCheckpointSaverCheckpointStructure:
         """
         import asyncio
         from omni.langgraph.checkpoint.saver import RustCheckpointSaver
+        from unittest.mock import AsyncMock
 
-        mock_inner = MagicMock()
+        mock_inner = AsyncMock()
 
         async def test_aput():
             saver = RustCheckpointSaver.__new__(RustCheckpointSaver)
@@ -245,7 +249,7 @@ class TestRustCheckpointSaverCheckpointStructure:
 
             # Use async aput instead
             result = await saver.aput(config, mock_checkpoint, mock_metadata, new_versions)
-            mock_inner.put.assert_called_once()
+            mock_inner.aput.assert_called_once()
 
         asyncio.run(test_aput())
 

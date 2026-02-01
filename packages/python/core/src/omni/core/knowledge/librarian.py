@@ -93,15 +93,28 @@ class Librarian:
 
         # Use unified path if not specified
         if storage_path is None:
-            from omni.foundation.config.dirs import get_vector_db_path
+            from omni.agent.cli.commands.reindex import get_database_path
 
-            storage_path = str(get_vector_db_path() / "knowledge.lance")
+            storage_path = get_database_path("knowledge")
+
+        # Extract parent directory and table name from the full path
+        # RustVectorStore expects the parent directory, not the .lance file path
+        from pathlib import Path
+
+        storage_path_obj = Path(storage_path)
+        if storage_path_obj.suffix == ".lance":
+            # storage_path is like "/path/to/knowledge.lance"
+            # Extract parent: "/path/to" and table name: "knowledge"
+            self._storage_path = str(storage_path_obj.parent)
+            self._table_name = storage_path_obj.stem  # "knowledge" from "knowledge.lance"
+        else:
+            self._storage_path = storage_path
+            self._table_name = collection  # Default to collection name
 
         # Use dimension from settings.yaml (default to 1024)
         if dimension is None:
             dimension = get_setting("embedding.dimension", 1024)
 
-        self._storage_path = storage_path
         self._dimension = dimension
         self._collection = collection
         self._store = None
@@ -116,7 +129,9 @@ class Librarian:
 
             self._store = RustVectorStore(self._storage_path, self._dimension)
             self._initialized = True
-            logger.info(f"📚 Librarian initialized at {self._storage_path}")
+            logger.info(
+                f"📚 Librarian initialized at {self._storage_path}/{self._table_name}.lance"
+            )
         except ImportError:
             logger.warning("RustVectorStore not available, using in-memory fallback")
             self._initialized = False
@@ -231,9 +246,9 @@ class Librarian:
                 meta["source"] = entry.source
                 metadatas.append(_json.dumps(meta))
 
-            # Add to vector store (use collection as table name)
+            # Add to vector store (use table_name for the LanceDB table)
             await self._store.add_documents(
-                table_name=self._collection,
+                table_name=self._table_name,
                 ids=ids,
                 vectors=embeddings,
                 contents=contents,
@@ -280,7 +295,7 @@ class Librarian:
 
         try:
             # Use list_all + keyword matching (since we use hash embeddings)
-            all_entries = await self._store.list_all(self._collection)
+            all_entries = await self._store.list_all(self._table_name)
 
             query_words = query.lower().split()
             scored = []
@@ -343,7 +358,7 @@ class Librarian:
 
         # Use list_all() to get all entries from knowledge table
         try:
-            raw_results = await self._store.list_all(self._collection)
+            raw_results = await self._store.list_all(self._table_name)
             if raw_results:
                 entries = []
                 for r in raw_results:

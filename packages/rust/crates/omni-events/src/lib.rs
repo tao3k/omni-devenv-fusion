@@ -17,7 +17,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use uuid::Uuid;
@@ -179,6 +179,63 @@ pub mod topics {
     pub const CORTEX_INDEX_UPDATED: &str = "cortex/index_updated";
     /// Cortex query event
     pub const CORTEX_QUERY: &str = "cortex/query";
+
+    // === Omega Events ===
+    /// Omega mission started
+    pub const OMEGA_MISSION_START: &str = "omega/mission/start";
+    /// Omega mission completed
+    pub const OMEGA_MISSION_COMPLETE: &str = "omega/mission/complete";
+    /// Omega mission failed
+    pub const OMEGA_MISSION_FAIL: &str = "omega/mission/fail";
+
+    /// Omega semantic scan started
+    pub const OMEGA_SEMANTIC_SCAN: &str = "omega/semantic/scan";
+    /// Omega semantic scan complete
+    pub const OMEGA_SEMANTIC_COMPLETE: &str = "omega/semantic/complete";
+
+    /// Omega experience load started
+    pub const OMEGA_EXPERIENCE_LOAD: &str = "omega/experience/load";
+    /// Omega experience loaded
+    pub const OMEGA_EXPERIENCE_LOADED: &str = "omega/experience/loaded";
+
+    /// Omega task decomposition started
+    pub const OMEGA_TASK_DECOMPOSE: &str = "omega/task/decompose";
+    /// Omega task decomposition complete
+    pub const OMEGA_TASK_DECOMPOSED: &str = "omega/task/decomposed";
+
+    /// Omega branch isolation started
+    pub const OMEGA_BRANCH_ISOLATE: &str = "omega/branch/isolate";
+    /// Omega branch created
+    pub const OMEGA_BRANCH_CREATED: &str = "omega/branch/created";
+    /// Omega branch merged
+    pub const OMEGA_BRANCH_MERGED: &str = "omega/branch/merged";
+    /// Omega branch rolled back
+    pub const OMEGA_BRANCH_ROLLBACK: &str = "omega/branch/rollback";
+
+    /// Omega task started
+    pub const OMEGA_TASK_START: &str = "omega/task/start";
+    /// Omega task completed
+    pub const OMEGA_TASK_COMPLETE: &str = "omega/task/complete";
+    /// Omega task failed
+    pub const OMEGA_TASK_FAIL: &str = "omega/task/fail";
+
+    /// Omega conflict detected
+    pub const OMEGA_CONFLICT_DETECTED: &str = "omega/conflict/detected";
+    /// Omega conflict resolved
+    pub const OMEGA_CONFLICT_RESOLVED: &str = "omega/conflict/resolved";
+
+    /// Omega recovery triggered
+    pub const OMEGA_RECOVERY_TRIGGER: &str = "omega/recovery/trigger";
+    /// Omega recovery success
+    pub const OMEGA_RECOVERY_SUCCESS: &str = "omega/recovery/success";
+
+    /// Omega skill crystallization started
+    pub const OMEGA_SKILL_CRYSTALLIZE: &str = "omega/skill/crystallize";
+    /// Omega skill crystallized
+    pub const OMEGA_SKILL_CRYSTALLIZED: &str = "omega/skill/crystallized";
+
+    /// TUI event (forwarded from Python)
+    pub const TUI_EVENT: &str = "tui/event";
 }
 
 /// Event source constants
@@ -193,6 +250,10 @@ pub mod sources {
     pub const CORTEX: &str = "cortex";
     /// Agent source
     pub const AGENT: &str = "agent";
+    /// Omega source
+    pub const OMEGA: &str = "omega";
+    /// TUI source
+    pub const TUI: &str = "tui";
 }
 
 #[cfg(test)]

@@ -494,12 +494,10 @@ class Kernel:
                     if handler and hasattr(handler, "_skill_config"):
                         cmd_keywords = handler._skill_config.get("keywords", [])
                         cmd_desc = handler._skill_config.get("description", "")
-                    
-                    commands.append({
-                        "name": cmd_name, 
-                        "description": cmd_desc,
-                        "keywords": cmd_keywords
-                    })
+
+                    commands.append(
+                        {"name": cmd_name, "description": cmd_desc, "keywords": cmd_keywords}
+                    )
 
                 skills_data.append(
                     {

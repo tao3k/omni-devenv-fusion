@@ -1,0 +1,23 @@
+[package]
+name = "omni-executor"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# Error handling
+thiserror = { workspace = true }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Async execution
+tokio = { workspace = true, features = ["process", "io-util"] }
+
+# AST-based semantic analysis using ast-grep
+ast-grep-core = "0.40.5"
+ast-grep-language = "0.40.5"
+
+[dev-dependencies]
+tempfile = "3.12"
+assert_fs = "1.1"

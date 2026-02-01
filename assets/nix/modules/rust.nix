@@ -10,9 +10,9 @@ in
 {
   packages = [
     pkgs.protobuf
-    pkgs.maturin
     pkgs.openssl
     pkgs.pkg-config
+    pkgs.libidn2
     pkgs.libiconv
   ];
   # https://devenv.sh/languages/

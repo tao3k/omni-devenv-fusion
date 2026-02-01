@@ -27,13 +27,16 @@ mod context;
 #[cfg(not(feature = "assembler"))]
 mod context;
 
+mod ast;
 mod editor;
 mod events;
+mod executor;
 mod io;
 mod navigation;
 mod scanner;
 mod security;
 mod sniffer;
+mod tui;
 pub mod utils;
 pub mod vector;
 
@@ -57,6 +60,8 @@ pub use events::{
     topic_agent_result, topic_agent_think, topic_file_changed, topic_file_created,
     topic_file_deleted, topic_system_ready,
 };
+pub use executor::PyOmniCell;
+pub use executor::{build_query, build_query_raw};
 pub use io::{
     count_tokens, get_cache_home, get_config_home, get_data_home, read_file_safe, truncate_tokens,
 };
@@ -73,7 +78,12 @@ pub use sniffer::{
     PyEnvironmentSnapshot, PyGlobSniffer, PyOmniSniffer, get_environment_snapshot, py_get_sniffer,
 };
 pub use utils::run_safe;
-pub use vector::{PyToolRecord, PyVectorStore, create_vector_store};
+pub use vector::{PyToolRecord, PyVectorStore, create_vector_store_py};
+
+// AST Extraction
+pub use ast::{
+    PyExtractResult, py_extract_items, py_get_supported_languages, py_is_language_supported,
+};
 
 // Watcher module exports (notify feature)
 #[cfg(feature = "notify")]
@@ -142,7 +152,7 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBatchRefactorStats>()?;
 
     // Vector Store (omni-vector bindings)
-    m.add_function(pyo3::wrap_pyfunction!(create_vector_store, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(create_vector_store_py, m)?)?;
     m.add_class::<PyVectorStore>()?;
     m.add_class::<PyToolRecord>()?;
 
@@ -158,6 +168,12 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyAssemblyResult>()?;
     m.add_class::<PyContextPruner>()?; // Add PyContextPruner here
 
+    // AST Extraction (Project Cerebellum - High Precision Context)
+    m.add_function(pyo3::wrap_pyfunction!(py_extract_items, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(py_is_language_supported, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(py_get_supported_languages, m)?)?;
+    m.add_class::<ast::PyExtractResult>()?;
+
     // Script Scanner
     m.add_function(pyo3::wrap_pyfunction!(scan_skill_tools, m)?)?;
 
@@ -165,6 +181,11 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(pyo3::wrap_pyfunction!(scan_skill, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(scan_skill_from_content, m)?)?;
     m.add_class::<PySkillMetadata>()?;
+
+    // OmniCell - Nushell Native Bridge (File System Replacement)
+    m.add_class::<executor::PyOmniCell>()?;
+    m.add_function(pyo3::wrap_pyfunction!(build_query, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(build_query_raw, m)?)?;
 
     // Skill Sync
     m.add_function(pyo3::wrap_pyfunction!(diff_skills, m)?)?;
