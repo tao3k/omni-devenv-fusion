@@ -47,10 +47,10 @@ from .schemas import (
     ExecutionStep,
 )
 
-logger = structlog.get_logger("omni.hippocampus")
+logger = structlog.get_logger("memory.hippocampus")
 
 # Collection name for hippocampus experiences
-HIPPOCAMPUS_COLLECTION = "omni.hippocampus"
+HIPPOCAMPUS_COLLECTION = "memory.hippocampus"
 
 # Trace storage directory (relative to PRJ_CACHE)
 TRACE_DIR = "omni-dev-fusion/memory/trace"
@@ -432,12 +432,12 @@ class Hippocampus:
             )
             return None
 
-    def get_stats(self) -> dict[str, Any]:
+    async def get_stats(self) -> dict[str, Any]:
         """Get hippocampus statistics."""
         trace_count = len(list(self._trace_dir.glob("*.json")))
 
         try:
-            vector_count = self.vector_store.count(HIPPOCAMPUS_COLLECTION)
+            vector_count = await self.vector_store.count(HIPPOCAMPUS_COLLECTION)
         except Exception:
             vector_count = -1
 

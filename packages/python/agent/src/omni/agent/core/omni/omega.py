@@ -423,7 +423,7 @@ class OmegaRunner:
         self.dashboard.log_event(event)
 
         # Also send to TUI if connected
-        if self.tui_bridge and self.tui_bridge.is_connected():
+        if self.tui_bridge and self.tui_bridge.is_connected:
             try:
                 self.tui_bridge.send_event(event)
             except Exception:
@@ -451,7 +451,7 @@ class OmegaRunner:
         self._emit("MISSION_START", f"开始执行任务: {goal}", {"goal": goal})
 
         try:
-            # Phase 1: Semantic Pre-check
+            # Step 1: Semantic Pre-check
             self._emit("SEMANTIC_SCAN", "正在进行语义预检...")
             semantic_analysis = await self._semantic_precheck(goal)
             self._emit(
@@ -460,7 +460,7 @@ class OmegaRunner:
                 semantic_analysis,
             )
 
-            # Phase 2: Experience Load
+            # Step 2: Experience Load
             if self.config.enable_memory_recall:
                 self._emit("EXPERIENCE_LOAD", "正在加载历史经验...")
                 experience = await self._load_experience(goal)
@@ -468,7 +468,7 @@ class OmegaRunner:
                     "EXPERIENCE_LOADED", f"找到 {experience.get('count', 0)} 条相关经验", experience
                 )
 
-            # Phase 3: Task Decompose
+            # Step 3: Task Decompose
             self._emit("TASK_DECOMPOSE", "正在分解任务...")
             task_graph = await self._decompose_task(goal, semantic_analysis)
             self._emit(
@@ -477,7 +477,7 @@ class OmegaRunner:
                 {"task_count": len(task_graph.all_tasks)},
             )
 
-            # Phase 4: Isolated Execution with Homeostasis
+            # Step 4: Isolated Execution with Homeostasis
             self._emit("BRANCH_ISOLATE", "开始隔离执行...")
             execution_result = await self._execute_with_protection(task_graph)
 
@@ -485,7 +485,7 @@ class OmegaRunner:
             self._tasks_failed = execution_result.failed_transactions
             self._conflicts_detected = execution_result.conflicts_detected
 
-            # Phase 5: Skill Crystallization
+            # Step 5: Skill Crystallization
             if self.config.enable_skill_crystallization and execution_result.success:
                 self._emit("SKILL_CRYSTALLIZE", "正在结晶技能...")
                 await self._crystallize_skill(goal, task_graph, execution_result)
@@ -524,7 +524,7 @@ class OmegaRunner:
             )
 
     async def _semantic_precheck(self, goal: str) -> dict[str, Any]:
-        """Phase 1: Semantic pre-check using Cerebellum/AST analysis."""
+        """Semantic pre-check using Cerebellum/AST analysis."""
         # Simplified: Analyze goal complexity
         complexity_indicators = ["全库", "所有", "批量", "批量修改", "重构"]
         risk_level = "low"
@@ -548,7 +548,7 @@ class OmegaRunner:
         }
 
     async def _load_experience(self, goal: str) -> dict[str, Any]:
-        """Phase 2: Load relevant experience from Hippocampus."""
+        """Load relevant experience from Hippocampus."""
         if not self.hippocampus:
             return {"count": 0, "experiences": []}
 
@@ -573,7 +573,7 @@ class OmegaRunner:
         goal: str,
         semantic_analysis: dict[str, Any],
     ) -> TaskGraph:
-        """Phase 3: Decompose goal into parallel task graph."""
+        """Decompose goal into parallel task graph."""
         decomposer = TaskDecomposer()
         result = await decomposer.decompose(goal)
 
@@ -593,7 +593,7 @@ class OmegaRunner:
         return graph
 
     async def _execute_with_protection(self, task_graph: TaskGraph) -> Any:
-        """Phase 4: Execute with Homeostasis protection."""
+        """Execute with Homeostasis protection."""
         return await self.homeostasis.execute_with_protection(task_graph)
 
     async def _crystallize_skill(
@@ -602,7 +602,7 @@ class OmegaRunner:
         task_graph: TaskGraph,
         result: Any,
     ) -> int:
-        """Phase 6: Crystallize successful logic into a skill."""
+        """Crystallize successful logic into a skill."""
         # This would integrate with Evolution/UniversalSolver
         # For now, log the intent
         logger.info(

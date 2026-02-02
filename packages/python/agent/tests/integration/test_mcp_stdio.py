@@ -178,39 +178,30 @@ class TestShutdownCount:
 class TestMCPProtocolHandlers:
     """Test MCP protocol handlers are registered correctly."""
 
-    @pytest.mark.asyncio
-    async def test_server_registers_initialize_handler(self):
-        """Test that server registers the initialize handler."""
-        from omni.agent.mcp_server.server import run_stdio_server
-
-        # The function should register handlers before starting
-        # We can't easily test the internal handlers, but we verify
-        # the function can be imported and called (handlers registered inside)
+    def test_server_registers_handlers(self):
+        """Test that server registers required handlers."""
+        from omni.agent.mcp_server.server import AgentMCPServer
         import inspect
 
-        source = inspect.getsource(run_stdio_server)
-        assert "@server.request" in source, "initialize handler should be registered"
-        assert "handle_initialize" in source, "handle_initialize function should exist"
+        source = inspect.getsource(AgentMCPServer._register_handlers)
 
-    @pytest.mark.asyncio
-    async def test_server_registers_tools_list_handler(self):
-        """Test that server registers the tools/list handler."""
-        from omni.agent.mcp_server.server import run_stdio_server
+        # Check for decorator-based registrations
+        assert "@self._app.list_tools()" in source
+        assert "@self._app.call_tool()" in source
+        assert "@self._app.list_resources()" in source
+        assert "@self._app.read_resource()" in source
+        assert "@self._app.list_prompts()" in source
+        assert "@self._app.get_prompt()" in source
 
+    def test_server_has_specific_tools(self):
+        """Verify server registers special kernel tools."""
+        from omni.agent.mcp_server.server import AgentMCPServer
         import inspect
 
-        source = inspect.getsource(run_stdio_server)
-        assert '@server.request("tools/list")' in source, "tools/list handler should be registered"
-
-    @pytest.mark.asyncio
-    async def test_server_registers_tools_call_handler(self):
-        """Test that server registers the tools/call handler."""
-        from omni.agent.mcp_server.server import run_stdio_server
-
-        import inspect
-
-        source = inspect.getsource(run_stdio_server)
-        assert '@server.request("tools/call")' in source, "tools/call handler should be registered"
+        source = inspect.getsource(AgentMCPServer._register_handlers)
+        assert 'name="omni"' in source
+        assert 'name="sys_query"' in source
+        assert 'name="sys_exec"' in source
 
 
 class TestMCPProtocolCompliance:

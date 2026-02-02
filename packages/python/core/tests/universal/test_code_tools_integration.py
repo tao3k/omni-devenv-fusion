@@ -25,25 +25,25 @@ async def test_smart_ast_search_integration(kernel):
     assert "code_tools.smart_ast_search" in commands
 
     # 2. Verify Execution (Real AST Search)
-    # We search for the SmartSearchEngine class definition within the project
+    # We search for the SmartAstEngine class definition within the project
     result = await kernel.execute_tool(
         "code_tools.smart_ast_search",
         {
-            "query": "class SmartSearchEngine",
-            "path": "assets/skills/code_tools/scripts/smart_ast_search/",
+            "query": "class SmartAstEngine",
+            "path": "assets/skills/code_tools/scripts/smart_ast/",
         },
     )
 
     assert "SEARCH:" in result
-    assert "SmartSearchEngine" in result
+    assert "SmartAstEngine" in result
     assert "L" in result  # Line number present
 
     # 3. Verify Intent-based Search (Semantic)
     result_intent = await kernel.execute_tool(
         "code_tools.smart_ast_search",
-        {"query": "classes", "path": "assets/skills/code_tools/scripts/smart_ast_search/"},
+        {"query": "classes", "path": "assets/skills/code_tools/scripts/smart_ast/"},
     )
-    assert "class SmartSearchEngine" in result_intent
+    assert "SmartAstEngine" in result_intent
 
 
 @pytest.mark.asyncio
@@ -55,7 +55,7 @@ async def test_modular_relative_imports_integration(kernel):
     try:
         await kernel.execute_tool(
             "code_tools.smart_ast_search",
-            {"query": "decorators", "path": "assets/skills/code_tools/scripts/smart_ast_search/"},
+            {"query": "decorators", "path": "assets/skills/code_tools/scripts/smart_ast/"},
         )
     except Exception as e:
         pytest.fail(f"Tool execution failed due to modular import error: {e}")

@@ -40,6 +40,7 @@ omni-mcp = { workspace = true }
 
 [dependency-groups]
 dev = [
+    "omni-test-kit",
     "pytest>=9.0.2",
     "pytest-asyncio>=0.25.0",
     "pytest-xdist>=3.6.0",

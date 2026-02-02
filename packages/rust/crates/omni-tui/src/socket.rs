@@ -11,9 +11,90 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+
+/// Unix Domain Socket client for connecting to Python's socket server
+///
+/// In reverse connection mode, Rust connects to Python's socket as a client.
+/// Used when Python is the server (binds and listens).
+pub struct SocketClient;
+
+impl SocketClient {
+    /// Connect to a Unix Domain Socket and start reading events
+    ///
+    /// # Arguments
+    /// * `socket_path` - Path to the Unix socket created by Python
+    /// * `tx` - Sender channel to push received events to the main thread
+    ///
+    /// # Returns
+    /// JoinHandle for the reader thread
+    pub fn connect(
+        socket_path: &str,
+        tx: Sender<SocketEvent>,
+    ) -> Result<thread::JoinHandle<()>, anyhow::Error> {
+        let path = socket_path.to_string();
+
+        let handle = thread::spawn(move || {
+            // Try to connect with retries
+            let max_retries = 50;
+            let retry_delay = Duration::from_millis(100);
+
+            for i in 0..max_retries {
+                match UnixStream::connect(&path) {
+                    Ok(stream) => {
+                        let _stream_clone = stream.try_clone().unwrap();
+                        let tx_clone = tx.clone();
+
+                        info!("Connected to Python socket at {}", path);
+
+                        // Spawn reader thread
+                        thread::spawn(move || {
+                            let reader = BufReader::new(stream);
+                            for line in reader.lines() {
+                                match line {
+                                    Ok(l) if !l.is_empty() => {
+                                        match serde_json::from_str::<SocketEvent>(&l) {
+                                            Ok(event) => {
+                                                info!("Received event: {}", event.topic);
+                                                if tx_clone.send(event).is_err() {
+                                                    break; // Receiver dropped
+                                                }
+                                            }
+                                            Err(e) => {
+                                                warn!("Failed to parse event: {}", e);
+                                            }
+                                        }
+                                    }
+                                    Ok(_) => continue,
+                                    Err(_) => break,
+                                }
+                            }
+                            info!("Socket reader thread stopped");
+                        });
+
+                        // Keep stream alive
+                        loop {
+                            std::thread::sleep(Duration::from_secs(1));
+                        }
+                    }
+                    Err(e) if i < max_retries - 1 => {
+                        // Not ready yet, retry
+                        std::thread::sleep(retry_delay);
+                    }
+                    Err(e) => {
+                        error!("Failed to connect to socket {}: {}", path, e);
+                        break;
+                    }
+                }
+            }
+        });
+
+        Ok(handle)
+    }
+}
 
 /// Received event from Python
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -61,7 +142,7 @@ impl SocketServer {
     }
 
     /// Start the server in a background thread
-    pub fn start(&self) -> Result<thread::JoinHandle<()>, Box<dyn std::error::Error>> {
+    pub fn start(&self) -> Result<thread::JoinHandle<()>, anyhow::Error> {
         let socket_path = Path::new(&self.socket_path);
 
         // Remove existing socket file
@@ -178,10 +259,7 @@ impl SocketServer {
 }
 
 /// Send an event through Unix socket (for testing)
-pub fn send_event(
-    socket_path: &str,
-    event: &SocketEvent,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn send_event(socket_path: &str, event: &SocketEvent) -> Result<(), anyhow::Error> {
     let mut stream = UnixStream::connect(socket_path)?;
 
     let json = serde_json::to_string(event)?;

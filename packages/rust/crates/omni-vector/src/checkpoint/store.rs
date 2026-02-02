@@ -691,4 +691,140 @@ impl CheckpointStore {
 
         Ok(results)
     }
+
+    /// Get timeline records for time-travel visualization.
+    ///
+    /// Returns structured timeline events with previews, suitable for UI display.
+    /// This method is optimized for fast timeline rendering in Python/Rust.
+    ///
+    /// # Arguments
+    /// * `table_name` - Name of the checkpoint table
+    /// * `thread_id` - Thread ID to get timeline for
+    /// * `limit` - Maximum number of events to return
+    ///
+    /// # Returns
+    /// Vector of TimelineRecord sorted by timestamp descending (newest first)
+    pub async fn get_timeline_records(
+        &self,
+        table_name: &str,
+        thread_id: &str,
+        limit: usize,
+    ) -> Result<Vec<super::TimelineRecord>, VectorStoreError> {
+        use futures::TryStreamExt;
+        use lance::deps::arrow_array::Array;
+
+        let table_path = self.table_path(table_name);
+        if !table_path.exists() {
+            return Ok(Vec::new());
+        }
+
+        let dataset = Dataset::open(table_path.to_string_lossy().as_ref())
+            .await
+            .map_err(VectorStoreError::LanceDB)?;
+
+        let mut scanner = dataset.scan();
+        scanner.project(&[ID_COLUMN, CONTENT_COLUMN, METADATA_COLUMN])?;
+        // PREDICATE PUSH-DOWN: Filter by thread_id column
+        let filter_expr = format!("{} = '{}'", THREAD_ID_COLUMN, thread_id.replace("'", "''"));
+        scanner.filter(&filter_expr)?;
+
+        let mut stream = scanner
+            .try_into_stream()
+            .await
+            .map_err(VectorStoreError::LanceDB)?;
+
+        const PREVIEW_MAX_LEN: usize = 200;
+        let mut checkpoints: Vec<(f64, super::TimelineRecord)> = Vec::new();
+
+        while let Some(batch) = stream.try_next().await.map_err(VectorStoreError::LanceDB)? {
+            let id_col_opt = batch.column_by_name(ID_COLUMN);
+            let content_col_opt = batch.column_by_name(CONTENT_COLUMN);
+            let metadata_col_opt = batch.column_by_name(METADATA_COLUMN);
+
+            if let (Some(id_col), Some(content_col), Some(metadata_col)) =
+                (id_col_opt, content_col_opt, metadata_col_opt)
+            {
+                let id_strs = id_col
+                    .as_any()
+                    .downcast_ref::<lance::deps::arrow_array::StringArray>();
+                let content_strs = content_col
+                    .as_any()
+                    .downcast_ref::<lance::deps::arrow_array::StringArray>();
+                let metadata_strs = metadata_col
+                    .as_any()
+                    .downcast_ref::<lance::deps::arrow_array::StringArray>();
+
+                if let (Some(id_strs), Some(content_strs), Some(metadata_strs)) =
+                    (id_strs, content_strs, metadata_strs)
+                {
+                    for i in 0..batch.num_rows() {
+                        if metadata_strs.is_null(i) || content_strs.is_null(i) || id_strs.is_null(i)
+                        {
+                            continue;
+                        }
+
+                        let id = id_strs.value(i).to_string();
+                        let content = content_strs.value(i).to_string();
+                        let metadata_str = metadata_strs.value(i);
+
+                        // Parse metadata for timestamp, parent_checkpoint_id, and reason
+                        let (timestamp, parent_checkpoint_id, reason) = if let Ok(metadata) =
+                            serde_json::from_str::<serde_json::Value>(&metadata_str)
+                        {
+                            let ts = metadata
+                                .get("timestamp")
+                                .and_then(|v| v.as_f64())
+                                .unwrap_or(0.0);
+                            let pid = metadata
+                                .get("parent_id")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
+                            let rs = metadata
+                                .get("reason")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
+                            (ts, pid, rs)
+                        } else {
+                            (0.0, None, None)
+                        };
+
+                        // Create preview (truncated content)
+                        let preview = if content.len() > PREVIEW_MAX_LEN {
+                            format!("{}...", &content[0..PREVIEW_MAX_LEN])
+                        } else {
+                            content.clone()
+                        };
+
+                        let record = super::TimelineRecord {
+                            checkpoint_id: id,
+                            thread_id: thread_id.to_string(),
+                            step: 0, // Will be set after sorting
+                            timestamp,
+                            preview,
+                            parent_checkpoint_id,
+                            reason,
+                        };
+
+                        checkpoints.push((timestamp, record));
+                    }
+                }
+            }
+        }
+
+        // Sort by timestamp descending and assign step numbers
+        checkpoints.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        checkpoints.truncate(limit);
+
+        let timeline: Vec<super::TimelineRecord> = checkpoints
+            .into_iter()
+            .enumerate()
+            .map(|(step, (_, record))| {
+                let mut record = record;
+                record.step = step as i32;
+                record
+            })
+            .collect();
+
+        Ok(timeline)
+    }
 }

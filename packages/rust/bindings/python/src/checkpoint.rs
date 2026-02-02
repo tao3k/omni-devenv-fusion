@@ -24,6 +24,83 @@ fn get_runtime() -> &'static tokio::runtime::Runtime {
     })
 }
 
+/// Timeline event for time-travel visualization.
+/// V2.1: Aligned with TUI Visual Debugger requirements.
+#[pyclass]
+#[derive(Clone, Debug)]
+pub struct PyTimelineEvent {
+    #[pyo3(get)]
+    pub checkpoint_id: String,
+    #[pyo3(get)]
+    pub thread_id: String,
+    #[pyo3(get)]
+    pub step: i32,
+    #[pyo3(get)]
+    pub timestamp: f64,
+    #[pyo3(get)]
+    pub preview: String,
+    #[pyo3(get)]
+    pub parent_checkpoint_id: Option<String>,
+    #[pyo3(get)]
+    pub reason: Option<String>,
+}
+
+#[pymethods]
+impl PyTimelineEvent {
+    /// Format timestamp as ISO string for display
+    fn iso_timestamp(&self) -> String {
+        let secs = self.timestamp as i64;
+        let nanos = ((self.timestamp - secs as f64) * 1_000_000_000.0) as i32;
+        chrono::DateTime::from_timestamp(secs, nanos as u32)
+            .map(|dt| dt.to_rfc3339())
+            .unwrap_or_else(|| format!("{}", self.timestamp))
+    }
+
+    /// Get relative time string (e.g., "2 minutes ago")
+    fn relative_time(&self) -> String {
+        let now = chrono::Utc::now().timestamp_millis() as f64;
+        let diff_ms = now - self.timestamp;
+        let secs = diff_ms / 1000.0;
+
+        if secs < 60.0 {
+            format!("{:.0}s ago", secs)
+        } else if secs < 3600.0 {
+            format!("{:.0}m ago", secs / 60.0)
+        } else if secs < 86400.0 {
+            format!("{:.0}h ago", secs / 3600.0)
+        } else {
+            format!("{:.1}d ago", secs / 86400.0)
+        }
+    }
+
+    /// Serialize to JSON for TUI socket communication
+    fn to_json(&self) -> String {
+        serde_json::json!({
+            "checkpoint_id": self.checkpoint_id,
+            "thread_id": self.thread_id,
+            "step": self.step,
+            "timestamp": self.timestamp,
+            "preview": self.preview,
+            "parent_checkpoint_id": self.parent_checkpoint_id,
+            "reason": self.reason
+        })
+        .to_string()
+    }
+
+    /// Convert to Python Dict for debugging
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = pyo3::types::PyDict::new(py);
+        dict.set_item("checkpoint_id", &self.checkpoint_id)?;
+        dict.set_item("thread_id", &self.thread_id)?;
+        dict.set_item("step", self.step)?;
+        dict.set_item("timestamp", self.timestamp)?;
+        dict.set_item("preview", &self.preview)?;
+        dict.set_item("parent_checkpoint_id", &self.parent_checkpoint_id)?;
+        dict.set_item("reason", &self.reason)?;
+        Ok(dict.into())
+    }
+}
+
 /// Python wrapper for CheckpointStore (LanceDB-based state persistence)
 #[pyclass]
 pub struct PyCheckpointStore {
@@ -219,6 +296,72 @@ impl PyCheckpointStore {
                 .collect();
 
             Ok(json_results)
+        })
+    }
+
+    /// Get timeline for time-travel visualization.
+    ///
+    /// Returns a list of PyTimelineEvent objects with previews and metadata.
+    /// This method is optimized for fast timeline rendering - all parsing
+    /// and preview generation happens in Rust.
+    ///
+    /// # Arguments
+    /// * `table_name` - Name of the checkpoint table
+    /// * `thread_id` - Thread ID to get timeline for
+    /// * `limit` - Maximum number of events to return (default 20)
+    ///
+    /// # Returns
+    /// List of PyTimelineEvent objects sorted by timestamp descending
+    fn get_timeline(
+        &self,
+        table_name: String,
+        thread_id: String,
+        limit: Option<usize>,
+    ) -> PyResult<Vec<PyTimelineEvent>> {
+        let limit = limit.unwrap_or(20);
+        let store = self.store.clone();
+        let rt = get_runtime();
+
+        rt.block_on(async {
+            let guard = store.lock().await;
+            let records = guard
+                .get_timeline_records(&table_name, &thread_id, limit)
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+            // Convert to PyTimelineEvent objects
+            let events: Vec<PyTimelineEvent> = records
+                .into_iter()
+                .map(|record| PyTimelineEvent {
+                    checkpoint_id: record.checkpoint_id,
+                    thread_id: record.thread_id,
+                    step: record.step,
+                    timestamp: record.timestamp,
+                    preview: record.preview,
+                    parent_checkpoint_id: record.parent_checkpoint_id,
+                    reason: record.reason,
+                })
+                .collect();
+
+            Ok(events)
+        })
+    }
+
+    /// Get checkpoint content by ID.
+    fn get_checkpoint_content(
+        &self,
+        table_name: String,
+        checkpoint_id: String,
+    ) -> PyResult<Option<String>> {
+        let store = self.store.clone();
+        let rt = get_runtime();
+
+        rt.block_on(async {
+            let guard = store.lock().await;
+            guard
+                .get_by_id(&table_name, &checkpoint_id)
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
         })
     }
 }

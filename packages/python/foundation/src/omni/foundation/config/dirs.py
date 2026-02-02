@@ -364,19 +364,46 @@ def get_vector_db_path() -> Path:
     - Router: get_vector_db_path() / "router.lance"
     - Librarian: get_vector_db_path() / "knowledge.lance"
 
-    NOTE: Use get_database_path() from omni.agent.cli.commands.reindex
-    for centralized database path management.
-
     Returns:
         Path to .cache/omni-vector/
-
-    Usage:
-        >>> from omni.foundation.config.dirs import get_vector_db_path
-        >>> db_dir = get_vector_db_path()
-        >>> # Returns: /project/.cache/omni-vector/
-        >>> # Use with: db_dir / "router.lance"
     """
     return get_cache_dir("omni-vector")
+
+
+def get_database_paths() -> dict[str, str]:
+    """Get all database paths used by Omni.
+
+    Returns a dict with database name -> absolute path.
+    All paths are relative to the vector DB base directory.
+
+    Databases:
+        skills   - Main skill tools database
+        router   - Router/hybrid search index
+        knowledge - Knowledge base
+        memory_hippocampus - Long-term memory/experience storage
+    """
+    base = get_vector_db_path()
+    return {
+        "skills": str(base / "skills.lance"),
+        "router": str(base / "router.lance"),
+        "knowledge": str(base / "knowledge.lance"),
+        "memory_hippocampus": str(base / "memory.hippocampus.lance"),
+    }
+
+
+def get_database_path(name: str) -> str:
+    """Get the path for a specific database.
+
+    Args:
+        name: Database name (skills, router, knowledge, memory)
+
+    Returns:
+        Absolute path to the database directory
+    """
+    paths = get_database_paths()
+    if name not in paths:
+        raise ValueError(f"Unknown database: {name}. Valid: {list(paths.keys())}")
+    return paths[name]
 
 
 def get_checkpoints_db_path() -> Path:
@@ -407,20 +434,6 @@ def get_checkpoints_db_path() -> Path:
     return project_root / db_path
 
 
-def get_memory_db_path() -> Path:
-    """Get the memory LanceDB database path.
-
-    Returns:
-        Path to the memory database (.cache/omni-vector/memory.lance)
-
-    Usage:
-        >>> from omni.foundation.config.dirs import get_memory_db_path
-        >>> db_path = get_memory_db_path()
-        >>> # Returns: /project/.cache/omni-vector/memory.lance
-    """
-    return get_vector_db_path() / "memory.lance"
-
-
 # =============================================================================
 # Exports
 # =============================================================================
@@ -435,11 +448,12 @@ __all__ = [
     "PRJ_RUNTIME",
     "get_cache_dir",
     "get_checkpoints_db_path",
+    "get_database_path",
+    "get_database_paths",
     "get_vector_db_path",
     "get_checkpoint_table_name",
     "get_config_dir",
     "get_data_dir",
-    "get_memory_db_path",
     "get_prj_dir",
     "get_runtime_dir",
     "get_skills_dir",

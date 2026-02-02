@@ -140,6 +140,8 @@ class _SkillDirCallable:
         Usage:
             SKILLS_DIR.git  # -> Path("assets/skills/git")
         """
+        if name.startswith("_"):
+            raise AttributeError(f"'_SkillDirCallable' object has no attribute '{name}'")
         return self(name)
 
     def definition_file(self, skill: str | None = None) -> Path:

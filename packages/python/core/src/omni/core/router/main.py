@@ -140,7 +140,7 @@ class OmniRouter:
 
         self._initialized = True
 
-        stats = self._indexer.get_stats()
+        stats = await self._indexer.get_stats()
         logger.info(f"🧠 OmniRouter initialized with {stats['entries_indexed']} indexed entries")
 
     async def route(self, query: str, context: dict[str, Any] | None = None) -> RouteResult | None:
@@ -286,11 +286,11 @@ class OmniRouter:
         """Check if the router is ready."""
         return self._initialized and self._indexer.is_ready
 
-    def get_stats(self) -> dict[str, Any]:
+    async def get_stats(self) -> dict[str, Any]:
         """Get router statistics."""
         return {
             "initialized": self._initialized,
-            "indexer_stats": self._indexer.get_stats(),
+            "indexer_stats": await self._indexer.get_stats(),
             "hybrid_stats": self._hybrid.stats(),
             "cache_stats": self._cache.stats(),
             "is_ready": self.is_ready(),

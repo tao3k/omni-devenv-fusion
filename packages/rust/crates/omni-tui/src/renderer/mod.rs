@@ -10,7 +10,7 @@ use crossterm::{
     terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
-use std::{error::Error, io::stdout};
+use std::io::stdout;
 
 /// TUI Renderer using Crossterm backend
 pub struct TuiRenderer {
@@ -20,7 +20,7 @@ pub struct TuiRenderer {
 
 impl TuiRenderer {
     /// Create a new TUI renderer
-    pub fn new() -> Result<Self, Box<dyn Error>> {
+    pub fn new() -> Result<Self, anyhow::Error> {
         enable_raw_mode()?;
 
         let backend = CrosstermBackend::new(stdout());
@@ -35,7 +35,7 @@ impl TuiRenderer {
     }
 
     /// Run the main event loop
-    pub fn run(&mut self, state: &mut AppState) -> Result<(), Box<dyn Error>> {
+    pub fn run(&mut self, state: &mut AppState) -> Result<(), anyhow::Error> {
         loop {
             // Render current state
             self.terminal.draw(|f| {
@@ -73,7 +73,7 @@ impl TuiRenderer {
     }
 
     /// Restore terminal to normal mode
-    pub fn restore_terminal(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn restore_terminal(&mut self) -> Result<(), anyhow::Error> {
         disable_raw_mode()?;
         execute!(stdout(), Clear(ClearType::All))?;
         Ok(())

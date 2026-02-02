@@ -473,11 +473,12 @@ class TestHippocampusLogic:
         # Should include command summary
         assert "find" in formatted.lower() or "glob" in formatted.lower()
 
-    def test_get_stats(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_get_stats(self, tmp_path):
         """Test getting hippocampus statistics structure."""
         hippocampus, _ = self._create_hippocampus_with_mock_dir(tmp_path)
 
-        stats = hippocampus.get_stats()
+        stats = await hippocampus.get_stats()
 
         # Verify stats structure
         assert "trace_count" in stats

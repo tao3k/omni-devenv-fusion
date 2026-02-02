@@ -95,9 +95,16 @@ class ScriptLoader:
 
             # Separate underscore and non-underscore files
             # Load non-underscore files first, then underscore files
-            # This ensures modules with external deps load before modules that depend on them
-            non_underscore_files = sorted([f for f in all_files if not f.stem.startswith("_")])
-            underscore_files = sorted([f for f in all_files if f.stem.startswith("_")])
+            non_underscore_files = [f for f in all_files if not f.stem.startswith("_")]
+            underscore_files = [f for f in all_files if f.stem.startswith("_")]
+
+            # Sort by path depth (shallower first) then alphabetically
+            # This ensures base modules load before modules that depend on them
+            def depth_then_name(p: Path) -> tuple[int, str]:
+                return (len(p.relative_to(self.scripts_path).parts), str(p))
+
+            non_underscore_files.sort(key=depth_then_name)
+            underscore_files.sort(key=depth_then_name)
 
             # Load in order: non-underscore first, then underscore
             ordered_files = non_underscore_files + underscore_files
@@ -135,20 +142,28 @@ class ScriptLoader:
 
             for i in range(1, len(parts)):
                 parent_pkg = ".".join(parts[:i])
+                # Calculate the path for this parent package
+                # e.g., "code_tools.scripts.smart_ast" -> scripts_path / "smart_ast"
+                # Note: parts[1] is 'scripts' which is already in scripts_path_str
+                # so we start from parts[2] (the first subdirectory after scripts)
+                parent_parts = parts[2:i]  # Skip skill_name and 'scripts'
+                if parent_parts:
+                    parent_path = scripts_path_str
+                    for part in parent_parts:
+                        parent_path = str(Path(parent_path) / part)
+                else:
+                    parent_path = scripts_path_str
+
                 if parent_pkg not in sys.modules:
-                    # Create a dummy namespace package
+                    # Create a dummy namespace package with correct path
                     m = types.ModuleType(parent_pkg)
-                    m.__path__ = [scripts_path_str]  # Include scripts path for sibling imports
+                    m.__path__ = [parent_path]
                     sys.modules[parent_pkg] = m
                 else:
-                    # Update existing package's __path__ to include scripts directory
-                    # This enables 'from git.scripts.commit_state import ...' to work
+                    # Update existing package's __path__ to include the correct directory
                     parent_mod = sys.modules[parent_pkg]
-                    if (
-                        hasattr(parent_mod, "__path__")
-                        and scripts_path_str not in parent_mod.__path__
-                    ):
-                        parent_mod.__path__.append(scripts_path_str)
+                    if hasattr(parent_mod, "__path__") and parent_path not in parent_mod.__path__:
+                        parent_mod.__path__.append(parent_path)
 
             # 2. Load the actual module
             spec = importlib.util.spec_from_file_location(full_module_name, path)

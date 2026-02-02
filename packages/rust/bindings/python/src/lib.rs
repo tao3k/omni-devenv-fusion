@@ -36,6 +36,7 @@ mod navigation;
 mod scanner;
 mod security;
 mod sniffer;
+mod tokenizer; // Add tokenizer module
 mod tui;
 pub mod utils;
 pub mod vector;
@@ -50,6 +51,7 @@ mod watcher; // Empty module when feature disabled
 // ============================================================================
 
 pub use checkpoint::PyCheckpointStore;
+pub use checkpoint::PyTimelineEvent;
 pub use context::{PyAssemblyResult, PyContextAssembler, PyContextPruner}; // Add PyContextPruner here
 pub use editor::{
     PyBatchRefactorStats, batch_structural_replace, structural_apply, structural_preview,
@@ -67,8 +69,8 @@ pub use io::{
 };
 pub use navigation::{get_file_outline, search_code, search_directory, search_with_rules};
 pub use scanner::{
-    PySkillMetadata, PySyncReport, diff_skills, scan_skill, scan_skill_from_content,
-    scan_skill_tools,
+    PySkillMetadata, PySkillScanner, PySyncReport, diff_skills, scan_skill,
+    scan_skill_from_content, scan_skill_tools,
 };
 pub use security::{
     PySandboxMode, PySandboxResult, PySandboxRunner, PySecurityViolation, check_permission,
@@ -79,6 +81,9 @@ pub use sniffer::{
 };
 pub use utils::run_safe;
 pub use vector::{PyToolRecord, PyVectorStore, create_vector_store_py};
+
+// Tokenizer exports
+pub use tokenizer::{PyMessage, py_count_tokens, py_truncate, py_truncate_middle};
 
 // AST Extraction
 pub use ast::{
@@ -162,11 +167,19 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m
     )?)?;
     m.add_class::<PyCheckpointStore>()?;
+    m.add_class::<PyTimelineEvent>()?;
 
     // Context Assembler (Parallel I/O + Templating + Token Counting)
     m.add_class::<PyContextAssembler>()?;
     m.add_class::<PyAssemblyResult>()?;
-    m.add_class::<PyContextPruner>()?; // Add PyContextPruner here
+    m.add_class::<PyContextPruner>()?;
+
+    // Tokenizer (High-performance token counting and context pruning)
+    m.add_function(pyo3::wrap_pyfunction!(py_count_tokens, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(py_truncate, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(py_truncate_middle, m)?)?;
+    m.add_class::<tokenizer::PyContextPruner>()?;
+    m.add_class::<tokenizer::PyMessage>()?;
 
     // AST Extraction (Project Cerebellum - High Precision Context)
     m.add_function(pyo3::wrap_pyfunction!(py_extract_items, m)?)?;
@@ -181,6 +194,9 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(pyo3::wrap_pyfunction!(scan_skill, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(scan_skill_from_content, m)?)?;
     m.add_class::<PySkillMetadata>()?;
+
+    // PySkillScanner - Holographic Registry Foundation
+    m.add_class::<PySkillScanner>()?;
 
     // OmniCell - Nushell Native Bridge (File System Replacement)
     m.add_class::<executor::PyOmniCell>()?;

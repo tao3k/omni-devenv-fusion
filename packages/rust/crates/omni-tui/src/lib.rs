@@ -12,11 +12,13 @@ pub mod state;
 pub use components::{FoldablePanel, PanelState, TuiApp};
 pub use event::{Event, EventHandler, TuiEvent};
 pub use renderer::TuiRenderer;
-pub use socket::{SocketEvent, SocketServer};
-pub use state::{AppState, PanelType, ReceivedEvent};
+pub use socket::{SocketClient, SocketEvent, SocketServer};
+pub use state::{
+    AppState, ExecutionState, LogWindow, MAX_LOG_LINES, PanelType, ReceivedEvent, TaskItem,
+    TaskStatus,
+};
 
 use log::info;
-use std::error::Error;
 
 /// Initialize the TUI subsystem with logging
 pub fn init_logger() {
@@ -26,9 +28,9 @@ pub fn init_logger() {
 }
 
 /// Main entry point for running the TUI application
-pub fn run_tui<F>(title: &str, app_creator: F) -> Result<(), Box<dyn Error>>
+pub fn run_tui<F>(title: &str, app_creator: F) -> Result<(), anyhow::Error>
 where
-    F: FnOnce(&mut AppState) -> Result<(), Box<dyn Error>>,
+    F: FnOnce(&mut AppState) -> Result<(), anyhow::Error>,
 {
     init_logger();
 

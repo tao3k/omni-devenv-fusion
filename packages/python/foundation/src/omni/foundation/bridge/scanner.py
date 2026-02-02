@@ -71,7 +71,7 @@ class PythonSkillScanner:
     Reads from LanceDB (populated by Rust scanner).
     """
 
-    def scan_directory(self) -> list[DiscoveredSkillRules]:
+    async def scan_directory(self) -> list[DiscoveredSkillRules]:
         """
         Load skills from LanceDB.
 
@@ -79,15 +79,15 @@ class PythonSkillScanner:
             List of DiscoveredSkillRules with rules and metadata.
         """
         try:
-            import asyncio
             from omni.foundation.bridge import RustVectorStore
             from omni.foundation.config.dirs import get_vector_db_path
 
             # Use skills.lance specifically for tool registry
             skills_path = str(Path(get_vector_db_path()) / "skills.lance")
             store = RustVectorStore(skills_path)
-            # Use asyncio.run() - now works with nest_asyncio.patch
-            tools = asyncio.run(store.list_all_tools())
+
+            # Use await instead of asyncio.run
+            tools = await store.list_all_tools()
 
             # Group tools by skill_name
             skills_by_name: dict[str, dict] = {}
@@ -142,7 +142,7 @@ class PythonSkillScanner:
             logger.error(f"Failed to load skills from LanceDB: {e}")
             return []
 
-    def parse_skill_metadata(self, skill_path: str) -> dict[str, Any]:
+    async def parse_skill_metadata(self, skill_path: str) -> dict[str, Any]:
         """
         Retrieve metadata for a specific skill.
 
@@ -152,17 +152,17 @@ class PythonSkillScanner:
         Returns:
             Metadata dict for the skill.
         """
-        skills = self.scan_directory()
+        skills = await self.scan_directory()
         for skill in skills:
             if skill.skill_path == skill_path or skill.skill_path.endswith(skill_path):
                 return skill.metadata
         return {"name": skill_path}
 
 
-def scan_skills_with_rules() -> list[DiscoveredSkillRules]:
+async def scan_skills_with_rules() -> list[DiscoveredSkillRules]:
     """Convenience function to load skills from LanceDB."""
     scanner = PythonSkillScanner()
-    return scanner.scan_directory()
+    return await scanner.scan_directory()
 
 
 __all__ = [

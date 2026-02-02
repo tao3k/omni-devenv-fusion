@@ -4,8 +4,8 @@
 //! - Security layer for mutation commands
 //! - Forced JSON output transformation
 //! - Structured error handling
-//! - AST-based semantic analysis (Phase 2)
-//! - Safe query building (Phase 3)
+//! - AST-based semantic analysis
+//! - Safe query building
 
 mod ast_analyzer;
 mod error;

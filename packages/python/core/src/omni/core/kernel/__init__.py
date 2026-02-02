@@ -6,10 +6,10 @@ Microkernel architecture core:
 - Components: Registry, Skill Plugin, Skill Loader, MCP Tool Adapter
 - Lifecycle: State machine management
 
-Kernel Boot Phases (async, ordered):
-=====================================
+Lifecycle Flow (async, ordered):
+================================
 
-Phase 1: Lifecycle INIT -> READY (_on_ready)
+Stage 1: Lifecycle INIT -> READY (_on_ready)
   Step 1.1: Initialize skill context (instant)
   Step 1.2: Load universal skills from Index (DB read + factory.create)
   Step 1.3: Load each skill's extensions & scripts (may trigger imports)
@@ -17,7 +17,7 @@ Phase 1: Lifecycle INIT -> READY (_on_ready)
   Step 1.5: Load Sniffer rules (DB read)
   Step 1.6: Log summary
 
-Phase 2: Lifecycle READY -> RUNNING (_on_running)
+Stage 2: Lifecycle READY -> RUNNING (_on_running)
   Step 2.1: Start file watcher (if enabled)
   Step 2.2: Enable skill hot-reload
 

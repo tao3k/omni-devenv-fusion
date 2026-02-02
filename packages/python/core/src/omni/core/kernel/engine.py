@@ -57,7 +57,7 @@ class Kernel:
         await kernel.initialize()
         await kernel.start()
         # Secure execution:
-        await kernel.execute_tool("filesystem.read_files", {"path": "..."}, caller="calculator")
+        await kernel.execute_tool("git.status", {}, caller="researcher")
         await kernel.shutdown()
     """
 
@@ -208,9 +208,9 @@ class Kernel:
         All tool invocations must pass through this method for proper permission enforcement.
 
         Args:
-            tool_name: Full tool name in format "skill.command" (e.g., "filesystem.read_files")
+            tool_name: Full tool name in format "skill.command" (e.g., "git.status")
             args: Tool arguments as a dictionary
-            caller: Name of the calling skill (e.g., "calculator"). None = Root/User (full access)
+            caller: Name of the calling skill (e.g., "researcher"). None = Root/User (full access)
 
         Returns:
             Tool execution result (CommandResult)
@@ -304,7 +304,7 @@ class Kernel:
         """Get list of discovered skills."""
         return self._discovered_skills
 
-    def discover_skills(self) -> list[Any]:
+    async def discover_skills(self) -> list[Any]:
         """Discover all skills using Rust scanner.
 
         This is called during kernel boot for fast skill discovery.
@@ -314,7 +314,9 @@ class Kernel:
         """
         if not self._discovered_skills:
             logger.info(f"🔍 Discovering skills in {self._skills_dir}")
-            self._discovered_skills = self.discovery_service.discover_all([str(self._skills_dir)])
+            self._discovered_skills = await self.discovery_service.discover_all(
+                [str(self._skills_dir)]
+            )
             # Note: Discovery count is logged by discovery_service.discover_all()
         return self._discovered_skills
 
@@ -336,7 +338,7 @@ class Kernel:
         skill = UniversalScriptSkill(skill_name=skill_name, skill_path=skill_path)
         return skill
 
-    def load_all_universal_skills(self) -> list[Any]:
+    async def load_all_universal_skills(self) -> list[Any]:
         """Load all discovered skills using UniversalScriptSkill.
 
         Returns:
@@ -348,7 +350,7 @@ class Kernel:
         factory = UniversalSkillFactory(self._project_root)
 
         # Use Index-based discovery (Rust-First Indexing)
-        discovered_skills = self.discover_skills()
+        discovered_skills = await self.discover_skills()
 
         skills = []
         for ds in discovered_skills:
@@ -384,13 +386,12 @@ class Kernel:
 
             # Auto-discover, load, and register all skills
             try:
-                # Discover skills
-                discovered_skills = self.discover_skills()
-
+                # Run discovery in an async manner
                 def load_skills_sync():
                     """Load all skills synchronously in a thread."""
 
                     async def load_all_skills_async():
+                        discovered_skills = await self.discover_skills()
                         for ds in discovered_skills:
                             try:
                                 from omni.core.skills.universal import UniversalSkillFactory
@@ -414,7 +415,9 @@ class Kernel:
                     future = executor.submit(load_skills_sync)
                     future.result()  # Wait for completion
 
-                logger.debug(f"Skill context initialized with {len(discovered_skills)} skills")
+                logger.debug(
+                    f"Skill context initialized with {self._skill_context.skills_count} skills"
+                )
             except Exception as e:
                 logger.warning(f"Failed to auto-load skills: {e}")
 
@@ -508,7 +511,8 @@ class Kernel:
                 )
 
         await indexer.index_skills(skills_data)
-        logger.info(f"Cortex built with {indexer.get_stats()['entries_indexed']} entries")
+        stats = await indexer.get_stats()
+        logger.info(f"Cortex built with {stats['entries_indexed']} entries")
 
     # =========================================================================
     # Event-Driven Reactor (Reactive Architecture)
@@ -689,7 +693,7 @@ class Kernel:
         # Step 2: Load and Register Universal Skills
         # Use UniversalScriptSkill to load all skills from assets
         logger.info(f"📦 Loading skills from {self._skills_dir}...")
-        loaded_skills = self.load_all_universal_skills()
+        loaded_skills = await self.load_all_universal_skills()
 
         # Count total commands
         total_commands = 0
@@ -810,7 +814,7 @@ class Kernel:
         if hasattr(self, "_router") and self._router is not None:
             if hasattr(self._router, "_semantic") and hasattr(self._router._semantic, "_indexer"):
                 indexer = self._router._semantic._indexer
-                stats = indexer.get_stats()
+                stats = await indexer.get_stats()
                 if stats.get("entries_indexed", 0) > 0:
                     logger.info(f"💾 Index contains {stats['entries_indexed']} entries (in-memory)")
 

@@ -40,12 +40,10 @@ class TestRunCommandExecution:
             _execute_task_via_kernel,
             _print_banner,
             _print_session_report,
-            _run_repl,
         )
 
         assert callable(_print_session_report)
         assert callable(_print_banner)
-        assert callable(_run_repl)
         assert callable(_execute_task_via_kernel)
 
 

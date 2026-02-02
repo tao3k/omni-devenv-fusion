@@ -188,33 +188,34 @@ def register_run_command(parent_app: typer.Typer):
         # Omega Mode: Full autonomous execution
         if omega:
             from omni.agent.core.omni import OmegaRunner, MissionConfig
-            from omni.agent.cli.console import init_tui, shutdown_tui, get_tui_bridge
+            from omni.agent.cli.tui_bridge import TUIManager, TUIConfig
 
             async def run_omega(goal: str, socket_path: str):
-                # Initialize TUI bridge
-                init_tui(socket_path)
-                bridge = get_tui_bridge()
+                # Create TUI manager with lifecycle
+                config = TUIConfig(socket_path=socket_path, enabled=True)
+                manager = TUIManager(config)
 
-                # Create mission config
-                config = MissionConfig(
-                    goal=goal,
-                    enable_isolation=True,
-                    enable_conflict_detection=True,
-                    enable_memory_recall=True,
-                    enable_skill_crystallization=True,
-                    auto_merge=True,
-                    auto_recovery=True,
-                )
+                async with manager.lifecycle() as bridge:
+                    # Create mission config
+                    config = MissionConfig(
+                        goal=goal,
+                        enable_isolation=True,
+                        enable_conflict_detection=True,
+                        enable_memory_recall=True,
+                        enable_skill_crystallization=True,
+                        auto_merge=True,
+                        auto_recovery=True,
+                    )
 
-                # Create and run Omega (pass TUI bridge for event forwarding)
-                runner = OmegaRunner(config=config, tui_bridge=bridge)
-                start_time = time.time()
+                    # Create and run Omega (pass TUI bridge for event forwarding)
+                    runner = OmegaRunner(config=config, tui_bridge=bridge)
+                    start_time = time.time()
 
-                try:
-                    result = await runner.run_mission(goal)
-                    return result
-                finally:
-                    shutdown_tui()
+                    try:
+                        result = await runner.run_mission(goal)
+                        return result
+                    finally:
+                        pass  # cleanup handled by context manager
 
             result = asyncio.run(run_omega(task, tui_socket))
 
@@ -259,6 +260,7 @@ def register_run_command(parent_app: typer.Typer):
 
             async def run_graph(request):
                 import json  # Ensure json is available
+                from rich.table import Table  # Local import to avoid scope issues
 
                 # Use standard checkpointer for interrupt support
                 from langgraph.checkpoint.memory import MemorySaver
@@ -542,7 +544,10 @@ def register_run_command(parent_app: typer.Typer):
                         break
 
                     except Exception as e:
+                        import traceback
+
                         console.print(f"[bold red]❌ Graph Error: {e}[/bold red]")
+                        console.print(f"[dim]Traceback: {traceback.format_exc()}[/dim]")
 
                 # --- SESSION DASHBOARD ---
                 duration = asyncio.get_event_loop().time() - session_start

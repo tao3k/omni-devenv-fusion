@@ -26,6 +26,7 @@ anyhow = "1.0.100"
 thiserror = "2.0.17"
 walkdir = "2.5.0"
 uuid = { version = "1.11", features = ["v4"] }
+chrono = { version = "0.4.38", default-features = false }
 
 # Git operations (libgit2 for performance)
 git2 = "0.20.3"

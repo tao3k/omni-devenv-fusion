@@ -69,7 +69,7 @@ class TestOmniRouter:
         await router.initialize(skills)
 
         assert router._initialized is True
-        stats = router._indexer.get_stats()
+        stats = await router._indexer.get_stats()
         assert stats["entries_indexed"] == 3  # 1 skill + 2 commands
 
     @pytest.mark.asyncio
@@ -96,7 +96,7 @@ class TestOmniRouter:
         await router.initialize(skills)
 
         assert router._initialized is True
-        stats = router._indexer.get_stats()
+        stats = await router._indexer.get_stats()
         # 2 skills + 1 git command + 2 memory commands = 5
         assert stats["entries_indexed"] == 5
 
@@ -125,7 +125,7 @@ class TestOmniRouter:
         await router.initialize([])
 
         assert router._initialized is True
-        stats = router._indexer.get_stats()
+        stats = await router._indexer.get_stats()
         assert stats["entries_indexed"] == 0
 
     @pytest.mark.asyncio
@@ -365,11 +365,12 @@ class TestOmniRouter:
 
         assert router.is_ready() is True
 
-    def test_get_stats(self):
+    @pytest.mark.asyncio
+    async def test_get_stats(self):
         """Test getting router statistics."""
         router = OmniRouter()
 
-        stats = router.get_stats()
+        stats = await router.get_stats()
 
         assert "initialized" in stats
         assert "indexer_stats" in stats

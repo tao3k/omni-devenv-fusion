@@ -228,22 +228,22 @@ impl NuSystemBridge {
     /// Security pre-flight check.
     ///
     /// Uses AST-based analysis (ast-grep) and external tools (shellcheck).
-    /// Phase 1: Quick pattern check
-    /// Phase 2: ShellCheck integration (if enabled)
+    /// Step 1: Quick pattern check
+    /// Step 2: ShellCheck integration (if enabled)
     pub fn validate_safety(&self, cmd: &str) -> Result<()> {
-        // Phase 1: Quick pattern check (immutable set)
+        // Step 1: Quick pattern check (immutable set)
         if Self::has_dangerous_pattern(cmd) {
             return Err(ExecutorError::SecurityViolation(
                 "Dangerous pattern detected".to_string(),
             ));
         }
 
-        // Phase 2: ShellCheck validation (if enabled)
+        // Step 2: ShellCheck validation (if enabled)
         if self.config.enable_shellcheck {
             self.run_shellcheck()?;
         }
 
-        // Phase 3: Whitelist check
+        // Step 3: Whitelist check
         if !self.config.allowed_commands.is_empty() {
             self.check_whitelist(cmd)?;
         }

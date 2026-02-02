@@ -1,14 +1,14 @@
+"""Context Management Module - Rust-accelerated Context Pruning.
+
+This module provides high-performance context window management for
+LangGraph workflows, including token counting, message compression,
+and cognitive re-anchoring for AutoFix recovery.
+
+Exports:
+    ContextPruner: Rust-accelerated context pruner.
+    create_pruner_for_model: Factory function for model-specific pruners.
 """
-Context Optimization Module (Token Diet)
 
-Smart context management for long-running conversations.
+from omni.agent.core.context.pruner import ContextPruner, create_pruner_for_model
 
-Submodules:
-- pruner: Intelligent message trimming strategies
-- manager: Context lifecycle and state management
-"""
-
-from .manager import ContextManager
-from .pruner import ContextPruner
-
-__all__ = ["ContextManager", "ContextPruner"]
+__all__ = ["ContextPruner", "create_pruner_for_model"]

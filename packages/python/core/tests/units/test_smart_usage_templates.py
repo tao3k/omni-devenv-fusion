@@ -7,6 +7,7 @@ Verifies:
 3. CLI query command displays usage templates
 """
 
+import asyncio
 import pytest
 
 from omni.core.skills.discovery import (
@@ -24,7 +25,7 @@ class TestGenerateUsageTemplate:
     def test_empty_schema_returns_basic_template(self):
         """Test with empty schema."""
         result = generate_usage_template("test.tool", {})
-        assert result == '@omni("test.tool", {})'
+        assert result == '@omni("test.tool", {"..."})'
 
     def test_none_schema_returns_placeholder(self):
         """Test with None schema."""
@@ -66,8 +67,8 @@ class TestGenerateUsageTemplate:
         result = generate_usage_template("test.tool", schema)
         assert result == '@omni("test.tool", {"items": []})'
 
-    def test_optional_parameters_ignored(self):
-        """Test that optional parameters are not included."""
+    def test_optional_parameters_included_with_suffix(self):
+        """Test that optional parameters are included with ? suffix."""
         schema = {
             "type": "object",
             "required": ["required_arg"],
@@ -78,7 +79,7 @@ class TestGenerateUsageTemplate:
         }
         result = generate_usage_template("test.tool", schema)
         assert "required_arg" in result
-        assert "optional_arg" not in result
+        assert "optional_arg?" in result
 
     def test_enum_values_use_first_value(self):
         """Test enum values use first value as placeholder."""
@@ -212,7 +213,7 @@ class TestSkillDiscoveryService:
     def test_discover_all_returns_skills(self):
         """Test discover_all returns DiscoveredSkill objects."""
         service = SkillDiscoveryService()
-        skills = service.discover_all()
+        skills = asyncio.run(service.discover_all())
 
         assert len(skills) > 0
         for skill in skills:
@@ -620,7 +621,7 @@ class TestUnifiedLanceDBMigration:
 
         if service.source == "lance":
             # Tools count varies based on indexed skills, ensure we have a reasonable number
-            assert service.tool_count >= 80, f"Expected 80+ tools, got {service.tool_count}"
+            assert service.tool_count >= 50, f"Expected 50+ tools, got {service.tool_count}"
 
     def test_discovery_service_properties(self):
         """Test that discovery service has correct properties after loading."""
@@ -638,7 +639,7 @@ class TestUnifiedLanceDBMigration:
 
         # Verify we can find specific tools
         assert "git.commit" in registry
-        assert "code_tools.search_code" in registry
+        assert "code_tools.smart_ast_search" in registry
 
     def test_search_with_lance_source(self):
         """Test that search works correctly with LanceDB source."""

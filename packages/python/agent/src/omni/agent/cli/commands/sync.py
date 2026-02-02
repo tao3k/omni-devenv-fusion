@@ -83,56 +83,35 @@ def _find_markdown_files(directory: str) -> list[str]:
     return files
 
 
-def _sync_knowledge(clear: bool = False) -> dict[str, Any]:
-    """Internal logic to sync knowledge base."""
-    import asyncio
+async def _sync_knowledge(clear: bool = False) -> dict[str, Any]:
+    """Internal logic to sync knowledge base (Librarian)."""
     from omni.core.knowledge.librarian import Librarian
-    from rich.progress import (
-        Progress,
-        SpinnerColumn,
-        TextColumn,
-        BarColumn,
-        TaskProgressColumn,
-        TimeElapsedColumn,
-    )
+    from omni.foundation.config.docs import DOCS_DIR
 
     try:
-        librarian = Librarian(collection="knowledge")
-        if not librarian.is_ready:
-            return {"status": "error", "details": "Knowledge base not ready"}
+        docs_path = DOCS_DIR()
+        if not docs_path.exists():
+            return {"status": "skipped", "details": "Docs dir not found"}
 
+        librarian = Librarian()
         if clear:
-            librarian.clear()
+            await librarian.clear()
 
-        # Define source directories
-        sources = ["docs", "assets/knowledge", "assets/how-to"]
-
-        # Collect all files first
-        all_files = []
-        for src in sources:
-            all_files.extend(_find_markdown_files(src))
-
-        total_found = len(all_files)
+        # Find and index markdown files
+        files = _find_markdown_files(str(docs_path))
+        total_found = len(files)
         total_indexed = 0
 
-        if total_found > 0:
-            # Use detailed progress bar
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                TaskProgressColumn(),
-                TimeElapsedColumn(),
-                console=console,
-            ) as progress:
-                task = progress.add_task("Indexing knowledge...", total=total_found)
-                for file_path in all_files:
-                    if librarian.ingest_file(file_path, {"type": "documentation"}):
-                        total_indexed += 1
-                    progress.advance(task)
+        for file_path in files:
+            try:
+                content = Path(file_path).read_text()
+                await librarian.index_document(file_path, content)
+                total_indexed += 1
+            except Exception:
+                pass
 
         # Commit cached entries to vector store
-        committed = asyncio.run(librarian.commit())
+        committed = await librarian.commit()
 
         return {
             "status": "success",
@@ -142,7 +121,7 @@ def _sync_knowledge(clear: bool = False) -> dict[str, Any]:
         return {"status": "error", "details": str(e)}
 
 
-def _sync_skills() -> dict[str, Any]:
+async def _sync_skills() -> dict[str, Any]:
     """Internal logic to sync skill registry (Cortex)."""
     from omni.core.skills.discovery import SkillDiscoveryService
     from omni.foundation.config.skills import SKILLS_DIR
@@ -154,7 +133,7 @@ def _sync_skills() -> dict[str, Any]:
 
         discovery = SkillDiscoveryService()
         # This triggers the Rust scanner to update the index
-        skills = discovery.discover_all()
+        skills = await discovery.discover_all()
 
         return {"status": "success", "details": f"Registered {len(skills)} skills"}
     except Exception as e:
@@ -194,21 +173,24 @@ def main(
     # Default action: Sync All
     import asyncio
 
-    if not json_output:
-        console.print("[dim]Running full system sync...[/dim]")
+    async def run_sync_all():
+        if not json_output:
+            console.print("[dim]Running full system sync...[/dim]")
 
-    stats = {}
+        stats = {}
 
-    # 1. Skills (Cortex)
-    stats["skills"] = _sync_skills()
+        # 1. Skills (Cortex)
+        stats["skills"] = await _sync_skills()
 
-    # 2. Knowledge (Librarian)
-    stats["knowledge"] = _sync_knowledge()
+        # 2. Knowledge (Librarian)
+        stats["knowledge"] = await _sync_knowledge()
 
-    # 3. Memory (Hippocampus)
-    stats["memory"] = asyncio.run(_sync_memory())
+        # 3. Memory (Hippocampus)
+        stats["memory"] = await _sync_memory()
 
-    _print_sync_report("Full System Sync", stats, json_output)
+        _print_sync_report("Full System Sync", stats, json_output)
+
+    asyncio.run(run_sync_all())
 
 
 @sync_app.command("knowledge")
@@ -219,7 +201,9 @@ def sync_knowledge_cmd(
     """
     Sync documentation into the knowledge base.
     """
-    stats = {"knowledge": _sync_knowledge(clear)}
+    import asyncio
+
+    stats = {"knowledge": asyncio.run(_sync_knowledge(clear))}
     _print_sync_report("Knowledge Base", stats, json_output)
 
 
@@ -230,7 +214,9 @@ def sync_skills_cmd(
     """
     Sync skill registry (Cortex).
     """
-    stats = {"skills": _sync_skills()}
+    import asyncio
+
+    stats = {"skills": asyncio.run(_sync_skills())}
     _print_sync_report("Skill Cortex", stats, json_output)
 
 

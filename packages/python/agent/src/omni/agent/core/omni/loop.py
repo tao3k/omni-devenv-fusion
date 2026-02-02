@@ -51,12 +51,7 @@ logger = get_logger("omni.agent.loop")
 
 # Tier 1: Atomic Tools (Low-level, Noise prone)
 TIER_1_ATOMIC = {
-    "filesystem.read_file",
-    "filesystem.write_file",
-    "filesystem.list_dir",
-    "filesystem.delete_file",
-    "terminal.run_command",
-    "terminal.analyze_last_error",  # Often hallucinated
+    "skill.generate_usage_guide",  # Often too detailed
 }
 
 # High-level skill indicators
@@ -365,7 +360,7 @@ class OmniLoop:
 
         # [NEW] Flush to Long-Term Memory (MemoryArchiver)
         # Archiver handles incremental sync - only stores new messages
-        self.archiver.archive_turn(self.history)
+        await self.archiver.archive_turn(self.history)
 
         # [Step 4] Fire-and-forget checkpoint to Rust Event Bus
         # This replaces blocking checkpoint.save() with async event publishing

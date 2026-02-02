@@ -1,1 +1,0 @@
-"""cli/ - Stress test CLI."""

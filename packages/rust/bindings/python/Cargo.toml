@@ -44,6 +44,7 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "fs"] }
 uuid = { workspace = true }
+chrono = { workspace = true }
 
 [dev-dependencies]
 pyo3 = { workspace = true }

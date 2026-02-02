@@ -13,7 +13,7 @@ Usage:
     skills = get_active_preload_skills(mode="cli")  # Includes CLI extensions
 
     # Check if command should be filtered (supports glob patterns)
-    if is_filtered("terminal.run_command"):
+    if is_filtered("git.raw_commit"):
         print("Filtered!")
 """
 
@@ -49,7 +49,7 @@ class FilterCommandsConfig(BaseModel):
     """Configuration for filtering tools with glob pattern matching.
 
     Attributes:
-        patterns: List of patterns (e.g., "terminal.*" or "!terminal.run_task")
+        patterns: List of patterns (e.g., "git.raw_*" or "!git.status")
     """
 
     patterns: list[str] = []
@@ -235,12 +235,12 @@ def is_filtered(command: str) -> bool:
     """Check if a command should be filtered using Glob patterns & exclusions.
 
     Logic:
-    1. Check if command matches any BLOCK pattern (e.g., "terminal.*").
-    2. If blocked, check if it matches any ALLOW pattern (e.g., "!terminal.run_task").
+    1. Check if command matches any BLOCK pattern (e.g., "git.raw_*").
+    2. If blocked, check if it matches any ALLOW pattern (e.g., "!git.status").
     3. If allowed, return False (not filtered).
 
     Args:
-        command: Full command name (e.g., "terminal.run_command")
+        command: Full command name (e.g., "git.raw_commit")
 
     Returns:
         True if command should be filtered from MCP tools

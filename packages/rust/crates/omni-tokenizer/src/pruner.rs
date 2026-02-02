@@ -12,6 +12,7 @@ pub struct Message {
 }
 
 /// Prunes context to fit within token limits while preserving important information.
+#[derive(Clone)]
 pub struct ContextPruner {
     tokenizer: TokenCounter,
     window_size: usize,

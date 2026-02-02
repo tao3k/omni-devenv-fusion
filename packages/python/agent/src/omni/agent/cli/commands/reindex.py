@@ -27,6 +27,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from omni.foundation.utils.fs import find_markdown_files
+from omni.foundation.config.dirs import get_database_path, get_database_paths
 
 reindex_app = typer.Typer(
     name="reindex",
@@ -36,49 +37,6 @@ reindex_app = typer.Typer(
 
 # Console for printing tables
 _console = Console()
-
-
-# =============================================================================
-# Database Path Management - Unified for all LanceDB databases
-# =============================================================================
-
-
-def get_database_paths() -> dict[str, str]:
-    """Get all database paths used by Omni.
-
-    Returns a dict with database name -> absolute path.
-    All paths are relative to the vector DB base directory.
-
-    Databases:
-        skills.lance   - Main skill tools database
-        router.lance   - Router/hybrid search index
-        knowledge.lance - Knowledge base
-        memory.lance   - Memory index
-    """
-    from omni.foundation.config.dirs import get_vector_db_path
-
-    base = get_vector_db_path()
-    return {
-        "skills": str(base / "skills.lance"),
-        "router": str(base / "router.lance"),
-        "knowledge": str(base / "knowledge.lance"),
-        "memory": str(base / "memory.lance"),
-    }
-
-
-def get_database_path(name: str) -> str:
-    """Get the path for a specific database.
-
-    Args:
-        name: Database name (skills, router, knowledge, memory)
-
-    Returns:
-        Absolute path to the database directory
-    """
-    paths = get_database_paths()
-    if name not in paths:
-        raise ValueError(f"Unknown database: {name}. Valid: {list(paths.keys())}")
-    return paths[name]
 
 
 # =============================================================================
@@ -287,7 +245,7 @@ def reindex_skills(
     if json_output:
         print(json.dumps(result, indent=2))
     elif result["status"] == "success":
-        print(
+        _console.print(
             Panel(
                 f"Indexed {result['tools_indexed']} tools to {result['database']}",
                 title="✅ Success",
@@ -322,7 +280,7 @@ def reindex_router(
     if json_output:
         print(json.dumps(result, indent=2))
     elif result["status"] == "success":
-        print(
+        _console.print(
             Panel(
                 f"Synced {result['tools_indexed']} tools to {result['database']}",
                 title="✅ Success",
@@ -330,7 +288,7 @@ def reindex_router(
             )
         )
     else:
-        print(
+        _console.print(
             Panel(
                 f"Failed: {result.get('error', 'Unknown error')}",
                 title="❌ Error",
@@ -358,7 +316,7 @@ def reindex_knowledge(
     if json_output:
         print(json.dumps(result, indent=2))
     elif result["status"] == "success":
-        print(
+        _console.print(
             Panel(
                 f"Indexed {result['docs_indexed']} docs, committed {result['entries_committed']} entries",
                 title="✅ Success",
@@ -366,7 +324,7 @@ def reindex_knowledge(
             )
         )
     else:
-        print(
+        _console.print(
             Panel(
                 f"Failed: {result.get('error', 'Unknown error')}",
                 title="❌ Error",

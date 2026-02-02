@@ -5,5 +5,8 @@
 pub mod record;
 pub mod store;
 
-pub use record::CheckpointRecord;
+pub use record::{CheckpointRecord, TimelineRecord};
 pub use store::CheckpointStore;
+
+#[cfg(test)]
+mod timeline_tests;

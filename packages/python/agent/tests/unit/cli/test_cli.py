@@ -22,6 +22,7 @@ from collections.abc import Callable
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch, MagicMock
 
 import pytest
 from typer.testing import CliRunner
@@ -115,7 +116,8 @@ def test_commands_submodules():
     print("\n[Commands Submodules]")
 
     from omni.agent.cli.commands import register_mcp_command, register_run_command
-    from omni.agent.cli.commands.ingest import ingest_app
+    from omni.agent.cli.commands.sync import sync_app
+    from omni.agent.cli.commands.reindex import reindex_app
     from omni.agent.cli.commands.route import route_app
     from omni.agent.cli.commands.skill import skill_app
 
@@ -123,7 +125,8 @@ def test_commands_submodules():
     assert register_run_command is not None, "register_run_command is None"
     assert callable(register_mcp_command), "register_mcp_command is not callable"
     assert route_app is not None, "route_app is None"
-    assert ingest_app is not None, "ingest_app is None"
+    assert sync_app is not None, "sync_app is None"
+    assert reindex_app is not None, "reindex_app is None"
 
     print("  All command submodules importable")
 
@@ -525,9 +528,14 @@ def test_runner_help_command():
     from omni.agent.cli.console import cli_log_handler
     from omni.agent.cli.runner import run_skills
 
-    captured = io.StringIO()
-    with redirect_stderr(captured):
-        run_skills(["help"], log_handler=cli_log_handler)
+    with patch("omni.core.get_kernel") as mock_get_kernel:
+        mock_kernel = MagicMock()
+        mock_kernel.is_ready = True  # Avoid initialize
+        mock_get_kernel.return_value = mock_kernel
+
+        captured = io.StringIO()
+        with redirect_stderr(captured):
+            run_skills(["help"], log_handler=cli_log_handler)
 
     output = captured.getvalue()
     assert "Available Skills" in output or "git" in output.lower()

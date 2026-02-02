@@ -40,19 +40,19 @@ To avoid competing with "Brains" like Claude-Code or Gemini-CLI, `omni-dev-fusio
 
 ## 3. Implementation Roadmap
 
-### Phase 1: Cognitive Kernel (Perception)
+### Stage 1: Cognitive Kernel (Perception)
 
 - **Objective**: Upgrade `OmniCell` from "Executor" to "Perceiver".
 - **Key Tech**: `sys_query` (replacing `ls`/`grep`).
 - **Flow**: Claude asks "Find Python files modified recently" -> Omni executes structured query -> Returns JSON `[{"path": "...", "mtime": "..."}]`.
 
-### Phase 2: The Adaptive Generalist (Resilience)
+### Stage 2: The Adaptive Generalist (Resilience)
 
 - **Objective**: A fallback node for unknown tasks.
 - **Key Tech**: `Universal Solver` (LangGraph Node).
 - **Flow**: Router (No Match) -> Universal Solver -> Dynamic NuScript Generation -> Execution -> Self-Correction Loop -> Success.
 
-### Phase 3: Evolutionary Memory (Growth)
+### Stage 3: Evolutionary Memory (Growth)
 
 - **Objective**: System grows stronger with usage.
 - **Key Tech**: Trace Compiler & Auto-Coding.

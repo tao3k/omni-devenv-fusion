@@ -6,17 +6,9 @@ Tests for:
 - create_omni_loop_context: Orchestrator factory for Omni Loop
 """
 
-import sys
+import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
-
-# Add src to path for imports
-SKILLS_ROOT = Path(__file__).parent.parent.parent.parent.parent
-sys.path.insert(0, str(SKILLS_ROOT / "packages" / "python" / "agent" / "src"))
-sys.path.insert(0, str(SKILLS_ROOT / "packages" / "python" / "core" / "src"))
-sys.path.insert(0, str(SKILLS_ROOT / "packages" / "python" / "foundation" / "src"))
 
 
 class TestPromptLoader:
@@ -198,12 +190,12 @@ class TestCreateOmniLoopContext:
         orchestrator = create_omni_loop_context()
         assert isinstance(orchestrator, ContextOrchestrator)
 
-    def test_orchestrator_has_four_providers(self):
-        """Test that Omni Loop orchestrator has 4 providers."""
+    def test_orchestrator_has_five_providers(self):
+        """Test that Omni Loop orchestrator has 5 providers."""
         from omni.core.context.orchestrator import create_omni_loop_context
 
         orchestrator = create_omni_loop_context()
-        assert len(orchestrator._providers) == 4
+        assert len(orchestrator._providers) == 5
 
     def test_orchestrator_has_routing_provider(self):
         """Test that orchestrator includes RoutingGuidanceProvider."""

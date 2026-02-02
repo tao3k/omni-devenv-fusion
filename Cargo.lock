@@ -4999,6 +4999,7 @@ name = "omni-core-rs"
 version = "0.1.1"
 dependencies = [
  "anyhow",
+ "chrono",
  "omni-ast",
  "omni-edit",
  "omni-events",
@@ -5146,6 +5147,7 @@ name = "omni-tui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "crossterm",
  "env_logger",

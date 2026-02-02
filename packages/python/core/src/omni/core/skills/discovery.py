@@ -532,7 +532,7 @@ class SkillDiscoveryService:
         matches.sort(key=lambda x: x[1], reverse=True)
         return [m[0] for m in matches[:limit]]
 
-    def discover_all(self, locations: list[str] | None = None) -> list[DiscoveredSkill]:
+    async def discover_all(self, locations: list[str] | None = None) -> list[DiscoveredSkill]:
         """Discover all skills from LanceDB.
 
         Args:
@@ -545,7 +545,7 @@ class SkillDiscoveryService:
 
         # Use PythonSkillScanner to read from LanceDB
         scanner = PythonSkillScanner()
-        index_entries = scanner.scan_directory()
+        index_entries = await scanner.scan_directory()
 
         all_skills = []
         for entry in index_entries:
@@ -558,7 +558,7 @@ class SkillDiscoveryService:
         logger.info(f"📦 Index Service provided {len(all_skills)} skills from LanceDB")
         return all_skills
 
-    def discover_one(self, skill_name: str) -> DiscoveredSkill | None:
+    async def discover_one(self, skill_name: str) -> DiscoveredSkill | None:
         """Find a single skill in the Index by name.
 
         Args:
@@ -568,15 +568,15 @@ class SkillDiscoveryService:
             DiscoveredSkill if found, None otherwise.
         """
         # This scans the in-memory list (fast enough for now)
-        skills = self.discover_all()
+        skills = await self.discover_all()
         for skill in skills:
             if skill.name == skill_name:
                 return skill
         return None
 
-    def get_skills_with_extensions(self) -> list[DiscoveredSkill]:
+    async def get_skills_with_extensions(self) -> list[DiscoveredSkill]:
         """Get all skills that have extensions directory."""
-        skills = self.discover_all()
+        skills = await self.discover_all()
         return [s for s in skills if s.has_extensions]
 
     def get_analytics_dataframe(self):

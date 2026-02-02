@@ -1,276 +1,267 @@
 # Context Optimization (The Token Diet)
 
-> Agent Layer - Smart Context Management
+> Agent Layer - Rust-accelerated Context Window Management
+> AutoFix Recovery with Cognitive Re-anchoring
 
 ## Overview
 
-The context optimization system reduces token usage in the CCA loop without losing context quality. It implements tiered memory management with smart pruning.
+The context optimization system reduces token usage in the CCA loop without losing context quality. It implements tiered memory management with smart pruning using **Rust-accelerated token counting** (20-100x faster than Python tiktoken).
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ Agent Core (omni.agent.core.context)                        │
-│                                                              │
-│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
-│  │ ContextManager  │◄──►│ ContextPruner                   │ │
-│  │                 │    │  ┌────────────────────────────┐ │ │
-│  │ - add_turn()    │    │  │ Priority Layers:           │ │ │
-│  │ - get_context() │    │  │ - System (CRITICAL)        │ │ │
-│  │ - prune()       │    │  │ - Recent (HIGH)            │ │ │
-│  │ - segment()     │    │  │ - Summary (MEDIUM)         │ │ │
-│  │ - compress()    │    │  │ - Overflow (LOW)           │ │ │
-│  │ - snapshot()    │    │  └────────────────────────────┘ │ │
-│  │ - summary       │    └─────────────────────────────────┘ │
-│  └─────────────────┘                                        │
-│                                                              │
-│  ┌─────────────────┐    ┌────────────────────────────┐    │
-│  │ Turn Tracking   │    │ NoteTaker Integration      │    │
-│  │                 │    │                             │    │
-│  │ - Turn dataclass│    │  - _messages_to_trajectory │    │
-│  │ - Serialization │    │  - _extract_summary_content│    │
-│  └─────────────────┘    │  - _simple_summarize       │    │
-│                         └────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│ Agent Core (omni.agent.core.context)                                │
+│                                                                      │
+│  ┌─────────────────┐    ┌─────────────────────────────────────────┐ │
+│  │ ContextPruner   │◄──►│ omni-tokenizer (Rust)                   │ │
+│  │                 │    │  ┌────────────────────────────┐        │ │
+│  │ - count_tokens()│    │  │ - count_tokens()          │        │ │
+│  │ - compress()    │    │  │ - ContextPruner (Rust)    │        │ │
+│  │ - prune_for_retry│   │  │  - Message struct         │        │ │
+│  │ - estimate_compression│ └────────────────────────────┘        │ │
+│  └─────────────────┘    └─────────────────────────────────────────┘ │
+│                                                                      │
+│  ┌─────────────────┐    ┌────────────────────────────────────────┐  │
+│  │ AutoFixLoop     │    │ TimeTraveler                          │  │
+│  │                 │    │                                       │  │
+│  │ - run()         │    │  - fork_and_correct()                 │  │
+│  │ - run_streaming │    │  - get_timeline()                     │  │
+│  └─────────────────┘    └────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Pruning Strategy
+## Core Components
 
-### Priority Layers
+### ContextPruner
 
-| Layer        | Priority | Action              | Rationale                  |
-| ------------ | -------- | ------------------- | -------------------------- |
-| **System**   | CRITICAL | Always preserved    | Identity, tool definitions |
-| **Recent**   | HIGH     | Last N turns intact | Conversation continuity    |
-| **Summary**  | MEDIUM   | Insert on prune     | Memory compression         |
-| **Overflow** | LOW      | Truncate oldest     | Token budget protection    |
-
-### Configuration
+Rust-accelerated context pruner for LangGraph workflows.
 
 ```python
-from omni.agent.core.context import ContextManager, ContextPruner, PruningConfig
+from omni.agent.core.context.pruner import ContextPruner
 
-config = PruningConfig(
-    max_tokens=128000,    # Context window budget
-    retained_turns=10,    # Keep last 10 turns
-    preserve_system=True, # Never drop system prompts
-    strategy="truncate",  # or "summarize"
+# Create pruner with custom settings
+pruner = ContextPruner(
+    window_size=4,           # Last N*2 messages kept as working memory
+    max_tool_output=500,     # Max characters for tool outputs in archive
+    max_context_tokens=8000, # Maximum total tokens
 )
-
-ctx = ContextManager(pruner=ContextPruner(config))
 ```
 
-## Usage
+#### Key Methods
 
-### Basic Conversation
+| Method                                 | Type | Description                             |
+| -------------------------------------- | ---- | --------------------------------------- |
+| `count_tokens(text)`                   | sync | Count tokens in text (Rust-accelerated) |
+| `count_messages(messages)`             | sync | Count tokens in message list            |
+| `compress_messages(messages)`          | sync | Compress with smart truncation          |
+| `prune_for_retry(messages, error)`     | sync | Create pruned context for AutoFix       |
+| `truncate_middle(text, max_tokens)`    | sync | Head + tail preservation                |
+| `estimate_compression_ratio(messages)` | sync | Measure compression effectiveness       |
 
-```python
-from omni.agent.core.context import ContextManager
-
-ctx = ContextManager()
-
-# Add conversation turns
-ctx.add_turn("User message", "Assistant response")
-
-# Get pruned context for LLM
-messages = ctx.get_active_context(strategy="pruned")
-
-# Get statistics
-stats = ctx.stats()
-# {
-#     "turn_count": 1,
-#     "total_messages": 3,
-#     "estimated_tokens": ~150,
-#     "pruner_config": {...}
-# }
-```
-
-### With Summary
-
-```python
-# Add many turns
-for i in range(20):
-    ctx.add_turn(f"User {i}", f"Assistant {i}")
-
-# Prune and insert summary
-ctx.prune_with_summary(
-    "User discussed project setup, git workflow, and testing"
-)
-
-# Context now contains summary + last 10 turns
-```
-
-## Smart Context Compression
-
-When conversation history exceeds limits, instead of discarding old messages, the system can **semantically compress** them using the NoteTaker skill.
-
-### Key Components
-
-```python
-# packages/python/agent/src/omni/agent/core/context/manager.py
-
-class ContextManager:
-    def __init__(self, ...):
-        self.summary: str | None = None  # Persistent summary
-
-    def segment(self) -> Tuple[List[Dict], List[Dict], List[Dict]]:
-        """Split context into (system, to_summarize, recent)"""
-
-    async def compress(self) -> bool:
-        """Compress old context using NoteTaker skill"""
-```
-
-### Compression Flow
+### Message Compression Strategy
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ ContextManager.compress()                                       │
+│                 compress_messages() Flow                        │
 ├─────────────────────────────────────────────────────────────────┤
-│ 1. segment() → (system, to_summarize, recent)                   │
-│                                                                 │
-│ 2. _messages_to_trajectory() → NoteTaker trajectory format      │
-│                                                                 │
-│ 3. Call NoteTaker.summarize() → markdown file                   │
-│                                                                 │
-│ 4. _extract_summary_content() → clean summary text              │
-│                                                                 │
-│ 5. _apply_compression() → replace old with summary              │
+│                                                                  │
+│  Input: [System, Tool(2KB), Tool(1KB), User, Assistant, ...]   │
+│                                                                  │
+│  ┌───────────────────────────────────────────────────────┐      │
+│  │ Step 1: Partition                                      │      │
+│  │   - System messages (ALWAYS PRESERVE)                 │      │
+│  │   - Other messages (archive + working)                │      │
+│  └───────────────────────────────────────────────────────┘      │
+│                                                                  │
+│  ┌───────────────────────────────────────────────────────┐      │
+│  │ Step 2: Identify Safety Zone                          │      │
+│  │   - Keep last N*2 messages as working memory         │      │
+│  │   - Remaining messages become archive                │      │
+│  └───────────────────────────────────────────────────────┘      │
+│                                                                  │
+│  ┌───────────────────────────────────────────────────────┐      │
+│  │ Step 3: Process Archive (Compress Tool Outputs)       │      │
+│  │   - If tool output > max_tool_output:                │      │
+│  │     preview + "[... N chars hidden to save context]" │      │
+│  └───────────────────────────────────────────────────────┘      │
+│                                                                  │
+│  ┌───────────────────────────────────────────────────────┐      │
+│  │ Step 4: Reassemble                                    │      │
+│  │   [System] + [Processed Archive] + [Working Memory]  │      │
+│  └───────────────────────────────────────────────────────┘      │
+│                                                                  │
+│  Output: [System, Tool(500 chars + note), User, Assistant]     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Usage
+## AutoFixLoop Integration
+
+The `AutoFixLoop` class provides anti-fragile workflow execution with automatic recovery.
 
 ```python
-from omni.agent.core.context import ContextManager
+from omni.agent.core.time_travel.recovery import AutoFixLoop
+from omni.agent.core.context.pruner import ContextPruner
+from omni.agent.core.time_travel.traveler import TimeTraveler
 
-ctx = ContextManager()
+# Create components
+pruner = ContextPruner(window_size=4)
+traveler = TimeTraveler(checkpointer)
+fixer = AutoFixLoop(traveler, pruner, max_retries=2)
 
-# Add many conversation turns
-for i in range(20):
-    ctx.add_turn(f"User {i}", f"Assistant {i}")
-
-# Segment into 3 parts
-system, to_summarize, recent = ctx.segment()
-# system: [{"role": "system", "content": "..."}]
-# to_summarize: [{"role": "user", "content": "..."}, ...]  # Old messages
-# recent: [{"role": "user", "content": "..."}, ...]  # Last N turns
-
-# Async compression with NoteTaker integration
-compressed = await ctx.compress()
-# Returns True if compression occurred
-
-# Summary is stored and reused
-print(ctx.summary)  # "Session discussed project setup, git workflow..."
-
-# Context now contains: system + [Context Summary] + recent
-messages = ctx.get_active_context(strategy="pruned")
+# Execute with automatic recovery
+result = await fixer.run(
+    graph,
+    {"task": "write code"},
+    config,
+    validator=lambda x: x.get("success"),
+)
 ```
 
-### Fallback Summarization
+### AutoFix Recovery Flow
 
-If NoteTaker is unavailable, uses simple extractive summarization:
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    AutoFixLoop.run()                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  1. Execute workflow                                                │
+│  2. Validate output                                                 │
+│  3. If failed:                                                      │
+│     a. Get current state                                            │
+│     b. Prune context (prune_for_retry)                             │
+│     c. Generate "Lesson Learned" summary                           │
+│     d. TimeTravel to checkpoint N-1                                 │
+│     e. Apply correction patch                                       │
+│     f. Retry from forked state                                      │
+│  4. Repeat until success or max_retries                            │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Lesson Learned Summary
+
+Instead of full error traces, creates compressed summaries:
 
 ```python
-def _simple_summarize(self, messages):
-    """Extract key content from messages."""
-    summaries = []
-    for msg in messages:
-        role = msg.get("role", "")
-        content = str(msg.get("content", ""))
-        if len(content) >= 20:  # Skip short messages
-            if len(content) > 300:
-                content = content[:300] + "..."
-            summaries.append(f"[{role}]: {content}")
-    return f"Summarized {len(messages)} messages:\n" + "\n".join(summaries[-10:])
+[AUTO-FIX RECOVERY]
+Previous attempt failed: ValueError: invalid input
+We have rolled back to a previous checkpoint.
+Please analyze the error and try a different approach.
+Consider what went wrong and how to avoid the same mistake.
 ```
 
-### API Reference
-
-| Method                       | Type  | Description                                    |
-| ---------------------------- | ----- | ---------------------------------------------- |
-| `segment()`                  | sync  | Returns `(system, to_summarize, recent)` tuple |
-| `compress()`                 | async | Compresses old context, returns bool           |
-| `_messages_to_trajectory()`  | sync  | Converts messages to NoteTaker format          |
-| `_extract_summary_content()` | sync  | Parses markdown summary output                 |
-| `_simple_summarize()`        | sync  | Fallback extractive summarization              |
-| `_apply_compression()`       | sync  | Replaces old messages with summary             |
-
-### Serialization
+## Model-Specific Configuration
 
 ```python
-# Save session (includes summary if compressed)
-snapshot = ctx.snapshot()
-# {
-#     "system_prompts": [...],
-#     "turns": [...],
-#     "turn_count": 5,
-#     "summary": "Session discussed project setup...",
-#     "pruner_config": {...}
-# }
+from omni.agent.core.context.pruner import create_pruner_for_model
 
-# Restore later
-new_ctx = ContextManager()
-new_ctx.load_snapshot(snapshot)
+# Optimized configurations for different models
+configs = {
+    "gpt-4o": {"window": 6, "max_tokens": 120000},
+    "gpt-4-turbo": {"window": 6, "max_tokens": 128000},
+    "gpt-4": {"window": 4, "max_tokens": 8192},
+    "gpt-3.5-turbo": {"window": 8, "max_tokens": 16384},
+}
 
-# Summary is restored
-print(new_ctx.summary)
+pruner = create_pruner_for_model("gpt-4o")
 ```
 
-### Statistics
+## Performance
+
+| Operation             | Rust           | Python Fallback |
+| --------------------- | -------------- | --------------- |
+| Token counting        | 20-100x faster | ~4 chars/token  |
+| Message compression   | <1ms           | <5ms            |
+| Context prune (retry) | <5ms           | <20ms           |
+
+## Usage Examples
+
+### Basic Context Pruning
 
 ```python
-stats = ctx.stats()
-# {
-#     "turn_count": 5,
-#     "system_messages": 2,
-#     "total_messages": 15,
-#     "estimated_tokens": 1200,
-#     "has_summary": True,  # NEW: Indicates compression occurred
-#     "pruner_config": {...}
-# }
+from omni.agent.core.context.pruner import ContextPruner
+
+pruner = ContextPruner(window_size=4, max_tool_output=500)
+
+messages = [
+    {"role": "system", "content": "You are a coding assistant."},
+    {"role": "tool", "content": "..." * 1000},  # Long tool output
+    {"role": "user", "content": "Fix the bug"},
+    {"role": "assistant", "content": "I'll help you fix the bug."},
+]
+
+# Compress messages
+compressed = pruner.compress_messages(messages)
+# Result: [System, Tool(500 + note), User, Assistant]
 ```
 
-## CLI Integration
+### AutoFix Recovery
 
 ```python
-# packages/python/agent/src/omni/agent/cli/omni_loop.py
+from omni.agent.core.time_travel.recovery import AutoFixLoop
 
-from omni.agent.core.omni import OmniLoop
+fixer = AutoFixLoop(traveler, pruner, max_retries=2)
 
-agent = OmniLoop()
-result = await agent.run(task, max_steps=10)
-
-# Stats come from ContextManager
-stats = agent.context.stats()
+try:
+    result = await fixer.run(
+        graph,
+        input_data,
+        config,
+        validator=is_valid_result,
+    )
+except Exception as e:
+    print(f"All retries failed: {e}")
 ```
 
-## Token Estimation
-
-Current implementation uses character-based estimation:
+### Compression Ratio Estimation
 
 ```python
-# pruner.py
-def estimate_tokens(self, messages):
-    total_chars = sum(len(str(m.get("content", ""))) for m in messages)
-    return total_chars // 4  # ~4 chars per token
+from omni.agent.core.context.pruner import ContextPruner
+
+pruner = ContextPruner()
+messages = [...]  # Your message history
+
+original_tokens = pruner.count_messages(messages)
+compressed = pruner.compress_messages(messages)
+compressed_tokens = pruner.count_messages(compressed)
+
+ratio = pruner.estimate_compression_ratio(messages)
+print(f"Compression ratio: {ratio:.2f}x")
+# Example output: "Compression ratio: 2.3x"
 ```
 
-**Future Enhancement**: Replace with tiktoken for accurate counting.
+## Fallback Mode
+
+When Rust bindings are unavailable (e.g., during development), ContextPruner automatically falls back to Python estimation:
+
+```python
+WARNING:omni.agent.core.context.pruner:ContextPruner falling back to estimation mode
+```
+
+- Token counting: ~4 characters per token estimation
+- Compression: Python-based message processing
 
 ## Related Files
 
-**Core:**
+**Core Implementation:**
 
-- `packages/python/agent/src/omni/agent/core/context/__init__.py`
 - `packages/python/agent/src/omni/agent/core/context/pruner.py`
-- `packages/python/agent/src/omni/agent/core/context/manager.py`
-- `packages/python/agent/src/omni/agent/core/omni.py`
+- `packages/python/agent/src/omni/agent/core/time_travel/recovery.py`
+- `packages/rust/crates/omni-tokenizer/src/lib.rs`
+- `packages/rust/crates/omni-tokenizer/src/pruner.rs`
+- `packages/rust/bindings/python/src/tokenizer.rs`
 
 **Tests:**
 
 - `packages/python/agent/tests/unit/test_context/test_pruner.py`
-- `packages/python/agent/tests/unit/test_context/test_manager.py`
 
-**CLI:**
+**Rust Tests:**
 
-- `packages/python/agent/src/omni/agent/cli/omni_loop.py`
+- `packages/rust/crates/omni-tokenizer/tests/test_tokenizer.rs`
+
+## See Also
+
+- [Cognitive Re-anchoring](cognitive-reanchoring.md)
+- [AutoFix Loop Scenario Test](../testing/scenario-test-driven-autofix-loop.md)
+- [Rust Crates](../architecture/rust-crates.md)

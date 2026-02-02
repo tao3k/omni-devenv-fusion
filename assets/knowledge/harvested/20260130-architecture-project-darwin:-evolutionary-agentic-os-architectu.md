@@ -33,7 +33,7 @@ Transform `omni-dev-fusion` into a self-evolving Agentic Operating System by int
 
 ## 3. Implementation Roadmap
 
-### Phase 1: Cognitive Kernel (Perception)
+### Stage 1: Cognitive Kernel (Perception)
 
 - **Status**: _In Progress (OmniCell)_
 - **Goal**: Upgrade `OmniCell` from a "blind executor" to a "semantic filter".
@@ -41,7 +41,7 @@ Transform `omni-dev-fusion` into a self-evolving Agentic Operating System by int
   - **Smart Query**: `query_structured(source, filter)` - Query the OS like a database rather than dumping raw text.
   - **Context Pruning**: Rust-based token counting and semantic truncation for CLI outputs (e.g., `ls` on large dirs).
 
-### Phase 2: The Adaptive Generalist (Resilience)
+### Stage 2: The Adaptive Generalist (Resilience)
 
 - **Status**: _Design Phase_
 - **Goal**: Create a fallback execution node that ensures the agent never hits a dead end.
@@ -50,7 +50,7 @@ Transform `omni-dev-fusion` into a self-evolving Agentic Operating System by int
   - **Dynamic Plan Generation**: LLM writes ephemeral Nushell scripts based on real-time `sys_ops` feedback.
   - **Self-Correction Loop**: Execute -> Catch Stderr -> Refine Script -> Retry.
 
-### Phase 3: Evolutionary Memory (Growth)
+### Stage 3: Evolutionary Memory (Growth)
 
 - **Status**: _Future_
 - **Goal**: System capabilities grow linearly with usage time.

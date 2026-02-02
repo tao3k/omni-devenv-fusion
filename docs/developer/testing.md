@@ -11,44 +11,84 @@
 
 ```
 packages/python/
-├── foundation/tests/              # 46 tests - Settings, Config, GitOps, Skills Path
-├── core/tests/                    # 49 tests - Router, Script Loader, Indexer, Skills
-├── mcp-server/tests/              # 42 tests - Transport, Types, Server
-└── agent/tests/                   # CLI tests, skill management
-assets/skills/*/tests/             # 263 skill tests (11 skills)
+├── test-kit/                      # dedicated test SDK (omni-test-kit)
+├── foundation/tests/              # 180+ tests - Settings, Config, GitOps
+├── core/tests/                    # 660+ tests - Kernel, Router, Reactor
+├── mcp-server/tests/              # 40+ tests - Transport, Types, Server
+└── agent/tests/                   # 500+ tests - CCA Loop, Omega, CLI
+assets/skills/*/tests/             # 130+ skill tests (modular)
 ```
 
 ### Test Status Summary
 
-| Package    | Passing | Skipped | Failing | Status      |
-| ---------- | ------- | ------- | ------- | ----------- |
-| Foundation | 46      | 0       | 0       | DONE        |
-| Core       | 49      | 0       | 0       | DONE        |
-| MCP-Server | 42      | 0       | 0       | DONE        |
-| Agent      | 19      | 0       | 0       | DONE        |
-| Skills     | 263     | 2       | 0       | DONE        |
-| **Total**  | **419** | **2**   | **0**   | **HEALTHY** |
+| Package    | Passing  | Skipped | Failing | Status      |
+| ---------- | -------- | ------- | ------- | ----------- |
+| Foundation | 188      | 0       | 0       | DONE        |
+| Core       | 668      | 14      | 0       | DONE        |
+| MCP-Server | 41       | 0       | 0       | DONE        |
+| Agent      | 547      | 21      | 0       | DONE        |
+| Skills     | 131      | 0       | 0       | DONE        |
+| **Total**  | **1575** | **35**  | **0**   | **HEALTHY** |
+
+---
+
+## Omni Test Kit (SDK)
+
+The `omni-test-kit` is a dedicated testing framework that provides specialized tools for the Omni-Dev Fusion environment. It is automatically registered as a `pytest` plugin.
+
+### Key Components
+
+- **`SkillTester`**: Executor for modular skill testing. Handles dependency injection and context mocking.
+- **`McpTester`**: Tools for validating MCP server compliance and message formats.
+- **`GitOpsVerifier`**: State-based verification for Git operations (branches, commits, tags).
+- **`LangGraphTester`**: Visualizer and spy for LangGraph workflow state transitions.
+
+### Global Fixtures
+
+| Fixture            | Description                                                     |
+| ------------------ | --------------------------------------------------------------- |
+| `project_root`     | Path to the absolute project root (SSOT).                       |
+| `skills_root`      | Path to `assets/skills/`.                                       |
+| `git_test_env`     | Sets up an isolated git repository and switches CWD.            |
+| `clean_settings`   | Resets the `Settings` singleton for isolated config testing.    |
+| `mock_rust_bridge` | Mocks the Rust core for environments without compiled binaries. |
+| `test_tracer`      | Unified logging and tracing for test execution.                 |
 
 ---
 
 ## Running Tests
 
-### Package Tests (Parallel Execution Enabled)
+### Using `just` (Recommended)
 
-Tests run in parallel with timeout protection (300s default):
+The standard way to run tests is via `just` commands defined in the project root:
 
 ```bash
-# Foundation tests (settings, config, gitops)
-uv run pytest packages/python/foundation/tests/ -q
+# Run ALL tests (Foundation, Core, MCP, Agent, Skills)
+just test
 
-# Core tests (router, script loader, indexer, skills)
-uv run pytest packages/python/core/tests/ -q
+# Run only Python package tests
+just test-python
 
-# MCP-Server tests (transport, server, types)
-uv run pytest packages/python/mcp-server/tests/ -q
+# Run only modular skill tests
+just test-skills
 
-# Agent CLI tests
-uv run pytest packages/python/agent/tests/ -q
+# Run only MCP tools integration tests
+just test-mcp
+```
+
+### Direct `pytest` Execution
+
+You can also run tests directly using `uv run pytest`:
+
+```bash
+# Foundation tests
+uv run pytest packages/python/foundation/tests/
+
+# Core tests
+uv run pytest packages/python/core/tests/
+
+# Agent tests (no parallel for stability)
+uv run pytest packages/python/agent/tests/ -n0
 ```
 
 ### All Package Tests Combined
@@ -137,69 +177,54 @@ pytest -v --timeout=30 test_slow_operation.py
 
 ## Writing Tests
 
-### Foundation Test Pattern
+### Modular Skill Test Pattern
+
+Skills are tested in isolation using the `skill_tester` fixture and the `@omni_skill` marker.
 
 ```python
-"""Tests for omni.foundation.config.settings module."""
-
 import pytest
+from omni.test_kit.decorators import omni_skill
 
+@pytest.mark.asyncio
+@omni_skill(name="git")
+class TestGitSkill:
+    async def test_status(self, skill_tester):
+        # Execute skill logic directly
+        result = await skill_tester.run("git", "status")
 
-class TestSettingsClass:
-    """Test the Settings singleton class."""
-
-    def test_singleton_pattern(self):
-        """Test that Settings is a singleton."""
-        from omni.foundation.config.settings import Settings
-
-        # Reset singleton for test
-        Settings._instance = None
-        Settings._loaded = False
-
-        settings1 = Settings()
-        settings2 = Settings()
-
-        assert settings1 is settings2
+        assert result.success
+        assert "branch" in str(result.output)
 ```
 
-### Core Async Test Pattern
+### Data-Driven Test Pattern
+
+Use the `@omni_data_driven` marker to load test cases from a external YAML file.
 
 ```python
-"""Tests for omni.core.skills.discovery module."""
-
 import pytest
-from omni.core.skills.discovery import UniversalSkillDiscovery
+from omni.test_kit.decorators import omni_data_driven
 
+@pytest.mark.asyncio
+@omni_data_driven(data_path="cases.yaml")
+async def test_skill_cases(case, skill_tester):
+    # 'case' is automatically injected from cases.yaml
+    result = await skill_tester.run(case.skill, case.command, **case.args)
 
-class TestUniversalSkillDiscovery:
-    """Test skill discovery functionality."""
-
-    @pytest.mark.asyncio
-    async def test_discover_skills_empty_dir(self):
-        """Test discovering skills in empty directory."""
-        discovery = UniversalSkillDiscovery()
-        skills = await discovery.discover_skills("/tmp/empty")
-
-        assert skills == []
+    assert result.success == case.expect_success
 ```
 
-### MCP-Server Test Pattern
+### GitOps Verification Pattern
+
+For skills that modify the Git state, use `GitOpsVerifier`.
 
 ```python
-"""Tests for omni.mcp.transport module."""
+def test_commit_flow(gitops_verifier, skill_tester):
+    # Run skill that creates a commit
+    await skill_tester.run("git", "commit", message="feat: test")
 
-import pytest
-from omni.mcp.transport.stdio import StdioTransport
-
-
-class TestStdioTransport:
-    """Test stdio transport."""
-
-    @pytest.mark.asyncio
-    async def test_create_transport(self):
-        """Test creating stdio transport."""
-        transport = StdioTransport()
-        assert transport is not None
+    # Verify state
+    gitops_verifier.assert_commit_exists("feat: test")
+    gitops_verifier.assert_branch_is_clean()
 ```
 
 ---

@@ -16,6 +16,27 @@ logger = logging.getLogger("omni.agent.workflows")
 llm_client = InferenceClient()
 
 
+def sanitize_nushell_command(cmd: str) -> str:
+    """Sanitize Nushell command to remove problematic patterns.
+
+    This is a defense-in-depth measure to catch any $in or other
+    problematic patterns that might slip through the LLM prompts.
+    """
+    sanitized = cmd
+
+    # Remove $in variable usage (reserved for pipeline input)
+    # Pattern: $in, ${in}, $in.property, $in.name, etc.
+    sanitized = re.sub(r"\$in(\.[a-zA-Z_][a-zA-Z0-9_]*)*", '""', sanitized)
+
+    # Remove closure patterns like { open $in | ... }
+    sanitized = re.sub(r"\{\s*open\s+\$in[^}]*\}", '""', sanitized)
+
+    # Remove any remaining $in references
+    sanitized = sanitized.replace("$in", '""')
+
+    return sanitized
+
+
 async def call_llm(prompt: str, system: str = "You are a helpful assistant.") -> str:
     """Real LLM Call using InferenceClient."""
     try:
@@ -311,7 +332,8 @@ async def plan_node(state: RobustTaskState) -> Dict[str, Any]:
 async def execute_node(state: RobustTaskState) -> Dict[str, Any]:
     """Execute a step with OmniCell kernel awareness."""
     logger.info(f"[GRAPH] ================================================")
-    logger.info(f"[GRAPH] Executing step for goal: {state.get('clarified_goal', 'unknown')[:100]}")
+    goal = state.get("clarified_goal", "unknown")
+    logger.info(f"[GRAPH] Executing step for goal: {str(goal)[:100]}")
 
     plan = state["plan"]
     index = plan["current_step_index"]
@@ -333,18 +355,50 @@ You have direct OS access via OmniCell:
 - **sys_exec(script)**: Write operations. Example: "echo 'data' | save report.md"
 
 If no specialized tool fits, use OmniCell directly.
+
+IMPORTANT: DO NOT use $in variable. Use simple file paths instead.
 """
+
+    # CRITICAL: Escape ALL braces in input values BEFORE format()
+    # This prevents Python's str.format() from interpreting {xxx} as placeholders
+    # The goal (from XML parsing) might contain residual XML tags like <goal> or {xxx}
+    def escape_braces_for_format(s: str) -> str:
+        """Double-escape braces to prevent format() from interpreting them as placeholders."""
+        return s.replace("{", "{{").replace("}", "}}")
+
+    # Use string replacement instead of format() to avoid KeyError issues
+    # The prompt template may contain { placeholders that conflict with JSON/code containing { }
+    history = "\n".join(state.get("execution_history", []))
+    # Escape history content
+    history = escape_braces_for_format(history)
+
+    # Escape goal content (from XML parsing, might contain residual XML tags)
+    goal_escaped = escape_braces_for_format(str(goal))
+    context = f"Goal: {goal_escaped}\n{omni_cell_awareness}"
+
+    # Escape tool descriptions (might contain JSON with braces)
+    tools_str_escaped = escape_braces_for_format(tools_str)
+
+    # Escape step description
+    step_desc_escaped = escape_braces_for_format(step["description"])
+
+    # Debug: Log the values that might contain problematic patterns
+    logger.debug(f"[GRAPH] goal type: {type(goal)}, value: {str(goal)[:100]}")
+    logger.debug(f"[GRAPH] goal_escaped: {goal_escaped[:100]}")
+    logger.debug(f"[GRAPH] goal contains braces: {'{' in str(goal) or '}' in str(goal)}")
+
     prompt = EXECUTION_PROMPT.format(
-        step_description=step["description"],
-        context=f"Goal: {state['clarified_goal']}\n{omni_cell_awareness}",
-        history="\n".join(state.get("execution_history", [])),
-        tools=tools_str,
+        step_description=step_desc_escaped,
+        context=context,
+        history=history,
+        tools=tools_str_escaped,
     )
     response = await call_llm(prompt, system="You are an expert developer. Output only valid XML.")
 
     action_json_str = parse_xml_tag(response, "action")
     thought = parse_xml_tag(response, "thought")
     logger.info(f"[GRAPH] LLM thought: {thought[:200] if thought else 'none'}...")
+    logger.info(f"[GRAPH] LLM action: {action_json_str[:200] if action_json_str else 'none'}...")
 
     execution_result = ""
     trace = record_event("llm_hit", {"task": "execution_strategy", "step": step["id"]})
@@ -375,6 +429,8 @@ If no specialized tool fits, use OmniCell directly.
                     runner = OmniCellRunner()
                     if tool_name == "sys_query":
                         query = tool_args.get("query", "")
+                        # Sanitize command to remove problematic $in patterns
+                        query = sanitize_nushell_command(query)
                         logger.info(f"[KERNEL] sys_query executing: {query[:100]}...")
                         result = await runner.run(query, ActionType.OBSERVE)
                         if result.status == "success":
@@ -392,6 +448,8 @@ If no specialized tool fits, use OmniCell directly.
                         )
                     else:  # sys_exec
                         script = tool_args.get("script", "")
+                        # Sanitize command to remove problematic $in patterns
+                        script = sanitize_nushell_command(script)
                         logger.info(f"[KERNEL] sys_exec executing: {script[:100]}...")
                         result = await runner.run(script, ActionType.MUTATE)
                         if result.status == "success":
@@ -490,7 +548,6 @@ async def validate_node(state: RobustTaskState) -> Dict[str, Any]:
 
             # Create trace from execution history
             plan = state.get("plan", {})
-            steps = plan.get("steps", [])
 
             # Convert execution history to steps
             trace_steps = []
@@ -505,14 +562,15 @@ async def validate_node(state: RobustTaskState) -> Dict[str, Any]:
                 )
 
             if trace_steps:
-                trace = await create_hippocampus_trace(
+                # Use a different variable name to avoid overwriting the trace list
+                hippocampus_trace = await create_hippocampus_trace(
                     task_description=state.get("clarified_goal", state.get("user_request", "")),
                     steps=trace_steps,
                     success=True,
                     domain="task_execution",
                     tags=["workflow_execution"],
                 )
-                await hippocampus.commit_to_long_term_memory(trace)
+                await hippocampus.commit_to_long_term_memory(hippocampus_trace)
                 trace.extend(record_event("hippocampus", {"msg": "Experience stored"}))
         except Exception as e:
             trace.extend(record_event("error", {"msg": f"Failed to store experience: {e}"}))

@@ -16,9 +16,9 @@ This is NOT optional. This is NOT a suggestion. This is a HARD REQUIREMENT.
 ### WRONG (What NOT to do):
 
 <thinking>
-User wants to read a file. I'll use filesystem.read_files with path="file.md".
+User wants to read a file. I'll use read_file with path="file.md".
 </thinking>
-[TOOL_CALL: filesystem.read_files]({"path": "file.md"})
+[TOOL_CALL: read_file]({"file_path": "file.md"})
 -> ERROR: Wrong path! You don't know where the file is!
 
 ### RIGHT (What you MUST do):
@@ -131,9 +131,9 @@ When you call a tool, you MUST output it in this EXACT format:
 
 Example for writing a file:
 <thinking>
-User wants to save content to a file. I need to use filesystem.save_file with path and content.
+User wants to save content to a file. I need to use write_file with path and content.
 </thinking>
-[TOOL_CALL: filesystem.save_file]({"path": "example.txt", "content": "Hello, World!"})
+[TOOL_CALL: write_file]({"file_path": "example.txt", "content": "Hello, World!"})
 
 Example for searching:
 <thinking>
@@ -143,15 +143,15 @@ User wants to find files matching "_.md". I need to use advanced_tools.smart_fin
 
 Example for applying MULTIPLE file changes (use JSON array):
 <thinking>
-User wants to modify multiple files at once. I'll use filesystem.apply_changes with a list of operations.
+User wants to modify multiple files at once. I'll use omniCell.execute with a Nushell script.
 </thinking>
-[TOOL_CALL: filesystem.apply_changes]({"changes": [{"action": "write", "path": "file1.txt", "content": "content1"}, {"action": "write", "path": "file2.txt", "content": "content2"}]})
+[TOOL_CALL: omniCell.execute]({"command": "echo 'content1' | save file1.txt; echo 'content2' | save file2.txt", "intent": "mutate"})
 
 Example for reading MULTIPLE files at once (use paths array):
 <thinking>
-User wants to read all shard files. I'll use filesystem.read_files with a list of paths.
+User wants to read all shard files. I'll use omniCell.execute to open multiple files.
 </thinking>
-[TOOL_CALL: filesystem.read_files]({"paths": ["shards/01_intro.md", "shards/02_core.md", "shards/03_rules.md"]})
+[TOOL_CALL: omniCell.execute]({"command": "open shards/01_intro.md shards/02_core.md shards/03_rules.md", "intent": "observe"})
 
 ## IMPORTANT: Always Use JSON Format
 
@@ -165,21 +165,20 @@ For arrays (multiple files/paths), use JSON array syntax:
 ALWAYS check the tool schema for required arguments (marked as "required" in schema).
 
 - MISSING ARGUMENTS will cause tool call to fail immediately
-- For `filesystem.write_file`: MUST include BOTH `path` AND `content`
-- For `filesystem.save_file`: MUST include BOTH `path` AND `content`
+- For `write_file`: MUST include BOTH `file_path` AND `content`
 
 BAD (Missing path):
 <thinking>
-User wants to save content. I'll use filesystem.write_file with content.
+User wants to save content. I'll use write_file with content.
 </thinking>
-[TOOL_CALL: filesystem.write_file]({"content": "Hello!"})
--> ERROR: Missing required argument: path
+[TOOL_CALL: write_file]({"content": "Hello!"})
+-> ERROR: Missing required argument: file_path
 
 GOOD (Both required args):
 <thinking>
-User wants to save content. I'll use filesystem.write_file with path and content.
+User wants to save content. I'll use write_file with file_path and content.
 </thinking>
-[TOOL_CALL: filesystem.write_file]({"path": "example.txt", "content": "Hello!"})
+[TOOL_CALL: write_file]({"file_path": "example.txt", "content": "Hello!"})
 
 ## STRICT JSON SYNTAX - NO EXCEPTIONS!
 
@@ -231,13 +230,13 @@ BAD (Missing Arguments):
 <thinking>
 I need to save content to a file.
 </thinking>
-[TOOL_CALL: filesystem.save_file]
+[TOOL_CALL: write_file]
 
 GOOD (With Arguments):
 <thinking>
-I need to save content to example.txt. I'll use filesystem.save_file with the correct path and content.
+I need to save content to example.txt. I'll use write_file with the correct file_path and content.
 </thinking>
-[TOOL_CALL: filesystem.save_file]({"path": "example.txt", "content": "Hello!"})
+[TOOL_CALL: write_file]({"file_path": "example.txt", "content": "Hello!"})
 
 ## Examples
 
@@ -310,17 +309,17 @@ Tool Call: [TOOL_CALL: tool_name]({"arg": "value"})
 ## Bad (Hallucination - Wrong Format)
 
 <thinking>
-I need to save content. I'll use save_file.
+I need to save content. I'll use write_file.
 </thinking>
-[TOOL_CALL: filesystem.save_file]
--> ERROR: Missing path and content arguments!
+[TOOL_CALL: write_file]
+-> ERROR: Missing file_path and content arguments!
 
 ## Good (Correct Format with Arguments)
 
 <thinking>
 I need to save content to example.txt. The file is at example.txt.
 </thinking>
-[TOOL_CALL: filesystem.save_file]({"path": "example.txt", "content": "Hello, World!"})
+[TOOL_CALL: write_file]({"file_path": "example.txt", "content": "Hello, World!"})
 
 ## Bad (Missing Arguments in Thinking)
 
@@ -351,7 +350,7 @@ I see terminal.analyze_last_error, so terminal.run_command must exist too.
 I need to run pwd but terminal.run_command is filtered. I should use skill.discover to find another way.
 </thinking>
 [TOOL_CALL: skill.discover]({"intent": "get current working directory path"})
--> Returns: @omni("filesystem.get_file_info", {"path": "."})
+-> Returns: @omni("omniCell.execute", {"command": "pwd"})
 
 # Rules
 

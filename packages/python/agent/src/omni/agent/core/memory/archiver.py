@@ -34,11 +34,9 @@ class MemoryArchiver:
         self.collection = collection
         self.last_archived_idx = 0
 
-    def archive_turn(self, messages: list[dict[str, Any]]) -> None:
+    async def archive_turn(self, messages: list[dict[str, Any]]) -> None:
         """
         Identify new messages and flush them to the vector store.
-
-        Designed to be fire-and-forget (safe to call without await, as Rust writes are fast).
 
         Args:
             messages: Full message history from the agent loop.
@@ -72,21 +70,9 @@ class MemoryArchiver:
                 "content_length": len(content),
             }
 
-            # Store to VectorDB (async in background via VectorStoreClient)
-            # Note: store.add() is async but we call it synchronously here
-            # The VectorStoreClient handles async embedding internally
-            import asyncio
-
             try:
-                # Run async add in thread pool to avoid blocking
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    loop.run_until_complete(
-                        self.store.add(content, metadata=metadata, collection=self.collection)
-                    )
-                finally:
-                    loop.close()
+                # Proper async await
+                await self.store.add(content, metadata=metadata, collection=self.collection)
 
                 logger.debug(
                     f"Archived message {global_idx}",

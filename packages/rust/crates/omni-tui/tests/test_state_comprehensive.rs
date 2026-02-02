@@ -57,12 +57,16 @@ fn test_panel_addition() {
     assert_eq!(state.app().unwrap().panels().len(), 1);
 }
 
-/// Test: App state cloning
+/// Test: App state operations (clone removed - mpsc::Receiver not Clone)
 #[test]
-fn test_state_clone() {
+fn test_state_operations() {
     let state = AppState::new("Test".to_string());
-    let cloned = state.clone();
-    assert_eq!(cloned.title(), state.title());
+    assert_eq!(state.title(), "Test");
+
+    // Verify state can be created and basic operations work
+    let mut state = AppState::new("Test2".to_string());
+    state.set_status("Status message");
+    assert_eq!(state.status_message(), Some("Status message"));
 }
 
 /// Test: Socket server integration

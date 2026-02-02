@@ -88,7 +88,7 @@ You are equipped with a high-performance Rust-based toolchain. You MUST follow t
 
 2. **Batch Efficiency**: For multi-file changes (> 3 files), you MUST use `advanced_tools.batch_replace`. Do not edit files sequentially.
 
-3. **Surgical Debugging**: Do not read full files to fix simple bugs. Use `filesystem.read_files_context` on the failing line.
+3. **Surgical Debugging**: Do not read full files to fix simple bugs. Use `read_file(offset=..., limit=...)` on the failing line.
 
 4. **Dry-Run Safety**: Always preview batch changes with `dry_run=True` before applying.
 
@@ -98,7 +98,7 @@ You are equipped with a high-performance Rust-based toolchain. You MUST follow t
 | ------------------ | --------------------------------------- | ---------------------------- |
 | Text Search        | `advanced_tools.smart_search` (ripgrep) | `code_tools.search_code`     |
 | Multi-file Replace | `advanced_tools.batch_replace`          | Sequential `apply_file_edit` |
-| Error Context      | `filesystem.read_files_context`         | Full file reads              |
+| Error Context      | `read_file`                             | Full file reads              |
 
 ## Key Commands
 

@@ -164,8 +164,8 @@ class RustImmuneBridge:
         Check if a tool execution is allowed by the permission gate.
 
         Args:
-            tool_name: Full tool name (e.g., "filesystem.read_file")
-            permissions: List of permission patterns (e.g., ["filesystem:*", "git:status"])
+            tool_name: Full tool name (e.g., "git.status")
+            permissions: List of permission patterns (e.g., ["git:*", "memory:read"])
 
         Returns:
             True if allowed, False otherwise

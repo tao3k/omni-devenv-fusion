@@ -160,4 +160,4 @@ Every execution produces an `ExecutionResult` containing:
 - `throughput`: Tasks per second (demonstrating parallelism benefits).
 - `metrics`: Detailed breakdown of retries and errors.
 
-This data is essential for the **Evolutionary Memory** (Phase 3 of Project Darwin) to learn which strategies work best.
+This data is essential for the **Evolutionary Memory** (Stage 3 of Project Darwin) to learn which strategies work best.

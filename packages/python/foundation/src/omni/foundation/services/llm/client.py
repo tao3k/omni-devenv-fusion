@@ -218,64 +218,6 @@ class InferenceClient:
                         for k, v in params:
                             tool_input[k] = v.strip()
 
-                    # Method 4: Fallback - extract file paths from thinking block for read_files
-                    # This handles cases where LLM says "让我读取 `file.md`" but doesn't include args
-                    if not tool_input and tool_name == "filesystem.read_files":
-                        # Look for file paths in backticks: `file.md` or `path/to/file.md`
-                        file_paths = re.findall(r"`([^`\n]+\.md)`", thinking_content)
-                        if not file_paths:
-                            # Look for any quoted strings that look like paths
-                            file_paths = re.findall(r'["\']([^"\']+\.md)["\']', thinking_content)
-                        if file_paths:
-                            tool_input["paths"] = file_paths
-
-                    # Method 5: Fallback for list_directory - extract directory from thinking
-                    if not tool_input and tool_name == "filesystem.list_directory":
-                        # Look for directory paths in backticks or quotes
-                        dir_paths = re.findall(r"`([^`\n]+)`", thinking_content)
-                        if not dir_paths:
-                            dir_paths = re.findall(r'["\']([^"\']+)["\']', thinking_content)
-                        # Filter for likely directory paths (not ending with .md, etc.)
-                        dir_paths = [
-                            p for p in dir_paths if not p.endswith((".md", ".txt", ".py", ".json"))
-                        ]
-                        if dir_paths:
-                            tool_input["path"] = dir_paths[0]
-
-                    # Method 6: Handle malformed output like [TOOL_CALL: name]({"key">content...)
-                    # This catches cases where LLM outputs HTML-like malformed JSON
-                    if not tool_input and tool_name.startswith("filesystem."):
-                        # Simpler approach: match content after >
-                        escaped_tool_name = re.escape(tool_name)
-                        pattern = rf"\[TOOL_CALL:\s*{escaped_tool_name}\]\s*\(\s*[^)]*>\s*(.*)"
-                        match = re.search(pattern, content_for_parsing, re.DOTALL)
-                        if match:
-                            full_content = match.group(1).strip()
-                            if full_content:
-                                # Try to extract the key name from the malformed JSON
-                                key_match = re.search(
-                                    r'["\']?(\w+)["\']?\s*[:=]\s*>', content_for_parsing
-                                )
-                                if key_match:
-                                    key = key_match.group(1)
-                                    tool_input[key] = full_content
-
-                                # For save_file/write_file, also try to find path from thinking or context
-                                if tool_name in ("filesystem.save_file", "filesystem.write_file"):
-                                    # Look for path in thinking block or common patterns
-                                    # Pattern: path="..." or path: "..." or `path`
-                                    path_patterns = [
-                                        r'path\s*[:=]\s*"([^"]+)"',
-                                        r"path\s*[:=]\s*\'([^\']+)\'",
-                                        r"`([^`]+\.md)`",
-                                        r"`([^`]+\.txt)`",
-                                    ]
-                                    for p in path_patterns:
-                                        path_match = re.search(p, thinking_content)
-                                        if path_match:
-                                            tool_input["path"] = path_match.group(1)
-                                            break
-
                     # Always add tool call (let the tool itself handle missing required args)
                     tool_calls.append(
                         {

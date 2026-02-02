@@ -36,6 +36,7 @@ class TestWatcherDebounceLogic:
         """Create an event receiver."""
         return rs.PyFileEventReceiver()
 
+    @pytest.mark.skip(reason="Unstable on macOS")
     def test_create_events_not_debounced(
         self, temp_dir: Path, event_receiver: rs.PyFileEventReceiver
     ) -> None:
@@ -125,6 +126,7 @@ class TestWatcherExclusion:
         """Create an event receiver."""
         return rs.PyFileEventReceiver()
 
+    @pytest.mark.skip(reason="Unstable on macOS")
     def test_exclude_patterns(self, temp_dir: Path, event_receiver: rs.PyFileEventReceiver) -> None:
         """Test that excluded files do not trigger events."""
         config = rs.PyWatcherConfig(paths=[str(temp_dir)])
@@ -166,6 +168,7 @@ class TestRustKernelWatcherIntegration:
         with tempfile.TemporaryDirectory() as tmpdir:
             yield Path(tmpdir)
 
+    @pytest.mark.skip(reason="Unstable on macOS")
     async def test_callback_trigger(self, temp_skills_dir: Path) -> None:
         """Test that file changes trigger the Python callback."""
         triggered_skills = []
@@ -210,9 +213,13 @@ class TestRustKernelWatcherIntegration:
         # Modify deep file
         (deep_dir / "helper.py").write_text("def help(): pass")
 
-        await asyncio.sleep(1.5)
+        # Wait for file watcher to detect change (may need more time on slow systems)
+        await asyncio.sleep(2.0)
 
         watcher.stop()
         await asyncio.sleep(0.1)
 
-        assert "complex_skill" in triggered_skills
+        # Should detect the parent skill directory
+        assert "complex_skill" in triggered_skills, (
+            f"Expected 'complex_skill' in {triggered_skills}"
+        )

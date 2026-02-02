@@ -123,7 +123,7 @@ class Homeostasis:
         errors: list[str] = []
 
         try:
-            # Phase 1: Begin all transactions (create isolated branches)
+            # Stage 1: Begin all transactions (create isolated branches)
             if self.config.enable_isolation:
                 for task_id in task_graph.all_tasks:
                     transaction = await self.shield.begin_transaction(task_id)
@@ -134,7 +134,7 @@ class Homeostasis:
                         branch=transaction.branch_name,
                     )
 
-            # Phase 2: Execute tasks with conflict detection
+            # Stage 2: Execute tasks with conflict detection
             # We'll execute level by level, detecting conflicts between levels
             execution_levels = task_graph.get_execution_levels()
 
@@ -172,7 +172,7 @@ class Homeostasis:
                         task, transactions, result_transactions, context
                     )
 
-            # Phase 3: Verify and merge successful transactions
+            # Stage 3: Verify and merge successful transactions
             if self.config.auto_merge_on_success:
                 for task_id, transaction in transactions.items():
                     if transaction.status == TransactionStatus.COMMITTED:
@@ -184,7 +184,7 @@ class Homeostasis:
                                 result_transactions[task_id]["merged"] = True
                                 result_transactions[task_id]["status"] = "merged"
 
-            # Phase 4: Cleanup failed transactions
+            # Stage 4: Cleanup failed transactions
             if self.config.auto_rollback_on_failure:
                 for task_id, transaction in transactions.items():
                     if transaction.status in (

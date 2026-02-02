@@ -399,10 +399,19 @@ class SkillIndexer:
         else:
             return []
 
-    def get_stats(self) -> dict[str, Any]:
+    async def get_stats(self) -> dict[str, Any]:
         """Get index statistics."""
+        count = self._indexed_count
+        if self._store is not None:
+            try:
+                count = await self._store.count("skills")
+            except Exception:
+                pass
+        elif self._memory_index is not None:
+            count = len(self._memory_index)
+
         return {
-            "entries_indexed": self._indexed_count,
+            "entries_indexed": count,
             "is_ready": self.is_ready,
             "storage_path": self._storage_path,
         }

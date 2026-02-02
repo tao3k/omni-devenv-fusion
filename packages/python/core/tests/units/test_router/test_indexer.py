@@ -5,6 +5,7 @@ Tests the optimized batch indexing functionality and singleton patterns.
 
 from __future__ import annotations
 
+import asyncio
 import pytest
 
 from omni.core.router.indexer import IndexedEntry, InMemoryIndex, IndexedSkill, SkillIndexer
@@ -80,7 +81,8 @@ class TestSkillIndexer:
         """Test get_stats returns correct info."""
         indexer = SkillIndexer()
 
-        stats = indexer.get_stats()
+        # get_stats is async, run it with asyncio.run
+        stats = asyncio.run(indexer.get_stats())
 
         assert "entries_indexed" in stats
         assert "is_ready" in stats
@@ -362,7 +364,7 @@ class TestSkillIndexerIndexing:
 
         await indexer.index_skills(skills)
 
-        stats = indexer.get_stats()
+        stats = await indexer.get_stats()
         assert stats["entries_indexed"] >= 1
 
 

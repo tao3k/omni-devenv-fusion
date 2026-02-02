@@ -6,6 +6,7 @@ Orchestrates concurrent task execution with:
 - Parallel group execution
 - Result aggregation and conflict detection
 - Cost-aware reflection
+- TUI Integration
 
 Integration: TaskDecomposer → CortexOrchestrator → UniversalSolver → OmniCell
 """
@@ -15,7 +16,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional, Protocol
 
 from omni.foundation.config.logging import get_logger
 
@@ -23,6 +24,15 @@ from .nodes import TaskGraph, TaskGroup, TaskNode, TaskStatus, TaskPriority
 from .planner import TaskDecomposer, DecompositionResult
 
 logger = get_logger("omni.cortex.orchestrator")
+
+
+class TUIBridgeProtocol(Protocol):
+    """Protocol for TUI event emission."""
+
+    @property
+    def is_active(self) -> bool: ...
+
+    async def send_event(self, topic: str, payload: dict[str, Any]) -> None: ...
 
 
 @dataclass
@@ -60,7 +70,7 @@ class ExecutionResult:
 
 class CortexOrchestrator:
     """
-    Parallel task orchestration engine.
+    Parallel task orchestration engine with TUI support.
 
     Responsibilities:
     1. Receive decomposed task graphs
@@ -68,18 +78,32 @@ class CortexOrchestrator:
     3. Collect and aggregate results
     4. Detect and handle conflicts
     5. Provide execution metrics
+    6. Emit events to TUI for visualization
 
     Example:
-        orchestrator = CortexOrchestrator()
+        orchestrator = CortexOrchestrator(tui_bridge=tui)
         result = await orchestrator.execute(task_graph)
     """
 
-    def __init__(self, config: ExecutionConfig | None = None):
+    def __init__(
+        self,
+        config: ExecutionConfig | None = None,
+        tui_bridge: Optional[TUIBridgeProtocol] = None,
+    ):
         self.config = config or ExecutionConfig()
         self.decomposer = TaskDecomposer()
+        self.tui = tui_bridge
         self._semaphore: asyncio.Semaphore | None = None
         self._execution_id: str | None = None
         self._start_time: datetime | None = None
+
+    async def _emit(self, topic: str, payload: dict[str, Any]) -> None:
+        """Emit event to TUI if active."""
+        if self.tui and self.tui.is_active:
+            try:
+                await self.tui.send_event(topic, payload)
+            except Exception as e:
+                logger.debug(f"Failed to emit TUI event: {e}")
 
     async def execute(
         self,
@@ -106,6 +130,16 @@ class CortexOrchestrator:
             groups=len(task_graph.groups),
         )
 
+        # Emit TUI event for execution start
+        await self._emit(
+            "cortex/start",
+            {
+                "execution_id": self._execution_id,
+                "total_tasks": len(task_graph.all_tasks),
+                "groups": len(task_graph.groups),
+            },
+        )
+
         # Initialize concurrency control
         self._semaphore = asyncio.Semaphore(self.config.max_concurrent_tasks)
 
@@ -129,6 +163,17 @@ class CortexOrchestrator:
                     task_count=len(group.tasks),
                 )
 
+                # Emit TUI event for group start
+                await self._emit(
+                    "cortex/group/start",
+                    {
+                        "group_id": group.id,
+                        "name": group.name,
+                        "parallel": group.execute_in_parallel,
+                        "task_count": len(group.tasks),
+                    },
+                )
+
                 # Execute group (parallel or sequential)
                 group_results = await self._execute_group(
                     group, task_graph, completed_tasks, context
@@ -137,16 +182,29 @@ class CortexOrchestrator:
                 # Collect results
                 results[group_id] = group_results
 
+                # Count completed and failed
+                group_completed = 0
+                group_failed = 0
+
                 # Update completed tasks
                 for task_id, result in group_results.items():
                     if result["status"] == "success":
                         completed_tasks.add(task_id)
                         results[task_id] = result
+                        group_completed += 1
                     else:
                         errors.append(f"{task_id}: {result.get('error', 'Unknown error')}")
+                        group_failed += 1
 
                         if self.config.stop_on_failure:
                             logger.warning("cortex.stopping_on_failure", task=task_id)
+                            await self._emit(
+                                "cortex/error",
+                                {
+                                    "task_id": task_id,
+                                    "error": result.get("error", "Unknown error"),
+                                },
+                            )
                             return ExecutionResult(
                                 success=False,
                                 total_tasks=len(task_graph.all_tasks),
@@ -155,6 +213,17 @@ class CortexOrchestrator:
                                 results=results,
                                 errors=errors,
                             )
+
+                # Emit TUI event for group completion
+                await self._emit(
+                    "cortex/group/complete",
+                    {
+                        "group_id": group.id,
+                        "name": group.name,
+                        "completed": group_completed,
+                        "failed": group_failed,
+                    },
+                )
 
             # Calculate final metrics
             duration_ms = (datetime.now() - self._start_time).total_seconds() * 1000
@@ -168,6 +237,18 @@ class CortexOrchestrator:
                 completed=len(completed_tasks),
                 failed=len(errors),
                 duration_ms=duration_ms,
+            )
+
+            # Emit TUI event for execution complete
+            await self._emit(
+                "cortex/complete",
+                {
+                    "execution_id": self._execution_id,
+                    "success": success,
+                    "completed": len(completed_tasks),
+                    "failed": len(errors),
+                    "duration_ms": duration_ms,
+                },
             )
 
             return ExecutionResult(
@@ -288,6 +369,16 @@ class CortexOrchestrator:
             description=task.description[:50],
         )
 
+        # Emit TUI event for task start
+        await self._emit(
+            "task/start",
+            {
+                "task_id": task.id,
+                "description": task.description,
+                "command": task.command,
+            },
+        )
+
         try:
             # Execute via UniversalSolver
             result = await self._run_with_solver(task.command, context)
@@ -300,6 +391,17 @@ class CortexOrchestrator:
                 "cortex.task_success",
                 task_id=task.id,
                 duration_ms=task.duration_ms,
+            )
+
+            # Emit TUI event for task success
+            await self._emit(
+                "task/complete",
+                {
+                    "task_id": task.id,
+                    "status": "success",
+                    "duration_ms": task.duration_ms,
+                    "output_preview": str(result)[:100] if result else "",
+                },
             )
 
             return task.id, {
@@ -323,12 +425,33 @@ class CortexOrchestrator:
                     task_id=task.id,
                     attempt=task.retry_count,
                 )
+
+                # Emit TUI event for retry
+                await self._emit(
+                    "task/retry",
+                    {
+                        "task_id": task.id,
+                        "attempt": task.retry_count,
+                        "error": str(e),
+                    },
+                )
+
                 return await self._execute_task(task, completed_tasks, context)
 
             logger.error(
                 "cortex.task_failed",
                 task_id=task.id,
                 error=str(e),
+            )
+
+            # Emit TUI event for task failure
+            await self._emit(
+                "task/fail",
+                {
+                    "task_id": task.id,
+                    "error": str(e),
+                    "retry_count": task.retry_count,
+                },
             )
 
             return task.id, {

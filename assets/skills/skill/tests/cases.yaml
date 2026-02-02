@@ -1,0 +1,11 @@
+- name: "test_discover_git"
+  input:
+    intent: "git commit"
+  expected:
+    contains: "git.smart_commit"
+
+- name: "test_list_templates_skill"
+  input:
+    skill_name: "skill"
+  expected:
+    has_keys: ["python", "rust"]

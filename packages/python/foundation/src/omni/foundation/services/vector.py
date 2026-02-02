@@ -159,6 +159,13 @@ class VectorStoreClient:
 
             return results
         except Exception as e:
+            # Handle "table not found" errors gracefully - return empty results
+            error_str = str(e).lower()
+            if "table not found" in error_str or "not found" in error_str:
+                logger.debug(
+                    f"VectorStore: Collection '{collection}' not found, returning empty results"
+                )
+                return []
             logger.error("Search failed", error=str(e))
             return []
 
@@ -195,6 +202,11 @@ class VectorStoreClient:
 
             return True
         except Exception as e:
+            # Handle "table not found" errors gracefully
+            error_str = str(e).lower()
+            if "table not found" in error_str or "not found" in error_str:
+                logger.debug(f"VectorStore: Collection '{collection}' not found for add operation")
+                return False
             logger.error("Add failed", error=str(e))
             return False
 
@@ -220,6 +232,13 @@ class VectorStoreClient:
 
             return True
         except Exception as e:
+            # Handle "table not found" errors gracefully
+            error_str = str(e).lower()
+            if "table not found" in error_str or "not found" in error_str:
+                logger.debug(
+                    f"VectorStore: Collection '{collection}' not found for delete operation"
+                )
+                return False
             logger.error("Delete failed", error=str(e))
             return False
 
@@ -239,6 +258,10 @@ class VectorStoreClient:
         try:
             return store.count(collection)
         except Exception as e:
+            # Handle "table not found" errors gracefully - return 0
+            error_str = str(e).lower()
+            if "table not found" in error_str or "not found" in error_str:
+                return 0
             logger.error("Count failed", error=str(e))
             return 0
 

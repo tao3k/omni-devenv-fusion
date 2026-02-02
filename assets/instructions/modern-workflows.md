@@ -81,7 +81,7 @@ test = testing.run_pytest(target="**/*.py")
 **Protocol**:
 
 1. **Diagnose**: Run `testing.run_pytest`. Look at the structured failures.
-2. **Surgical Read**: Use `filesystem.read_files_context(file="...", line=42, context_lines=10)`.
+2. **Surgical Read**: Use `read_file(file_path="...", offset=42, limit=10)`.
    - _Why_: Focus only on the error location. Save tokens.
 3. **Fix**: Use `code_tools.apply_file_edit` to fix the specific logic.
 4. **Verify**: Rerun `testing.run_pytest` to confirm the fix (Green state).
@@ -96,10 +96,10 @@ result = testing.run_pytest(target="tests/test_calculator.py")
 # result["failures"][0] = {"file": "tests/test_calculator.py", "line": 42, "error": "..."}
 
 # Step 2: Surgical Read
-context = filesystem.read_files_context(
+context = read_file(
     file_path="tests/test_calculator.py",
-    line_number=42,
-    context_lines=5
+    offset=42,
+    limit=5
 )
 
 # Step 3: Fix
@@ -120,15 +120,10 @@ assert test["success"] is True
 
 Always prefer the most specialized tool for the job:
 
-| Task                  | Tool                                    |
-| --------------------- | --------------------------------------- |
-| **Text Search**       | `advanced_tools.smart_search` (ripgrep) |
-| **File Finding**      | `advanced_tools.smart_find` (fd)        |
-| **Project Structure** | `advanced_tools.tree_view`              |
-| **Single File Edit**  | `code_tools.apply_file_edit`            |
-| **Multi-File Edit**   | `advanced_tools.batch_replace`          |
-| **Surgical Read**     | `filesystem.read_files_context`         |
-| **Test Execution**    | `testing.run_pytest`                    |
+| Single File Edit | `code_tools.apply_file_edit` |
+| Multi-File Edit | `advanced_tools.batch_replace` |
+| Surgical Read | `read_file` (with offset/limit) |
+| Test Execution | `testing.run_pytest` |
 
 ---
 
@@ -143,8 +138,8 @@ Always prefer the most specialized tool for the job:
 
 ### Surgical Reading
 
-1. Use `read_file_context` instead of full file reads
-2. Set `context_lines` appropriately (5-10 is usually sufficient)
+1. Use `read_file` (offset/limit) instead of full file reads
+2. Set `limit` appropriately (5-10 is usually sufficient)
 3. Focus on the error line returned by `run_pytest`
 
 ---
@@ -155,7 +150,7 @@ Always prefer the most specialized tool for the job:
 | ---------------------------- | ---------------------------------------------------------------------------------------------- |
 | New feature with unknown API | `knowledge.get_best_practice` → Implement                                                      |
 | Bulk rename/refactor         | `smart_search` → `batch_replace(dry_run=True)` → `batch_replace(dry_run=False)` → `run_pytest` |
-| Fix test failure             | `run_pytest` → `read_file_context` → `apply_file_edit` → `run_pytest`                          |
+| Fix test failure             | `run_pytest` → `read_file` → `apply_file_edit` → `run_pytest`                                  |
 | Find patterns                | `smart_search` (prefer over `search_code`)                                                     |
 | List files                   | `smart_find` (prefer over `list_directory`)                                                    |
 | View structure               | `tree_view`                                                                                    |

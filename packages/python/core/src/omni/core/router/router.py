@@ -233,10 +233,11 @@ class UnifiedRouter:
     def _load_skill_index(self) -> dict:
         """Load skill index for keyword-based routing."""
         try:
+            import asyncio
             from omni.foundation.bridge.scanner import PythonSkillScanner
 
             scanner = PythonSkillScanner()
-            skills = scanner.scan_directory()
+            skills = asyncio.run(scanner.scan_directory())
 
             # Build keyword -> (skill, commands) mapping from routingKeywords
             keyword_map = {}

@@ -1,10 +1,8 @@
 """Unit tests for omni.mcp.interfaces."""
 
 from typing import Any
-
 import pytest
 from mcp.types import JSONRPCRequest, JSONRPCResponse
-
 from omni.mcp.interfaces import (
     MCPRequestContext,
     MCPRequestHandler,
@@ -18,17 +16,17 @@ class TestMCPRequestHandlerProtocol:
 
     def test_protocol_defines_required_methods(self):
         """Verify protocol has all required methods."""
-        # Protocol should define handle_request, handle_notification, initialize
         assert hasattr(MCPRequestHandler, "__protocol_attrs__")
 
     @pytest.mark.asyncio
-    async def test_mock_handler_implements_protocol(self):
+    async def test_mock_handler_implements_protocol(self, mcp_tester):
         """Test that a mock handler can satisfy the protocol."""
 
         class MockHandler:
             async def handle_request(self, request: JSONRPCRequest) -> JSONRPCResponse:
-                req_id = request.get("id")
-                return JSONRPCResponse(jsonrpc="2.0", id=req_id, result={})
+                # Use mcp_tester macro to build response
+                res = mcp_tester.make_success_response(request.get("id"), {})
+                return JSONRPCResponse(**res)
 
             async def handle_notification(self, method: str, params: Any) -> None:
                 pass
@@ -37,7 +35,6 @@ class TestMCPRequestHandlerProtocol:
                 pass
 
         handler = MockHandler()
-        # Verify it can be used where MCPRequestHandler is expected
         assert isinstance(handler, MCPRequestHandler)
 
 
@@ -48,8 +45,7 @@ class TestMCPTransportProtocol:
         """Verify transport protocol has all required methods."""
         assert hasattr(MCPTransport, "__protocol_attrs__")
 
-    @pytest.mark.asyncio
-    async def test_mock_transport_implements_protocol(self):
+    def test_mock_transport_implements_protocol(self):
         """Test that a mock transport can satisfy the protocol."""
 
         class MockTransport:
@@ -76,8 +72,7 @@ class TestMCPSessionProtocol:
         """Verify session protocol has session_id property."""
         assert hasattr(MCPSession, "__protocol_attrs__")
 
-    @pytest.mark.asyncio
-    async def test_mock_session_implements_protocol(self):
+    def test_mock_session_implements_protocol(self):
         """Test that a mock session can satisfy the protocol."""
 
         class MockSession:
@@ -100,8 +95,7 @@ class TestMCPRequestContextProtocol:
         """Verify context protocol has session property."""
         assert hasattr(MCPRequestContext, "__protocol_attrs__")
 
-    @pytest.mark.asyncio
-    async def test_mock_context_implements_protocol(self):
+    def test_mock_context_implements_protocol(self):
         """Test that a mock context can satisfy the protocol."""
 
         class MockContext:

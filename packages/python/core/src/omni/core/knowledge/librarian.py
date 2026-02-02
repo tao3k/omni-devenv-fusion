@@ -93,7 +93,7 @@ class Librarian:
 
         # Use unified path if not specified
         if storage_path is None:
-            from omni.agent.cli.commands.reindex import get_database_path
+            from omni.foundation.config.dirs import get_database_path
 
             storage_path = get_database_path("knowledge")
 

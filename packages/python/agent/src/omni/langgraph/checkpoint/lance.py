@@ -337,6 +337,11 @@ class RustLanceCheckpointSaver(BaseCheckpointSaver):
         """Get the table name."""
         return self._table_name
 
+    @property
+    def store(self) -> Any:
+        """Get the underlying Rust store for advanced operations."""
+        return self._store
+
     def count(self, thread_id: str) -> int:
         """Count checkpoints for a thread."""
         return self._store.count(self._table_name, thread_id)
