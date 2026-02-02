@@ -40,6 +40,9 @@ tiktoken-rs = "0.9.1"
 memchr = "2.7.6"
 tempfile = "3.24"
 
+# JSON Schema generation for Schema Singularity (SSOT)
+schemars = "0.8.21"
+
 # Performance optimization - Thin LTO for reduced memory
 [profile.release]
 opt-level = "s"      

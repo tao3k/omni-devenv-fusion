@@ -23,6 +23,7 @@
    - [skills-scanner](#skills-scanner)
 4. [Python Bindings](#python-bindings)
 5. [Build Commands](#build-commands)
+6. [Related Documentation](#related-documentation)
 
 ---
 
@@ -40,7 +41,7 @@ The Rust crates provide high-performance implementations for performance-critica
 | `omni-sniffer`   | Environment sniffer    | git2                 |
 | `omni-tags`      | Symbol extraction      | tree-sitter, walkdir |
 | `omni-tokenizer` | Token counting         | tiktoken-rs          |
-| `omni-types`     | Common types           | serde                |
+| `omni-types`     | Common types + Schemas | serde, schemars      |
 | `omni-vector`    | Vector database        | lance, dashmap       |
 | `skills-scanner` | Skill scanning         | omni-ast             |
 
@@ -683,7 +684,7 @@ compressed = pruner.compress([{"role": "user", "content": "..."}])
 
 ### omni-types
 
-**Purpose**: Common type definitions for Omni DevEnv
+**Purpose**: Common type definitions for Omni DevEnv + Schema Singularity (SSOT)
 
 **Location**: `packages/rust/crates/omni-types/`
 
@@ -691,50 +692,107 @@ compressed = pruner.compress([{"role": "user", "content": "..."}])
 omni-types/
 ├── Cargo.toml
 ├── src/
-│   └── lib.rs             # Entry point with all types
+│   └── lib.rs             # Entry point with all types + Schema Registry
 └── tests/
     └── test_types.rs
 ```
 
-**Key Types**:
+**Key Types** (all derive `JsonSchema` for Schema Singularity):
 
 ```rust
-pub struct OmniError {
-    pub code: ErrorCode,
-    pub message: String,
-    pub context: Option<Value>,
-}
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
+/// Agent skill definition
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Skill {
     pub name: String,
     pub description: String,
-    pub commands: Vec<Command>,
+    pub category: String,
 }
 
+/// Skill definition with generic metadata container
+/// This is the core type for Holographic Registry
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct SkillDefinition {
+    pub name: String,                    // Unique identifier (e.g., "git", "writer")
+    pub description: String,             // Semantic description for vector embedding
+    pub metadata: serde_json::Value,     // Flexible metadata container
+    #[serde(default)]
+    pub routing_keywords: Vec<String>,   // Keywords for semantic search
+}
+
+/// Task brief from orchestrator
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct TaskBrief {
-    pub task_id: String,
-    pub description: String,
-    pub context: Value,
+    pub task: String,
+    pub mission_brief: String,
+    pub constraints: Vec<String>,
+    pub relevant_files: Vec<String>,
 }
 
+/// Agent execution result
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AgentResult {
     pub success: bool,
-    pub output: String,
-    pub metrics: Option<ExecutionMetrics>,
+    pub content: String,
+    pub confidence: f64,
+    pub message: String,
 }
 
+/// Vector search result
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct VectorSearchResult {
     pub id: String,
-    pub score: f32,
-    pub payload: Value,
-    pub metadata: HashMap<String, String>,
+    pub content: String,
+    pub metadata: serde_json::Value,
+    pub distance: f64,
 }
 
+/// Environment snapshot for the sensory system
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct EnvironmentSnapshot {
-    pub git_status: Option<GitStatus>,
-    pub working_directory: PathBuf,
-    pub timestamp: DateTime<Utc>,
-    pub context_files: Vec<PathBuf>,
+    pub git_branch: String,
+    pub git_modified: usize,
+    pub git_staged: usize,
+    pub active_context_lines: usize,
+    pub dirty_files: Vec<String>,
+    pub timestamp: f64,
+}
+```
+
+**Schema Registry** (Schema Singularity):
+
+```rust
+/// Get JSON Schema for a registered type.
+/// Enables Python/LLM to dynamically retrieve authoritative schemas.
+pub fn get_schema_json(type_name: &str) -> Result<String, SchemaError> {
+    let schema = match type_name {
+        "Skill" => schemars::schema_for!(Skill),
+        "SkillDefinition" => schemars::schema_for!(SkillDefinition),
+        "TaskBrief" => schemars::schema_for!(TaskBrief),
+        "AgentResult" => schemars::schema_for!(AgentResult),
+        "AgentContext" => schemars::schema_for!(AgentContext),
+        "VectorSearchResult" => schemars::schema_for!(VectorSearchResult),
+        "EnvironmentSnapshot" => schemars::schema_for!(EnvironmentSnapshot),
+        "OmniTool" => schemars::schema_for!(SkillDefinition), // Alias
+        _ => return Err(SchemaError::UnknownType(type_name.to_string())),
+    };
+    serde_json::to_string_pretty(&schema).ok()
+}
+
+/// Get list of all registered type names
+pub fn get_registered_types() -> Vec<&'static str> {
+    vec![
+        "Skill",
+        "SkillDefinition",
+        "TaskBrief",
+        "AgentResult",
+        "AgentContext",
+        "VectorSearchResult",
+        "EnvironmentSnapshot",
+        "OmniTool",
+    ]
 }
 ```
 
@@ -742,6 +800,25 @@ pub struct EnvironmentSnapshot {
 
 - `serde`, `serde_json`
 - `thiserror`
+- `schemars` (0.8.21) - **NEW**: Enables automatic JSON Schema generation
+
+**Python Bindings** (`packages/rust/bindings/python/src/schema.rs`):
+
+```python
+from omni_core_rs import py_get_schema_json, py_get_registered_types
+
+# Get all available schema types
+types = py_get_registered_types()
+# ['Skill', 'SkillDefinition', 'TaskBrief', ...]
+
+# Get authoritative JSON Schema from Rust SSOT
+schema = py_get_schema_json('SkillDefinition')
+# Returns: JSON Schema string for SkillDefinition
+```
+
+**Related Documentation**:
+
+- [Schema Singularity](../reference/schema-singularity.md) - Detailed SSOT architecture guide
 
 ---
 

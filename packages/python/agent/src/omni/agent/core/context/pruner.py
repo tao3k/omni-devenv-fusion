@@ -45,6 +45,33 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+class PruningConfig:
+    """Configuration for context pruning behavior.
+
+    Attributes:
+        max_tokens: Maximum tokens for total context.
+        retained_turns: Number of message pairs to retain.
+        max_tool_output: Maximum characters for tool outputs.
+    """
+
+    def __init__(
+        self,
+        max_tokens: int = 8000,
+        retained_turns: int = 4,
+        max_tool_output: int = 500,
+    ) -> None:
+        """Initialize PruningConfig.
+
+        Args:
+            max_tokens: Maximum tokens for total context.
+            retained_turns: Number of message pairs to retain.
+            max_tool_output: Maximum characters for tool outputs.
+        """
+        self.max_tokens = max_tokens
+        self.retained_turns = retained_turns
+        self.max_tool_output = max_tool_output
+
+
 class ContextPruner:
     """Rust-accelerated Context Pruner.
 
@@ -52,34 +79,107 @@ class ContextPruner:
     Implements "Cognitive Re-anchoring" for AutoFixLoop recovery.
 
     Attributes:
-        window_size: Number of message pairs to keep in working memory.
-        max_tool_output: Maximum characters for tool outputs in archive.
+        config: PruningConfig instance with pruning settings.
         rust_pruner: Rust-accelerated pruner instance (if available).
     """
 
     def __init__(
         self,
-        window_size: int = 4,
-        max_tool_output: int = 500,
-        max_context_tokens: int = 8000,
+        config: PruningConfig | None = None,
+        window_size: int | None = None,
+        max_tool_output: int | None = None,
+        max_context_tokens: int | None = None,
     ) -> None:
         """Initialize the ContextPruner.
 
         Args:
+            config: Optional PruningConfig object. If provided, other args are ignored.
             window_size: Number of message pairs (user+assistant) to keep.
             max_tool_output: Maximum characters for tool outputs in archive.
             max_context_tokens: Maximum tokens for total context.
         """
-        self.window_size = window_size
-        self.max_tool_output = max_tool_output
-        self.max_context_tokens = max_context_tokens
+        # Create config if needed (store for config attribute)
+        if config is not None:
+            self.config = config
+        else:
+            self.config = PruningConfig(
+                max_tokens=max_context_tokens if max_context_tokens is not None else 8000,
+                retained_turns=window_size if window_size is not None else 4,
+                max_tool_output=max_tool_output if max_tool_output is not None else 500,
+            )
+
+        # Use config values
+        self.window_size = self.config.retained_turns
+        self.max_tool_output = self.config.max_tool_output
+        self.max_context_tokens = self.config.max_tokens
 
         if RUST_AVAILABLE:
-            self.rust_pruner = RustContextPruner(window_size, max_tool_output)
-            logger.info(f"ContextPruner initialized with Rust acceleration (window={window_size})")
+            self.rust_pruner = RustContextPruner(self.window_size, self.max_tool_output)
+            logger.info(
+                f"ContextPruner initialized with Rust acceleration (window={self.window_size})"
+            )
         else:
             self.rust_pruner = None
             logger.warning("ContextPruner falling back to estimation mode")
+
+    def prune(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """Prune messages based on token limit.
+
+        Uses the default "recent" strategy which keeps system messages
+        and the most recent N turns.
+
+        Args:
+            messages: List of message dicts.
+
+        Returns:
+            Pruned list of messages.
+        """
+        # Count total tokens
+        total_tokens = self.count_messages(messages)
+
+        if total_tokens <= self.max_context_tokens:
+            return messages
+
+        # Strategy: Keep system messages + recent turns
+        system_msgs = [m for m in messages if m.get("role") == "system"]
+        other_msgs = [m for m in messages if m.get("role") != "system"]
+
+        # Calculate how many turns to keep
+        max_other_tokens = self.max_context_tokens - self.count_messages(system_msgs)
+        target_turns = max(1, max_other_tokens // 1000)  # Rough estimate: 1000 tokens per turn
+
+        # Keep last N turns (2 messages per turn: user + assistant)
+        keep_count = min(target_turns * 2, len(other_msgs))
+        pruned_other = other_msgs[-keep_count:]
+
+        return system_msgs + pruned_other
+
+    def get_summary_candidates(
+        self, messages: List[Dict[str, str]], max_candidates: int = 5
+    ) -> list[dict[str, Any]]:
+        """Get messages that are good candidates for summarization.
+
+        Args:
+            messages: List of message dicts.
+            max_candidates: Maximum number of candidates to return.
+
+        Returns:
+            List of message dicts with metadata.
+        """
+        # Look at older messages (not the most recent turn)
+        candidates = []
+        for i, msg in enumerate(messages[:-2]):  # Exclude last turn
+            if msg.get("role") in ("user", "assistant"):
+                candidates.append(
+                    {
+                        "index": i,
+                        "role": msg.get("role"),
+                        "content": msg.get("content", "")[:200],
+                        "tokens": self.count_tokens(msg.get("content", "")),
+                    }
+                )
+
+        return candidates[-max_candidates:]
 
     def count_tokens(self, text: str) -> int:
         """Count tokens in text using Rust.

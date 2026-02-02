@@ -12,10 +12,12 @@ Key Features:
 - Bi-directional alias mapping (LLM-friendly names -> canonical names)
 - Glob pattern filtering for tool exposure
 - Zero-copy Rust registry access
+- [v2.1] Holographic Mode: Dynamic tool discovery via HolographicRegistry (Stage 3.5)
 
 Usage:
     python -m omni.agent.mcp_server.server
     python -m omni.agent.mcp_server.server --sse --port 8080
+    python -m omni.agent.mcp_server.server --holographic  # Enable holographic mode
 """
 
 from __future__ import annotations
@@ -35,6 +37,9 @@ from omni.core.config.loader import load_command_overrides, is_filtered
 from omni.core.omni_tool import get_omni_tool_info
 from omni.core.skills.runtime.omni_cell import ActionType, get_runner
 
+# [NEW] Holographic Registry for dynamic tool discovery (Stage 3.5)
+from omni.core.skills.registry.holographic import HolographicRegistry, ToolMetadata
+
 # [NEW] Import shared formatting logic
 from omni.foundation.utils.formatting import sanitize_tool_args, one_line_preview
 from omni.mcp.transport.sse import SSEServer
@@ -47,7 +52,7 @@ logger = get_logger("omni.agent.mcp_server")
 
 class AgentMCPServer:
     """
-    High-Performance MCP Server (v2.0)
+    High-Performance MCP Server (v2.1)
 
     Leverages Rust components for microsecond-level responses:
     - tools/list: Zero-copy via Rust Vector Store registry
@@ -56,12 +61,24 @@ class AgentMCPServer:
     Features:
     - Bi-directional alias mapping: LLM sees 'save_memory', kernel executes 'memory.remember_insight'
     - Glob pattern filtering: Control which tools are exposed to LLM
+    - [v2.1] Holographic Mode: Dynamic tool discovery via HolographicRegistry (Stage 3.5)
     """
 
-    def __init__(self):
+    def __init__(self, use_holographic: bool = False):
+        """Initialize the MCP Server.
+
+        Args:
+            use_holographic: If True, use HolographicRegistry for dynamic tool discovery.
+                           If False, use traditional kernel-based tool listing.
+        """
         self._kernel = None
         self._app = Server("omni-agent-os-v2")
         self._start_time = time.time()
+
+        # [v2.1] Holographic Mode flag
+        self._use_holographic = use_holographic
+        self._holographic_adapter = None
+        self._holographic_registry: HolographicRegistry | None = None
 
         # [NEW] Routing Tables for Alias Resolution
         self._alias_to_real: dict[str, str] = {}  # alias -> real_name (Incoming calls)
@@ -69,6 +86,210 @@ class AgentMCPServer:
 
         self._build_routing_table()
         self._register_handlers()
+
+    def _init_holographic_mode(self) -> None:
+        """Initialize Holographic Registry and Adapter for dynamic tool discovery."""
+        if not self._use_holographic:
+            return
+
+        if not self._kernel or not self._kernel.is_ready:
+            logger.warning("Kernel not ready, cannot initialize holographic mode")
+            return
+
+        try:
+            # Get the router's semantic indexer to access its registry
+            router = getattr(self._kernel, "router", None)
+            if router and hasattr(router, "_semantic"):
+                semantic = router._semantic
+                if hasattr(semantic, "_indexer"):
+                    indexer = semantic._indexer
+                    if hasattr(indexer, "_registry"):
+                        self._holographic_registry = indexer._registry
+                        logger.info("✅ Holographic Registry initialized from router's indexer")
+                        return
+
+            # Fallback: Check if kernel has direct registry access
+            if hasattr(self._kernel, "skill_context"):
+                # Use the skill context to get tools and create registry on demand
+                commands = self._kernel.skill_context.get_core_commands()
+                logger.info(f"Found {len(commands)} commands for holographic registry")
+
+            logger.info(
+                "ℹ️  Holographic mode enabled but no registry found - using adapter initialization"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to initialize holographic mode: {e}")
+
+    # =============================================================================
+    # [v2.1] Holographic Tool Discovery Methods (Stage 3.5)
+    # =============================================================================
+
+    async def _list_holographic_tools(
+        self,
+        query: str | None = None,
+        limit: int | None = None,
+    ) -> list[Tool]:
+        """List tools from HolographicRegistry with optional semantic filtering.
+
+        Args:
+            query: Optional search query for semantic filtering
+            limit: Maximum tools to return
+
+        Returns:
+            List of MCP Tool objects from HolographicRegistry
+        """
+        if not self._holographic_registry:
+            logger.warning("Holographic registry not available")
+            return []
+
+        max_tools = limit or 20
+
+        try:
+            if query:
+                # Semantic search using HolographicRegistry
+                from omni.core.context.tools import ToolContextBuilder
+
+                keywords = ToolContextBuilder.extract_keywords(query)
+                tools_metadata = await self._holographic_registry.search_hybrid(
+                    query=query,
+                    keywords=keywords,
+                    limit=max_tools,
+                )
+                logger.debug(f"Semantic search for '{query}' found {len(tools_metadata)} tools")
+            else:
+                # List all tools
+                tools_metadata = await self._holographic_registry.list_tools(limit=max_tools)
+
+            # Convert to MCP Tool format
+            mcp_tools = self._convert_holographic_to_mcp_tools(tools_metadata)
+            logger.info(f"[HoloMCP] Listed {len(mcp_tools)} tools from HolographicRegistry")
+            return mcp_tools
+
+        except Exception as e:
+            logger.error(f"Failed to list holographic tools: {e}")
+            return []
+
+    def _convert_holographic_to_mcp_tools(self, tools_metadata: list[ToolMetadata]) -> list[Tool]:
+        """Convert ToolMetadata to MCP Tool format.
+
+        Args:
+            tools_metadata: List of ToolMetadata from HolographicRegistry
+
+        Returns:
+            List of MCP Tool objects
+        """
+        mcp_tools: list[Tool] = []
+
+        for metadata in tools_metadata:
+            # Build input schema from args
+            input_schema = self._build_holographic_input_schema(metadata)
+
+            tool = Tool(
+                name=metadata.name,
+                description=metadata.description,
+                inputSchema=input_schema,
+            )
+            mcp_tools.append(tool)
+
+        return mcp_tools
+
+    def _build_holographic_input_schema(self, metadata: ToolMetadata) -> dict[str, Any]:
+        """Build JSON Schema for tool parameters from ToolMetadata.
+
+        Args:
+            metadata: ToolMetadata from HolographicRegistry
+
+        Returns:
+            JSON Schema dict for MCP inputSchema
+        """
+        properties: dict[str, Any] = {}
+        required: list[str] = []
+
+        for arg in metadata.args:
+            if isinstance(arg, dict):
+                arg_name = arg.get("name", "")
+                arg_type = arg.get("type", "string")
+                arg_desc = arg.get("description", "")
+
+                # Convert Python type to JSON Schema type
+                json_type = self._python_type_to_json_type(arg_type)
+
+                properties[arg_name] = {
+                    "type": json_type,
+                    "description": arg_desc,
+                }
+                required.append(arg_name)
+
+        return {
+            "type": "object",
+            "properties": properties,
+            "required": required if required else [],
+        }
+
+    def _python_type_to_json_type(self, python_type: str) -> str:
+        """Convert Python type hint to JSON Schema type."""
+        type_mapping = {
+            "str": "string",
+            "string": "string",
+            "int": "integer",
+            "float": "number",
+            "bool": "boolean",
+            "list": "array",
+            "dict": "object",
+            "any": "string",
+            "Optional": "string",
+        }
+
+        # Handle Optional[X] patterns
+        if "Optional[" in python_type:
+            python_type = python_type.split("[")[1].split("]")[0]
+
+        # Handle List[X] patterns
+        if "List[" in python_type:
+            return "array"
+
+        return type_mapping.get(python_type.lower(), "string")
+
+    async def _call_holographic_tool(self, name: str, args: dict) -> list[TextContent]:
+        """Execute a holographic tool with lazy loading.
+
+        Args:
+            name: Tool name
+            args: Tool arguments
+
+        Returns:
+            List of text content results
+        """
+        if not self._holographic_registry:
+            return [TextContent(type="text", text="Error: Holographic registry not available")]
+
+        # Look up tool metadata
+        metadata = await self._holographic_registry.get_tool(name)
+        if metadata is None:
+            return [TextContent(type="text", text=f"Tool not found: {name}")]
+
+        # Lazy load the tool implementation
+        from omni.core.skills.registry.holographic import LazyTool
+
+        lazy_tool = LazyTool(metadata=metadata, registry=self._holographic_registry)
+        func = await lazy_tool.load()
+
+        if func is None:
+            return [TextContent(type="text", text=f"Failed to load tool: {name}")]
+
+        # Execute the tool
+        try:
+            if asyncio.iscoroutinefunction(func):
+                result = await func(**args)
+            else:
+                result = func(**args)
+
+            return [TextContent(type="text", text=str(result))]
+
+        except Exception as e:
+            logger.error(f"Error executing {name}: {e}")
+            return [TextContent(type="text", text=f"Error: {str(e)}")]
 
     def _build_routing_table(self):
         """Pre-compute routing tables from overrides config."""
@@ -116,15 +337,20 @@ class AgentMCPServer:
         """Register MCP protocol handlers."""
 
         @self._app.list_tools()
-        async def list_tools() -> list[Tool]:
+        async def list_tools(limit: int | None = None, query: str | None = None) -> list[Tool]:
             """
             List tools using Zero-Copy Rust Registry with Alias Resolution.
 
             Features:
+            - [v2.1] Holographic Mode: Dynamic discovery via HolographicRegistry
             - Applies command overrides (alias, append_doc)
             - Filters out commands via glob patterns
             - Performance: ~1-5ms (vs ~100ms+ for Python iteration)
             """
+            # [v2.1] Holographic Mode: Use dynamic tool discovery
+            if self._use_holographic and self._holographic_registry:
+                return await self._list_holographic_tools(query=query, limit=limit)
+
             if not self._kernel or not self._kernel.is_ready:
                 logger.warning("Kernel not ready, returning empty tools list")
                 return []
@@ -223,7 +449,14 @@ class AgentMCPServer:
 
         @self._app.call_tool()
         async def call_tool(name: str, arguments: dict) -> list[Any]:
-            """Execute tool via Kernel with Clean Logging."""
+            """Execute tool via Kernel with Clean Logging.
+
+            [v2.1] Holographic Mode: Supports lazy-loaded tools from HolographicRegistry.
+            """
+            # [v2.1] Holographic Mode: Use lazy-loaded tool execution
+            if self._use_holographic and self._holographic_registry:
+                return await self._call_holographic_tool(name, arguments)
+
             # [NEW] Universal Master Proxy Support
             if name == "omni":
                 intent = arguments.get("intent")
@@ -299,11 +532,13 @@ class AgentMCPServer:
             """Get system status for debugging startup issues.
 
             Returns kernel readiness, cortex status, and component health.
+            [v2.1] Includes holographic mode status.
             """
             try:
                 cortex_ready = False
                 indexed_count = 0
                 router_status = "unknown"
+                holographic_status = "disabled"
 
                 if self._kernel and self._kernel.is_ready:
                     # Check router and cortex status
@@ -319,6 +554,16 @@ class AgentMCPServer:
 
                     router_status = "ready" if router else "not_initialized"
                     skill_count = len(self._kernel.skill_context.get_core_commands())
+
+                    # [v2.1] Check holographic status
+                    if self._use_holographic:
+                        if self._holographic_registry:
+                            holographic_status = "active"
+                        else:
+                            holographic_status = "enabled (no registry)"
+                    else:
+                        holographic_status = "disabled"
+
                 else:
                     skill_count = 0
 
@@ -333,8 +578,9 @@ class AgentMCPServer:
                                 "cortex_indexed": indexed_count,
                                 "router_status": router_status,
                                 "tool_count": skill_count,
+                                "holographic_mode": holographic_status,
                                 "uptime_seconds": round(uptime, 2),
-                                "version": "2.0.0",
+                                "version": "2.1.0",
                             },
                             indent=2,
                         ),
@@ -654,7 +900,8 @@ Focus on:
 
     async def run_stdio(self, verbose: bool = False) -> None:
         """Run the MCP server over Stdio."""
-        logger.info("🚀 Starting Agent MCP Server v2.0 (STDIO Mode)")
+        mode = "Holographic" if self._use_holographic else "Standard"
+        logger.info(f"🚀 Starting Agent MCP Server v2.1 ({mode} Mode - STDIO)")
 
         # Initialize kernel
         self._kernel = get_kernel()
@@ -664,6 +911,14 @@ Focus on:
             logger.info(
                 f"✅ Kernel ready with {len(self._kernel.skill_context.get_core_commands())} tools"
             )
+
+        # [v2.1] Initialize holographic mode after kernel is ready
+        if self._use_holographic:
+            self._init_holographic_mode()
+            if self._holographic_registry:
+                logger.info("🔮 Holographic mode active - tools will be dynamically discovered")
+            else:
+                logger.warning("⚠️  Holographic mode enabled but registry not available")
 
         # [NEW] Validate overrides against loaded tools
         self._validate_overrides()
@@ -699,11 +954,20 @@ async def run_stdio_server(verbose: bool = False) -> None:
     await server.run_stdio(verbose=verbose)
 
 
-async def run_sse_server(port: int = 8080, verbose: bool = False) -> None:
-    """Run the Agent in SSE mode."""
-    logger.info(f"🚀 Starting Agent MCP Server v2.0 (SSE Mode on port {port})")
+async def run_sse_server(
+    port: int = 8080, verbose: bool = False, use_holographic: bool = False
+) -> None:
+    """Run the Agent in SSE mode.
 
-    server = AgentMCPServer()
+    Args:
+        port: Port for SSE server (default: 8080)
+        verbose: Enable verbose logging
+        use_holographic: Enable holographic mode for dynamic tool discovery
+    """
+    mode = "Holographic" if use_holographic else "Standard"
+    logger.info(f"🚀 Starting Agent MCP Server v2.1 ({mode} Mode - SSE on port {port})")
+
+    server = AgentMCPServer(use_holographic=use_holographic)
 
     # Initialize kernel
     server._kernel = get_kernel()
@@ -713,6 +977,14 @@ async def run_sse_server(port: int = 8080, verbose: bool = False) -> None:
         logger.info(
             f"✅ Kernel ready with {len(server._kernel.skill_context.get_core_commands())} tools"
         )
+
+    # [v2.1] Initialize holographic mode after kernel is ready
+    if use_holographic:
+        server._init_holographic_mode()
+        if server._holographic_registry:
+            logger.info("🔮 Holographic mode active - tools will be dynamically discovered")
+        else:
+            logger.warning("⚠️  Holographic mode enabled but registry not available")
 
     # [NEW] Validate overrides
     server._validate_overrides()
@@ -727,7 +999,7 @@ async def run_sse_server(port: int = 8080, verbose: bool = False) -> None:
             "resources": {"subscribe": True},
             "prompts": {"listChanged": False},
         },
-        "serverInfo": {"name": "omni-agent", "version": "2.0.0"},
+        "serverInfo": {"name": "omni-agent", "version": "2.1.0"},
     }
 
     try:
@@ -743,16 +1015,25 @@ async def main_async() -> None:
     """Main async entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Omni Agent MCP Server v2.0")
+    parser = argparse.ArgumentParser(description="Omni Agent MCP Server v2.1")
     parser.add_argument("--sse", action="store_true", help="Run in SSE mode instead of STDIO")
     parser.add_argument("--port", type=int, default=8080, help="Port for SSE mode (default: 8080)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose mode")
+    parser.add_argument(
+        "--holographic",
+        action="store_true",
+        help="Enable holographic mode for dynamic tool discovery via HolographicRegistry",
+    )
 
     args = parser.parse_args()
 
     try:
         if args.sse:
-            await run_sse_server(port=args.port, verbose=args.verbose)
+            await run_sse_server(
+                port=args.port,
+                verbose=args.verbose,
+                use_holographic=args.holographic,
+            )
         else:
             await run_stdio_server(verbose=args.verbose)
     except asyncio.CancelledError:

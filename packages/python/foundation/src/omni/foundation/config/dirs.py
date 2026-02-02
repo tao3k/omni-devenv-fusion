@@ -380,14 +380,14 @@ def get_database_paths() -> dict[str, str]:
         skills   - Main skill tools database
         router   - Router/hybrid search index
         knowledge - Knowledge base
-        memory_hippocampus - Long-term memory/experience storage
+        memory - Long-term memory/experience storage (Hippocampus)
     """
     base = get_vector_db_path()
     return {
         "skills": str(base / "skills.lance"),
         "router": str(base / "router.lance"),
         "knowledge": str(base / "knowledge.lance"),
-        "memory_hippocampus": str(base / "memory.hippocampus.lance"),
+        "memory": str(base / "memory.hippocampus.lance"),
     }
 
 
@@ -434,6 +434,20 @@ def get_checkpoints_db_path() -> Path:
     return project_root / db_path
 
 
+def get_memory_db_path() -> Path:
+    """Get the memory database path (Hippocampus).
+
+    Returns:
+        Path to the LanceDB memory database in the vector store directory.
+
+    Usage:
+        >>> from omni.foundation.config.dirs import get_memory_db_path
+        >>> memory_path = get_memory_db_path()
+        >>> # Returns: /project/.cache/omni-vector/memory.hippocampus.lance
+    """
+    return get_vector_db_path() / "memory.hippocampus.lance"
+
+
 # =============================================================================
 # Exports
 # =============================================================================
@@ -450,6 +464,7 @@ __all__ = [
     "get_checkpoints_db_path",
     "get_database_path",
     "get_database_paths",
+    "get_memory_db_path",
     "get_vector_db_path",
     "get_checkpoint_table_name",
     "get_config_dir",

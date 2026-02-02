@@ -339,7 +339,7 @@ class TestSkillPathResolutionIntegration:
         from omni.foundation.config.skills import SKILLS_DIR
 
         scanner = PythonSkillScanner()
-        skills = scanner.scan_directory()
+        skills = await scanner.scan_directory()
 
         # Skip if no skills in database
         if len(skills) == 0:

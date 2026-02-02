@@ -17,7 +17,7 @@ class TestGetMemoryDbPath:
         memory_path = get_memory_db_path()
         vector_path = get_vector_db_path()
 
-        assert memory_path == vector_path / "memory.lance"
+        assert memory_path == vector_path / "memory.hippocampus.lance"
         assert memory_path.suffix == ".lance"
 
     def test_returns_absolute_path(self):

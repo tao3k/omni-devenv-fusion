@@ -34,6 +34,7 @@ mod executor;
 mod io;
 mod navigation;
 mod scanner;
+mod schema; // Schema Registry for Schema Singularity
 mod security;
 mod sniffer;
 mod tokenizer; // Add tokenizer module
@@ -84,6 +85,9 @@ pub use vector::{PyToolRecord, PyVectorStore, create_vector_store_py};
 
 // Tokenizer exports
 pub use tokenizer::{PyMessage, py_count_tokens, py_truncate, py_truncate_middle};
+
+// Schema Registry exports (Schema Singularity)
+pub use schema::{py_get_registered_types, py_get_schema_json};
 
 // AST Extraction
 pub use ast::{
@@ -206,6 +210,10 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Skill Sync
     m.add_function(pyo3::wrap_pyfunction!(diff_skills, m)?)?;
     m.add_class::<PySyncReport>()?;
+
+    // Schema Registry - Dynamic JSON Schema Generation (Schema Singularity)
+    m.add_function(pyo3::wrap_pyfunction!(py_get_schema_json, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(py_get_registered_types, m)?)?;
 
     // Rust Bridge Config Sync (PRJ_SPEC Compliance)
     m.add_function(pyo3::wrap_pyfunction!(get_config_home, m)?)?;

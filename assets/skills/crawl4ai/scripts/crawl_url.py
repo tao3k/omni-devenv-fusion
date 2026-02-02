@@ -22,25 +22,36 @@ def _get_skill_dir() -> Path:
 
 @skill_command(
     name="crawl_url",
-    description="Crawl a web page and extract its content as markdown using Playwright.",
+    category="read",
+    description="""
+    Crawl a web page and extract its content as markdown using Playwright.
+
+    Supports depth-based crawling to explore linked pages within the same domain.
+    The result includes markdown content, metadata, and optionally a list of crawled URLs.
+
+    Args:
+        - url: str - Target URL to crawl (required)
+        - fit_markdown: bool = true - Clean and simplify the markdown output
+        - max_depth: int = 0 - Maximum crawling depth (0 = single page only, 1+ = follow links)
+
+    Returns:
+        dict with keys:
+        - success: bool - Whether the crawl succeeded
+        - url: str - The original URL crawled
+        - content: str - Markdown content of the page(s)
+        - error: str - Error message if success is False
+        - metadata: dict - Page title and description
+        - crawled_urls: list[str] - URLs crawled when max_depth > 0
+    """,
 )
 async def crawl_url(
     url: str,
     fit_markdown: bool = True,
+    max_depth: int = 0,
 ) -> dict[str, Any]:
-    """
-    Crawl a webpage and extract content as markdown.
-
-    Args:
-        url: Target URL to crawl
-        fit_markdown: Whether to clean and simplify the markdown (default: True)
-
-    Returns:
-        dict with keys: success, url, content, error, metadata
-    """
     result = run_skill_command(
         skill_dir=_get_skill_dir(),
         script_name="engine.py",
-        args={"url": url, "fit_markdown": fit_markdown},
+        args={"url": url, "fit_markdown": fit_markdown, "max_depth": max_depth},
     )
     return result

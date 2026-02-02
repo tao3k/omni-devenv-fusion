@@ -4,6 +4,8 @@ omni.core.kernel.watcher - Rust-Native Hot Reload
 Monitors the skills directory (via SKILLS_DIR()) and triggers Kernel reloads.
 Uses Rust omni-io notify bindings for high-performance file watching
 with EventBus integration and continuous event polling.
+
+Also provides ReactiveSkillWatcher for skill indexing integration.
 """
 
 from __future__ import annotations
@@ -12,6 +14,8 @@ import asyncio
 import os
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +27,34 @@ logger = get_logger("omni.core.watcher")
 
 # Skip these file patterns (mirrors Rust exclude patterns)
 SKIP_PATTERNS = {".pyc", ".pyo", ".pyd", ".swp", ".swo", ".tmp", "__pycache__", ".git"}
+
+
+class FileChangeType(str, Enum):
+    """File change event types."""
+
+    CREATED = "created"
+    MODIFIED = "modified"
+    DELETED = "deleted"
+    ERROR = "error"
+    CHANGED = "changed"  # Some watchers send "changed" instead of "modified"
+
+
+@dataclass
+class FileChangeEvent:
+    """A file change event from the watcher."""
+
+    event_type: FileChangeType
+    path: str
+    is_directory: bool = False
+
+    @classmethod
+    def from_tuple(cls, data: tuple[str, str]) -> "FileChangeEvent":
+        """Create from (event_type, path) tuple."""
+        return cls(
+            event_type=FileChangeType(data[0]),
+            path=data[1],
+            is_directory=False,
+        )
 
 
 class RustKernelWatcher:
@@ -202,3 +234,246 @@ class RustKernelWatcher:
         if self._watcher_handle is not None:
             return self._watcher_handle.is_running
         return self._running
+
+
+# ============================================================================
+# Reactive Skill Watcher (New for Holographic Registry Integration)
+# ============================================================================
+
+from omni.core.skills.indexer import SkillIndexer
+
+
+class ReactiveSkillWatcher:
+    """
+    Monitors the skill directory and triggers incremental indexing upon changes.
+
+    Uses Rust-based file watching (omni-io) for high-performance event capture,
+    then dispatches to the SkillIndexer for knowledge updates.
+
+    Features:
+    - Debouncing: Avoids duplicate events for the same file
+    - Pattern filtering: Only processes relevant file types
+    - Graceful shutdown: Clean stop of watcher threads
+
+    This is the "Live-Wire" that connects Rust Sniffer to Python Indexer,
+    enabling hot-reload of tools without restarting the Agent.
+    """
+
+    def __init__(
+        self,
+        root_dir: str,
+        indexer: SkillIndexer,
+        patterns: list[str] | None = None,
+        debounce_seconds: float = 0.5,
+        poll_interval: float = 0.5,
+    ):
+        """Initialize the reactive skill watcher.
+
+        Args:
+            root_dir: Directory to watch for skill changes
+            indexer: SkillIndexer instance for processing events
+            patterns: File patterns to watch (default: ["**/*.py"])
+            debounce_seconds: Debounce delay in seconds
+            poll_interval: How often to poll for events (seconds)
+        """
+        self.root_dir = Path(root_dir).resolve()
+        self.indexer = indexer
+        self.poll_interval = poll_interval
+        self.debounce_seconds = debounce_seconds
+
+        # Build exclude patterns for common noise
+        exclude_patterns = [
+            "**/*.pyc",
+            "**/__pycache__/**",
+            "**/.git/**",
+            "**/target/**",
+            "**/.venv/**",
+            "**/node_modules/**",
+        ]
+
+        # File patterns to include
+        self.patterns = patterns or ["**/*.py"]
+
+        # Rust watcher config
+        self.config = rs.PyWatcherConfig()
+        self.config.paths = [str(self.root_dir)]
+        self.config.recursive = True
+        self.config.debounce_ms = int(debounce_seconds * 1000)
+        self.config.patterns = self.patterns
+        self.config.exclude = exclude_patterns
+
+        # Event receiver (uses EventBus subscription)
+        self._event_receiver = rs.PyFileEventReceiver()
+
+        # State
+        self._running = False
+        self._watcher_handle = None
+        self._task: asyncio.Task[None] | None = None
+
+        # Debounce state
+        self._last_event: FileChangeEvent | None = None
+        self._last_event_time: float = 0.0
+
+    async def start(self):
+        """Start watching for file changes."""
+        if self._running:
+            logger.warning("ReactiveSkillWatcher already running")
+            return
+
+        logger.info(
+            f"👀 Reactive Skill Watcher started",
+            root=str(self.root_dir),
+            patterns=self.patterns,
+        )
+
+        # Start Rust file watcher
+        try:
+            self._watcher_handle = rs.py_start_file_watcher(self.config)
+            logger.info("Rust file watcher started successfully")
+        except Exception as e:
+            logger.error(f"Failed to start Rust file watcher: {e}")
+            raise
+
+        self._running = True
+        self._task = asyncio.create_task(self._poll_events())
+
+    async def stop(self):
+        """Stop the watcher gracefully."""
+        if not self._running:
+            return
+
+        logger.info("Stopping Reactive Skill Watcher...")
+
+        self._running = False
+
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+
+        # Stop Rust watcher
+        if self._watcher_handle:
+            try:
+                self._watcher_handle.stop()
+            except Exception as e:
+                logger.warning(f"Error stopping watcher handle: {e}")
+
+        logger.info("Reactive Skill Watcher stopped")
+
+    async def _poll_events(self):
+        """Poll for file events from the Rust receiver."""
+        while self._running:
+            try:
+                # Try to receive events (non-blocking)
+                raw_events = self._event_receiver.try_recv()
+
+                if raw_events:
+                    # Process batch of events
+                    events = [FileChangeEvent.from_tuple(e) for e in raw_events]
+                    await self._process_batch(events)
+
+                # Yield control and sleep
+                await asyncio.sleep(self.poll_interval)
+
+            except Exception as e:
+                logger.error(f"Error in watcher poll loop: {e}")
+                await asyncio.sleep(1.0)  # Back off on error
+
+    async def _process_batch(self, events: list[FileChangeEvent]):
+        """Process a batch of file change events."""
+        for event in events:
+            # Filter to skill-related paths
+            if not self._is_skill_related(event.path):
+                continue
+
+            # Debounce duplicate events
+            if self._should_debounce(event):
+                logger.debug(f"Debounced event: {event.path}")
+                continue
+
+            try:
+                await self._handle_event(event)
+            except Exception as e:
+                logger.warning(f"Failed to process event for {event.path}: {e}")
+
+    def _is_skill_related(self, path: str) -> bool:
+        """Check if the path is relevant to skills."""
+        p = Path(path)
+
+        # Skip directories
+        if p.is_dir():
+            return False
+
+        # Skip non-Python files (unless it's a skill metadata file)
+        if p.suffix != ".py" and p.name != "SKILL.md":
+            return False
+
+        # Skip test files and private modules
+        if "test" in p.name.lower() or p.name.startswith("_"):
+            return False
+
+        # Skip paths with __pycache__, .git, etc.
+        if any(part in p.parts for part in ["__pycache__", ".git", "target", ".venv"]):
+            return False
+
+        return True
+
+    def _should_debounce(self, event: FileChangeEvent) -> bool:
+        """Check if event should be debounced."""
+        now = time.monotonic()
+
+        # Reset debounce if enough time has passed
+        if now - self._last_event_time > self.debounce_seconds:
+            self._last_event = None
+
+        # Check if this is a duplicate of the last event
+        if self._last_event == event:
+            self._last_event_time = now
+            return True
+
+        # Record this event
+        self._last_event = event
+        self._last_event_time = now
+        return False
+
+    async def _handle_event(self, event: FileChangeEvent):
+        """Handle a single file change event."""
+        path = Path(event.path)
+        filename = path.name
+
+        logger.debug(f"Processing {event.event_type.value}: {filename}")
+
+        if event.event_type == FileChangeType.CREATED:
+            count = await self.indexer.index_file(event.path)
+            if count > 0:
+                logger.info(f"⚡ Added {count} tools from {filename}")
+
+        elif event.event_type in (FileChangeType.MODIFIED, FileChangeType.CHANGED):
+            count = await self.indexer.reindex_file(event.path)
+            if count > 0:
+                logger.info(f"⚡ Hot-reloaded {count} tools from {filename}")
+            else:
+                logger.debug(f"No tools indexed for modified file: {filename}")
+
+        elif event.event_type == FileChangeType.DELETED:
+            count = await self.indexer.remove_file(event.path)
+            logger.info(f"🗑️ Removed tools for {filename}")
+
+        elif event.event_type == FileChangeType.ERROR:
+            logger.warning(f"File watcher error: {event.path}")
+
+    @property
+    def is_running(self) -> bool:
+        """Check if the watcher is currently running."""
+        return self._running
+
+    async def get_stats(self) -> dict[str, Any]:
+        """Get watcher statistics."""
+        return {
+            "root_dir": str(self.root_dir),
+            "patterns": self.patterns,
+            "running": self._running,
+            "poll_interval": self.poll_interval,
+        }

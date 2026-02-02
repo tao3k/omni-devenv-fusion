@@ -86,10 +86,10 @@ def _find_markdown_files(directory: str) -> list[str]:
 async def _sync_knowledge(clear: bool = False) -> dict[str, Any]:
     """Internal logic to sync knowledge base (Librarian)."""
     from omni.core.knowledge.librarian import Librarian
-    from omni.foundation.config.docs import DOCS_DIR
+    from omni.foundation.runtime.gitops import get_docs_dir
 
     try:
-        docs_path = DOCS_DIR()
+        docs_path = get_docs_dir()
         if not docs_path.exists():
             return {"status": "skipped", "details": "Docs dir not found"}
 

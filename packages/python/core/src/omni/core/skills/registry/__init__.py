@@ -8,6 +8,7 @@ Modular skill registry with separated concerns:
 - installer.py: Remote installation
 - resolver.py: Version resolution
 - jit.py: JIT acquisition
+- holographic.py: Holographic (virtual) registry backed by LanceDB
 
 Thin client implementation - remote installation deprecated.
 """
@@ -100,6 +101,14 @@ def get_skill_tools(skill_name: str) -> list[dict[str, Any]]:
     return []
 
 
+# Import from holographic module for re-export
+from .holographic import (
+    HolographicRegistry,
+    ToolMetadata,
+    LazyTool,
+)
+
+
 __all__ = [
     # Core
     "SkillRegistry",
@@ -114,4 +123,8 @@ __all__ = [
     "suggest_skills_for_task",
     "list_installed_skills",
     "get_skill_tools",
+    # Holographic Registry
+    "HolographicRegistry",
+    "ToolMetadata",
+    "LazyTool",
 ]

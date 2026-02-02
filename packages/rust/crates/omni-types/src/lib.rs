@@ -2,9 +2,15 @@
 //!
 //! This crate provides shared data structures used across all Omni crates.
 //! All types are designed to be serialization-compatible with Python (via PyO3).
+//!
+//! # Schema Singularity
+//! Types derive `schemars::JsonSchema` to enable automatic JSON Schema generation.
+//! This establishes Rust as the Single Source of Truth (SSOT) for type definitions,
+//! allowing Python and LLM consumers to dynamically retrieve authoritative schemas.
 
 #![allow(clippy::doc_markdown)]
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -33,7 +39,7 @@ pub enum OmniError {
 }
 
 /// Agent skill definition
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Skill {
     /// Skill name identifier
     pub name: String,
@@ -48,7 +54,7 @@ pub struct Skill {
 ///
 /// All schema-defined fields (version, permissions, require_refs, etc.)
 /// are stored in the flexible `metadata` JSON object.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(from = "SkillDefinitionHelper", into = "SkillDefinitionHelper")]
 pub struct SkillDefinition {
     /// Unique identifier for the skill (e.g., "git", "writer")
@@ -58,6 +64,7 @@ pub struct SkillDefinition {
     /// Generic metadata container for schema-defined fields
     pub metadata: serde_json::Value,
     /// Routing keywords for semantic search
+    #[serde(default)]
     pub routing_keywords: Vec<String>,
 }
 
@@ -162,7 +169,7 @@ impl SkillDefinition {
 }
 
 /// Task brief from orchestrator
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct TaskBrief {
     /// Task description
     pub task: String,
@@ -175,7 +182,7 @@ pub struct TaskBrief {
 }
 
 /// Agent execution result
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AgentResult {
     /// Whether the task succeeded
     pub success: bool,
@@ -188,7 +195,7 @@ pub struct AgentResult {
 }
 
 /// Context for agent execution
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AgentContext {
     /// System prompt for the agent
     pub system_prompt: String,
@@ -203,7 +210,7 @@ pub struct AgentContext {
 }
 
 /// Vector search result
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct VectorSearchResult {
     /// Result identifier
     pub id: String,
@@ -217,7 +224,7 @@ pub struct VectorSearchResult {
 
 /// Environment snapshot for the sensory system.
 /// This is the Rosetta Stone for Rust-Python communication.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct EnvironmentSnapshot {
     /// Current Git branch name
     pub git_branch: String,
@@ -285,4 +292,52 @@ impl EnvironmentSnapshot {
             self.active_context_lines
         )
     }
+}
+
+// =============================================================================
+// Schema Registry: Dynamic JSON Schema Generation for Python/LLM Consumption
+// =============================================================================
+
+/// Schema generation error
+#[derive(Debug, thiserror::Error)]
+pub enum SchemaError {
+    #[error("Unknown type: {0}")]
+    UnknownType(String),
+}
+
+/// Get JSON Schema for a registered type.
+/// This enables Python to dynamically retrieve authoritative schemas from Rust.
+///
+/// # Errors
+/// Returns `SchemaError::UnknownType` if the type name is not registered.
+pub fn get_schema_json(type_name: &str) -> Result<String, SchemaError> {
+    let schema = match type_name {
+        // Core types
+        "Skill" => schemars::schema_for!(Skill),
+        "SkillDefinition" => schemars::schema_for!(SkillDefinition),
+        "TaskBrief" => schemars::schema_for!(TaskBrief),
+        "AgentResult" => schemars::schema_for!(AgentResult),
+        "AgentContext" => schemars::schema_for!(AgentContext),
+        "VectorSearchResult" => schemars::schema_for!(VectorSearchResult),
+        "EnvironmentSnapshot" => schemars::schema_for!(EnvironmentSnapshot),
+        // Legacy alias
+        "OmniTool" => schemars::schema_for!(SkillDefinition),
+        _ => return Err(SchemaError::UnknownType(type_name.to_string())),
+    };
+    serde_json::to_string_pretty(&schema)
+        .map_err(|e| SchemaError::UnknownType(format!("Serialization failed: {e}")))
+}
+
+/// Get list of all registered type names.
+pub fn get_registered_types() -> Vec<&'static str> {
+    vec![
+        "Skill",
+        "SkillDefinition",
+        "TaskBrief",
+        "AgentResult",
+        "AgentContext",
+        "VectorSearchResult",
+        "EnvironmentSnapshot",
+        "OmniTool", // Alias for SkillDefinition
+    ]
 }

@@ -19,3 +19,4 @@ omni_test_kit = "omni.test_kit.plugin"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/omni"]
+exclude = ["src/omni/__init__.py"]
