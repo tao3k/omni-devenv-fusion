@@ -341,9 +341,15 @@ class ReactiveSkillWatcher:
         # [WORKAROUND] Rust watcher may send created/changed instead of deleted
         # when a file is deleted. Check file existence for these event types.
         effective_event_type = event.event_type
-        if event.event_type in (FileChangeType.CREATED, FileChangeType.CHANGED, FileChangeType.MODIFIED):
+        if event.event_type in (
+            FileChangeType.CREATED,
+            FileChangeType.CHANGED,
+            FileChangeType.MODIFIED,
+        ):
             if not path.exists():
-                logger.info(f"🗑️ [WORKAROUND] File doesn't exist for {event.event_type.value}, treating as DELETED")
+                logger.info(
+                    f"🗑️ [WORKAROUND] File doesn't exist for {event.event_type.value}, treating as DELETED"
+                )
                 effective_event_type = FileChangeType.DELETED
 
         if effective_event_type == FileChangeType.CREATED:
@@ -387,7 +393,9 @@ class ReactiveSkillWatcher:
                 logger.warning(f"Failed to reload skill {skill_name}: {e}")
 
         # Notify MCP clients if tools were added/modified/removed
-        logger.info(f"🗑️ [DEBUG] should_notify={should_notify}, callback={self._on_change_callback is not None}")
+        logger.info(
+            f"🗑️ [DEBUG] should_notify={should_notify}, callback={self._on_change_callback is not None}"
+        )
         if should_notify and self._on_change_callback:
             # Use effective_event_type for accurate logging
             log_event_type = effective_event_type.value

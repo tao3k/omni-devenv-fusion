@@ -260,7 +260,9 @@ class TestReactiveSkillWatcherEvents:
 
         assert callback_triggered or mock_indexer.remove_file.call_count == 1
 
-    async def test_delete_workaround_for_nonexistent_file(self, watcher, mock_indexer, tmp_path) -> None:
+    async def test_delete_workaround_for_nonexistent_file(
+        self, watcher, mock_indexer, tmp_path
+    ) -> None:
         """Test that Rust watcher workaround correctly handles deleted files.
 
         The Rust watcher may send 'created' or 'changed' events for deleted files.
@@ -644,15 +646,17 @@ def public_tool():
         from omni_core_rs import scan_paths
 
         # Initial state: tool exists
-        initial_files = [(
-            "/virtual/git/scripts/test_tool.py",
-            '''"""Test tool."""
+        initial_files = [
+            (
+                "/virtual/git/scripts/test_tool.py",
+                '''"""Test tool."""
 
 @skill_command(name="test_tool")
 def test_tool():
     pass
 ''',
-        )]
+            )
+        ]
         initial_tools = scan_paths(initial_files, "git", [], [])
         assert len(initial_tools) == 1
         assert initial_tools[0].tool_name == "git.test_tool"
@@ -662,15 +666,17 @@ def test_tool():
         assert len(deleted_tools) == 0
 
         # Simulate re-add: new content
-        re_add_files = [(
-            "/virtual/git/scripts/test_tool.py",
-            '''"""Re-added test tool."""
+        re_add_files = [
+            (
+                "/virtual/git/scripts/test_tool.py",
+                '''"""Re-added test tool."""
 
 @skill_command(name="test_tool")
 def test_tool():
     pass
 ''',
-        )]
+            )
+        ]
         re_add_tools = scan_paths(re_add_files, "git", [], [])
         assert len(re_add_tools) == 1
         assert re_add_tools[0].tool_name == "git.test_tool"
@@ -681,9 +687,10 @@ def test_tool():
         """Test scanning multiple tools in a single file."""
         from omni_core_rs import scan_paths
 
-        files = [(
-            "/virtual/skill/scripts/multi_tool.py",
-            '''"""Multi-tool module."""
+        files = [
+            (
+                "/virtual/skill/scripts/multi_tool.py",
+                '''"""Multi-tool module."""
 
 @skill_command(name="tool_a")
 def tool_a(param: str) -> str:
@@ -700,7 +707,8 @@ def tool_c():
     """Tool C with no params."""
     pass
 ''',
-        )]
+            )
+        ]
 
         tools = scan_paths(files, "skill", ["test"], [])
 
@@ -714,16 +722,18 @@ def tool_c():
         """Test that function name is preserved in ToolRecord."""
         from omni_core_rs import scan_paths
 
-        files = [(
-            "/virtual/skill/scripts/renamed_tool.py",
-            '''"""Tool with different names."""
+        files = [
+            (
+                "/virtual/skill/scripts/renamed_tool.py",
+                '''"""Tool with different names."""
 
 @skill_command(name="custom_name")
 def original_function_name(param: str) -> str:
     """Tool with different decorator and function name."""
     return param
 ''',
-        )]
+            )
+        ]
 
         tools = scan_paths(files, "skill", [], [])
 

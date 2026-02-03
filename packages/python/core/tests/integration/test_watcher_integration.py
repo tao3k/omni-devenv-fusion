@@ -43,6 +43,7 @@ def commit():
     def mock_indexer(self):
         """Create a mock indexer for testing."""
         from unittest.mock import AsyncMock
+
         indexer = MagicMock()
         indexer.index_file = AsyncMock(return_value=1)
         indexer.reindex_file = AsyncMock(return_value=1)
@@ -72,7 +73,9 @@ def commit():
         assert watcher.is_running is False
 
     @pytest.mark.asyncio
-    async def test_reactive_watcher_receives_events(self, temp_skills_dir: Path, mock_indexer) -> None:
+    async def test_reactive_watcher_receives_events(
+        self, temp_skills_dir: Path, mock_indexer
+    ) -> None:
         """Test ReactiveSkillWatcher can be created and started."""
         from omni.core.kernel.watcher import ReactiveSkillWatcher
 
@@ -103,7 +106,9 @@ def commit():
         # watches assets/skills from config, not temp directory
 
     @pytest.mark.asyncio
-    async def test_reactive_watcher_extracts_skill_name(self, temp_skills_dir: Path, mock_indexer) -> None:
+    async def test_reactive_watcher_extracts_skill_name(
+        self, temp_skills_dir: Path, mock_indexer
+    ) -> None:
         """Test ReactiveSkillWatcher correctly extracts skill names."""
         from omni.core.kernel.watcher import ReactiveSkillWatcher
 
@@ -171,10 +176,10 @@ def test_cmd():
         )
 
         # Verify watcher has expected properties
-        assert hasattr(watcher, 'is_running')
-        assert hasattr(watcher, 'start')
-        assert hasattr(watcher, 'stop')
-        assert hasattr(watcher, '_extract_skill_name')
+        assert hasattr(watcher, "is_running")
+        assert hasattr(watcher, "start")
+        assert hasattr(watcher, "stop")
+        assert hasattr(watcher, "_extract_skill_name")
 
     @pytest.mark.asyncio
     async def test_kernel_start_with_watcher(self, sample_skills_dir: Path) -> None:

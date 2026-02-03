@@ -58,4 +58,9 @@ available tools and routing strategies.
     <rule>Remember: "Run 'just validate' before committing"</rule>
     <rule>Remember: "Use conventional commit messages"</rule>
   </memory_rules>
+
+  <knowledge_reference>
+    <file>assets/prompts/knowledge_system.md</file>
+    <description>Knowledge indexing rules and LLM guidance</description>
+  </knowledge_reference>
 </system_context>

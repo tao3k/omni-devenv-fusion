@@ -143,6 +143,7 @@ async def run_stdio(verbose: bool = False) -> None:
     # [FIX] Register MCP server BEFORE starting kernel to ensure Live-Wire
     # callbacks can access _mcp_server when file changes are detected
     from .lifespan import set_mcp_server
+
     set_mcp_server(server)
     log.debug("MCP server registered for Live-Wire notifications")
 

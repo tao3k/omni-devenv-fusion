@@ -174,3 +174,169 @@ pre-commit:
             f"Original file should be in commit: {committed_files}"
         )
         assert "new_file.py" in committed_files, f"New file should be in commit: {committed_files}"
+
+    async def test_cargo_fmt_import_reorder_restage(self, skill_tester, temp_git_repo, monkeypatch):
+        """Test that cargo fmt import reordering is re-staged.
+
+        This simulates the exact scenario:
+        - User stages a Rust file with: use serde_json::{json, Value};
+        - cargo fmt runs and reformats to: use serde_json::{Value, json};
+        - The workflow should detect this change and re-stage the file
+        """
+        import subprocess
+        from git.scripts.prepare import stage_and_scan
+
+        monkeypatch.chdir(temp_git_repo)
+
+        # Initialize git config
+        result = subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            capture_output=True,
+        )
+        result = subprocess.run(
+            ["git", "config", "user.name", "Test"],
+            capture_output=True,
+        )
+
+        # Create a Rust file with specific import order (unformatted)
+        rust_file = temp_git_repo / "lib.rs"
+        rust_file.write_text("use serde_json::{Value, json};\n\npub fn test() {}\n")
+
+        # Stage the file
+        subprocess.run(["git", "add", "lib.rs"], capture_output=True)
+
+        # Get staged files before cargo fmt
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--name-only"],
+            capture_output=True,
+            text=True,
+            cwd=temp_git_repo,
+        )
+        staged_before = result.stdout
+        print(f"Staged before fmt: {staged_before.strip()}")
+        assert "lib.rs" in staged_before
+
+        # Simulate cargo fmt: reorder imports (alphabetical order)
+        rust_file.write_text("use serde_json::{json, Value};\n\npub fn test() {}\n")
+
+        # Now lib.rs shows as modified (diff between HEAD and working tree)
+        result = subprocess.run(
+            ["git", "diff", "--name-only"],
+            capture_output=True,
+            text=True,
+            cwd=temp_git_repo,
+        )
+        modified = result.stdout
+        print(f"Modified after fmt: {modified.strip()}")
+        assert "lib.rs" in modified
+
+        # Run stage_and_scan - this should detect the modification and re-stage
+        scan_result = stage_and_scan(str(temp_git_repo))
+
+        # Verify no errors
+        assert scan_result.get("lefthook_error") == "", (
+            f"Lefthook error: {scan_result.get('lefthook_error')}"
+        )
+
+        # Verify lib.rs is still in staged files
+        staged_files = scan_result.get("staged_files", [])
+        print(f"Staged after scan: {staged_files}")
+        assert "lib.rs" in staged_files, f"lib.rs should be re-staged: {staged_files}"
+
+        # Verify the staged content matches the formatted version
+        proc = subprocess.run(
+            ["git", "diff", "--cached", "lib.rs"],
+            capture_output=True,
+            text=True,
+            cwd=temp_git_repo,
+        )
+        diff_cached = proc.stdout
+        print(f"Staged diff:\n{diff_cached}")
+
+        # The diff should show the import reorder is staged (alphabetical: json before Value)
+        assert "json, Value" in diff_cached, (
+            f"Import reorder should be in staged diff. Got: {diff_cached}"
+        )
+
+    async def test_approve_runs_lefthook_before_commit(
+        self, skill_tester, temp_git_repo, monkeypatch
+    ):
+        """Test that approve runs lefthook pre-commit before actual commit.
+
+        This ensures that any formatting changes from lefthook hooks are
+        captured in the final commit, matching what git commit's hook would produce.
+        """
+        import subprocess
+        import shutil
+        from git.scripts.smart_commit_workflow import (
+            _start_smart_commit_async,
+            _approve_smart_commit_async,
+        )
+
+        if not shutil.which("lefthook"):
+            pytest.skip("lefthook not installed")
+
+        monkeypatch.chdir(temp_git_repo)
+
+        # Setup git config
+        subprocess.run(["git", "config", "user.email", "test@test.com"], capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"], capture_output=True)
+
+        # Create a lefthook that modifies files (like cargo fmt)
+        lefthook_script = temp_git_repo / "lefthook_fmt.sh"
+        lefthook_script.write_text("""#!/bin/bash
+# Reorder imports alphabetically (json before Value)
+sed -i '' 's/Value, json/json, Value/' lib.rs
+exit 0
+""")
+        lefthook_script.chmod(0o755)
+
+        (temp_git_repo / "lefthook.yml").write_text("""
+pre-commit:
+  commands:
+    fmt:
+      run: ./lefthook_fmt.sh
+""")
+
+        # Create original file with unformatted import order
+        rust_file = temp_git_repo / "lib.rs"
+        rust_file.write_text("use serde::{Value, json};\n\npub fn test() {}\n")
+
+        subprocess.run(["git", "add", "lib.rs"], capture_output=True)
+        subprocess.run(["git", "commit", "-m", "initial"], capture_output=True)
+
+        # Create a change
+        rust_file.write_text(
+            "use serde::{Value, json};\n\npub fn test() {}\n\npub fn another() {}\n"
+        )
+        subprocess.run(["git", "add", "lib.rs"], capture_output=True)
+
+        # Start workflow
+        start_result = await _start_smart_commit_async()
+        workflow_id = start_result.get("workflow_id")
+
+        # Approve - this should run lefthook before commit and re-stage
+        approve_result = await _approve_smart_commit_async(
+            message="feat(test): lefthook re-stage",
+            workflow_id=workflow_id,
+            project_root=str(temp_git_repo),
+        )
+
+        # Verify commit was created
+        assert approve_result.get("status") == "committed", (
+            f"Expected committed, got: {approve_result}"
+        )
+        commit_hash = approve_result.get("commit_hash")
+        assert commit_hash
+
+        # Verify the committed content has the formatted import order
+        proc = subprocess.run(
+            ["git", "show", commit_hash + ":lib.rs"],
+            capture_output=True,
+            text=True,
+            cwd=temp_git_repo,
+        )
+        committed_content = proc.stdout
+        assert "json, Value" in committed_content, (
+            f"Formatted import should be in commit. Got: {committed_content}"
+        )

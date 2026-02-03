@@ -67,4 +67,4 @@ pub use security::{SecurityConfig, SecurityScanner, SecurityViolation};
 pub use extract::{ExtractResult, extract_items};
 
 // Code chunking utilities
-pub use chunk::{chunk_code, CodeChunk};
+pub use chunk::{CodeChunk, chunk_code};

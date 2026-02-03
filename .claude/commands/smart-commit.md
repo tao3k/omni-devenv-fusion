@@ -8,15 +8,30 @@ argument-hint: [message]
 ## Steps
 
 1. **Start**: `@omni("git.smart_commit", {"action": "start"})`
-   - LLM reads output: commit analysis table, git diff, valid scopes
+   - Stages files with `git add -A`
+   - Runs lefthook pre-commit (formatting: cargo fmt, ruff, etc.)
+   - Re-stages any modified files
+   - Shows lefthook summary, git diff, valid scopes
 
-2. **Analyze**: Review diff → Generate commit message (conventional format)
+2. **Analyze**: Review output → Generate commit message (conventional format)
 
 3. **Approve**: `@omni("git.smart_commit", {"action": "approve", "workflow_id": "xxx", "message": "type(scope): description"})`
 
 ## User Confirmation
 
-After step 2, print commit message and ask user:
+After step 1, print commit message and ask user:
 
-- Reply **Yes** → Proceed to step 3
+- Reply **Yes** → Output approve command
 - Reply **No** → Cancel
+
+## After User Confirms "Yes"
+
+Output the approve command:
+
+```markdown
+## Ready to Commit!
+
+### Approve Commit
+
+@omni("git.smart_commit", {"action": "approve", "workflow_id": "WORKFLOW_ID", "message": "COMMIT_MESSAGE"})
+```

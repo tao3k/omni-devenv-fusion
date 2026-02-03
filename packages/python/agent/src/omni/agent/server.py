@@ -95,9 +95,8 @@ class AgentMCPHandler(MCPRequestHandler):
             logger.warning("⚠️ Kernel did not reach READY state, attempting start...")
             await self._kernel.start()
 
-        # Enable hot reload by default
-        self._kernel.enable_hot_reload()
-        logger.info("👀 File watcher enabled for hot reload")
+        # Hot reload is already enabled by default during kernel initialization
+        # (Live-Wire Skill Watcher starts automatically)
 
         self._initialized = True
         logger.info(

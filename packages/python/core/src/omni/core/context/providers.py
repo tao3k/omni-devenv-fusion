@@ -6,6 +6,7 @@ Layer-specific providers for the cognitive pipeline.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, ClassVar
 
 from omni.foundation.config.logging import get_logger
@@ -27,6 +28,7 @@ class SystemPersonaProvider(ContextProvider):
     def __init__(self, role: str = "architect") -> None:
         self.role = role
         self._content: str | None = None
+        self._knowledge_content: str | None = None
 
     async def provide(self, state: dict[str, Any], budget: int) -> ContextResult | None:
         # Load persona content (cached)
@@ -35,9 +37,29 @@ class SystemPersonaProvider(ContextProvider):
                 self.role, f"<role>You are {self.role}.</role>"
             )
 
-        token_count = len(self._content.split())  # Rough estimate
+        # Load knowledge system prompt from references.yaml (cached)
+        if self._knowledge_content is None:
+            # Try to use settings, fall back to default path
+            try:
+                from omni.foundation.config import get_setting
+
+                prompt_path = get_setting("prompts.system_core", "assets/prompts/system_core.md")
+            except (ImportError, Exception):
+                prompt_path = "assets/prompts/system_core.md"
+            prompt_file = Path.cwd() / prompt_path
+            if prompt_file.exists():
+                self._knowledge_content = prompt_file.read_text()
+            else:
+                self._knowledge_content = ""
+
+        # Combine persona and knowledge guidance
+        content = (
+            f"{self._content}\n\n<knowledge_system>\n{self._knowledge_content}\n</knowledge_system>"
+        )
+
+        token_count = len(content.split())  # Rough estimate
         return ContextResult(
-            content=self._content,
+            content=content,
             token_count=token_count,
             name="persona",
             priority=0,

@@ -77,19 +77,23 @@ fn event_to_topic_and_path(kind: &notify::EventKind, path: &Path) -> (&'static s
 
     // Handle macOS edge case: some editors may send Create/Modify instead of Remove
     // when a file is deleted. We check if the file actually exists.
-    if matches!(kind, notify::EventKind::Create(_)) || matches!(kind, notify::EventKind::Modify(_)) {
+    if matches!(kind, notify::EventKind::Create(_)) || matches!(kind, notify::EventKind::Modify(_))
+    {
         if !path.exists() {
             // File was reported as created/modified but doesn't exist -> it was deleted
             return (topics::FILE_DELETED, path_str);
         }
     }
 
-    (match kind {
-        notify::EventKind::Create(_) => topics::FILE_CREATED,
-        notify::EventKind::Modify(_) => topics::FILE_CHANGED,
-        notify::EventKind::Remove(_) => topics::FILE_DELETED,
-        _ => topics::FILE_CHANGED,
-    }, path_str)
+    (
+        match kind {
+            notify::EventKind::Create(_) => topics::FILE_CREATED,
+            notify::EventKind::Modify(_) => topics::FILE_CHANGED,
+            notify::EventKind::Remove(_) => topics::FILE_DELETED,
+            _ => topics::FILE_CHANGED,
+        },
+        path_str,
+    )
 }
 
 /// Check if path matches any pattern using high-performance GlobSet

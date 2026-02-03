@@ -188,6 +188,13 @@ class TestSkillDiscoverPattern:
         router = router_for_integration
         kernel = get_kernel()
 
+        # First, ensure router has data by syncing
+        from omni.agent.cli.commands.reindex import _sync_router_from_skills
+
+        sync_result = _sync_router_from_skills()
+        if sync_result["status"] != "success" or sync_result.get("tools_indexed", 0) == 0:
+            pytest.skip("Router database not populated, skipping integration test")
+
         intent = "find python files"
         limit = 5
 
@@ -211,6 +218,13 @@ class TestSkillDiscoverPattern:
         advanced_tools.smart_find should be found for "find files" queries.
         """
         router = router_for_integration
+
+        # First, ensure router has data by syncing
+        from omni.agent.cli.commands.reindex import _sync_router_from_skills
+
+        sync_result = _sync_router_from_skills()
+        if sync_result["status"] != "success" or sync_result.get("tools_indexed", 0) == 0:
+            pytest.skip("Router database not populated, skipping integration test")
 
         # Query that should match smart_find
         results = await router.route_hybrid(

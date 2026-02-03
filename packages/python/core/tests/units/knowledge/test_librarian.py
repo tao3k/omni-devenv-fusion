@@ -1,345 +1,177 @@
 """
-test_librarian.py - Librarian Tests
+test_librarian.py - Librarian Unit Tests
 
-Tests for the Librarian knowledge management class.
+Tests for the unified Librarian class with text and AST chunking.
 """
 
-import os
 import tempfile
 
 import pytest
 
 
-@pytest.fixture(autouse=True)
-def reset_librarian_singleton():
-    """Reset librarian singleton before each test."""
-    from omni.core.knowledge.librarian import Librarian
+class TestChunkMode:
+    """Tests for the ChunkMode enum."""
 
-    Librarian.reset_singleton()
-    yield
-    Librarian.reset_singleton()
+    def test_chunk_mode_values(self):
+        """ChunkMode should have expected values."""
+        from omni.core.knowledge.librarian import ChunkMode
 
-
-class TestKnowledgeEntry:
-    """Tests for the KnowledgeEntry dataclass."""
-
-    def test_knowledge_entry_creation(self):
-        """KnowledgeEntry should store all fields."""
-        from omni.core.knowledge.librarian import KnowledgeEntry
-
-        entry = KnowledgeEntry(
-            id="test_001",
-            content="test content",
-            source="test.md",
-            metadata={"key": "value"},
-            score=0.85,
-        )
-        assert entry.id == "test_001"
-        assert entry.content == "test content"
-        assert entry.source == "test.md"
-        assert entry.metadata == {"key": "value"}
-        assert entry.score == 0.85
+        assert ChunkMode.AUTO.value == "auto"
+        assert ChunkMode.TEXT.value == "text"
+        assert ChunkMode.AST.value == "ast"
 
 
-class TestSearchResult:
-    """Tests for the SearchResult dataclass."""
+class TestLibrarianInit:
+    """Tests for Librarian initialization."""
 
-    def test_search_result_creation(self):
-        """SearchResult should store entry and score."""
-        from omni.core.knowledge.librarian import KnowledgeEntry, SearchResult
-
-        entry = KnowledgeEntry(id="test_001", content="content", source="test.md", metadata={})
-        result = SearchResult(entry=entry, score=0.9)
-        assert result.entry.id == "test_001"
-        assert result.score == 0.9
-
-
-class TestLibrarian:
-    """Tests for the Librarian class."""
-
-    def test_librarian_init_defaults(self):
+    def test_librarian_init_with_defaults(self, tmp_path):
         """Librarian should have correct defaults."""
         from omni.core.knowledge.librarian import Librarian
 
-        # Create with mocked store to avoid initialization issues
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-            temp_path = f.name
+        librarian = Librarian(project_root=str(tmp_path))
 
-        try:
-            # Mock the bridge import to prevent actual initialization
-            import unittest.mock as mock
+        assert librarian.root == tmp_path.resolve()
+        assert librarian.batch_size == 50
+        assert librarian.chunk_mode.value == "auto"
+        assert librarian.table_name == "knowledge_chunks"
 
-            with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
-                librarian = Librarian(temp_path, dimension=1536)
-                assert librarian._dimension == 1536
-                assert librarian._collection == "knowledge"
-        finally:
-            if os.path.exists(temp_path):
-                os.unlink(temp_path)
+    def test_librarian_init_custom_values(self, tmp_path):
+        """Librarian should accept custom values."""
+        from omni.core.knowledge.librarian import Librarian, ChunkMode
 
-    def test_ingest_file_not_found(self):
-        """ingest_file should return False for non-existent file."""
-        import unittest.mock as mock
-
-        from omni.core.knowledge.librarian import Librarian
-
-        with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
-            librarian = Librarian()
-            librarian._initialized = False  # Ensure not ready
-
-            result = librarian.ingest_file("/nonexistent/file.md")
-            assert result is False
-
-    def test_ingest_file_success(self):
-        """ingest_file should return True and cache entries."""
-        import unittest.mock as mock
-
-        from omni.core.knowledge.librarian import Librarian
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
-            f.write("# Test Document\n\nSome content here.")
-            temp_path = f.name
-
-        try:
-            with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
-                librarian = Librarian()
-                librarian._initialized = False  # Skip store init
-
-                result = librarian.ingest_file(temp_path)
-                assert result is True
-                assert hasattr(librarian, "_cache")
-                assert len(librarian._cache) > 0
-        finally:
-            os.unlink(temp_path)
-
-    def test_ingest_file_with_metadata(self):
-        """ingest_file should use provided metadata."""
-        import unittest.mock as mock
-
-        from omni.core.knowledge.librarian import Librarian
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            f.write("Test content")
-            temp_path = f.name
-
-        try:
-            with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
-                librarian = Librarian()
-                librarian._initialized = False
-
-                metadata = {"author": "test", "version": "1.0"}
-                result = librarian.ingest_file(temp_path, metadata=metadata)
-                assert result is True
-                entry = librarian._cache[0]
-                assert entry.metadata.get("author") == "test"
-                assert entry.metadata.get("source") == temp_path
-        finally:
-            os.unlink(temp_path)
-
-    def test_ingest_directory_not_found(self):
-        """ingest_directory should return 0 for non-existent directory."""
-        import unittest.mock as mock
-
-        from omni.core.knowledge.librarian import Librarian
-
-        with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
-            librarian = Librarian()
-            librarian._initialized = False
-
-            result = librarian.ingest_directory("/nonexistent/dir")
-            assert result == 0
-
-    def test_ingest_directory_success(self):
-        """ingest_directory should return count of ingested files."""
-        import unittest.mock as mock
-
-        from omni.core.knowledge.librarian import Librarian
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Create test files
-            for i in range(3):
-                with open(os.path.join(tmpdir, f"file{i}.md"), "w") as f:
-                    f.write(f"# File {i}\nContent here.")
-
-            with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
-                librarian = Librarian()
-                librarian._initialized = False
-
-                result = librarian.ingest_directory(tmpdir, extensions=[".md"])
-                assert result == 3
-
-    def test_ingest_directory_filters_by_extension(self):
-        """ingest_directory should filter by extension."""
-        import unittest.mock as mock
-
-        from omni.core.knowledge.librarian import Librarian
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Create files with different extensions
-            with open(os.path.join(tmpdir, "file.md"), "w") as f:
-                f.write("MD content")
-            with open(os.path.join(tmpdir, "file.txt"), "w") as f:
-                f.write("TXT content")
-            with open(os.path.join(tmpdir, "file.py"), "w") as f:
-                f.write("# Python")
-
-            with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
-                librarian = Librarian()
-                librarian._initialized = False
-
-                # Only .md files
-                result = librarian.ingest_directory(tmpdir, extensions=[".md"])
-                assert result == 1
-
-    @pytest.mark.asyncio
-    async def test_search_not_ready(self):
-        """search() should return empty list when not ready."""
-        import unittest.mock as mock
-
-        from omni.core.knowledge.librarian import Librarian
-
-        with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
-            librarian = Librarian()
-            librarian._initialized = False
-
-            result = await librarian.search("test query")
-            assert result == []
-
-    def test_get_stats_not_ready(self):
-        """get_stats() should return ready: False when not initialized."""
-        import unittest.mock as mock
-
-        from omni.core.knowledge.librarian import Librarian
-
-        with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
-            librarian = Librarian()
-            librarian._initialized = False
-
-            stats = librarian.get_stats()
-            assert stats["ready"] is False
-
-
-class TestLibrarianChunking:
-    """Tests for the Librarian text chunking functionality."""
-
-    def test_chunk_text_small(self):
-        """Small text should not be chunked."""
-        import unittest.mock as mock
-
-        from omni.core.knowledge.librarian import Librarian
-
-        with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
-            librarian = Librarian()
-            text = "Short text"
-            chunks = librarian._chunk_text(text, max_chunk_size=2000)
-            assert len(chunks) == 1
-            assert chunks[0] == "Short text"
-
-    def test_chunk_text_large(self):
-        """Large text should be split into chunks."""
-        import unittest.mock as mock
-
-        from omni.core.knowledge.librarian import Librarian
-
-        with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
-            librarian = Librarian()
-            # Create text larger than chunk size - each line is ~8 chars
-            # Need >2000 chars total to trigger chunking
-            text = "line1234\n" * 500  # ~500 * 9 = 4500 chars
-            chunks = librarian._chunk_text(text, max_chunk_size=2000)
-            assert len(chunks) > 1
-
-    def test_chunk_text_preserves_lines(self):
-        """Chunked text should preserve line boundaries."""
-        import unittest.mock as mock
-
-        from omni.core.knowledge.librarian import Librarian
-
-        with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
-            librarian = Librarian()
-            lines = ["line1", "line2", "line3", "line4", "line5"]
-            text = "\n".join(lines)
-            chunks = librarian._chunk_text(text, max_chunk_size=2000)
-
-            # All lines should be in some chunk
-            chunked_text = "\n".join(chunks)
-            for line in lines:
-                assert line in chunked_text
-
-
-class TestHyperSearch:
-    """Tests for the HyperSearch class."""
-
-    @pytest.mark.asyncio
-    async def test_search_with_highlighting(self):
-        """search_with_highlighting should return highlighted results."""
-        import unittest.mock as mock
-
-        from omni.core.knowledge.librarian import (
-            HyperSearch,
-            KnowledgeEntry,
-            Librarian,
-            SearchResult,
+        librarian = Librarian(
+            project_root=str(tmp_path),
+            batch_size=100,
+            chunk_mode=ChunkMode.AST,
+            table_name="custom_table",
         )
 
-        with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
-            librarian = Librarian()
-            librarian._initialized = False
+        assert librarian.batch_size == 100
+        assert librarian.chunk_mode == ChunkMode.AST
+        assert librarian.table_name == "custom_table"
 
-            # Add test entry to cache directly
-            librarian._cache = [
-                KnowledgeEntry(
-                    id="test_001",
-                    content="This is test content about testing",
-                    source="test.md",
-                    metadata={},
-                )
-            ]
 
-            hyper = HyperSearch(librarian)
-            with mock.patch.object(
-                hyper._librarian, "search", new_callable=mock.AsyncMock
-            ) as mock_search:
-                mock_entry = KnowledgeEntry(
-                    id="test_001",
-                    content="This is test content about testing",
-                    source="test.md",
-                    metadata={},
-                )
-                mock_search.return_value = [SearchResult(entry=mock_entry, score=0.9)]
+class TestLibrarianIngest:
+    """Tests for Librarian ingestion."""
 
-                results = await hyper.search_with_highlighting("test")
+    def test_ingest_returns_dict(self, tmp_path):
+        """ingest() should return a dictionary."""
+        from omni.core.knowledge.librarian import Librarian
 
-                assert len(results) == 1
-                assert "content_preview" in results[0]
-                assert results[0]["id"] == "test_001"
+        librarian = Librarian(project_root=str(tmp_path))
+        result = librarian.ingest()
 
-    @pytest.mark.asyncio
-    async def test_find_related(self):
-        """find_related should search for related entries."""
-        import unittest.mock as mock
+        assert isinstance(result, dict)
+        assert "files_processed" in result
+        assert "chunks_indexed" in result
+        assert "errors" in result
 
-        from omni.core.knowledge.librarian import (
-            HyperSearch,
-            KnowledgeEntry,
-            Librarian,
-            SearchResult,
-        )
 
-        with mock.patch.dict("sys.modules", {"omni.foundation.bridge": None}):
-            librarian = Librarian()
-            librarian._initialized = False
+class TestLibrarianGetStats:
+    """Tests for Librarian get_stats."""
 
-            hyper = HyperSearch(librarian)
+    def test_get_stats_returns_dict(self, tmp_path):
+        """get_stats() should return a dictionary."""
+        from omni.core.knowledge.librarian import Librarian
 
-            with mock.patch.object(
-                hyper._librarian, "search", new_callable=mock.AsyncMock
-            ) as mock_search:
-                mock_entry = KnowledgeEntry(
-                    id="test_001", content="This is test content", source="test.md", metadata={}
-                )
-                mock_search.return_value = [SearchResult(entry=mock_entry, score=0.9)]
+        librarian = Librarian(project_root=str(tmp_path))
+        stats = librarian.get_stats()
 
-                results = await hyper.find_related("test_001")
+        assert isinstance(stats, dict)
+        assert "table" in stats
+        assert "record_count" in stats
 
-                assert len(results) == 1
+
+class TestFileIngestor:
+    """Tests for the FileIngestor class."""
+
+    def test_discover_files_empty_dir(self, tmp_path):
+        """discover_files should return empty list for empty directory."""
+        from omni.core.knowledge.ingestion import FileIngestor
+
+        ingestor = FileIngestor()
+        files = ingestor.discover_files(tmp_path, use_knowledge_dirs=False)
+
+        assert files == []
+
+    def test_discover_files_finds_py_files(self, tmp_path):
+        """discover_files should find Python files via git."""
+        import subprocess
+
+        from omni.core.knowledge.ingestion import FileIngestor
+
+        # Create a Python file
+        (tmp_path / "test.py").write_text("def hello():\n    return 'world'\n")
+
+        # Initialize git repo (required for git discovery)
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+        subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+
+        ingestor = FileIngestor()
+        files = ingestor.discover_files(tmp_path, use_knowledge_dirs=False)
+
+        assert len(files) == 1
+        assert files[0].suffix == ".py"
+
+    def test_create_records_empty(self, tmp_path):
+        """create_records should return empty list for no files."""
+        from omni.core.knowledge.ingestion import FileIngestor
+
+        ingestor = FileIngestor()
+        records = ingestor.create_records([], tmp_path)
+
+        assert records == []
+
+    def test_create_records_with_py_file(self, tmp_path):
+        """create_records should create records from Python file."""
+        import subprocess
+
+        from omni.core.knowledge.ingestion import FileIngestor
+
+        # Create a Python file
+        py_file = tmp_path / "test.py"
+        py_file.write_text("def hello():\n    return 'world'\n")
+
+        # Initialize git repo
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+        subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+
+        ingestor = FileIngestor()
+        files = ingestor.discover_files(tmp_path, use_knowledge_dirs=False)
+        records = ingestor.create_records(files, tmp_path)
+
+        assert len(records) > 0
+        assert records[0]["id"]
+
+    def test_chunk_file_with_ast_mode(self, tmp_path):
+        """_chunk_with_mode with AST mode should chunk Python files."""
+        from omni.core.knowledge.ingestion import FileIngestor
+
+        ingestor = FileIngestor()
+        py_file = tmp_path / "test.py"
+        py_file.write_text("def hello():\n    return 'world'\n")
+
+        chunks = ingestor._chunk_with_mode(py_file, py_file.read_text(), "ast")
+
+        assert len(chunks) > 0
+        # AST chunking should find the function
+        assert any("hello" in chunk["content"] for chunk in chunks)
+
+    def test_chunk_file_with_text_mode(self, tmp_path):
+        """_chunk_with_mode with TEXT mode should chunk any file."""
+        from omni.core.knowledge.ingestion import FileIngestor
+
+        ingestor = FileIngestor()
+        txt_file = tmp_path / "test.txt"
+        txt_file.write_text("line1\nline2\nline3\nline4\nline5\n")
+
+        chunks = ingestor._chunk_with_mode(txt_file, txt_file.read_text(), "text")
+
+        assert len(chunks) > 0
+        # Text chunking should preserve content
+        combined = " ".join(chunk["content"] for chunk in chunks)
+        assert "line1" in combined
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

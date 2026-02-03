@@ -24,7 +24,8 @@ class TestScanPathsVirtualFiles:
 def tool_a(param: str) -> str:
     """Tool A implementation."""
     return param
-'''),
+''',
+            ),
             (
                 "/virtual/test_skill/scripts/tool_b.py",
                 '''
@@ -32,7 +33,8 @@ def tool_a(param: str) -> str:
 def tool_b(value: int) -> int:
     """Tool B implementation."""
     return value * 2
-'''),
+''',
+            ),
         ]
 
         tools = scan_paths(files, "test_skill", [], [])
@@ -52,7 +54,8 @@ def tool_b(value: int) -> int:
 def test_tool():
     """A test tool."""
     pass
-'''),
+''',
+            ),
         ]
 
         tools = scan_paths(files, "test_skill", ["test", "verify"], [])
@@ -72,7 +75,8 @@ def test_tool():
 def test_tool():
     """A test tool."""
     pass
-'''),
+''',
+            ),
         ]
 
         tools = scan_paths(files, "test_skill", [], [])
@@ -92,7 +96,8 @@ def test_tool():
 def init_tool():
     """This should be skipped."""
     pass
-'''),
+''',
+            ),
             (
                 "/virtual/test_skill/scripts/public.py",
                 '''
@@ -100,7 +105,8 @@ def init_tool():
 def public_tool():
     """This should be included."""
     pass
-'''),
+''',
+            ),
         ]
 
         tools = scan_paths(files, "test_skill", [], [])
@@ -118,7 +124,8 @@ def public_tool():
 def private_tool():
     """This should be skipped."""
     pass
-'''),
+''',
+            ),
             (
                 "/virtual/test_skill/scripts/public.py",
                 '''
@@ -126,7 +133,8 @@ def private_tool():
 def public_tool():
     """This should be included."""
     pass
-'''),
+''',
+            ),
         ]
 
         tools = scan_paths(files, "test_skill", [], [])
@@ -143,11 +151,12 @@ def public_tool():
             ),
             (
                 "/virtual/test_skill/scripts/tool.py",
-                '''
+                """
 @skill_command(name="tool")
 def tool():
     pass
-'''),
+""",
+            ),
         ]
 
         tools = scan_paths(files, "test_skill", [], [])
@@ -170,7 +179,8 @@ def tool():
 def regular_function():
     """No skill_command decorator here."""
     pass
-'''),
+''',
+            ),
         ]
 
         tools = scan_paths(files, "test_skill", [], [])
@@ -250,11 +260,11 @@ class TestFileHashConsistency:
 
     def test_same_content_same_hash(self) -> None:
         """Test that identical content produces identical file hashes."""
-        content = '''
+        content = """
 @skill_command(name="tool")
 def tool():
     pass
-'''
+"""
 
         tools1 = parse_script_content(content, "/virtual/path/tool.py", "test", [], [])
         tools2 = parse_script_content(content, "/virtual/path/tool.py", "test", [], [])
@@ -263,18 +273,18 @@ def tool():
 
     def test_different_content_different_hash(self) -> None:
         """Test that different content produces different file hashes."""
-        content1 = '''
+        content1 = """
 @skill_command(name="tool")
 def tool():
     pass
-'''
+"""
 
-        content2 = '''
+        content2 = """
 @skill_command(name="tool")
 def tool():
     pass
 # different
-'''
+"""
 
         tools1 = parse_script_content(content1, "/virtual/path/tool.py", "test", [], [])
         tools2 = parse_script_content(content2, "/virtual/path/tool.py", "test", [], [])
@@ -295,7 +305,8 @@ class TestVirtualPathUseCases:
 def commit(message: str) -> str:
     """Create a commit with the given message."""
     return f"Committed: {message}"
-'''),
+''',
+            ),
             (
                 "/virtual/git/scripts/status.py",
                 '''
@@ -303,7 +314,8 @@ def commit(message: str) -> str:
 def status() -> str:
     """Show the working tree status."""
     return "On branch main"
-'''),
+''',
+            ),
             (
                 "/virtual/git/scripts/log.py",
                 '''
@@ -311,7 +323,8 @@ def status() -> str:
 def log(n: int = 10) -> str:
     """Show recent commits."""
     return f"Showing last {n} commits"
-'''),
+''',
+            ),
         ]
 
         tools = scan_paths(files, "git", ["git", "version control"], [])
@@ -335,11 +348,7 @@ def new_tool(param: str) -> str:
 '''
 
         tools = parse_script_content(
-            content,
-            "/tmp/test_skill/scripts/new_tool.py",
-            "test_skill",
-            ["test"],
-            ["testing"]
+            content, "/tmp/test_skill/scripts/new_tool.py", "test_skill", ["test"], ["testing"]
         )
 
         assert len(tools) == 1
@@ -347,10 +356,6 @@ def new_tool(param: str) -> str:
         assert tools[0].file_path == "/tmp/test_skill/scripts/new_tool.py"
         # Hash should be consistent for same content
         tools2 = parse_script_content(
-            content,
-            "/tmp/test_skill/scripts/new_tool.py",
-            "test_skill",
-            ["test"],
-            ["testing"]
+            content, "/tmp/test_skill/scripts/new_tool.py", "test_skill", ["test"], ["testing"]
         )
         assert tools[0].file_hash == tools2[0].file_hash

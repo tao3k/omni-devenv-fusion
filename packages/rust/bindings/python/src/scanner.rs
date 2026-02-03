@@ -521,7 +521,13 @@ pub fn parse_script_content(
 ) -> Vec<PyToolRecord> {
     let scanner = omni_vector::ToolsScanner::new();
 
-    match scanner.parse_content(&content, &file_path, &skill_name, &skill_keywords, &skill_intents) {
+    match scanner.parse_content(
+        &content,
+        &file_path,
+        &skill_name,
+        &skill_keywords,
+        &skill_intents,
+    ) {
         Ok(tools) => tools.into_iter().map(|t| t.into()).collect(),
         Err(_) => Vec::new(),
     }

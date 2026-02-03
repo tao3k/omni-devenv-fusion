@@ -165,7 +165,12 @@ fn detect_chunk_type(pattern: &str, idx: usize) -> String {
 }
 
 /// Generate unique chunk ID
-fn generate_chunk_id(file_name: &str, chunk_type: &str, metadata: &HashMap<String, String>, idx: usize) -> String {
+fn generate_chunk_id(
+    file_name: &str,
+    chunk_type: &str,
+    metadata: &HashMap<String, String>,
+    idx: usize,
+) -> String {
     if let Some(name) = metadata.get("NAME") {
         format!("{}_{}_{}", file_name, chunk_type, name)
     } else {
@@ -223,7 +228,11 @@ fn split_chunk(chunk: &CodeChunk, max_lines: usize) -> Vec<CodeChunk> {
             line_start: chunk.line_start + start_line,
             line_end: chunk.line_start + end_line - 1,
             metadata: chunk.metadata.clone(),
-            docstring: if i == 0 { chunk.docstring.clone() } else { None },
+            docstring: if i == 0 {
+                chunk.docstring.clone()
+            } else {
+                None
+            },
         };
 
         parts.push(part);
@@ -258,7 +267,7 @@ class Greeter:
             "test.py",
             Lang::Python,
             &["def $NAME", "class $NAME"],
-            2,  // min_lines=2 to exclude 1-line functions
+            2, // min_lines=2 to exclude 1-line functions
             0,
         )
         .unwrap();
@@ -267,7 +276,10 @@ class Greeter:
         assert_eq!(chunks.len(), 3);
 
         // Check that we found functions and classes
-        let funcs: Vec<_> = chunks.iter().filter(|c| c.chunk_type == "function").collect();
+        let funcs: Vec<_> = chunks
+            .iter()
+            .filter(|c| c.chunk_type == "function")
+            .collect();
         let classes: Vec<_> = chunks.iter().filter(|c| c.chunk_type == "class").collect();
         assert_eq!(funcs.len(), 2);
         assert_eq!(classes.len(), 1);
@@ -366,7 +378,10 @@ impl Greeter {
         assert_eq!(chunks.len(), 4);
 
         // Check chunk types
-        let funcs: Vec<_> = chunks.iter().filter(|c| c.chunk_type == "function").collect();
+        let funcs: Vec<_> = chunks
+            .iter()
+            .filter(|c| c.chunk_type == "function")
+            .collect();
         let structs: Vec<_> = chunks.iter().filter(|c| c.chunk_type == "struct").collect();
         assert_eq!(funcs.len(), 3);
         assert_eq!(structs.len(), 1);
@@ -420,15 +435,8 @@ async def process_items():
     return results
 "#;
 
-        let chunks = chunk_code(
-            content,
-            "api.py",
-            Lang::Python,
-            &["async def $NAME"],
-            1,
-            0,
-        )
-        .unwrap();
+        let chunks =
+            chunk_code(content, "api.py", Lang::Python, &["async def $NAME"], 1, 0).unwrap();
 
         assert_eq!(chunks.len(), 2);
         assert!(chunks[0].content.contains("fetch_data"));
@@ -448,7 +456,15 @@ x = 1
 y = 2
 "#;
 
-        let chunks = chunk_code(content, "test.py", Lang::Python, &["def $NAME", "class $NAME"], 1, 0).unwrap();
+        let chunks = chunk_code(
+            content,
+            "test.py",
+            Lang::Python,
+            &["def $NAME", "class $NAME"],
+            1,
+            0,
+        )
+        .unwrap();
         assert_eq!(chunks.len(), 0);
     }
 
@@ -516,7 +532,10 @@ def hello():
         let chunks = chunk_code(content, "test.py", Lang::Python, &["def $NAME"], 1, 0).unwrap();
 
         assert_eq!(chunks.len(), 1);
-        assert_eq!(chunks[0].docstring, Some("Single quoted docstring.".to_string()));
+        assert_eq!(
+            chunks[0].docstring,
+            Some("Single quoted docstring.".to_string())
+        );
     }
 
     #[test]

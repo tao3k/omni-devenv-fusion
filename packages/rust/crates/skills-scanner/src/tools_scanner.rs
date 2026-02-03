@@ -644,8 +644,13 @@ impl ToolsScanner {
                 continue;
             }
 
-            let parsed_tools =
-                self.parse_content(content, file_path, skill_name, skill_keywords, skill_intents)?;
+            let parsed_tools = self.parse_content(
+                content,
+                file_path,
+                skill_name,
+                skill_keywords,
+                skill_intents,
+            )?;
 
             if !parsed_tools.is_empty() {
                 log::debug!(
@@ -884,7 +889,13 @@ def write_text(content: str) -> str:
 "#;
 
         let tools = scanner
-            .parse_content(content, "/virtual/path/scripts/tool.py", "writer", &["write".to_string()], &[])
+            .parse_content(
+                content,
+                "/virtual/path/scripts/tool.py",
+                "writer",
+                &["write".to_string()],
+                &[],
+            )
             .unwrap();
 
         assert_eq!(tools.len(), 1);
@@ -912,7 +923,13 @@ def status() -> str:
 "#;
 
         let tools = scanner
-            .parse_content(content, "/virtual/path/scripts/main.py", "git", &["git".to_string()], &[])
+            .parse_content(
+                content,
+                "/virtual/path/scripts/main.py",
+                "git",
+                &["git".to_string()],
+                &[],
+            )
             .unwrap();
 
         assert_eq!(tools.len(), 2);
@@ -950,7 +967,13 @@ def init_tool():
 
         // parse_content doesn't skip __init__.py - that's handled in scan_paths
         let tools = scanner
-            .parse_content(content, "/virtual/path/scripts/__init__.py", "test", &[], &[])
+            .parse_content(
+                content,
+                "/virtual/path/scripts/__init__.py",
+                "test",
+                &[],
+                &[],
+            )
             .unwrap();
 
         // This should find the tool since we're calling parse_content directly
@@ -987,7 +1010,13 @@ def test_tool():
 
         let intents = vec!["test".to_string(), "verify".to_string()];
         let tools = scanner
-            .parse_content(content, "/virtual/path/scripts/tool.py", "test", &[], &intents)
+            .parse_content(
+                content,
+                "/virtual/path/scripts/tool.py",
+                "test",
+                &[],
+                &intents,
+            )
             .unwrap();
 
         assert_eq!(tools.len(), 1);
@@ -1041,7 +1070,8 @@ def tool():
 def tool_a(param: str) -> str:
     '''Tool A implementation.'''
     return param
-"#.to_string(),
+"#
+                .to_string(),
             ),
             (
                 "/virtual/skill/scripts/tool_b.py".to_string(),
@@ -1050,13 +1080,12 @@ def tool_a(param: str) -> str:
 def tool_b(value: int) -> int:
     '''Tool B implementation.'''
     return value * 2
-"#.to_string(),
+"#
+                .to_string(),
             ),
         ];
 
-        let tools = scanner
-            .scan_paths(&files, "test_skill", &[], &[])
-            .unwrap();
+        let tools = scanner.scan_paths(&files, "test_skill", &[], &[]).unwrap();
 
         assert_eq!(tools.len(), 2);
         assert!(tools.iter().any(|t| t.tool_name == "test_skill.tool_a"));
@@ -1074,7 +1103,8 @@ def tool_b(value: int) -> int:
 def init_tool():
     '''This should be skipped.'''
     pass
-"#.to_string(),
+"#
+                .to_string(),
             ),
             (
                 "/virtual/skill/scripts/real_tool.py".to_string(),
@@ -1083,13 +1113,12 @@ def init_tool():
 def real_tool():
     '''This should be included.'''
     pass
-"#.to_string(),
+"#
+                .to_string(),
             ),
         ];
 
-        let tools = scanner
-            .scan_paths(&files, "test_skill", &[], &[])
-            .unwrap();
+        let tools = scanner.scan_paths(&files, "test_skill", &[], &[]).unwrap();
 
         // Only one tool (skipping __init__.py)
         assert_eq!(tools.len(), 1);
@@ -1107,7 +1136,8 @@ def real_tool():
 def private_tool():
     '''This should be skipped.'''
     pass
-"#.to_string(),
+"#
+                .to_string(),
             ),
             (
                 "/virtual/skill/scripts/public.py".to_string(),
@@ -1116,13 +1146,12 @@ def private_tool():
 def public_tool():
     '''This should be included.'''
     pass
-"#.to_string(),
+"#
+                .to_string(),
             ),
         ];
 
-        let tools = scanner
-            .scan_paths(&files, "test_skill", &[], &[])
-            .unwrap();
+        let tools = scanner.scan_paths(&files, "test_skill", &[], &[]).unwrap();
 
         // Only one tool (skipping _private.py)
         assert_eq!(tools.len(), 1);
@@ -1143,13 +1172,12 @@ def public_tool():
 @skill_command(name="real_tool")
 def real_tool():
     pass
-"#.to_string(),
+"#
+                .to_string(),
             ),
         ];
 
-        let tools = scanner
-            .scan_paths(&files, "test_skill", &[], &[])
-            .unwrap();
+        let tools = scanner.scan_paths(&files, "test_skill", &[], &[]).unwrap();
 
         assert_eq!(tools.len(), 1);
     }
@@ -1159,9 +1187,7 @@ def real_tool():
         let scanner = ToolsScanner::new();
         let files: Vec<(String, String)> = Vec::new();
 
-        let tools = scanner
-            .scan_paths(&files, "test_skill", &[], &[])
-            .unwrap();
+        let tools = scanner.scan_paths(&files, "test_skill", &[], &[]).unwrap();
 
         assert!(tools.is_empty());
     }
@@ -1169,17 +1195,16 @@ def real_tool():
     #[test]
     fn test_scan_paths_with_keywords_and_intents() {
         let scanner = ToolsScanner::new();
-        let files = vec![
-            (
-                "/virtual/skill/scripts/tool.py".to_string(),
-                r#"
+        let files = vec![(
+            "/virtual/skill/scripts/tool.py".to_string(),
+            r#"
 @skill_command(name="test_tool")
 def test_tool():
     '''A test tool.'''
     pass
-"#.to_string(),
-            ),
-        ];
+"#
+            .to_string(),
+        )];
 
         let keywords = vec!["test".to_string(), "verify".to_string()];
         let intents = vec!["testing".to_string()];

@@ -102,7 +102,9 @@ async def _notify_tools_changed(skill_changes: dict[str, str]) -> None:
     log.info("🔔 Skill changes detected (Live-Wire)", skills=list(skill_changes.keys()))
 
     if _mcp_server is None:
-        log.warning("No MCP server available for tool notification - Live-Wire notification blocked!")
+        log.warning(
+            "No MCP server available for tool notification - Live-Wire notification blocked!"
+        )
         return
 
     try:

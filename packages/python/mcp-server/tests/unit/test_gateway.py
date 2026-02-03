@@ -211,6 +211,7 @@ class TestToolListChangedNotification:
 
         # Check it's async
         import inspect
+
         assert inspect.iscoroutinefunction(server.send_tool_list_changed)
 
     @pytest.mark.asyncio

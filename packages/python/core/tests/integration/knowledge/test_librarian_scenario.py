@@ -1,341 +1,226 @@
 """
-test_librarian_scenario.py - Integration Scenarios for The Librarian
+test_librarian_scenario.py - Integration Tests for Librarian
 
-The Librarian's Exam: Real-world scenarios to verify knowledge recall capabilities.
-
-Scenarios:
-1. "The Architect": Keyword search over Markdown documentation.
-2. "The Debugger": Keyword search for specific Error Codes.
-3. "The Developer": Retrieving specific function definitions from Code.
-4. "The Updater": Modifying a file and verifying the index updates.
-
-Note: These tests use mocking for the vector store since the real
-implementation requires embedding generation which is handled by a separate
-embedding service.
+Tests for the unified Librarian with text and AST chunking modes.
 """
 
 from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock
+import subprocess
 
 import pytest
 
-from omni.core.knowledge.librarian import Librarian
 
+class MockEmbeddingService:
+    """Mock embedding service for testing (sync API to match real EmbeddingService)."""
 
-def async_mock(return_value):
-    """Create an async mock that returns the given value."""
-    mock = AsyncMock()
-    mock.return_value = return_value
-    return mock
+    def __init__(self, dimension: int = 384):
+        self.dimension = dimension
+        self.backend = "mock"
 
+    def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Generate deterministic embeddings based on text content."""
+        import hashlib
 
-@pytest.fixture(autouse=True)
-def reset_librarian_singleton():
-    """Reset librarian singleton before each test."""
-    from omni.core.knowledge.librarian import Librarian
+        embeddings = []
+        for text in texts:
+            hash_bytes = hashlib.sha256(text.encode()).digest()
+            vector = [float(b) / 255.0 for b in hash_bytes]
+            while len(vector) < self.dimension:
+                vector.extend(vector)
+            embeddings.append(vector[: self.dimension])
 
-    Librarian.reset_singleton()
-    yield
-    Librarian.reset_singleton()
+        return embeddings
 
-
-@pytest.fixture
-def temp_librarian(tmp_path: Path) -> Librarian:
-    """Create a Librarian instance with mocked vector store."""
-    db_path = tmp_path / "knowledge_db"
-    lib = Librarian(storage_path=str(db_path), collection="test_scenarios")
-    return lib
-
-
-@pytest.fixture
-def corpus(tmp_path: Path) -> Path:
-    """Generate a diverse corpus of files for testing."""
-    docs_dir = tmp_path / "documents"
-    docs_dir.mkdir()
-
-    # 1. Architecture Doc (Markdown) - Semantic search target
-    (docs_dir / "arch.md").write_text(
-        "# Trinity Architecture\n\nThe system is divided into Foundation, Core, and Agent layers.\n\nFoundation handles configuration and utilities.\nCore manages skills and orchestration.\nAgent provides the MCP interface.",
-        encoding="utf-8",
-    )
-
-    # 2. Error Codes (Log/Text - Keyword heavy)
-    (docs_dir / "errors.log").write_text(
-        "ERROR_503: Service Unavailable - Retry after backoff.\n"
-        "ERROR_404: Resource not found - Check the path.\n"
-        "ERROR_500: Internal Server Error - Check logs for details.",
-        encoding="utf-8",
-    )
-
-    # 3. Code (Python) - Function definition search
-    (docs_dir / "api.py").write_text(
-        '"""API module for database connections."""\n\n'
-        "def connect_to_db(timeout: int) -> bool:\n"
-        "    '''Establishes connection to the database.\n\n"
-        "    Args:\n"
-        "        timeout: Connection timeout in seconds.\n"
-        "    '''\n"
-        "    return True\n\n"
-        "def disconnect_from_db() -> None:\n"
-        "    '''Closes the database connection.'''\n"
-        "    pass\n",
-        encoding="utf-8",
-    )
-
-    # 4. Status file for updater test
-    (docs_dir / "status.md").write_text(
-        "Status: GREEN - All systems operational.", encoding="utf-8"
-    )
-
-    return docs_dir
+    def embed(self, query: str) -> list[list[float]]:
+        """Embed a single query (returns list of lists to match real EmbeddingService)."""
+        return self.embed_batch([query])
 
 
 @pytest.fixture
-def mock_search_results():
-    """Helper to create mock search results as dicts (matching list_all format)."""
-
-    def _create(content: str, source: str, score: float = 0.9):
-        return {
-            "id": f"doc_{hash(source) % 10000}",
-            "content": content,
-            "source": source,
-            "type": "test",
-            "score": score,
-        }
-
-    return _create
+def mock_embedder():
+    """Create a mock embedding service."""
+    return MockEmbeddingService()
 
 
-class TestScenarioArchitect:
-    """Scenario 1: Keyword search finds concepts."""
+@pytest.fixture
+def temp_project(tmp_path):
+    """Create a temporary project with sample code."""
+    project_root = tmp_path / "test_project"
+    project_root.mkdir()
+
+    # Python file with functions and classes
+    py_file = project_root / "calculator.py"
+    py_file.write_text('''
+def add(a, b):
+    """Add two numbers."""
+    return a + b
+
+def subtract(a, b):
+    """Subtract b from a."""
+    return a - b
+
+class MathOps:
+    """Advanced math operations."""
+
+    def multiply(self, x, y):
+        """Multiply two numbers."""
+        return x * y
+
+    def divide(self, x, y):
+        """Divide x by y."""
+        if y == 0:
+            raise ValueError("Cannot divide by zero")
+        return x / y
+''')
+
+    # Rust file
+    rs_file = project_root / "lib.rs"
+    rs_file.write_text("""
+pub fn hello(name: &str) -> String {
+    format!("Hello, {}!", name)
+}
+
+pub struct Greeter {
+    name: String,
+}
+
+impl Greeter {
+    pub fn new(name: String) -> Self {
+        Self { name }
+    }
+}
+""")
+
+    # Markdown file
+    md_file = project_root / "README.md"
+    md_file.write_text("# Test Project\n\nThis is a test project for Librarian.\n")
+
+    # Initialize git repo
+    subprocess.run(["git", "init"], cwd=project_root, capture_output=True)
+
+    return project_root
+
+
+@pytest.fixture
+def librarian_store(tmp_path):
+    """Create a temporary vector store."""
+    from omni_core_rs import PyVectorStore
+
+    store_path = str(tmp_path / "test_librarian.lance")
+    store = PyVectorStore(store_path, 384, True)
+    return store
+
+
+class TestLibrarian:
+    """Tests for the unified Librarian class."""
 
     @pytest.mark.asyncio
-    async def test_keyword_search_finds_concepts(self, temp_librarian: Librarian, corpus: Path):
-        """The Architect: Search should find content about 'system' and 'layers'."""
-        # Ingest the architecture doc
-        temp_librarian.ingest_file(str(corpus / "arch.md"))
+    async def test_full_ingestion_flow(self, temp_project, librarian_store, mock_embedder):
+        """Test complete ingestion flow from files to indexed chunks."""
+        from omni.core.knowledge.librarian import Librarian
 
-        # Mock list_all to return the ingested content (as async mock)
-        mock_result = {
-            "id": "arch_0",
-            "content": "The Trinity Architecture divides the system into Foundation, Core, and Agent layers.",
-            "source": str(corpus / "arch.md"),
-            "type": "documentation",
-            "score": 1.0,
-        }
-        temp_librarian._store.list_all = async_mock([mock_result])
+        librarian = Librarian(
+            project_root=str(temp_project),
+            store=librarian_store,
+            embedder=mock_embedder,
+            use_knowledge_dirs=False,
+        )
 
-        # Search for concept keywords
-        results = await temp_librarian.search("system layers", limit=3)
+        result = await librarian._ingest_async(clean=True)
 
-        assert len(results) > 0, "Expected at least one search result"
-        content = results[0].entry.content.lower()
-        assert any(
-            word in content for word in ["layer", "foundation", "core", "agent", "system"]
-        ), f"Expected structural content, got: {results[0].entry.content[:200]}"
-
-
-class TestScenarioDebugger:
-    """Scenario 2: Keyword search finds exact error codes."""
+        # Only .py and .rs files are discovered (README.md is not in ast_extensions)
+        assert result["files_processed"] == 2, f"Expected 2 files, got {result['files_processed']}"
+        assert result["chunks_indexed"] > 0, "Expected at least one chunk"
 
     @pytest.mark.asyncio
-    async def test_keyword_search_finds_error_codes(self, temp_librarian: Librarian, corpus: Path):
-        """The Debugger: Search for ERROR_503 should find the service unavailable message."""
-        temp_librarian.ingest_file(str(corpus / "errors.log"))
+    async def test_ast_chunking_python(self, temp_project, librarian_store, mock_embedder):
+        """Test that AST chunking correctly identifies Python functions and classes."""
+        from omni.core.knowledge.librarian import Librarian
 
-        # Mock list_all to return error content
-        mock_result = {
-            "id": "errors_0",
-            "content": "ERROR_503: Service Unavailable - Retry after backoff.",
-            "source": str(corpus / "errors.log"),
-            "type": "log",
-            "score": 1.0,
-        }
-        temp_librarian._store.list_all = async_mock([mock_result])
+        librarian = Librarian(
+            project_root=str(temp_project),
+            store=librarian_store,
+            embedder=mock_embedder,
+            use_knowledge_dirs=False,
+        )
 
-        # Search for specific error code
-        results = await temp_librarian.search("ERROR_503", limit=3)
+        await librarian._ingest_async(clean=True)
+        results = librarian.query("multiply", limit=5)
 
-        assert len(results) > 0, "Expected at least one search result for ERROR_503"
-        assert (
-            "Service Unavailable" in results[0].entry.content or "503" in results[0].entry.content
-        ), f"Expected ERROR_503 content, got: {results[0].entry.content}"
+        assert len(results) > 0, "Expected to find 'multiply'"
 
-
-class TestScenarioDeveloper:
-    """Scenario 3: Code chunking preserves function context."""
+        found_multiply = any("multiply" in res["text"] for res in results)
+        assert found_multiply, "Expected to find multiply in results"
 
     @pytest.mark.asyncio
-    async def test_code_search_finds_function_definitions(
-        self, temp_librarian: Librarian, corpus: Path
+    async def test_ast_chunking_rust(self, temp_project, librarian_store, mock_embedder):
+        """Test that AST chunking works for Rust code."""
+        from omni.core.knowledge.librarian import Librarian
+
+        librarian = Librarian(
+            project_root=str(temp_project),
+            store=librarian_store,
+            embedder=mock_embedder,
+            use_knowledge_dirs=False,
+        )
+
+        await librarian._ingest_async(clean=True)
+
+        results = librarian.query("Greeter", limit=20)
+
+        # Check that at least one result contains Rust code from lib.rs
+        rust_results = [r for r in results if r["metadata"].get("file_path", "").endswith(".rs")]
+        assert len(rust_results) > 0, f"Expected Rust results"
+
+        # Verify the impl block with Greeter is indexed
+        found_greeter = any("Greeter" in res["text"] for res in rust_results)
+        assert found_greeter, f"Expected 'Greeter' in Rust results"
+
+    @pytest.mark.asyncio
+    async def test_get_context_formats_correctly(
+        self, temp_project, librarian_store, mock_embedder
     ):
-        """The Developer: Search for function name should find its definition."""
-        temp_librarian.ingest_file(str(corpus / "api.py"))
+        """Test that get_context returns properly formatted LLM context."""
+        from omni.core.knowledge.librarian import Librarian
 
-        # Mock list_all to return function definition
-        mock_result = {
-            "id": "api_0",
-            "content": "def connect_to_db(timeout: int) -> bool:\n    '''Establishes connection to the database.'''\n    return True",
-            "source": str(corpus / "api.py"),
-            "type": "code",
-            "score": 1.0,
-        }
-        temp_librarian._store.list_all = async_mock([mock_result])
-
-        # Search for function definition
-        results = await temp_librarian.search("connect_to_db", limit=3)
-
-        assert len(results) > 0, "Expected at least one search result for connect_to_db"
-        assert (
-            "def connect_to_db" in results[0].entry.content
-            or "connect_to_db" in results[0].entry.content
-        ), f"Expected function definition, got: {results[0].entry.content}"
-
-
-class TestScenarioUpdater:
-    """Scenario 4: Document updates reflect in search."""
-
-    @pytest.mark.asyncio
-    async def test_updated_content_reflects_in_search(
-        self, temp_librarian: Librarian, corpus: Path
-    ):
-        """The Updater: Updating content should update search results."""
-        status_file = corpus / "status.md"
-
-        # Ingest initial content
-        temp_librarian.ingest_file(str(status_file))
-
-        # Mock list_all for GREEN
-        mock_green = {
-            "id": "status_0",
-            "content": "Status: GREEN - All systems operational.",
-            "source": str(status_file),
-            "type": "documentation",
-            "score": 0.95,
-        }
-        temp_librarian._store.list_all = async_mock([mock_green])
-
-        # Verify initial state - search for GREEN
-        results_green = await temp_librarian.search("Status", limit=1)
-        assert len(results_green) > 0, "Should find initial status"
-        assert "GREEN" in results_green[0].entry.content, (
-            f"Expected GREEN in initial content, got: {results_green[0].entry.content}"
+        librarian = Librarian(
+            project_root=str(temp_project),
+            store=librarian_store,
+            embedder=mock_embedder,
+            use_knowledge_dirs=False,
         )
 
-        # Update content - modify the file
-        status_file.write_text("Status: RED - Critical Failure detected!", encoding="utf-8")
+        await librarian._ingest_async(clean=True)
+        context = librarian.get_context("multiply", limit=2)
 
-        # Re-ingest the updated file
-        temp_librarian.ingest_file(str(status_file))
+        assert context, "Expected non-empty context"
+        assert "```" in context, "Expected code blocks in context"
+        assert "calculator.py" in context, "Expected file path in context"
 
-        # Mock list_all for RED
-        mock_red = {
-            "id": "status_0",
-            "content": "Status: RED - Critical Failure detected!",
-            "source": str(status_file),
-            "type": "documentation",
-            "score": 0.95,
-        }
-        temp_librarian._store.list_all = async_mock([mock_red])
+    @pytest.mark.asyncio
+    async def test_query_with_metadata(self, temp_project, librarian_store, mock_embedder):
+        """Test that query results include proper metadata."""
+        from omni.core.knowledge.librarian import Librarian
 
-        # Verify updated state - search for RED
-        results_red = await temp_librarian.search("Status", limit=5)
-
-        # At least one result should contain RED
-        red_found = any("RED" in r.entry.content for r in results_red)
-        assert red_found, (
-            f"Expected RED in updated content, got: {[r.entry.content for r in results_red]}"
+        librarian = Librarian(
+            project_root=str(temp_project),
+            store=librarian_store,
+            embedder=mock_embedder,
+            use_knowledge_dirs=False,
         )
 
+        await librarian._ingest_async(clean=True)
+        results = librarian.query("add", limit=5)
 
-class TestScenarioHybridSearch:
-    """Scenario 5: Search combines keyword matching."""
+        for res in results:
+            assert "id" in res, "Result should have id"
+            assert "text" in res, "Result should have text"
+            assert "metadata" in res, "Result should have metadata"
 
-    @pytest.mark.asyncio
-    async def test_keyword_search_works(self, temp_librarian: Librarian, corpus: Path):
-        """Test that keyword search works."""
-        # Ingest all documents
-        for file in corpus.iterdir():
-            if file.is_file():
-                temp_librarian.ingest_file(str(file))
-
-        # Mock list_all for database query
-        mock_db = {
-            "id": "api_0",
-            "content": "def connect_to_db(timeout: int) -> bool: Establishes connection to the database.",
-            "source": str(corpus / "api.py"),
-            "type": "code",
-            "score": 0.95,
-        }
-        temp_librarian._store.list_all = async_mock([mock_db])
-
-        # Keyword query
-        results = await temp_librarian.search("database", limit=3)
-        assert len(results) > 0, "Keyword search should find results"
-
-        # Mock list_all for error code query
-        mock_error = {
-            "id": "errors_0",
-            "content": "ERROR_500: Internal Server Error - Check logs for details.",
-            "source": str(corpus / "errors.log"),
-            "type": "log",
-            "score": 0.95,
-        }
-        temp_librarian._store.list_all = async_mock([mock_error])
-
-        # Error code query
-        error_results = await temp_librarian.search("ERROR_500", limit=3)
-        assert len(error_results) > 0, "Error code search should find results"
-
-
-class TestScenarioEdgeCases:
-    """Scenario 6: Edge cases and error handling."""
-
-    @pytest.mark.asyncio
-    async def test_search_empty_knowledge_base(self, temp_librarian: Librarian):
-        """Test search on empty knowledge base returns empty results."""
-        # Mock empty search results
-        temp_librarian._store.search = MagicMock(return_value=[])
-
-        results = await temp_librarian.search("anything", limit=5)
-        assert len(results) == 0, "Expected empty results for empty knowledge base"
-
-    def test_ingest_nonexistent_file(self, temp_librarian: Librarian, tmp_path: Path):
-        """Test ingesting nonexistent file returns False."""
-        result = temp_librarian.ingest_file(str(tmp_path / "nonexistent.md"))
-        assert result is False, "Expected False for nonexistent file"
-
-    def test_ingest_empty_file(self, temp_librarian: Librarian, tmp_path: Path):
-        """Test ingesting empty file works without error."""
-        empty_file = tmp_path / "empty.md"
-        empty_file.write_text("", encoding="utf-8")
-
-        result = temp_librarian.ingest_file(str(empty_file))
-        # Should return True (file exists and was processed)
-        assert result is True, "Expected True for empty file ingestion"
-
-    @pytest.mark.asyncio
-    async def test_search_respects_threshold(self, temp_librarian: Librarian, mock_search_results):
-        """Test that search respects score threshold."""
-        # Mock with low score
-        low_score_result = mock_search_results(
-            content="Low relevance match", source="test.md", score=0.3
-        )
-        temp_librarian._store.list_all = async_mock([low_score_result])
-
-        # Search with high threshold
-        results = await temp_librarian.search("anything", limit=5, threshold=0.5)
-        assert len(results) == 0, "Should filter out results below threshold"
-
-    @pytest.mark.asyncio
-    async def test_search_handles_error_gracefully(self, temp_librarian: Librarian):
-        """Test that search handles errors gracefully."""
-        # Mock list_all to raise exception using AsyncMock
-        error_mock = AsyncMock(side_effect=Exception("Search failed"))
-        temp_librarian._store.list_all = error_mock
-
-        results = await temp_librarian.search("anything", limit=5)
-        assert len(results) == 0, "Expected empty results on error"
+            metadata = res["metadata"]
+            assert "file_path" in metadata, "Metadata should have file_path"
+            assert "start_line" in metadata, "Metadata should have start_line"
+            assert "chunk_type" in metadata, "Metadata should have chunk_type"
 
 
 if __name__ == "__main__":

@@ -99,30 +99,19 @@ def _reindex_knowledge(clear: bool = False) -> dict[str, Any]:
     from omni.core.knowledge.librarian import Librarian
 
     try:
-        librarian = Librarian(collection="knowledge")
-        if not librarian.is_ready:
-            return {"status": "error", "database": "knowledge.lance", "error": "Not ready"}
+        librarian = Librarian(table_name="knowledge")
 
         if clear:
-            librarian.clear()
-
-        sources = ["docs", "assets/knowledge", "assets/how-to"]
-        all_files = []
-        for src in sources:
-            all_files.extend(find_markdown_files(src))
-
-        total_indexed = 0
-        for file_path in all_files:
-            if librarian.ingest_file(file_path, {"type": "documentation"}):
-                total_indexed += 1
-
-        committed = asyncio.run(librarian.commit())
+            librarian.ingest(clean=True)
+        else:
+            result = librarian.ingest()
+            # Return the processed counts from incremental ingestion
 
         return {
             "status": "success",
             "database": "knowledge.lance",
-            "docs_indexed": total_indexed,
-            "entries_committed": committed,
+            "docs_indexed": result.get("files_processed", 0),
+            "chunks_indexed": result.get("chunks_indexed", 0),
         }
     except Exception as e:
         return {"status": "error", "database": "knowledge.lance", "error": str(e)}

@@ -366,4 +366,3 @@ def tool():
 ```
 
 This approach allows testing hot reload logic without creating temporary directories or modifying `assets/skills/`.
-

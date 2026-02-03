@@ -269,8 +269,15 @@ pub fn py_chunk_code(
 
     let pattern_refs: Vec<&str> = patterns.iter().map(|s| s.as_str()).collect();
 
-    let chunks = omni_ast::chunk_code(&content, &file_path, lang, &pattern_refs, min_lines, max_lines)
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Chunking failed: {}", e)))?;
+    let chunks = omni_ast::chunk_code(
+        &content,
+        &file_path,
+        lang,
+        &pattern_refs,
+        min_lines,
+        max_lines,
+    )
+    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Chunking failed: {}", e)))?;
 
     Ok(chunks.into_iter().map(Into::into).collect())
 }

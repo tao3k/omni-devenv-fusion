@@ -1,249 +1,82 @@
-# agent/knowledge/references.yaml
-# Reference Knowledge Library - Knowledge Document Paths
+# =============================================================================
+# Omni-Dev-Fusion References Configuration
 #
-# This file provides paths to knowledge documents.
-# Path resolved from settings.yaml > conf_dir.
+# Centralized path references for knowledge base and documentation.
+# Used by Librarian for knowledge ingestion and by other modules for path resolution.
 #
-# Usage:
-#   from common.mcp_core.reference_library import get_reference_path
-#   path = get_reference_path("knowledge.specs_dir")
+# IMPORTANT: Keep paths synchronized with actual directory structure.
+# =============================================================================
 
 # =============================================================================
-# Spec Directory References
-# =============================================================================
-specs:
-  dir: "assets/specs"
-  template: "assets/specs/TEMPLATE.md"
-  archive: "assets/specs/archive"
-  description: "Feature specifications directory"
-
-# =============================================================================
-# Standards Directory References
-# =============================================================================
-standards:
-  dir: "agent/standards"
-  python: "agent/standards/lang-python.md"
-  nix: "agent/standards/lang-nix.md"
-  feature_lifecycle: "agent/standards/feature-lifecycle.md"
-  mcp_guidelines: "agent/standards/mcp-guidelines.md"
-  description: "Coding standards and guidelines"
-
-# =============================================================================
-# Writing Style References
-# =============================================================================
-writing_style:
-  dir: "agent/writing-style/"
-  cache: "WritingStyleCache"
-  files:
-    - "concise.md"
-    - "formatting.md"
-    - "technical.md"
-  description: "Engineering writing style guidelines"
-
-# =============================================================================
-# Language Standards References
-# =============================================================================
-language_standards:
-  patterns:
-    python: "agent/standards/lang-python.md"
-    nix: "agent/standards/lang-nix.md"
-  cache: "LangStandardsCache"
-  description: "Language-specific coding standards"
-
-# =============================================================================
-# GitOps Protocol References
-# =============================================================================
-git_protocol:
-  doc: "agent/skills/git_operations/guide.md"
-  cache: "GitWorkflowCache"
-  rules_cache: "GitRulesCache"
-  description: "Git commit workflow protocol and authorization rules"
-  rules:
-    - "stop_and_ask" # Default: require user authorization
-    - "auto_commit" # Override: allow automatic commits (user says "run just agent-commit")
-
-# =============================================================================
-# Feature Lifecycle References
-# =============================================================================
-feature_lifecycle:
-  doc: "agent/standards/feature-lifecycle.md"
-  description: "Feature lifecycle and complexity classification (L1-L4)"
-
-# =============================================================================
-# Testing Workflow References
-# =============================================================================
-testing_workflows:
-  doc: "agent/how-to/testing-workflows.md"
-  description: "Testing strategies and workflows"
-
-# =============================================================================
-# Documentation Workflow References
-# =============================================================================
-documentation_workflow:
-  doc: "agent/how-to/documentation-workflow.md"
-  description: "Documentation update workflow and sync rules"
-
-# =============================================================================
-# MCP Guidelines References
-# =============================================================================
-mcp_guidelines:
-  doc: "agent/standards/mcp-guidelines.md"
-  description: "MCP server design guidelines and best practices"
-
-# =============================================================================
-# Cache Patterns References
-# =============================================================================
-cache_patterns:
-  doc: "docs/explanation/cache-patterns.md"
-  description: "Caching patterns and implementation details"
-
-# =============================================================================
-# Harvested Knowledge References
-# =============================================================================
-harvested_knowledge:
-  dir: "assets/knowledge/harvested"
-  description: "Long-term knowledge extracted from development sessions"
-
-# =============================================================================
-# CLI Documentation References
-# =============================================================================
-cli:
-  doc: "docs/developer/cli.md"
-  description: "CLI command reference and usage guide"
-  commands:
-    route: "docs/developer/cli.md#phase-4142-route-command"
-    ingest: "docs/developer/cli.md#ingest-command"
-  ingest_commands:
-    - "knowledge"
-    - "skills"
-    - "all"
-    - "status"
-  skill_subcommands:
-    list: "List installed and loaded skills."
-    discover: "Discover skills from remote index. [DEPRECATED]"
-    info: "Show information about a skill."
-    install: "Install a skill from a remote repository. [DEPRECATED]"
-    update: "Update an installed skill. [DEPRECATED]"
-    test: "Test skills using the testing framework."
-    check: "Validate skill structure."
-    templates: "Manage skill templates."
-    create: "Create a new skill from template."
-  files:
-    - "__init__.py"
-    - "app.py"
-    - "console.py"
-    - "runner.py"
-    - "omni_loop.py"
-  directories:
-    - "commands"
-knowledge_caches:
-  git_protocol:
-    class: "GitWorkflowCache"
-    source: "agent/skills/git_operations/guide.md"
-  git_rules:
-    class: "GitRulesCache"
-    source: "agent/skills/git_operations/guide.md"
-  writing_style:
-    class: "WritingStyleCache"
-    source: "agent/writing-style/"
-  language_standards:
-    class: "LangStandardsCache"
-    sources:
-      - "agent/standards/lang-python.md"
-      - "agent/standards/lang-nix.md"
-
-# =============================================================================
-# Context & Orchestrator References (SSOT)
-# =============================================================================
-context:
-  system_context: "docs/llm/system_context.xml"
-  architecture_docs_dir: "docs/human/architecture"
-  description: "Context orchestrator and LLM system paths"
-
-# =============================================================================
-# Design Documents References (SSOT)
-# =============================================================================
-design_docs:
-  dir: "docs"
-  description: "Design documents directory"
-
-# =============================================================================
-# Knowledge Directories References (SSOT)
+# Knowledge Directories (for Librarian Ingestion)
+#
+# NOTE: These directories are scanned for knowledge files.
+# Hidden directories (starting with '.') are ignored by default.
+# LLM can decide via prompt which files should be skipped.
 # =============================================================================
 knowledge_dirs:
+  # Core documentation - human-readable guides
   - path: "assets/knowledge"
     domain: "knowledge"
-    description: "Project knowledge base"
+    description: "Project knowledge base (patterns, solutions, errors)"
   - path: "assets/how-to"
     domain: "workflow"
-    description: "How-to guides"
+    description: "How-to guides and workflows"
   - path: "docs/explanation"
     domain: "architecture"
-    description: "Architecture docs"
-  - path: "assets/skills/knowledge/standards"
-    domain: "standards"
-    description: "Coding standards"
-  - path: "packages/python/core/tests"
-    domain: "testing"
-    description: "Test infrastructure (Core layer)"
+    description: "Architecture documentation"
+  - path: "docs/reference"
+    domain: "reference"
+    description: "Reference documentation"
+  # Skill implementations - contains Python scripts
+  - path: "assets/skills"
+    domain: "skills"
+    description: "Skill implementations (Python scripts)"
 
 # =============================================================================
-# Prompts References (SSOT)
+# Documentation References
 # =============================================================================
-prompts:
-  system_core: "assets/prompts/system_core.md"
-  user_custom: ".cache/user_custom.md"
-  description: "Prompt templates and custom prompts"
 
-# =============================================================================
-# How-to Guides References (SSOT)
-# =============================================================================
+# Trinity Architecture
+trinity:
+  architecture: "docs/explanation/trinity-architecture.md"
+  core: "docs/human/architecture/trinity-core.md"
+  skills: "docs/human/architecture/skills-architecture.md"
+
+# Skill System
+skills:
+  directory: "assets/skills"
+  standard: "docs/human/architecture/skill-standard.md"
+  lifecycle: "docs/human/architecture/skill-lifecycle.md"
+
+# How-to Guides
 howto:
   gitops: "assets/how-to/gitops.md"
   testing_workflows: "assets/how-to/testing-workflows.md"
   documentation_workflow: "assets/how-to/documentation-workflow.md"
-  agent_native: "assets/how-to/agent-native-development.md"
-  description: "How-to guide paths"
 
-# =============================================================================
-# Trinity Architecture v2.0 References (SSOT)
-# =============================================================================
-trinity:
-  architecture: "docs/explanation/trinity-architecture.md"
-  core: "docs/human/architecture/trinity-core.md"
-  kernel: "docs/architecture/kernel.md"
+# Reference Docs
+reference:
+  cli: "docs/developer/cli.md"
+  extension_system: "docs/reference/extension-system.md"
+
+# Architecture Docs
+architecture_docs:
+  dir: "docs/human/architecture"
   router: "docs/architecture/router.md"
-  skills: "docs/architecture/skills.md"
-  description: "Trinity Architecture v2.0 - Thin Agent, Fat Kernel"
 
-# =============================================================================
-# Zero-Code Skills References (SSOT)
-# =============================================================================
-skills:
-  zero_code: "docs/explanation/zero-code-skill-architecture.md"
-  architecture: "docs/human/architecture/skills-architecture.md"
-  lifecycle: "docs/human/architecture/skill-lifecycle.md"
-  standard: "docs/human/architecture/skill-standard.md"
-  directory: "assets/skills"
-  cache: "SkillIndexCache"
-  description: "Zero-Code Skill System"
+# Context & System
+context:
+  system_context: "docs/llm/system_context.xml"
+  architecture_docs_dir: "docs/human/architecture"
 
-# =============================================================================
-# Test Infrastructure References (SSOT)
-# =============================================================================
+# Prompts
+prompts:
+  system_core: "assets/prompts/system_core.md"
+  user_custom: ".cache/user_custom.md"
+
+# Test Infrastructure
 test:
   infrastructure: "packages/python/core/tests"
   utils: "packages/python/core/tests/utils"
   fixtures: "packages/python/core/tests/fixtures"
-  plugins: "packages/python/core/tests/plugins"
-  conftest: "packages/python/core/tests/conftest.py"
-  description: "Test infrastructure (moved to Core layer)"
-
-# =============================================================================
-# Extension System References (SSOT)
-# =============================================================================
-extensions:
-  system: "docs/reference/extension-system.md"
-  llm: "docs/reference/extension-system-llm.md"
-  rust_bridge: "assets/skills/git/extensions/rust_bridge"
-  description: "Skill extension system for Rust/Python bridging"

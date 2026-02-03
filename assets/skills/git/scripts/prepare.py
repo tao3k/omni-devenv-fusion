@@ -10,9 +10,12 @@ Uses cascading template pattern with configuration via settings.yaml.
 """
 
 import re
-import shutil
 import subprocess
 from pathlib import Path
+
+from omni.foundation.config.logging import get_logger
+
+logger = get_logger("git.prepare")
 
 
 def _run(cmd: list[str], cwd: Path | None = None) -> tuple[str, str, int]:
@@ -127,21 +130,17 @@ def _validate_and_fix_scope(
 
 
 def _check_lefthook(cwd: Path | None = None) -> tuple[bool, str, str]:
-    """Run lefthook pre-commit checks.
+    """Run git pre-commit hook (lefthook is installed as the hook).
 
     Returns:
         Tuple of (success, report_message, lefthook_output)
     """
-    if not shutil.which("lefthook"):
-        return True, "", ""
+    lh_out, lh_err, lh_rc = _run(["git", "hook", "run", "pre-commit"], cwd=cwd)
 
-    lh_version, _, _ = _run(["lefthook", "--version"], cwd=cwd)
-    lh_out, lh_err, lh_rc = _run(["lefthook", "run", "pre-commit"], cwd=cwd)
-
-    lefthook_output = lh_out or lh_err
+    lefthook_output = lh_err or lh_out
 
     if lefthook_output.strip():
-        lefthook_report = f"lefthook {lh_version} hook: pre-commit\n{lefthook_output}"
+        lefthook_report = f"pre-commit hook:\n{lefthook_output}"
     else:
         lefthook_report = ""
 
@@ -152,7 +151,6 @@ def _check_lefthook(cwd: Path | None = None) -> tuple[bool, str, str]:
 
 
 def stage_and_scan(root_dir: str = ".") -> dict:
-    import shutil
     from pathlib import Path as PathType
 
     result = {
@@ -161,6 +159,7 @@ def stage_and_scan(root_dir: str = ".") -> dict:
         "security_issues": [],
         "scope_warning": "",
         "lefthook_error": "",
+        "lefthook_summary": "",
     }
 
     root_path = PathType(root_dir)
@@ -169,7 +168,7 @@ def stage_and_scan(root_dir: str = ".") -> dict:
         return result
 
     try:
-        _run(["git", "add", "."], cwd=root_path)
+        _run(["git", "add", "-A"], cwd=root_path)
     except Exception:
         return result
 
@@ -202,29 +201,44 @@ def stage_and_scan(root_dir: str = ".") -> dict:
 
     result["security_issues"] = sensitive
 
-    final_staged, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root_path)
-    final_staged_set = set(line for line in final_staged.splitlines() if line.strip())
-
     lefthook_failed = False
     lefthook_output = ""
-    if shutil.which("lefthook"):
-        lh_out, lh_err, lh_rc = _run(["lefthook", "run", "pre-commit"], cwd=root_path)
-        lefthook_output = lh_out or lh_err
+    lefthook_summary = ""
+
+    # Run git pre-commit hook (lefthook is installed as the hook)
+    lh_out, lh_err, lh_rc = _run(["git", "hook", "run", "pre-commit"], cwd=root_path)
+    lefthook_output = lh_err or lh_out
+    lefthook_failed = lh_rc != 0
+
+    # Extract summary - look for "summary:" keyword in output (stderr)
+    for line in reversed(lh_err.splitlines()):
+        if "summary:" in line.lower():
+            lefthook_summary = line.strip()
+            break
+
+    # Re-stage all modified files (including those modified by hook/formatting)
+    # Use git add -A to stage all changes (both modified tracked and untracked)
+    modified_out, _, _ = _run(["git", "diff", "--name-only"], cwd=root_path)
+    untracked_out, _, _ = _run(["git", "ls-files", "--others", "--exclude-standard"], cwd=root_path)
+
+    modified_set = set(line for line in modified_out.splitlines() if line.strip())
+    untracked_set = set(line for line in untracked_out.splitlines() if line.strip())
+
+    if modified_set or untracked_set:
+        _run(["git", "add", "-A"], cwd=root_path)
+        logger.info(f"Re-staged {len(modified_set)} modified + {len(untracked_set)} new files")
+
+    if lefthook_failed:
+        # Re-run hook on newly staged files
+        lh_out, lh_err, lh_rc = _run(["git", "hook", "run", "pre-commit"], cwd=root_path)
+        lefthook_output = lh_err or lh_out
         lefthook_failed = lh_rc != 0
 
-        # Re-stage files that lefthook may have modified (e.g., formatting)
-        current_staged, _, _ = _run(["git", "diff", "--cached", "--name-only"], cwd=root_path)
-        current_staged_set = set(line for line in current_staged.splitlines() if line.strip())
-        unstaged_by_lefthook = final_staged_set - current_staged_set
-
-        for f in unstaged_by_lefthook:
-            _run(["git", "add", f], cwd=root_path)
-
-        if lefthook_failed:
-            # Re-run lefthook on newly staged files
-            lh_out, lh_err, lh_rc = _run(["lefthook", "run", "pre-commit"], cwd=root_path)
-            lefthook_output = lh_out or lh_err
-            lefthook_failed = lh_rc != 0
+        # Re-extract summary after retry
+        for line in reversed(lh_err.splitlines()):
+            if "summary:" in line.lower():
+                lefthook_summary = line.strip()
+                break
 
     if lefthook_failed:
         result["lefthook_error"] = lefthook_output
@@ -240,6 +254,9 @@ def stage_and_scan(root_dir: str = ".") -> dict:
         diff_out = "[Diff unavailable - encoding issue]"
 
     result["diff"] = diff_out
+
+    # Store lefthook summary for display
+    result["lefthook_summary"] = lefthook_summary
 
     valid_scopes = _get_cog_scopes(root_path)
     if valid_scopes:

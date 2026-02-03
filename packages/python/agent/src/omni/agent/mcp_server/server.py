@@ -911,6 +911,7 @@ Focus on:
             # [FIX] Register MCP server BEFORE kernel.start() to ensure Live-Wire
             # callbacks can access _mcp_server when file changes are detected
             from .lifespan import set_mcp_server
+
             set_mcp_server(self._app)
             logger.debug("MCP server registered for Live-Wire notifications")
 
@@ -930,10 +931,9 @@ Focus on:
         # [NEW] Validate overrides against loaded tools
         self._validate_overrides()
 
-        # Enable verbose mode
+        # Enable verbose mode (hot reload is already enabled by default)
         if verbose:
-            self._kernel.enable_hot_reload()
-            logger.info("👀 Hot reload enabled")
+            logger.info("👀 Verbose mode enabled")
 
         try:
             # Use stdio_server context manager for proper stream handling

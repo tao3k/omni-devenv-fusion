@@ -82,8 +82,71 @@ def _build_workflow() -> Any:
         """Return state as is."""
         return dict(state)
 
+    def _lefthook_pre_commit_node(state: GraphState) -> dict[str, Any]:
+        """Run lefthook pre-commit and re-stage any modified files.
+
+        This step runs before commit to ensure formatting changes are included.
+        """
+        import os
+        import subprocess
+        import shutil
+
+        # Use PRJ_ROOT env var or state value or fallback to "."
+        project_root = os.environ.get("PRJ_ROOT") or state.get("project_root") or "."
+        result = dict(state)
+
+        try:
+            if shutil.which("lefthook"):
+                # Run lefthook pre-commit (applies formatting)
+                subprocess.run(
+                    ["git", "hook", "run", "pre-commit"],
+                    cwd=project_root,
+                    capture_output=True,
+                    text=True,
+                )
+                logger.info("Ran lefthook pre-commit in workflow")
+
+                # Re-stage all modified files (including those modified by lefthook)
+                proc = subprocess.run(
+                    ["git", "diff", "--name-only"],
+                    cwd=project_root,
+                    capture_output=True,
+                    text=True,
+                )
+                modified = [f for f in proc.stdout.strip().split("\n") if f]
+
+                proc = subprocess.run(
+                    ["git", "ls-files", "--others", "--exclude-standard"],
+                    cwd=project_root,
+                    capture_output=True,
+                    text=True,
+                )
+                untracked = [f for f in proc.stdout.strip().split("\n") if f]
+
+                if modified or untracked:
+                    subprocess.run(
+                        ["git", "add", "-A"],
+                        cwd=project_root,
+                        capture_output=True,
+                    )
+                    logger.info(f"Re-staged {len(modified)} modified + {len(untracked)} new files")
+
+                    # Update staged_files in state
+                    proc = subprocess.run(
+                        ["git", "diff", "--cached", "--name-only"],
+                        cwd=project_root,
+                        capture_output=True,
+                        text=True,
+                    )
+                    result["staged_files"] = [f for f in proc.stdout.strip().split("\n") if f]
+        except Exception as e:
+            logger.warning(f"Failed to run lefthook pre-commit: {e}")
+
+        return result
+
     builder = StateGraph(GraphState)
     builder.add_node("check", _check_state_node)
+    builder.add_node("lefthook_pre_commit", _lefthook_pre_commit_node)
     builder.add_node("empty", _return_state)
     builder.add_node("lefthook_error", _return_state)
     builder.add_node("security_warning", _return_state)
@@ -99,8 +162,11 @@ def _build_workflow() -> Any:
             WorkflowRouting.PREPARED: "prepared",
         },
     )
+    # All terminal states go to END
     for node in ["empty", "lefthook_error", "security_warning", "prepared"]:
         builder.add_edge(node, END)
+    # lefthook_pre_commit is also terminal (user then needs to approve)
+    builder.add_edge("lefthook_pre_commit", END)
 
     return builder
 
@@ -117,7 +183,7 @@ from omni.foundation.api.decorators import skill_command
     ⚠️  **Use smart_commit for all commits in this project** unless user explicitly requests otherwise.
 
     Multi-step workflow:
-    1. start: Stages files, runs security scan, lefthook checks
+    1. start: Stages files, runs lefthook (formatting), security scan
     2. approve: User approves, LLM generates commit message, executes commit
     3. reject: Cancels the workflow
     4. status: Checks workflow status
@@ -126,7 +192,7 @@ from omni.foundation.api.decorators import skill_command
     Benefits over direct git_commit:
     - Automatic commit message generation from diff analysis
     - Security scan for sensitive files
-    - Lefthook validation before commit
+    - Lefthook formatting (cargo fmt, ruff, etc.) with automatic re-staging
     - Human-in-the-loop approval
     - File categorization for detailed commit messages
 
@@ -152,6 +218,7 @@ async def smart_commit(
     action: SmartCommitAction = SmartCommitAction.START,
     workflow_id: str = "",
     message: str = "",
+    project_root: str = "",
 ) -> str:
     """
     Execute the Smart Commit workflow.
@@ -159,23 +226,30 @@ async def smart_commit(
     State Machine Pattern - uses workflow_id to track progress across multiple calls.
 
     Args:
-        - action: SmartCommitAction - Workflow action: start, approve, reject, status, visualize
-        - workflow_id: str - Workflow ID from start action
-        - message: str - Commit message for approve action
+        - action: SmartCommitAction - Workflow action: start, lefthook, approve, reject, status, visualize
+        - workflow_id: str - Workflow ID from start action (required for lefthook/approve/reject/status)
+        - message: str - Commit message for approve action (required for approve)
+        - project_root: str - Project root directory (defaults to PRJ_ROOT or ".")
 
     Returns:
         Workflow-specific result messages based on the action.
     """
+    # Resolve project_root from PRJ_ROOT env var if not provided
+    import os
+
+    if not project_root:
+        project_root = os.environ.get("PRJ_ROOT", ".")
+
     try:
         match action:
             case SmartCommitAction.START:
-                result = await _start_smart_commit_async()
+                result = await _start_smart_commit_async(project_root=project_root)
                 wf_id = result.get("workflow_id", "unknown")
                 files = result.get("staged_files", [])
                 diff = result.get("diff_content", "")
                 status = result.get("status", "unknown")
                 scope_warning = result.get("scope_warning", "")
-                valid_scopes = _get_cog_scopes(Path("."))
+                valid_scopes = _get_cog_scopes(Path(project_root))
 
                 match status:
                     case SmartCommitStatus.EMPTY:
@@ -194,6 +268,7 @@ async def smart_commit(
                             staged_file_count=len(files),
                             scope_warning=scope_warning,
                             valid_scopes=valid_scopes,
+                            lefthook_summary=result.get("lefthook_summary", ""),
                             lefthook_report="",
                             diff_content=diff,
                             wf_id=wf_id,
@@ -226,8 +301,7 @@ async def smart_commit(
                 if len(lines) > 1:
                     commit_body = "\n".join(lines[1:]).strip()
 
-                root = Path(".")
-                valid_scopes = _get_cog_scopes(root)
+                valid_scopes = _get_cog_scopes(Path(project_root))
                 if valid_scopes and commit_scope not in valid_scopes:
                     from difflib import get_close_matches
 
@@ -235,7 +309,11 @@ async def smart_commit(
                     if matches:
                         commit_scope = matches[0]
 
-                result = await _approve_smart_commit_async(workflow_id=workflow_id, message=message)
+                result = await _approve_smart_commit_async(
+                    workflow_id=workflow_id,
+                    message=message,
+                    project_root=project_root,
+                )
 
                 return render_commit_message(
                     subject=commit_description,
@@ -277,9 +355,14 @@ async def smart_commit(
 
 
 async def _start_smart_commit_async(
-    project_root: str = ".",
+    project_root: str = "",
 ) -> dict[str, Any]:
     """Start smart commit workflow - stage and scan files."""
+    import os
+
+    if not project_root:
+        project_root = os.environ.get("PRJ_ROOT", ".")
+
     from git.scripts.prepare import stage_and_scan
 
     wf_id = str(uuid.uuid4())[:8]
@@ -292,6 +375,7 @@ async def _start_smart_commit_async(
     diff = result_data.get("diff", "")
     security_issues = result_data.get("security_issues", [])
     lefthook_error = result_data.get("lefthook_error", "")
+    lefthook_summary = result_data.get("lefthook_summary", "")
 
     valid_scopes = _get_cog_scopes(root)
     scope_warning = ""
@@ -315,6 +399,7 @@ async def _start_smart_commit_async(
     state_dict: dict[str, Any] = dict(initial_state)
     state_dict["scope_warning"] = scope_warning
     state_dict["lefthook_report"] = ""
+    state_dict["lefthook_summary"] = lefthook_summary
 
     state_dict["workflow_id"] = wf_id
 
@@ -327,23 +412,36 @@ async def _start_smart_commit_async(
 async def _approve_smart_commit_async(
     message: str,
     workflow_id: str,
-    project_root: str = ".",
+    project_root: str = "",
 ) -> dict[str, Any]:
     """Approve and execute commit with the given message."""
+    import os
     import subprocess
-    from pathlib import Path
 
-    root = Path(project_root)
+    if not project_root:
+        project_root = os.environ.get("PRJ_ROOT", ".")
 
-    # Load workflow state to get original staged files from start step
-    workflow_state = load_workflow_state(_WORKFLOW_TYPE, workflow_id) or {}
-    original_staged = workflow_state.get("staged_files", [])
-
-    # Re-stage ALL modified files (not just originally staged ones)
-    # This ensures changes from formatting tools (cargo fmt, rustfmt, etc.)
-    # that were run AFTER 'start' are also included in the commit
+    # Step 1: Run lefthook pre-commit to apply any formatting
+    # This mirrors what git commit's hook would do, but we do it explicitly
+    # so we can re-stage the modified files before committing
     try:
-        # Get all modified (unstaged + staged) files
+        import shutil
+
+        if shutil.which("lefthook"):
+            subprocess.run(
+                ["git", "hook", "run", "pre-commit"],
+                cwd=project_root,
+                capture_output=True,
+                text=True,
+            )
+            logger.info("Ran lefthook pre-commit")
+    except Exception as e:
+        logger.warning(f"Failed to run lefthook pre-commit: {e}")
+
+    # Step 2: Re-stage ALL modified files (including those modified by lefthook)
+    # This ensures the commit includes the formatted content
+    try:
+        # Get all modified (working tree vs HEAD) files
         proc = subprocess.run(
             ["git", "diff", "--name-only"],
             cwd=project_root,
@@ -352,7 +450,7 @@ async def _approve_smart_commit_async(
         )
         all_modified = [f for f in proc.stdout.strip().split("\n") if f]
 
-        # Also get all modified but not yet tracked
+        # Also get untracked files
         proc = subprocess.run(
             ["git", "ls-files", "--others", "--exclude-standard"],
             cwd=project_root,
@@ -361,16 +459,16 @@ async def _approve_smart_commit_async(
         )
         untracked = [f for f in proc.stdout.strip().split("\n") if f]
 
-        # Stage ALL modified files (original staged + newly formatted)
-        all_files_to_stage = set(original_staged + all_modified + untracked)
-        for f in all_files_to_stage:
+        # Use git add -A to stage all changes
+        if all_modified or untracked:
             subprocess.run(
-                ["git", "add", f],
+                ["git", "add", "-A"],
                 cwd=project_root,
                 capture_output=True,
             )
+            logger.info(f"Re-staged {len(all_modified)} modified + {len(untracked)} new files")
     except Exception as e:
-        logger.warning(f"Failed to re-stage all modified files: {e}")
+        logger.warning(f"Failed to re-stage files: {e}")
 
     # Get final staged files count
     try:
@@ -433,16 +531,16 @@ async def _get_workflow_status_async(workflow_id: str) -> dict[str, Any] | None:
 def _smart_commit_diagram() -> str:
     """Generate a Mermaid diagram of the workflow."""
     return """graph TD
-    A[Start: git.smart_commit action=start] --> B[Stage & Scan Files]
+    A[Start: git.smart_commit action=start] --> B[git add -A → lefthook → re-stage]
     B --> C{Check Results}
     C -->|Empty| D[empty: Nothing to commit]
     C -->|Lefthook Failed| E[lefthook_error: Fix errors]
     C -->|Security Issues| F[security_warning: Review files]
-    C -->|Prepared| G[prepared: User approves]
-    G --> H[git.smart_commit action=approve]
-    H --> I[git.git_commit executes]
-    I --> J[Done]
-    J --> K[TEST: Hot Reload Works!]"""
+    C -->|Prepared| G[User reviews changes]
+    G --> H[User approves with message]
+    H --> I[git.smart_commit action=approve]
+    I --> J[git commit executes]
+    J --> K[Done]"""
 
 
 # Register with common visualization lib

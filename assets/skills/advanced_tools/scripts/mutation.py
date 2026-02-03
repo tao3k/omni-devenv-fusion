@@ -169,11 +169,19 @@ def regex_replace(
         paths = ConfigPaths()
 
     root = Path(paths.project_root)
-    target = Path(file_path).resolve()
+    file_path_path = Path(file_path)
 
-    # Handle absolute paths
-    if target.is_absolute():
-        if not outside:
+    # Handle path: relative paths are resolved relative to project root
+    # Absolute paths are checked against project root
+    if file_path_path.is_absolute():
+        # Absolute path: check if it's within project root
+        resolved_target = file_path_path.resolve()
+        is_within_root = (
+            resolved_target.is_relative_to(root)
+            if hasattr(root, "is_relative_to")
+            else str(resolved_target).startswith(str(root) + "/")
+        )
+        if not is_within_root and not outside:
             return {
                 "success": False,
                 "error": "File path is outside project. Use outside=true to allow.\n"
@@ -184,14 +192,17 @@ def regex_replace(
                 '  "outside": true\n'
                 "})",
             }
-        logger.warning(f"[OUTSIDE MODE] Modifying external file: {target}")
+        target = resolved_target
+        if outside and not is_within_root:
+            logger.warning(f"[OUTSIDE MODE] Modifying external file: {target}")
     else:
+        # Relative path: resolve from project root
         target = (root / file_path).resolve()
 
     # 1. Security Check (skip project boundary check if outside=True)
     if not target.exists():
         return {"success": False, "error": "File not found."}
-    if not outside and not str(target).startswith(str(root)):
+    if not outside and not str(target).startswith(str(root) + "/"):
         return {"success": False, "error": "Invalid file path (outside project)."}
 
     # 2. Env Check

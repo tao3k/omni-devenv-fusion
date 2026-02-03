@@ -144,6 +144,16 @@ def smart_search(
             except (json.JSONDecodeError, KeyError):
                 continue
 
+        if not matches:
+            return {
+                "success": False,
+                "error": f"No matches found for pattern '{pattern}'",
+                "tool": "ripgrep",
+                "count": 0,
+                "matches": [],
+                "hint": "Try a different pattern or check for typos",
+            }
+
         return {
             "success": True,
             "tool": "ripgrep",
@@ -232,6 +242,15 @@ def smart_find(
         try:
             result = subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=30)
             files = [line for line in result.stdout.splitlines() if line.strip()]
+            if not files:
+                return {
+                    "success": False,
+                    "error": f"No files found matching pattern '{pattern}'",
+                    "search_mode": "content",
+                    "count": 0,
+                    "files": [],
+                    "hint": "Try a different pattern or check for typos",
+                }
             return {
                 "success": True,
                 "tool": "ripgrep",
@@ -258,6 +277,15 @@ def smart_find(
     try:
         result = subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=30)
         files = [line for line in result.stdout.splitlines() if line.strip()]
+        if not files:
+            return {
+                "success": False,
+                "error": f"No files found matching pattern '{pattern}'",
+                "search_mode": "filename",
+                "count": 0,
+                "files": [],
+                "hint": "Try a different pattern or check for typos",
+            }
         return {
             "success": True,
             "tool": "fd",

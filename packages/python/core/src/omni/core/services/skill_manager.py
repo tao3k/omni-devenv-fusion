@@ -96,6 +96,7 @@ class SkillManager:
 
         # LanceDB path - use unified vector DB path from PRJ_CACHE
         from omni.foundation.config.dirs import get_database_path
+
         db_path = vector_store_path or get_database_path("skills")
 
         # Embedding service (singleton pattern)
@@ -126,6 +127,9 @@ class SkillManager:
 
         # Callbacks for skill changes (used by MCP Gateway for notifications)
         self._on_update_callbacks: list[Callable[[], None]] = []
+
+        # Librarian (initialized in startup to avoid circular imports)
+        self.librarian: "Librarian | None" = None
 
     def on_registry_update(self, callback: Callable[[], None] | Callable[[], Any]) -> None:
         """Register a callback to be fired when skills change.
@@ -159,7 +163,7 @@ class SkillManager:
 
         for i, callback in enumerate(self._on_update_callbacks):
             try:
-                logger.debug(f"🔔 Invoking callback {i+1}/{len(self._on_update_callbacks)}")
+                logger.debug(f"🔔 Invoking callback {i + 1}/{len(self._on_update_callbacks)}")
                 # Check if callback is a coroutine function
                 if asyncio.iscoroutinefunction(callback):
                     await callback()
@@ -168,19 +172,42 @@ class SkillManager:
             except Exception as e:
                 logger.warning(f"Error in update callback {i}: {e}")
 
-    async def startup(self, initial_scan: bool = False):
+    async def startup(self, initial_scan: bool = False, ingest_knowledge: bool = False):
         """Bootstrap the skill system.
 
         Args:
-            initial_scan: Whether to scan all files on startup
-                          (disable for large projects, enable for fresh installs)
+            initial_scan: Whether to scan all skill files on startup
+            ingest_knowledge: Whether to ingest project knowledge on startup
         """
+        from omni.core.runtime.services import ServiceRegistry
+        from omni.core.knowledge.librarian import Librarian
+
         logger.info(
             "Starting SkillManager",
             project_root=str(self.project_root),
             embedding_backend=self.embedding_service.backend,
             enable_watcher=self._enable_watcher,
         )
+
+        # Initialize and register Librarian (for code search capability)
+        logger.info("Initializing Librarian service...")
+        self.librarian = Librarian(
+            project_root=str(self.project_root),
+            store=self.vector_store,
+            embedder=self.embedding_service,
+        )
+
+        # Register services in ServiceRegistry for stateless skill access
+        ServiceRegistry.register("skill_manager", self)
+        ServiceRegistry.register("librarian", self.librarian)
+        ServiceRegistry.register("embedding", self.embedding_service)
+        logger.info(f"Registered services: {ServiceRegistry.list_services()}")
+
+        # Optional: Ingest project knowledge
+        if ingest_knowledge:
+            logger.info("Ingesting project knowledge...")
+            result = self.librarian.ingest()
+            logger.info(f"Knowledge ingestion complete: {result}")
 
         # Optional: Initial full scan
         if initial_scan:
@@ -205,14 +232,53 @@ class SkillManager:
 
     async def shutdown(self):
         """Gracefully shutdown the skill system."""
+        from omni.core.runtime.services import ServiceRegistry
+
         logger.info("Shutting down SkillManager...")
+
+        # Unregister services
+        ServiceRegistry.unregister("skill_manager")
+        ServiceRegistry.unregister("librarian")
+        ServiceRegistry.unregister("embedding")
 
         # Stop watcher first
         if self.watcher:
             await self.watcher.stop()
             self.watcher = None
 
+        self.librarian = None
         logger.info("SkillManager shutdown complete")
+
+    def get_knowledge_stats(self) -> dict[str, Any]:
+        """Get knowledge base statistics.
+
+        Returns:
+            Dict with knowledge base stats, or empty dict if librarian not initialized
+        """
+        if self.librarian is None:
+            return {"status": "not_initialized"}
+
+        stats = self.librarian.get_stats()
+        manifest_status = self.librarian.get_manifest_status()
+        return {
+            "status": "online",
+            **stats,
+            "manifest": manifest_status,
+        }
+
+    def ingest_knowledge(self, clean: bool = False) -> dict[str, int]:
+        """Ingest project knowledge.
+
+        Args:
+            clean: If True, drop existing table first
+
+        Returns:
+            Ingestion result dict
+        """
+        if self.librarian is None:
+            return {"error": "Librarian not initialized"}
+
+        return self.librarian.ingest(clean=clean)
 
     async def reindex_file(self, file_path: str) -> int:
         """Manually re-index a file.

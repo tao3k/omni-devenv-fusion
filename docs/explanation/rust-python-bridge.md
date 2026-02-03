@@ -206,12 +206,13 @@ tools = parse_script_content(content, "/virtual/path.py", "test", [], [])
 
 The `scan_paths` and `parse_script_content` functions enable skill tool scanning without filesystem access:
 
-| Function | Purpose | Use Case |
-|----------|---------|----------|
-| `scan_paths(files, skill_name, keywords, intents)` | Scan multiple virtual files | Batch testing, API integration |
-| `parse_script_content(content, file_path, skill_name, keywords, intents)` | Parse single content | Unit testing, content from DB |
+| Function                                                                  | Purpose                     | Use Case                       |
+| ------------------------------------------------------------------------- | --------------------------- | ------------------------------ |
+| `scan_paths(files, skill_name, keywords, intents)`                        | Scan multiple virtual files | Batch testing, API integration |
+| `parse_script_content(content, file_path, skill_name, keywords, intents)` | Parse single content        | Unit testing, content from DB  |
 
 **Key Features:**
+
 - No filesystem I/O - all content provided as strings
 - Supports `skill_keywords` and `skill_intents` for metadata enrichment
 - File hash computed for change detection

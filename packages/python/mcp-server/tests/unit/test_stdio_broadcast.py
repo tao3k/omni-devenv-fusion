@@ -13,17 +13,19 @@ class TestStdioTransportBroadcast:
     def test_transport_has_broadcast_method(self):
         """StdioTransport should have a broadcast method."""
         transport = StdioTransport()
-        assert hasattr(transport, 'broadcast')
+        assert hasattr(transport, "broadcast")
         assert callable(transport.broadcast)
 
     def test_broadcast_is_async(self):
         """Broadcast should be an async coroutine function."""
         transport = StdioTransport()
         import asyncio
+
         assert asyncio.iscoroutinefunction(transport.broadcast)
 
     def test_server_send_tool_list_changed_uses_broadcast(self):
         """MCPServer.send_tool_list_changed should use transport.broadcast."""
+
         class MockHandler:
             pass
 
@@ -31,14 +33,15 @@ class TestStdioTransportBroadcast:
         server = MCPServer(MockHandler(), transport)
 
         # Verify the server has the method
-        assert hasattr(server, 'send_tool_list_changed')
+        assert hasattr(server, "send_tool_list_changed")
 
         # Verify transport.broadcast exists (which send_tool_list_changed uses)
-        assert hasattr(transport, 'broadcast')
+        assert hasattr(transport, "broadcast")
 
     @pytest.mark.asyncio
     async def test_send_tool_list_changed_calls_broadcast(self):
         """MCPServer.send_tool_list_changed should call transport.broadcast."""
+
         class MockHandler:
             pass
 
@@ -67,4 +70,5 @@ class TestStdioTransportBroadcast:
         # We can't easily test the actual output in unit tests
         # since it writes to stdout, but we verify the method is properly defined
         import asyncio
+
         assert asyncio.iscoroutinefunction(transport.broadcast)

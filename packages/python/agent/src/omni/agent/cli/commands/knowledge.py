@@ -343,6 +343,94 @@ def knowledge_search(
         raise typer.Exit(1)
 
 
+@knowledge_app.command("ingest")
+def knowledge_ingest(
+    path: str = typer.Argument(".", help="Root directory to ingest"),
+    clean: bool = typer.Option(False, "--clean", "-c", help="Drop existing table first"),
+    batch_size: int = typer.Option(50, "--batch", "-b", help="Batch size"),
+    limit: int = typer.Option(200, "--limit", "-l", help="Maximum files to process (default: 200)"),
+) -> None:
+    """
+    Ingest project code into Knowledge Graph using AST chunking.
+
+    Examples:
+        omni knowledge ingest
+        omni knowledge ingest --limit 100
+        omni knowledge ingest --path /path/to/project --clean
+    """
+    from pathlib import Path
+
+    project_path = Path(path).resolve()
+
+    if not project_path.exists():
+        console.print(f"[red]❌ Path does not exist: {project_path}[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"[bold blue]🚀 Librarian[/bold blue] - {project_path}")
+    console.print(f"[dim]Processing up to {limit} source files (py, rs, js, ts, go, java)...[/dim]")
+
+    try:
+        from omni.core.knowledge.librarian import Librarian
+
+        librarian = Librarian(
+            project_root=str(project_path),
+            batch_size=batch_size,
+            max_files=limit,
+        )
+        result = librarian.ingest(clean=clean)
+
+        table = Table(title="Ingestion Results")
+        table.add_column("Metric")
+        table.add_column("Value")
+        table.add_row("Files Processed", str(result["files_processed"]))
+        table.add_row("Chunks Indexed", str(result["chunks_indexed"]))
+        table.add_row("Errors", str(result["errors"]))
+
+        console.print(Panel.fit(table, title="✅ Complete"))
+
+    except Exception as e:
+        console.print(f"[red]❌ Ingestion failed: {e}[/red]")
+        raise typer.Exit(1)
+
+
+@knowledge_app.command("context")
+def knowledge_context(
+    query: str = typer.Argument(..., help="Query to get context for"),
+    limit: int = typer.Option(3, "--limit", "-l", help="Number of context blocks"),
+    path: str = typer.Option(".", "--path", help="Project path"),
+    output: Optional[str] = typer.Option(
+        None, "--output", "-o", help="Output to file for pasting into prompts"
+    ),
+) -> None:
+    """
+    Get formatted context blocks for LLM consumption.
+
+    Examples:
+        omni knowledge context "How does the router work?"
+        omni knowledge context "AST chunking" -l 5 -o context.md
+    """
+    import asyncio
+    from pathlib import Path
+
+    project_path = Path(path).resolve()
+
+    try:
+        from omni.core.knowledge.librarian import Librarian
+
+        librarian = Librarian(project_root=str(project_path))
+        context = asyncio.run(librarian.get_context(query, limit=limit))
+
+        if output:
+            Path(output).write_text(context)
+            console.print(f"[green]Context written to {output}[/green]")
+        else:
+            console.print(context)
+
+    except Exception as e:
+        console.print(f"[red]❌ Error: {e}[/red]")
+        raise typer.Exit(1)
+
+
 def register_knowledge_command(parent_app: typer.Typer) -> None:
     """Register the knowledge command with the parent app."""
     parent_app.add_typer(knowledge_app, name="knowledge")

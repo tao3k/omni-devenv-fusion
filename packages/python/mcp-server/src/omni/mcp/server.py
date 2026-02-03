@@ -87,7 +87,9 @@ class MCPServer:
                 send_notification = getattr(session, "send_notification", None)
                 if send_notification is not None and callable(send_notification):
                     await send_notification("notifications/tools/listChanged", None)
-                    logger.debug(f"Sent notification to session {getattr(session, 'session_id', 'unknown')}")
+                    logger.debug(
+                        f"Sent notification to session {getattr(session, 'session_id', 'unknown')}"
+                    )
             except Exception as e:
                 logger.warning(f"Failed to send notification to session: {e}")
 

@@ -121,8 +121,12 @@ class Kernel:
 
     @property
     def is_ready(self) -> bool:
-        """Check if kernel is ready."""
-        return self._lifecycle.is_ready()
+        """Check if kernel is ready (initialized and operational).
+
+        Returns True for both READY and RUNNING states, as the kernel
+        is fully operational after start() is called.
+        """
+        return self._lifecycle.is_ready() or self._lifecycle.is_running()
 
     @property
     def is_running(self) -> bool:

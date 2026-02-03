@@ -99,7 +99,7 @@ let
                 };
                 format-rust = {
                   glob = "*.rs";
-                  run = "cargo fmt -- {staged_files}";
+                  run = "rustfmt -- {staged_files}";
                 };
               };
               commit-msg = lefthook.default.data.commit-msg;

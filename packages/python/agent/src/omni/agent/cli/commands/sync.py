@@ -94,28 +94,14 @@ async def _sync_knowledge(clear: bool = False) -> dict[str, Any]:
             return {"status": "skipped", "details": "Docs dir not found"}
 
         librarian = Librarian()
-        if clear:
-            await librarian.clear()
 
-        # Find and index markdown files
-        files = _find_markdown_files(str(docs_path))
-        total_found = len(files)
-        total_indexed = 0
-
-        for file_path in files:
-            try:
-                content = Path(file_path).read_text()
-                await librarian.index_document(file_path, content)
-                total_indexed += 1
-            except Exception:
-                pass
-
-        # Commit cached entries to vector store
-        committed = await librarian.commit()
+        # Use ingest() which handles file discovery, chunking, and indexing
+        # It automatically tracks changes via manifest
+        result = librarian.ingest(clean=clear)
 
         return {
             "status": "success",
-            "details": f"Indexed {total_indexed}/{total_found} docs, committed {committed} entries",
+            "details": f"Indexed {result['files_processed']} files, {result['chunks_indexed']} chunks",
         }
     except Exception as e:
         return {"status": "error", "details": str(e)}

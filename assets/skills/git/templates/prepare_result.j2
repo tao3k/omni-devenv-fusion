@@ -26,6 +26,15 @@
 - ... and {{ staged_file_count - 30 }} more files
 {% endif %}
 
+{% if lefthook_summary %}
+### 🪝 Lefthook Summary
+
+```
+{{ lefthook_summary }}
+```
+
+{% endif %}
+
 ### 📁 Files by Category
 
 {% set docs = [] %}
