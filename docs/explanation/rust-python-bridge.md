@@ -150,6 +150,8 @@ from omni_core_rs import (
     is_code_safe,           # Quick safety check
     scan_skill_tools,       # Skill tool discovery
     check_permission,       # Zero Trust permission check
+    scan_paths,             # Virtual path skill scanning (no filesystem)
+    parse_script_content,   # Parse single script content
 )
 
 # Security scanning
@@ -168,7 +170,53 @@ if is_code_safe(code):
 
 # Permission gatekeeper
 allowed = check_permission("filesystem.read_file", ["filesystem:*", "git:status"])
+
+# Virtual Path Scanning (Testing & API Support)
+# Scan Python files without filesystem access - useful for testing
+files = [
+    ("/virtual/skill/scripts/tool_a.py", '''
+@skill_command(name="tool_a")
+def tool_a(param: str) -> str:
+    """Tool A implementation."""
+    return param
+'''),
+    ("/virtual/skill/scripts/tool_b.py", '''
+@skill_command(name="tool_b")
+def tool_b(value: int) -> int:
+    """Tool B implementation."""
+    return value * 2
+'''),
+]
+
+# Scan virtual files with keywords and intents
+tools = scan_paths(files, "test_skill", ["test"], ["testing"])
+# Returns: [PyToolRecord(tool_name="test_skill.tool_a", ...), ...]
+
+# Parse single script content directly
+content = '''
+@skill_command(name="my_tool")
+def my_tool(param: str) -> str:
+    """My tool description."""
+    return param
+'''
+tools = parse_script_content(content, "/virtual/path.py", "test", [], [])
 ```
+
+#### Virtual Path Scanning
+
+The `scan_paths` and `parse_script_content` functions enable skill tool scanning without filesystem access:
+
+| Function | Purpose | Use Case |
+|----------|---------|----------|
+| `scan_paths(files, skill_name, keywords, intents)` | Scan multiple virtual files | Batch testing, API integration |
+| `parse_script_content(content, file_path, skill_name, keywords, intents)` | Parse single content | Unit testing, content from DB |
+
+**Key Features:**
+- No filesystem I/O - all content provided as strings
+- Supports `skill_keywords` and `skill_intents` for metadata enrichment
+- File hash computed for change detection
+- Skips `__init__.py` and private files (starting with `_`)
+- Returns `PyToolRecord` objects compatible with `scan_skill_tools`
 
 ### Immune System (Security + Sandbox)
 

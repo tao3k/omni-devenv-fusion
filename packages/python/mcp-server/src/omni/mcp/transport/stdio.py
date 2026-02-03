@@ -23,6 +23,9 @@ from mcp.server.stdio import stdio_server as mcp_stdio_server
 from mcp.types import JSONRPCMessage
 
 from ..interfaces import MCPRequestHandler, MCPTransport
+from omni.foundation.config.logging import get_logger
+
+logger = get_logger("omni.mcp.transport.stdio")
 
 
 class StdioTransport(MCPTransport):
@@ -145,6 +148,7 @@ class StdioTransport(MCPTransport):
             # JSON-RPC 2.0: Response MUST have a non-null id
             msg_id = response_dict.get("id")
             if msg_id is None:
+                # Notifications don't have id - use _write_notification instead
                 return
 
             # Build JSON-RPC 2.0 compliant response
@@ -168,6 +172,27 @@ class StdioTransport(MCPTransport):
 
         except Exception:
             pass
+
+    async def broadcast(self, notification: dict[str, Any]) -> None:
+        """Broadcast a notification to all connected clients.
+
+        For stdio transport, this writes directly to stdout.
+        Notifications are JSON-RPC 2.0 messages without an 'id' field.
+        """
+        try:
+            # JSON-RPC 2.0 notifications must NOT have an 'id' field
+            payload = {
+                "jsonrpc": "2.0",
+                "method": notification.get("method"),
+                "params": notification.get("params"),
+            }
+
+            json_bytes = orjson.dumps(payload, option=orjson.OPT_APPEND_NEWLINE)
+            sys.stdout.buffer.write(json_bytes)
+            sys.stdout.buffer.flush()
+            logger.debug(f"Broadcast notification: {payload.get('method')}")
+        except Exception as e:
+            logger.warning(f"Failed to broadcast notification: {e}")
 
 
 # =============================================================================

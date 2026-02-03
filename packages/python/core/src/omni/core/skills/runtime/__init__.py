@@ -33,6 +33,7 @@ class SkillContext:
     - Skill registration and retrieval
     - Skill lifecycle management
     - Command dispatch (both decorated and native functions)
+    - Reload callbacks for MCP notification integration
     """
 
     def __init__(self, skills_dir: Path):
@@ -45,6 +46,7 @@ class SkillContext:
         self._skills: dict[str, Any] = {}
         self._commands: dict[str, Any] = {}  # Decorated commands: "skill.command"
         self._native: dict[str, Any] = {}  # Native functions: "skill.function"
+        self._reload_callbacks: list[callable] = []  # Callbacks after reload
 
     def register_skill(self, skill: Any) -> None:
         """Register a loaded skill (UniversalScriptSkill).
@@ -92,6 +94,26 @@ class SkillContext:
             )
         else:
             logger.warning(f"Attempted to register nameless skill: {skill}")
+
+    def on_reload(self, callback: callable) -> None:
+        """Register a callback to be invoked when skills are reloaded.
+
+        This is used by MCP Gateway to send notifications/tools/listChanged
+        when scripts change on disk.
+
+        Args:
+            callback: Synchronous callback function (no args)
+        """
+        self._reload_callbacks.append(callback)
+        logger.debug(f"Registered reload callback (total: {len(self._reload_callbacks)})")
+
+    def _notify_reload(self) -> None:
+        """Internal: notify all registered callbacks of a reload."""
+        for callback in self._reload_callbacks:
+            try:
+                callback()
+            except Exception as e:
+                logger.warning(f"Error in reload callback: {e}")
 
     def get_skill(self, name: str) -> Any | None:
         """Get a registered skill by name, with hot reload support.

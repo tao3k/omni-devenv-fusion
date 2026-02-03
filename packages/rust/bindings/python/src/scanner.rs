@@ -427,3 +427,102 @@ pub fn diff_skills(scanned_tools_json: &str, existing_tools_json: &str) -> PyRes
 
     Ok(report.into())
 }
+
+/// Scan a list of virtual file paths with their content.
+///
+/// This function allows scanning Python files without filesystem access,
+/// which is useful for testing with temporary directories or processing
+/// file content from databases/APIs.
+///
+/// Args:
+///   files: List of tuples (file_path: str, content: str)
+///   skill_name: Name of the skill (e.g., "git", "writer")
+///   skill_keywords: Routing keywords from SKILL.md for keyword boosting
+///   skill_intents: Intents from SKILL.md
+///
+/// Returns:
+///   List of PyToolRecord objects from all scanned files
+///
+/// # Example
+///
+/// ```python
+/// from omni_core_rs import scan_paths
+///
+/// files = [
+///     ("/virtual/skill/scripts/tool_a.py", '''
+///         @skill_command(name="tool_a")
+///         def tool_a(param: str) -> str:
+///             '''Tool A implementation.'''
+///             return param
+///     '''),
+///     ("/virtual/skill/scripts/tool_b.py", '''
+///         @skill_command(name="tool_b")
+///         def tool_b(value: int) -> int:
+///             '''Tool B implementation.'''
+///             return value * 2
+///     '''),
+/// ]
+///
+/// tools = scan_paths(files, "test_skill", ["test"], ["testing"])
+/// ```
+#[pyfunction]
+#[pyo3(signature = (files, skill_name, skill_keywords, skill_intents))]
+pub fn scan_paths(
+    files: Vec<(String, String)>,
+    skill_name: String,
+    skill_keywords: Vec<String>,
+    skill_intents: Vec<String>,
+) -> Vec<PyToolRecord> {
+    let scanner = omni_vector::ToolsScanner::new();
+
+    match scanner.scan_paths(&files, &skill_name, &skill_keywords, &skill_intents) {
+        Ok(tools) => tools.into_iter().map(|t| t.into()).collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// Parse script content directly without reading from disk.
+///
+/// This is a lower-level function for parsing a single Python script.
+/// For batch scanning multiple files, use `scan_paths` instead.
+///
+/// Args:
+///   content: The Python script content as a string
+///   file_path: Virtual file path (for metadata/logging only)
+///   skill_name: Name of the parent skill
+///   skill_keywords: Routing keywords from SKILL.md
+///   skill_intents: Intents from SKILL.md
+///
+/// Returns:
+///   List of PyToolRecord objects (usually 0 or 1)
+///
+/// # Example
+///
+/// ```python
+/// from omni_core_rs import parse_script_content
+///
+/// content = """
+/// @skill_command(name="my_tool")
+/// def my_tool(param: str) -> str:
+///     '''My tool description.'''
+///     return param
+/// """
+///
+/// tools = parse_script_content(content, "/virtual/path/tool.py", "test", [], [])
+/// ```
+#[pyfunction]
+#[pyo3(signature = (content, file_path, skill_name, skill_keywords, skill_intents))]
+pub fn parse_script_content(
+    content: String,
+    file_path: String,
+    skill_name: String,
+    skill_keywords: Vec<String>,
+    skill_intents: Vec<String>,
+) -> Vec<PyToolRecord> {
+    let scanner = omni_vector::ToolsScanner::new();
+
+    match scanner.parse_content(&content, &file_path, &skill_name, &skill_keywords, &skill_intents) {
+        Ok(tools) => tools.into_iter().map(|t| t.into()).collect(),
+        Err(_) => Vec::new(),
+    }
+}

@@ -155,9 +155,28 @@ class OmniCellRunner:
         action: ActionType,
         ensure_structured: bool,
     ) -> CellResult:
-        """Execute via Rust bridge."""
+        """Execute via Rust bridge (async wrapper for sync call with timeout)."""
+        import asyncio
+
         try:
-            raw_json = self._rust_bridge.execute(command, ensure_structured)
+            # Run sync Rust bridge call in thread pool with timeout
+            loop = asyncio.get_event_loop()
+            try:
+                raw_json = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        None, lambda: self._rust_bridge.execute(command, ensure_structured)
+                    ),
+                    timeout=30.0,  # 30 second timeout
+                )
+            except asyncio.TimeoutError:
+                return CellResult(
+                    status="error",
+                    metadata={
+                        "error_type": "timeout",
+                        "error_msg": f"Command timed out after 30 seconds: {command[:100]}...",
+                        "command": command,
+                    },
+                )
 
             # Parse the JSON string into Python objects
             data = json.loads(raw_json)

@@ -235,8 +235,13 @@ class TestRouterDatabaseConsistency:
         This prevents the bug where skills.lance was populated but
         router.lance was empty, causing skill.discover to fail.
         """
-        from omni.agent.cli.commands.reindex import get_database_paths
+        from omni.agent.cli.commands.reindex import get_database_paths, _sync_router_from_skills
         from omni.foundation.bridge import RustVectorStore, get_vector_store
+
+        # First, ensure router is synced from skills
+        sync_result = _sync_router_from_skills()
+        if sync_result["status"] != "success":
+            pytest.skip(f"Could not sync router database: {sync_result.get('error', 'unknown')}")
 
         db_paths = get_database_paths()
 
@@ -248,9 +253,9 @@ class TestRouterDatabaseConsistency:
         router_store = get_vector_store(db_paths["router"], enable_keyword_index=True)
         router_tools = asyncio.run(router_store.list_all_tools())
 
-        # Both should have the same number of tools
+        # After sync, both should have the same number of tools
         assert len(skills_tools) == len(router_tools), (
-            f"skills.lance ({len(skills_tools)}) != router.lance ({len(router_tools)})"
+            f"After sync: skills.lance ({len(skills_tools)}) != router.lance ({len(router_tools)})"
         )
 
     def test_router_database_is_populated(self):

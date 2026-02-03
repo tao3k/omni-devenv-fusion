@@ -201,8 +201,8 @@ async def test_watcher_file_change_type():
 @pytest.mark.asyncio
 async def test_watcher_creation(temp_dir: Path, indexer: SkillIndexer):
     """Test that the ReactiveSkillWatcher can be created and managed."""
+    # Create watcher with custom skills_dir to use temp_dir
     watcher = ReactiveSkillWatcher(
-        root_dir=str(temp_dir),
         indexer=indexer,
         patterns=["**/*.py"],
         debounce_seconds=0.1,
@@ -213,8 +213,11 @@ async def test_watcher_creation(temp_dir: Path, indexer: SkillIndexer):
 
     # Can't easily start/stop in test without real file events
     # but we can verify configuration
-    assert watcher.root_dir == temp_dir
+    # Note: ReactiveSkillWatcher gets skills_dir from config (SKILLS_DIR())
+    # so we verify patterns and other settings
     assert watcher.patterns == ["**/*.py"]
+    assert watcher.debounce_seconds == 0.1
+    assert watcher.poll_interval == 0.1
 
 
 @pytest.mark.asyncio

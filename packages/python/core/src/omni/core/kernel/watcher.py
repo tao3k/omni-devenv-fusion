@@ -1,17 +1,23 @@
 """
-omni.core.kernel.watcher - Rust-Native Hot Reload
+omni.core.kernel.watcher - Reactive Skill Watcher (Live-Wire)
 
-Monitors the skills directory (via SKILLS_DIR()) and triggers Kernel reloads.
-Uses Rust omni-io notify bindings for high-performance file watching
-with EventBus integration and continuous event polling.
+Monitors the skills directory (via SKILLS_DIR()) and triggers incremental
+indexing upon changes. Uses Rust omni-io notify bindings for high-performance
+file watching with EventBus integration.
 
-Also provides ReactiveSkillWatcher for skill indexing integration.
+Features:
+- Debouncing: Avoids duplicate events for the same file
+- Pattern filtering: Only processes relevant file types
+- Callback support: Fires callbacks when skills change (for MCP notifications)
+- Kernel integration: Automatically reloads skills when scripts change
+
+This is the "Live-Wire" that connects Rust Sniffer to Python Indexer,
+enabling hot-reload of tools without restarting the Agent.
 """
 
 from __future__ import annotations
 
 import asyncio
-import os
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -57,187 +63,8 @@ class FileChangeEvent:
         )
 
 
-class RustKernelWatcher:
-    """Manages Rust-based file watcher for Kernel-native hot reload.
-
-    Uses omni-core-rs bindings to omni-io notify for efficient file watching
-    with EventBus integration. Continuously polls for file events in a
-    background task and triggers callbacks for skill changes.
-
-    This replaces the previous watchdog-based implementation with a
-    Rust-native solution for better performance and integration.
-    """
-
-    def __init__(
-        self,
-        skills_dir: Path,
-        callback: Callable[[str], None],
-        *,
-        debounce_seconds: float = 0.5,
-    ) -> None:
-        self.skills_dir = skills_dir
-        self.callback = callback
-        self.debounce_seconds = debounce_seconds
-        self._last_trigger: dict[str, float] = {}
-        self._watcher_handle: rs.PyFileWatcherHandle | None = None
-        self._running = False
-        self._watch_task: asyncio.Task[None] | None = None
-        self._event_receiver: rs.PyFileEventReceiver | None = None  # Persistent receiver
-
-    def _extract_skill_name(self, path: str) -> str | None:
-        """Extract skill name from file path."""
-        try:
-            path_obj = Path(path).resolve()
-            skills_dir_resolved = self.skills_dir.resolve()
-
-            if path_obj.name.startswith("."):
-                return None
-            if path_obj.suffix in SKIP_PATTERNS:
-                return None
-            if "__pycache__" in path_obj.parts:
-                return None
-
-            if not path_obj.is_relative_to(skills_dir_resolved):
-                # Fallback for some edge cases where resolve() might behave differently
-                # but usually resolve() fixes the /var vs /private/var issue
-                return None
-
-            relative = path_obj.relative_to(skills_dir_resolved)
-            if len(relative.parts) >= 1:
-                return relative.parts[0]
-        except ValueError:
-            pass
-        return None
-
-    def _trigger(self, skill_name: str) -> None:
-        """Trigger reload with debouncing."""
-        now = time.time()
-        last = self._last_trigger.get(skill_name, 0)
-
-        if now - last < self.debounce_seconds:
-            return
-
-        self._last_trigger[skill_name] = now
-        logger.info(f"Detected change in skill: {skill_name}")
-
-        # Bridge to async callback
-        try:
-            loop = asyncio.get_running_loop()
-            if loop.is_running():
-                loop.call_soon_threadsafe(lambda: self._safe_callback(skill_name))
-        except RuntimeError:
-            # No running loop - callback will be handled when loop starts
-            pass
-
-    def _safe_callback(self, skill_name: str) -> None:
-        """Safely invoke the callback."""
-        try:
-            self.callback(skill_name)
-        except Exception as e:
-            logger.error(f"Error in hot reload callback for {skill_name}: {e}")
-
-    async def _poll_events(self) -> None:
-        """Background task to poll for file events from EventBus."""
-        logger.debug("Event polling started")
-
-        while self._running:
-            try:
-                # Use persistent receiver to not miss events
-                if self._event_receiver is not None:
-                    events = self._event_receiver.try_recv()
-
-                    for event_type, path in events:
-                        if skill_name := self._extract_skill_name(path):
-                            self._trigger(skill_name)
-            except Exception as e:
-                logger.debug(f"Error polling file events: {e}")
-
-            # Small sleep to prevent busy loop
-            await asyncio.sleep(0.05)
-
-        logger.debug("Event polling stopped")
-
-    def start(self) -> None:
-        """Start watching for changes using Rust bindings."""
-        if not self.skills_dir.exists():
-            logger.warning(f"Watcher cannot start: {self.skills_dir} does not exist.")
-            return
-
-        logger.info(f"Watching skills at (Rust): {self.skills_dir}")
-
-        # Create persistent event receiver BEFORE starting watcher
-        # This ensures we don't miss any events
-        try:
-            self._event_receiver = rs.PyFileEventReceiver()
-        except Exception as e:
-            logger.error(f"Failed to create event receiver: {e}")
-            return
-
-        # Use Rust watcher with exclude patterns matching Python side
-        config = rs.PyWatcherConfig(paths=[str(self.skills_dir)])
-        config.recursive = True
-        config.debounce_ms = int(self.debounce_seconds * 1000)
-        config.exclude = [f"**/{p}/**" if p == "__pycache__" else f"**/{p}" for p in SKIP_PATTERNS]
-
-        try:
-            self._watcher_handle = rs.py_start_file_watcher(config)
-            self._running = True
-            logger.info("Rust file watcher started successfully")
-
-            # Start background polling task
-            self._watch_task = asyncio.create_task(self._poll_events())
-        except Exception as e:
-            logger.error(f"Failed to start Rust watcher: {e}")
-            self._running = False
-
-    def stop(self) -> None:
-        """Stop watching."""
-        if self._running:
-            logger.info("Stopping Rust watcher...")
-            self._running = False
-
-            # Cancel polling task
-            if self._watch_task is not None:
-                try:
-                    self._watch_task.cancel()
-                    # Schedule cleanup in event loop if running
-                    try:
-                        loop = asyncio.get_running_loop()
-                        loop.create_task(self._cleanup_task())
-                    except RuntimeError:
-                        pass
-                except Exception as e:
-                    logger.debug(f"Error canceling poll task: {e}")
-                self._watch_task = None
-
-            # Stop Rust watcher
-            if self._watcher_handle is not None:
-                try:
-                    self._watcher_handle.stop()
-                except Exception as e:
-                    logger.debug(f"Error stopping Rust watcher: {e}")
-                self._watcher_handle = None
-
-            logger.info("Rust watcher stopped")
-
-    async def _cleanup_task(self) -> None:
-        """Cleanup task after cancellation."""
-        try:
-            if self._watch_task is not None:
-                await self._watch_task
-        except Exception:
-            pass
-
-    @property
-    def is_running(self) -> bool:
-        """Check if watcher is running."""
-        if self._watcher_handle is not None:
-            return self._watcher_handle.is_running
-        return self._running
-
-
 # ============================================================================
-# Reactive Skill Watcher (New for Holographic Registry Integration)
+# Reactive Skill Watcher (Live-Wire)
 # ============================================================================
 
 from omni.core.skills.indexer import SkillIndexer
@@ -254,6 +81,8 @@ class ReactiveSkillWatcher:
     - Debouncing: Avoids duplicate events for the same file
     - Pattern filtering: Only processes relevant file types
     - Graceful shutdown: Clean stop of watcher threads
+    - Callback support: Fires callbacks when skills change (for MCP notifications)
+    - Kernel integration: Automatically reloads skills when scripts change
 
     This is the "Live-Wire" that connects Rust Sniffer to Python Indexer,
     enabling hot-reload of tools without restarting the Agent.
@@ -261,25 +90,32 @@ class ReactiveSkillWatcher:
 
     def __init__(
         self,
-        root_dir: str,
         indexer: SkillIndexer,
         patterns: list[str] | None = None,
         debounce_seconds: float = 0.5,
         poll_interval: float = 0.5,
+        kernel: "Kernel | None" = None,
     ):
         """Initialize the reactive skill watcher.
 
         Args:
-            root_dir: Directory to watch for skill changes
             indexer: SkillIndexer instance for processing events
             patterns: File patterns to watch (default: ["**/*.py"])
             debounce_seconds: Debounce delay in seconds
             poll_interval: How often to poll for events (seconds)
+            kernel: Optional Kernel instance for skill reload integration
         """
-        self.root_dir = Path(root_dir).resolve()
+        from omni.foundation.config.skills import SKILLS_DIR
+        from omni.foundation.runtime.gitops import get_project_root
+
+        # Use get_project_root() to get project root (reads PRJ_ROOT from direnv via git)
+        self.project_root = get_project_root()
+        # skills_dir from config (user-configurable via settings.yaml -> assets.skills_dir)
+        self.skills_dir = SKILLS_DIR()
         self.indexer = indexer
         self.poll_interval = poll_interval
         self.debounce_seconds = debounce_seconds
+        self._kernel = kernel  # Kernel bridge for skill reload
 
         # Build exclude patterns for common noise
         exclude_patterns = [
@@ -294,9 +130,9 @@ class ReactiveSkillWatcher:
         # File patterns to include
         self.patterns = patterns or ["**/*.py"]
 
-        # Rust watcher config
+        # Rust watcher config - watch skills_dir (user-configurable)
         self.config = rs.PyWatcherConfig()
-        self.config.paths = [str(self.root_dir)]
+        self.config.paths = [str(self.skills_dir)]
         self.config.recursive = True
         self.config.debounce_ms = int(debounce_seconds * 1000)
         self.config.patterns = self.patterns
@@ -314,6 +150,21 @@ class ReactiveSkillWatcher:
         self._last_event: FileChangeEvent | None = None
         self._last_event_time: float = 0.0
 
+        # Callback for skill changes (used by SkillManager for MCP notifications)
+        self._on_change_callback: Callable[[], None] | None = None
+
+    def set_on_change_callback(self, callback: Callable[[], None]) -> None:
+        """Set a callback to be invoked when skills change.
+
+        This callback is used by SkillManager to notify MCP clients
+        when tools are added/modified/removed.
+
+        Args:
+            callback: Synchronous callback function (no args, no return)
+        """
+        self._on_change_callback = callback
+        logger.debug("Change callback registered")
+
     async def start(self):
         """Start watching for file changes."""
         if self._running:
@@ -322,7 +173,7 @@ class ReactiveSkillWatcher:
 
         logger.info(
             f"👀 Reactive Skill Watcher started",
-            root=str(self.root_dir),
+            skills_dir=str(self.skills_dir),
             patterns=self.patterns,
         )
 
@@ -383,9 +234,12 @@ class ReactiveSkillWatcher:
 
     async def _process_batch(self, events: list[FileChangeEvent]):
         """Process a batch of file change events."""
+        logger.info(f"🗑️ [BATCH] Received {len(events)} events")
         for event in events:
+            logger.info(f"🗑️ [BATCH] Processing event: {event.event_type.value} {event.path}")
             # Filter to skill-related paths
             if not self._is_skill_related(event.path):
+                logger.info(f"🗑️ [BATCH] Skipped (not skill-related): {event.path}")
                 continue
 
             # Debounce duplicate events
@@ -393,6 +247,7 @@ class ReactiveSkillWatcher:
                 logger.debug(f"Debounced event: {event.path}")
                 continue
 
+            logger.info(f"🗑️ [BATCH] Calling _handle_event for {event.event_type.value}")
             try:
                 await self._handle_event(event)
             except Exception as e:
@@ -420,9 +275,45 @@ class ReactiveSkillWatcher:
 
         return True
 
+    def _extract_skill_name(self, path: str) -> str | None:
+        """Extract skill name from file path for ReactiveSkillWatcher.
+
+        Uses self.skills_dir (configurable) to resolve skill paths.
+        """
+        try:
+            path_obj = Path(path).resolve()
+            skills_dir_resolved = self.skills_dir.resolve()
+
+            if path_obj.name.startswith("."):
+                return None
+            if path_obj.suffix in SKIP_PATTERNS:
+                return None
+            if "__pycache__" in path_obj.parts:
+                return None
+
+            if not path_obj.is_relative_to(skills_dir_resolved):
+                return None
+
+            relative = path_obj.relative_to(skills_dir_resolved)
+            if len(relative.parts) >= 1:
+                return relative.parts[0]
+        except ValueError:
+            pass
+        return None
+
     def _should_debounce(self, event: FileChangeEvent) -> bool:
-        """Check if event should be debounced."""
+        """Check if event should be debounced.
+
+        Important: DELETED events should NOT be debounced because:
+        - File deletion is a unique event
+        - Re-creation of a deleted file should be processed
+        - We want to notify clients that the file is gone
+        """
         now = time.monotonic()
+
+        # DELETED events are never debounced (file deletion is significant)
+        if event.event_type == FileChangeType.DELETED:
+            return False
 
         # Reset debounce if enough time has passed
         if now - self._last_event_time > self.debounce_seconds:
@@ -445,24 +336,75 @@ class ReactiveSkillWatcher:
 
         logger.debug(f"Processing {event.event_type.value}: {filename}")
 
-        if event.event_type == FileChangeType.CREATED:
+        should_notify = False
+
+        # [WORKAROUND] Rust watcher may send created/changed instead of deleted
+        # when a file is deleted. Check file existence for these event types.
+        effective_event_type = event.event_type
+        if event.event_type in (FileChangeType.CREATED, FileChangeType.CHANGED, FileChangeType.MODIFIED):
+            if not path.exists():
+                logger.info(f"🗑️ [WORKAROUND] File doesn't exist for {event.event_type.value}, treating as DELETED")
+                effective_event_type = FileChangeType.DELETED
+
+        if effective_event_type == FileChangeType.CREATED:
             count = await self.indexer.index_file(event.path)
             if count > 0:
                 logger.info(f"⚡ Added {count} tools from {filename}")
+                should_notify = True
 
-        elif event.event_type in (FileChangeType.MODIFIED, FileChangeType.CHANGED):
+        elif effective_event_type in (FileChangeType.MODIFIED, FileChangeType.CHANGED):
             count = await self.indexer.reindex_file(event.path)
             if count > 0:
                 logger.info(f"⚡ Hot-reloaded {count} tools from {filename}")
+                should_notify = True
             else:
                 logger.debug(f"No tools indexed for modified file: {filename}")
 
-        elif event.event_type == FileChangeType.DELETED:
+        elif effective_event_type == FileChangeType.DELETED:
+            # Always notify on deletion - even if remove returns 0,
+            # the file change itself is significant
+            logger.info(f"🗑️ Processing DELETED event for {filename}")
             count = await self.indexer.remove_file(event.path)
-            logger.info(f"🗑️ Removed tools for {filename}")
+            if count > 0:
+                logger.info(f"🗑️ Removed {count} tools for {filename}")
+            else:
+                logger.info(f"🗑️ File deleted: {filename}")
+            should_notify = True
+            logger.info(f"🗑️ should_notify set to True for DELETED event")
 
         elif event.event_type == FileChangeType.ERROR:
             logger.warning(f"File watcher error: {event.path}")
+
+        # Bridge to Kernel for skill reload (Live-Wire Discovery Loop)
+        skill_name = self._extract_skill_name(event.path)
+        logger.info(f"🗑️ [DEBUG] skill_name={skill_name}, _kernel={self._kernel is not None}")
+        if skill_name and self._kernel is not None:
+            try:
+                logger.info(f"🗑️ [DEBUG] Calling kernel.reload_skill({skill_name})")
+                await self._kernel.reload_skill(skill_name)
+                logger.info(f"🗑️ [DEBUG] kernel.reload_skill({skill_name}) completed")
+            except Exception as e:
+                logger.warning(f"Failed to reload skill {skill_name}: {e}")
+
+        # Notify MCP clients if tools were added/modified/removed
+        logger.info(f"🗑️ [DEBUG] should_notify={should_notify}, callback={self._on_change_callback is not None}")
+        if should_notify and self._on_change_callback:
+            # Use effective_event_type for accurate logging
+            log_event_type = effective_event_type.value
+            logger.info(f"🔔 Triggering on_change_callback for {log_event_type}: {filename}")
+            try:
+                # Support both sync and async callbacks
+                callback = self._on_change_callback
+                logger.info(f"🔔 [DEBUG] callback type: {type(callback).__name__}")
+                if asyncio.iscoroutinefunction(callback):
+                    logger.info(f"🔔 [DEBUG] Creating task for async callback")
+                    # Run async callback in background task
+                    asyncio.create_task(callback())
+                else:
+                    logger.info(f"🔔 [DEBUG] Calling sync callback directly")
+                    callback()
+            except Exception as e:
+                logger.warning(f"Error in on_change callback: {e}")
 
     @property
     def is_running(self) -> bool:
@@ -472,7 +414,8 @@ class ReactiveSkillWatcher:
     async def get_stats(self) -> dict[str, Any]:
         """Get watcher statistics."""
         return {
-            "root_dir": str(self.root_dir),
+            "project_root": str(self.project_root),
+            "skills_dir": str(self.skills_dir),
             "patterns": self.patterns,
             "running": self._running,
             "poll_interval": self.poll_interval,

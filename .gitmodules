@@ -1,0 +1,3 @@
+[submodule "assets/knowledge"]
+	path = assets/knowledge
+	url = https://github.com/tao3k/omni-knowledge.git

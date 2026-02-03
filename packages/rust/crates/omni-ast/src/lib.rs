@@ -28,6 +28,7 @@
 // Module Declarations
 // ============================================================================
 
+mod chunk;
 mod extract;
 mod item;
 mod lang;
@@ -64,3 +65,6 @@ pub use security::{SecurityConfig, SecurityScanner, SecurityViolation};
 
 // Code extraction utilities
 pub use extract::{ExtractResult, extract_items};
+
+// Code chunking utilities
+pub use chunk::{chunk_code, CodeChunk};

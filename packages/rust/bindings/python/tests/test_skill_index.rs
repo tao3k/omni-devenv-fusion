@@ -277,3 +277,180 @@ def unique_tool():
     assert!(names.contains(&"test_skill.unique_tool"));
     assert!(names.contains(&"test_skill.duplicate_tool"));
 }
+
+/// Test scan_paths function - scanning virtual files without filesystem access.
+#[test]
+fn test_scan_paths_virtual_files() {
+    use skills_scanner::ToolsScanner;
+
+    let scanner = ToolsScanner::new();
+    let files = vec![
+        (
+            "/virtual/test_skill/scripts/tool_a.py".to_string(),
+            r#"
+@skill_command(name="tool_a")
+def tool_a(param: str) -> str:
+    '''Tool A implementation.'''
+    return param
+"#.to_string(),
+        ),
+        (
+            "/virtual/test_skill/scripts/tool_b.py".to_string(),
+            r#"
+@skill_command(name="tool_b")
+def tool_b(value: int) -> int:
+    '''Tool B implementation.'''
+    return value * 2
+"#.to_string(),
+        ),
+    ];
+
+    let tools = scanner.scan_paths(&files, "test_skill", &[], &[]).unwrap();
+
+    assert_eq!(tools.len(), 2);
+    assert!(tools.iter().any(|t| t.tool_name == "test_skill.tool_a"));
+    assert!(tools.iter().any(|t| t.tool_name == "test_skill.tool_b"));
+}
+
+/// Test scan_paths skips __init__.py and private files.
+#[test]
+fn test_scan_paths_skips_special_files() {
+    use skills_scanner::ToolsScanner;
+
+    let scanner = ToolsScanner::new();
+    let files = vec![
+        (
+            "/virtual/test_skill/scripts/__init__.py".to_string(),
+            r#"
+@skill_command(name="init_tool")
+def init_tool():
+    '''This should be skipped.'''
+    pass
+"#.to_string(),
+        ),
+        (
+            "/virtual/test_skill/scripts/_private.py".to_string(),
+            r#"
+@skill_command(name="private_tool")
+def private_tool():
+    '''This should be skipped.'''
+    pass
+"#.to_string(),
+        ),
+        (
+            "/virtual/test_skill/scripts/public.py".to_string(),
+            r#"
+@skill_command(name="public_tool")
+def public_tool():
+    '''This should be included.'''
+    pass
+"#.to_string(),
+        ),
+    ];
+
+    let tools = scanner.scan_paths(&files, "test_skill", &[], &[]).unwrap();
+
+    // Only one tool (skipping __init__.py and _private.py)
+    assert_eq!(tools.len(), 1);
+    assert_eq!(tools[0].tool_name, "test_skill.public_tool");
+}
+
+/// Test scan_paths with keywords and intents.
+#[test]
+fn test_scan_paths_with_metadata() {
+    use skills_scanner::ToolsScanner;
+
+    let scanner = ToolsScanner::new();
+    let files = vec![(
+        "/virtual/test_skill/scripts/tool.py".to_string(),
+        r#"
+@skill_command(name="test_tool")
+def test_tool():
+    '''A test tool.'''
+    pass
+"#.to_string(),
+    )];
+
+    let keywords = vec!["test".to_string(), "verify".to_string()];
+    let intents = vec!["testing".to_string()];
+
+    let tools = scanner.scan_paths(&files, "test_skill", &keywords, &intents).unwrap();
+
+    assert_eq!(tools.len(), 1);
+    assert!(tools[0].keywords.contains(&"test".to_string()));
+    assert!(tools[0].keywords.contains(&"verify".to_string()));
+    assert!(tools[0].intents.contains(&"testing".to_string()));
+}
+
+/// Test parse_content function - parsing single script content directly.
+#[test]
+fn test_parse_content_single_tool() {
+    use skills_scanner::ToolsScanner;
+
+    let scanner = ToolsScanner::new();
+    let content = r#"
+@skill_command(name="my_tool")
+def my_tool(param: str) -> str:
+    '''My tool description.'''
+    return param
+"#;
+
+    let tools = scanner
+        .parse_content(content, "/virtual/path/tool.py", "test", &[], &[])
+        .unwrap();
+
+    assert_eq!(tools.len(), 1);
+    assert_eq!(tools[0].tool_name, "test.my_tool");
+    assert_eq!(tools[0].function_name, "my_tool");
+    assert_eq!(tools[0].file_path, "/virtual/path/tool.py");
+}
+
+/// Test parse_content produces consistent file hashes.
+#[test]
+fn test_parse_content_file_hash() {
+    use skills_scanner::ToolsScanner;
+
+    let scanner = ToolsScanner::new();
+    let content = r#"
+@skill_command(name="tool")
+def tool():
+    pass
+"#;
+
+    let tools1 = scanner
+        .parse_content(content, "/virtual/path/tool.py", "test", &[], &[])
+        .unwrap();
+    let tools2 = scanner
+        .parse_content(content, "/virtual/path/tool.py", "test", &[], &[])
+        .unwrap();
+
+    // Same content should produce same hash
+    assert_eq!(tools1[0].file_hash, tools2[0].file_hash);
+
+    // Different content should produce different hash
+    let content2 = r#"
+@skill_command(name="tool")
+def tool():
+    pass
+# different
+"#;
+
+    let tools3 = scanner
+        .parse_content(content2, "/virtual/path/tool.py", "test", &[], &[])
+        .unwrap();
+
+    assert_ne!(tools1[0].file_hash, tools3[0].file_hash);
+}
+
+/// Test scan_paths empty list returns empty results.
+#[test]
+fn test_scan_paths_empty_list() {
+    use skills_scanner::ToolsScanner;
+
+    let scanner = ToolsScanner::new();
+    let files: Vec<(String, String)> = Vec::new();
+
+    let tools = scanner.scan_paths(&files, "test_skill", &[], &[]).unwrap();
+
+    assert!(tools.is_empty());
+}

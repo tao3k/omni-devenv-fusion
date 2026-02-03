@@ -140,8 +140,15 @@ async def run_stdio(verbose: bool = False) -> None:
 
     server = get_server(verbose=verbose)
 
+    # [FIX] Register MCP server BEFORE starting kernel to ensure Live-Wire
+    # callbacks can access _mcp_server when file changes are detected
+    from .lifespan import set_mcp_server
+    set_mcp_server(server)
+    log.debug("MCP server registered for Live-Wire notifications")
+
     # Lifespan: Run once at startup (load skills)
     # Enable watcher for hot-reload support
+    # Callback registration is now done in lifespan.py after kernel starts
     async with server_lifespan(enable_watcher=True):
         try:
             await server.start()

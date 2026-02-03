@@ -42,10 +42,54 @@ class MCPServer:
         self.transport = transport
         self._running = False
         self._handlers: dict[str, Any] = {}
+        self._sessions: set = set()  # Track connected sessions for broadcasting
 
     @property
     def is_running(self) -> bool:
         return self._running
+
+    def register_session(self, session: Any) -> None:
+        """Register a connected session for broadcast notifications."""
+        self._sessions.add(session)
+        logger.debug(f"Session registered. Total sessions: {len(self._sessions)}")
+
+    def unregister_session(self, session: Any) -> None:
+        """Unregister a disconnected session."""
+        self._sessions.discard(session)
+        logger.debug(f"Session unregistered. Total sessions: {len(self._sessions)}")
+
+    async def send_tool_list_changed(self) -> None:
+        """
+        Broadcast 'notifications/tools/listChanged' to all connected clients.
+
+        This is the key method for live tool cache invalidation.
+        When skills change, call this to notify Claude/Cursor to refresh.
+        """
+        notification = {
+            "jsonrpc": "2.0",
+            "method": "notifications/tools/listChanged",
+            "params": None,
+        }
+
+        # Get the transport's notification method if available
+        broadcast = getattr(self.transport, "broadcast", None)
+        if broadcast is not None and callable(broadcast):
+            try:
+                await broadcast(notification)
+                logger.info("🔔 Broadcasted tools/listChanged to all clients")
+                return
+            except Exception as e:
+                logger.warning(f"Failed to broadcast via transport: {e}")
+
+        # Fallback: try to send to each registered session
+        for session in list(self._sessions):
+            try:
+                send_notification = getattr(session, "send_notification", None)
+                if send_notification is not None and callable(send_notification):
+                    await send_notification("notifications/tools/listChanged", None)
+                    logger.debug(f"Sent notification to session {getattr(session, 'session_id', 'unknown')}")
+            except Exception as e:
+                logger.warning(f"Failed to send notification to session: {e}")
 
     def request(self, method: str):
         """Decorator to register a request handler."""

@@ -70,15 +70,26 @@ impl FileWatcherHandle {
     }
 }
 
-/// Convert notify event kind to topic
+/// Convert notify event kind to topic and handle macOS edge cases
 #[cfg(feature = "notify")]
-fn event_to_topic(kind: &notify::EventKind) -> &'static str {
-    match kind {
+fn event_to_topic_and_path(kind: &notify::EventKind, path: &Path) -> (&'static str, String) {
+    let path_str = path.to_string_lossy().to_string();
+
+    // Handle macOS edge case: some editors may send Create/Modify instead of Remove
+    // when a file is deleted. We check if the file actually exists.
+    if matches!(kind, notify::EventKind::Create(_)) || matches!(kind, notify::EventKind::Modify(_)) {
+        if !path.exists() {
+            // File was reported as created/modified but doesn't exist -> it was deleted
+            return (topics::FILE_DELETED, path_str);
+        }
+    }
+
+    (match kind {
         notify::EventKind::Create(_) => topics::FILE_CREATED,
         notify::EventKind::Modify(_) => topics::FILE_CHANGED,
         notify::EventKind::Remove(_) => topics::FILE_DELETED,
         _ => topics::FILE_CHANGED,
-    }
+    }, path_str)
 }
 
 /// Check if path matches any pattern using high-performance GlobSet
@@ -209,25 +220,29 @@ where
                                 debounce.insert(path_str.clone(), now);
                             }
 
-                            // Convert to FileEvent
-                            let file_event = match event.kind {
-                                notify::EventKind::Create(_) => FileEvent::Created {
-                                    path: path_str.clone(),
+                            // Handle macOS edge case: check if file exists for Create/Modify events
+                            // If file doesn't exist, treat it as DELETED
+                            let (topic, final_path_str) = event_to_topic_and_path(&event.kind, path);
+
+                            // Convert to FileEvent - use final_path_str and topic to determine type
+                            let file_event = match topic {
+                                topics::FILE_DELETED => FileEvent::Deleted {
+                                    path: final_path_str.clone(),
                                     is_dir: path.is_dir(),
                                 },
-                                notify::EventKind::Remove(_) => FileEvent::Deleted {
-                                    path: path_str.clone(),
+                                topics::FILE_CREATED => FileEvent::Created {
+                                    path: final_path_str.clone(),
                                     is_dir: path.is_dir(),
                                 },
-                                _ => FileEvent::Modified { path: path_str.clone() },
+                                _ => FileEvent::Modified { path: final_path_str.clone() },
                             };
 
                             // Create OmniEvent and publish to global bus
-                            let topic = event_to_topic(&event.kind);
                             let payload = serde_json::json!({
-                                "path": path_str,
+                                "path": final_path_str,
                                 "is_dir": path.is_dir(),
                                 "event_type": format!("{:?}", event.kind),
+                                "resolved_type": topic,
                             });
 
                             let omni_event = OmniEvent::new("watcher", topic, payload);

@@ -152,20 +152,47 @@ def regex_replace(
     pattern: str,
     replacement: str,
     paths: ConfigPaths | None = None,
+    outside: bool = False,
 ) -> dict[str, Any]:
     """
     Execute: sed -i 's/pattern/replacement/g' file
     Uses | as delimiter to avoid escaping path slashes.
+
+    Args:
+        file_path: Path to file (relative to project root, or absolute)
+        pattern: Regex pattern to search for
+        replacement: Replacement string
+        paths: ConfigPaths injection
+        outside: If True, allow editing files outside project root (shows warning)
     """
     if paths is None:
         paths = ConfigPaths()
 
-    root = paths.project_root
-    target = (root / file_path).resolve()
+    root = Path(paths.project_root)
+    target = Path(file_path).resolve()
 
-    # 1. Security Check
-    if not str(target).startswith(str(root)) or not target.exists():
-        return {"success": False, "error": "Invalid file path."}
+    # Handle absolute paths
+    if target.is_absolute():
+        if not outside:
+            return {
+                "success": False,
+                "error": "File path is outside project. Use outside=true to allow.\n"
+                "Example: @omni('advanced_tools.regex_replace', {\n"
+                '  "file_path": "/external/path/file.txt",\n'
+                '  "pattern": "old",\n'
+                '  "replacement": "new",\n'
+                '  "outside": true\n'
+                "})",
+            }
+        logger.warning(f"[OUTSIDE MODE] Modifying external file: {target}")
+    else:
+        target = (root / file_path).resolve()
+
+    # 1. Security Check (skip project boundary check if outside=True)
+    if not target.exists():
+        return {"success": False, "error": "File not found."}
+    if not outside and not str(target).startswith(str(root)):
+        return {"success": False, "error": "Invalid file path (outside project)."}
 
     # 2. Env Check
     sed_exec = shutil.which("sed")

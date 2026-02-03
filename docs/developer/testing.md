@@ -379,8 +379,82 @@ cargo test -p omni-tags
 | Crate        | Tests | Status  |
 | ------------ | ----- | ------- |
 | omni-vector  | 35    | PASSING |
-| omni-scanner | -     | TODO    |
+| skills-scanner | 55   | PASSING |
 | omni-tags    | -     | TODO    |
+
+---
+
+## Testing Without Filesystem Access
+
+### Virtual Path Scanner
+
+The Rust skills scanner now supports **virtual path scanning** - scanning Python files without filesystem I/O. This enables:
+
+1. **Isolated Unit Tests** - Test scanner logic without touching disk
+2. **Temporary Directory Simulation** - Create virtual skill structures in memory
+3. **API Integration** - Process file content from databases or external sources
+
+```python
+from omni_core_rs import scan_paths, parse_script_content
+
+# Test scanner behavior without filesystem
+files = [
+    ("/virtual/git/scripts/commit.py", '''
+@skill_command(name="commit")
+def commit(message: str) -> str:
+    """Create a commit."""
+    return f"Committed: {message}"
+'''),
+    ("/virtual/git/scripts/status.py", '''
+@skill_command(name="status")
+def status() -> str:
+    """Show status."""
+    return "On branch main"
+'''),
+]
+
+# Scan virtual files
+tools = scan_paths(files, "git", ["git", "version control"], [])
+assert len(tools) == 2
+
+# Parse single script
+content = '''
+@skill_command(name="test_tool")
+def test_tool():
+    """A test tool."""
+    pass
+'''
+tools = parse_script_content(content, "/virtual/path.py", "test", [], [])
+assert len(tools) == 1
+assert tools[0].tool_name == "test.test_tool"
+```
+
+### Watcher Testing with Virtual Files
+
+For testing Live-Wire file watcher behavior, use the Rust scanner's virtual path capability:
+
+```python
+from omni_core_rs import scan_paths
+
+# Simulate a skill directory being created/changed/deleted
+def simulate_skill_change(skill_name: str, files: dict[str, str]) -> list:
+    """Simulate skill file changes without filesystem."""
+    file_list = [
+        (f"/virtual/{skill_name}/scripts/{name}", content)
+        for name, content in files.items()
+    ]
+    return scan_paths(file_list, skill_name, [], [])
+
+# Test: Add new tool
+new_files = {"new_tool.py": '''
+@skill_command(name="new_tool")
+def new_tool():
+    """A new tool."""
+    pass
+'''}
+tools = simulate_skill_change("git", new_files)
+assert any("new_tool" in t.tool_name for t in tools)
+```
 
 ---
 

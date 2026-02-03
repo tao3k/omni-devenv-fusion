@@ -24,7 +24,6 @@ from omni.foundation.config.logging import configure_logging, get_logger
 from omni.foundation.config.skills import SKILLS_DIR
 
 from .lifecycle import LifecycleManager, LifecycleState
-from .watcher import RustKernelWatcher
 from .reactor import get_reactor, EventTopic
 
 if TYPE_CHECKING:
@@ -72,9 +71,9 @@ class Kernel:
         "_router",
         "_security",  # Security Validator (Permission Gatekeeper)
         "_skill_context",
+        "_skill_manager",  # SkillManager for vector store and Live-Wire integration
         "_skills_dir",
         "_sniffer",  # Intent Sniffer for context detection
-        "_watcher",
     )
 
     def __init__(
@@ -96,9 +95,9 @@ class Kernel:
         )
         self._components: dict[str, Any] = {}
         self._skill_context: SkillContext | None = None
+        self._skill_manager = None  # SkillManager for vector store and Live-Wire
         self._discovery_service = None
         self._discovered_skills: list[Any] = []
-        self._watcher: RustKernelWatcher | None = None
         self._router = None
         self._sniffer: IntentSniffer | None = None  # Lazy init in sniffer property
         self._security = None  # Security Validator (Permission Gatekeeper) - lazy init
@@ -423,6 +422,29 @@ class Kernel:
 
         return self._skill_context
 
+    @property
+    def skill_manager(self):
+        """Get the SkillManager for vector store and Live-Wire integration.
+
+        The SkillManager provides:
+        - Vector Store (LanceDB persistence for embeddings)
+        - Skill Indexer (Rust Scan -> Python Embed -> Rust Store)
+        - Holographic Registry (Virtual tool lookup)
+        - Reactive Watcher (Live-Wire hot reload)
+
+        This enables automatic tool discovery and refresh when skill files change.
+        """
+        if self._skill_manager is None:
+            from omni.core.services.skill_manager import SkillManager
+
+            self._skill_manager = SkillManager(
+                project_root=str(self._project_root),
+                enable_watcher=True,
+            )
+            # Bridge kernel to SkillManager for Live-Wire integration
+            self._skill_manager.set_kernel(self)
+        return self._skill_manager
+
     # =========================================================================
     # Semantic Router (The Cortex)
     # =========================================================================
@@ -575,68 +597,8 @@ class Kernel:
         return self._skills_dir
 
     # =========================================================================
-    # Hot Reload
+    # Skill Hot Reload (Live-Wire)
     # =========================================================================
-
-    def enable_hot_reload(self) -> None:
-        """Start the file system watcher for hot reload (development mode).
-
-        Watches:
-        - assets/skills/ directory for skill script changes
-        - .cache/omni-vector/ for LanceDB changes
-
-        Handles both skill reload and LanceDB index reload.
-        """
-        import os
-        from pathlib import Path
-
-        if self._watcher is not None and self._watcher.is_running:
-            return  # Already running
-
-        def callback_bridge(event_path: str) -> None:
-            """Bridge Rust watcher callback to async reload.
-
-            Handles skill changes - LanceDB will be updated on next sync.
-            """
-            filename = os.path.basename(event_path)
-            logger.debug(f"File changed: {filename}")
-
-            # Reload sniffer rules from LanceDB
-            self._reload_sniffer_sync_wrapper()
-            return
-
-            # Handle Skill Script Change
-            try:
-                rel = Path(event_path).relative_to(self._skills_dir)
-                if len(rel.parts) > 0:
-                    skill_name = rel.parts[0]
-                    if not skill_name.startswith("_"):
-                        logger.info(f"🔄 Triggering reload for {skill_name}...")
-                        self._reload_skill_sync_wrapper(skill_name)
-            except ValueError:
-                pass  # Path not relative to skills_dir
-
-        self._watcher = RustKernelWatcher(self._skills_dir, callback_bridge)
-        if self._watcher is not None:
-            self._watcher.start()
-            logger.info("🔁 Hot reload enabled (watches skills/ and LanceDB)")
-
-    def _reload_sniffer_sync_wrapper(self) -> None:
-        """Sync wrapper for sniffer reload (triggered by LanceDB change)."""
-        try:
-            count = self.sniffer.load_rules_from_lancedb()
-            logger.info(f"✅ Sniffer rules reloaded ({count} rules active)")
-        except Exception as e:
-            logger.error(f"❌ Failed to reload sniffer rules: {e}")
-
-    def _reload_skill_sync_wrapper(self, skill_name: str) -> None:
-        """Sync wrapper to trigger reload task."""
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(self.reload_skill(skill_name))
-        except RuntimeError:
-            # No loop running, run synchronously
-            asyncio.run(self.reload_skill(skill_name))
 
     async def reload_skill(self, skill_name: str) -> None:
         """Reload a single skill (for hot reload)."""
@@ -753,13 +715,26 @@ class Kernel:
 
         log_extension_summary()
 
-        # Timing summary
         t5 = _time.time()
-        total_time = t5 - t0
+
+        # Step 8: Start SkillManager's Reactive Watcher (Live-Wire)
+        # This enables automatic tool refresh when skill files change
+        logger.info("⚡ Starting Live-Wire Skill Watcher...")
+        try:
+            await self.skill_manager.startup()
+            logger.info("🧠 Live-Wire Skill Watcher active")
+        except Exception as e:
+            logger.warning(f"Failed to start SkillManager watcher: {e}")
+
+        t6 = _time.time()
+
+        # Timing summary
+        total_time = t6 - t0
         logger.info(
             f"[TIMING] Kernel startup: {total_time:.2f}s "
             f"(skills: {t1 - t0:.2f}s, load: {t2 - t1:.2f}s, "
-            f"cortex_bg: {t3 - t2:.2f}s, sniffer: {t4 - t3:.2f}s, reactor: {t5 - t4:.2f}s)"
+            f"cortex_bg: {t3 - t2:.2f}s, sniffer: {t4 - t3:.2f}s, "
+            f"reactor: {t5 - t4:.2f}s, live_wire: {t6 - t5:.2f}s)"
         )
 
         # Summary of active services
@@ -771,6 +746,7 @@ class Kernel:
         logger.info("   • Sniffer:   Context detection active")
         logger.info("   • Security:  Permission Gatekeeper active (Zero Trust)")
         logger.info("   • Watcher:   File monitoring enabled (hot reload)")
+        logger.info("   • Live-Wire: Automatic tool refresh active")
         logger.info("   • Reactor:   Event-driven architecture active")
         logger.info("━" * 60)
 
@@ -792,22 +768,22 @@ class Kernel:
             await asyncio.gather(*self._background_tasks, return_exceptions=True)
             self._background_tasks.clear()
 
+        # Step 0.5: Stop SkillManager's Live-Wire Watcher
+        if self._skill_manager is not None:
+            await self._skill_manager.shutdown()
+            self._skill_manager = None
+            logger.debug("SkillManager stopped")
+
         # Step 1: Unregister sniffer from reactor (cleanup handlers)
         if self._sniffer is not None:
             self._sniffer.unregister_from_reactor()
             logger.debug("Sniffer unregistered from reactor")
 
-        # Step 1: Stop reactor first (no more event processing)
+        # Step 2: Stop reactor first (no more event processing)
         if self._reactor is not None and self._reactor.is_running:
             await self._reactor.stop()
             self._reactor = None
             logger.debug("Event reactor stopped")
-
-        # Step 2: Stop file watcher (no more file events)
-        if self._watcher is not None:
-            self._watcher.stop()
-            self._watcher = None
-            logger.debug("File watcher stopped")
 
         # Step 3: Save any persistent state (vector index, caches)
         # Note: In-memory stores can't be persisted, but we log the intent
@@ -818,7 +794,7 @@ class Kernel:
                 if stats.get("entries_indexed", 0) > 0:
                     logger.info(f"💾 Index contains {stats['entries_indexed']} entries (in-memory)")
 
-        # Step 4: Unregister all skills gracefully
+        # Step 5: Unregister all skills gracefully
         if self._skill_context is not None:
             skills_count = self._skill_context.skills_count
             from omni.core.skills.runtime import reset_context

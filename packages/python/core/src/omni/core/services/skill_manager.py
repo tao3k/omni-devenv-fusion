@@ -39,9 +39,10 @@ Usage:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import structlog
 
@@ -65,6 +66,10 @@ class SkillManager:
     4. Reactive Watcher - Live-wire for hot reload
 
     All components share the same embedding service for consistency.
+
+    Callback Support:
+    - on_registry_update(callback): Register callback fired when skills change
+      The callback is used by MCP Gateway to send notifications/tools/listChanged
     """
 
     def __init__(
@@ -81,7 +86,7 @@ class SkillManager:
         Args:
             project_root: Root directory of the project (auto-detected if None)
             embedding_service: EmbeddingService instance (singleton if None)
-            vector_store_path: Path for LanceDB storage (default: .omni/data/lancedb)
+            vector_store_path: Path for LanceDB storage (default: .cache/omni-vector/skills.lance)
             enable_watcher: Whether to enable Reactive Skill Watcher
             watcher_patterns: File patterns for watcher (default: ["**/*.py"])
             watcher_debounce_seconds: Debounce delay for watcher events
@@ -89,8 +94,9 @@ class SkillManager:
         # Resolve project root
         self.project_root = Path(project_root or Path.cwd()).resolve()
 
-        # LanceDB path
-        db_path = vector_store_path or str(self.project_root / ".omni" / "data" / "lancedb")
+        # LanceDB path - use unified vector DB path from PRJ_CACHE
+        from omni.foundation.config.dirs import get_database_path
+        db_path = vector_store_path or get_database_path("skills")
 
         # Embedding service (singleton pattern)
         self.embedding_service = embedding_service or get_embedding_service()
@@ -116,6 +122,51 @@ class SkillManager:
         self._watcher_patterns = watcher_patterns
         self._watcher_debounce = watcher_debounce_seconds
         self.watcher: ReactiveSkillWatcher | None = None
+        self._kernel: "Kernel | None" = None  # Kernel reference for Live-Wire integration
+
+        # Callbacks for skill changes (used by MCP Gateway for notifications)
+        self._on_update_callbacks: list[Callable[[], None]] = []
+
+    def on_registry_update(self, callback: Callable[[], None] | Callable[[], Any]) -> None:
+        """Register a callback to be fired when skills change.
+
+        This is the key integration point for MCP Gateway.
+        When skills are added/modified/removed, the callback is invoked,
+        which triggers notifications/tools/listChanged to MCP clients.
+
+        Supports both sync and async callbacks.
+
+        Args:
+            callback: Callback function (sync or async, no args)
+                     Called when the skill registry changes.
+
+        Example:
+            manager = SkillManager()
+            manager.on_registry_update(lambda: print("Skills changed!"))
+            # Or async:
+            manager.on_registry_update(async def on_change(): await notify_clients())
+        """
+        self._on_update_callbacks.append(callback)
+        logger.debug(f"Registered update callback (total: {len(self._on_update_callbacks)})")
+
+    async def _notify_updates(self) -> None:
+        """Internal: Notify all registered callbacks of a skill change.
+
+        This is called by the ReactiveSkillWatcher when it processes
+        file change events that affect the skill registry.
+        """
+        logger.info(f"🔔 _notify_updates called with {len(self._on_update_callbacks)} callbacks")
+
+        for i, callback in enumerate(self._on_update_callbacks):
+            try:
+                logger.debug(f"🔔 Invoking callback {i+1}/{len(self._on_update_callbacks)}")
+                # Check if callback is a coroutine function
+                if asyncio.iscoroutinefunction(callback):
+                    await callback()
+                else:
+                    callback()
+            except Exception as e:
+                logger.warning(f"Error in update callback {i}: {e}")
 
     async def startup(self, initial_scan: bool = False):
         """Bootstrap the skill system.
@@ -140,14 +191,17 @@ class SkillManager:
         # Start Reactive Watcher (Live-Wire)
         if self._enable_watcher:
             self.watcher = ReactiveSkillWatcher(
-                root_dir=str(self.project_root),
                 indexer=self.indexer,
                 patterns=self._watcher_patterns,
                 debounce_seconds=self._watcher_debounce,
+                kernel=self._kernel,  # Bridge to kernel for Live-Wire reload
             )
+            # Bridge watcher events to SkillManager callbacks
+            # This enables the full chain: Rust Watcher -> Python Index -> MCP Notification
+            # Always set callback (even if empty list) - future callbacks will be added to _on_update_callbacks
+            self.watcher.set_on_change_callback(self._notify_updates)
             await self.watcher.start()
-
-        logger.info("SkillManager started successfully")
+            logger.info("⚡ Live-Wire Skill Watcher started")
 
     async def shutdown(self):
         """Gracefully shutdown the skill system."""
@@ -227,6 +281,23 @@ class SkillManager:
             stats["watcher"] = await self.watcher.get_stats()
 
         return stats
+
+    def set_kernel(self, kernel: "Kernel") -> None:
+        """Set the kernel reference for Live-Wire skill reload integration.
+
+        This enables the full automatic refresh chain:
+        File change → ReactiveSkillWatcher → kernel.reload_skill() → MCP notification
+
+        Args:
+            kernel: The Kernel instance
+        """
+        self._kernel = kernel
+        # If watcher is already running, update it with kernel reference
+        if self.watcher is not None:
+            self.watcher._kernel = kernel
+            logger.debug("Kernel reference set on ReactiveSkillWatcher")
+        else:
+            logger.debug("Kernel reference stored (watcher not yet created)")
 
     @property
     def is_running(self) -> bool:

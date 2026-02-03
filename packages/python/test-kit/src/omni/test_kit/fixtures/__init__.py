@@ -29,6 +29,16 @@ from omni.test_kit.fixtures.scanner import (
     parametrize_skills,
 )
 
+from omni.test_kit.fixtures.watcher import (
+    mock_watcher_indexer,
+    mock_watcher_indexer_with_count,
+    temp_skill_dir,
+    sample_skill_script,
+    sample_skill_with_tools,
+    WatcherTestHelper,
+    watcher_test_helper,
+)
+
 __all__ = [
     # Core
     "test_tracer",
@@ -53,4 +63,12 @@ __all__ = [
     "SkillResult",
     "SkillTester",
     "parametrize_skills",
+    # Watcher (Live-Wire)
+    "mock_watcher_indexer",
+    "mock_watcher_indexer_with_count",
+    "temp_skill_dir",
+    "sample_skill_script",
+    "sample_skill_with_tools",
+    "WatcherTestHelper",
+    "watcher_test_helper",
 ]

@@ -339,14 +339,38 @@ async def _approve_smart_commit_async(
     workflow_state = load_workflow_state(_WORKFLOW_TYPE, workflow_id) or {}
     original_staged = workflow_state.get("staged_files", [])
 
-    # Re-stage all files that were staged in start step
-    # This ensures changes from lefthook (formatting, etc.) are included
-    for f in original_staged:
-        subprocess.run(
-            ["git", "add", f],
+    # Re-stage ALL modified files (not just originally staged ones)
+    # This ensures changes from formatting tools (cargo fmt, rustfmt, etc.)
+    # that were run AFTER 'start' are also included in the commit
+    try:
+        # Get all modified (unstaged + staged) files
+        proc = subprocess.run(
+            ["git", "diff", "--name-only"],
             cwd=project_root,
             capture_output=True,
+            text=True,
         )
+        all_modified = [f for f in proc.stdout.strip().split("\n") if f]
+
+        # Also get all modified but not yet tracked
+        proc = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+        )
+        untracked = [f for f in proc.stdout.strip().split("\n") if f]
+
+        # Stage ALL modified files (original staged + newly formatted)
+        all_files_to_stage = set(original_staged + all_modified + untracked)
+        for f in all_files_to_stage:
+            subprocess.run(
+                ["git", "add", f],
+                cwd=project_root,
+                capture_output=True,
+            )
+    except Exception as e:
+        logger.warning(f"Failed to re-stage all modified files: {e}")
 
     # Get final staged files count
     try:

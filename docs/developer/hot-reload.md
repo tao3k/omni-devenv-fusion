@@ -267,3 +267,103 @@ If decorator attributes (description, etc.) changed:
 2. **Use `skill.reload` for metadata changes** - Triggers MCP notification
 3. **Test with simple changes first** - Verify hot reload works before complex edits
 4. **Restart if stuck** - Claude Code session restart clears all caches
+
+## Testing Hot Reload
+
+### With Filesystem (Traditional)
+
+```bash
+# 1. Start MCP server
+uv run omni mcp --transport stdio
+
+# 2. In another terminal, modify a skill
+echo "modified" >> assets/skills/git/scripts/status.py
+
+# 3. Invoke command - changes should be reflected
+@omni git.status
+```
+
+### Without Filesystem (Virtual Path Scanning)
+
+For testing hot reload behavior without touching the filesystem, use the virtual path scanner:
+
+```python
+from omni_core_rs import scan_paths
+
+def simulate_tool_change(skill_name: str, tool_name: str, new_content: str) -> dict:
+    """Simulate a tool change and verify scanner detects it."""
+    file_path = f"/virtual/{skill_name}/scripts/{tool_name}.py"
+    files = [(file_path, new_content)]
+
+    # Scan the updated content
+    tools = scan_paths(files, skill_name, [], [])
+
+    return {
+        "detected": len(tools) > 0,
+        "tool_name": tools[0].tool_name if tools else None,
+        "file_hash": tools[0].file_hash if tools else None,
+    }
+
+# Test: Add a new tool
+new_tool_content = '''
+@skill_command(name="new_feature")
+def new_feature(param: str) -> str:
+    """New feature implementation."""
+    return f"Result: {param}"
+'''
+
+result = simulate_tool_change("git", "new_feature", new_tool_content)
+assert result["detected"] is True
+assert "new_feature" in result["tool_name"]
+
+# Test: Verify file hash changes for change detection
+old_hash = result["file_hash"]
+
+updated_content = '''
+@skill_command(name="new_feature")
+def new_feature(param: str) -> str:
+    """Updated implementation."""
+    return f"Updated: {param}"
+'''
+
+result2 = simulate_tool_change("git", "new_feature", updated_content)
+assert result2["file_hash"] != old_hash  # Hash should change
+```
+
+### Testing Delete-Re-Add Scenario
+
+The virtual path scanner enables testing the critical delete-re-add scenario:
+
+```python
+from omni_core_rs import scan_paths
+
+def test_delete_re_add_scenario():
+    """Test that deleted tools are removed and re-added correctly."""
+    # Initial state: tool exists
+    initial_files = [("/virtual/git/scripts/tool.py", '''
+@skill_command(name="tool")
+def tool():
+    """Original tool."""
+    pass
+''')]
+    tools = scan_paths(initial_files, "git", [], [])
+    assert len(tools) == 1
+
+    # Simulate delete: empty file list
+    deleted_tools = scan_paths([], "git", [], [])
+    assert len(deleted_tools) == 0
+
+    # Simulate re-add: new content
+    re_add_files = [("/virtual/git/scripts/tool.py", '''
+@skill_command(name="tool")
+def tool():
+    """Re-added tool."""
+    pass
+''')]
+    re_add_tools = scan_paths(re_add_files, "git", [], [])
+    assert len(re_add_tools) == 1
+    assert re_add_tools[0].tool_name == "git.tool"
+```
+
+This approach allows testing hot reload logic without creating temporary directories or modifying `assets/skills/`.
+

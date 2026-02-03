@@ -907,6 +907,13 @@ Focus on:
         self._kernel = get_kernel()
         if not self._kernel.is_ready:
             await self._kernel.initialize()
+
+            # [FIX] Register MCP server BEFORE kernel.start() to ensure Live-Wire
+            # callbacks can access _mcp_server when file changes are detected
+            from .lifespan import set_mcp_server
+            set_mcp_server(self._app)
+            logger.debug("MCP server registered for Live-Wire notifications")
+
             await self._kernel.start()
             logger.info(
                 f"✅ Kernel ready with {len(self._kernel.skill_context.get_core_commands())} tools"

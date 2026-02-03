@@ -109,3 +109,68 @@ pre-commit:
 
         assert result.success
         assert "graph TD" in str(result.output)
+
+    async def test_approve_includes_formatting_changes(
+        self, skill_tester, temp_git_repo, monkeypatch
+    ):
+        """Test that approve includes files modified after start (e.g., cargo fmt).
+
+        This tests the scenario where:
+        1. User starts workflow with some staged files
+        2. Formatting tool (cargo fmt, rustfmt) runs and modifies OTHER files
+        3. User approves - ALL modified files should be included in commit
+        """
+        import subprocess
+        from git.scripts.smart_commit_workflow import (
+            _start_smart_commit_async,
+            _approve_smart_commit_async,
+        )
+
+        monkeypatch.chdir(temp_git_repo)
+
+        # 1. Create and stage a Python file
+        python_file = temp_git_repo / "test_file.py"
+        python_file.write_text("# Original content\nx = 1\n")
+
+        subprocess.run(["git", "add", "test_file.py"], capture_output=True)
+
+        # 2. Start workflow
+        start_result = await _start_smart_commit_async()
+        workflow_id = start_result.get("workflow_id")
+        assert workflow_id is not None
+        assert "test_file.py" in start_result.get("staged_files", [])
+
+        # 3. Simulate cargo fmt/rustfmt modifying the file AFTER start
+        # (This is what happens when you run cargo fmt between start and approve)
+        python_file.write_text("# Formatted by cargo fmt\nx = 1\ny = 2\n")
+
+        # 4. Also create a NEW file that should be included
+        new_file = temp_git_repo / "new_file.py"
+        new_file.write_text("# New file created after start\nz = 3\n")
+
+        # 5. Approve the workflow
+        approve_result = await _approve_smart_commit_async(
+            message="feat(test): include formatting changes",
+            workflow_id=workflow_id,
+            project_root=str(temp_git_repo),
+        )
+
+        # 6. Verify commit was created
+        assert approve_result.get("status") == "committed", (
+            f"Expected committed, got: {approve_result}"
+        )
+        assert approve_result.get("commit_hash") is not None
+
+        # 7. Verify both files are in the commit
+        proc = subprocess.run(
+            ["git", "show", "--name-only", "--format=", approve_result["commit_hash"]],
+            capture_output=True,
+            text=True,
+            cwd=temp_git_repo,
+        )
+        committed_files = proc.stdout.strip().split("\n")
+
+        assert "test_file.py" in committed_files, (
+            f"Original file should be in commit: {committed_files}"
+        )
+        assert "new_file.py" in committed_files, f"New file should be in commit: {committed_files}"

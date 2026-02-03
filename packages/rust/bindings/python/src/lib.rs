@@ -70,8 +70,8 @@ pub use io::{
 };
 pub use navigation::{get_file_outline, search_code, search_directory, search_with_rules};
 pub use scanner::{
-    PySkillMetadata, PySkillScanner, PySyncReport, diff_skills, scan_skill,
-    scan_skill_from_content, scan_skill_tools,
+    PySkillMetadata, PySkillScanner, PySyncReport, diff_skills, parse_script_content, scan_paths,
+    scan_skill, scan_skill_from_content, scan_skill_tools,
 };
 pub use security::{
     PySandboxMode, PySandboxResult, PySandboxRunner, PySecurityViolation, check_permission,
@@ -91,7 +91,8 @@ pub use schema::{py_get_registered_types, py_get_schema_json};
 
 // AST Extraction
 pub use ast::{
-    PyExtractResult, py_extract_items, py_get_supported_languages, py_is_language_supported,
+    PyCodeChunk, PyExtractResult, py_chunk_code, py_extract_items, py_get_supported_languages,
+    py_is_language_supported,
 };
 
 // Watcher module exports (notify feature)
@@ -189,7 +190,9 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(pyo3::wrap_pyfunction!(py_extract_items, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(py_is_language_supported, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(py_get_supported_languages, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(py_chunk_code, m)?)?;
     m.add_class::<ast::PyExtractResult>()?;
+    m.add_class::<ast::PyCodeChunk>()?;
 
     // Script Scanner
     m.add_function(pyo3::wrap_pyfunction!(scan_skill_tools, m)?)?;
@@ -210,6 +213,10 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Skill Sync
     m.add_function(pyo3::wrap_pyfunction!(diff_skills, m)?)?;
     m.add_class::<PySyncReport>()?;
+
+    // Virtual Path Scanner (Testing & API support)
+    m.add_function(pyo3::wrap_pyfunction!(scan_paths, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(parse_script_content, m)?)?;
 
     // Schema Registry - Dynamic JSON Schema Generation (Schema Singularity)
     m.add_function(pyo3::wrap_pyfunction!(py_get_schema_json, m)?)?;

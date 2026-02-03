@@ -424,11 +424,11 @@ class UniversalScriptSkill:
             return False
         return self._ext_loader.has(name)
 
-    async def execute(self, command: str, **kwargs: Any) -> Any:
+    async def execute(self, cmd_name: str, **kwargs: Any) -> Any:
         """Execute a command.
 
         Args:
-            command: Full command name (e.g., "git.status")
+            cmd_name: Full command name (e.g., "git.status")
             **kwargs: Command arguments
 
         Returns:
@@ -438,10 +438,10 @@ class UniversalScriptSkill:
             raise RuntimeError(f"Skill {self._name} is not loaded")
 
         # Get handler - try full name first, then simple name
-        handler = self._script_loader.get_command(command)
+        handler = self._script_loader.get_command(cmd_name)
         if handler is None:
             # Try extracting simple name from "git.status" -> "status"
-            simple_name = command.split(".")[-1] if "." in command else command
+            simple_name = cmd_name.split(".")[-1] if "." in cmd_name else cmd_name
             handler = self._script_loader.get_command_simple(simple_name)
 
         if handler is None:

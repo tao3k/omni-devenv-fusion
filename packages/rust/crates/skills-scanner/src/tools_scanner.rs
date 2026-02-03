@@ -409,6 +409,266 @@ impl ToolsScanner {
 
         schema.to_string()
     }
+
+    /// Parse script content directly without reading from disk.
+    ///
+    /// This method is useful for:
+    /// - Testing with virtual file content
+    /// - Processing file content from databases or APIs
+    /// - Scanning files without filesystem access
+    ///
+    /// # Arguments
+    ///
+    /// * `content` - The Python script content as a string
+    /// * `file_path` - Virtual file path (for metadata/logging only)
+    /// * `skill_name` - Name of the parent skill
+    /// * `skill_keywords` - Routing keywords from SKILL.md
+    /// * `skill_intents` - Intents from SKILL.md
+    ///
+    /// # Returns
+    ///
+    /// A vector of `ToolRecord` objects with enriched metadata.
+    pub fn parse_content(
+        &self,
+        content: &str,
+        file_path: &str,
+        skill_name: &str,
+        skill_keywords: &[String],
+        skill_intents: &[String],
+    ) -> Result<Vec<ToolRecord>, Box<dyn std::error::Error>> {
+        let mut tools = Vec::new();
+
+        // Compute SHA256 hash for incremental indexing
+        let mut hasher = Sha256::new();
+        hasher.update(content.as_bytes());
+        let file_hash = hex::encode(hasher.finalize());
+
+        // Find all @skill_command decorated functions using AST
+        // Note: omni-ast has issues with decorator patterns, so we use a hybrid approach:
+        // 1. Find all decorators using simple string matching (not regex)
+        // 2. Find all functions using AST
+        // 3. Associate decorators with functions by position
+
+        // Find all decorators with their positions
+        let decorators = find_skill_command_decorators(content);
+        if !decorators.is_empty() {
+            log::debug!(
+                "ToolsScanner: Found {} @skill_command decorators in {}",
+                decorators.len(),
+                file_path
+            );
+        }
+
+        // Find all function definitions using AST pattern matching
+        let all_funcs = scan(content, "def $NAME", Lang::Python)?;
+
+        // Associate decorators with functions by position (decorator should be right before function)
+        // decorated_funcs contains tuples of (decorator_text, Match)
+        let mut decorated_funcs: Vec<(String, Match)> = Vec::new();
+
+        for func in &all_funcs {
+            let func_start = func.start;
+            let func_name = match func.get_capture("NAME") {
+                Some(n) => n,
+                None => continue,
+            };
+
+            // Find decorator closest before this function
+            let mut best_decorator: Option<&(usize, usize, String)> = None;
+            for dec in &decorators {
+                let dec_end = dec.1;
+                if dec_end < func_start {
+                    // Check if decorator is within reasonable distance (increased to 2000 chars)
+                    let distance = func_start - dec_end;
+                    if distance < 2000 {
+                        if best_decorator.is_none() || dec_end > best_decorator.unwrap().1 {
+                            best_decorator = Some(dec);
+                        }
+                    }
+                }
+            }
+
+            if let Some(dec) = best_decorator {
+                log::debug!(
+                    "ToolsScanner: Associated decorator with function: {}",
+                    func_name
+                );
+                decorated_funcs.push((dec.2.clone(), func.clone()));
+            }
+        }
+
+        // Build a map of function name to docstring
+        let mut func_docstrings: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+        for func in &all_funcs {
+            let func_name = func.get_capture("NAME").map(|s| s.to_string());
+            if let Some(name) = &func_name {
+                let docstring = extract_docstring_from_text(&func.text);
+                func_docstrings.insert(name.clone(), docstring);
+            }
+        }
+
+        // Process each decorated function (decorator, function pair)
+        for (decorator_text, func) in &decorated_funcs {
+            let func_name = match func.get_capture("NAME").map(|s| s.to_string()) {
+                Some(name) => name,
+                None => continue,
+            };
+
+            // Get decorator arguments
+            let args = parse_decorator_args(decorator_text);
+
+            // Get docstring from pre-built map
+            let docstring = func_docstrings.get(&func_name).cloned().unwrap_or_default();
+
+            // Extract tool name
+            let tool_name = match &args.name {
+                Some(name) => name.clone(),
+                None => func_name.clone(),
+            };
+
+            // Extract function parameters from the matched text
+            let parameters = extract_parameters_from_text(&func.text);
+
+            // Build description
+            let description = match &args.description {
+                Some(desc) => desc.clone(),
+                None => {
+                    if !docstring.is_empty() {
+                        docstring.clone()
+                    } else {
+                        format!("Execute {}.{}", skill_name, tool_name)
+                    }
+                }
+            };
+
+            // Build category
+            let category = args
+                .category
+                .clone()
+                .unwrap_or_else(|| infer_category_from_skill(skill_name));
+
+            // Build annotations
+            let annotations = build_annotations(&args, &func_name, &parameters);
+
+            // Generate input_schema from parameters
+            let input_schema = self.generate_input_schema(&parameters);
+
+            // Combine keywords
+            let mut combined_keywords = vec![skill_name.to_string(), tool_name.clone()];
+            combined_keywords.extend(skill_keywords.iter().cloned());
+
+            tools.push(ToolRecord::with_enrichment(
+                format!("{}.{}", skill_name, tool_name),
+                description,
+                skill_name.to_string(),
+                file_path.to_string(),
+                func_name.clone(),
+                "script".to_string(),
+                combined_keywords,
+                skill_intents.to_vec(),
+                file_hash.clone(),
+                docstring,
+                category,
+                annotations,
+                parameters,
+                input_schema,
+            ));
+        }
+
+        Ok(tools)
+    }
+
+    /// Scan a list of virtual file paths with their content.
+    ///
+    /// This method allows scanning files without filesystem access, which is
+    /// useful for:
+    /// - Testing with temporary directories (no cleanup needed)
+    /// - Processing file content from databases or APIs
+    /// - Batch scanning with full control over file content
+    ///
+    /// # Arguments
+    ///
+    /// * `files` - Vector of tuples: (file_path: String, content: String)
+    /// * `skill_name` - Name of the parent skill
+    /// * `skill_keywords` - Routing keywords from SKILL.md
+    /// * `skill_intents` - Intents from SKILL.md
+    ///
+    /// # Returns
+    ///
+    /// A vector of `ToolRecord` objects from all scanned files.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let scanner = ToolsScanner::new();
+    /// let files = vec![
+    ///     ("/tmp/skill/scripts/tool_a.py", r#"
+    ///         @skill_command(name="tool_a")
+    ///         def tool_a(param: str) -> str:
+    ///             '''Tool A implementation.'''
+    ///             return param
+    ///     "#.to_string()),
+    ///     ("/tmp/skill/scripts/tool_b.py", r#"
+    ///         @skill_command(name="tool_b")
+    ///         def tool_b(value: int) -> int:
+    ///             '''Tool B implementation.'''
+    ///             value * 2
+    ///     "#.to_string()),
+    /// ];
+    ///
+    /// let tools = scanner.scan_paths(&files, "test_skill", &[], &[])?;
+    /// ```
+    pub fn scan_paths(
+        &self,
+        files: &[(String, String)],
+        skill_name: &str,
+        skill_keywords: &[String],
+        skill_intents: &[String],
+    ) -> Result<Vec<ToolRecord>, Box<dyn std::error::Error>> {
+        let mut all_tools = Vec::new();
+
+        for (file_path, content) in files {
+            // Skip __init__.py and private files
+            let file_name = std::path::Path::new(file_path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("");
+
+            if file_name == "__init__.py" || file_name.starts_with('_') {
+                continue;
+            }
+
+            // Only process Python files
+            if !file_path.ends_with(".py") {
+                continue;
+            }
+
+            let parsed_tools =
+                self.parse_content(content, file_path, skill_name, skill_keywords, skill_intents)?;
+
+            if !parsed_tools.is_empty() {
+                log::debug!(
+                    "ToolsScanner: Found {} tools in {}",
+                    parsed_tools.len(),
+                    file_path
+                );
+            }
+
+            all_tools.extend(parsed_tools);
+        }
+
+        if !all_tools.is_empty() {
+            log::info!(
+                "Scanned {} tools from {} files for skill '{}'",
+                all_tools.len(),
+                files.len(),
+                skill_name
+            );
+        }
+
+        Ok(all_tools)
+    }
 }
 
 impl Default for ToolsScanner {
@@ -609,6 +869,329 @@ def polish_text(text: str) -> str:
         let _scanner = ToolsScanner::new();
         // Just verify it can be created
         assert!(true);
+    }
+
+    #[test]
+    fn test_parse_content_single_tool() {
+        let scanner = ToolsScanner::new();
+        let content = r#"
+from agent.skills.decorators import skill_command
+
+@skill_command(name="write_text")
+def write_text(content: str) -> str:
+    '''Write text to a file.'''
+    return "written"
+"#;
+
+        let tools = scanner
+            .parse_content(content, "/virtual/path/scripts/tool.py", "writer", &["write".to_string()], &[])
+            .unwrap();
+
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].tool_name, "writer.write_text");
+        assert_eq!(tools[0].function_name, "write_text");
+        assert_eq!(tools[0].file_path, "/virtual/path/scripts/tool.py");
+        assert!(tools[0].keywords.contains(&"write".to_string()));
+    }
+
+    #[test]
+    fn test_parse_content_multiple_tools() {
+        let scanner = ToolsScanner::new();
+        let content = r#"
+from agent.skills.decorators import skill_command
+
+@skill_command(name="commit")
+def commit(message: str) -> str:
+    '''Create a commit.'''
+    return f"Committed: {message}"
+
+@skill_command(name="status")
+def status() -> str:
+    '''Show working tree status.'''
+    return "status output"
+"#;
+
+        let tools = scanner
+            .parse_content(content, "/virtual/path/scripts/main.py", "git", &["git".to_string()], &[])
+            .unwrap();
+
+        assert_eq!(tools.len(), 2);
+        assert!(tools.iter().any(|t| t.tool_name == "git.commit"));
+        assert!(tools.iter().any(|t| t.tool_name == "git.status"));
+    }
+
+    #[test]
+    fn test_parse_content_no_decorators() {
+        let scanner = ToolsScanner::new();
+        let content = r#"
+def regular_function():
+    '''This function has no decorator.'''
+    return "no tool here"
+"#;
+
+        let tools = scanner
+            .parse_content(content, "/virtual/path/scripts/tool.py", "test", &[], &[])
+            .unwrap();
+
+        assert!(tools.is_empty());
+    }
+
+    #[test]
+    fn test_parse_content_skips_init() {
+        let scanner = ToolsScanner::new();
+        let content = r#"
+from agent.skills.decorators import skill_command
+
+@skill_command(name="init_tool")
+def init_tool():
+    '''This should be skipped.'''
+    pass
+"#;
+
+        // parse_content doesn't skip __init__.py - that's handled in scan_paths
+        let tools = scanner
+            .parse_content(content, "/virtual/path/scripts/__init__.py", "test", &[], &[])
+            .unwrap();
+
+        // This should find the tool since we're calling parse_content directly
+        assert_eq!(tools.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_content_with_category() {
+        let scanner = ToolsScanner::new();
+        let content = r#"
+@skill_command(name="test_tool", category="testing")
+def test_tool():
+    '''A test tool.'''
+    pass
+"#;
+
+        let tools = scanner
+            .parse_content(content, "/virtual/path/scripts/tool.py", "test", &[], &[])
+            .unwrap();
+
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].category, "testing");
+    }
+
+    #[test]
+    fn test_parse_content_with_intents() {
+        let scanner = ToolsScanner::new();
+        let content = r#"
+@skill_command(name="test_tool")
+def test_tool():
+    '''A test tool.'''
+    pass
+"#;
+
+        let intents = vec!["test".to_string(), "verify".to_string()];
+        let tools = scanner
+            .parse_content(content, "/virtual/path/scripts/tool.py", "test", &[], &intents)
+            .unwrap();
+
+        assert_eq!(tools.len(), 1);
+        assert!(tools[0].intents.contains(&"test".to_string()));
+        assert!(tools[0].intents.contains(&"verify".to_string()));
+    }
+
+    #[test]
+    fn test_parse_content_file_hash() {
+        let scanner = ToolsScanner::new();
+        let content = r#"
+@skill_command(name="tool")
+def tool():
+    pass
+"#;
+
+        let tools1 = scanner
+            .parse_content(content, "/virtual/path/scripts/tool.py", "test", &[], &[])
+            .unwrap();
+
+        // Same content should produce same hash
+        let tools2 = scanner
+            .parse_content(content, "/virtual/path/scripts/tool.py", "test", &[], &[])
+            .unwrap();
+
+        assert_eq!(tools1[0].file_hash, tools2[0].file_hash);
+
+        // Different content should produce different hash
+        let content2 = r#"
+@skill_command(name="tool")
+def tool():
+    pass
+# different
+"#;
+
+        let tools3 = scanner
+            .parse_content(content2, "/virtual/path/scripts/tool.py", "test", &[], &[])
+            .unwrap();
+
+        assert_ne!(tools1[0].file_hash, tools3[0].file_hash);
+    }
+
+    #[test]
+    fn test_scan_paths_multiple_files() {
+        let scanner = ToolsScanner::new();
+        let files = vec![
+            (
+                "/virtual/skill/scripts/tool_a.py".to_string(),
+                r#"
+@skill_command(name="tool_a")
+def tool_a(param: str) -> str:
+    '''Tool A implementation.'''
+    return param
+"#.to_string(),
+            ),
+            (
+                "/virtual/skill/scripts/tool_b.py".to_string(),
+                r#"
+@skill_command(name="tool_b")
+def tool_b(value: int) -> int:
+    '''Tool B implementation.'''
+    return value * 2
+"#.to_string(),
+            ),
+        ];
+
+        let tools = scanner
+            .scan_paths(&files, "test_skill", &[], &[])
+            .unwrap();
+
+        assert_eq!(tools.len(), 2);
+        assert!(tools.iter().any(|t| t.tool_name == "test_skill.tool_a"));
+        assert!(tools.iter().any(|t| t.tool_name == "test_skill.tool_b"));
+    }
+
+    #[test]
+    fn test_scan_paths_skips_init() {
+        let scanner = ToolsScanner::new();
+        let files = vec![
+            (
+                "/virtual/skill/scripts/__init__.py".to_string(),
+                r#"
+@skill_command(name="init_tool")
+def init_tool():
+    '''This should be skipped.'''
+    pass
+"#.to_string(),
+            ),
+            (
+                "/virtual/skill/scripts/real_tool.py".to_string(),
+                r#"
+@skill_command(name="real_tool")
+def real_tool():
+    '''This should be included.'''
+    pass
+"#.to_string(),
+            ),
+        ];
+
+        let tools = scanner
+            .scan_paths(&files, "test_skill", &[], &[])
+            .unwrap();
+
+        // Only one tool (skipping __init__.py)
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].tool_name, "test_skill.real_tool");
+    }
+
+    #[test]
+    fn test_scan_paths_skips_private_files() {
+        let scanner = ToolsScanner::new();
+        let files = vec![
+            (
+                "/virtual/skill/scripts/_private.py".to_string(),
+                r#"
+@skill_command(name="private_tool")
+def private_tool():
+    '''This should be skipped.'''
+    pass
+"#.to_string(),
+            ),
+            (
+                "/virtual/skill/scripts/public.py".to_string(),
+                r#"
+@skill_command(name="public_tool")
+def public_tool():
+    '''This should be included.'''
+    pass
+"#.to_string(),
+            ),
+        ];
+
+        let tools = scanner
+            .scan_paths(&files, "test_skill", &[], &[])
+            .unwrap();
+
+        // Only one tool (skipping _private.py)
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].tool_name, "test_skill.public_tool");
+    }
+
+    #[test]
+    fn test_scan_paths_skips_non_python() {
+        let scanner = ToolsScanner::new();
+        let files = vec![
+            (
+                "/virtual/skill/scripts/readme.md".to_string(),
+                "# This is not Python".to_string(),
+            ),
+            (
+                "/virtual/skill/scripts/real_tool.py".to_string(),
+                r#"
+@skill_command(name="real_tool")
+def real_tool():
+    pass
+"#.to_string(),
+            ),
+        ];
+
+        let tools = scanner
+            .scan_paths(&files, "test_skill", &[], &[])
+            .unwrap();
+
+        assert_eq!(tools.len(), 1);
+    }
+
+    #[test]
+    fn test_scan_paths_empty_list() {
+        let scanner = ToolsScanner::new();
+        let files: Vec<(String, String)> = Vec::new();
+
+        let tools = scanner
+            .scan_paths(&files, "test_skill", &[], &[])
+            .unwrap();
+
+        assert!(tools.is_empty());
+    }
+
+    #[test]
+    fn test_scan_paths_with_keywords_and_intents() {
+        let scanner = ToolsScanner::new();
+        let files = vec![
+            (
+                "/virtual/skill/scripts/tool.py".to_string(),
+                r#"
+@skill_command(name="test_tool")
+def test_tool():
+    '''A test tool.'''
+    pass
+"#.to_string(),
+            ),
+        ];
+
+        let keywords = vec!["test".to_string(), "verify".to_string()];
+        let intents = vec!["testing".to_string()];
+
+        let tools = scanner
+            .scan_paths(&files, "test_skill", &keywords, &intents)
+            .unwrap();
+
+        assert_eq!(tools.len(), 1);
+        assert!(tools[0].keywords.contains(&"test".to_string()));
+        assert!(tools[0].keywords.contains(&"verify".to_string()));
+        assert!(tools[0].intents.contains(&"testing".to_string()));
     }
 
     // Note: Comprehensive integration tests are in tests/tools_scanner.rs
