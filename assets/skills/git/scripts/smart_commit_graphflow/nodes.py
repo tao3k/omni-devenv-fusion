@@ -112,9 +112,16 @@ def _handle_submodules_node(state: GraphState) -> dict[str, Any]:
     This node:
     1. Detects if project has submodules with changes
     2. For each changed submodule:
-       - Record the submodule path for later commit
-    3. Returns routing decision: SUBMODULE_PENDING or PREPARED
+       - cd into submodule
+       - Stage files with git add -A
+       - Run lefthook pre-commit
+       - Auto-commit with generated message
+    3. Stage submodule reference updates in main repo
+    4. Return PREPARED for main repo workflow
     """
+    import shutil
+    from datetime import datetime
+
     project_root = os.environ.get("PRJ_ROOT") or state.get("project_root") or "."
     result = dict(state)
 
@@ -129,59 +136,149 @@ def _handle_submodules_node(state: GraphState) -> dict[str, Any]:
         if proc.returncode != 0 or not proc.stdout.strip():
             # No submodules, proceed normally
             result["_routing"] = WorkflowRouting.PREPARED
-            result["submodules_pending"] = []
+            result["submodules_committed"] = []
             return result
 
         # Parse submodule status lines
-        # Format: "<status> <sha1> <path>" where status can be " " (clean), "+" (updated), "-" (not initialized)
-        submodule_lines = proc.stdout.strip().split("\n")
+        # Format: "<status> <sha1> <path> (<ref>)"
+        # - status can be " " (clean), "+" (new commits), "-" (not initialized)
+        submodule_lines = proc.stdout.split("\n")
         submodules_with_changes = []
 
         for line in submodule_lines:
-            line = line.strip()
             if not line:
                 continue
 
-            # Parse: status can be ' ' (clean), '+' (new commits), '-' (not initialized)
-            parts = line.split()
+            # Get status char from FIRST character (before stripping)
+            status_char = line[0]
+
+            # The rest after status char: "sha1 path (ref)"
+            parts = line[1:].strip().split()
             if len(parts) >= 2:
-                status_char = parts[0]
-                submodule_path = parts[1] if len(parts) > 1 else None
+                submodule_path = parts[1]
+                sub_full_path = Path(project_root) / submodule_path
 
-                # Check for changes: '+' means new commits, ' ' means clean
-                # Also need to check for modified worktree in submodule
-                if submodule_path and status_char in ["+", " "]:
-                    sub_full_path = Path(project_root) / submodule_path
+                # Check if submodule has its own changes
+                proc_sub = subprocess.run(
+                    ["git", "status", "--porcelain"],
+                    cwd=sub_full_path,
+                    capture_output=True,
+                    text=True,
+                )
+                has_internal_changes = proc_sub.returncode == 0 and proc_sub.stdout.strip()
 
-                    # Check if submodule has its own changes
-                    proc_sub = subprocess.run(
-                        ["git", "status", "--porcelain"],
+                # Submodule has changes if:
+                # 1. status_char is '+' (recorded commit differs)
+                # 2. OR submodule has internal changes
+                if has_internal_changes or status_char == "+":
+                    submodules_with_changes.append(submodule_path)
+
+        if not submodules_with_changes:
+            result["_routing"] = WorkflowRouting.PREPARED
+            result["submodules_committed"] = []
+            return result
+
+        # Commit each submodule with changes
+        submodule_commits = []
+        for sub_path in submodules_with_changes:
+            sub_full_path = Path(project_root) / sub_path
+
+            try:
+                # Stage all changes in submodule
+                subprocess.run(
+                    ["git", "add", "-A"],
+                    cwd=sub_full_path,
+                    capture_output=True,
+                )
+                logger.info(f"Staged changes in submodule {sub_path}")
+
+                # Run lefthook pre-commit if available
+                if shutil.which("lefthook"):
+                    subprocess.run(
+                        ["git", "hook", "run", "pre-commit"],
+                        cwd=sub_full_path,
+                        capture_output=True,
+                    )
+                    logger.info(f"Ran lefthook in submodule {sub_path}")
+
+                # Get staged files for commit message
+                proc_files = subprocess.run(
+                    ["git", "diff", "--cached", "--name-only"],
+                    cwd=sub_full_path,
+                    capture_output=True,
+                    text=True,
+                )
+                file_count = (
+                    len(proc_files.stdout.strip().split("\n")) if proc_files.stdout.strip() else 0
+                )
+
+                if file_count > 0:
+                    # Generate commit message
+                    date_str = datetime.now().strftime("%Y%m%d")
+                    commit_msg = f"chore(submodule): update {sub_path} ({date_str})\n\nAuto-committed by omni smart_commit\n\nSubmodule: {sub_path}\nFiles: {file_count}"
+
+                    # Commit in submodule
+                    commit_result = subprocess.run(
+                        ["git", "commit", "-m", commit_msg],
                         cwd=sub_full_path,
                         capture_output=True,
                         text=True,
                     )
-                    if proc_sub.returncode == 0 and proc_sub.stdout.strip():
-                        submodules_with_changes.append(submodule_path)
-                    elif status_char == "+":
-                        # Status + means submodule has new commits to be committed
-                        submodules_with_changes.append(submodule_path)
 
-        if not submodules_with_changes:
-            result["_routing"] = WorkflowRouting.PREPARED
-            result["submodules_pending"] = []
-            return result
+                    if commit_result.returncode == 0:
+                        # Get commit hash
+                        proc_hash = subprocess.run(
+                            ["git", "rev-parse", "HEAD"],
+                            cwd=sub_full_path,
+                            capture_output=True,
+                            text=True,
+                        )
+                        commit_hash = (
+                            proc_hash.stdout.strip()[:8] if proc_hash.returncode == 0 else "unknown"
+                        )
+                        submodule_commits.append(
+                            {
+                                "path": sub_path,
+                                "commit_hash": commit_hash,
+                            }
+                        )
+                        logger.info(
+                            f"Committed {file_count} files in submodule {sub_path}: {commit_hash}"
+                        )
+                    else:
+                        logger.warning(f"Failed to commit in {sub_path}: {commit_result.stderr}")
+                else:
+                    logger.info(f"No staged files in submodule {sub_path}, skipping commit")
 
-        # We have submodules with changes that need to be committed first
-        result["_routing"] = WorkflowRouting.SUBMODULE_PENDING
-        result["submodules_pending"] = submodules_with_changes
+            except Exception as e:
+                logger.warning(f"Failed to process submodule {sub_path}: {e}")
 
-        logger.info(
-            f"Found {len(submodules_with_changes)} submodules with changes: {submodules_with_changes}"
+        # After committing in submodules, stage the submodule reference updates in main repo
+        subprocess.run(
+            ["git", "add", "-A"],
+            cwd=project_root,
+            capture_output=True,
+        )
+        logger.info(f"Staged {len(submodule_commits)} submodule reference updates in main repo")
+
+        result["_routing"] = WorkflowRouting.PREPARED
+        result["submodules_committed"] = submodule_commits
+        result["submodule_info"] = (
+            (
+                f"\n\n**Submodules committed:**\n"
+                + "\n".join(f"- `{s['path']}`: `{s['commit_hash']}`" for s in submodule_commits)
+            )
+            if submodule_commits
+            else ""
         )
 
+        logger.info(f"Handled {len(submodule_commits)} submodules with changes")
+
     except Exception as e:
-        logger.warning(f"Failed to check submodules: {e}")
+        logger.warning(f"Failed to handle submodules: {e}")
         result["_routing"] = WorkflowRouting.PREPARED
+        result["submodules_committed"] = []
+        result["submodule_info"] = ""
 
     return result
 

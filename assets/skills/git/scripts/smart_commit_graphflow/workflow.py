@@ -24,7 +24,6 @@ from omni.core.skills.state import GraphState
 from ._enums import WorkflowRouting
 from .nodes import (
     _check_state_node,
-    _commit_submodules_node,
     _handle_submodules_node,
     _lefthook_pre_commit_node,
     _return_state,
@@ -38,22 +37,13 @@ def _build_workflow() -> Any:
     Returns:
         StateGraph: The compiled workflow graph ready for execution
     """
-    # Import checkpointer here to avoid circular imports
-    try:
-        from omni.langgraph.checkpoint.saver import get_default_checkpointer as _get_checkpointer
-
-        _CHECKPOINT_AVAILABLE = True
-        _memory = _get_checkpointer()
-    except ImportError:
-        _CHECKPOINT_AVAILABLE = False
-        _memory = None
+    from langgraph.checkpoint.memory import MemorySaver
 
     builder = StateGraph(GraphState)
 
     # Add all nodes
     builder.add_node("check", _check_state_node)
     builder.add_node("handle_submodules", _handle_submodules_node)
-    builder.add_node("commit_submodules", _commit_submodules_node)
     builder.add_node("lefthook_pre_commit", _lefthook_pre_commit_node)
     builder.add_node("empty", _return_state)
     builder.add_node("lefthook_error", _return_state)
@@ -75,18 +65,16 @@ def _build_workflow() -> Any:
         },
     )
 
-    # Handle submodules routes to commit_submodules or proceed directly
+    # Handle submodules only DETECTS and records pending submodules
+    # Actual commit happens in commands.py _approve_smart_commit_async
     builder.add_conditional_edges(
         "handle_submodules",
         _route_state,
         {
-            WorkflowRouting.SUBMODULE_PENDING: "commit_submodules",
+            WorkflowRouting.SUBMODULE_PENDING: "prepared",
             WorkflowRouting.PREPARED: "lefthook_pre_commit",
         },
     )
-
-    # After committing submodules, proceed to lefthook_pre_commit
-    builder.add_edge("commit_submodules", "lefthook_pre_commit")
 
     # All terminal states go to END
     for node in ["empty", "lefthook_error", "security_warning", "prepared"]:
@@ -110,16 +98,17 @@ def _get_diagram() -> str:
     C -->|Empty| D[empty: Nothing to commit]
     C -->|Lefthook Failed| E[lefthook_error: Fix errors]
     C -->|Security Issues| F[security_warning: Review files]
-    C -->|Prepared| G[handle_submodules: Check for submodule changes]
+    C -->|Prepared| G[handle_submodules: Detect submodule changes]
     G --> H{Submodule Routing}
     H -->|No changes| I[lefthook_pre_commit]
-    H -->|Has changes| J[commit_submodules: Commit changes in each submodule]
-    J --> I
-    I --> K[User reviews changes]
-    K --> L[User approves with message]
-    L --> M[git.smart_commit action=approve]
-    M --> N[git commit executes]
-    N --> O[Done]"""
+    H -->|Has changes| I
+    I --> J[User reviews changes]
+    J --> K[User approves with message]
+    K --> L[git.smart_commit action=approve]
+    L --> M[1. commit submodules first]
+    M --> N[2. lefthook pre-commit]
+    N --> O[3. git commit main]
+    O --> P[Done]"""
 
 
 # Module-level compiled workflow (lazy initialization)
@@ -135,19 +124,13 @@ def get_workflow() -> Any:
     """
     global _smart_commit_graph, _app
 
-    if _smart_commit_graph is None:
+    if _app is None:
         _smart_commit_graph = _build_workflow()
+        # Use in-memory checkpointer for stateless workflow invocation
+        from langgraph.checkpoint.memory import MemorySaver
 
-        # Import checkpointer
-        try:
-            from omni.langgraph.checkpoint.saver import (
-                get_default_checkpointer as _get_checkpointer,
-            )
-
-            _memory = _get_checkpointer()
-            _app = _smart_commit_graph.compile(checkpointer=_memory)
-        except ImportError:
-            _app = _smart_commit_graph.compile()
+        _memory = MemorySaver()
+        _app = _smart_commit_graph.compile(checkpointer=_memory)
 
     return _app
 
