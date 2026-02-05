@@ -209,6 +209,7 @@ def _get_cached_system_prompt(state: ResearchState) -> str:
 from researcher.scripts.research import (
     clone_repo,
     init_harvest_structure,
+    parse_repo_url,
     repomix_compress_shard,
     repomix_map,
     save_index,
@@ -237,8 +238,11 @@ class ResearchState(TypedDict):
 
     # Setup Stage
     repo_path: str  # Local clone path
+    repo_revision: str  # Git commit hash of the analyzed revision
+    repo_revision_date: str  # Git commit date
+    repo_owner: str  # Repository owner (e.g., "anthropics")
+    repo_name: str  # Repository name (e.g., "claude-code")
     file_tree: str  # Repository structure map
-    repo_name: str  # Repository name for filenames
 
     # Planning Stage
     shards_queue: list[ShardDef]  # Shards to process (Plan output)
@@ -271,24 +275,35 @@ async def node_setup(state: ResearchState) -> dict:
     logger.info("[Graph] Setting up research...", url=state["repo_url"])
 
     try:
-        # Extract repo name
+        # Parse owner and repo name from URL
         repo_url = state["repo_url"]
-        repo_name = repo_url.split("/")[-1]
-        if repo_name.endswith(".git"):
-            repo_name = repo_name[:-4]
+        repo_owner, repo_name = parse_repo_url(repo_url)
 
-        # Clone repository
-        path = clone_repo(repo_url)
+        # Clone repository (now returns dict with path and revision)
+        repo_info = clone_repo(repo_url)
+        path = repo_info["path"]
+        revision = repo_info["revision"]
+        revision_date = repo_info["date"]
 
         # Generate file tree map using exa with depth limit
         tree = _generate_tree_with_exa(path, max_depth=3)
 
-        logger.info("[Graph] Setup complete", path=path, tree_length=len(tree))
+        logger.info(
+            "[Graph] Setup complete",
+            path=path,
+            owner=repo_owner,
+            repo=repo_name,
+            revision=revision,
+            tree_length=len(tree),
+        )
 
         return {
             "repo_path": path,
-            "file_tree": tree,
+            "repo_revision": revision,
+            "repo_revision_date": revision_date,
+            "repo_owner": repo_owner,
             "repo_name": repo_name,
+            "file_tree": tree,
             "steps": state["steps"] + 1,
         }
 
@@ -441,9 +456,19 @@ GUIDELINES:
         )
 
         content = response.get("content", "").strip()
+        logger.debug(
+            f"[Graph] Architect response",
+            content_length=len(content),
+            content_preview=content[:500] if content else "(empty)",
+        )
+
         shards = _extract_json_list(content)
 
         if not shards:
+            logger.warning(
+                f"[Graph] Failed to parse shards from LLM response, using fallback",
+                content_preview=content[:200] if content else "(empty)",
+            )
             # Fallback: single shard with repo root (let LLM analyze everything)
             shards = [
                 {
@@ -597,7 +622,10 @@ Format as a standalone Markdown section that can be combined with other shard an
         # Initialize harvest structure if needed
         harvest_dir = state.get("harvest_dir")
         if not harvest_dir:
-            harvest_path = init_harvest_structure(repo_name)
+            # Get owner and repo_name from state
+            repo_owner = state.get("repo_owner", "unknown")
+            repo_name = state.get("repo_name", "unknown")
+            harvest_path = init_harvest_structure(repo_owner, repo_name)
             harvest_dir = str(harvest_path)
         else:
             harvest_path = Path(harvest_dir)
@@ -653,17 +681,21 @@ async def node_synthesize(state: ResearchState) -> dict:
         request = state.get("request", "Analyze architecture")
         harvest_dir = state.get("harvest_dir", "")
         shard_summaries = state.get("shard_analyses", [])
+        revision = state.get("repo_revision", "")
+        revision_date = state.get("repo_revision_date", "")
 
         if not harvest_dir:
             raise ValueError("No harvest directory available")
 
-        # Generate index.md
+        # Generate index.md with revision info
         save_index(
             base_dir=Path(harvest_dir),
             title=repo_name,
             repo_url=repo_url,
             request=request,
             shard_summaries=shard_summaries,
+            revision=revision,
+            revision_date=revision_date,
         )
 
         # Generate final summary message
@@ -714,8 +746,8 @@ def _extract_json_list(text: str) -> list[Any]:
             parsed = json.loads(json_str)
             if isinstance(parsed, list):
                 return parsed
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as e:
+            logger.debug(f"[Graph] JSON decode error: {e}, trying alternate parsing")
 
     # Try parsing entire response
     try:
@@ -724,6 +756,13 @@ def _extract_json_list(text: str) -> list[Any]:
             return parsed
     except json.JSONDecodeError:
         pass
+
+    # Log debug info for troubleshooting
+    logger.debug(
+        f"[Graph] Failed to extract JSON list from response",
+        content_preview=text[:500] if text else "(empty)",
+        has_brackets=("[" in text and "]" in text),
+    )
 
     return []
 
@@ -839,8 +878,11 @@ async def run_research_workflow(
             request=saved_state.get("request", validated.request),
             repo_url=saved_state.get("repo_url", validated.repo_url),
             repo_path=saved_state.get("repo_path", ""),
-            file_tree=saved_state.get("file_tree", ""),
+            repo_revision=saved_state.get("repo_revision", ""),
+            repo_revision_date=saved_state.get("repo_revision_date", ""),
+            repo_owner=saved_state.get("repo_owner", ""),
             repo_name=saved_state.get("repo_name", ""),
+            file_tree=saved_state.get("file_tree", ""),
             shards_queue=saved_state.get("shards_queue", []),
             current_shard=saved_state.get("current_shard"),
             shard_counter=saved_state.get("shard_counter", 0),
@@ -857,8 +899,11 @@ async def run_research_workflow(
             request=validated.request,
             repo_url=validated.repo_url,
             repo_path="",
-            file_tree="",
+            repo_revision="",
+            repo_revision_date="",
+            repo_owner="",
             repo_name="",
+            file_tree="",
             shards_queue=[],
             current_shard=None,
             shard_counter=0,

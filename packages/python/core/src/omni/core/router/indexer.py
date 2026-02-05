@@ -13,7 +13,6 @@ Python 3.12+ Features:
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -24,6 +23,13 @@ from itertools import batched
 from typing import Any
 
 from pydantic import BaseModel
+
+try:
+    import omni_core_rs as omni_rs
+
+    _compute_hash = omni_rs.compute_hash
+except ImportError:
+    _compute_hash = None
 
 from omni.foundation.bridge import RustVectorStore, SearchResult
 from omni.foundation.config.logging import get_logger
@@ -206,25 +212,31 @@ class SkillIndexer:
                         {
                             "name": s.get("name"),
                             "commands": sorted([c.get("name") for c in s.get("commands", [])]),
-                            "description_hash": hashlib.md5(
-                                s.get("description", "").encode()
-                            ).hexdigest(),
+                            "description_hash": _compute_hash(s.get("description", ""))
+                            if _compute_hash
+                            else s.get("description", ""),
                             # Include routing keywords and intents in hash
-                            "keywords_hash": hashlib.md5(
-                                json.dumps(s.get("routing_keywords", []), sort_keys=True).encode()
-                            ).hexdigest(),
-                            "intents_hash": hashlib.md5(
-                                json.dumps(s.get("intents", []), sort_keys=True).encode()
-                            ).hexdigest(),
+                            "keywords_hash": _compute_hash(
+                                json.dumps(s.get("routing_keywords", []), sort_keys=True)
+                            )
+                            if _compute_hash
+                            else json.dumps(s.get("routing_keywords", []), sort_keys=True),
+                            "intents_hash": _compute_hash(
+                                json.dumps(s.get("intents", []), sort_keys=True)
+                            )
+                            if _compute_hash
+                            else json.dumps(s.get("intents", []), sort_keys=True),
                         }
                         for s in skills
                     ],
                     key=lambda x: x["name"],
                 )
             }
-            current_hash = hashlib.md5(
-                json.dumps(current_state, sort_keys=True).encode()
-            ).hexdigest()
+            current_hash = (
+                _compute_hash(json.dumps(current_state, sort_keys=True))
+                if _compute_hash
+                else json.dumps(current_state, sort_keys=True)
+            )
 
             # Check index metadata only if we have a valid storage path (not in-memory)
             if self._storage_path != ":memory:" and self._store is not None:

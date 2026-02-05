@@ -1,56 +1,49 @@
 ---
-name: "git"
-version: "2.0.0"
-description: "Git integration with LangGraph workflow support, Smart Commit V2, and Spec-Awareness"
-routing_keywords: [
-    # Core verbs (high priority)
-    "git",
-    "commit",
-    "push",
-    "pull",
-    "merge",
-    "rebase",
-    "checkout",
-    "stash",
-    "tag",
-    # High-frequency phrases
-    "commit code",
-    "save changes",
-    "commit changes",
-    "push code",
-    "save work",
-    "check in",
-    "submit code",
-    "version control",
-    "branch",
-    "repo",
-    "repository",
-    "history",
-    "diff",
-    "status",
-    "log",
-    "hotfix",
-    "pr",
-    "pull request",
-    "code review",
-  ]
-intents:
-  [
-    "hotfix",
-    "pr",
-    "branch",
-    "commit",
-    "stash",
-    "merge",
-    "revert",
-    "tag",
-    "status",
-  ]
-authors: ["omni-dev-fusion"]
-permissions:
-  - "filesystem:*"
-  - "terminal:run_command"
-  - "knowledge:ingest"
+name: git
+description: Use when committing code, managing branches, pushing to remote, creating pull requests, or performing version control operations.
+metadata:
+  author: omni-dev-fusion
+  version: "2.0.0"
+  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/git"
+  routing_keywords:
+    - "git"
+    - "commit"
+    - "push"
+    - "pull"
+    - "merge"
+    - "rebase"
+    - "checkout"
+    - "stash"
+    - "tag"
+    - "commit code"
+    - "save changes"
+    - "commit changes"
+    - "push code"
+    - "save work"
+    - "check in"
+    - "submit code"
+    - "version control"
+    - "branch"
+    - "repo"
+    - "repository"
+    - "history"
+    - "diff"
+    - "status"
+    - "log"
+    - "hotfix"
+    - "pr"
+    - "pull request"
+    - "code review"
+  intents:
+    - "Hotfix changes"
+    - "Create pull request"
+    - "Manage branches"
+    - "Commit code"
+    - "Stash changes"
+    - "Merge branches"
+    - "Rebase branches"
+    - "Tag commits"
+    - "Check git status"
 ---
 
 # Git Skill

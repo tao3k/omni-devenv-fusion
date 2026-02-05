@@ -8,6 +8,7 @@ Uses Pydantic V2 create_model for type-safe schema generation.
 from __future__ import annotations
 
 import inspect
+import re
 import types
 from collections.abc import Callable
 from typing import Any, get_type_hints
@@ -19,7 +20,9 @@ from ..config.logging import get_logger
 logger = get_logger("omni.api.schema")
 
 
-def _generate_tool_schema(func: Callable, exclude_params: set[str] | None = None) -> dict[str, Any]:
+def _generate_tool_schema(
+    func: Callable, exclude_params: set[str] | None = None, docstring: str = ""
+) -> dict[str, Any]:
     """
     [Core Algorithm] Auto-generate OpenAPI Schema using Pydantic V2 reflection.
 
@@ -27,6 +30,11 @@ def _generate_tool_schema(func: Callable, exclude_params: set[str] | None = None
     1. Analyze function signature and type annotations.
     2. Dynamically build a Pydantic Model (create_model) to represent parameter structure.
     3. Export standard Schema via .model_json_schema().
+
+    Args:
+        func: The function to generate schema for
+        exclude_params: Parameters to exclude from schema
+        docstring: Full docstring or description including Args section for param extraction
     """
     if exclude_params is None:
         exclude_params = set()
@@ -108,23 +116,62 @@ def _generate_tool_schema(func: Callable, exclude_params: set[str] | None = None
         # 5. Build field kwargs (description from docstring)
         field_kwargs: dict[str, Any] = {}
 
-        # Extract description from docstring for this parameter
-        docstring = func.__doc__ or ""
-        param_pattern = f":param {param_name}:"
-        param_default_pattern = f":param {param_name} "
+        # Use provided docstring, fall back to function's __doc__
+        docstring_source = docstring or (func.__doc__ or "")
 
-        if docstring and (param_pattern in docstring or param_default_pattern in docstring):
-            import re
+        # Try multiple docstring formats:
+        # 1. Google-style with dash: "Args: - param_name: str - description"
+        # 2. Google-style with parentheses: "Args: param_name (type): description"
+        # 3. Sphinx-style: ":param param_name: description"
+        # 4. NumPy-style: "param_name : description"
 
-            # Try to find the line with :param name:
-            pattern = rf"(?:^|\n)\s*:param\s+{param_name}\s*:\s*(.+?)(?=\n\s*:param|\n\s*\w|\Z)"
-            match = re.search(pattern, docstring, re.DOTALL | re.IGNORECASE)
+        extracted_desc = None
+
+        def extract_param_desc(doc: str, param: str) -> str | None:
+            """Extract parameter description from docstring.
+
+            Matches lines like:
+            - param: str - description
+            - param: description
+            """
+            # Match line starting with - param_name:
+            pattern = rf"(?:^|\n)\s*[-•]\s*{re.escape(param)}\s*:\s*(.+?)(?:\n|$)"
+            match = re.search(pattern, doc, re.MULTILINE | re.IGNORECASE)
             if match:
                 desc = match.group(1).strip()
-                # Remove newlines and extra spaces
-                desc = " ".join(desc.split())
-                if desc:
-                    field_kwargs["description"] = desc
+                # If it has a separator like ' - ' or ' — ', take only the part after
+                for sep in [" - ", " — ", " – ", "- "]:
+                    if sep in desc:
+                        parts = desc.split(sep)
+                        if len(parts) > 1:
+                            desc = parts[-1].strip()
+                        break
+                return desc
+            return None
+
+        # Try Google-style with dash: "Args: - param_name: str - description"
+        extracted_desc = extract_param_desc(docstring_source, param_name)
+
+        if not extracted_desc:
+            # Try Google-style with parentheses: "Args: param_name (type): description"
+            google_pattern = (
+                rf"(?:^|\n)\s*\*?{re.escape(param_name)}\s*\(.*?\):\s*(.+?)(?=\n\s*\w|\n\s*\*|\Z)"
+            )
+            match = re.search(google_pattern, docstring_source, re.DOTALL | re.IGNORECASE)
+            if match:
+                extracted_desc = match.group(1).strip()
+                extracted_desc = " ".join(extracted_desc.split())
+
+        if not extracted_desc:
+            # Try Sphinx-style :param name:
+            sphinx_pattern = rf"(?:^|\n)\s*:param\s+{re.escape(param_name)}\s*:\s*(.+?)(?=\n\s*:param|\n\s*\w|\Z)"
+            match = re.search(sphinx_pattern, docstring_source, re.DOTALL | re.IGNORECASE)
+            if match:
+                extracted_desc = match.group(1).strip()
+                extracted_desc = " ".join(extracted_desc.split())
+
+        if extracted_desc:
+            field_kwargs["description"] = extracted_desc
 
         # Add default value if present
         if param.default is not inspect.Parameter.empty:

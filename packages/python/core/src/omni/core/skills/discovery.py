@@ -4,7 +4,7 @@ omni.core.skills.discovery - Skill Discovery Module
 High-performance skill discovery using Rust + LanceDB.
 
 Architecture:
-    LanceDB (SSOT) -> Foundation (Reader) -> Core (Discovery) -> Kernel
+    LanceDB (SSOT) -> RustVectorStore (Reader) -> Core (Discovery) -> Kernel
 
     ┌─────────────────┐
     │    LanceDB      │  ← Single Source of Truth (Rust/LanceDB)
@@ -33,15 +33,13 @@ Unified Search Flow:
     4. Return enriched ToolMatch objects
 """
 
+import asyncio
 import json
 import os
 import inspect
 from typing import Any, Callable, get_type_hints
 
-from omni.foundation.bridge.scanner import (
-    DiscoveredSkillRules,
-    PythonSkillScanner,
-)
+from omni.foundation.bridge.rust_vector import get_vector_store
 from omni.foundation.config.logging import get_logger
 from pydantic import BaseModel
 
@@ -132,7 +130,7 @@ def generate_usage_template(
 class DiscoveredSkill(BaseModel):
     """Represents a discovered skill with its metadata.
 
-    Created from Foundation's DiscoveredSkillRules via from_index_entry().
+    Created from RustVectorStore tool records.
     """
 
     name: str
@@ -141,25 +139,37 @@ class DiscoveredSkill(BaseModel):
     has_extensions: bool = False
 
     @classmethod
-    def from_index_entry(cls, entry: DiscoveredSkillRules) -> "DiscoveredSkill":
-        """Create from Foundation DiscoveredSkillRules object.
+    def from_tool_record(cls, tool: dict[str, Any]) -> "DiscoveredSkill":
+        """Create from tool record dictionary (from RustVectorStore).
 
         Args:
-            entry: DiscoveredSkillRules from PythonSkillScanner.scan_directory()
+            tool: Tool dictionary with skill_name, file_path, etc.
 
         Returns:
             DiscoveredSkill instance
         """
+        skill_name = tool.get("skill_name", "unknown")
+        file_path = tool.get("file_path", "")
+
+        # Extract skill path from file_path
+        if "/assets/skills/" in file_path:
+            skill_path = file_path.split("/assets/skills/")[-1].split("/")[0]
+            skill_path = f"assets/skills/{skill_path}"
+        else:
+            skill_path = f"assets/skills/{skill_name}"
+
         # Check for extensions directory
-        has_ext = False
-        if entry.skill_path:
-            ext_path = os.path.join(entry.skill_path, "extensions")
-            has_ext = os.path.isdir(ext_path)
+        has_ext = os.path.isdir(os.path.join(skill_path, "extensions")) if skill_path else False
 
         return cls(
-            name=entry.skill_name,
-            path=entry.skill_path,
-            metadata=entry.metadata,
+            name=skill_name,
+            path=skill_path,
+            metadata={
+                "description": tool.get("description", ""),
+                "tools": [
+                    {"name": tool.get("tool_name", ""), "description": tool.get("description", "")}
+                ],
+            },
             has_extensions=has_ext,
         )
 
@@ -543,14 +553,56 @@ class SkillDiscoveryService:
         """
         logger.debug("🔍 Accessing Skill Index from LanceDB...")
 
-        # Use PythonSkillScanner to read from LanceDB
-        scanner = PythonSkillScanner()
-        index_entries = await scanner.scan_directory()
+        # Use RustVectorStore directly to read from LanceDB
+        store = get_vector_store()
+        tools = await store.list_all_tools()
 
+        # Group tools by skill and convert to DiscoveredSkill
+        skills_by_name: dict[str, dict[str, Any]] = {}
+        for tool in tools:
+            skill_name = tool.get("skill_name", "unknown")
+            file_path = tool.get("file_path", "")
+
+            # Extract skill path from file_path
+            if "/assets/skills/" in file_path:
+                skill_path = file_path.split("/assets/skills/")[-1].split("/")[0]
+                skill_path = f"assets/skills/{skill_path}"
+            else:
+                skill_path = f"assets/skills/{skill_name}"
+
+            if skill_name not in skills_by_name:
+                skills_by_name[skill_name] = {
+                    "path": skill_path,
+                    "description": tool.get("description", ""),
+                    "tools": [],
+                }
+
+            skills_by_name[skill_name]["tools"].append(
+                {
+                    "name": tool.get("tool_name", ""),
+                    "description": tool.get("description", ""),
+                }
+            )
+
+        # Convert to DiscoveredSkill objects
         all_skills = []
-        for entry in index_entries:
-            skill = DiscoveredSkill.from_index_entry(entry)
-            all_skills.append(skill)
+        for skill_name, skill_data in skills_by_name.items():
+            has_ext = (
+                os.path.isdir(os.path.join(skill_data["path"], "extensions"))
+                if skill_data["path"]
+                else False
+            )
+            all_skills.append(
+                DiscoveredSkill(
+                    name=skill_name,
+                    path=skill_data["path"],
+                    metadata={
+                        "description": skill_data["description"],
+                        "tools": skill_data["tools"],
+                    },
+                    has_extensions=has_ext,
+                )
+            )
 
         # Sort by name for consistent ordering
         all_skills.sort(key=lambda s: s.name)

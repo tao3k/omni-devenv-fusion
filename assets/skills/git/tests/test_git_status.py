@@ -50,6 +50,6 @@ class TestGitScripts:
 
     def test_smart_commit_workflow_imports(self):
         """Test smart_commit_workflow script imports successfully."""
-        from git.scripts import smart_commit_workflow
+        from git.scripts.smart_commit_graphflow import _build_workflow
 
-        assert hasattr(smart_commit_workflow, "_build_workflow")
+        assert callable(_build_workflow)

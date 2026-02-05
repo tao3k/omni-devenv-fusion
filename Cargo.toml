@@ -1,10 +1,24 @@
 [workspace]
 resolver = "2"
 
-# Include all Rust crates from packages/rust/
+# Include all Rust crates explicitly (no glob to avoid missing crate errors)
 members = [
-    "packages/rust/crates/*",
-    "packages/rust/bindings/python"
+    "packages/rust/bindings/python",
+    "packages/rust/crates/omni-ast",
+    "packages/rust/crates/omni-edit",
+    "packages/rust/crates/omni-events",
+    "packages/rust/crates/omni-executor",
+    "packages/rust/crates/omni-io",
+    "packages/rust/crates/omni-knowledge",
+    "packages/rust/crates/omni-lance",
+    "packages/rust/crates/omni-scanner",
+    "packages/rust/crates/omni-security",
+    "packages/rust/crates/omni-sniffer",
+    "packages/rust/crates/omni-tags",
+    "packages/rust/crates/omni-tokenizer",
+    "packages/rust/crates/omni-tui",
+    "packages/rust/crates/omni-types",
+    "packages/rust/crates/omni-vector",
 ]
 
 # Workspace package metadata (inherited by all crates)
@@ -27,6 +41,8 @@ thiserror = "2.0.17"
 walkdir = "2.5.0"
 uuid = { version = "1.11", features = ["v4"] }
 chrono = { version = "0.4.38", default-features = false }
+tracing = "0.1"
+globset = "0.4"
 
 # Git operations (libgit2 for performance)
 git2 = "0.20.3"
@@ -42,6 +58,13 @@ tempfile = "3.24"
 
 # JSON Schema generation for Schema Singularity (SSOT)
 schemars = "0.8.21"
+
+# LanceDB for vector storage
+lance = "1.0"
+lance-arrow = "1.0"
+
+# Logging
+log = "0.4"
 
 # Performance optimization - Thin LTO for reduced memory
 [profile.release]

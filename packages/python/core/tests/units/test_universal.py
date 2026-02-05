@@ -22,7 +22,7 @@ class TestSimpleSkillMetadata:
         assert meta.name == "test_skill"
         assert meta.version == "1.0.0"
         assert meta.description == ""
-        assert meta.capabilities == []
+        assert meta.routing_keywords == []
 
     def test_custom_values(self):
         """Test custom metadata values."""
@@ -30,11 +30,11 @@ class TestSimpleSkillMetadata:
             name="custom",
             version="2.0.0",
             description="A custom skill",
-            capabilities=["commit", "push"],
+            routing_keywords=["commit", "push"],
         )
         assert meta.name == "custom"
         assert meta.version == "2.0.0"
-        assert "commit" in meta.capabilities
+        assert "commit" in meta.routing_keywords
 
 
 class TestUniversalScriptSkill:
@@ -66,25 +66,26 @@ class TestUniversalScriptSkill:
         assert skill.metadata.version == "1.2.3"
 
     def test_init_with_skill_md(self, tmp_path: Path):
-        """Test initialization loads from SKILL.md (if exists).
-
-        Note: Current implementation uses constructor name as default.
-        SKILL.md provides extended metadata.
-        """
+        """Test initialization recognizes SKILL.md exists (parsing handled by Rust scanner)."""
         skill_path = tmp_path / "skill_with_md"
         skill_path.mkdir()
         (skill_path / "SKILL.md").write_text("""---
 name: loaded-skill
-version: 3.0.0
 description: Loaded from SKILL.md
+metadata:
+  version: "3.0.0"
+  routing_keywords:
+    - "test"
+    - "loaded"
 ---
 """)
 
         skill = UniversalScriptSkill("loaded", skill_path)
-        # Constructor name takes precedence for metadata
+        # Constructor name takes precedence
         assert skill.metadata.name == "loaded"
-        # Verify SKILL.md was recognized
+        # Verify SKILL.md was recognized (parsing handled by Rust)
         assert (skill.path / "SKILL.md").exists()
+        # Note: Full metadata parsing is done by Rust scanner
 
     @pytest.mark.asyncio
     async def test_load_empty_skill(self, tmp_path: Path):

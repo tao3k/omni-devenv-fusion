@@ -103,6 +103,7 @@ def render_commit_message(
     workflow_id: str = "",
     commit_type: str = "feat",
     commit_scope: str = "general",
+    submodule_section: str = "",
 ) -> str:
     """
     Render commit message using cascading Jinja2 template.
@@ -124,6 +125,7 @@ def render_commit_message(
         workflow_id: Workflow ID for tracking (optional)
         commit_type: Conventional commit type (feat, fix, refactor, etc.)
         commit_scope: Commit scope (e.g., git-workflow, core, etc.)
+        submodule_section: Additional section showing submodule commits (optional)
 
     Returns:
         Formatted commit message with verification badge
@@ -144,6 +146,7 @@ def render_commit_message(
         workflow_id=workflow_id,
         commit_type=commit_type,
         commit_scope=commit_scope,
+        submodule_section=submodule_section,
         timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     )
 

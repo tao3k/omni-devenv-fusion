@@ -111,7 +111,7 @@ from omni.core.router import OmniRouter
 
 router = OmniRouter()
 await router.initialize(skills)
-result = await router.route("帮我提交代码")
+result = await router.route("commit the changes")
 ```
 
 ### With Caching

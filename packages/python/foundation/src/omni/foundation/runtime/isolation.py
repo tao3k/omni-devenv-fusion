@@ -119,12 +119,32 @@ def run_skill_command(
 
     cmd.extend(["python", f"scripts/{script_name}"])
 
-    # Convert args to CLI flags (e.g., {"url": "..."} -> "--url", "...")
+    # Convert args to CLI flags with proper type handling
+    # - dict/list: JSON encode
+    # - Booleans: "true"/"false"
+    # - Other values: convert to string
+    # - None/empty values: omit
+    import json
+
     for key, value in args.items():
+        # Skip None or empty values
+        if value is None:
+            continue
+        if isinstance(value, str) and not value:
+            continue
+        if isinstance(value, (list, dict)) and len(value) == 0:
+            continue
+
         cmd.append(f"--{key}")
+
         if isinstance(value, bool):
+            # Booleans: always pass as "true"/"false" string
             cmd.append("true" if value else "false")
+        elif isinstance(value, (list, dict)):
+            # Complex types: JSON encode
+            cmd.append(json.dumps(value))
         else:
+            # Other values: convert to string
             cmd.append(str(value))
 
     # Join command into a shell string for proper env var expansion

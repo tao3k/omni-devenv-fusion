@@ -1,30 +1,30 @@
 ---
-name: "memory"
-version: "1.0.0"
-description: "The Hippocampus Interface - Vector-based Memory for LLM (LanceDB + FastEmbed)"
-routing_keywords:
-  [
-    "memory",
-    "remember",
-    "store",
-    "save",
-    "learn",
-    "forget",
-    "context",
-    "persistent",
-    "long-term",
-    "recall",
-    "embeddings",
-    "vector",
-    "note",
-    "wisdom",
-  ]
-authors: ["omni-dev-fusion"]
-intents:
-  - "Remember or store information"
-  - "Recall past experiences"
-  - "Save learning to memory"
-  - "Retrieve context from memory"
+name: memory
+description: Use when storing insights, recalling past experiences, saving learning, or retrieving context from vector-based memory.
+metadata:
+  author: omni-dev-fusion
+  version: "1.0.0"
+  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/memory"
+  routing_keywords:
+    - "memory"
+    - "remember"
+    - "store"
+    - "save"
+    - "learn"
+    - "forget"
+    - "context"
+    - "persistent"
+    - "long-term"
+    - "recall"
+    - "embeddings"
+    - "vector"
+    - "note"
+    - "wisdom"
+  intents:
+    - "Remember or store information"
+    - "Recall past experiences"
+    - "Save learning to memory"
+    - "Retrieve context from memory"
 ---
 
 # Memory Skill Policy

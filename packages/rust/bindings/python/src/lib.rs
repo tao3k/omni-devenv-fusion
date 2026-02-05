@@ -37,6 +37,7 @@ mod scanner;
 mod schema; // Schema Registry for Schema Singularity
 mod security;
 mod sniffer;
+mod tags; // Symbol extraction using omni-tags
 mod tokenizer; // Add tokenizer module
 mod tui;
 pub mod utils;
@@ -66,7 +67,9 @@ pub use events::{
 pub use executor::PyOmniCell;
 pub use executor::{build_query, build_query_raw};
 pub use io::{
-    count_tokens, get_cache_home, get_config_home, get_data_home, read_file_safe, truncate_tokens,
+    PyDiscoverOptions, count_files_in_dir, count_tokens, discover_files, discover_files_in_dir,
+    get_cache_home, get_config_home, get_data_home, read_file_safe, should_skip_path,
+    truncate_tokens,
 };
 pub use navigation::{get_file_outline, search_code, search_directory, search_with_rules};
 pub use scanner::{
@@ -89,10 +92,20 @@ pub use tokenizer::{PyMessage, py_count_tokens, py_truncate, py_truncate_middle}
 // Schema Registry exports (Schema Singularity)
 pub use schema::{py_get_registered_types, py_get_schema_json};
 
+// Symbol Extraction (omni-tags)
+pub use tags::{
+    PySymbol, PySymbolKind, py_extract_symbols, py_get_file_outline, py_parse_symbols,
+    py_search_directory, py_search_file, py_search_with_rules,
+};
+
+// Knowledge Sync Engine (omni-knowledge)
+pub use omni_knowledge::PySyncEngine;
+pub use omni_knowledge::PySyncResult;
+
 // AST Extraction
 pub use ast::{
-    PyCodeChunk, PyExtractResult, py_chunk_code, py_extract_items, py_get_supported_languages,
-    py_is_language_supported,
+    PyCodeChunk, PyExtractResult, py_chunk_code, py_extract_items, py_extract_skeleton,
+    py_get_supported_languages, py_is_language_supported,
 };
 
 // Watcher module exports (notify feature)
@@ -134,6 +147,13 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(pyo3::wrap_pyfunction!(read_file_safe, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(count_tokens, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(truncate_tokens, m)?)?;
+
+    // File Discovery (Rust-based high-performance file traversal)
+    m.add_function(pyo3::wrap_pyfunction!(discover_files, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(discover_files_in_dir, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(count_files_in_dir, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(should_skip_path, m)?)?;
+    m.add_class::<PyDiscoverOptions>()?;
 
     // Hyper-Immune System (Security) + Permission Gatekeeper + Sandbox
     m.add_function(pyo3::wrap_pyfunction!(scan_secrets, m)?)?;
@@ -188,6 +208,7 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // AST Extraction (Project Cerebellum - High Precision Context)
     m.add_function(pyo3::wrap_pyfunction!(py_extract_items, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(py_extract_skeleton, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(py_is_language_supported, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(py_get_supported_languages, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(py_chunk_code, m)?)?;
@@ -238,6 +259,11 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<PyWatcherConfig>()?;
         m.add_class::<PyFileEvent>()?;
     }
+
+    // Knowledge Sync Engine (omni-knowledge)
+    m.add_class::<PySyncEngine>()?;
+    m.add_class::<PySyncResult>()?;
+    m.add_function(pyo3::wrap_pyfunction!(omni_knowledge::compute_hash, m)?)?;
 
     m.add("VERSION", "0.5.0")?;
     Ok(())

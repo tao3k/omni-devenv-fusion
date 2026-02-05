@@ -7,19 +7,20 @@ edition.workspace = true
 thiserror = { workspace = true }
 memchr = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util"] }
-# Context Assembly dependencies
+# Parallel iteration
 rayon = "1.8"
 minijinja = "1.0"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 omni-tokenizer = { path = "../omni-tokenizer" }
+# Tracing for instrumentation
+tracing = { workspace = true }
 # Event Bus for reactive file watching (optional)
 omni-events = { path = "../omni-events", optional = true }
 # File watching crate (optional, requires notify feature)
-# Enable all features for cross-platform support (macOS fsevent, Windows, inotify)
 notify = { version = "6.0", features = ["serde"], optional = true }
-# Pattern matching using ripgrep's GlobSet (high-performance)
-globset = { version = "0.4", optional = true }
+# Glob pattern matching (optional, for notify feature)
+globset = { workspace = true, optional = true }
 
 [features]
 default = []
@@ -27,4 +28,4 @@ assembler = []  # Enable context assembly functionality
 notify = ["omni-events", "dep:notify", "dep:globset"]  # Enable file watching with event publishing
 
 [dev-dependencies]
-tempfile = "3.12"
+tempfile = { workspace = true }

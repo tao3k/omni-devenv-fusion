@@ -5,7 +5,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from omni_core_rs import py_chunk_code
+from omni_core_rs import py_chunk_code, py_extract_skeleton, discover_files, should_skip_path
+from omni.foundation.runtime.path_filter import SKIP_DIRS as DEFAULT_SKIP_DIRS
 
 from .config import KnowledgeConfig
 
@@ -20,10 +21,16 @@ class FileIngestor:
             config: Knowledge configuration (uses default if None)
         """
         self.config = config or KnowledgeConfig()
+        # Build skip_dirs list for Rust functions
+        self._skip_dirs = list(self.config.skip_dirs | DEFAULT_SKIP_DIRS)
 
     def _should_skip(self, path: Path) -> bool:
-        """Check if a path should be skipped based on directory name."""
-        return any(part in self.config.skip_dirs for part in path.parts)
+        """Check if a path should be skipped using Rust-based filtering."""
+        return should_skip_path(
+            str(path),
+            skip_hidden=True,
+            skip_dirs=self._skip_dirs,
+        )
 
     def discover_files(
         self,
@@ -58,21 +65,27 @@ class FileIngestor:
         return sorted(set(files))
 
     def _discover_in_dir(self, directory: Path) -> list[Path]:
-        """Discover files in a directory recursively."""
+        """Discover files in a directory recursively using Rust-based discovery."""
         if not directory.exists():
             return []
 
-        files = []
-        # Use ALL supported extensions (code + markdown)
-        for ext in self.config.supported_extensions:
-            for f in directory.rglob(f"*{ext}"):
-                if (
-                    f.is_file()
-                    and not self._should_skip(f)
-                    and f.stat().st_size <= self.config.max_file_size
-                ):
-                    files.append(f)
-        return files
+        # Build skip_dirs from config + defaults
+        skip_dirs = list(self.config.skip_dirs | DEFAULT_SKIP_DIRS)
+
+        # Use Rust-based file discovery for performance
+        extensions = [f".{ext.lstrip('.')}" for ext in self.config.supported_extensions]
+
+        rust_files = discover_files(
+            root=str(directory),
+            extensions=extensions,
+            max_file_size=self.config.max_file_size,
+            skip_hidden=True,
+            skip_dirs=skip_dirs,
+            recursive=True,
+        )
+
+        # Convert to Path objects
+        return [Path(f) for f in rust_files]
 
     def _discover_via_git(self, project_root: Path) -> list[Path]:
         """Discover files using git ls-files (respects .gitignore)."""
@@ -144,6 +157,51 @@ class FileIngestor:
         except Exception:
             return self._text_chunk(content, file_path)
 
+    def _skeleton_chunk(self, content: str, file_path: str, language: str) -> list[dict[str, Any]]:
+        """Extract skeleton (signatures only) for lightweight semantic indexing.
+
+        This uses Rust's extract_skeleton which:
+        1. Parses AST to find function/class signatures
+        2. Removes implementation bodies
+        3. Preserves docstrings
+        4. Returns highly compressed representation for embedding
+        """
+        try:
+            result = py_extract_skeleton(content, language)
+            data = json.loads(result)
+
+            skeleton = data.get("skeleton", "")
+
+            if not skeleton.strip():
+                return self._text_chunk(content, file_path)
+
+            # Split skeleton into individual items
+            items = skeleton.split("\n\n")
+
+            chunks = []
+            for i, item in enumerate(items):
+                item = item.strip()
+                if not item:
+                    continue
+
+                # Generate a pseudo line range for compatibility
+                chunk_id = f"{Path(file_path).stem}_skel_{i}"
+
+                chunks.append(
+                    {
+                        "id": chunk_id,
+                        "content": item,
+                        "start_line": 1,  # Skeleton doesn't track line numbers
+                        "end_line": 1,
+                        "type": "skeleton",
+                        "language": language,
+                    }
+                )
+
+            return chunks
+        except Exception:
+            return self._text_chunk(content, file_path)
+
     def _text_chunk(self, content: str, file_path: str) -> list[dict[str, Any]]:
         """Fallback text-based chunking."""
         lines = content.split("\n")
@@ -170,6 +228,49 @@ class FileIngestor:
             )
 
         return chunks
+
+    def _summary_chunk(self, content: str, file_path: str) -> list[dict[str, Any]]:
+        """Create a summary-only chunk for lightweight embedding.
+
+        Extracts:
+        - Filename
+        - First H1 header (title)
+        - First 500 chars of content as summary
+
+        This reduces token usage by ~95% for knowledge base indexing.
+        """
+        filename = Path(file_path).stem
+        title = ""
+        summary_chars = 500
+
+        # Extract first H1 header (markdown title)
+        for line in content.split("\n"):
+            stripped = line.strip()
+            if stripped.startswith("# "):
+                title = stripped[2:].strip()
+                break
+
+        # Create summary from first N characters
+        first_chars = content[:summary_chars]
+        # Trim to last complete sentence or line
+        summary = first_chars.rsplit("\n", 1)[0].rsplit(". ", 1)[0]
+
+        # Build semantic anchor text
+        semantic_text = f"File: {filename}\n"
+        if title:
+            semantic_text += f"Title: {title}\n"
+        semantic_text += f"Summary: {summary}..."
+
+        return [
+            {
+                "id": f"{Path(file_path).stem}_summary",
+                "content": semantic_text,
+                "start_line": 1,
+                "end_line": 1,
+                "type": "summary",
+                "language": "",
+            }
+        ]
 
     def create_records(
         self,
@@ -227,7 +328,7 @@ class FileIngestor:
         Args:
             file_path: Path to the file
             content: File content
-            mode: "text", "ast", or "auto"
+            mode: "text", "skeleton", "ast", "summary", or "auto"
 
         Returns:
             List of chunks
@@ -235,8 +336,17 @@ class FileIngestor:
         ext = file_path.suffix.lower()
         is_markdown = ext in self.config.markdown_extensions
 
-        if mode == "text" or is_markdown:
-            # Text chunking for markdown and forced text mode
+        if mode == "text":
+            # Full text chunking
+            return self._text_chunk(content, str(file_path))
+        elif mode == "summary" or (mode == "auto" and is_markdown):
+            # Summary-only chunking for lightweight embedding (reduces tokens by ~95%)
+            return self._summary_chunk(content, str(file_path))
+        elif mode == "skeleton":
+            # Skeleton mode for lightweight semantic indexing (default for code)
+            language = self.config.ast_extensions.get(ext)
+            if language:
+                return self._skeleton_chunk(content, str(file_path), language)
             return self._text_chunk(content, str(file_path))
         elif mode == "ast":
             # AST chunking for supported code languages
@@ -245,8 +355,10 @@ class FileIngestor:
                 return self._ast_chunk(content, str(file_path), language)
             return self._text_chunk(content, str(file_path))
         else:
-            # Auto mode: AST for code, text for markdown/docs
+            # Auto mode: Summary for markdown (default), skeleton for code
+            if is_markdown:
+                return self._summary_chunk(content, str(file_path))
             language = self.config.ast_extensions.get(ext)
             if language:
-                return self._ast_chunk(content, str(file_path), language)
+                return self._skeleton_chunk(content, str(file_path), language)
             return self._text_chunk(content, str(file_path))

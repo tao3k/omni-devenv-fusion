@@ -328,36 +328,47 @@ class TestSkillPathResolutionIntegration:
 
     @pytest.mark.asyncio
     async def test_scanner_returns_correct_skill_paths(self):
-        """Verify scanner extracts correct skill paths from file paths.
+        """Verify RustVectorStore returns correct skill paths from file paths.
 
         This is the critical test for the bug where:
         - file_path: "/project/assets/skills/git/scripts/commit.py"
         - Buggy extraction: "git" -> scripts_path = "/project/git/scripts" (WRONG)
         - Fixed extraction: "assets/skills/git" -> scripts_path = "/project/assets/skills/git/scripts" (CORRECT)
         """
-        from omni.foundation.bridge.scanner import PythonSkillScanner
+        from omni.foundation.bridge.rust_vector import get_vector_store
         from omni.foundation.config.skills import SKILLS_DIR
 
-        scanner = PythonSkillScanner()
-        skills = await scanner.scan_directory()
+        store = get_vector_store()
+        tools = await store.list_all_tools()
 
-        # Skip if no skills in database
-        if len(skills) == 0:
-            pytest.skip("No skills loaded from LanceDB")
+        # Skip if no tools in database
+        if len(tools) == 0:
+            pytest.skip("No tools loaded from LanceDB")
 
-        for skill in skills:
+        # Group tools by skill and verify paths
+        skills_seen: set[str] = set()
+        for tool in tools:
+            file_path = tool.get("file_path", "")
+            skill_name = tool.get("skill_name", "")
+
+            if skill_name in skills_seen:
+                continue
+            skills_seen.add(skill_name)
+
             # Verify skill_path is in correct format (must be "assets/skills/{name}")
-            assert skill.skill_path == f"assets/skills/{skill.skill_name}", (
-                f"Skill '{skill.skill_name}' has incorrect path: {skill.skill_path}. "
-                f"Expected: 'assets/skills/{skill.skill_name}'"
-            )
+            if "/assets/skills/" in file_path:
+                extracted_skill = file_path.split("/assets/skills/")[-1].split("/")[0]
+                expected_path = f"assets/skills/{skill_name}"
+                assert extracted_skill == skill_name, (
+                    f"Tool '{tool.get('tool_name', 'unknown')}' has incorrect skill extraction: {extracted_skill}. "
+                    f"Expected: {skill_name}"
+                )
 
-            # Verify the skill directory exists using SKILLS_DIR(name)
-            skill_dir = SKILLS_DIR(skill.skill_name)
-            assert skill_dir.exists(), (
-                f"Skill directory does not exist: {skill_dir}. "
-                f"Check scanner.py skill_path extraction."
-            )
+                # Verify the skill directory exists using SKILLS_DIR(name)
+                skill_dir = SKILLS_DIR(skill_name)
+                assert skill_dir.exists(), (
+                    f"Skill directory does not exist: {skill_dir}. Check skill path extraction."
+                )
 
     @pytest.mark.asyncio
     async def test_mcp_handler_receives_tools_from_scanner(self):

@@ -12,6 +12,7 @@ Usage:
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Optional
 
 import typer
@@ -25,6 +26,20 @@ knowledge_app = typer.Typer(
     name="knowledge",
     help="Manage knowledge base (Librarian)",
 )
+
+
+def _run_async(coro):
+    """Run async code, handling event loop properly."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import nest_asyncio
+
+            nest_asyncio.apply()
+            return loop.run_until_complete(coro)
+    except RuntimeError:
+        pass
+    return asyncio.run(coro)
 
 
 def _print_stats(stats: dict[str, Any], json_output: bool = False):
@@ -69,8 +84,6 @@ def knowledge_list(
         omni knowledge list -n 50
         omni knowledge list --json
     """
-    import asyncio
-
     try:
         from omni.core.knowledge.librarian import Librarian
 
@@ -79,8 +92,8 @@ def knowledge_list(
             console.print("[red]Knowledge base not ready. Run 'omni sync knowledge' first.[/]")
             raise typer.Exit(1)
 
-        entries = asyncio.run(librarian.list_entries(limit=limit))
-        total = asyncio.run(librarian.count())
+        entries = _run_async(librarian.list_entries(limit=limit))
+        total = _run_async(librarian.count())
 
         if json_output:
             import json
@@ -246,13 +259,11 @@ def knowledge_stats(json_output: bool = typer.Option(False, "--json", "-j", help
         omni knowledge stats
         omni knowledge stats --json
     """
-    import asyncio
-
     try:
         from omni.core.knowledge.librarian import Librarian
 
         librarian = Librarian(collection="knowledge")
-        total = asyncio.run(librarian.count())
+        total = _run_async(librarian.count())
 
         stats = {
             "total": total,
@@ -291,7 +302,7 @@ def knowledge_search(
             console.print("[red]Knowledge base not ready.[/]")
             raise typer.Exit(1)
 
-        results = asyncio.run(librarian.search(query, limit=limit))
+        results = _run_async(librarian.search(query, limit=limit))
 
         if json_output:
             import json
@@ -418,7 +429,7 @@ def knowledge_context(
         from omni.core.knowledge.librarian import Librarian
 
         librarian = Librarian(project_root=str(project_path))
-        context = asyncio.run(librarian.get_context(query, limit=limit))
+        context = _run_async(librarian.get_context(query, limit=limit))
 
         if output:
             Path(output).write_text(context)

@@ -132,16 +132,26 @@ Skills are automatically reloaded when `scripts/commands.py` is modified. Mtime 
 
 ## Skill Metadata (SKILL.md)
 
-Each skill has a `SKILL.md` with YAML frontmatter for system integration:
+Each skill has a `SKILL.md` with YAML frontmatter using Anthropic official format:
 
 ```yaml
 ---
-name: "git"
-version: "2.0.0"
-description: "Git integration with LangGraph workflow support"
-routing_keywords: ["git", "commit", "push", "branch"]
-intents: ["hotfix", "pr", "commit", "status"]
-authors: ["omni-dev-fusion"]
+name: git
+description: Use when working with version control, commits, branches, or Git operations.
+metadata:
+  author: omni-dev-fusion
+  version: "2.0.0"
+  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/git"
+  routing_keywords:
+    - "git"
+    - "commit"
+    - "push"
+    - "branch"
+  intents:
+    - "hotfix"
+    - "pr"
+    - "commit"
+    - "status"
 ---
 
 # Git Skill

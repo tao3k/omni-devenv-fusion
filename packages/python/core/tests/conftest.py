@@ -8,6 +8,39 @@ from typing import Any
 
 import pytest
 
+# =============================================================================
+# Test Stratification Markers
+# =============================================================================
+#
+# Tests are categorized into three tiers:
+# - unit: Pure unit tests (mock all external dependencies)
+# - local: Local integration tests (real services, no network calls)
+# - cloud: Cloud integration tests (requires network/CI environment)
+#
+# Usage:
+#   pytest -m unit       # Run unit tests only
+#   pytest -m local     # Run local integration tests
+#   pytest -m cloud     # Run cloud integration tests
+#   pytest              # Run all tests
+# =============================================================================
+
+
+def pytest_configure(config):
+    """Configure pytest with custom markers for test stratification."""
+    config.addinivalue_line(
+        "markers", "unit: marks tests as pure unit tests (mock all dependencies)"
+    )
+    config.addinivalue_line(
+        "markers", "local: marks tests as local integration tests (real services, no network)"
+    )
+    config.addinivalue_line(
+        "markers", "cloud: marks tests as cloud integration tests (requires network/CI)"
+    )
+    config.addinivalue_line(
+        "markers", "slow: marks tests as slow running (for performance tracking)"
+    )
+
+
 # Core specific fixtures are now loaded from omni-test-kit-core plugin
 
 

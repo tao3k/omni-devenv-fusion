@@ -38,7 +38,7 @@ class TestSmartCommitWorkflowModular:
         # 1. Start workflow
         (temp_git_repo / "file.txt").write_text("content")
         # Direct call to get result dict for easier ID extraction
-        from git.scripts.smart_commit_workflow import _start_smart_commit_async
+        from git.scripts.smart_commit_graphflow.commands import _start_smart_commit_async
 
         start_result = await _start_smart_commit_async()
         workflow_id = start_result.get("workflow_id")
@@ -121,7 +121,7 @@ pre-commit:
         3. User approves - ALL modified files should be included in commit
         """
         import subprocess
-        from git.scripts.smart_commit_workflow import (
+        from git.scripts.smart_commit_graphflow.commands import (
             _start_smart_commit_async,
             _approve_smart_commit_async,
         )
@@ -268,7 +268,7 @@ pre-commit:
         """
         import subprocess
         import shutil
-        from git.scripts.smart_commit_workflow import (
+        from git.scripts.smart_commit_graphflow.commands import (
             _start_smart_commit_async,
             _approve_smart_commit_async,
         )

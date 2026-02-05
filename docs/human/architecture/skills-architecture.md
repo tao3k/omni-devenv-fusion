@@ -45,21 +45,23 @@ Every skill MUST have a `SKILL.md` with YAML frontmatter:
 
 ````yaml
 ---
-name: "git"
-version: "2.0.0"
-description: "Git integration with LangGraph workflow support, Smart Commit V2, and Spec-Awareness"
-routing_keywords:
-  - "git"
-  - "commit"
-  - "push"
-  - "branch"
-  - "hotfix"
-intents:
-  - "hotfix"
-  - "pr"
-  - "commit"
-  - "status"
-authors: ["omni-dev-fusion"]
+name: git
+description: Use when working with version control, commits, branches, or Git operations.
+metadata:
+  author: omni-dev-fusion
+  version: "2.0.0"
+  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/git"
+  routing_keywords:
+    - "git"
+    - "commit"
+    - "push"
+    - "branch"
+    - "hotfix"
+  intents:
+    - "hotfix"
+    - "pr"
+    - "commit"
+    - "status"
 ---
 
 # Git Skill

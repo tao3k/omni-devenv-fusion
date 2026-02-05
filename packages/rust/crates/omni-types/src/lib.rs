@@ -301,6 +301,7 @@ impl EnvironmentSnapshot {
 /// Schema generation error
 #[derive(Debug, thiserror::Error)]
 pub enum SchemaError {
+    /// The requested type name is not registered.
     #[error("Unknown type: {0}")]
     UnknownType(String),
 }

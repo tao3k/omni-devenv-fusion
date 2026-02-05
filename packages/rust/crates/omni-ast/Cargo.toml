@@ -15,15 +15,17 @@ ast-grep-config = "0.40.5"
 
 # Common utilities
 serde = { workspace = true, features = ["derive"] }
-anyhow = "1.0"
+anyhow = { workspace = true }
 thiserror = { workspace = true }
 
 # File traversal
-walkdir = "2.5"
+walkdir = { workspace = true }
 omni-io = { path = "../omni-io" }
+tree-sitter = "0.26.5"
+tree-sitter-python = "0.25.0"
 
 [dev-dependencies]
-tempfile = "3"
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

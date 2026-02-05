@@ -1,5 +1,5 @@
 {# git/commit_message.j2 - Commit Message Template #}
-{# Variables: subject, body, timestamp, commit_hash, file_count, verified_by, security_status, workflow_id, commit_type, commit_scope #}
+{# Variables: subject, body, timestamp, commit_hash, file_count, verified_by, security_status, workflow_id, commit_type, commit_scope, submodule_section #}
 
 {%- if status == "committed" -%}
 ## ✅ Commit Successful!
@@ -7,6 +7,12 @@
 **{{ commit_type }}({{ commit_scope }}): {{ subject }}**
 
 {{ body }}
+
+{% if submodule_section %}
+---
+
+{{ submodule_section }}
+{% endif %}
 
 ---
 

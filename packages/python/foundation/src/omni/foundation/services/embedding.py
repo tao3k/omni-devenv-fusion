@@ -190,10 +190,25 @@ Example: 0.5,0.3,-0.2,0.8,0.1,0.9,-0.5,0.2,0.7,-0.1,0.4,0.6,-0.3,0.8,0.0,0.5"""
     def _embed_with_llm(self, text: str) -> list[list[float]]:
         """Generate embedding using LLM (sync wrapper)."""
         try:
-            return asyncio.run(self._embed_with_llm_async(text))
+            return self._run_async(self._embed_with_llm_async(text))
         except Exception as e:
             logger.error(f"LLM embed failed: {e}")
             return [self._simple_embed(text, 1024)]
+
+    def _run_async(self, coro):
+        """Run async code, handling event loop properly."""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Already in event loop - use nest_asyncio pattern
+                import nest_asyncio
+
+                nest_asyncio.apply()
+                return loop.run_until_complete(coro)
+        except RuntimeError:
+            pass
+        # No event loop exists
+        return asyncio.run(coro)
 
     def _embed_with_fastembed(self, text: str) -> list[list[float]]:
         """Generate embedding using FastEmbed."""
@@ -281,7 +296,7 @@ Example: 0.5,0.3,-0.2,0.8,0.1,0.9,-0.5,0.2,0.7,-0.1,0.4,0.6,-0.3,0.8,0.0,0.5"""
         try:
             # Overall timeout for entire batch (60s per item with 10s buffer)
             total_timeout = min(60.0 * len(texts), 300.0)  # Max 5 minutes
-            return asyncio.run(asyncio.wait_for(embed_all(), timeout=total_timeout))
+            return self._run_async(asyncio.wait_for(embed_all(), timeout=total_timeout))
         except asyncio.TimeoutError:
             logger.error(f"Batch embed timed out after {total_timeout}s, using hash fallback")
             return [self._simple_embed(text, self._dimension) for text in texts]

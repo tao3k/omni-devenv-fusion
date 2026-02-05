@@ -102,10 +102,35 @@ async def _execute_task_via_kernel(task: str, max_steps: int | None, verbose: bo
     await kernel.start()
 
     try:
-        # First try direct routing
+        # First try direct routing via OmniRouter
         from omni.core.router.main import RouterRegistry
 
         router = RouterRegistry.get("run_command")
+
+        # Initialize router with skills from kernel's skill context
+        skills_data = []
+        for skill in kernel.skill_context._skills.values():
+            cmd_names = skill.list_commands() if hasattr(skill, "list_commands") else []
+            commands = []
+            for cmd_name in cmd_names:
+                handler = skill.get_command(cmd_name)
+                cmd_keywords = []
+                cmd_desc = ""
+                if handler and hasattr(handler, "_skill_config"):
+                    cmd_keywords = handler._skill_config.get("keywords", [])
+                    cmd_desc = handler._skill_config.get("description", "")
+                commands.append(
+                    {"name": cmd_name, "description": cmd_desc, "keywords": cmd_keywords}
+                )
+            skills_data.append(
+                {
+                    "name": skill.name,
+                    "description": getattr(skill.metadata, "description", ""),
+                    "commands": commands,
+                }
+            )
+
+        await router.initialize(skills_data)
         route_result = await router.route(task)
 
         if route_result and getattr(route_result, "command_name", None):

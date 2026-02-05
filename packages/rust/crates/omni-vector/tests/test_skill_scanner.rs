@@ -1,17 +1,23 @@
 //! Tests for SkillScanner - SKILL.md parsing.
 
-use skills_scanner::{SkillScanner, SkillStructure, ToolsScanner};
+use omni_scanner::{SkillScanner, SkillStructure, ToolsScanner, extract_frontmatter};
 use tempfile::TempDir;
 
 #[test]
 fn test_parse_skill_md_with_frontmatter() {
     let content = r#"---
-name: "writer"
-version: "1.1.0"
-description: "Text manipulation skill"
-routing_keywords: ["write", "edit", "polish"]
-authors: ["omni-dev-fusion"]
-intents: ["Update documentation"]
+name: writer
+description: Use when editing files or writing documentation
+metadata:
+  author: omni-dev-fusion
+  version: "1.1.0"
+  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/writer"
+  routing_keywords:
+    - "write"
+    - "edit"
+    - "polish"
+  intents:
+    - "Update documentation"
 ---
 
 # Writer Skill
@@ -26,7 +32,10 @@ intents: ["Update documentation"]
 
     assert_eq!(manifest.skill_name, "writer");
     assert_eq!(manifest.version, "1.1.0");
-    assert_eq!(manifest.description, "Text manipulation skill");
+    assert_eq!(
+        manifest.description,
+        "Use when editing files or writing documentation"
+    );
     assert_eq!(manifest.routing_keywords, vec!["write", "edit", "polish"]);
     assert_eq!(manifest.authors, vec!["omni-dev-fusion"]);
     assert_eq!(manifest.intents, vec!["Update documentation"]);
@@ -112,7 +121,7 @@ version: "1.0"
 # Content
 "#;
 
-    let frontmatter = skills_scanner::skill_scanner::extract_frontmatter(content).unwrap();
+    let frontmatter = extract_frontmatter(content).unwrap();
     assert!(frontmatter.contains("name:"));
     assert!(frontmatter.contains("version:"));
 }
@@ -120,7 +129,7 @@ version: "1.0"
 #[test]
 fn test_extract_frontmatter_no_frontmatter() {
     let content = "# Just content\nNo frontmatter here.";
-    assert!(skills_scanner::skill_scanner::extract_frontmatter(content).is_none());
+    assert!(extract_frontmatter(content).is_none());
 }
 
 /// Regression test: Verify routing keywords are scanned from SKILL.md

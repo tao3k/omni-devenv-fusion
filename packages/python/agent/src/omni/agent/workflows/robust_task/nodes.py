@@ -220,6 +220,9 @@ async def clarify_node(state: RobustTaskState) -> Dict[str, Any]:
             query=state["user_request"],
             limit=3,
         )
+        logger.info(
+            f"workflow.hippocampus_recall_result: query={state['user_request']}, count={len(experiences)}"
+        )
         if experiences:
             exp_parts = ["# Relevant Past Experiences:\n"]
             for i, exp in enumerate(experiences[:3], 1):
@@ -227,14 +230,32 @@ async def clarify_node(state: RobustTaskState) -> Dict[str, Any]:
                 exp_parts.append(f"Task: {exp.task_description}")
                 if exp.nu_pattern:
                     exp_parts.append(f"Approach: {exp.nu_pattern}")
+                # Include actual steps if available
+                if exp.steps:
+                    steps_text = []
+                    for s in exp.steps[:3]:
+                        # ExecutionStep is a Pydantic model, access attributes directly
+                        cmd = (
+                            getattr(s, "command", str(s))
+                            if not isinstance(s, dict)
+                            else s.get("command", str(s))
+                        )
+                        out = (
+                            getattr(s, "output", "")
+                            if not isinstance(s, dict)
+                            else s.get("output", "")[:100]
+                        )
+                        steps_text.append(f"  - {cmd}: {out}")
+                    exp_parts.append("Steps:\n" + "\n".join(steps_text))
                 exp_parts.append("")
             experience_context = "\n".join(exp_parts)
             logger.info(
-                "workflow.hippocampus_experiences_for_clarification",
-                count=len(experiences),
+                f"workflow.hippocampus_experiences_for_clarification: count={len(experiences)}"
             )
+        else:
+            logger.info(f"workflow.no_experiences_found: query={state['user_request']}")
     except Exception as e:
-        logger.debug("workflow.hippocampus_recall_failed", error=str(e))
+        logger.warning(f"workflow.hippocampus_recall_failed: {e}")
 
     prompt = CLARIFICATION_PROMPT.format(
         user_request=state["user_request"],
@@ -293,10 +314,53 @@ async def plan_node(state: RobustTaskState) -> Dict[str, Any]:
     # DEBUG: Check if feedback is received
     trace = record_event("system_log", {"msg": f"Planning with feedback: {user_feedback}"})
 
+    # [HIPPOCAMPS] Recall relevant experiences for planning
+    experience_context = ""
+    try:
+        from omni.agent.core.memory.hippocampus import get_hippocampus
+
+        hippocampus = get_hippocampus()
+        experiences = await hippocampus.recall_experience(
+            query=state.get("clarified_goal", state.get("user_request", "")),
+            limit=3,
+        )
+        if experiences:
+            exp_parts = ["# Relevant Past Experiences:\n"]
+            for i, exp in enumerate(experiences[:3], 1):
+                exp_parts.append(f"## Experience {i} (confidence: {exp.similarity_score:.2f})")
+                exp_parts.append(f"Task: {exp.task_description}")
+                if exp.nu_pattern:
+                    exp_parts.append(f"Approach: {exp.nu_pattern}")
+                if exp.steps:
+                    steps_text = []
+                    for s in exp.steps[:3]:
+                        cmd = (
+                            getattr(s, "command", str(s))
+                            if not isinstance(s, dict)
+                            else s.get("command", str(s))
+                        )
+                        out = (
+                            getattr(s, "output", "")
+                            if not isinstance(s, dict)
+                            else s.get("output", "")[:100]
+                        )
+                        steps_text.append(f"  - {cmd}: {out}")
+                    exp_parts.append("Steps:\n" + "\n".join(steps_text))
+                exp_parts.append("")
+            experience_context = "\n".join(exp_parts)
+            logger.info(f"workflow.plan_hippocampus_experiences: count={len(experiences)}")
+    except Exception as e:
+        logger.debug(f"workflow.plan_hippocampus_recall_failed: {e}")
+
+    # Combine memory_context and experience_context
+    full_memory_context = memory_str
+    if experience_context:
+        full_memory_context = f"{memory_str}\n\n{experience_context}"
+
     prompt = PLANNING_PROMPT.format(
         goal=state["clarified_goal"],
         context=str(state.get("context_files", [])),
-        memory_context=memory_str,
+        memory_context=full_memory_context,
         user_feedback=user_feedback,
         tools=tools_str,
     )
@@ -536,8 +600,27 @@ async def validate_node(state: RobustTaskState) -> Dict[str, Any]:
     is_valid = "PASS" in verdict.upper()
     trace = record_event("validation", {"verdict": verdict})
 
-    # [HIPPOCAMPS] Store successful execution as experience
-    if is_valid:
+    # [HIPPOCAMPS] Store only valuable learning
+    # NOTE: We don't store successful first-try simple tasks - no learning value
+    # Only store when there's something to learn:
+    # 1. Retry recovery (retry_count > 0): Learned from failure
+    # 2. Complex multi-step (steps > 1): Valuable execution pattern
+
+    should_store = False
+    store_reason = ""
+
+    # Condition 1: Retry recovery - learned from failure
+    if is_valid and state.get("retry_count", 0) > 0:
+        should_store = True
+        store_reason = "retry_recovery"
+
+    # Condition 2: Complex multi-step execution - valuable pattern
+    trace_steps_count = len(state.get("execution_history", []))
+    if is_valid and trace_steps_count > 1:
+        should_store = True
+        store_reason = "complex_execution"
+
+    if should_store:
         try:
             from omni.agent.core.memory.hippocampus import (
                 get_hippocampus,
@@ -546,13 +629,10 @@ async def validate_node(state: RobustTaskState) -> Dict[str, Any]:
 
             hippocampus = get_hippocampus()
 
-            # Create trace from execution history
-            plan = state.get("plan", {})
-
             # Convert execution history to steps
-            trace_steps = []
+            steps = []
             for i, history_item in enumerate(state.get("execution_history", [])):
-                trace_steps.append(
+                steps.append(
                     {
                         "command": f"Step {i + 1}",
                         "output": history_item,
@@ -561,37 +641,18 @@ async def validate_node(state: RobustTaskState) -> Dict[str, Any]:
                     }
                 )
 
-            if trace_steps:
-                # Use a different variable name to avoid overwriting the trace list
-                hippocampus_trace = await create_hippocampus_trace(
+            if steps:
+                trace_obj = await create_hippocampus_trace(
                     task_description=state.get("clarified_goal", state.get("user_request", "")),
-                    steps=trace_steps,
+                    steps=steps,
                     success=True,
                     domain="task_execution",
-                    tags=["workflow_execution"],
+                    tags=[store_reason, "workflow_execution"],
                 )
-                await hippocampus.commit_to_long_term_memory(hippocampus_trace)
-                trace.extend(record_event("hippocampus", {"msg": "Experience stored"}))
+                await hippocampus.commit_to_long_term_memory(trace_obj)
+                trace.extend(record_event("hippocampus", {"msg": f"Stored {store_reason}"}))
         except Exception as e:
             trace.extend(record_event("error", {"msg": f"Failed to store experience: {e}"}))
-
-    # Automatic Lesson Learning
-    if is_valid and state.get("retry_count", 0) > 0:
-        try:
-            lesson_content = f"Task: {state['user_request']}.\nOutcome: Initially failed, then succeeded.\nFix Strategy: {thought}"
-            trace.extend(record_event("learning", {"msg": "Storing lesson from failure recovery"}))
-            from omni.agent.workflows.memory.graph import build_memory_graph
-
-            memory_app = build_memory_graph()
-            await memory_app.ainvoke(
-                {
-                    "content": lesson_content,
-                    "mode": "store",
-                    "query": "lesson learned error recovery",
-                }
-            )
-        except Exception as e:
-            trace.extend(record_event("error", {"msg": f"Failed to store lesson: {e}"}))
 
     return {
         "validation_result": {"is_valid": is_valid, "feedback": feedback},

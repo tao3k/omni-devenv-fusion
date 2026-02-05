@@ -18,7 +18,7 @@ Usage:
     # Use unified router
     router = OmniRouter()
     await router.initialize(skills)
-    result = await router.route("帮我提交代码")
+    result = await router.route("commit the changes")
 
     # Or use hybrid search directly (Rust-native)
     results = await router.hybrid.search("git commit", limit=5)

@@ -7,7 +7,7 @@ Provides skill management:
 - discovery: Skill finder
 - memory: Skill memory management (Rust-Native Context Hydration)
 - extensions: Extension loading system
-- script_loader: Script loading with auto-wiring
+- tools_loader: Script loading with auto-wiring
 - universal: Zero-Code Skill container
 - index_loader: Rust-generated skill index loader
 - file_cache: Thread-safe file content cache
@@ -82,12 +82,11 @@ from .runtime import (
     run_command,
 )
 
-# Script loader module
-from .script_loader import (
-    ScriptLoader,
-    SkillScriptLoader,
-    create_script_loader,
-    # skill_command removed - use omni.foundation.api.decorators.skill_command
+# Tools loader module
+from .tools_loader import (
+    ToolsLoader,
+    create_tools_loader,
+    _skill_command_registry,
 )
 
 # Universal skill module
@@ -140,10 +139,10 @@ __all__ = [
     "SkillExtensionLoader",
     "ExtensionWrapper",
     "get_extension_loader",
-    # Script Loader
-    "ScriptLoader",
-    "SkillScriptLoader",
-    "create_script_loader",
+    # Tools Loader
+    "ToolsLoader",
+    "create_tools_loader",
+    "_skill_command_registry",
     # Universal
     "UniversalScriptSkill",
     "UniversalSkillFactory",

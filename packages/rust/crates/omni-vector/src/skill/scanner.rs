@@ -5,9 +5,23 @@
 //! - routing_keywords for hybrid search
 //! - Authors and intents
 //!
-//! Follows the skill structure defined in settings.yaml:
-//! - Required: SKILL.md (skill metadata)
-//! - Required: scripts/commands.py (MCP tools)
+//! Follows Anthropic official SKILL.md format:
+//! ```yaml
+//! ---
+//! name: <skill-identifier>
+//! description: Use when <use-case-1>, <use-case-2>, or <use-case-3>.
+//! metadata:
+//!   author: <name>
+//!   version: "x.x.x"
+//!   source: <url>
+//!   routing_keywords:
+//!     - "keyword1"
+//!     - "keyword2"
+//!   intents:
+//!     - "Intent description 1"
+//!     - "Intent description 2"
+//! ---
+//! ```
 
 use std::fs;
 use std::path::Path;
@@ -133,33 +147,77 @@ impl SkillScannerModule {
             }
         };
 
-        // Parse YAML frontmatter
-        let manifest: SkillFrontmatter = serde_yaml::from_str(&frontmatter)?;
+        // Parse YAML frontmatter (Anthropic official format)
+        let frontmatter_parsed: SkillFrontmatter = serde_yaml::from_str(&frontmatter)?;
+
+        // Extract from metadata block (new format)
+        let (version, routing_keywords, authors, intents) = match &frontmatter_parsed.metadata {
+            Some(meta) => (
+                meta.version.clone().unwrap_or_default(),
+                meta.routing_keywords.clone().unwrap_or_default(),
+                // Support both "author" (single) and "authors" (multiple)
+                if let Some(authors_vec) = &meta.authors {
+                    authors_vec.clone()
+                } else if let Some(a) = &meta.author {
+                    vec![a.clone()]
+                } else {
+                    Vec::new()
+                },
+                meta.intents.clone().unwrap_or_default(),
+            ),
+            None => {
+                log::warn!("No metadata block found in SKILL.md for: {}", skill_name);
+                (String::new(), Vec::new(), Vec::new(), Vec::new())
+            }
+        };
 
         Ok(SkillManifest {
             skill_name,
-            version: manifest.version.unwrap_or_default(),
-            description: manifest.description.unwrap_or_default(),
-            routing_keywords: manifest.routing_keywords.unwrap_or_default(),
-            authors: manifest.authors.unwrap_or_default(),
-            intents: manifest.intents.unwrap_or_default(),
+            version,
+            description: frontmatter_parsed.description.unwrap_or_default(),
+            routing_keywords,
+            authors,
+            intents,
         })
     }
 }
 
-/// YAML frontmatter structure (inner YAML in SKILL.md).
+/// YAML frontmatter structure (Anthropic official format).
+///
+/// ```yaml
+/// ---
+/// name: <skill>
+/// description: Use when...
+/// metadata:
+///   author: <name>
+///   version: "x.x.x"
+///   source: <url>
+///   routing_keywords: [...]
+///   intents: [...]
+/// ---
+/// ```
 #[derive(Debug, Deserialize, PartialEq, Default)]
 struct SkillFrontmatter {
     #[serde(default)]
     name: Option<String>,
     #[serde(default)]
-    version: Option<String>,
-    #[serde(default)]
     description: Option<String>,
     #[serde(default)]
-    routing_keywords: Option<Vec<String>>,
+    metadata: Option<SkillMetadata>,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Default)]
+struct SkillMetadata {
+    #[serde(default)]
+    author: Option<String>,
     #[serde(default)]
     authors: Option<Vec<String>>,
+    #[serde(default)]
+    version: Option<String>,
+    #[serde(default)]
+    source: Option<String>,
+    #[serde(default)]
+    routing_keywords: Option<Vec<String>>,
     #[serde(default)]
     intents: Option<Vec<String>>,
 }

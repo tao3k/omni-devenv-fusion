@@ -1,0 +1,246 @@
+# MCP Tool Schema Specification
+#
+# Cross-language schema definition for Omni-Dev-Fusion MCP Tools.
+# Used for code generation (Python, Rust) and validation.
+#
+
+"$schema": "http://json-schema.org/draft-07/schema#"
+"$id": "https://omni.dev/schema/tool/v1"
+
+definitions:
+  # ---------------------------------------------------------------------------
+  # Tool Metadata
+  # ---------------------------------------------------------------------------
+  ToolMetadata:
+    type: object
+    properties:
+      name:
+        type: string
+        description: Unique tool identifier (e.g., "git.commit")
+      fullName:
+        type: string
+        description: Fully qualified name including skill (e.g., "git.commit")
+      description:
+        type: string
+        description: Human-readable description for LLM context
+      category:
+        type: string
+        description: Tool category (e.g., "version_control", "code_search")
+      version:
+        type: string
+        description: Tool version
+        default: "1.0.0"
+      deprecated:
+        type: boolean
+        description: Whether tool is deprecated
+        default: false
+
+  # ---------------------------------------------------------------------------
+  # MCP Annotations
+  # ---------------------------------------------------------------------------
+  MCPAnnotations:
+    type: object
+    properties:
+      title:
+        type: string
+        description: Short title for display
+      readOnlyHint:
+        type: boolean
+        description: Tool does not modify environment
+        default: false
+      destructiveHint:
+        type: boolean
+        description: Tool performs destructive updates
+        default: false
+      idempotentHint:
+        type: boolean
+        description: Same input produces same output
+        default: false
+      openWorldHint:
+        type: boolean
+        description: Tool interacts with external systems
+        default: false
+
+  # ---------------------------------------------------------------------------
+  # Parameters
+  # ---------------------------------------------------------------------------
+  ToolParameter:
+    type: object
+    properties:
+      type:
+        type: string
+        description: JSON Schema type
+        enum:
+          - string
+          - number
+          - integer
+          - boolean
+          - array
+          - object
+          - "null"
+      description:
+        type: string
+        description: Parameter description for LLM
+      required:
+        type: boolean
+        description: Whether parameter is required
+        default: false
+      default: {}
+      enum:
+        type: array
+        description: Allowed values
+      minLength:
+        type: integer
+        description: Minimum string length
+      maxLength:
+        type: integer
+        description: Maximum string length
+      minimum:
+        type: number
+        description: Minimum numeric value
+      maximum:
+        type: number
+        description: Maximum numeric value
+      pattern:
+        type: string
+        description: Regex pattern for validation
+
+  ToolParameters:
+    type: object
+    properties:
+      type:
+        type: string
+        const: "object"
+      properties:
+        type: object
+        additionalProperties:
+          "$ref": "#/definitions/ToolParameter"
+      required:
+        type: array
+        items:
+          type: string
+        description: List of required parameter names
+
+  # ---------------------------------------------------------------------------
+  # Variants
+  # ---------------------------------------------------------------------------
+  ToolVariant:
+    type: object
+    properties:
+      name:
+        type: string
+        description: Variant identifier (e.g., "rust", "local", "remote")
+      description:
+        type: string
+        description: Variant description
+      priority:
+        type: integer
+        description: Selection priority (lower = higher priority)
+        default: 100
+      status:
+        type: string
+        enum:
+          - available
+          - degraded
+          - unavailable
+        default: available
+      capabilities:
+        type: array
+        items:
+          type: string
+        description: Variant-specific capabilities
+
+  # ---------------------------------------------------------------------------
+  # Response Schema
+  # ---------------------------------------------------------------------------
+  ResponseStatus:
+    type: string
+    enum:
+      - success
+      - error
+      - blocked
+      - partial
+
+  ToolResponse:
+    type: object
+    properties:
+      status:
+        "$ref": "#/definitions/ResponseStatus"
+      data: {}
+      error_message:
+        type: string
+        description: Error message for failed operations
+      error_code:
+        type: string
+        description: Machine-readable error code (e.g., "3001")
+      metadata:
+        type: object
+        description: Additional context information
+      timestamp:
+        type: string
+        format: date-time
+        description: Response timestamp
+
+# ---------------------------------------------------------------------------
+# Main Tool Schema Document
+# ---------------------------------------------------------------------------
+type: object
+properties:
+  "$schema":
+    type: string
+    const: "https://omni.dev/schema/tool/v1"
+  info:
+    type: object
+    properties:
+      name:
+        type: string
+      version:
+        type: string
+      generated_at:
+        type: string
+        format: date-time
+  tools:
+    type: array
+    items:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Tool identifier
+        description:
+          type: string
+          description: Tool description for LLM context
+        category:
+          type: string
+          description: Tool category
+        annotations:
+          "$ref": "#/definitions/MCPAnnotations"
+        parameters:
+          "$ref": "#/definitions/ToolParameters"
+        variants:
+          type: array
+          items:
+            "$ref": "#/definitions/ToolVariant"
+          description: Available implementations
+        default_variant:
+          type: string
+          description: Default variant name
+        execution:
+          type: object
+          properties:
+            retry_on:
+              type: array
+              items:
+                type: string
+            max_attempts:
+              type: integer
+            cache_ttl:
+              type: number
+        required:
+          type: array
+          items:
+            type: string
+      required:
+        - name
+        - description
+        - parameters

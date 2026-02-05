@@ -442,7 +442,7 @@ def format_recall_results(json_output: str) -> str:
             section = result.get("section", "")
             source = result.get("source", "")
             score = result.get("score", 0)
-            content = result.get("content", "")[:400]
+            content = result.get("content", "")
 
             lines.append(f"## {i}. {title}")
             if section:
@@ -450,7 +450,7 @@ def format_recall_results(json_output: str) -> str:
             lines.append(f"**Relevance**: {score:.1%}")
             lines.append(f"**Source**: `{source}`")
             lines.append("")
-            lines.append(f"> {content}...")
+            lines.append(f"> {content}")
             lines.append("")
             lines.append("---")
             lines.append("")

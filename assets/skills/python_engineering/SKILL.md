@@ -1,33 +1,33 @@
 ---
-name: "python_engineering"
-version: "1.1.0"
-description: "Python development utilities including linting, testing, and Pydantic standards. Supports Python 3.12+ modernization."
-routing_keywords:
-  [
-    "python",
-    "lint",
-    "format",
-    "type check",
-    "pytest",
-    "pep8",
-    "pydantic",
-    "type hints",
-    "typing",
-    "ruff",
-    "black",
-    "modernize",
-    "upgrade",
-    "refactor 3.12",
-    "match case",
-    "override",
-  ]
-authors: ["omni-dev-fusion"]
-intents:
-  - "Python linting and formatting"
-  - "Check Python imports"
-  - "Python type checking"
-  - "Pytest testing"
-  - "Modernize Python code to 3.12+ standards"
+name: python_engineering
+description: Use when linting Python code, formatting with ruff/black, running pytest tests, type checking with pyright, or modernizing Python 3.12+ standards.
+metadata:
+  author: omni-dev-fusion
+  version: "1.1.0"
+  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/python_engineering"
+  routing_keywords:
+    - "python"
+    - "lint"
+    - "format"
+    - "type check"
+    - "pytest"
+    - "pep8"
+    - "pydantic"
+    - "type hints"
+    - "typing"
+    - "ruff"
+    - "black"
+    - "modernize"
+    - "upgrade"
+    - "refactor 3.12"
+    - "match case"
+    - "override"
+  intents:
+    - "Python linting and formatting"
+    - "Check Python imports"
+    - "Python type checking"
+    - "Pytest testing"
+    - "Modernize Python code to 3.12+ standards"
 ---
 
 # Python Engineering Skill Policy
@@ -52,7 +52,3 @@ See [lang-python-modern.md](../knowledge/references/standards/lang-python-modern
 - `run_pytest` - Execute test suite
 - `check_types` - Run pyright type checking
 - `format_python` - Format code with ruff/black
-
-## Routing Keywords
-
-Python, lint, format, type check, pytest, pep8, pydantic, type hints, typing, ruff, black, modernize, upgrade, refactor 3.12, match case, override

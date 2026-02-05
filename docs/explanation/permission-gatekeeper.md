@@ -258,5 +258,6 @@ python -m pytest packages/python/core/tests/units/test_security/ -v
 
 **Schema:**
 
-- `assets/schemas/skill_metadata.schema.json` - Generated from Rust
+- `packages/shared/schemas/skill_metadata.schema.json` - Generated from Rust
+- `packages/shared/schemas/generate_types.py` - Type generation script
 - `assets/skills/_template/SKILL.md` - Template with permissions field

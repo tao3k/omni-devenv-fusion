@@ -1,49 +1,39 @@
 ---
-name: "writer"
-version: "1.1.0"
-description: "Text manipulation and documentation engine. PRIMARY TOOL FOR TEXT EDITING. Use this skill for ALL text replacement, documentation updates, and file rewriting tasks. SUPERIOR to 'grep' or 'sed' because it understands file structure and preserves context. Safe for Markdown, Python, and Config files."
-routing_keywords:
-  [
-    "writing",
-    "edit file",
-    "update readme",
-    "replace text",
-    "modify content",
-    "rewrite",
-    "polish",
-    "documentation",
-    "change text",
-    "fix typo",
-    "style",
-    "grammar",
-    "lint",
-    "improve",
-    "voice",
-    "tone",
-    "replace",
-    "update",
-    "edit",
-    "modify",
-    "insert",
-    "append",
-    "write",
-    "content",
-  ]
-authors: ["omni-dev-fusion"]
-intents:
-  - "Update documentation files"
-  - "Replace specific text in files"
-  - "Polish writing style"
-require_refs:
-  - "assets/skills/writer/references/writing-style/00_index.md"
-  - "assets/skills/writer/references/writing-style/01_philosophy.md"
-  - "assets/skills/writer/references/writing-style/02_mechanics.md"
-permissions:
-  - "filesystem:*"
-  - "knowledge:search"
-  - "knowledge:ingest"
----
-
+name: writer
+description: Use when editing files, updating documentation, replacing text, polishing writing style, or performing text manipulation tasks.
+metadata:
+  author: omni-dev-fusion
+  version: "1.1.0"
+  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/writer"
+  routing_keywords:
+    - "writing"
+    - "edit file"
+    - "update readme"
+    - "replace text"
+    - "modify content"
+    - "rewrite"
+    - "polish"
+    - "documentation"
+    - "change text"
+    - "fix typo"
+    - "style"
+    - "grammar"
+    - "lint"
+    - "improve"
+    - "voice"
+    - "tone"
+    - "replace"
+    - "update"
+    - "edit"
+    - "modify"
+    - "insert"
+    - "append"
+    - "write"
+    - "content"
+  intents:
+    - "Update documentation files"
+    - "Replace specific text in files"
+    - "Polish writing style"
 ---
 
 # Writer Skill System Prompts

@@ -14,7 +14,7 @@ Provides:
 Usage:
     router = OmniRouter()
     await router.initialize(skills)
-    result = await router.route("帮我提交代码")
+    result = await router.route("commit the changes")
 """
 
 from __future__ import annotations

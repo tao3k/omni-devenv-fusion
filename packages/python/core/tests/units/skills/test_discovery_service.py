@@ -217,23 +217,23 @@ class TestGenerateUsageTemplate:
 class TestDiscoveredSkill:
     """Tests for the DiscoveredSkill class."""
 
-    def test_from_index_entry(self):
-        """Verify DiscoveredSkill creation from index entry."""
+    def test_from_tool_record(self):
+        """Verify DiscoveredSkill creation from tool record (RustVectorStore)."""
         from omni.core.skills.discovery import DiscoveredSkill
-        from omni.foundation.bridge.scanner import DiscoveredSkillRules
 
-        # Create a mock entry
-        entry = DiscoveredSkillRules(
-            skill_name="test_skill",
-            skill_path="/path/to/test_skill",
-            metadata={"version": "1.0.0"},
-        )
+        # Create a mock tool record
+        tool = {
+            "skill_name": "test_skill",
+            "file_path": "/path/to/assets/skills/test_skill/scripts/tool.py",
+            "description": "A test skill",
+            "tool_name": "test_skill.tool",
+        }
 
-        skill = DiscoveredSkill.from_index_entry(entry)
+        skill = DiscoveredSkill.from_tool_record(tool)
 
         assert skill.name == "test_skill"
-        assert skill.path == "/path/to/test_skill"
-        assert skill.metadata["version"] == "1.0.0"
+        assert "assets/skills/test_skill" in skill.path
+        assert skill.metadata["description"] == "A test skill"
 
 
 class TestToolMatch:

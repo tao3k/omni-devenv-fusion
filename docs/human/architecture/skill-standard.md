@@ -30,16 +30,29 @@ assets/skills/<skill_name>/
 
 ## SKILL.md Format
 
-Every skill MUST have a `SKILL.md` with YAML frontmatter:
+Every skill MUST have a `SKILL.md` with YAML frontmatter using the Anthropic official format:
 
 ````markdown
 ---
-name: "git"
-version: "2.0.0"
-description: "Git integration with Smart Commit V2 and Spec-Awareness"
-routing_keywords: ["git", "commit", "push", "pull", "merge", "branch"]
-intents: ["hotfix", "pr", "branch", "commit", "stash"]
-authors: ["omni-dev-fusion"]
+name: git
+description: Use when working with version control, commits, branches, or Git operations.
+metadata:
+  author: omni-dev-fusion
+  version: "2.0.0"
+  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/git"
+  routing_keywords:
+    - "git"
+    - "commit"
+    - "push"
+    - "pull"
+    - "merge"
+    - "branch"
+  intents:
+    - "hotfix"
+    - "pr"
+    - "branch"
+    - "commit"
+    - "stash"
 ---
 
 # Skill Name

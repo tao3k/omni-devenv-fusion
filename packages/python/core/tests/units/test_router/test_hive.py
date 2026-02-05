@@ -63,11 +63,11 @@ class TestHiveRouter:
         )
 
         hive = HiveRouter(mock_semantic)
-        result = await hive.route("帮我提交代码")
+        result = await hive.route("commit the changes")
 
         assert result is not None
         assert result.skill_name == "git"
-        mock_semantic.route.assert_called_once_with("帮我提交代码")
+        mock_semantic.route.assert_called_once_with("commit the changes")
 
     @pytest.mark.asyncio
     async def test_route_returns_none_when_both_fail(self):

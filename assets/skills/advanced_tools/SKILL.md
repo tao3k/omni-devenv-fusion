@@ -1,45 +1,47 @@
 ---
-name: "advanced_tools"
-version: "1.2.0"
-description: "High-performance [FIND] and [SEARCH] engine for the project. Uses Rust-native tools (fd, ripgrep) to locate files and search code content with extreme speed. Includes safe batch refactoring."
-routing_keywords:
-  [
-    "find",
-    "search",
-    "locate",
-    "grep",
-    "ripgrep",
-    "rg",
-    "fd",
-    "discovery",
-    "explore",
-    "pattern",
-    "regex",
-    "match",
-    "content",
-    "text",
-    "files",
-    "codebase",
-    "batch",
-    "refactor",
-    "replace",
-    "directory",
-    "tree",
-  ]
-authors: ["omni-dev-fusion"]
-intents:
-  - "Find files by name, extension, or glob pattern"
-  - "Search for text or regex patterns in code content"
-  - "Locate specific files across the entire project"
-  - "Fast codebase exploration and discovery"
-  - "Batch find and replace across multiple files"
-  - "High-performance grep replacement"
-  - "Scan directory for files matching a pattern"
+name: advanced_tools
+description: Use when finding files by name, searching code content, locating patterns with regex, exploring codebase, or batch refactoring across multiple files.
+metadata:
+  author: omni-dev-fusion
+  version: "1.2.0"
+  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/advanced_tools"
+  routing_keywords:
+    - "find"
+    - "search"
+    - "locate"
+    - "grep"
+    - "ripgrep"
+    - "rg"
+    - "fd"
+    - "discovery"
+    - "explore"
+    - "pattern"
+    - "regex"
+    - "match"
+    - "content"
+    - "text"
+    - "files"
+    - "codebase"
+    - "batch"
+    - "refactor"
+    - "replace"
+    - "directory"
+    - "tree"
+  intents:
+    - "Find files by name, extension, or glob pattern"
+    - "Search for text or regex patterns in code content"
+    - "Locate specific files across the entire project"
+    - "Fast codebase exploration and discovery"
+    - "Batch find and replace across multiple files"
+    - "High-performance grep replacement"
+    - "Scan directory for files matching a pattern"
 ---
+
+# Advanced Tools (Find & Search) Skill
 
 You have loaded the **Advanced Tools (Find & Search) Skill**.
 
-## 🚀 The Search Engine of Agentic OS
+## The Search Engine of Agentic OS
 
 This skill is the **PRIMARY** gateway for locating anything in the project. It wraps high-performance Rust tools.
 
@@ -51,7 +53,7 @@ This skill is the **PRIMARY** gateway for locating anything in the project. It w
 
 ## Available Tools
 
-### 🔍 smart_find: Fast File Location
+### smart_find: Fast File Location
 
 **ALWAYS use this to find files.** Superior to `ls` or `list_directory` for discovery.
 
@@ -64,7 +66,7 @@ def smart_find(
 ) -> dict
 ```
 
-### 🧠 smart_search: Fast Code Search
+### smart_search: Fast Code Search
 
 **ALWAYS use this to find code content.** The gold standard for `grep`.
 
@@ -77,7 +79,7 @@ def smart_search(
 ) -> dict
 ```
 
-### 🛠️ batch_replace: Safe Refactoring
+### batch_replace: Safe Refactoring
 
 **RECOMMENDED for mass changes.** Always includes a dry-run preview.
 

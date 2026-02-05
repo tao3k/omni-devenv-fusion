@@ -1,32 +1,34 @@
 ---
-name: "documentation"
-version: "1.0.0"
-description: "Specialized skill for creating, updating, and indexing project documentation."
-routing_keywords:
-  [
-    "docs",
-    "documentation",
-    "readme",
-    "markdown",
-    "write docs",
-    "update docs",
-    "doc",
-    "guide",
-    "manual",
-    "tutorial",
-    "write about",
-    "document",
-    "writing",
-    "create doc",
-    "edit doc",
-  ]
-authors: ["omni-dev-fusion"]
-intents:
-  - "Read or update documentation"
-  - "Write README or guide"
-  - "Generate API documentation"
-  - "Document code changes"
+name: documentation
+description: Use when creating documentation, updating README files, writing guides, generating API docs, or documenting code changes.
+metadata:
+  author: omni-dev-fusion
+  version: "1.0.0"
+  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/documentation"
+  routing_keywords:
+    - "docs"
+    - "documentation"
+    - "readme"
+    - "markdown"
+    - "write docs"
+    - "update docs"
+    - "doc"
+    - "guide"
+    - "manual"
+    - "tutorial"
+    - "write about"
+    - "document"
+    - "writing"
+    - "create doc"
+    - "edit doc"
+  intents:
+    - "Read or update documentation"
+    - "Write README or guide"
+    - "Generate API documentation"
+    - "Document code changes"
 ---
+
+# Documentation Skill
 
 You have loaded the **Documentation Skill**.
 

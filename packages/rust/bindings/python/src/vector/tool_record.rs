@@ -1,6 +1,6 @@
 //! Tool Record - Python bindings for tool metadata
 
-use omni_vector::ToolRecord;
+use omni_scanner::ToolRecord;
 use pyo3::prelude::*;
 
 /// Python wrapper for ToolRecord

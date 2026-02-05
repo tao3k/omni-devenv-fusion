@@ -2,7 +2,7 @@
 
 > Long-Term Memory Interface for Self-Learning Agents
 > **Status**: Active
-> **Version**: v1.2 | 2026-01-27
+> **Version**: v1.3 | 2026-02-03
 > **Skill ID**: `memory`
 
 ## Overview
@@ -16,7 +16,18 @@
 | **Analogy**        | Hippocampus in brain = memory consolidation & recall |
 | **Implementation** | LanceDB + LLM Embedding (MiniMax-M2.1, 1024-dim)     |
 | **Purpose**        | "I remember doing that before"                       |
-| **Update**         | Runtime accumulation (per task execution)            |
+| **Update**         | Selective storage (only valuable learnings)          |
+
+### Storage Policy
+
+Hippocampus **only stores valuable learnings**, not every successful task:
+
+| Condition           | Store? | Reason                     |
+| ------------------- | ------ | -------------------------- |
+| Single-step success | ❌ No  | No learning value          |
+| Multi-step success  | ✅ Yes | Valuable execution pattern |
+| Retry → Success     | ✅ Yes | Learned from failure       |
+| Pure failure        | ❌ No  | Don't store failures       |
 
 ### Embedding Configuration
 
@@ -111,10 +122,27 @@ Do not include any other text."""
                                 ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                          Agent Runtime                                    │
-│  - OmniLoop injects memories before task execution (EpisodicMemoryProvider)
-│  - Harvester extracts rules after task completion                        │
-│  - NoteTaker persists wisdom notes                                       │
+│  - Clarify/Plan Node: Recall via hippocampus.recall_experience()        │
+│  - Validate Node: Store only on retry_recovery or complex_execution     │
+│  - NoteTaker: Persists wisdom notes                                     │
 └──────────────────────────────────────────────────────────────────────────┘
+```
+
+### Storage Flow
+
+```
+Task Execution
+     │
+     ├──► Recall: Query hippocampus for relevant past experiences
+     │         └── Injects into Clarify/Plan node prompts
+     │
+     ├──► Execute: Run the task
+     │
+     └──► Validate: Check if should store
+               │
+               ├──► retry_count > 0 → Store (learned from failure)
+               ├──► steps > 1 → Store (complex execution pattern)
+               └──► single-step success → Skip (no learning value)
 ```
 
 ### 1.1 EpisodicMemoryProvider (Layer 4)
@@ -355,17 +383,31 @@ NoteTaker calls memory.save_memory() to persist wisdom notes automatically at en
 
 ## 7. Best Practices
 
-### 7.1 What to Store
+### 7.1 What to Store (Automatic)
 
-| Do Store               | Don't Store       |
-| ---------------------- | ----------------- |
-| Actionable insights    | Obvious facts     |
-| Project-specific rules | Generic knowledge |
-| Workflow preferences   | Every tiny action |
-| Error solutions        | Debug logs        |
-| User corrections       | Temporary state   |
+Hippocampus **automatically** stores experiences based on these conditions:
 
-### 7.2 Metadata Guidelines
+| Condition           | Store? | Tag                 | Reason                     |
+| ------------------- | ------ | ------------------- | -------------------------- |
+| `retry_count > 0`   | ✅ Yes | `retry_recovery`    | Learned from failure       |
+| `steps > 1`         | ✅ Yes | `complex_execution` | Valuable execution pattern |
+| Single-step success | ❌ No  | -                   | No learning value          |
+| Pure failure        | ❌ No  | -                   | Don't store failures       |
+
+### 7.2 Manual Storage (via Skills)
+
+For explicit learnings, use NoteTaker or memory.save_memory():
+
+```python
+# Store explicit wisdom
+await note_taker.update_knowledge_base(
+    category="patterns",
+    title="Research Workflow Pattern",
+    content="Use researcher.run_research_graph for code analysis..."
+)
+```
+
+### 7.3 Metadata Guidelines
 
 ```python
 # Good metadata

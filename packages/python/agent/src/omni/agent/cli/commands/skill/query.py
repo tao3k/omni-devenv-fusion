@@ -382,3 +382,150 @@ def skill_search(
             style="yellow",
         )
     )
+
+
+@skill_app.command("schema")
+def skill_schema(
+    tool_name: str = typer.Argument(..., help="Tool name (e.g., 'git.commit' or 'commit')"),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+):
+    """
+    Show schema for a specific tool.
+
+    Displays the MCP Tool Schema including parameters, annotations, and variants.
+    """
+    from omni.core.skills.schema_gen import generate_tool_schemas
+
+    # Load all skills first to register their commands
+    from omni.core.kernel import get_kernel
+
+    kernel = get_kernel()
+
+    # Ensure skills are loaded so commands are registered
+    try:
+        kernel.skill_context.load_all_skills()
+    except Exception:
+        pass  # Continue anyway - some skills might fail to load
+
+    # Generate schemas (this will scan registered commands)
+    schemas = generate_tool_schemas()
+
+    # Try to find the tool
+    tool_schema = None
+
+    # Search by full name (e.g., "git.commit")
+    if tool_name in schemas.get("tools", []):
+        for tool in schemas["tools"]:
+            if tool.get("name") == tool_name:
+                tool_schema = tool
+                break
+
+    # If not found, try partial match (e.g., "commit" matches "git.commit")
+    if tool_schema is None:
+        for tool in schemas.get("tools", []):
+            tool_name_lower = tool.get("name", "").lower()
+            # Match if tool name ends with the search term
+            if (
+                tool_name_lower.endswith(f".{tool_name.lower()}")
+                or tool_name_lower == tool_name.lower()
+            ):
+                tool_schema = tool
+                break
+
+    if tool_schema is None:
+        err_console.print(
+            Panel(
+                f"Tool '{tool_name}' not found.\n"
+                f"Available tools: {', '.join([t.get('name', '') for t in schemas.get('tools', [])[:20]])}...\n"
+                f"Use 'omni skill list' to see all available skills.",
+                title="🔍 Tool Not Found",
+                style="red",
+            )
+        )
+        raise typer.Exit(1)
+
+    if json_output:
+        # Output JSON to stdout
+        sys.stdout.write(json.dumps(tool_schema, indent=2, ensure_ascii=False) + "\n")
+        return
+
+    # Pretty print the schema
+    from rich.json import JSON
+    from rich.columns import Columns
+
+    err_console.print(Panel(f"[bold]Tool Schema: {tool_schema.get('name', '')}[/]", style="cyan"))
+
+    # Show key info
+    err_console.print(f"[bold]Description:[/] {tool_schema.get('description', 'N/A')}")
+    err_console.print(f"[bold]Category:[/] {tool_schema.get('category', 'N/A')}")
+
+    # Annotations - show all MCP hints even if False (important for LLM guidance)
+    annotations = tool_schema.get("annotations", {})
+    if annotations:
+        err_console.print("\n[bold]MCP Annotations:[/]")
+        annotation_strs = []
+        for key, value in annotations.items():
+            # Show all hints including False (important for LLM behavior guidance)
+            annotation_strs.append(f"{key}: {value}")
+        if annotation_strs:
+            err_console.print("  " + " | ".join(annotation_strs))
+        else:
+            err_console.print("  [dim]None[/]")
+
+    # Parameters
+    params = tool_schema.get("parameters", {})
+    props = params.get("properties", {})
+    required = params.get("required", [])
+
+    if props:
+        err_console.print("\n[bold]Parameters:[/]")
+        param_table = Table(show_header=True, header_style="bold magenta")
+        param_table.add_column("Name")
+        param_table.add_column("Type")
+        param_table.add_column("Required")
+        param_table.add_column("Description")
+
+        for param_name, param_def in props.items():
+            is_required = "[green]Yes[/green]" if param_name in required else "[dim]No[/dim]"
+            param_type = param_def.get("type", "unknown")
+            param_desc = param_def.get("description", "")
+            param_table.add_row(param_name, param_type, is_required, param_desc)
+
+        err_console.print(param_table)
+
+    # Variants
+    variants = tool_schema.get("variants", [])
+    if variants:
+        err_console.print("\n[bold]Variants:[/]")
+        variant_table = Table(show_header=True, header_style="bold green")
+        variant_table.add_column("Name")
+        variant_table.add_column("Priority")
+        variant_table.add_column("Status")
+        variant_table.add_column("Description")
+
+        for var in variants:
+            status = var.get("status", "unknown")
+            status_style = "green" if status == "available" else "yellow"
+            variant_table.add_row(
+                var.get("name", ""),
+                str(var.get("priority", 100)),
+                f"[{status_style}]{status}[/{status_style}]",
+                var.get("description", ""),
+            )
+
+        err_console.print(variant_table)
+
+    # Show usage hint
+    tool_name = tool_schema.get("name", "")
+    params_str = ", ".join(
+        [f'{p}="value"' for p in (required[:2] if required else list(props.keys())[:2])]
+    )
+    usage_text = f'[bold]Usage:[/] @omni("{tool_name}", {params_str})'
+
+    err_console.print(
+        Panel(
+            usage_text,
+            title="💡 Usage",
+            style="blue",
+        )
+    )

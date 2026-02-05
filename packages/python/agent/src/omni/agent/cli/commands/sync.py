@@ -7,13 +7,15 @@ Usage:
     omni sync                # Sync EVERYTHING (Default)
     omni sync knowledge      # Sync documentation only
     omni sync skills         # Sync skill registry (Cortex) only
+    omni sync router         # Sync router database (Hybrid Search) only
     omni sync memory         # Optimize memory index
 """
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import typer
 from rich.box import ROUNDED
@@ -83,45 +85,121 @@ def _find_markdown_files(directory: str) -> list[str]:
     return files
 
 
-async def _sync_knowledge(clear: bool = False) -> dict[str, Any]:
-    """Internal logic to sync knowledge base (Librarian)."""
-    from omni.core.knowledge.librarian import Librarian
-    from omni.foundation.runtime.gitops import get_docs_dir
+async def _sync_symbols(clear: bool = False) -> dict[str, Any]:
+    """Internal logic to sync code symbols using Zero-Token Indexing.
 
+    Uses omni-tags (Rust) to extract symbols without LLM tokens.
+    This replaces LLM-based summarization for code files.
+    """
     try:
-        docs_path = get_docs_dir()
-        if not docs_path.exists():
-            return {"status": "skipped", "details": "Docs dir not found"}
+        from omni.core.knowledge.symbol_indexer import SymbolIndexer
+        from omni.foundation.runtime.gitops import get_project_root
 
-        librarian = Librarian()
+        # Get project root
+        try:
+            project_root = str(get_project_root())
+        except Exception:
+            project_root = "."
 
-        # Use ingest() which handles file discovery, chunking, and indexing
-        # It automatically tracks changes via manifest
-        result = librarian.ingest(clean=clear)
+        indexer = SymbolIndexer(
+            project_root=project_root,
+            extensions=[".py", ".rs", ".js", ".ts", ".go", ".java"],
+        )
+
+        # Build the symbol index
+        result = indexer.build(clean=clear)
 
         return {
             "status": "success",
-            "details": f"Indexed {result['files_processed']} files, {result['chunks_indexed']} chunks",
+            "details": f"Symbols: {result['unique_symbols']} in {result['indexed_files']} files",
+        }
+    except Exception as e:
+        return {"status": "error", "details": str(e)}
+
+
+async def _sync_knowledge(clear: bool = False, include_code: bool = False) -> dict[str, Any]:
+    """Internal logic to sync knowledge base (Librarian).
+
+    By default, this only indexes documentation (markdown files).
+    Code files are indexed via _sync_symbols (Zero-Token).
+
+    Args:
+        clear: Clear existing index first
+        include_code: Also index code files (NOT recommended - use _sync_symbols instead)
+    """
+    from pathlib import Path
+
+    from omni.core.knowledge.librarian import Librarian
+    from omni.foundation.runtime.path_filter import should_skip_path, SKIP_DIRS
+
+    try:
+        librarian = Librarian()
+
+        # Configure FileIngestor to use globs from knowledge_dirs config
+        original_discover = librarian.ingestor.discover_files
+
+        def knowledge_discover(project_root: Path, **kwargs):
+            """Discover files using globs from knowledge_dirs config."""
+            files = []
+            for entry in librarian.config.knowledge_dirs:
+                dir_path = project_root / entry.get("path", "")
+                globs = entry.get("globs", [])
+
+                # Support both single glob and list of globs
+                if isinstance(globs, str):
+                    globs = [globs]
+
+                if not dir_path.exists():
+                    continue
+
+                for glob_pattern in globs:
+                    for f in dir_path.glob(glob_pattern):
+                        if f.is_file() and not should_skip_path(
+                            f, skip_hidden=True, skip_dirs=SKIP_DIRS
+                        ):
+                            files.append(f)
+            return sorted(set(files))
+
+        librarian.ingestor.discover_files = knowledge_discover
+
+        # Use ingest() which handles file discovery, chunking, and indexing
+        result = librarian.ingest(clean=clear)
+
+        # Restore original method
+        librarian.ingestor.discover_files = original_discover
+
+        return {
+            "status": "success",
+            "details": f"Indexed {result['files_processed']} docs, {result['chunks_indexed']} chunks (code: use 'omni sync symbols')",
         }
     except Exception as e:
         return {"status": "error", "details": str(e)}
 
 
 async def _sync_skills() -> dict[str, Any]:
-    """Internal logic to sync skill registry (Cortex)."""
-    from omni.core.skills.discovery import SkillDiscoveryService
+    """Internal logic to sync skill registry (Cortex) and skills table."""
+    from omni.foundation.bridge import get_vector_store
     from omni.foundation.config.skills import SKILLS_DIR
 
     try:
-        skills_path = SKILLS_DIR()
-        if not skills_path.exists():
+        skills_path = str(SKILLS_DIR())
+        if not Path(skills_path).exists():
             return {"status": "skipped", "details": "Skills dir not found"}
 
+        # Index tools to skills table (for omni db search)
+        store = get_vector_store()
+        count = await store.index_skill_tools(skills_path, "skills")
+
+        # Also update the skill discovery service
+        from omni.core.skills.discovery import SkillDiscoveryService
+
         discovery = SkillDiscoveryService()
-        # This triggers the Rust scanner to update the index
         skills = await discovery.discover_all()
 
-        return {"status": "success", "details": f"Registered {len(skills)} skills"}
+        return {
+            "status": "success",
+            "details": f"Indexed {count} tools, registered {len(skills)} skills",
+        }
     except Exception as e:
         return {"status": "error", "details": str(e)}
 
@@ -137,6 +215,24 @@ async def _sync_memory() -> dict[str, Any]:
         await store.create_index("memory")
         count = await store.count("memory")
         return {"status": "success", "details": f"Optimized index ({count} memories)"}
+    except Exception as e:
+        return {"status": "error", "details": str(e)}
+
+
+async def _sync_router() -> dict[str, Any]:
+    """Internal logic to sync router database from skills."""
+    from omni.foundation.bridge import get_vector_store
+    from omni.foundation.config.dirs import get_database_path
+    from omni.foundation.config.skills import SKILLS_DIR
+
+    try:
+        router_path = get_database_path("router")
+        skills_path = str(SKILLS_DIR())
+
+        router_store = get_vector_store(router_path, enable_keyword_index=True)
+        count = await router_store.index_skill_tools(skills_path, "router")
+
+        return {"status": "success", "details": f"Synced {count} tools to router"}
     except Exception as e:
         return {"status": "error", "details": str(e)}
 
@@ -165,18 +261,40 @@ def main(
 
         stats = {}
 
-        # 1. Skills (Cortex)
+        # 1. Symbols (Zero-Token Code Index) - NEW!
+        stats["symbols"] = await _sync_symbols()
+
+        # 2. Skills (Cortex)
         stats["skills"] = await _sync_skills()
 
-        # 2. Knowledge (Librarian)
+        # 3. Router (Hybrid Search Index)
+        stats["router"] = await _sync_router()
+
+        # 4. Knowledge (Librarian - Docs only)
         stats["knowledge"] = await _sync_knowledge()
 
-        # 3. Memory (Hippocampus)
+        # 5. Memory (Hippocampus)
         stats["memory"] = await _sync_memory()
 
         _print_sync_report("Full System Sync", stats, json_output)
 
     asyncio.run(run_sync_all())
+
+
+def _run_async(coro):
+    """Run async code, handling event loop properly."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Use nest_asyncio pattern for running in existing loop
+            import nest_asyncio
+
+            nest_asyncio.apply()
+            return loop.run_until_complete(coro)
+    except RuntimeError:
+        pass
+    # No event loop exists
+    return asyncio.run(coro)
 
 
 @sync_app.command("knowledge")
@@ -187,9 +305,7 @@ def sync_knowledge_cmd(
     """
     Sync documentation into the knowledge base.
     """
-    import asyncio
-
-    stats = {"knowledge": asyncio.run(_sync_knowledge(clear))}
+    stats = {"knowledge": _run_async(_sync_knowledge(clear))}
     _print_sync_report("Knowledge Base", stats, json_output)
 
 
@@ -200,9 +316,7 @@ def sync_skills_cmd(
     """
     Sync skill registry (Cortex).
     """
-    import asyncio
-
-    stats = {"skills": asyncio.run(_sync_skills())}
+    stats = {"skills": _run_async(_sync_skills())}
     _print_sync_report("Skill Cortex", stats, json_output)
 
 
@@ -213,10 +327,40 @@ def sync_memory_cmd(
     """
     Optimize and sync memory index.
     """
+    stats = {"memory": _run_async(_sync_memory())}
+    _print_sync_report("Memory Index", stats, json_output)
+
+
+@sync_app.command("router")
+def sync_router_cmd(
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+):
+    """
+    Sync router database from skills (Hybrid Search Index).
+    """
+    stats = {"router": _run_async(_sync_router())}
+    _print_sync_report("Router Index", stats, json_output)
+
+
+@sync_app.command("symbols")
+def sync_symbols_cmd(
+    clear: bool = typer.Option(False, "--clear", "-c", help="Clear existing symbol index first"),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+):
+    """
+    Sync code symbols using Zero-Token Indexing.
+
+    This uses omni-tags (Rust AST extraction) to index functions,
+    classes, and other symbols without using LLM tokens.
+
+    Examples:
+        omni sync symbols
+        omni sync symbols --clear
+    """
     import asyncio
 
-    stats = {"memory": asyncio.run(_sync_memory())}
-    _print_sync_report("Memory Index", stats, json_output)
+    stats = {"symbols": asyncio.run(_sync_symbols(clear))}
+    _print_sync_report("Symbol Index (Zero-Token)", stats, json_output)
 
 
 def register_sync_command(parent_app: typer.Typer) -> None:

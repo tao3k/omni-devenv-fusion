@@ -38,8 +38,38 @@ class KnowledgeConfig:
 
     @property
     def knowledge_dirs(self) -> list[dict[str, str]]:
-        """Get knowledge directories from config."""
+        """Get knowledge directories from config.
+
+        Each entry has:
+            - path: Directory path (relative to project root)
+            - globs: List of glob patterns for files (e.g., ["**/*.md"])
+            - domain: Domain category (e.g., "knowledge", "workflow")
+            - description: Optional description
+
+        Example:
+            knowledge_dirs:
+              - path: "assets/knowledge"
+                globs: ["**/*.md", "**/*.markdown"]
+                domain: "knowledge"
+        """
         return self._config.get("knowledge_dirs", [])
+
+    @property
+    def ast_symbols_dirs(self) -> list[dict[str, str]]:
+        """Get AST symbols directories for zero-token indexing.
+
+        Each entry has:
+            - path: Directory path (relative to project root)
+            - globs: List of glob patterns for files (e.g., ["**/*.py", "**/*.rs"])
+            - description: Optional description
+
+        Example:
+            ast_symbols_dirs:
+              - path: "packages"
+                globs: ["**/*.py", "**/*.rs"]
+                description: "Python and Rust packages"
+        """
+        return self._config.get("ast_symbols_dirs", [])
 
     @property
     def ast_extensions(self) -> dict[str, str]:
@@ -102,6 +132,34 @@ class KnowledgeConfig:
             "typescript": ["function $NAME", "class $NAME", "const $NAME ="],
             "go": ["func $NAME", "type $NAME struct"],
             "java": ["public $NAME", "class $NAME"],
+        }
+
+    @property
+    def skeleton_patterns(self) -> dict[str, list[str]]:
+        """Get skeleton patterns for lightweight semantic indexing.
+
+        These patterns extract only signatures, removing implementation bodies.
+        Used for Vector Store indexing where token efficiency is critical.
+        """
+        return {
+            "python": ["def $NAME", "class $NAME", "async def $NAME"],
+            "rust": ["fn $NAME", "pub fn $NAME", "struct $NAME", "pub struct $NAME", "impl $NAME"],
+            "javascript": [
+                "function $NAME",
+                "class $NAME",
+                "const $NAME = function",
+                "const $NAME = (",
+            ],
+            "typescript": [
+                "function $NAME",
+                "class $NAME",
+                "const $NAME = function",
+                "const $NAME = (",
+            ],
+            "go": ["func $NAME", "type $NAME struct", "type $NAME interface"],
+            "java": ["public $NAME", "class $NAME", "interface $NAME"],
+            "cpp": ["$TYPE $NAME(", "class $NAME", "struct $NAME"],
+            "csharp": ["public $TYPE $NAME", "class $NAME", "interface $NAME"],
         }
 
     def get_knowledge_paths(self, project_root: Path) -> list[Path]:

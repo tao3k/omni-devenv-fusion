@@ -1,0 +1,43 @@
+[package]
+name = "omni-scanner"
+version.workspace = true
+edition.workspace = true
+description = "Unified Scanner - Scans skills and knowledge directories with YAML frontmatter support"
+authors = ["Omni-Dev-Fusion Team"]
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+# AST parsing for script scanning
+omni-ast = { path = "../omni-ast" }
+
+# Serialization
+serde = { workspace = true }
+serde_yaml = "0.9"
+serde_json = { workspace = true }
+schemars = "=1.2.0"
+toml = "0.8"
+
+# Async runtime
+tokio = { workspace = true, features = ["fs"] }
+
+# File traversal
+walkdir = { workspace = true }
+
+# Hashing for incremental indexing
+sha2 = "0.10"
+hex = "0.4"
+
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Logging
+log = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

@@ -75,6 +75,9 @@ def skill_command(
     destructive: bool = False,
     idempotent: bool = False,
     open_world: bool = False,
+    # Provider Variants Support
+    variants: list[str] | None = None,
+    default_variant: str | None = None,
     # Dependency Injection Configuration
     inject_root: bool = False,
     inject_settings: list[str] | None = None,
@@ -94,18 +97,23 @@ def skill_command(
     - Auto-wiring: When autowire=True, @inject_resources is applied automatically
       to detect Settings/ConfigPaths type hints and inject them at runtime.
     - MCP Annotations: read_only, destructive, idempotent, open_world for LLM hints.
+    - Provider Variants: Support multiple implementations (e.g., local, rust, remote).
 
     MCP Annotations Guide:
     - read_only=True: Tool doesn't modify environment (e.g., read_file)
     - destructive=True: Tool performs destructive updates (e.g., delete_file)
     - idempotent=True: Same input produces same output (e.g., get_info)
     - open_world=True: Tool interacts with external systems (e.g., http_request)
+
+    Provider Variants:
+    - variants: List of available variant names (e.g., ["local", "rust"])
+    - default_variant: Preferred variant when not specified (e.g., "rust")
     """
     from ..config.logging import get_logger
 
     logger = get_logger("omni.api")
 
-    # Build annotations dict per MCP spec
+    # Build annotations dict per MCP spec - filter out None values
     annotations = {
         "title": title,
         "readOnlyHint": read_only,  # MCP: True = read-only
@@ -113,6 +121,8 @@ def skill_command(
         "idempotentHint": idempotent,  # MCP: True = idempotent
         "openWorldHint": open_world,  # MCP: True = external network
     }
+    # Filter out None values for cleaner output
+    annotations = {k: v for k, v in annotations.items() if v is not None}
 
     def decorator(func: Callable) -> Callable:
         # Apply auto-wiring decorator if enabled (inject_resources)
@@ -130,9 +140,15 @@ def skill_command(
         injected_params = getattr(func, "_injected_params", set())
         exclude_params.update(injected_params)
 
+        # Get the full description (includes Args section for param extraction)
+        full_description = (
+            description or (func.__doc__ or "") if description else (func.__doc__ or "")
+        )
+
         # Immediately generate schema - type errors will surface now
+        # Pass full_description for parameter description extraction
         try:
-            input_schema = _generate_tool_schema(func, exclude_params)
+            input_schema = _generate_tool_schema(func, exclude_params, full_description)
         except Exception as e:
             logger.warning(f"Failed to generate schema for skill '{func.__name__}': {e}")
             input_schema = {"type": "object", "properties": {}, "required": []}
@@ -144,6 +160,8 @@ def skill_command(
             "description": description or (func.__doc__ or "").strip().split("\n")[0],
             "category": category,
             "annotations": annotations,
+            "variants": variants or [],
+            "default_variant": default_variant,
             "input_schema": input_schema,
             "execution": {
                 "retry_on": retry_on,
@@ -154,6 +172,13 @@ def skill_command(
                 "autowire": autowire,
             },
         }
+
+        # Register in global registry for schema generation
+        # Use lazy import to avoid circular dependency
+        from omni.core.skills.tools_loader import _skill_command_registry
+
+        full_name = f"{category}.{name or func.__name__}"
+        _skill_command_registry[full_name] = func
 
         return func
 

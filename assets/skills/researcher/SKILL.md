@@ -1,26 +1,28 @@
 ---
-name: "researcher"
-version: "2.0.0"
-description: "Sharded Deep Research V2.0 - Turbo-charged for speed. Smart clone, native repomix, native tree generation."
-routing_keywords:
-  [
-    "analyze_repo",
-    "deep_research",
-    "code_analysis",
-    "repository_map",
-    "sharded_analysis",
-    "architecture_review",
-    "llm_research",
-  ]
-authors: ["omni-dev-fusion"]
-intents:
-  [
-    "research_repository",
-    "analyze_codebase",
-    "deep_research",
-    "architecture_review",
-  ]
-permissions: []
+name: researcher
+description: Use when analyzing repositories, conducting deep research on codebases, performing architecture reviews, or exploring large projects.
+metadata:
+  author: omni-dev-fusion
+  version: "2.0.0"
+  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/researcher"
+  routing_keywords:
+    - "research"
+    - "analyze"
+    - "analyze_repo"
+    - "deep_research"
+    - "code_analysis"
+    - "repository_map"
+    - "sharded_analysis"
+    - "architecture_review"
+    - "llm_research"
+    - "explore"
+    - "investigate"
+    - "study"
+  intents:
+    - "Research repository"
+    - "Analyze codebase"
+    - "Deep research"
+    - "Architecture review"
 ---
 
 # Researcher Skill
@@ -67,8 +69,9 @@ This autonomously:
 ```json
 {
   "success": true,
-  "harvest_dir": "/path/to/.data/harvested/20250123-repo/",
+  "harvest_dir": "/path/to/.data/harvested/<owner>/<repo_name>/",
   "shards_analyzed": 4,
+  "revision": "abc1234",
   "shard_summaries": [
     "- **[Core Kernel](./shards/01_core_kernel.md)**: Main business logic",
     "- **[API Layer](./shards/02_api_layer.md)**: HTTP handlers"
@@ -80,12 +83,25 @@ This autonomously:
 **Output Location:**
 
 ```
-.data/harvested/<date>-<repo_name>/
-├── index.md                    # Master index with all shard links
+.data/harvested/<owner>/<repo_name>/
+├── index.md                    # Master index with YAML frontmatter (includes revision)
 └── shards/
     ├── 01_core_kernel.md       # Shard 1 analysis
     ├── 02_api_layer.md         # Shard 2 analysis
     └── ...
+```
+
+**index.md Frontmatter:**
+
+```yaml
+---
+title: Research Analysis: <repo_name>
+source: <repo_url>
+revision: <git_hash>
+revision_date: <YYYY-MM-DD HH:MM:SS TZ>
+generated: <YYYY-MM-DD>
+shards: <count>
+---
 ```
 
 ## Usage Example

@@ -5,7 +5,7 @@ Trinity Architecture - Core Layer
 High-level Python wrapper for the Rust OmniCell Executor.
 Serves as the central nervous system for all OS interactions.
 
-Replaces the legacy filesystem skill with structured Nushell-based operations.
+All methods return ToolResponse for unified MCP format.
 """
 
 from __future__ import annotations
@@ -17,16 +17,10 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from omni.core.errors import CoreErrorCode, OmniError
+from omni.core.responses import ResponseStatus, ToolResponse
+
 logger = logging.getLogger(__name__)
-
-
-class SysQueryResult(BaseModel):
-    """Result from sys_query (code extraction)."""
-
-    success: bool = Field(default=False, description="Whether extraction succeeded")
-    items: list[dict[str, Any]] = Field(default_factory=list, description="Extracted code elements")
-    count: int = Field(default=0, description="Number of items extracted")
-    error: str | None = Field(default=None, description="Error message if failed")
 
 
 class ActionType(str, Enum):
@@ -36,17 +30,13 @@ class ActionType(str, Enum):
     MUTATE = "mutate"  # Side-effect operations (cp, mv, rm, save)
 
 
-class CellResult(BaseModel):
-    """Result from OmniCell execution."""
+class SysQueryResult(BaseModel):
+    """Result from sys_query (code extraction). Used internally."""
 
-    status: str = Field(..., description="Execution status: success, error, or blocked")
-    data: dict[str, Any] | list[dict[str, Any]] | str | None = Field(
-        default=None, description="Parsed JSON data from command output"
-    )
-    metadata: dict[str, Any] = Field(
-        default_factory=dict, description="Additional execution metadata"
-    )
-    security_check: str = Field(default="pass", description="Security validation result")
+    success: bool = Field(default=False, description="Whether extraction succeeded")
+    items: list[dict[str, Any]] = Field(default_factory=list, description="Extracted code elements")
+    count: int = Field(default=0, description="Number of items extracted")
+    error: str | None = Field(default=None, description="Error message if failed")
 
 
 class OmniCellRunner:
@@ -119,7 +109,7 @@ class OmniCellRunner:
         command: str,
         action: ActionType | None = None,
         ensure_structured: bool = True,
-    ) -> CellResult:
+    ) -> ToolResponse:
         """Execute a command via the Rust OmniCell kernel.
 
         Args:
@@ -128,7 +118,7 @@ class OmniCellRunner:
             ensure_structured: Force JSON output for structured data
 
         Returns:
-            CellResult with status, data, and metadata
+            ToolResponse with execution result
         """
         # Auto-classify if action not specified
         if action is None:
@@ -138,23 +128,23 @@ class OmniCellRunner:
         if action == ActionType.MUTATE:
             safety_result = self._check_mutation_safety(command)
             if not safety_result["safe"]:
-                return CellResult(
-                    status="blocked",
-                    metadata={"reason": safety_result["reason"], "command": command},
+                return ToolResponse.blocked(
+                    reason=safety_result["reason"],
+                    metadata={"command": command, "security_check": "mutation_safety"},
                 )
 
         if self._rust_bridge is not None:
             return await self._run_via_rust(command, action, ensure_structured)
 
         # Degraded mode: Fallback to subprocess
-        return await self._run_fallback(command, action, ensure_structured)
+        return await self._run_fallback(command, action)
 
     async def _run_via_rust(
         self,
         command: str,
         action: ActionType,
         ensure_structured: bool,
-    ) -> CellResult:
+    ) -> ToolResponse:
         """Execute via Rust bridge (async wrapper for sync call with timeout)."""
         import asyncio
 
@@ -169,19 +159,20 @@ class OmniCellRunner:
                     timeout=30.0,  # 30 second timeout
                 )
             except asyncio.TimeoutError:
-                return CellResult(
-                    status="error",
+                return ToolResponse.error(
+                    message=f"Command timed out after 30 seconds: {command[:100]}...",
+                    code=CoreErrorCode.TOOL_TIMEOUT.value,
                     metadata={
-                        "error_type": "timeout",
-                        "error_msg": f"Command timed out after 30 seconds: {command[:100]}...",
                         "command": command,
+                        "error_type": "timeout",
+                        "runner": "omni-cell-rust",
                     },
                 )
 
             # Parse the JSON string into Python objects
             data = json.loads(raw_json)
 
-            # [IMPROVEMENT] Clean up null results for mutations
+            # Clean up null results for mutations
             if action == ActionType.MUTATE:
                 if data is None or data == "null":
                     data = {
@@ -195,8 +186,7 @@ class OmniCellRunner:
                     if cleaned != data:
                         data = cleaned
 
-            return CellResult(
-                status="success",
+            return ToolResponse.success(
                 data=data,
                 metadata={
                     "runner": "omni-cell-rust",
@@ -207,23 +197,24 @@ class OmniCellRunner:
 
         except json.JSONDecodeError as e:
             logger.error(f"JSON parse error: {e}")
-            return CellResult(
-                status="error",
+            return ToolResponse.error(
+                message=f"JSON parse error: {e}",
+                code=CoreErrorCode.CELL_JSON_DECODE_ERROR.value,
                 metadata={
-                    "error_type": "json_decode",
-                    "error_msg": str(e),
-                    "raw_output": raw_json if "raw_json" in dir() else None,
                     "command": command,
+                    "error_type": "json_decode",
+                    "runner": "omni-cell-rust",
                 },
             )
         except Exception as e:
             logger.error(f"OmniCell execution failed: {e}")
-            return CellResult(
-                status="error",
+            return ToolResponse.error(
+                message=str(e),
+                code=CoreErrorCode.CELL_EXECUTION_ERROR.value,
                 metadata={
-                    "error_type": type(e).__name__,
-                    "error_msg": str(e),
                     "command": command,
+                    "error_type": type(e).__name__,
+                    "runner": "omni-cell-rust",
                 },
             )
 
@@ -231,17 +222,14 @@ class OmniCellRunner:
         self,
         command: str,
         action: ActionType,
-        ensure_structured: bool,
-    ) -> CellResult:
+    ) -> ToolResponse:
         """Fallback execution via subprocess when Rust bridge unavailable."""
         import asyncio
         import subprocess
 
         try:
-            # Build command
-            final_cmd = command
-            if ensure_structured:
-                final_cmd = f"{command} | to json --raw"
+            # Build command with JSON output
+            final_cmd = f"{command} | to json --raw"
 
             # Execute via shell
             process = await asyncio.create_subprocess_shell(
@@ -252,23 +240,25 @@ class OmniCellRunner:
             stdout, stderr = await process.communicate()
 
             if process.returncode != 0:
-                return CellResult(
-                    status="error",
+                return ToolResponse.error(
+                    message=f"Command failed: {stderr.decode()}",
+                    code=CoreErrorCode.CELL_SUBPROCESS_ERROR.value,
                     metadata={
+                        "command": command,
                         "error_type": "subprocess",
                         "stderr": stderr.decode(),
-                        "command": command,
+                        "runner": "omni-cell-fallback",
                     },
                 )
 
             output = stdout.decode().strip()
             if not output:
-                return CellResult(
-                    status="success",
+                return ToolResponse.success(
                     data={"status": "mutation_complete"},
                     metadata={
                         "runner": "omni-cell-fallback",
                         "mode": action.value,
+                        "command": command,
                     },
                 )
 
@@ -278,22 +268,23 @@ class OmniCellRunner:
             except json.JSONDecodeError:
                 data = output
 
-            return CellResult(
-                status="success",
+            return ToolResponse.success(
                 data=data,
                 metadata={
                     "runner": "omni-cell-fallback",
                     "mode": action.value,
+                    "command": command,
                 },
             )
 
         except Exception as e:
-            return CellResult(
-                status="error",
+            return ToolResponse.error(
+                message=str(e),
+                code=CoreErrorCode.CELL_EXECUTION_ERROR.value,
                 metadata={
-                    "error_type": type(e).__name__,
-                    "error_msg": str(e),
                     "command": command,
+                    "error_type": type(e).__name__,
+                    "runner": "omni-cell-fallback",
                 },
             )
 
@@ -346,7 +337,7 @@ class OmniCellRunner:
         self,
         query: dict[str, Any],
         action: ActionType = ActionType.OBSERVE,
-    ) -> SysQueryResult:
+    ) -> ToolResponse:
         """Extract code elements from a file using AST patterns.
 
         Provides high-precision context extraction for large codebases.
@@ -360,11 +351,7 @@ class OmniCellRunner:
             action: ActionType (only OBSERVE supported currently)
 
         Returns:
-            SysQueryResult with:
-                - success: Boolean indicating success
-                - items: List of extracted elements with text, line numbers, captures
-                - count: Number of items found
-                - error: Error message if failed
+            ToolResponse with sys_query result
 
         Example:
             >>> result = await runner.sys_query({
@@ -373,30 +360,33 @@ class OmniCellRunner:
             ...     "language": "python",
             ...     "captures": ["NAME"]
             ... })
-            >>> print(result.items[0]["captures"]["NAME"])
+            >>> print(result.data["items"][0]["captures"]["NAME"])
             'hello'
         """
         if action != ActionType.OBSERVE:
-            return SysQueryResult(
-                success=False,
-                error="sys_query only supports OBSERVE action type",
+            return ToolResponse.error(
+                message="sys_query only supports OBSERVE action type",
+                code=CoreErrorCode.INVALID_ARGUMENT.value,
+                metadata={"query": query, "action": action.value},
             )
 
         path = query.get("path")
         pattern = query.get("pattern")
 
         if not path or not pattern:
-            return SysQueryResult(
-                success=False,
-                error="Both 'path' and 'pattern' are required",
+            return ToolResponse.error(
+                message="Both 'path' and 'pattern' are required",
+                code=CoreErrorCode.MISSING_REQUIRED.value,
+                metadata={"query": query},
             )
 
         # Read file content
         content = await self._read_file(path)
         if content is None:
-            return SysQueryResult(
-                success=False,
-                error=f"Failed to read file: {path}",
+            return ToolResponse.error(
+                message=f"Failed to read file: {path}",
+                code=CoreErrorCode.STORAGE_READ_ERROR.value,
+                metadata={"path": path},
             )
 
         # Get optional parameters
@@ -416,29 +406,40 @@ class OmniCellRunner:
 
             items = json.loads(raw_json)
 
-            return SysQueryResult(
-                success=True,
-                items=items,
-                count=len(items),
+            return ToolResponse.success(
+                data={
+                    "items": items,
+                    "count": len(items),
+                    "path": path,
+                    "pattern": pattern,
+                },
+                metadata={
+                    "query_type": "sys_query",
+                    "language": language,
+                    "captures": captures,
+                },
             )
 
         except ImportError:
             logger.warning("Rust bridge not available for sys_query")
-            return SysQueryResult(
-                success=False,
-                error="Rust bridge not available. Run `uv sync --reinstall-package omni-core-rs`",
+            return ToolResponse.error(
+                message="Rust bridge not available. Run `uv sync --reinstall-package omni-core-rs`",
+                code=CoreErrorCode.DEPENDENCY_MISSING.value,
+                metadata={"path": path, "pattern": pattern},
             )
         except json.JSONDecodeError as e:
             logger.error(f"JSON parse error in sys_query: {e}")
-            return SysQueryResult(
-                success=False,
-                error=f"JSON parse error: {e}",
+            return ToolResponse.error(
+                message=f"JSON parse error: {e}",
+                code=CoreErrorCode.CELL_JSON_DECODE_ERROR.value,
+                metadata={"path": path, "pattern": pattern},
             )
         except Exception as e:
             logger.error(f"sys_query failed: {e}")
-            return SysQueryResult(
-                success=False,
-                error=str(e),
+            return ToolResponse.error(
+                message=str(e),
+                code=CoreErrorCode.TOOL_EXECUTION_FAILED.value,
+                metadata={"path": path, "pattern": pattern, "error_type": type(e).__name__},
             )
 
     async def _read_file(self, path: str) -> str | None:
@@ -504,7 +505,7 @@ def get_runner() -> OmniCellRunner:
 async def run_command(
     command: str,
     action: ActionType | None = None,
-) -> CellResult:
+) -> ToolResponse:
     """Convenience function to run a command.
 
     Args:
@@ -512,7 +513,7 @@ async def run_command(
         action: Optional action type hint
 
     Returns:
-        CellResult with execution results
+        ToolResponse with execution results
     """
     runner = get_runner()
     return await runner.run(command, action)
@@ -521,7 +522,7 @@ async def run_command(
 async def sys_query(
     query: dict[str, Any],
     action: ActionType = ActionType.OBSERVE,
-) -> SysQueryResult:
+) -> ToolResponse:
     """Convenience function to extract code elements.
 
     Args:
@@ -529,7 +530,7 @@ async def sys_query(
         action: ActionType (only OBSERVE supported)
 
     Returns:
-        SysQueryResult with extraction results
+        ToolResponse with extraction results
     """
     runner = get_runner()
     return await runner.sys_query(query, action)

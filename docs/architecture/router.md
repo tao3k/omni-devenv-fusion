@@ -244,7 +244,7 @@ class HiveRouter:
 ### Routing Strategy
 
 ```
-Query: "帮我提交代码"
+Query: "commit the changes"
         │
         ▼
 ┌─────────────────────────┐
@@ -432,7 +432,7 @@ Each skill creates multiple entries:
 
 ```
 1. User Input
-   @omni("帮我提交代码")
+   @omni("commit the changes")
 
 2. Query Parsing
    - No direct match found

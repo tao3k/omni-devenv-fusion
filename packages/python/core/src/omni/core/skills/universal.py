@@ -35,7 +35,7 @@ class SimpleSkillMetadata(BaseModel):
     name: str
     version: str = "1.0.0"
     description: str = ""
-    capabilities: list[str] = []
+    routing_keywords: list[str] = []
     activation: SkillActivationConfig | None = None
 
     @classmethod
@@ -49,149 +49,13 @@ class SimpleSkillMetadata(BaseModel):
         Returns:
             SimpleSkillMetadata instance
         """
-        # Map Index 'routing_keywords' to 'capabilities'
-        capabilities = data.get("routing_keywords", [])
-        if not capabilities and "capabilities" in data:
-            capabilities = data["capabilities"]
-
         return cls(
             name=name,
             version=data.get("version", "1.0.0"),
             description=data.get("description", ""),
-            capabilities=capabilities,
+            routing_keywords=data.get("routing_keywords", []),
             activation=None,  # Activation now handled by Core Sniffer
         )
-
-
-def parse_skill_md_frontmatter(skill_md_path: Path) -> dict[str, Any]:
-    """Parse YAML frontmatter from SKILL.md file.
-
-    Args:
-        skill_md_path: Path to SKILL.md file
-
-    Returns:
-        Dictionary of frontmatter values
-    """
-    if not skill_md_path.exists():
-        return {}
-
-    try:
-        content = skill_md_path.read_text()
-        # Match YAML frontmatter between --- markers
-        match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
-        if match:
-            yaml_content = match.group(1)
-            return _parse_simple_yaml(yaml_content)
-    except Exception as e:
-        logger.debug(f"Failed to parse frontmatter from {skill_md_path}: {e}")
-
-    return {}
-
-
-def _parse_simple_yaml(yaml_str: str) -> dict[str, Any]:
-    """Parse simple YAML to dict (no external dependencies).
-
-    Handles basic YAML structures like:
-    ---
-    name: "value"
-    activation:
-      files:
-        - "file1"
-        - "file2"
-    ---
-    """
-    result = {}
-    current_section = None
-    current_list = None
-    current_dict = None
-
-    for line in yaml_str.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-
-        # Top-level key: value
-        if ":" in line and not line.startswith(" "):
-            key, value = line.split(":", 1)
-            key = key.strip()
-            value = value.strip()
-
-            if not value:
-                # Start of nested structure
-                current_section = key
-                if key == "activation":
-                    current_dict = {}
-                    result[key] = current_dict
-                else:
-                    current_dict = None
-            else:
-                # Simple value
-                result[key] = _parse_yaml_value(value)
-                current_section = None
-                current_dict = None
-
-        # Nested key: value
-        elif current_section and ":" in line:
-            # Remove leading spaces
-            stripped = line.lstrip()
-            key, value = stripped.split(":", 1)
-            key = key.strip()
-            value = value.strip()
-
-            if current_dict is not None:
-                if not value:
-                    # Start of list
-                    current_list = []
-                    current_dict[key] = current_list
-                else:
-                    current_dict[key] = _parse_yaml_value(value)
-
-            elif current_section == "activation" and key == "files":
-                # Files is a list at activation level
-                current_list = []
-                result["activation"]["files"] = current_list
-
-    # Convert nested dict to SkillActivationConfig
-    if "activation" in result and isinstance(result["activation"], dict):
-        act_dict = result["activation"]
-        files = act_dict.get("files", [])
-        result["activation"] = SkillActivationConfig(files=files)
-
-    return result
-
-
-def _parse_yaml_value(value: str) -> Any:
-    """Parse a YAML value string to Python type."""
-    value = value.strip()
-
-    # Remove quotes
-    if (value.startswith('"') and value.endswith('"')) or (
-        value.startswith("'") and value.endswith("'")
-    ):
-        value = value[1:-1]
-
-    # Boolean
-    if value.lower() == "true":
-        return True
-    if value.lower() == "false":
-        return False
-
-    # None
-    if value.lower() == "null" or value.lower() == "none":
-        return None
-
-    # Number
-    try:
-        return int(value)
-    except ValueError:
-        pass
-
-    try:
-        return float(value)
-    except ValueError:
-        pass
-
-    return value
 
 
 class UniversalScriptSkill:
@@ -227,38 +91,37 @@ class UniversalScriptSkill:
         self._name = skill_name
         self._path = Path(skill_path)
         self._metadata = metadata or self._load_metadata()
-        self._script_loader: ScriptLoader | None = None
+        self._tools_loader: ToolsLoader | None = None
         self._ext_loader: SkillExtensionLoader | None = None
         self._loaded = False
         self._sniffer_ext: list[Callable[[str], float]] = []
 
     def _load_metadata(self) -> SimpleSkillMetadata:
-        """Load metadata from SKILL.md frontmatter."""
-        skill_md = self._path / "SKILL.md"
+        """Load metadata from SKILL.md frontmatter.
 
-        if skill_md.exists():
-            frontmatter = parse_skill_md_frontmatter(skill_md)
+        Note: SKILL.md parsing is handled by Rust scanner (skills-scanner crate).
+        Python端只负责提供默认的 metadata 结构。
+        For full metadata, use RustSkillScanner.scan_skill() or load from Index.
+        """
+        # 读取 activation 配置（这是 Python 端需要的）
+        activation: SkillActivationConfig | None = None
+        activation_file = self._path / "activation.yaml"
+        if activation_file.exists():
+            import yaml
 
-            activation_config = frontmatter.get("activation")
-            if isinstance(activation_config, SkillActivationConfig):
-                activation = activation_config
-            elif isinstance(activation_config, dict):
-                activation = SkillActivationConfig(files=activation_config.get("files", []))
-            else:
-                activation = None
-
-            return SimpleSkillMetadata(
-                name=self._name,
-                version=frontmatter.get("version", "1.0.0"),
-                description=frontmatter.get("description", ""),
-                capabilities=frontmatter.get("capabilities", []),
-                activation=activation,
-            )
+            try:
+                act_data = yaml.safe_load(activation_file.read_text())
+                if act_data and "files" in act_data:
+                    activation = SkillActivationConfig(files=act_data["files"])
+            except Exception:
+                pass
 
         return SimpleSkillMetadata(
             name=self._name,
             version="1.0.0",
             description=f"Skill: {self._name}",
+            routing_keywords=[],
+            activation=activation,
         )
 
     @property
@@ -310,8 +173,8 @@ class UniversalScriptSkill:
     @property
     def commands(self) -> dict[str, Callable]:
         """Get all registered commands (for backward compatibility)."""
-        if self._script_loader:
-            return self._script_loader.commands
+        if self._tools_loader:
+            return self._tools_loader.commands
         return {}
 
     def get_activation_rule(self) -> tuple[str, list[str]] | None:
@@ -386,7 +249,7 @@ class UniversalScriptSkill:
 
         # 3. Create Script Loader
         scripts_path = self._path / "scripts"
-        self._script_loader = create_script_loader(scripts_path, self._name)
+        self._tools_loader = create_tools_loader(scripts_path, self._name)
 
         # 4. Auto-Wiring: Inject Rust accelerator if present
         rust_bridge = self._get_extension("rust_bridge")
@@ -394,22 +257,22 @@ class UniversalScriptSkill:
             try:
                 accelerator = rust_bridge.RustAccelerator(cwd)
                 if accelerator.is_active:
-                    self._script_loader.inject("rust", accelerator)
+                    self._tools_loader.inject("rust", accelerator)
                     logger.debug(f"[{self._name}] Rust Accelerator active")
                 else:
-                    self._script_loader.inject("rust", None)
+                    self._tools_loader.inject("rust", None)
                     logger.debug(f"[{self._name}] Rust accelerator inactive")
             except Exception as e:
                 logger.debug(f"[{self._name}] Rust accelerator failed: {e}")
-                self._script_loader.inject("rust", None)
+                self._tools_loader.inject("rust", None)
         else:
-            self._script_loader.inject("rust", None)
+            self._tools_loader.inject("rust", None)
 
         # 5. Load Scripts
-        self._script_loader.load_all()
+        self._tools_loader.load_all()
 
         self._loaded = True
-        logger.debug(f"[{self._name}] Loaded ({len(self._script_loader)} commands)")
+        logger.debug(f"[{self._name}] Loaded ({len(self._tools_loader)} commands)")
 
     def _get_extension(self, name: str):
         """Get an extension by name."""
@@ -438,14 +301,14 @@ class UniversalScriptSkill:
             raise RuntimeError(f"Skill {self._name} is not loaded")
 
         # Get handler - try full name first, then simple name
-        handler = self._script_loader.get_command(cmd_name)
+        handler = self._tools_loader.get_command(cmd_name)
         if handler is None:
             # Try extracting simple name from "git.status" -> "status"
             simple_name = cmd_name.split(".")[-1] if "." in cmd_name else cmd_name
-            handler = self._script_loader.get_command_simple(simple_name)
+            handler = self._tools_loader.get_command_simple(simple_name)
 
         if handler is None:
-            available = self._script_loader.list_commands()
+            available = self._tools_loader.list_commands()
             raise ValueError(
                 f"Command '{command}' not found in skill '{self._name}'. Available: {available}"
             )
@@ -457,19 +320,19 @@ class UniversalScriptSkill:
 
     def list_commands(self) -> list[str]:
         """List all available commands."""
-        if self._script_loader:
-            return self._script_loader.list_commands()
+        if self._tools_loader:
+            return self._tools_loader.list_commands()
         return []
 
     def get_command(self, name: str) -> Callable | None:
         """Get a command handler by name."""
-        if self._script_loader:
-            return self._script_loader.get_command(name)
+        if self._tools_loader:
+            return self._tools_loader.get_command(name)
         return None
 
     def __repr__(self) -> str:
         status = "loaded" if self._loaded else "not loaded"
-        cmds = len(self._script_loader) if self._script_loader else 0
+        cmds = len(self._tools_loader) if self._tools_loader else 0
         return f"<UniversalScriptSkill name='{self._name}' status='{status}' commands={cmds}>"
 
 
@@ -569,6 +432,6 @@ def create_skill_from_assets(assets_path: str | Path, skill_name: str) -> Univer
     return UniversalScriptSkill(skill_name=skill_name, skill_path=skill_path)
 
 
-# Import ScriptLoader and SkillExtensionLoader at module level for circular import avoidance
+# Import ToolsLoader and SkillExtensionLoader at module level for circular import avoidance
 from .extensions import SkillExtensionLoader
-from .script_loader import ScriptLoader, create_script_loader
+from .tools_loader import ToolsLoader, create_tools_loader

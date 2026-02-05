@@ -18,3 +18,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["scripts"]
+
+[tool.pyright]
+# IDE type checking - resolve omni.foundation imports
+pythonVersion = "3.13"
+venvPath = ["../.."]
+venv = ".venv"

@@ -2,12 +2,17 @@
 # git/prepare_result.j2 - Commit Preparation Result Template
 #
 # Enhanced with:
+# - Submodule information display
 # - Truncated diff (50000 chars for detailed commit message generation)
 # - File category breakdown for LLM analysis
 # - Rich emoji UI for better audit experience
 #}
 
 ## 📊 🔍 Raw Data (LLM Read This)
+
+{% if submodule_info %}
+{{ submodule_info }}
+{% endif %}
 
 {% if valid_scopes %}
 **🎯 Valid Scopes**: `{{ valid_scopes|join('`, `') }}`

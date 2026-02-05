@@ -15,16 +15,24 @@ from omni_core_rs import PySkillScanner, PySkillMetadata
 from omni.test_kit.fixtures import test_tracer, skills_root
 
 
-# Sample SKILL.md content for testing
+# Sample SKILL.md content for testing (Anthropic format with metadata block)
 SAMPLE_SKILL_MD = """---
 name: "test_skill"
-version: "1.0.0"
 description: "A test skill for unit testing"
-routing_keywords: ["test", "example", "demo"]
-authors: ["Test Author <test@example.com>"]
-intents: ["test.intent", "example.action"]
-repository: "https://github.com/example/test-skill"
-permissions: ["filesystem:read", "network:http"]
+metadata:
+  version: "1.0.0"
+  author: "Test Author <test@example.com>"
+  routing_keywords:
+    - "test"
+    - "example"
+    - "demo"
+  intents:
+    - "test.intent"
+    - "example.action"
+  source: "https://github.com/example/test-skill"
+  permissions:
+    - "filesystem:read"
+    - "network:http"
 ---
 
 # Test Skill
@@ -80,9 +88,12 @@ def multi_skill_directory():
         with open(os.path.join(skill1_path, "SKILL.md"), "w") as f:
             f.write("""---
 name: "skill_one"
-version: "1.0.0"
 description: "First test skill"
-routing_keywords: ["one", "first"]
+metadata:
+  version: "1.0.0"
+  routing_keywords:
+    - "one"
+    - "first"
 ---
 
 # Skill One
@@ -94,10 +105,13 @@ routing_keywords: ["one", "first"]
         with open(os.path.join(skill2_path, "SKILL.md"), "w") as f:
             f.write("""---
 name: "skill_two"
-version: "2.0.0"
 description: "Second test skill"
-routing_keywords: ["two", "second"]
-authors: ["Author Two"]
+metadata:
+  version: "2.0.0"
+  authors: ["Author Two"]
+  routing_keywords:
+    - "two"
+    - "second"
 ---
 
 # Skill Two

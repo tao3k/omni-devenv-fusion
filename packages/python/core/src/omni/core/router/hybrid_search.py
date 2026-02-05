@@ -117,6 +117,8 @@ class HybridSearch:
     - Query cleaning for Tantivy compatibility
     - Confidence calibration for downstream consumers
 
+    Intent extraction is handled by the discovery node LLM prompt.
+
     Example:
         ```python
         search = HybridSearch()

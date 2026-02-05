@@ -1,37 +1,39 @@
 ---
-name: "Skill Manager"
-version: "1.0.0"
-description: "Manage skills - discover, install, and update from remote repositories"
-routing_keywords:
-  - "skill"
-  - "discovery"
-  - "discover"
-  - "search"
-  - "find"
-  - "lookup"
-  - "install"
-  - "jit"
-  - "reload"
-  - "unload"
-  - "list"
-  - "analyze" # For analyzing project capabilities
-  - "learn" # For learning about project structure
-  - "what can" # For "what can you do" queries
-  - "capability"
-  - "available"
-  - "tools"
-  - "commands"
-  - "@omni" # All tool calls must go through discover first
-authors: ["omni-dev"]
-intents:
-  - "Discover or search skills"
-  - "Find available tools and commands"
-  - "Analyze project capabilities"
-  - "Learn what tools are available"
-  - "Install new skill"
-  - "Reload skill"
-  - "List available skills"
-  - "Get tool usage before calling @omni"
+name: skill
+description: Use when discovering skills, installing new capabilities, listing available tools, reloading skill manifests, or learning about project capabilities.
+metadata:
+  author: omni-dev-fusion
+  version: "1.0.0"
+  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/skill"
+  routing_keywords:
+    - "skill"
+    - "discovery"
+    - "discover"
+    - "search"
+    - "find"
+    - "lookup"
+    - "install"
+    - "jit"
+    - "reload"
+    - "unload"
+    - "list"
+    - "analyze"
+    - "learn"
+    - "what can"
+    - "capability"
+    - "available"
+    - "tools"
+    - "commands"
+    - "@omni"
+  intents:
+    - "Discover or search skills"
+    - "Find available tools and commands"
+    - "Analyze project capabilities"
+    - "Learn what tools are available"
+    - "Install new skill"
+    - "Reload skill"
+    - "List available skills"
+    - "Get tool usage before calling @omni"
 ---
 
 # Skill Manager

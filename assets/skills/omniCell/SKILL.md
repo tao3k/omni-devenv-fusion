@@ -1,7 +1,26 @@
 ---
-name: omni_cell
-description: Structured OS interaction via Nushell (Nu). Replaces bash for agent workflows.
-version: 1.0.0
+name: omniCell
+description: Use when executing system commands, running Nushell scripts, querying system state, or performing OS interactions with structured JSON output.
+metadata:
+  author: omni-dev-fusion
+  version: "1.0.0"
+  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/omniCell"
+  routing_keywords:
+    - "nushell"
+    - "nu"
+    - "execute"
+    - "command"
+    - "shell"
+    - "terminal"
+    - "system"
+    - "os"
+    - "run"
+    - "process"
+  intents:
+    - "Execute system commands"
+    - "Run Nushell scripts"
+    - "Query system state"
+    - "Perform OS interactions"
 ---
 
 # OmniCell

@@ -414,26 +414,25 @@ class RustVectorStore:
             logger.debug(f"Failed to get analytics table from LanceDB: {e}")
             return None
 
-    async def index_skill_tools(self, base_path: str) -> int:
+    async def index_skill_tools(self, base_path: str, table_name: str = "skills") -> int:
         """Index all tools from skills scripts directory to LanceDB.
 
         Scans `base_path/skills/*/scripts/*.py` for @skill_command decorated
         functions and indexes them for discovery.
-        Updates the default database (skills.lance) for skill tools.
 
         Args:
             base_path: Base directory containing skills (e.g., "assets/skills")
+            table_name: Table name to index tools into (default: "skills", use "router" for router DB)
 
         Returns:
             Number of tools indexed, or 0 on error.
         """
-        # Index to the default path (skills.lance)
         try:
             import omni_core_rs as _rust
 
             store = _rust.create_vector_store(self._index_path, self._dimension, True)
-            count = store.index_skill_tools(base_path, "skills")
-            logger.info(f"Indexed {count} tools from {base_path}")
+            count = store.index_skill_tools(base_path, table_name)
+            logger.info(f"Indexed {count} tools from {base_path} to table '{table_name}'")
             return count
         except Exception as e:
             logger.error(f"Failed to index skill tools: {e}")

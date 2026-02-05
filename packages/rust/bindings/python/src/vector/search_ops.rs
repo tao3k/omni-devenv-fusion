@@ -210,7 +210,7 @@ pub(crate) fn load_tool_registry_async(
 }
 
 pub(crate) fn scan_skill_tools_raw(base_path: &str) -> PyResult<Vec<String>> {
-    use skills_scanner::{SkillScanner, ToolRecord, ToolsScanner};
+    use omni_scanner::{SkillScanner, ToolRecord, ToolsScanner};
 
     let skill_scanner = SkillScanner::new();
     let script_scanner = ToolsScanner::new();

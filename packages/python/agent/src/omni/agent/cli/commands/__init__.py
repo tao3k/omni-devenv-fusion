@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .db import db_app, register_db_command
 from .knowledge import register_knowledge_command
 from .mcp import register_mcp_command
 from .reindex import get_database_path, get_database_paths, register_reindex_command, reindex_app
@@ -11,8 +12,10 @@ from .skill import register_skill_command, skill_app
 from .sync import register_sync_command, sync_app
 
 __all__ = [
+    "db_app",
     "get_database_path",
     "get_database_paths",
+    "register_db_command",
     "register_knowledge_command",
     "register_mcp_command",
     "register_reindex_command",

@@ -4,8 +4,11 @@ test_concurrency.py - Concurrency Integration Tests
 This module tests the Rust backend under high concurrency
 to verify stability and correct behavior under stress.
 
+Marker: local (integration tests with real services, no network)
+
 Run with:
     uv run pytest packages/python/core/tests/integration/test_concurrency.py -v
+    uv run pytest packages/python/core/tests/integration/test_concurrency.py -m local -v
 """
 
 from __future__ import annotations

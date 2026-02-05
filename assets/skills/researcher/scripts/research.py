@@ -33,6 +33,46 @@ def _get_workspace() -> Path:
     return workspace
 
 
+def parse_repo_url(url: str) -> tuple[str, str]:
+    """
+    Parse owner and repo name from a Git URL.
+
+    Args:
+        url: Git repository URL (e.g., https://github.com/owner/repo)
+
+    Returns:
+        (owner, repo_name) tuple
+
+    Examples:
+        >>> parse_repo_url("https://github.com/anthropics/claude-code")
+        ("anthropics", "claude-code")
+        >>> parse_repo_url("https://github.com/tao3k/omni-dev-fusion.git")
+        ("tao3k", "omni-dev-fusion")
+    """
+    # Clean URL
+    url = url.strip().rstrip("/")
+
+    # Handle different URL formats
+    patterns = [
+        r"github\.com[/:]([^/]+)/([^/.]+)",  # github.com/owner/repo
+        r"github\.com[/:]([^/]+)/([^/.]+)\.git",  # github.com/owner/repo.git
+        r"raw\.githubusercontent\.com[/:]([^/]+)/([^/]+)",  # raw.githubusercontent.com
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1), match.group(2)
+
+    # Fallback: simple split
+    parts = url.rstrip("/").split("/")
+    if len(parts) >= 2:
+        return parts[-2], parts[-1].replace(".git", "")
+
+    # Last resort: use whole URL as repo name
+    return "unknown", url.split("/")[-1].replace(".git", "")
+
+
 def _find_repomix_cmd() -> str:
     """Find repomix executable - prefer system binary, skip npx."""
     # Check if in PATH first (fastest)
@@ -50,13 +90,18 @@ def _find_repomix_cmd() -> str:
     return "npx"
 
 
-def clone_repo(url: str, branch: str | None = None) -> str:
+def clone_repo(url: str, branch: str | None = None) -> dict:
     """
     Smart Clone/Update - Accelerates workflow by updating existing repos.
 
     - If repo exists with .git: git fetch + reset --hard (incremental update)
     - If no .git or update fails: fresh clone
+
+    Returns:
+        dict with 'path' (local path) and 'revision' (git commit hash)
     """
+    import subprocess
+
     repo_name = url.split("/")[-1].replace(".git", "")
     repo_path = _get_workspace() / repo_name
 
@@ -88,7 +133,7 @@ def clone_repo(url: str, branch: str | None = None) -> str:
                     capture_output=True,
                 )
                 print(f"✅ [Tool] Repo updated: {repo_name}")
-                return str(repo_path)
+                return _get_repo_info(repo_path)
             except subprocess.CalledProcessError:
                 pass  # Fall through to fresh clone
 
@@ -106,7 +151,54 @@ def clone_repo(url: str, branch: str | None = None) -> str:
 
     subprocess.run(cmd, check=True, capture_output=True)
     print(f"✅ [Tool] Repo cloned: {repo_name}")
-    return str(repo_path)
+    return _get_repo_info(repo_path)
+
+
+def _get_repo_info(repo_path: Path) -> dict:
+    """Get git revision info for a repository."""
+    import subprocess
+
+    try:
+        # Get short commit hash
+        hash_result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+        )
+        commit_hash = hash_result.stdout.strip()[:8] if hash_result.returncode == 0 else "unknown"
+
+        # Get commit date
+        date_result = subprocess.run(
+            ["git", "log", "-1", "--format=%ci", "HEAD"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+        )
+        commit_date = date_result.stdout.strip() if date_result.returncode == 0 else ""
+
+        # Get branch
+        branch_result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+        )
+        branch = branch_result.stdout.strip() if branch_result.returncode == 0 else "unknown"
+
+        return {
+            "path": str(repo_path),
+            "revision": commit_hash,
+            "date": commit_date,
+            "branch": branch,
+        }
+    except Exception:
+        return {
+            "path": str(repo_path),
+            "revision": "unknown",
+            "date": "",
+            "branch": "unknown",
+        }
 
 
 def repomix_map(path: str, max_depth: int = 4) -> str:
@@ -238,13 +330,19 @@ def repomix_compress_shard(
         raise RuntimeError(f"Repomix shard '{shard_name}' failed to generate output.")
 
 
-def init_harvest_structure(repo_name: str) -> Path:
+def init_harvest_structure(owner: str, repo_name: str) -> Path:
     """
-    Setup .data/harvested/<date>-<repo_name>/ directory structure.
+    Setup .data/harvested/<owner>/<repo_name>/ directory structure.
+
+    Standardized storage format:
+    - Old: .data/harvested/YYYYMMDD-repo_name (messy, hard to organize)
+    - New: .data/harvested/<owner>/<repo_name>/ (clean, organized by source)
+
+    Args:
+        owner: Repository owner/organization (e.g., "anthropics", "tao3k")
+        repo_name: Repository name (e.g., "claude-code", "skills")
     """
-    date_str = datetime.now().strftime("%Y%m%d")
-    clean_name = repo_name.split("/")[-1].replace(".git", "")
-    base_dir = get_data_dir("harvested") / f"{date_str}-{clean_name}"
+    base_dir = get_data_dir("harvested") / owner / repo_name
 
     if base_dir.exists():
         shutil.rmtree(base_dir)
@@ -269,18 +367,42 @@ def save_shard_result(base_dir: Path, shard_id: int, title: str, content: str) -
 
 
 def save_index(
-    base_dir: Path, title: str, repo_url: str, request: str, shard_summaries: list[str]
+    base_dir: Path,
+    title: str,
+    repo_url: str,
+    request: str,
+    shard_summaries: list[str],
+    revision: str = "",
+    revision_date: str = "",
 ) -> Path:
     """
     Generate and save index.md for the harvested research.
+
+    Includes YAML frontmatter with source revision info for traceability.
     """
     date_str = datetime.now().strftime("%Y-%m-%d")
     total_shards = len(shard_summaries)
 
-    index_content = f"""# Research Analysis: {title}
+    # Build YAML frontmatter with source revision
+    frontmatter_lines = ["---"]
+    frontmatter_lines.append(f"title: Research Analysis: {title}")
+    frontmatter_lines.append(f"source: {repo_url}")
+    if revision:
+        frontmatter_lines.append(f"revision: {revision}")
+    if revision_date:
+        frontmatter_lines.append(f"revision_date: {revision_date}")
+    frontmatter_lines.append(f"generated: {date_str}")
+    frontmatter_lines.append(f"shards: {total_shards}")
+    frontmatter_lines.append("---")
+    frontmatter = "\n".join(frontmatter_lines)
+
+    index_content = f"""{frontmatter}
+
+# Research Analysis: {title}
 
 **Date:** {date_str}
 **Source:** [{repo_url}]({repo_url})
+**Revision:** `{revision}` {f"({revision_date})" if revision_date else ""}
 **Total Shards:** {total_shards}
 **Generated by:** Omni-Dev Fusion Researcher V2.0 (Turbo)
 

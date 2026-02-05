@@ -26,7 +26,19 @@ from omni.foundation.config.skills import get_all_skill_paths
 
 
 def parse_skill_md(skill_path: Path) -> dict[str, Any] | None:
-    """Parse SKILL.md frontmatter to extract manifest."""
+    """Parse SKILL.md frontmatter to extract manifest.
+
+    Supports the new Anthropic format with nested metadata block:
+    ---
+    name: git
+    description: Use when working with git...
+    metadata:
+      version: "2.0.0"
+      routing_keywords:
+        - "git"
+        - "commit"
+    ---
+    """
     skill_md_path = skill_path / "SKILL.md"
     if not skill_md_path.exists():
         return None
@@ -40,6 +52,18 @@ def parse_skill_md(skill_path: Path) -> dict[str, Any] | None:
 
                 manifest = yaml.safe_load(parts[1])
                 if isinstance(manifest, dict):
+                    # Handle new metadata block format
+                    if "metadata" in manifest and isinstance(manifest["metadata"], dict):
+                        metadata = manifest["metadata"]
+                        # Flatten metadata fields to top-level for compatibility
+                        for key, value in metadata.items():
+                            if key not in manifest:
+                                manifest[key] = value
+                        # Handle author -> authors conversion
+                        if "author" in metadata and "authors" not in manifest:
+                            manifest["authors"] = [metadata["author"]]
+                        # Remove metadata block after flattening
+                        manifest.pop("metadata", None)
                     return manifest
     except Exception:
         pass
@@ -79,18 +103,25 @@ def fixtures_skills_data_skill_factory(
         # Create __init__.py
         (skill_dir / "__init__.py").touch()
 
-        # Create SKILL.md with manifest
+        # Create SKILL.md with manifest (Anthropic format with metadata block)
         manifest_data = manifest or {
             "name": name,
             "version": "0.1.0",
             "description": f"Test skill: {name}",
-            "tools_module": f"omni.skills.{name}.tools",
         }
 
-        skill_md = skill_dir / "SKILL.md"
-        skill_md.write_text(
-            "---\n" + "\n".join(f"{k}: {v}" for k, v in manifest_data.items()) + "\n---\n"
+        # Build YAML content
+        yaml_lines = ["---"]
+        yaml_lines.append(f'name: "{manifest_data.get("name", name)}"')
+        yaml_lines.append(
+            f'description: "{manifest_data.get("description", f"Test skill: {name}")}"'
         )
+        yaml_lines.append("metadata:")
+        yaml_lines.append(f'  version: "{manifest_data.get("version", "0.1.0")}"')
+        yaml_lines.append("---")
+
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text("\n".join(yaml_lines) + "\n")
 
         created.append(skill_dir)
         return skill_dir
@@ -128,22 +159,29 @@ def fixtures_skills_data_toxic_skill_factory(
         elif error_type == "missing_tools":
             content = "# No tools defined\n"
         elif error_type == "invalid_manifest":
-            content = "---\nname: invalid name with spaces\nversion: 1.0.0\n---\n"
+            content = """---
+name: "invalid name with spaces"
+description: Invalid manifest
+metadata:
+  version: "1.0.0"
+---
+"""
         else:
             content = "# Unknown error type\n"
 
         (skill_dir / "tools.py").write_text(content)
         (skill_dir / "__init__.py").touch()
 
-        # Create SKILL.md
-        manifest = {
-            "name": name,
-            "version": "0.1.0",
-            "description": f"Toxic skill: {error_type}",
-        }
-        (skill_dir / "SKILL.md").write_text(
-            "---\n" + "\n".join(f"{k}: {v}" for k, v in manifest.items()) + "\n---\n"
-        )
+        # Create SKILL.md (Anthropic format with metadata block)
+        yaml_lines = [
+            "---",
+            f'name: "{name}"',
+            f'description: "Toxic skill: {error_type}"',
+            "metadata:",
+            '  version: "0.1.0"',
+            "---",
+        ]
+        (skill_dir / "SKILL.md").write_text("\n".join(yaml_lines) + "\n")
 
         created.append(skill_dir)
         return skill_dir

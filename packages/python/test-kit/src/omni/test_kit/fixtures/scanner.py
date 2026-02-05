@@ -15,11 +15,7 @@ from omni.foundation.config.skills import SKILLS_DIR
 class SkillTestBuilder:
     """Builder for creating test skill directories with SKILL.md.
 
-    Usage:
-        builder = SkillTestBuilder("test_skill")
-        builder.with_metadata(version="1.0.0", routing_keywords=["test"])
-        builder.with_script("example_tool.py", tool_code)
-        path = builder.create(tmpdir)
+    Creates skills using the Anthropic format with nested metadata block.
     """
 
     def __init__(self, skill_name: str):
@@ -28,12 +24,12 @@ class SkillTestBuilder:
             "name": skill_name,
             "version": "1.0.0",
             "description": f"Test skill: {skill_name}",
-            "routing_keywords": [],
-            "authors": [],
-            "intents": [],
-            "repository": "",
-            "permissions": [],
         }
+        self.routing_keywords: list[str] = []
+        self.authors: list[str] = []
+        self.intents: list[str] = []
+        self.repository: str = ""
+        self.permissions: list[str] = []
         self.scripts: dict[str, str] = {}
 
     def with_metadata(
@@ -52,15 +48,15 @@ class SkillTestBuilder:
         if description is not None:
             self.metadata["description"] = description
         if routing_keywords is not None:
-            self.metadata["routing_keywords"] = routing_keywords
+            self.routing_keywords = routing_keywords
         if authors is not None:
-            self.metadata["authors"] = authors
+            self.authors = authors
         if intents is not None:
-            self.metadata["intents"] = intents
+            self.intents = intents
         if repository is not None:
-            self.metadata["repository"] = repository
+            self.repository = repository
         if permissions is not None:
-            self.metadata["permissions"] = permissions
+            self.permissions = permissions
         return self
 
     def with_script(self, filename: str, content: str) -> "SkillTestBuilder":
@@ -73,7 +69,7 @@ class SkillTestBuilder:
         skill_path = Path(base_dir) / self.skill_name
         skill_path.mkdir(parents=True, exist_ok=True)
 
-        # Create SKILL.md
+        # Create SKILL.md (Anthropic format with metadata block)
         skill_md = skill_path / "SKILL.md"
         yaml_frontmatter = self._build_frontmatter()
         skill_md.write_text(yaml_frontmatter)
@@ -88,15 +84,24 @@ class SkillTestBuilder:
         return str(skill_path)
 
     def _build_frontmatter(self) -> str:
-        """Build SKILL.md content with YAML frontmatter."""
+        """Build SKILL.md content with YAML frontmatter (Anthropic format)."""
         lines = ["---"]
-        for key, value in self.metadata.items():
-            if isinstance(value, list):
-                lines.append(f"{key}: {['"' + v + '"' for v in value]}")
-            elif isinstance(value, str) and value:
-                lines.append(f'{key}: "{value}"')
-            else:
-                lines.append(f"{key}:")
+        lines.append(f'name: "{self.metadata.get("name", self.skill_name)}"')
+        lines.append(
+            f'description: "{self.metadata.get("description", f"Test skill: {self.skill_name}")}"'
+        )
+        lines.append("metadata:")
+        lines.append(f'  version: "{self.metadata.get("version", "1.0.0")}"')
+        if self.authors:
+            lines.append(f"  authors: {["'" + a + "'" for a in self.authors]}")
+        if self.routing_keywords:
+            lines.append(f"  routing_keywords: {["'" + k + "'" for k in self.routing_keywords]}")
+        if self.intents:
+            lines.append(f"  intents: {["'" + i + "'" for i in self.intents]}")
+        if self.repository:
+            lines.append(f'  source: "{self.repository}"')
+        if self.permissions:
+            lines.append(f"  permissions: {["'" + p + "'" for p in self.permissions]}")
         lines.append("---")
         lines.append(f"\n# {self.skill_name}")
         return "\n".join(lines)

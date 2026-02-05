@@ -4991,6 +4991,8 @@ dependencies = [
  "serde",
  "tempfile",
  "thiserror 2.0.17",
+ "tree-sitter",
+ "tree-sitter-python",
  "walkdir",
 ]
 
@@ -5005,6 +5007,8 @@ dependencies = [
  "omni-events",
  "omni-executor",
  "omni-io",
+ "omni-knowledge",
+ "omni-scanner",
  "omni-security",
  "omni-sniffer",
  "omni-tags",
@@ -5015,7 +5019,6 @@ dependencies = [
  "pyo3",
  "serde",
  "serde_json",
- "skills-scanner",
  "tempfile",
  "tokio",
  "uuid",
@@ -5040,7 +5043,7 @@ dependencies = [
 
 [[package]]
 name = "omni-events"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5081,6 +5084,27 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.17",
  "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "omni-knowledge"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "lance",
+ "lance-arrow",
+ "log",
+ "omni-types",
+ "pyo3",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "uuid",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -5088,6 +5112,26 @@ name = "omni-lance"
 version = "0.1.1"
 dependencies = [
  "lance",
+]
+
+[[package]]
+name = "omni-scanner"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "hex",
+ "log",
+ "omni-ast",
+ "schemars 1.2.0",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "toml",
+ "walkdir",
 ]
 
 [[package]]
@@ -5144,7 +5188,7 @@ dependencies = [
 
 [[package]]
 name = "omni-tui"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5187,12 +5231,12 @@ dependencies = [
  "log",
  "omni-io",
  "omni-lance",
+ "omni-scanner",
  "omni-types",
  "ordered-float 4.6.0",
  "serde",
  "serde_json",
  "serde_yaml",
- "skills-scanner",
  "tantivy 0.25.0",
  "tempfile",
  "thiserror 2.0.17",
@@ -6944,26 +6988,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "skills-scanner"
-version = "0.1.1"
-dependencies = [
- "anyhow",
- "hex",
- "log",
- "omni-ast",
- "schemars 1.2.0",
- "serde",
- "serde_json",
- "serde_yaml",
- "sha2",
- "tempfile",
- "thiserror 2.0.17",
- "tokio",
- "toml",
- "walkdir",
-]
-
-[[package]]
 name = "slab"
 version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7989,9 +8013,9 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter"
-version = "0.26.3"
+version = "0.26.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "974d205cc395652cfa8b37daa053fe56eebd429acf8dc055503fee648dae981e"
+checksum = "12987371f54efc9b9306a20dc87ed5aaee9f320c8a8b115e28515c412b2efe39"
 dependencies = [
  "cc",
  "regex",

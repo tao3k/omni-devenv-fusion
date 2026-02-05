@@ -18,27 +18,24 @@ notify = ["omni-io/notify"]
 [dependencies]
 # Python 3.13 support via PyO3 0.23
 pyo3 = { workspace = true, features = ["extension-module"] }
-# Note: tokio removed - not needed for synchronous bindings
+
+# Internal crates
 omni-events = { path = "../../crates/omni-events" }
 omni-sniffer = { path = "../../crates/omni-sniffer" }
 omni-types = { path = "../../crates/omni-types" }
 omni-io = { path = "../../crates/omni-io", default-features = false }
 omni-tokenizer = { path = "../../crates/omni-tokenizer" }
-# Hyper-Immune System
 omni-ast = { path = "../../crates/omni-ast" }
 omni-security = { path = "../../crates/omni-security" }
-# The Cartographer
 omni-tags = { path = "../../crates/omni-tags" }
-# The Surgeon - Structural Refactoring
 omni-edit = { path = "../../crates/omni-edit" }
-# The Librarian - Vector Store for embeddings
 omni-vector = { path = "../../crates/omni-vector" }
-# Skills Scanner - Skill metadata and tool discovery
-skills-scanner = { path = "../../crates/skills-scanner" }
-# OmniCell - Nushell Native Bridge
+omni-scanner = { path = "../../crates/omni-scanner" }
 omni-executor = { path = "../../crates/omni-executor" }
-# Omni-TUI - Terminal UI Engine
 omni-tui = { path = "../../crates/omni-tui" }
+omni-knowledge = { path = "../../crates/omni-knowledge" }
+
+# Workspace dependencies (inherited)
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
@@ -47,5 +44,4 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 
 [dev-dependencies]
-pyo3 = { workspace = true }
-tempfile = "3"
+tempfile = { workspace = true }

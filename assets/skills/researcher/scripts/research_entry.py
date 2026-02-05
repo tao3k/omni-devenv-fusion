@@ -115,6 +115,7 @@ async def run_research_graph(
         # Extract harvest directory from messages
         harvest_dir = result.get("harvest_dir", "")
         shard_analyses = result.get("shard_analyses", [])
+        revision = result.get("repo_revision", "")
 
         # Format summary from messages
         messages = result.get("messages", [])
@@ -125,6 +126,7 @@ async def run_research_graph(
         return {
             "success": True,
             "harvest_dir": harvest_dir,
+            "revision": revision,
             "shards_analyzed": len(shard_analyses),
             "shard_summaries": shard_analyses,
             "summary": summary,

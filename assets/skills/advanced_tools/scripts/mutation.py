@@ -31,7 +31,25 @@ class FileChange(BaseModel):
 
 @skill_command(
     name="batch_replace",
-    description="Batch refactoring with dry-run safety. RECOMMENDED for refactoring.",
+    description="""
+    Batch refactoring with dry-run safety. RECOMMENDED for refactoring.
+
+    Uses rg (ripgrep) to find matches, then applies regex replacements.
+
+    Args:
+        - pattern: str - Regex pattern to search for (required)
+        - replacement: str - Replacement string (required)
+        - file_glob: str = **/* - Glob pattern for files (e.g., "**/*.py")
+        - dry_run: bool = true - If true, only preview changes
+        - max_files: int = 50 - Maximum files to process
+
+    Returns:
+        JSON with success, count, changes list, and diffs.
+
+    IMPORTANT: Always use dry_run=true first. Use specific file_glob patterns
+    to limit scope (e.g., "src/*.py" not "**/*"). If rg fails with
+    "Resource temporarily unavailable", reduce max_files or use more specific glob.
+    """,
     autowire=True,
 )
 def batch_replace(

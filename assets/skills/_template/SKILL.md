@@ -1,19 +1,19 @@
 ---
-# === Omni-Dev Fusion Skill Manifest ===
 name: _template
-version: 1.0.0
-description: Template skill for new capabilities - demonstrates Trinity Architecture v4.0
-authors: ["omni-dev-fusion"]
-license: Apache-2.0
-execution_mode: library
-routing_strategy: keyword
-routing_keywords: ["template", "new skill", "create skill", "scaffold"]
-require_refs: []
-intents: []
-# Zero Trust Permissions - Declare required capabilities here
-# Format: "category:action" (e.g., "filesystem:read", "network:http")
-# Empty list = no permissions granted (safer default)
-permissions: []
+description: Template skill for creating new capabilities - demonstrates Trinity Architecture v4.0 with scripts/commands.py pattern.
+metadata:
+  author: omni-dev-fusion
+  version: "1.0.0"
+  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/_template"
+  routing_keywords:
+    - "template"
+    - "new skill"
+    - "create skill"
+    - "scaffold"
+  intents:
+    - "Create a new skill"
+    - "Scaffold skill structure"
+    - "Learn Trinity Architecture patterns"
 ---
 
 # Template Skill

@@ -234,18 +234,23 @@ class UnifiedRouter:
         """Load skill index for keyword-based routing."""
         try:
             import asyncio
-            from omni.foundation.bridge.scanner import PythonSkillScanner
+            from omni.foundation.bridge.rust_vector import get_vector_store
 
-            scanner = PythonSkillScanner()
-            skills = asyncio.run(scanner.scan_directory())
+            store = get_vector_store()
+            tools = asyncio.run(store.list_all_tools())
 
-            # Build keyword -> (skill, commands) mapping from routingKeywords
-            keyword_map = {}
-            for skill in skills:
-                skill_name = skill.skill_name
-                keywords = skill.metadata.get("routingKeywords", [])
-                for kw in keywords:
-                    keyword_map.setdefault(kw.lower(), []).append(skill_name)
+            # Build keyword -> skill mapping from tool records
+            # Note: routingKeywords should be stored in the tool metadata
+            keyword_map: dict[str, list[str]] = {}
+            for tool in tools:
+                skill_name = tool.get("skill_name", "unknown")
+                # Try to get routing keywords from description or metadata
+                description = tool.get("description", "")
+                # Extract keywords from description (simple approach)
+                words = description.lower().split()[:5]
+                for kw in words:
+                    if len(kw) > 3:
+                        keyword_map.setdefault(kw, []).append(skill_name)
 
             return keyword_map
         except Exception as e:
@@ -323,8 +328,8 @@ class UnifiedRouter:
                         skill = ctx.get_skill(skill_name)
 
                         # Check if skill has native functions matching potential commands
-                        if skill and hasattr(skill, "_script_loader") and skill._script_loader:
-                            loader = skill._script_loader
+                        if skill and hasattr(skill, "_tools_loader") and skill._tools_loader:
+                            loader = skill._tools_loader
                             for cmd_word in potential_commands:
                                 registered_cmd = f"{skill_name}.{cmd_word}"
                                 native_func = f"{skill_name}_{cmd_word}"

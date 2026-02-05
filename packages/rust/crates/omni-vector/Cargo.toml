@@ -21,9 +21,6 @@ ordered-float = "4.2"
 # RecordBatch utilities (extracted to omni-lance)
 omni-lance = { path = "../omni-lance" }
 
-# Skills Scanner - Modular skill directory scanning
-skills-scanner = { path = "../skills-scanner" }
-
 # Async runtime
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "fs"] }
 
@@ -38,24 +35,27 @@ dashmap = "7.0.0-rc2"
 
 # Error handling
 thiserror = { workspace = true }
-anyhow = "1.0"
+anyhow = { workspace = true }
 
 # Serialization
 serde = { workspace = true }
-serde_json = "1.0"
+serde_json = { workspace = true }
 
 # Reuse our common types
 omni-types = { path = "../omni-types" }
 omni-io = { path = "../omni-io" }
 
+# Omni Scanner - Skills and Knowledge scanning
+omni-scanner = { path = "../omni-scanner" }
+
 # YAML parsing for skill manifests
 serde_yaml = "0.9"
 
 # Logging
-log = "0.4"
+log = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3.24"
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

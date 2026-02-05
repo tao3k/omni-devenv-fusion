@@ -74,8 +74,8 @@ class SkillContext:
             self._skills[skill.name] = skill
 
             # Register decorated commands from the skill
-            if hasattr(skill, "_script_loader") and skill._script_loader is not None:
-                loader = skill._script_loader
+            if hasattr(skill, "_tools_loader") and skill._tools_loader is not None:
+                loader = skill._tools_loader
 
                 # Register decorated commands
                 for cmd_name, handler in loader.commands.items():
@@ -158,19 +158,19 @@ class SkillContext:
                         for key in old_native:
                             del self._native[key]
 
-                        # Re-import and reload scripts into skill's script_loader
-                        if skill._script_loader:
-                            # Clear script_loader's internal caches
-                            skill._script_loader.commands.clear()
-                            skill._script_loader.native_functions.clear()
+                        # Re-import and reload scripts into skill's tools_loader
+                        if skill._tools_loader:
+                            # Clear tools_loader's internal caches
+                            skill._tools_loader.commands.clear()
+                            skill._tools_loader.native_functions.clear()
 
                             # Reload scripts
-                            skill._script_loader.load_all()
+                            skill._tools_loader.load_all()
 
                             # Register new commands
-                            for cmd_name, handler in skill._script_loader.commands.items():
+                            for cmd_name, handler in skill._tools_loader.commands.items():
                                 self._commands[cmd_name] = handler
-                            for func_name, func in skill._script_loader.native_functions.items():
+                            for func_name, func in skill._tools_loader.native_functions.items():
                                 full_name = f"{name}.{func_name}"
                                 self._native[full_name] = func
                                 self._native[func_name] = func

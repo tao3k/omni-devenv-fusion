@@ -1,0 +1,44 @@
+[package]
+name = "omni-knowledge"
+version.workspace = true
+edition.workspace = true
+description = "High-performance knowledge management with LanceDB storage"
+authors = ["Omni-Dev-Fusion Team"]
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+# LanceDB core
+lance = { workspace = true }
+lance-arrow = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "fs"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Reuse common types
+omni-types = { path = "../omni-types" }
+
+# Python bindings
+pyo3 = { workspace = true }
+
+# Fast hash for sync (5-10x faster than MD5)
+xxhash-rust = "0.8"
+
+# Logging
+log = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

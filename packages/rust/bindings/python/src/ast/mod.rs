@@ -282,6 +282,41 @@ pub fn py_chunk_code(
     Ok(chunks.into_iter().map(Into::into).collect())
 }
 
+/// Extract skeleton (signatures + docstrings) from source code.
+///
+/// This function extracts only structural definitions (function signatures,
+/// class definitions) along with their docstrings, removing implementation bodies.
+/// Ideal for lightweight semantic indexing where full code content is not needed.
+///
+/// Args:
+///     content: Source code content
+///     language: Programming language (e.g., "python", "rust")
+///
+/// Returns:
+///     JSON string containing {"skeleton": "...", "items_count": N}
+#[pyfunction]
+#[pyo3(signature = (content, language))]
+pub fn py_extract_skeleton(content: String, language: String) -> PyResult<String> {
+    let lang: omni_ast::Lang = language
+        .as_str()
+        .try_into()
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Invalid language: {}", e)))?;
+
+    let skeleton = omni_ast::extract_skeleton(&content, lang);
+
+    // Count items (separated by double newlines)
+    let items_count = skeleton.split("\n\n").filter(|s| !s.is_empty()).count();
+
+    let result = serde_json::json!({
+        "skeleton": skeleton,
+        "items_count": items_count,
+    });
+
+    serde_json::to_string(&result).map_err(|e| {
+        pyo3::exceptions::PyRuntimeError::new_err(format!("JSON serialization failed: {}", e))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -265,10 +265,13 @@ class TestSkillInfo:
         skill_dir.mkdir()
         (skill_dir / "SKILL.md").write_text("""---
 name: test_skill
-version: 1.0.0
 description: A test skill
-authors: ["Test Author"]
-routing_keywords: ["test", "example"]
+metadata:
+  version: "1.0.0"
+  authors: ["Test Author"]
+  routing_keywords:
+    - "test"
+    - "example"
 ---
 This is a test skill.
 """)

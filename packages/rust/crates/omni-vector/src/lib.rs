@@ -18,15 +18,15 @@ pub use omni_lance::{
 };
 
 // ============================================================================
-// Re-exports from skills-scanner
+// Re-exports from omni-scanner (Skills and Knowledge types)
 // ============================================================================
 
-pub use skills_scanner::{
-    DocumentScanner, SkillMetadata, SkillScanner, SkillStructure, ToolRecord, ToolsScanner,
+pub use omni_scanner::{
+    SkillMetadata as OmniSkillMetadata, SkillScanner, ToolRecord as OmniToolRecord, ToolsScanner,
 };
 
 // ============================================================================
-// Re-exports from submodules
+// Module Declarations
 // ============================================================================
 
 pub use checkpoint::{CheckpointRecord, CheckpointStore};

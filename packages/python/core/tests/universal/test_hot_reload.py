@@ -240,7 +240,7 @@ ctx.register_skill(skill)
 
 # Get import count before reload
 skill1 = ctx.get_skill("sysmodules_skill")
-count_before = skill1._script_loader.commands.get("sysmodules_skill.status", lambda: None)()
+count_before = skill1._tools_loader.commands.get("sysmodules_skill.status", lambda: None)()
 
 # Modify file to trigger reload
 import time
@@ -505,7 +505,7 @@ print("retrieved:", retrieved is not None)
 class TestScriptLoaderHotReload:
     """Tests for ScriptLoader's role in hot reload."""
 
-    def test_script_loader_reload_clears_cache(self, tmp_path):
+    def test_tools_loader_reload_clears_cache(self, tmp_path):
         """Verify ScriptLoader.load_all() clears old commands."""
         skill_path = tmp_path / "loader_test_skill"
         skill_path.mkdir()
@@ -538,7 +538,7 @@ skill = UniversalScriptSkill("loader_test_skill", Path("{skill_path}"))
 import asyncio
 asyncio.run(skill.load({{"cwd": str(Path("."))}}))
 
-initial_cmds = len(skill._script_loader.commands)
+initial_cmds = len(skill._tools_loader.commands)
 print("initial commands:", initial_cmds)
 
 # Modify script
@@ -548,10 +548,10 @@ script_path = Path("{skill_path}/scripts/main.py")
 script_path.write_text(script_path.read_text().replace("v1", "v2"))
 
 # Reload
-skill._script_loader.commands.clear()
-skill._script_loader.load_all()
+skill._tools_loader.commands.clear()
+skill._tools_loader.load_all()
 
-new_cmds = len(skill._script_loader.commands)
+new_cmds = len(skill._tools_loader.commands)
 print("new commands:", new_cmds)
 print("reloaded:", initial_cmds == new_cmds)
 ''',
@@ -598,7 +598,7 @@ async def test():
     print("after reload mtime:", mtime2)
 
     # Commands should be refreshed
-    print("commands count:", len(skill2._script_loader.commands))
+    print("commands count:", len(skill2._tools_loader.commands))
 
 import asyncio
 asyncio.run(test())

@@ -1,23 +1,16 @@
 ---
-name: "{{ skill_name }}"
-version: "0.1.0"
-description: "{{ description }}"
-authors: ["{{ author | default('omni-dev') }}"]
-license: MIT
-execution_mode: library
-routing_strategy: keyword
-routing_keywords: {{ routing_keywords | tojson }}
-require_refs: []
-permissions:
-{%- if permissions %}
-{%- for perm in permissions %}
-  - "{{ perm }}"
+name: {{ skill_name }}
+description: Use when {{ description | lower }}.
+metadata:
+  author: omni-dev-fusion
+  version: "0.1.0"
+  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/{{ skill_name }}"
+  routing_keywords:
+{%- for kw in routing_keywords %}
+    - "{{ kw }}"
 {%- endfor %}
-{%- else %}
-  []
-{%- endif %}
-intents:
-  - "Use functionality from {{ skill_name }}"
+  intents:
+    - "Use {{ skill_name }} functionality"
 ---
 
 # {{ skill_name | replace('-', ' ') | title }} Skill
@@ -51,8 +44,8 @@ Check available commands with `@omni("{{ skill_name }}.list_tools")`.
 | Component | Description |
 | --------- | ----------- |
 | **Code** | `scripts/commands.py` - Implementation with `@skill_command` |
-| **Context** | `SKILL.md` - Skill metadata in YAML Frontmatter |
-| **State** | Configured permissions: `{{ permissions | join(', ') | default('none') }}` |
+| **Context** | `SKILL.md` - Skill metadata in YAML Frontmatter with metadata block |
+| **State** | Configured permissions: {{ permissions | join(', ') | default('none') }} |
 
 ## Usage
 

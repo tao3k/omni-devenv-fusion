@@ -1,6 +1,6 @@
 import pytest
 from omni.test_kit.decorators import omni_skill
-from git.scripts.smart_commit_workflow import _build_workflow
+from git.scripts.smart_commit_graphflow.workflow import _build_workflow
 
 
 @omni_skill(name="git")

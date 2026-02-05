@@ -33,6 +33,7 @@ mod extract;
 mod item;
 mod lang;
 mod python;
+mod python_tree_sitter;
 mod re_exports;
 mod scan;
 mod security;
@@ -64,7 +65,12 @@ pub use python::{
 pub use security::{SecurityConfig, SecurityScanner, SecurityViolation};
 
 // Code extraction utilities
-pub use extract::{ExtractResult, extract_items};
+pub use extract::{ExtractResult, extract_items, extract_skeleton, get_skeleton_patterns};
 
 // Code chunking utilities
 pub use chunk::{CodeChunk, chunk_code};
+
+// Tree-sitter based Python parser for robust decorator extraction
+pub use python_tree_sitter::{
+    DecoratedFunction, DecoratorArguments, DecoratorInfo, ParameterInfo, TreeSitterPythonParser,
+};

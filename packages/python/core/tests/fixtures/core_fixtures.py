@@ -107,13 +107,15 @@ def create_toxic_skill_factory(skills_dir: Path) -> Callable[[str, str], tuple[s
         # Determine module name
         module_name = tools_module_path or f"assets.skills.{name}.tools"
 
-        # Write SKILL.md (unified manifest format)
+        # Write SKILL.md (Anthropic format with metadata block)
         skill_md_content = f'''\
 ---
 name: "{name}"
-version: "0.0.1"
 description: "A toxic skill for testing"
-routing_keywords: ["test"]
+metadata:
+  version: "0.0.1"
+  routing_keywords:
+    - "test"
 ---
 
 # Toxic Guide

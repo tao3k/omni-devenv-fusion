@@ -9,9 +9,11 @@
 //! Enhanced with PySkillScanner for configurable scanning.
 
 use crate::vector::PyToolRecord;
-use omni_vector::{SkillScanner, ToolsScanner};
+use omni_scanner::{
+    IndexToolEntry, SkillMetadata, SkillScanner as OmniSkillScanner, SkillStructure, ToolRecord,
+    ToolsScanner as OmniToolsScanner, calculate_sync_ops,
+};
 use pyo3::prelude::*;
-use skills_scanner::{SkillMetadata, SkillStructure};
 use std::path::Path;
 
 /// Python wrapper for SkillMetadata
@@ -86,8 +88,8 @@ impl From<SkillMetadata> for PySkillMetadata {
 /// ```
 #[pyclass]
 pub struct PySkillScanner {
-    inner: SkillScanner,
-    tools_scanner: ToolsScanner,
+    inner: OmniSkillScanner,
+    tools_scanner: OmniToolsScanner,
     base_path: String,
 }
 
@@ -98,8 +100,8 @@ impl PySkillScanner {
     #[pyo3(signature = (base_path))]
     fn new(base_path: String) -> Self {
         Self {
-            inner: SkillScanner::new(),
-            tools_scanner: ToolsScanner::new(),
+            inner: OmniSkillScanner::new(),
+            tools_scanner: OmniToolsScanner::new(),
             base_path,
         }
     }
@@ -238,7 +240,7 @@ impl PySkillScanner {
         }
 
         let structure = SkillStructure::default();
-        SkillScanner::validate_structure(&skill_path, &structure)
+        OmniSkillScanner::validate_structure(&skill_path, &structure)
     }
 
     /// Get the base path for this scanner.
@@ -261,8 +263,8 @@ impl PySkillScanner {
 #[pyfunction]
 #[pyo3(signature = (base_path))]
 pub fn scan_skill_tools(base_path: String) -> Vec<PyToolRecord> {
-    let skill_scanner = SkillScanner::new();
-    let script_scanner = ToolsScanner::new();
+    let skill_scanner = OmniSkillScanner::new();
+    let script_scanner = OmniToolsScanner::new();
     let skills_path = Path::new(&base_path);
 
     if !skills_path.exists() {
@@ -274,7 +276,7 @@ pub fn scan_skill_tools(base_path: String) -> Vec<PyToolRecord> {
         Ok(metadatas) => {
             // Step 2: For each skill, scan ONLY the scripts/ directory
             // (consistent with export behavior in scan_all_full_to_index)
-            let mut tools_map: std::collections::HashMap<String, omni_vector::ToolRecord> =
+            let mut tools_map: std::collections::HashMap<String, ToolRecord> =
                 std::collections::HashMap::new();
 
             for metadata in &metadatas {
@@ -299,7 +301,10 @@ pub fn scan_skill_tools(base_path: String) -> Vec<PyToolRecord> {
                 }
             }
 
-            tools_map.into_iter().map(|(_, t)| t.into()).collect()
+            tools_map
+                .into_iter()
+                .map(|(_, t): (_, ToolRecord)| t.into())
+                .collect()
         }
         Err(_) => Vec::new(),
     }
@@ -318,7 +323,7 @@ pub fn scan_skill_tools(base_path: String) -> Vec<PyToolRecord> {
 #[pyfunction]
 #[pyo3(signature = (skill_path))]
 pub fn scan_skill(skill_path: String) -> Option<PySkillMetadata> {
-    let scanner = SkillScanner::new();
+    let scanner = OmniSkillScanner::new();
     let path = std::path::Path::new(&skill_path);
 
     if !path.exists() || !path.is_dir() {
@@ -345,7 +350,7 @@ pub fn scan_skill(skill_path: String) -> Option<PySkillMetadata> {
 #[pyfunction]
 #[pyo3(signature = (content, skill_name))]
 pub fn scan_skill_from_content(content: &str, skill_name: String) -> PySkillMetadata {
-    let scanner = SkillScanner::new();
+    let scanner = OmniSkillScanner::new();
     let temp_path = std::path::Path::new("/tmp").join(&skill_name);
 
     match scanner.parse_skill_md(content, &temp_path) {
@@ -382,8 +387,8 @@ pub struct PySyncReport {
     pub unchanged_count: usize,
 }
 
-impl From<skills_scanner::SyncReport> for PySyncReport {
-    fn from(report: skills_scanner::SyncReport) -> Self {
+impl From<omni_scanner::SyncReport> for PySyncReport {
+    fn from(report: omni_scanner::SyncReport) -> Self {
         Self {
             added: report.added.into_iter().map(|t| t.into()).collect(),
             updated: report.updated.into_iter().map(|t| t.into()).collect(),
@@ -407,23 +412,21 @@ impl From<skills_scanner::SyncReport> for PySyncReport {
 #[pyfunction]
 #[pyo3(signature = (scanned_tools_json, existing_tools_json))]
 pub fn diff_skills(scanned_tools_json: &str, existing_tools_json: &str) -> PyResult<PySyncReport> {
-    let scanned: Vec<omni_vector::ToolRecord> =
-        serde_json::from_str(scanned_tools_json).map_err(|e| {
-            pyo3::exceptions::PyValueError::new_err(format!(
-                "Failed to parse scanned tools JSON: {}",
-                e
-            ))
-        })?;
+    let scanned: Vec<ToolRecord> = serde_json::from_str(scanned_tools_json).map_err(|e| {
+        pyo3::exceptions::PyValueError::new_err(format!(
+            "Failed to parse scanned tools JSON: {}",
+            e
+        ))
+    })?;
 
-    let existing: Vec<skills_scanner::IndexToolEntry> = serde_json::from_str(existing_tools_json)
-        .map_err(|e| {
+    let existing: Vec<IndexToolEntry> = serde_json::from_str(existing_tools_json).map_err(|e| {
         pyo3::exceptions::PyValueError::new_err(format!(
             "Failed to parse existing tools JSON: {}",
             e
         ))
     })?;
 
-    let report = skills_scanner::calculate_sync_ops(scanned, existing);
+    let report = calculate_sync_ops(scanned, existing);
 
     Ok(report.into())
 }
@@ -473,7 +476,7 @@ pub fn scan_paths(
     skill_keywords: Vec<String>,
     skill_intents: Vec<String>,
 ) -> Vec<PyToolRecord> {
-    let scanner = omni_vector::ToolsScanner::new();
+    let scanner = OmniToolsScanner::new();
 
     match scanner.scan_paths(&files, &skill_name, &skill_keywords, &skill_intents) {
         Ok(tools) => tools.into_iter().map(|t| t.into()).collect(),
@@ -519,7 +522,7 @@ pub fn parse_script_content(
     skill_keywords: Vec<String>,
     skill_intents: Vec<String>,
 ) -> Vec<PyToolRecord> {
-    let scanner = omni_vector::ToolsScanner::new();
+    let scanner = OmniToolsScanner::new();
 
     match scanner.parse_content(
         &content,

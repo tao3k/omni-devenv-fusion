@@ -132,7 +132,7 @@ impl VectorStore {
             if let Ok(dataset) = Dataset::open(table_path.to_string_lossy().as_ref()).await {
                 let mut scanner = dataset.scan();
                 scanner
-                    .project(&[VECTOR_COLUMN, METADATA_COLUMN, CONTENT_COLUMN])
+                    .project(&[VECTOR_COLUMN, METADATA_COLUMN, CONTENT_COLUMN, "id"])
                     .ok();
                 if let Ok(mut stream) = scanner.try_into_stream().await {
                     let query_len = query_vector.len();
@@ -140,7 +140,10 @@ impl VectorStore {
                         let v_col = batch.column_by_name(VECTOR_COLUMN);
                         let m_col = batch.column_by_name(METADATA_COLUMN);
                         let c_col = batch.column_by_name(CONTENT_COLUMN);
-                        if let (Some(v_c), Some(m_c), Some(c_c)) = (v_col, m_col, c_col) {
+                        let i_col = batch.column_by_name("id");
+                        if let (Some(v_c), Some(m_c), Some(c_c), Some(id_c)) =
+                            (v_col, m_col, c_col, i_col)
+                        {
                             use lance::deps::arrow_array::Array;
                             let vector_arr =
                                 v_c.as_any()
@@ -151,8 +154,11 @@ impl VectorStore {
                             let content_arr = c_c
                                 .as_any()
                                 .downcast_ref::<lance::deps::arrow_array::StringArray>();
-                            if let (Some(v_arr), Some(m_arr), Some(c_arr)) =
-                                (vector_arr, metadata_arr, content_arr)
+                            let id_arr = id_c
+                                .as_any()
+                                .downcast_ref::<lance::deps::arrow_array::StringArray>();
+                            if let (Some(v_arr), Some(m_arr), Some(c_arr), Some(i_arr)) =
+                                (vector_arr, metadata_arr, content_arr, id_arr)
                             {
                                 let values = v_arr
                                     .values()
@@ -184,18 +190,15 @@ impl VectorStore {
                                             {
                                                 continue;
                                             }
-                                            let name = meta
-                                                .get("command")
-                                                .and_then(|s| s.as_str())
-                                                .unwrap_or("")
-                                                .to_string();
-                                            if name.is_empty() {
+                                            // Use id as the unique key (matches keyword index)
+                                            let tool_id = i_arr.value(i).to_string();
+                                            if tool_id.is_empty() {
                                                 continue;
                                             }
                                             results_map.insert(
-                                                name.clone(),
+                                                tool_id.clone(),
                                                 skill::ToolSearchResult {
-                                                    name,
+                                                    name: tool_id.clone(),
                                                     description: c_arr.value(i).to_string(),
                                                     input_schema: meta
                                                         .get("input_schema")

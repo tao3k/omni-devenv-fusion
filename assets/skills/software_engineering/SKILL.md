@@ -1,29 +1,31 @@
 ---
-name: "software_engineering"
-version: "1.0.0"
-description: "The foundation of engineering mindset. Focuses on architecture, system patterns, and universal code navigation."
-routing_keywords:
-  [
-    "architecture",
-    "design",
-    "structure",
-    "patterns",
-    "architecture review",
-    "codebase",
-    "navigate",
-    "explore",
-    "understand",
-    "system design",
-    "modular",
-    "components",
-  ]
-authors: ["omni-dev-fusion"]
-intents:
-  - "Analyze project architecture and structure"
-  - "Design system components and modules"
-  - "Review code for patterns and anti-patterns"
-  - "Navigate and understand codebase organization"
+name: software_engineering
+description: Use when analyzing project architecture, exploring codebase structure, understanding system design, reviewing code patterns, or navigating modular components.
+metadata:
+  author: omni-dev-fusion
+  version: "1.0.0"
+  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/software_engineering"
+  routing_keywords:
+    - "architecture"
+    - "design"
+    - "structure"
+    - "patterns"
+    - "architecture review"
+    - "codebase"
+    - "navigate"
+    - "explore"
+    - "understand"
+    - "system design"
+    - "modular"
+    - "components"
+  intents:
+    - "Analyze project architecture and structure"
+    - "Design system components and modules"
+    - "Review code for patterns and anti-patterns"
+    - "Navigate and understand codebase organization"
 ---
+
+# Software Engineering Skill
 
 You have loaded the **Software Engineering Skill**.
 

@@ -45,7 +45,7 @@ class HiveRouter:
 
     Usage:
         hive = HiveRouter(semantic_router)
-        result = await hive.route("帮我提交代码")
+        result = await hive.route("commit the changes")
     """
 
     # Explicit command pattern: skill.command

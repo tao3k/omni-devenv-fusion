@@ -28,46 +28,47 @@ class TestActionType:
         assert ActionType("mutate") == ActionType.MUTATE
 
 
-class TestCellResult:
-    """Tests for CellResult model."""
+class TestToolResponse:
+    """Tests for ToolResponse model (formerly CellResult)."""
 
-    def test_cell_result_success(self):
+    def test_tool_response_success(self):
         """Test successful result creation."""
-        from omni.core.skills.runtime.omni_cell import CellResult
+        from omni.core.responses import ToolResponse
 
-        result = CellResult(
-            status="success",
+        result = ToolResponse.success(
             data={"name": "test.txt", "size": 1024},
             metadata={"mode": "observe"},
         )
 
-        assert result.status == "success"
+        assert result.status.value == "success"
         assert result.data["name"] == "test.txt"
-        assert result.security_check == "pass"
+        assert result.is_success is True
 
-    def test_cell_result_error(self):
+    def test_tool_response_error(self):
         """Test error result creation."""
-        from omni.core.skills.runtime.omni_cell import CellResult
+        from omni.core.responses import ToolResponse
 
-        result = CellResult(
-            status="error",
-            metadata={"error_msg": "Command failed", "command": "rm -rf /"},
+        result = ToolResponse.error(
+            message="Command failed",
+            code="ERROR",
+            metadata={"command": "rm -rf /"},
         )
 
-        assert result.status == "error"
+        assert result.status.value == "error"
         assert result.data is None
-        assert "Command failed" in result.metadata["error_msg"]
+        assert "Command failed" in result.error_message
 
-    def test_cell_result_blocked(self):
+    def test_tool_response_blocked(self):
         """Test blocked result creation."""
-        from omni.core.skills.runtime.omni_cell import CellResult
+        from omni.core.responses import ToolResponse
 
-        result = CellResult(
-            status="blocked",
+        result = ToolResponse.blocked(
+            reason="Security policy violation",
             metadata={"reason": "Security policy violation"},
         )
 
-        assert result.status == "blocked"
+        assert result.status.value == "blocked"
+        assert result.is_blocked is True
 
 
 class TestOmniCellRunner:

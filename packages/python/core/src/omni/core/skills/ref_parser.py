@@ -1,50 +1,49 @@
 """
 ref_parser.py - Reference Parser
 
-Parses required_refs from:
-1. Rust-generated metadata (priority)
-2. SKILL.md YAML frontmatter (fallback)
+Parses required_refs from Rust-generated metadata only.
+Rust scanner is the Single Source of Truth for skill metadata.
 
-Supports both camelCase and snake_case key formats.
+No Python fallback - if Rust is unavailable, references cannot be resolved.
 """
 
 from __future__ import annotations
 
-import re
+import logging
 from typing import Any
 
-import yaml
+logger = logging.getLogger(__name__)
 
 
 class RefParser:
-    """Parse required_refs from metadata or SKILL.md."""
+    """Parse required_refs from Rust-generated metadata."""
 
     def parse(
         self,
         metadata: dict[str, Any],
-        skill_md_content: str | None = None,
+        skill_md_content: str | None = None,  # noqa: ARG002 - Kept for API compatibility
     ) -> list[str]:
-        """Extract reference list from metadata or fallback.
+        """Extract reference list from Rust metadata.
 
         Args:
             metadata: Skill metadata from Rust index
-            skill_md_content: Raw SKILL.md content for fallback
+            skill_md_content: Ignored (Rust is SSOT)
 
         Returns:
-            List of relative file paths to reference
+            List of relative file paths to reference, or empty list if unavailable
         """
-        # 1. Try Rust metadata first (priority)
+        # Rust metadata is the only source of truth
         refs = self._extract_from_metadata(metadata)
-        if refs:
-            return refs
 
-        # 2. Fallback to YAML frontmatter parsing
-        if skill_md_content:
-            refs = self._extract_from_frontmatter(skill_md_content)
-            if refs:
-                return refs
+        if refs is None:
+            # Check if metadata is essentially empty (Rust unavailable or failed)
+            if not metadata or all(v is None for v in metadata.values() if v != "name"):
+                logger.warning(
+                    "Rust metadata unavailable - required_refs cannot be resolved. "
+                    "Ensure Rust scanner is properly initialized."
+                )
 
-        return []
+        return refs if refs else []
 
     def _extract_from_metadata(self, metadata: dict[str, Any]) -> list[str] | None:
         """Extract from Rust-generated metadata.
@@ -62,26 +61,6 @@ class RefParser:
             return refs if isinstance(refs, list) else None
 
         return None
-
-    def _extract_from_frontmatter(self, content: str) -> list[str]:
-        """Extract from SKILL.md YAML frontmatter.
-
-        Falls back to regex for malformed YAML.
-        """
-        # Parse YAML frontmatter
-        match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
-        if match:
-            try:
-                fm = yaml.safe_load(match.group(1))
-                if fm:
-                    # Try both key formats
-                    refs = fm.get("required_refs") or fm.get("requireRefs")
-                    if refs and isinstance(refs, list):
-                        return refs
-            except yaml.YAMLError:
-                pass
-
-        return []
 
     def normalize_ref(self, ref: str) -> str:
         """Normalize reference path for consistency."""

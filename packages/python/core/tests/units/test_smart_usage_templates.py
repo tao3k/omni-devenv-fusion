@@ -637,9 +637,9 @@ class TestUnifiedLanceDBMigration:
         registry = service._load_registry()
         assert len(registry) > 0
 
-        # Verify we can find specific tools
+        # Verify we can find specific tools (code_tools only has code_search now)
         assert "git.commit" in registry
-        assert "code_tools.smart_ast_search" in registry
+        assert "code_tools.code_search" in registry
 
     def test_search_with_lance_source(self):
         """Test that search works correctly with LanceDB source."""

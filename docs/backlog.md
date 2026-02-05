@@ -21,15 +21,27 @@
 
 Enhance Hybrid Search to fix keyword matching issues (e.g., "Research" intent not triggering `researcher.run_research_graph`).
 
-| Task                      | Status | Description                                                                      |
-| ------------------------- | ------ | -------------------------------------------------------------------------------- |
-| **Intent Cleansing Fix**  | `Todo` | Stop excessive intent abstraction. Keep keywords from user query.                |
-| **Keyword Rescue**        | `Todo` | Force-inject strong keywords (e.g., "research", "analyze") into query.           |
-| **Skill Keywords Update** | `Todo` | Add explicit synonyms to `SKILL.md` (e.g., `researcher`: "research", "analyze"). |
-| **Discovery Node Logic**  | `Todo` | Update `discovery_node` prompt to return `<keywords>` tag along with `<intent>`. |
+**Status: DONE** - Fixed by adding proper keywords to skills.
 
-**Context:**
-Currently, `skill.discover` fails to rank `researcher` tools highly for "Research ..." queries because LLM abstraction dilutes keywords, and Semantic Search (MiniMax) associates "Research" with "Test" (false positive).
+**Root Cause:**
+Researcher skill was missing plain "research" keyword - only had "deep_research", "llm_research".
+
+**Fix Applied:**
+
+1. Added `routing_keywords` to researcher skill: "research", "analyze", "explore", "investigate", "study"
+2. Hybrid search remains clean - no hardcoded intent logic
+3. Intent extraction delegated to LLM discovery node prompt
+
+**How it works now:**
+
+- User: "Research this codebase"
+- Keyword "research" is in researcher skill
+- BM25 keyword search finds match
+- researcher.run_research_graph is selected
+
+**Files Modified:**
+
+- `assets/skills/researcher/SKILL.md` - Added routing keywords
 
 ---
 
@@ -64,12 +76,12 @@ Implement permission boundaries for skills before allowing external/untrusted to
 
 Reduce token usage in the CCA loop without losing context quality.
 
-| Task                          | Status | Description                                                |
-| ----------------------------- | ------ | ---------------------------------------------------------- |
-| **Smart Context Trimming**    | `Done` | Implement `ContextPruner` with tiered priority layers      |
-| **Auto-Summarization API**    | `Done` | Add `ContextManager.prune_with_summary()` method           |
-| **Vector Index Optimization** | `Done` | Adaptive IVF-FLAT partitions (256 vectors/partition)       |
-| **TikToken Integration**      | `Todo` | Replace char-based token estimation with accurate tiktoken |
+| Task                          | Status | Description                                           |
+| ----------------------------- | ------ | ----------------------------------------------------- |
+| **Smart Context Trimming**    | `Done` | Implement `ContextPruner` with tiered priority layers |
+| **Auto-Summarization API**    | `Done` | Add `ContextManager.prune_with_summary()` method      |
+| **Vector Index Optimization** | `Done` | Adaptive IVF-FLAT partitions (256 vectors/partition)  |
+| **TikToken Integration**      | `Done` | Rust-only (omni-tokenizer + PyO3), no Python fallback |
 
 **Documentation:**
 
@@ -144,6 +156,13 @@ uv run omni run "git commit" --tui    # Start TUI mode
 
 | Feature                             | Date       | Notes                                                    |
 | ----------------------------------- | ---------- | -------------------------------------------------------- |
+| **TikToken Integration**            | 2026-02-04 | Rust-only omni-tokenizer + PyO3, no Python fallback      |
+| **Enhanced Test-Kit**               | 2026-02-04 | Layer markers, assertion helpers, demo tests             |
+| **Testing Layer Strategy**          | 2026-02-04 | @unit, @integration, @cloud markers in omni.test_kit     |
+| **Tool Schema Definition**          | 2026-02-04 | tool.schema.yaml in packages/shared/schemas/             |
+| **Unified Response Format**         | 2026-02-04 | ToolResponse with status, data, error_code, metadata     |
+| **Error Code System**               | 2026-02-04 | CoreErrorCode enum (1xxx-9xxx categories)                |
+| **Provider Pattern**                | 2026-02-04 | VariantProvider, VariantRegistry in omni.core.skills     |
 | **Robust Task Workflow**            | 2026-01-29 | Graph-based workflow with Reflection & Discovery Fixes   |
 | **Permission Gatekeeper**           | 2026-01-21 | Zero Trust security with Rust PermissionGatekeeper       |
 | **Context Optimization**            | 2026-01-21 | ContextPruner + ContextManager for token diet            |
@@ -155,14 +174,42 @@ uv run omni run "git commit" --tui    # Start TUI mode
 
 ---
 
-## How to Use This Backlog
+## Architecture Improvements (Feb 2026)
 
-1. **Pick a task** from High Priority
-2. **Create a branch** with descriptive name: `feature/skill-template-update`
-3. **Complete the work** with tests
-4. **Update this file** to mark as `Done` with date
-5. **Commit** with: `docs(backlog): complete Skill Ecosystem Standardization`
+| Feature                          | Status | Description                                         |
+| -------------------------------- | ------ | --------------------------------------------------- |
+| **Provider Pattern**             | `Done` | VariantProvider, VariantRegistry for skill variants |
+| **Tool Schema Definition**       | `Done` | tool.schema.yaml in packages/shared/schemas/        |
+| **Testing Layer Strategy**       | `Done` | @unit, @integration, @cloud markers                 |
+| **Unified Response Format**      | `Done` | ToolResponse with ResponseStatus enum               |
+| **Error Code System**            | `Done` | CoreErrorCode with 1xxx-9xxx categories             |
+| **Enhanced Test-Kit**            | `Done` | assert helpers, layer markers, fixtures             |
+| **Shared Type Definition**       | `Done` | Pydantic types in core module                       |
+| **Knowledge System Enhancement** | `Done` | omni-knowledge Rust crate + PyO3 bindings           |
+
+**Related Files:**
+
+- `packages/python/core/src/omni/core/responses.py`
+- `packages/python/core/src/omni/core/errors.py`
+- `packages/python/core/src/omni/core/skills/variants.py`
+- `packages/python/core/src/omni/core/testing/layers.py`
+- `packages/python/test-kit/src/omni/test_kit/asserts.py`
+- `packages/python/core/src/omni/core/shared/skill_metadata_schema.py`
+- `packages/python/core/src/omni/core/shared/tool_schema.py`
+
+**Knowledge System Files:**
+
+- `packages/rust/crates/omni-knowledge/src/lib.rs`
+- `packages/rust/crates/omni-knowledge/src/types.rs`
+- `packages/rust/crates/omni-knowledge/src/storage.rs`
+- `packages/rust/crates/omni-knowledge/tests/test_knowledge.rs`
+- `packages/python/core/src/omni/core/knowledge/types.py`
+- `packages/python/core/tests/units/knowledge/test_librarian.py`
 
 ---
 
-_Built on standards. Not reinventing the wheel._
+## High Priority
+
+### Hybrid Search Optimization
+
+Enhance Hybrid Search to fix keyword matching issues (e.g., "Research" intent not triggering `researcher.run_research_graph`).

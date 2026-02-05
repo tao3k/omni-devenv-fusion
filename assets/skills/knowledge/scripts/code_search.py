@@ -1,33 +1,37 @@
 """
-Code Search Skill - Semantic Code Search via Librarian
+Knowledge Search Skill - Documentation & Semantic Code Search
 
-Provides Agent with the ability to semantically search the codebase using
-the Librarian's hybrid search capabilities.
+Provides semantic search capabilities using the Librarian's hybrid search.
 
 Commands:
-- code_search: Semantic search for code implementation
+- knowledge_search: Semantic search for code implementation
 - code_context: Get LLM-ready context blocks
 - knowledge_status: Check knowledge base status
+- ingest_knowledge: Ingest/update project knowledge
 """
 
+import json
 from typing import Any
 
 from omni.foundation.api.decorators import skill_command
 from omni.foundation.config.logging import get_logger
 
-logger = get_logger("skill.code.search")
+logger = get_logger("skill.knowledge.search")
 
 
 @skill_command(
-    name="code_search",
+    name="knowledge_search",
     category="search",
     description="""
-    Semantically search the codebase for implementation details, functions, or classes.
+    Search the knowledge base for documentation and code patterns.
 
     Use this when you need to find:
-    - How a particular feature is implemented
-    - Where a function or class is defined
-    - Code related to a specific concept
+    - Documentation about project features
+    - Code patterns and examples
+    - How a particular feature is documented
+
+    Note: For structural code search (class/function definitions),
+    use code_search from code_tools instead.
 
     Args:
         - query: str - Natural language query about the code (required)
@@ -38,8 +42,8 @@ logger = get_logger("skill.code.search")
     """,
     autowire=True,
 )
-def code_search(query: str, limit: int = 5) -> dict[str, Any]:
-    """Perform semantic search on the codebase using Librarian."""
+async def knowledge_search(query: str, limit: int = 5) -> dict[str, Any]:
+    """Perform semantic search on the knowledge base using Librarian."""
     from omni.core.runtime.services import get_librarian
 
     librarian = get_librarian()
@@ -68,9 +72,10 @@ def code_search(query: str, limit: int = 5) -> dict[str, Any]:
         for res in results:
             meta = res.get("metadata", {})
             if isinstance(meta, str):
-                import json
-
-                meta = json.loads(meta)
+                try:
+                    meta = json.loads(meta)
+                except (json.JSONDecodeError, TypeError):
+                    meta = {}
 
             formatted_results.append(
                 {
@@ -78,7 +83,7 @@ def code_search(query: str, limit: int = 5) -> dict[str, Any]:
                     "lines": f"L{meta.get('start_line', '?')}-{meta.get('end_line', '?')}",
                     "type": meta.get("chunk_type", "code"),
                     "score": res.get("score", 0),
-                    "content": res["text"][:500] + "..." if len(res["text"]) > 500 else res["text"],
+                    "content": res["text"],
                 }
             )
 
@@ -90,7 +95,7 @@ def code_search(query: str, limit: int = 5) -> dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error(f"Code search failed: {e}")
+        logger.error(f"Knowledge search failed: {e}")
         return {
             "success": False,
             "error": str(e),
@@ -117,7 +122,7 @@ def code_search(query: str, limit: int = 5) -> dict[str, Any]:
     """,
     autowire=True,
 )
-def code_context(query: str, limit: int = 3) -> dict[str, Any]:
+async def code_context(query: str, limit: int = 3) -> dict[str, Any]:
     """Get formatted LLM-ready context blocks from the codebase."""
     from omni.core.runtime.services import get_librarian
 
@@ -171,7 +176,7 @@ def code_context(query: str, limit: int = 3) -> dict[str, Any]:
     """,
     autowire=True,
 )
-def knowledge_status() -> dict[str, Any]:
+async def knowledge_status() -> dict[str, Any]:
     """Get knowledge base status."""
     from omni.core.runtime.services import get_librarian
 
@@ -222,7 +227,7 @@ def knowledge_status() -> dict[str, Any]:
     """,
     autowire=True,
 )
-def ingest_knowledge(clean: bool = False) -> dict[str, Any]:
+async def ingest_knowledge(clean: bool = False) -> dict[str, Any]:
     """Ingest project knowledge into the knowledge base."""
     from omni.core.runtime.services import get_librarian
 
@@ -254,4 +259,4 @@ def ingest_knowledge(clean: bool = False) -> dict[str, Any]:
         }
 
 
-__all__ = ["code_search", "code_context", "knowledge_status", "ingest_knowledge"]
+__all__ = ["knowledge_search", "code_context", "knowledge_status", "ingest_knowledge"]
